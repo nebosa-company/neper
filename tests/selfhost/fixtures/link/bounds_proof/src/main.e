@@ -80,6 +80,21 @@ fn conjunct(items: []const u32, at: usize) -> u32 {
     ret total
 }
 
+// The early-exit form (D380): `if at >= items.len { ret }` proves `items[at]` for
+// the rest of the block; `exit_shifted` writes `at` after the guard and keeps its
+// check, which trips at the end.
+fn exit_guard(items: []const u32, at: usize) -> u32 {
+    if at >= items.len { ret 0u32 }
+    ret items[at]
+}
+
+fn exit_shifted(items: []const u32, start: usize) -> u32 {
+    var at = start
+    if items.len <= at { ret 0u32 }
+    at += 1usize
+    ret items[at]
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var mode = ""
     if args.len > 1usize { mode = args[1usize] }
@@ -109,6 +124,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if conjunct(values[..], args.len + 2usize) != 5u32 { ret mem.Exhausted }
         if conjunct(values[..], args.len + 3usize) != 0u32 { ret mem.Exhausted }
         if conjunct(values[..], args.len + 1usize) != 4u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "exit_guard") {
+        if exit_guard(values[..], args.len + 2usize) != 5u32 { ret mem.Exhausted }
+        if exit_guard(values[..], args.len + 3usize) != 0u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "exit_shifted") {
+        if exit_shifted(values[..], args.len + 2usize) == 0u32 { ret mem.Exhausted }
         ret ok
     }
     if str.eq(mode, "guarded_shifted") {

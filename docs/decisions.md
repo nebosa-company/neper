@@ -8435,3 +8435,24 @@ for them.
 Not yet, of H04 section 4: the protected data as a view of the guard, so a
 borrow cannot survive the release; reentrancy; wait-and-reacquire through a
 guard; the reader and writer guards of `RwLock`.
+
+## D380 -- The early-exit form of the bounds proof: `if i >= x.len { ret }` proves the rest of the block
+
+The third shape of the same proof: a guard that leaves -- `if i >= x.len { ret
+... }`, or `if x.len <= i { break }`, a block ending in `ret`, `break`,
+`continue` or `unreachable` and no `else` -- so what follows it in the enclosing
+block runs only under the guard's negation. `lower_block` opens the proof after
+lowering such a statement, over the tokens from its end to the block's end, with
+D356's side conditions read over that range, and closes every proof it opened
+when the block ends. `proof_open` is now `proof_open_over` with an operator
+polarity and a token range, and the loop, the guard and the conjunct forms call
+it with theirs. The compiler's own build reports 369 checks elided, from 354; the
+fixture's `exit_guard` and `exit_shifted` are the eliminated and retained cases.
+
+Also in this row: D376's plan `edit` record had been added to the schema under the
+name of the fix edit's definition, a duplicate key that replaced it; it is
+`planEdit` now, and the schema is checked for duplicate keys before use.
+
+What remains is mostly the field base: `c.tokens[at]` under `if at >= c.token_count
+{ ret }` is the compiler's commonest guard, and neither side is a local. Not yet,
+with it: a bound through a second local, and a guard over `x.len - 1`.

@@ -21,7 +21,17 @@ except ImportError:
     print("skipped: python package `jsonschema` is not installed")
     sys.exit(0)
 
-VALIDATOR = Draft202012Validator(json.loads((ROOT / "docs/schemas/neper-v1.schema.json").read_text(encoding="utf-8")))
+def _no_duplicate_keys(pairs):
+    """A duplicated key in the schema silently replaces a definition (D380): refuse it."""
+    seen = set()
+    for key, _ in pairs:
+        if key in seen:
+            raise SystemExit("neper-v1.schema.json: duplicate key %r" % key)
+        seen.add(key)
+    return dict(pairs)
+
+
+VALIDATOR = Draft202012Validator(json.loads((ROOT / "docs/schemas/neper-v1.schema.json").read_text(encoding="utf-8"), object_pairs_hook=_no_duplicate_keys))
 
 # A validator that accepts everything would pass every golden and prove nothing,
 # so one record that must be rejected runs before the corpus does.

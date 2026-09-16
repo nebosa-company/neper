@@ -1662,6 +1662,14 @@ esac
 "$bounds_proof_path" reslice
 "$bounds_proof_path" guarded
 "$bounds_proof_path" conjunct
+"$bounds_proof_path" exit_guard
+bounds_exit_status=0
+bounds_exit=$("$bounds_proof_path" exit_shifted 2>&1) || bounds_exit_status=$?
+[ "$bounds_exit_status" -eq 134 ]
+case "$bounds_exit" in
+    *'main.e:95:9: trap[bounds]: index 5 out of bounds for len 5'*) ;;
+    *) printf '%s\n' "the exit-guard-then-shifted access did not trap: $bounds_exit" >&2; exit 1 ;;
+esac
 # The guard form (D377): `if at < items.len` proves the block's access; a write of
 # the index first keeps the check, which trips at the end.
 bounds_guarded_status=0

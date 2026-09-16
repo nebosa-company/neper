@@ -4147,6 +4147,14 @@ fn proof_token_writes(c: *check.Checker, at: usize, end: usize) -> bool {
 // assigns `x` or takes its address, so the length the condition read is the length
 // the access sees. The proof is pushed for the body's lowering; true when it was.
 fn proof_open(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, condition_index: usize, body_index: usize, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> bool {
+    let body = tree.nodes[body_index]
+    ret proof_open_over(c, g, tree, module_index, condition_index, false, usize(body.token_start) + 1usize, usize(body.token_end), builder, bindings, binding_count)
+}
+
+// The proof over a token range: `condition` is `i < x.len` when `negated` is false
+// and `i >= x.len` (or `x.len <= i`) when it is true -- the guard of an early exit,
+// whose rest-of-block is the range (D380).
+fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, condition_index: usize, negated: bool, scan_start: usize, scan_end: usize, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> bool {
     if builder.proof_count >= builder.proof_index.len { ret false }
     let condition = tree.nodes[condition_index]
     if condition.kind != .BinaryExpr { ret false }
@@ -4164,13 +4172,25 @@ fn proof_open(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         at += 1usize
     }
     if side != 2usize { ret false }
-    // The operator between the sides is `<` and nothing else.
+    // The operator between the sides is `<` and nothing else; negated, `>=` with the
+    // index on the left or `<=` with the length on the left.
     var operator_at = usize(tree.nodes[left_index].token_end)
     while operator_at < usize(tree.nodes[right_index].token_start) && c.tokens[operator_at].kind == .Newline { operator_at += 1usize }
-    if c.tokens[operator_at].kind != .PunctLt { ret false }
-    let (index_name, has_index) = proof_name(c, g, tree, module_index, left_index)
+    var index_side = left_index
+    var length_side = right_index
+    if !negated {
+        if c.tokens[operator_at].kind != .PunctLt { ret false }
+    } else {
+        if c.tokens[operator_at].kind == .PunctLtEq {
+            index_side = right_index
+            length_side = left_index
+        } else {
+            if c.tokens[operator_at].kind != .PunctGtEq { ret false }
+        }
+    }
+    let (index_name, has_index) = proof_name(c, g, tree, module_index, index_side)
     if !has_index { ret false }
-    let right = tree.nodes[right_index]
+    let right = tree.nodes[length_side]
     if right.kind != .FieldExpr { ret false }
     let member = c.tokens[usize(right.token_end) - 1usize]
     if member.kind != .Identifier || !check.same(g.modules[module_index].text[member.start..member.end], "len") { ret false }
@@ -4183,10 +4203,9 @@ fn proof_open(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let (base_binding, base_bound) = find_binding(bindings, binding_count, base_name)
     if !index_bound || !base_bound { ret false }
     if base_binding.ty.kind != .Slice && base_binding.ty.kind != .Array && base_binding.ty.kind != .String { ret false }
-    // The body's tokens: the first write of `i`, whether one lies in a nested loop,
+    // The range's tokens: the first write of `i`, whether one lies in a nested loop,
     // and whether `x` is written at all.
-    let body = tree.nodes[body_index]
-    let body_end = usize(body.token_end)
+    let body_end = scan_end
     var first_assign = body_end
     var nested_write = false
     var base_written = false
@@ -4194,7 +4213,7 @@ fn proof_open(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     var depth = 0usize
     var loop_depth = 0usize
     var loop_marks: [64]bool = zero
-    var scan = usize(body.token_start) + 1usize
+    var scan = scan_start
     while scan < body_end {
         let token = c.tokens[scan]
         if token.kind == .KwWhile || token.kind == .KwFor { loop_pending = true }
@@ -4236,6 +4255,45 @@ fn proof_open(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     builder.proof_ok[builder.proof_count] = true
     builder.proof_count += 1usize
     ret true
+}
+
+// Whether an `if` statement is an early exit -- one condition, one block whose last
+// statement is `ret`, `break`, `continue` or `unreachable`, no `else` -- with a
+// negated proof condition; when it is, the proof is opened over the range.
+fn proof_guard_exits(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, scan_start: usize, scan_end: usize, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> bool {
+    var condition_index = 0usize
+    var block_index = 0usize
+    var parts = 0usize
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parts == 0usize { condition_index = child_index }
+            if parts == 1usize { block_index = child_index }
+            parts += 1usize
+        }
+        at += 1usize
+    }
+    if parts != 2usize { ret false }
+    let block = tree.nodes[block_index]
+    if block.kind != .Block { ret false }
+    // The block's last statement.
+    var last_index = 0usize
+    var has_last = false
+    let block_end = usize(block.first_child) + usize(block.child_count)
+    var scan = usize(block.first_child)
+    while scan < block_end {
+        if parse.child_is_node_at(tree, scan) {
+            last_index = parse.child_index_at(tree, scan)
+            has_last = true
+        }
+        scan += 1usize
+    }
+    if !has_last { ret false }
+    let last = tree.nodes[last_index].kind
+    if last != .ReturnStmt && last != .BreakStmt && last != .ContinueStmt && c.tokens[usize(tree.nodes[last_index].token_start)].kind != .KwUnreachable { ret false }
+    ret proof_open_over(c, g, tree, module_index, condition_index, true, scan_start, scan_end, builder, bindings, binding_count)
 }
 
 // The leftmost operand of an `&&` chain -- `a` of `a && b && c` -- or the node
@@ -5359,11 +5417,19 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let defer_checkpoint = defers.count
     let end = usize(node.first_child) + usize(node.child_count)
     var at = usize(node.first_child)
+    var proofs_opened = 0usize
     while at < end {
         if builder.blocks[builder.current_block].terminated { break }
-        if parse.child_is_node_at(tree, at) { try lower_statement(c, g, tree, module_index, function, tree.nodes[parse.child_index_at(tree, at)], builder, bindings, binding_count, control, defers) }
+        if parse.child_is_node_at(tree, at) {
+            let statement = tree.nodes[parse.child_index_at(tree, at)]
+            try lower_statement(c, g, tree, module_index, function, statement, builder, bindings, binding_count, control, defers)
+            // `if i >= x.len { ret ... }` proves `x[i]` for the rest of this block (D380):
+            // the guard exits, so what follows runs only under its negation.
+            if statement.kind == .IfStmt && proof_guard_exits(c, g, tree, module_index, statement, usize(statement.token_end), usize(node.token_end), builder, bindings, *binding_count) { proofs_opened += 1usize }
+        }
         at += 1usize
     }
+    builder.proof_count = builder.proof_count - proofs_opened
     if !builder.blocks[builder.current_block].terminated { try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, *binding_count, defers, defer_checkpoint) }
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
