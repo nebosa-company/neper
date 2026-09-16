@@ -1,4 +1,4 @@
-"""Apply a `plan-rename-file --json` plan (D376, H29) to the files it names.
+"""Apply a plan -- `plan-rename-file --json` (D376, H29) or `plan-add-parameter-file --json` (D406) -- to the files it names.
 
     python scripts/apply_plan.py PLAN.jsonl --root DIR [--project-src DIR]
 

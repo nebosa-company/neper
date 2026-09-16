@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"plan-add-parameter","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"bump is named as a value here, and a value of a function type cannot take a new parameter: no signature change is planned","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":677,"byte_end":677,"line":24,"column":55,"end_line":24,"end_column":55,"column_utf16":55,"end_column_utf16":55},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":2,"data":{"edits":0,"files":0,"complete":true}}

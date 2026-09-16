@@ -2090,6 +2090,26 @@ $planUses = & $compiler uses-file (Join-Path $planScratch 'src/explain.e') $repo
 if ($LASTEXITCODE -ne 0 -or (($planUses | Where-Object { $_ -match '"record":"use"' }) | ForEach-Object { ($_ -replace '.*"byte_start":(\d+).*', '$1') } | Sort-Object -Unique).Count -ne 2) { throw 'the renamed function is not used at the two sites' }
 & python (Join-Path $repo 'scripts/apply_plan.py') $planActual --root (Join-Path $planScratch 'src') 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) { throw 'a plan over changed files was applied' }
+# `plan-add-parameter-file --json` (D406, H17): the signature-change plan byte for byte;
+# applied to a copy it checks with the parameter last; a function named as a value is
+# refused with exit 2 and the diagnostic naming the site.
+$parameterActual = Join-Path $testBuild 'conformance-tools-plan-parameter.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-add-parameter-file contract.e `"$repo`" x64 windows --json --symbol contract.total --parameter `"scale: i64`" --argument 1i64 > `"$parameterActual`""
+if ($LASTEXITCODE -ne 0) { throw "plan-add-parameter-file --json failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $parameterActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_parameter.expected.jsonl')).Hash) { throw "plan-add-parameter-file --json differs from the conformance corpus" }
+$parameterScratch = Join-Path $testBuild 'plan-parameter-scratch'
+if (Test-Path -LiteralPath $parameterScratch) { Remove-Item -LiteralPath $parameterScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $parameterScratch 'src') | Out-Null
+Copy-Item (Join-Path $conformanceRoot 'tools/contract.e') (Join-Path $parameterScratch 'src')
+& python (Join-Path $repo 'scripts/apply_plan.py') $parameterActual --root (Join-Path $parameterScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the add-parameter plan did not apply' }
+$parameterChecked = & $compiler check-file (Join-Path $parameterScratch 'src/contract.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $parameterChecked -ne 'module check ok') { throw "the program with the added parameter does not check: $parameterChecked" }
+if (-not (Select-String -LiteralPath (Join-Path $parameterScratch 'src/contract.e') -Pattern 'fn total\(c: \*const Counter, scale: i64\) -> i64' -Quiet)) { throw 'the added parameter is not last in the declaration' }
+$parameterRefused = Join-Path $testBuild 'conformance-tools-plan-parameter-refused.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-add-parameter-file contract.e `"$repo`" x64 windows --json --symbol contract.bump --parameter `"by: i64`" --argument 1i64 > `"$parameterRefused`""
+if ($LASTEXITCODE -ne 2) { throw "a plan over a function named as a value did not exit 2 (got $LASTEXITCODE)" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $parameterRefused).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_parameter_refused.expected.jsonl')).Hash) { throw "a refused plan-add-parameter-file differs from the conformance corpus" }
 # `explain-file --json` (D359): every dispatch and instantiation the checker decided, byte
 # for byte (target-independent).
 $explainActual = Join-Path $testBuild 'conformance-tools-explain.jsonl'

@@ -334,6 +334,17 @@ result with `edits`, `files` and `complete`. A harness applies the edits to file
 whose hashes still match -- all of them or none -- from the highest offset down, and
 re-checks; `scripts/apply_plan.py` is the reference applier. What `uses-file` does
 not see (comments, strings, generated registrations) the plan does not edit.
+`neper plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name
+--parameter "name: T" --argument EXPR` (D406, H17) is the signature-change plan in
+the same shape: the `edit` records carry `op` `add-parameter-and-migrate`, the
+declaration's edit inserts the parameter last in its list and every resolved call's
+edit inserts the argument last (with the `, ` a non-empty list needs), the
+insertion point being the list's closing `)`; the postcondition says the signature
+and the use count re-checking must find. A function named as a value (a thread
+entry, a callback) or chosen by a protocol cannot be migrated -- its type is its
+signature -- and the plan is refused with an `E-CLI-9999` naming the first such
+site and exit 2, so no half-migration is emitted. Every refused query (a subject
+that names nothing, a plan that cannot be made) exits 2 as its result says.
 `m25-h29-structured-edits.md` fixes the plan shape for the operations to come.
 
 ## 6. Formatting contract

@@ -9029,3 +9029,35 @@ three zeros; the schema requires the object.
 Not yet: the count of declarations rechecked -- every module with a tree is
 declared on every build, header trees included (D392), so the count would be
 the module count until declarations come from the Interface.
+
+## D406 -- `plan-add-parameter-file`: the signature-change plan
+
+H17 asks for signature-change plans and H29 fixed the shape of
+`add-parameter-and-migrate` (D376) without delivering it; the card's own edit
+shape -- a parameter added, every call site given it -- was the example. The
+command `plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name
+--parameter "name: T" --argument EXPR` checks the program and emits the rename's
+records: the preconditions (each touched file's hash), one `edit` per site with
+`op` `add-parameter-and-migrate` -- the declaration's inserts the parameter last
+in its list, each resolved call's inserts the argument last, the insertion point
+found at the tokens as the `)` that closes the list after the name (an optional
+`[...]` of generic arguments passed over), with the `, ` a non-empty list needs
+-- a postcondition naming the signature and the use count re-checking must find,
+and the result. The site collection and the preconditions are one code with the
+rename's (`plan_sites`, `plan_preconditions`), whose output is byte-identical.
+
+What a signature change cannot migrate is refused whole: a function named as a
+value (a thread's entry, a callback) has its signature as its type, and a
+function a protocol chose has the protocol's; the plan then emits one
+`E-CLI-9999` naming the first such site and a result of exit code 2, and no
+edit -- a half-migration would be worse than none. Every refused query now exits
+2 as its result record says (the subject that names nothing had exited 0
+against a record saying 2).
+
+The corpus gains `tools/plan_parameter` (over `contract.total`) and
+`tools/plan_parameter_refused` (over `contract.bump`, a thread entry); both
+suites apply the plan to a copy, check it, and confirm the parameter is last.
+
+Not yet: `change-signature` (reordering, removal), a `replace-expression`, an
+argument expression per call rather than one for all, and the plan's snapshot
+identity.

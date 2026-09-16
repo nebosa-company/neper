@@ -2401,6 +2401,21 @@ plan_sites=$($test_build/neper-self uses-file "$plan_scratch/src/explain.e" "$re
 plan_again=0
 python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null 2>&1 || plan_again=$?
 [ "$plan_again" -ne 0 ]
+# `plan-add-parameter-file --json` (D406, H17): the signature-change plan byte for byte;
+# applied to a copy it checks with the parameter last; a function named as a value is
+# refused with exit 2 and the diagnostic naming the site.
+(cd "$conformance_root/tools" && $test_build/neper-self plan-add-parameter-file contract.e "$repo" x64 linux --json --symbol contract.total --parameter 'scale: i64' --argument 1i64 > "$test_build/conformance-tools-plan-parameter.jsonl")
+cmp -s "$test_build/conformance-tools-plan-parameter.jsonl" "$conformance_root/tools/plan_parameter.expected.jsonl" || { echo "plan-add-parameter-file --json differs from the conformance corpus" >&2; exit 1; }
+parameter_scratch="$test_build/plan-parameter-scratch"
+rm -rf "$parameter_scratch" && mkdir -p "$parameter_scratch/src" && cp "$conformance_root/tools/contract.e" "$parameter_scratch/src/"
+python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-parameter.jsonl" --root "$parameter_scratch/src" > /dev/null
+parameter_checked=$($test_build/neper-self check-file "$parameter_scratch/src/contract.e" "$repo" x64 linux)
+[ "$parameter_checked" = 'module check ok' ]
+grep -q 'fn total(c: \*const Counter, scale: i64) -> i64' "$parameter_scratch/src/contract.e"
+parameter_refused=0
+(cd "$conformance_root/tools" && $test_build/neper-self plan-add-parameter-file contract.e "$repo" x64 linux --json --symbol contract.bump --parameter 'by: i64' --argument 1i64 > "$test_build/conformance-tools-plan-parameter-refused.jsonl") || parameter_refused=$?
+[ "$parameter_refused" -eq 2 ]
+cmp -s "$test_build/conformance-tools-plan-parameter-refused.jsonl" "$conformance_root/tools/plan_parameter_refused.expected.jsonl" || { echo "a refused plan-add-parameter-file differs from the conformance corpus" >&2; exit 1; }
 # A version 2 map (D373, H19): the generator's input is hashed, a regeneration-owned
 # mapping says so in the related location, and a changed input is E-TOOL-0001.
 for map_case in generated_map stale_generator; do

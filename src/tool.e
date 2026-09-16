@@ -18,6 +18,8 @@ use check
 
 error Capacity
 error InvalidSource
+// A plan's site whose list could not be found at the tokens (D406).
+error InvalidPlan
 
 // One record at a time: built here, printed whole, so a line is never split.
 type Out = struct {
@@ -2436,7 +2438,10 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
         try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no module of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
-        ret flush(&out)
+        try flush(&out)
+        // The process status agrees with the record (D406): a refused query exits 2.
+        os.exit(2i32)
+        ret ok
     }
     let module = g.modules[module_index]
     let (root, relative) = source_identity_of(g, module.path)
@@ -2525,7 +2530,10 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
-        ret flush(&out)
+        try flush(&out)
+        // The process status agrees with the record (D406): a refused query exits 2.
+        os.exit(2i32)
+        ret ok
     }
     let function = c.functions[function_index]
     let module = g.modules[function.module_index]
@@ -2689,7 +2697,10 @@ fn uses_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str) ->
         try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"uses\":0,\"roots\":0,\"complete\":true}}")
-        ret flush(&out)
+        try flush(&out)
+        // The process status agrees with the record (D406): a refused query exits 2.
+        os.exit(2i32)
+        ret ok
     }
     let function = c.functions[function_index]
     var written = 0usize
@@ -2779,28 +2790,26 @@ fn uses_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str) ->
 // token of every resolved use -- each a byte span and its replacement, and one
 // `postcondition` record saying what re-checking must find. Nothing is applied: a
 // harness applies the edits to files whose hashes still match and re-checks.
-fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, to: str) -> err {
-    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
-    if storage_error != ok { ret storage_error }
-    var out: Out = zero
-    out.bytes = storage
-    try header(&out, "plan-rename")
-    let (function_index, has_function) = uses_subject(c, g, subject)
-    if !has_function {
-        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
-        try flush(&out)
-        try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
-        ret flush(&out)
-    }
+// The sites a plan over one function touches (D376, D406): the declaration's name
+// and every use's, in (module, offset) order, deduplicated -- an instance record and
+// a call record share the offset of one spelling. A use of the name as a value is a
+// site of a rename and not of a signature change, which cannot migrate it.
+type PlanSites = struct {
+    modules: []usize,
+    offsets: []usize,
+    kinds: []u8,
+    count: usize,
+}
+
+fn plan_sites(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, function_index: usize, with_values: bool) -> (PlanSites, err) {
+    var sites: PlanSites = zero
     let function = c.functions[function_index]
-    // The sites, in (module, offset) order, deduplicated: an instance record and a
-    // call record share the offset of one spelling.
     let (site_modules, modules_error) = mem.alloc[usize](a, c.explain_count + 1usize)
-    if modules_error != ok { ret modules_error }
+    if modules_error != ok { ret (sites, modules_error) }
     let (site_offsets, offsets_error) = mem.alloc[usize](a, c.explain_count + 1usize)
-    if offsets_error != ok { ret offsets_error }
+    if offsets_error != ok { ret (sites, offsets_error) }
     let (site_kinds, kinds_error) = mem.alloc[u8](a, c.explain_count + 1usize)
-    if kinds_error != ok { ret kinds_error }
+    if kinds_error != ok { ret (sites, kinds_error) }
     var site_count = 0usize
     if function.module_index < g.count {
         let (declaration, has_declaration) = rename_declaration_offset(g.modules[function.module_index].text, function.source_start, function.name)
@@ -2816,7 +2825,7 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
         let e = c.explains[at]
         var called = e.function_index == function_index
         if !called && e.function_index < c.function_count && c.function_generics[e.function_index].instance && c.function_generics[e.function_index].template_index == function_index { called = true }
-        let targets = (e.kind == 4u8 && !e.found && called) || (e.kind == 2u8 && e.template_index == function_index) || (e.kind == 5u8 && e.function_index == function_index)
+        let targets = (e.kind == 4u8 && !e.found && called) || (e.kind == 2u8 && e.template_index == function_index) || (with_values && e.kind == 5u8 && e.function_index == function_index)
         if targets && e.module_index < g.count {
             let (name_at, has_name) = rename_use_offset(g.modules[e.module_index].text, e.offset, function.name)
             if has_name {
@@ -2844,30 +2853,219 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
         }
         at += 1usize
     }
-    // Preconditions: each touched file's hash, once, in module order.
+    sites.modules = site_modules
+    sites.offsets = site_offsets
+    sites.kinds = site_kinds
+    sites.count = site_count
+    ret (sites, ok)
+}
+
+// The preconditions of a plan: each touched file's hash, once, in module order.
+fn plan_preconditions(a: *mem.Arena, out: *Out, g: *graph.Graph, sites: PlanSites) -> (usize, err) {
     var files = 0usize
     var site = 0usize
-    while site < site_count {
-        if site == 0usize || site_modules[site] != site_modules[site - 1usize] {
-            let module = g.modules[site_modules[site]]
-            let (root, relative) = source_identity_of(g, module.path)
-            let (path, path_error) = manifest_slashes(a, relative)
-            if path_error != ok { ret path_error }
-            let (digest, digest_error) = manifest_sha256(a, module.text)
-            if digest_error != ok { ret digest_error }
-            try text(&out, "{\"record\":\"precondition\",\"source\":{\"root\":")
-            try quoted(&out, root)
-            try text(&out, ",\"path\":")
-            try quoted(&out, path)
-            try text(&out, "},\"sha256\":")
-            try quoted(&out, digest)
-            try byte(&out, 125u8)
-            try flush(&out)
+    while site < sites.count {
+        if site == 0usize || sites.modules[site] != sites.modules[site - 1usize] {
+            let record_error = precondition_record(a, out, g, sites.modules[site])
+            if record_error != ok { ret (files, record_error) }
             files += 1usize
         }
         site += 1usize
     }
-    site = 0usize
+    ret (files, ok)
+}
+
+fn precondition_record(a: *mem.Arena, out: *Out, g: *graph.Graph, module_index: usize) -> err {
+    let module = g.modules[module_index]
+    let (root, relative) = source_identity_of(g, module.path)
+    let (path, path_error) = manifest_slashes(a, relative)
+    if path_error != ok { ret path_error }
+    let (digest, digest_error) = manifest_sha256(a, module.text)
+    if digest_error != ok { ret digest_error }
+    try text(out, "{\"record\":\"precondition\",\"source\":{\"root\":")
+    try quoted(out, root)
+    try text(out, ",\"path\":")
+    try quoted(out, path)
+    try text(out, "},\"sha256\":")
+    try quoted(out, digest)
+    try byte(out, 125u8)
+    ret flush(out)
+}
+
+// The `)` that closes the parameter or argument list after the name at `name_at`
+// (D406): the name's token, an optional `[...]` of generic arguments, then `(` and its
+// match; and whether the list holds nothing but layout.
+fn list_close_offset(tokens: []const lex.Token, name_at: usize) -> (usize, bool, bool) {
+    var low = 0usize
+    var high = tokens.len
+    while low < high {
+        let mid = low + (high - low) / 2usize
+        if tokens[mid].start < name_at { low = mid + 1usize } else { high = mid }
+    }
+    if low >= tokens.len || tokens[low].start != name_at { ret (0usize, false, false) }
+    var at = low + 1usize
+    if at < tokens.len && tokens[at].kind == .PunctLBracket {
+        var bracket_depth = 0usize
+        while at < tokens.len {
+            if tokens[at].kind == .PunctLBracket { bracket_depth += 1usize }
+            if tokens[at].kind == .PunctRBracket {
+                bracket_depth = bracket_depth - 1usize
+                if bracket_depth == 0usize {
+                    at += 1usize
+                    break
+                }
+            }
+            at += 1usize
+        }
+    }
+    if at >= tokens.len || tokens[at].kind != .PunctLParen { ret (0usize, false, false) }
+    let open_at = at
+    var depth = 0usize
+    var empty = true
+    while at < tokens.len {
+        if tokens[at].kind == .PunctLParen { depth += 1usize }
+        if tokens[at].kind == .PunctRParen {
+            depth = depth - 1usize
+            if depth == 0usize { ret (tokens[at].start, empty, true) }
+        }
+        if at != open_at && tokens[at].kind != .Newline { empty = false }
+        at += 1usize
+    }
+    ret (0usize, false, false)
+}
+
+// `plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name --parameter
+// "name: T" --argument EXPR` (D406, H17/H29): the signature-change plan. The
+// declaration gains the parameter last, and every call the argument last, with the
+// `, ` a non-empty list needs; the preconditions, the edits in (module, offset) order
+// and the postcondition are the rename's. A function named as a value or chosen by a
+// protocol cannot be migrated -- its type is its signature -- and the plan is refused
+// naming the first such site, so no half-migration is ever emitted.
+fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, parameter: str, argument: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "plan-add-parameter")
+    let (function_index, has_function) = uses_subject(c, g, subject)
+    if !has_function {
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try flush(&out)
+        try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
+        try flush(&out)
+        // The process status agrees with the record (D406): a refused query exits 2.
+        os.exit(2i32)
+        ret ok
+    }
+    let function = c.functions[function_index]
+    // A site the plan cannot migrate: the name as a value, or a protocol's choice.
+    var scan = 0usize
+    while scan < c.explain_count {
+        let e = c.explains[scan]
+        let as_value = e.kind == 5u8 && e.function_index == function_index
+        let dispatched = e.kind == 1u8 && e.found && e.function_index == function_index
+        if (as_value || dispatched) && e.module_index < g.count {
+            let module = g.modules[e.module_index]
+            let (root, relative) = source_identity_of(g, module.path)
+            let (path, path_error) = manifest_slashes(a, relative)
+            if path_error != ok { ret path_error }
+            out.lines = module.lines
+            try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"")
+            try text(&out, function.name)
+            if as_value { try text(&out, " is named as a value here, and a value of a function type cannot take a new parameter: no signature change is planned") } else { try text(&out, " is chosen by a protocol here, whose signature is fixed: no signature change is planned") }
+            try text(&out, "\",\"span\":")
+            var here: lex.Token = zero
+            here.start = e.offset
+            here.end = e.offset
+            try point_span(&out, root, path, module.text, here)
+            try text(&out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
+            try flush(&out)
+            try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
+            try flush(&out)
+            // The process status agrees with the record (D406): a refused query exits 2.
+            os.exit(2i32)
+            ret ok
+        }
+        scan += 1usize
+    }
+    let (sites, sites_error) = plan_sites(a, c, g, function_index, false)
+    if sites_error != ok { ret sites_error }
+    let (files, preconditions_error) = plan_preconditions(a, &out, g, sites)
+    if preconditions_error != ok { ret preconditions_error }
+    var site = 0usize
+    while site < sites.count {
+        let module = g.modules[sites.modules[site]]
+        let (root, relative) = source_identity_of(g, module.path)
+        let (path, path_error) = manifest_slashes(a, relative)
+        if path_error != ok { ret path_error }
+        out.lines = module.lines
+        let (close_at, empty, has_list) = list_close_offset(module.tokens, sites.offsets[site])
+        if !has_list { ret InvalidPlan }
+        var insert: lex.Token = zero
+        insert.start = close_at
+        insert.end = close_at
+        try text(&out, "{\"record\":\"edit\",\"op\":\"add-parameter-and-migrate\",\"symbol\":")
+        try quoted_function(&out, c, g, function_index)
+        try text(&out, ",\"site\":")
+        if sites.kinds[site] == 0u8 { try text(&out, "\"declaration\"") } else { try text(&out, "\"use\"") }
+        try text(&out, ",\"span\":")
+        try token_span(&out, root, path, module.text, insert, insert)
+        try text(&out, ",\"replacement\":")
+        var replacement_storage: [512]u8 = zero
+        var replacement_at = 0usize
+        if !empty { replacement_at = nptest_copy(replacement_storage[..], replacement_at, ", ") }
+        if sites.kinds[site] == 0u8 { replacement_at = nptest_copy(replacement_storage[..], replacement_at, parameter) } else { replacement_at = nptest_copy(replacement_storage[..], replacement_at, argument) }
+        try quoted(&out, replacement_storage[0usize..replacement_at])
+        try byte(&out, 125u8)
+        try flush(&out)
+        site += 1usize
+    }
+    try text(&out, "{\"record\":\"postcondition\",\"check\":\"check-file passes; context-file --symbol ")
+    try text(&out, subject)
+    try text(&out, " reports the signature with `")
+    try text(&out, parameter)
+    try text(&out, "` last, and uses-file --symbol ")
+    try text(&out, subject)
+    try text(&out, " reports uses at ")
+    if sites.count > 0usize { try decimal(&out, sites.count - 1usize) } else { try decimal(&out, 0usize) }
+    try text(&out, " sites\"}")
+    try flush(&out)
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":")
+    try decimal(&out, sites.count)
+    try text(&out, ",\"files\":")
+    try decimal(&out, files)
+    try text(&out, ",\"complete\":")
+    if !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, "}}")
+    ret flush(&out)
+}
+
+fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, to: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "plan-rename")
+    let (function_index, has_function) = uses_subject(c, g, subject)
+    if !has_function {
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try flush(&out)
+        try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
+        try flush(&out)
+        // The process status agrees with the record (D406): a refused query exits 2.
+        os.exit(2i32)
+        ret ok
+    }
+    let function = c.functions[function_index]
+    let (sites, sites_error) = plan_sites(a, c, g, function_index, true)
+    if sites_error != ok { ret sites_error }
+    let site_modules = sites.modules
+    let site_offsets = sites.offsets
+    let site_kinds = sites.kinds
+    let site_count = sites.count
+    let (files, preconditions_error) = plan_preconditions(a, &out, g, sites)
+    if preconditions_error != ok { ret preconditions_error }
+    var site = 0usize
     while site < site_count {
         let module = g.modules[site_modules[site]]
         let (root, relative) = source_identity_of(g, module.path)

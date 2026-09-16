@@ -37,9 +37,13 @@ again, and the spans, applicable to this one.
 | `add-parameter-and-migrate` | `symbol`, the parameter, a default expression per call | as above | the declaration; each call gains the argument | as above |
 | `replace-expression` | a span and a replacement expression | the file's hash; the span is one expression node | one edit | `check-file` passes; the expression's type is unchanged |
 
-Only the first is delivered (section 4). The other three are named here so that
-their plan shape is fixed before they exist: the same record kinds, the operation
-in `op`, no new record per operation.
+The first (D376) and the third (D406, `plan-add-parameter-file --symbol m.f
+--parameter "name: T" --argument EXPR`) are delivered (section 4); the parameter
+goes last and every call gains the argument last, and a function named as a value
+or chosen by a protocol is refused with the site, since its type is its
+signature. The other two are named here so that their plan shape is fixed before
+they exist: the same record kinds, the operation in `op`, no new record per
+operation.
 
 ## 3. What a plan does not claim
 
