@@ -682,6 +682,12 @@ type Checker = struct {
     failure_expected: Type,
     failure_actual: Type,
     failure_has_types: bool,
+    // The expression the mismatch surfaced at (D444, H09), when the outermost frame
+    // to see it is one token -- a name or a literal a conversion can wrap without a
+    // reading: `failure_fix_at` holds its start under fix kind 3 and this its end,
+    // zero for none. A wider expression clears it. (One field: the bootstrap holds
+    // a struct to 128.)
+    failure_mismatch_end: usize,
     failure_related: lex.Token,
     failure_has_related: bool,
     failure_related_note: str,
@@ -834,6 +840,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.failure_detail = ""
     c.failure_detail2 = ""
     c.failure_has_types = false
+    c.failure_mismatch_end = 0usize
     ret ok
 }
 
@@ -1145,10 +1152,12 @@ fn apply_context(c: *Checker, actual: Type, expected: Type) -> (Type, err) {
     if actual.kind == .UntypedFloat && expected.kind == .Float { ret (expected, ok) }
     if type_assignable(c, actual, expected) {
         c.failure_has_types = false
+        c.failure_mismatch_end = 0usize
         ret (expected, ok)
     }
     if c.generic_declaration && types_may_match_after_instantiation(c, actual, expected) {
         c.failure_has_types = false
+        c.failure_mismatch_end = 0usize
         ret (expected, ok)
     }
     // The pair the diagnostic names (D401): the last mismatch before the failure is
@@ -9735,6 +9744,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             let (result_id, result_known) = memo_intern(c, fresh)
             if result_known { c.memo_tables[module_index][node_index] = (expected_key << 32usize) | (result_id + 1usize) }
         }
+        if fresh_error == TypeMismatch { note_mismatch_expression(c, tree, node_index) }
         ret (fresh, fresh_error)
     }
     var slot = 0usize
@@ -9751,7 +9761,25 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     if fresh_error == ok && c.expr_cache.len != 0usize && c.call_generation != 0usize {
         c.expr_cache[slot] = ExprCacheEntry { generation: c.call_generation, token_start: start, token_end: end, expected: expected, result: fresh }
     }
+    if fresh_error == TypeMismatch { note_mismatch_expression(c, tree, node_index) }
     ret (fresh, fresh_error)
+}
+
+// The expression a mismatch surfaced at (D444): every frame the error passes
+// records itself, so the outermost wins -- a name or a literal keeps its span, a
+// wider expression clears it, since which of its parts to convert is a reading.
+fn note_mismatch_expression(c: *Checker, tree: *parse.Tree, node_index: usize) {
+    if !c.failure_has_types { ret }
+    let node = tree.nodes[node_index]
+    let first = usize(node.token_start)
+    let last = usize(node.token_end)
+    if last <= first || last > c.token_count { ret }
+    c.failure_mismatch_end = 0usize
+    if last - first == 1usize {
+        c.failure_fix_kind = 3u8
+        c.failure_fix_at = c.tokens[first].start
+        c.failure_mismatch_end = c.tokens[first].end
+    }
 }
 
 fn same_expectation(a: Type, b: Type) -> bool {

@@ -9750,3 +9750,21 @@ and an `lstat` that succeeds.
 
 Not yet: `watch_open`, `set_mode`, `set_times` and `set_current_dir`, and the
 wrappers beyond `e.os` (`e.fs`, `e.proc`).
+
+## D444 -- A scalar mismatch carries its conversion as a fix
+
+H09 lists fixes for the type codes; a type mismatch named both types (D401)
+and offered nothing, while `tooling.md`'s own example of a fix was the
+conversion. The checker now notes the innermost expression a mismatch surfaced
+at -- its bytes and whether it is one token -- and the diagnostic writer, when
+both types are integers or floats and the expression is one token (a name or a
+literal), attaches `convert explicitly`, applicability `maybe` since a
+narrowing conversion changes the value, with one edit replacing the
+expression's span by `T(expr)` for the expected `T`; the fix carries D432's
+precondition. A wider expression gets no fix: which of its parts to convert is
+a reading, and the innermost mismatch would name the wrong one. The corpus
+gains `reject/type_mismatch_fix` (an initializer), and `reject/type_mismatch`
+(an argument) now carries `i32(widened)` at the argument's span.
+
+Not yet: a fix for a name the program does not declare (a near miss), and for
+mismatches of aggregates.

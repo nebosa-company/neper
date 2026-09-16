@@ -3255,9 +3255,11 @@ type Sink = struct {
     related_token: lex.Token,
     has_related: bool,
     related_note: str,
-    // A fix to insert (D381): text at a byte offset, or empty.
+    // A fix to insert (D381): text at a byte offset, or empty; kind 3 (D444) replaces
+    // the bytes up to `fix_end` instead.
     fix_text: str,
     fix_at: usize,
+    fix_end: usize,
     fix_kind: u8,
     // The two types of a mismatch (D401, H09), as fields beside the message; empty
     // when the diagnostic is not one.
@@ -3383,11 +3385,16 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             var insert: lex.Token = zero
             insert.start = report.fix_at
             insert.end = report.fix_at
+            if report.fix_kind == 3u8 { insert.end = report.fix_end }
             let insert_at = lex.span_of(text, lines, insert)
-            if report.fix_kind == 2u8 {
-                try write_all(report, "[{\"message\":\"test the error before the value is used\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+            if report.fix_kind == 3u8 {
+                try write_all(report, "[{\"message\":\"convert explicitly\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
             } else {
-                try write_all(report, "[{\"message\":\"defer the cleanup after the acquisition\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+                if report.fix_kind == 2u8 {
+                    try write_all(report, "[{\"message\":\"test the error before the value is used\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+                } else {
+                    try write_all(report, "[{\"message\":\"defer the cleanup after the acquisition\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+                }
             }
             if report.operand_path.len != 0usize && is_operand {
                 try write_span(report, report.operand_path, insert_at, true)
@@ -4667,6 +4674,23 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     report.fix_text = checker.failure_fix_text
     report.fix_at = checker.failure_fix_at
     report.fix_kind = checker.failure_fix_kind
+    // A conversion as the fix (D444, H09): a mismatch of two scalar numbers at a
+    // one-token expression -- a name or a literal -- is wrapped in the expected type,
+    // `maybe`, since a narrowing conversion changes what the program computes.
+    var conversion_storage: [512]u8 = zero
+    let scalar_expected = checker.failure_expected.kind == .Integer || checker.failure_expected.kind == .Float
+    let scalar_actual = checker.failure_actual.kind == .Integer || checker.failure_actual.kind == .Float
+    if mismatch && checker.failure_has_types && checker.failure_fix_kind == 3u8 && checker.failure_mismatch_end != 0usize && scalar_expected && scalar_actual && checker.failure_module < g.count {
+        let failing_text = module_text(g, checker.failure_module)
+        if checker.failure_mismatch_end <= failing_text.len && checker.failure_fix_at < checker.failure_mismatch_end && report.expected_text.len + checker.failure_mismatch_end - checker.failure_fix_at + 2usize <= conversion_storage.len {
+            var conversion_at = tool.nptest_copy(conversion_storage[..], 0usize, report.expected_text)
+            conversion_at = tool.nptest_copy(conversion_storage[..], conversion_at, "(")
+            conversion_at = tool.nptest_copy(conversion_storage[..], conversion_at, failing_text[checker.failure_fix_at..checker.failure_mismatch_end])
+            conversion_at = tool.nptest_copy(conversion_storage[..], conversion_at, ")")
+            report.fix_text = conversion_storage[0usize..conversion_at]
+            report.fix_end = checker.failure_mismatch_end
+        }
+    }
     let emitted = emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, check.diagnostic_code(checker.failure_kind), message_storage[..message.count])
     report.has_related = false
     report.fix_text = ""
