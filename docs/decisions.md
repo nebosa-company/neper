@@ -9955,3 +9955,20 @@ corrected to credit D426 as the whole-build instantiation budget it is.
 
 Not yet: programs with input, and the fixtures past the bootstrap's subset,
 for which the bootstrap is no oracle.
+
+## D457 -- The unsafe inventory rides in the artifact
+
+The compiler's own warm build spent 20 of its 100 ms writing the manifest, and
+13 of those scanning every module's bytes for the `unsafe` inventory -- a scan
+D383 had measured at two milliseconds and the program had outgrown. The
+inventory of a module is now rendered once, when its artifact is written, on
+the worker that lowered it, and stored as an Inventory section (format 10: a
+record count and the manifest's bytes); a warm build copies a kept module's
+section into the manifest and scans only the modules it parsed. The manifest
+phase of the warm build fell from 20 ms to 4, the image digest most of what
+remains; the inventory is byte-identical between the cold build and the warm
+one, which both suites check on the unsafe fixture in both modes. Artifacts of
+format 9 are rebuilt once.
+
+Not yet: the warm build's `link from artifacts` (37 ms) and `link` (20 ms),
+the two phases that now bound it.

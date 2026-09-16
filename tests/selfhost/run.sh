@@ -1864,6 +1864,16 @@ for hot_mode in --release --time; do
     [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:options-changed dep=rebuilt:options-changed
     cmp "$hot_exe" "$hot_clean"
+    # The unsafe inventory rides in the artifact (D457): warm and cold manifests agree.
+    inventory_scratch="$test_build/inventory-scratch"
+    rm -rf "$inventory_scratch"
+    cp -r "$repo/tests/conformance/tools/manifest_unsafe" "$inventory_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$inventory_scratch/src/main.e" "$repo" x64 linux "$test_build/inventory$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 -c "import json,sys; print(json.dumps(json.load(open(sys.argv[1]))['unsafe']))" "$inventory_scratch/.neper/$hot_manifest_mode/build-manifest.json" > "$test_build/inventory-cold.json"
+    [ "$("$test_build/neper-self" emit-executable "$inventory_scratch/src/main.e" "$repo" x64 linux "$test_build/inventory$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 -c "import json,sys; print(json.dumps(json.load(open(sys.argv[1]))['unsafe']))" "$inventory_scratch/.neper/$hot_manifest_mode/build-manifest.json" > "$test_build/inventory-warm.json"
+    cmp -s "$test_build/inventory-cold.json" "$test_build/inventory-warm.json"
+    grep -q '"nocheck"' "$test_build/inventory-warm.json"
     # A write that dies (D435, H24): the second module's artifact write dies after
     # staging; the warm build after it rebuilds that module alone and is the clean build.
     cp "$hot_fixture/src/dep.e" "$hot_source/dep.e"
@@ -3263,9 +3273,9 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '9' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '10' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
-[ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '8' ]
+[ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '9' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
 interface_artifact_path="$test_build/interface.x64-linux.em"
 interface_artifact_written=$($test_build/neper-self emit-em "$repo/tests/selfhost/fixtures/em/interface/src/main.e" "$repo" x64 linux "$interface_artifact_path")

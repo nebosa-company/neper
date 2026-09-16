@@ -3763,6 +3763,7 @@ both as a module and as the Windows variant of `thing`.
 | Code | machine code (or SPIR-V/PTX) with relocations: the module's own functions, plus the monomorphised instances and device-compiled helpers it emitted under module-local linkage; a relocation names its target by module, name and instance, or the library and symbol an `@import` binds |
 | Debug | the standard-format debug sections of §13 — line tables, and the locals-and-types subset in DWARF or CodeView — plus the source hash; from M4, the neper-format side table beside them |
 | Imports | the module's `use` declarations in order, each a module name and a qualifier (format 6, D322): a hot build discovers the program's graph from an unchanged module's artifact without parsing it |
+| Inventory | the module's unsafe inventory as the build manifest lists it -- a record count and the rendered records (format 10, D457): a warm build copies a kept module's and scans only the modules it parsed |
 
 The file is little-endian regardless of target. Its fixed 32-byte header is: bytes
 `0..3` magic `NEPM`; `u16` format version; `u16` header size; `u32` target-triple

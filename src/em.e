@@ -111,7 +111,7 @@ type CodeRelocation = struct {
     symbol_index: usize,
 }
 
-fn format_version() -> usize { ret 9usize }
+fn format_version() -> usize { ret 10usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -128,6 +128,8 @@ fn lines_kind() -> usize { ret 8usize }
 // The module's `use` declarations in order, name and qualifier (D322, format 6): a hot
 // build discovers the graph from an unchanged module's artifact without parsing it.
 fn imports_kind() -> usize { ret 9usize }
+// The unsafe inventory (D457): the manifest's records for the module, rendered.
+fn inventory_kind() -> usize { ret 10usize }
 
 fn declaration_function_kind() -> usize { ret 1usize }
 fn declaration_aggregate_kind() -> usize { ret 2usize }
@@ -146,7 +148,7 @@ fn mode_id(mode: BuildMode) -> usize {
 }
 
 fn known_kind(kind: usize) -> bool {
-    ret kind >= strings_kind() && kind <= imports_kind()
+    ret kind >= strings_kind() && kind <= inventory_kind()
 }
 
 // One row of a code function's line table as an artifact carries it.
@@ -2235,7 +2237,7 @@ fn write_interface_artifact(c: *check.Checker, g: *graph.Graph, module_index: us
 }
 
 fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, target_triple: str, mode: BuildMode, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, line_count: usize, strings: *StringTable, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
-    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 8usize || output.count != 0usize { ret InvalidArtifact }
+    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 9usize || output.count != 0usize { ret InvalidArtifact }
     try reset_strings(strings)
     let (target_index, target_error) = intern(strings, target_triple)
     if target_error != ok { ret target_error }
@@ -2269,7 +2271,27 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     try begin_section(&writer, imports_kind(), required_flag())
     try write_imports(g, module_index, strings, output)
     try end_section(&writer)
+    // The inventory (D457): its record count, then the manifest's bytes for it.
+    try begin_section(&writer, inventory_kind(), required_flag())
+    try binary.little_u32(output, g.modules[module_index].inventory_count)
+    try binary.copy_bytes(output, g.modules[module_index].inventory)
+    try end_section(&writer)
     ret finish(&writer)
+}
+
+// The Inventory section read (D457): the count and the bytes, or nothing for an
+// artifact without one.
+fn artifact_inventory(bytes: []const u8) -> ([]const u8, usize, bool, err) {
+    var none: []const u8 = zero
+    let validation_error = check_layout(bytes)
+    if validation_error != ok { ret (none, 0usize, false, validation_error) }
+    let (section, found, section_error) = find_section_unchecked(bytes, inventory_kind())
+    if section_error != ok { ret (none, 0usize, false, section_error) }
+    if !found { ret (none, 0usize, false, ok) }
+    if section.length < 4usize { ret (none, 0usize, false, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, section.offset)
+    if count_error != ok { ret (none, 0usize, false, InvalidArtifact) }
+    ret (bytes[section.offset + 4usize..section.offset + section.length], count, true, ok)
 }
 
 fn write_imports(g: *graph.Graph, module_index: usize, table: *StringTable, output: *binary.Buffer) -> err {

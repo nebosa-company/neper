@@ -623,6 +623,12 @@ program under the same budget and worker count answers the same way on every
 machine. `--stats` reports the count as `function instances`; the corpus's
 `tools/instances` case makes three.
 
+The manifest's `unsafe` inventory of a kept module comes from its artifact
+(D457): the sites are rendered when the artifact is written, on the worker that
+lowered the module, and a warm build copies them -- the manifest phase of the
+compiler's own warm build fell from 20 ms to 4 -- scanning only the modules it
+parsed, so the inventory is whole either way.
+
 `--fault-write N` (D435, H24) on a hot build makes the artifact write of module
 `N` (by load order, the root 0) die after its `.tmp` is staged and before the
 replace, as a crash there would: the build stops with one `E-CLI-9999`, exit 1,

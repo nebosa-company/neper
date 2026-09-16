@@ -23,6 +23,11 @@ type Module = struct {
     name: str,
     path: str,
     text: str,
+    // The unsafe inventory the module's artifact carries (D457): the manifest's
+    // records for it, copied on a warm build instead of scanning the text.
+    inventory: []const u8,
+    inventory_count: usize,
+    inventory_known: bool,
     // Where the text's lines begin (D315): tokens carry offsets, and a line is looked
     // up here when a diagnostic, a trap record or a tooling record asks.
     lines: []usize,
@@ -527,7 +532,8 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     var no_tree: parse.Tree = zero
     let (spelling, spelling_error) = spelling_of(a, g, path)
     if spelling_error != ok { ret (0usize, spelling_error) }
-    g.modules[index] = Module { name: name, path: path, text: "", lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
+    var no_inventory: []const u8 = zero
+    g.modules[index] = Module { name: name, path: path, text: "", inventory: no_inventory, inventory_count: 0usize, inventory_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }

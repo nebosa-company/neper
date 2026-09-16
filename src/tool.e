@@ -4570,6 +4570,111 @@ fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (us
 
 // The object, into `out`, without a newline: the command flushes it as a record and a
 // build saves it as a file. An empty `artifact_path` is no artifact.
+// The unsafe sites of one module (D355, D371, D457): the module's bytes scanned for
+// `@unsafe`, `@nocheck`, `extern fn`, `mem.cast`, `mem.bitcast` and a bare `union`,
+// each a record of the manifest's `unsafe` array after the `written` ones.
+fn manifest_module_sites(out: *Out, written: *usize, module_name: str, text_bytes_in: str, lines_in: []usize, openers: []const u8) -> err {
+    // An `@` first on its line (after spaces) opens an attribute or a `@nocheck`
+    // statement; one inside a comment or a string has `//` or `"` before it on
+    // the line. The bytes are scanned, not the tokens: a lex of every module
+    // cost fifty milliseconds on the compiler's own build, this costs two.
+    let text_bytes = text_bytes_in
+    let lines = lines_in
+    // A kept module has no line table (it was never scanned), and `line_of` would
+    // count from the start at every site: a cursor counts each byte once (D389).
+    var line_cursor_at = 0usize
+    var line_cursor = 1usize
+    var byte_at = 0usize
+    while byte_at < text_bytes.len {
+        // One load per byte (D383): the loop is the D356 shape, so it carries no check.
+        let opener = text_bytes[byte_at]
+        let opener_class = openers[usize(opener)]
+        if opener_class == 0u8 {
+            byte_at += 1usize
+            continue
+        }
+        if opener_class == 1u8 && manifest_line_opens(text_bytes, byte_at) {
+            let word_end = manifest_word_end(text_bytes, byte_at + 1usize)
+            let word = text_bytes[byte_at + 1usize..word_end]
+            if graph.same(word, "unsafe") || graph.same(word, "nocheck") {
+                while line_cursor_at < byte_at {
+                    if text_bytes[line_cursor_at] == 10u8 { line_cursor += 1usize }
+                    line_cursor_at += 1usize
+                }
+                let line = line_cursor
+                var function = ""
+                if graph.same(word, "unsafe") {
+                    // The next `fn` after the attribute.
+                    let (name, found) = manifest_fn_after(text_bytes, word_end)
+                    if found { function = name }
+                    try manifest_unsafe_site(out, *written, "unsafe", "declared", module_name, function, line)
+                } else {
+                    // The last `fn` before the block.
+                    let (name, found) = manifest_fn_before(text_bytes, byte_at)
+                    if found { function = name }
+                    try manifest_unsafe_site(out, *written, "nocheck", "declared", module_name, function, line)
+                }
+                *written += 1usize
+            }
+            byte_at = word_end
+        } else {
+            // The escape hatches the program does not declare (D371, H27): an
+            // `extern fn`, a `mem.cast`, a `mem.bitcast`, a bare `union` -- each a
+            // site the checker trusts and checks nothing at, listed as `trusted`.
+            // Only an `e`, `m` or `u` can open a site: the call per byte cost 115 ms
+            // on the 500k-line workload (D383).
+            var site_end = 0usize
+            var kind = ""
+            var function = ""
+            var candidate = false
+            if opener_class == 2u8 {
+                if opener == 101u8 && (byte_at == 0usize || text_bytes[byte_at - 1usize] == 10u8) { candidate = true }
+                if opener == 109u8 && byte_at + 1usize < text_bytes.len && text_bytes[byte_at + 1usize] == 101u8 { candidate = true }
+                if opener == 117u8 && byte_at >= 2usize && text_bytes[byte_at - 1usize] == 32u8 && text_bytes[byte_at - 2usize] == 61u8 { candidate = true }
+            }
+            if candidate {
+                let (site_kind, site_function, found_end) = manifest_trusted_site(text_bytes, byte_at)
+                kind = site_kind
+                function = site_function
+                site_end = found_end
+            }
+            if site_end != 0usize {
+                while line_cursor_at < byte_at {
+                    if text_bytes[line_cursor_at] == 10u8 { line_cursor += 1usize }
+                    line_cursor_at += 1usize
+                }
+                try manifest_unsafe_site(out, *written, kind, "trusted", module_name, function, line_cursor)
+                *written += 1usize
+                byte_at = site_end
+            } else {
+                byte_at += 1usize
+            }
+        }
+    }
+    ret ok
+}
+
+// The inventory of one module as its artifact carries it (D457): the records the
+// manifest would write for it, rendered once when the artifact is written, and
+// their count -- so a warm build copies bytes for every kept module and scans only
+// what it parsed.
+fn module_inventory(a: *mem.Arena, module_name: str, text_bytes: str, lines: []usize) -> ([]u8, usize, err) {
+    var none: []u8 = zero
+    let (storage, storage_error) = mem.alloc[u8](a, 4096usize + text_bytes.len / 4usize)
+    if storage_error != ok { ret (none, 0usize, storage_error) }
+    var out: Out = zero
+    out.bytes = storage
+    var openers: [256]u8 = zero
+    openers[64usize] = 1u8
+    openers[101usize] = 2u8
+    openers[109usize] = 2u8
+    openers[117usize] = 2u8
+    var written = 0usize
+    let sites_error = manifest_module_sites(&out, &written, module_name, text_bytes, lines, openers[..])
+    if sites_error != ok { ret (none, 0usize, sites_error) }
+    ret (storage[0usize..out.count], written, ok)
+}
+
 fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph, mode: str, unchecked: bool, artifact_path: str, artifact_sha256: str, reasons: []u8) -> err {
     try text(out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3,\"target\":\"")
     try text(out, arch)
@@ -4651,82 +4756,15 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
     openers[117usize] = 2u8
     var module_at = 0usize
     while module_at < g.count {
-        // An `@` first on its line (after spaces) opens an attribute or a `@nocheck`
-        // statement; one inside a comment or a string has `//` or `"` before it on
-        // the line. The bytes are scanned, not the tokens: a lex of every module
-        // cost fifty milliseconds on the compiler's own build, this costs two.
-        let text_bytes = g.modules[module_at].text
-        let lines = g.modules[module_at].lines
-        // A kept module has no line table (it was never scanned), and `line_of` would
-        // count from the start at every site: a cursor counts each byte once (D389).
-        var line_cursor_at = 0usize
-        var line_cursor = 1usize
-        var byte_at = 0usize
-        while byte_at < text_bytes.len {
-            // One load per byte (D383): the loop is the D356 shape, so it carries no check.
-            let opener = text_bytes[byte_at]
-            let opener_class = openers[usize(opener)]
-            if opener_class == 0u8 {
-                byte_at += 1usize
-                continue
+        // A kept module's inventory rides in its artifact (D457): copied, not scanned.
+        if g.modules[module_at].inventory_known {
+            if g.modules[module_at].inventory_count != 0usize {
+                if written != 0usize { try byte(out, 44u8) }
+                try text(out, g.modules[module_at].inventory)
+                written += g.modules[module_at].inventory_count
             }
-            if opener_class == 1u8 && manifest_line_opens(text_bytes, byte_at) {
-                let word_end = manifest_word_end(text_bytes, byte_at + 1usize)
-                let word = text_bytes[byte_at + 1usize..word_end]
-                if graph.same(word, "unsafe") || graph.same(word, "nocheck") {
-                    while line_cursor_at < byte_at {
-                        if text_bytes[line_cursor_at] == 10u8 { line_cursor += 1usize }
-                        line_cursor_at += 1usize
-                    }
-                    let line = line_cursor
-                    var function = ""
-                    if graph.same(word, "unsafe") {
-                        // The next `fn` after the attribute.
-                        let (name, found) = manifest_fn_after(text_bytes, word_end)
-                        if found { function = name }
-                        try manifest_unsafe_site(out, written, "unsafe", "declared", g.modules[module_at].name, function, line)
-                    } else {
-                        // The last `fn` before the block.
-                        let (name, found) = manifest_fn_before(text_bytes, byte_at)
-                        if found { function = name }
-                        try manifest_unsafe_site(out, written, "nocheck", "declared", g.modules[module_at].name, function, line)
-                    }
-                    written += 1usize
-                }
-                byte_at = word_end
-            } else {
-                // The escape hatches the program does not declare (D371, H27): an
-                // `extern fn`, a `mem.cast`, a `mem.bitcast`, a bare `union` -- each a
-                // site the checker trusts and checks nothing at, listed as `trusted`.
-                // Only an `e`, `m` or `u` can open a site: the call per byte cost 115 ms
-                // on the 500k-line workload (D383).
-                var site_end = 0usize
-                var kind = ""
-                var function = ""
-                var candidate = false
-                if opener_class == 2u8 {
-                    if opener == 101u8 && (byte_at == 0usize || text_bytes[byte_at - 1usize] == 10u8) { candidate = true }
-                    if opener == 109u8 && byte_at + 1usize < text_bytes.len && text_bytes[byte_at + 1usize] == 101u8 { candidate = true }
-                    if opener == 117u8 && byte_at >= 2usize && text_bytes[byte_at - 1usize] == 32u8 && text_bytes[byte_at - 2usize] == 61u8 { candidate = true }
-                }
-                if candidate {
-                    let (site_kind, site_function, found_end) = manifest_trusted_site(text_bytes, byte_at)
-                    kind = site_kind
-                    function = site_function
-                    site_end = found_end
-                }
-                if site_end != 0usize {
-                    while line_cursor_at < byte_at {
-                        if text_bytes[line_cursor_at] == 10u8 { line_cursor += 1usize }
-                        line_cursor_at += 1usize
-                    }
-                    try manifest_unsafe_site(out, written, kind, "trusted", g.modules[module_at].name, function, line_cursor)
-                    written += 1usize
-                    byte_at = site_end
-                } else {
-                    byte_at += 1usize
-                }
-            }
+        } else {
+            try manifest_module_sites(out, &written, g.modules[module_at].name, g.modules[module_at].text, g.modules[module_at].lines, openers[..])
         }
         module_at += 1usize
     }

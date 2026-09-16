@@ -1712,6 +1712,21 @@ foreach ($hotMode in @('--release', '--time')) {
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:options-changed' 'dep=rebuilt:options-changed'
     if ($LASTEXITCODE -ne 0) { throw "the manifest after a capped build's artifacts does not say options-changed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after an inline cap is not the clean build ($hotMode)" }
+    # The unsafe inventory rides in the artifact (D457): a warm build's manifest lists
+    # the same sites as the cold build's, copied from the kept modules' artifacts.
+    $inventoryScratch = Join-Path $testBuild 'inventory-scratch'
+    if (Test-Path -LiteralPath $inventoryScratch) { Remove-Item -LiteralPath $inventoryScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\conformance\tools\manifest_unsafe') $inventoryScratch
+    $inventoryExe = Join-Path $testBuild "inventory$hotMode.exe"
+    $inventoryCold = & $compiler emit-executable (Join-Path $inventoryScratch 'src\main.e') $repo 'x64' 'windows' $inventoryExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $inventoryCold -ne 'executable written') { throw "the cold inventory build failed ($hotMode)" }
+    $inventoryColdManifest = Get-Content -Raw -LiteralPath (Join-Path $inventoryScratch ".neper\$hotManifestMode\build-manifest.json")
+    $inventoryWarm = & $compiler emit-executable (Join-Path $inventoryScratch 'src\main.e') $repo 'x64' 'windows' $inventoryExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $inventoryWarm -ne 'executable written') { throw "the warm inventory build failed ($hotMode)" }
+    $inventoryWarmManifest = Get-Content -Raw -LiteralPath (Join-Path $inventoryScratch ".neper\$hotManifestMode\build-manifest.json")
+    $inventoryColdSites = ($inventoryColdManifest | ConvertFrom-Json).unsafe | ConvertTo-Json -Compress
+    $inventoryWarmSites = ($inventoryWarmManifest | ConvertFrom-Json).unsafe | ConvertTo-Json -Compress
+    if ($inventoryColdSites -ne $inventoryWarmSites -or $inventoryColdSites -notmatch '"nocheck"') { throw "the warm build's unsafe inventory differs from the cold build's ($hotMode)" }
     # A write that dies (D435, H24): `--fault-write 1` makes the second module's artifact
     # write die after staging, so the build fails with its `.tmp` left; the warm build
     # after it finds every published artifact whole, rebuilds that module alone as
@@ -3069,8 +3084,8 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 9 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
-if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 8) { throw 'compiled-module section count is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 10 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 9) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'
 $interfaceArtifactWritten = & $compiler emit-em (Join-Path $PSScriptRoot 'fixtures\em\interface\src\main.e') $repo 'x64' 'windows' $interfaceArtifactPath

@@ -6123,7 +6123,7 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild, largest_bytes: usize) -> err {
     let (string_slots, string_slots_error) = mem.alloc[usize](a, 131072usize)
     if string_slots_error != ok { ret string_slots_error }
     try em.init_strings(&hot.strings, string_values, string_slots)
-    let (sections, sections_error) = mem.alloc[em.Section](a, 8usize)
+    let (sections, sections_error) = mem.alloc[em.Section](a, 9usize)
     if sections_error != ok { ret sections_error }
     hot.sections = sections
     let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
@@ -6143,6 +6143,13 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     if hot.release { mode = .Release }
     if hot.unchecked { mode = .Unchecked }
     hot.artifact.count = 0usize
+    // The module's unsafe inventory (D457), rendered here on the worker so a warm
+    // build copies it from the artifact instead of scanning every module's text.
+    let (inventory, inventory_count, inventory_error) = tool.module_inventory(a, loaded.modules[module_index].name, loaded.modules[module_index].text, loaded.modules[module_index].lines)
+    if inventory_error != ok { ret inventory_error }
+    loaded.modules[module_index].inventory = inventory
+    loaded.modules[module_index].inventory_count = inventory_count
+    loaded.modules[module_index].inventory_known = true
     try em.write_module(checker, loaded, builder, module_index, hot.triple, mode, context.output, stage_offsets, context.relocations, *context.relocation_count, context.lines, *context.line_count, &hot.strings, hot.sections, &hot.scratch, &hot.artifact)
     let (held, held_error) = mem.alloc[u8](a, hot.artifact.count)
     if held_error != ok { ret held_error }
@@ -8545,13 +8552,18 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 if string_slots_error != ok { ret string_slots_error }
                 var strings: em.StringTable = zero
                 try em.init_strings(&strings, string_values, string_slots)
-                let (sections, sections_error) = mem.alloc[em.Section](a, 8usize)
+                let (sections, sections_error) = mem.alloc[em.Section](a, 9usize)
                 if sections_error != ok { ret sections_error }
                 let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
                 if triple_error != ok { ret triple_error }
                 let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
                 if packed_error != ok { ret packed_error }
                 if writes_em {
+                    let (root_inventory, root_inventory_count, root_inventory_error) = tool.module_inventory(a, loaded.modules[0usize].name, loaded.modules[0usize].text, loaded.modules[0usize].lines)
+                    if root_inventory_error != ok { ret root_inventory_error }
+                    loaded.modules[0usize].inventory = root_inventory
+                    loaded.modules[0usize].inventory_count = root_inventory_count
+                    loaded.modules[0usize].inventory_known = true
                     try em.write_module(&checker, &loaded, &builder, 0usize, triple, artifact_mode, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines, code.line_count, &strings, sections, &scratch, &artifact)
                     try binary.pack(&artifact, packed)
                     try save_bytes(a, args[6usize], packed[..artifact.count])
@@ -8564,6 +8576,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 while module_at < loaded.count {
                     if !keep[module_at] {
                         artifact.count = 0usize
+                        let (each_inventory, each_inventory_count, each_inventory_error) = tool.module_inventory(a, loaded.modules[module_at].name, loaded.modules[module_at].text, loaded.modules[module_at].lines)
+                        if each_inventory_error != ok { ret each_inventory_error }
+                        loaded.modules[module_at].inventory = each_inventory
+                        loaded.modules[module_at].inventory_count = each_inventory_count
+                        loaded.modules[module_at].inventory_known = true
                         try em.write_module(&checker, &loaded, &builder, module_at, triple, artifact_mode, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines, code.line_count, &strings, sections, &scratch, &artifact)
                         try binary.pack(&artifact, packed)
                         let (artifact_path, artifact_path_error) = compiled_module_path(a, args[6usize], loaded.modules[module_at].name, triple)
@@ -8636,6 +8653,20 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 // Every build writes `.neper/<mode>/build-manifest.json` under the project root
                 // (section 7, D254), with the executable it just wrote as the one artifact.
                 try fill_manifest_digests(a, &loaded, held)
+                // A kept module's unsafe inventory from its artifact (D457): the manifest
+                // copies it and scans only the modules the build parsed.
+                var inventory_at = 0usize
+                while inventory_at < loaded.count {
+                    if !loaded.modules[inventory_at].has_tree && inventory_at < held.len && held[inventory_at].len != 0usize {
+                        let (carried, carried_count, carried_found, carried_error) = em.artifact_inventory(held[inventory_at])
+                        if carried_error == ok && carried_found {
+                            loaded.modules[inventory_at].inventory = carried
+                            loaded.modules[inventory_at].inventory_count = carried_count
+                            loaded.modules[inventory_at].inventory_known = true
+                        }
+                    }
+                    inventory_at += 1usize
+                }
                 // What the build did (D405, H14), for the manifest's `work`.
                 loaded.work_bodies_checked = report.build.bodies_checked
                 loaded.work_modules_lowered = report.build.modules_lowered
