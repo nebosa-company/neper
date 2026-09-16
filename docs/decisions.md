@@ -9781,3 +9781,21 @@ says `did you mean `x`?` and carries `use the nearest name in scope` as a
 no change: the existing goldens hold. The corpus gains `reject/name_near`.
 
 Not yet: names of other modules (`os.opne`), type names, and field names.
+
+## D446 -- The manifest counts the declarations rechecked
+
+H14 asks for the count of declarations rechecked; D405's `work` said what a
+build lowered and whose bodies it checked, and nothing about the declarations,
+which every build collects from lexed trees whether a module is kept or not.
+The checker's counts after the declaration pass -- functions, aggregates,
+constants, globals -- are the build's `declarations_checked`, a fourth field of
+the manifest's `work` and a `--stats` row, and `check_incremental.py
+work.declarations_checked=N` pins it in both suites. The number said more than
+the row expected: a cold build of the incremental fixture holds 403
+declarations, a warm build over a stable cache 28 (29 for the Linux target) --
+the seeded surface alone, since a kept module's declarations come from its
+artifact (D322) and are never collected from a tree. H14's remaining reuse is
+inside a rebuilt module, not across kept ones, and the row now says so.
+
+Not yet: the count per module, and reuse of declarations inside a module that
+is rebuilt for one edited body.

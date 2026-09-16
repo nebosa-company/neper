@@ -284,7 +284,7 @@
         "unsafe":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["kind","provenance","module","function","line"],"properties":{"kind":{"enum":["unsafe","nocheck","extern","cast","bitcast","union"]},"provenance":{"enum":["declared","trusted"]},"module":{"type":"string"},"function":{"type":"string"},"line":{"type":"integer","minimum":0}}}},
         "incremental":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["module","decision","reason"],"properties":{"module":{"type":"string"},"decision":{"enum":["kept","rebuilt"]},"reason":{"enum":["no-artifact","invalid-artifact","source-changed","mode-changed","compiler-changed","options-changed","stable","edges-hold","edge-changed"]}}}},
         "options":{"type":"object","required":["checks"],"properties":{"checks":{"enum":["retained","off"]}}},
-        "work":{"type":"object","additionalProperties":false,"required":["bodies_checked","modules_lowered","functions_lowered"],"properties":{"bodies_checked":{"type":"integer","minimum":0},"modules_lowered":{"type":"integer","minimum":0},"functions_lowered":{"type":"integer","minimum":0}}}
+        "work":{"type":"object","additionalProperties":false,"required":["bodies_checked","modules_lowered","functions_lowered","declarations_checked"],"properties":{"bodies_checked":{"type":"integer","minimum":0},"modules_lowered":{"type":"integer","minimum":0},"functions_lowered":{"type":"integer","minimum":0},"declarations_checked":{"type":"integer","minimum":0}}}
       },
       "additionalProperties":false
     },

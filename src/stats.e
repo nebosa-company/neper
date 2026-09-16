@@ -71,6 +71,7 @@ type Build = struct {
     // checked, the modules lowered and the functions lowered in them; a warm build
     // over a stable cache does none of it.
     bodies_checked: usize,
+    declarations_checked: usize,
     modules_lowered: usize,
     functions_lowered: usize,
     ran: bool,
@@ -375,6 +376,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try row("unreached code")
     try number(b.unreached_bytes)
     try out(" bytes\n")
+    try row_number("declarations checked", b.declarations_checked)
     try row_number("bodies checked", b.bodies_checked)
     try row_number("modules lowered", b.modules_lowered)
     try row_number("functions lowered", b.functions_lowered)

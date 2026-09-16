@@ -4642,6 +4642,10 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
     try decimal(out, g.work_modules_lowered)
     try text(out, ",\"functions_lowered\":")
     try decimal(out, g.work_functions_lowered)
+    // The declarations rechecked (D446, H14): the seeded surface and the parsed
+    // modules' -- a warm build over a stable cache holds the seeds alone.
+    try text(out, ",\"declarations_checked\":")
+    try decimal(out, g.work_declarations_checked)
     ret text(out, "}}")
 }
 

@@ -1832,7 +1832,7 @@ for hot_mode in --release --time; do
     hot_manifest_mode=debug
     [ "$hot_mode" = --release ] && hot_manifest_mode=release
     hot_manifest="$hot_scratch/.neper/$hot_manifest_mode/build-manifest.json"
-    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable e.os=kept:stable work.bodies_checked=0 work.modules_lowered=0 work.functions_lowered=0
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable e.os=kept:stable work.bodies_checked=0 work.modules_lowered=0 work.functions_lowered=0 work.declarations_checked=29
     cmp "$hot_exe" "$hot_clean"
     # `--stats` on a warm build (D412): the kept modules are parsed for the counts.
     $test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --stats 2>&1 | grep -q 'bodies checked | 0'

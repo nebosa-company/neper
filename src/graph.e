@@ -160,6 +160,10 @@ type Graph = struct {
     work_bodies_checked: usize,
     work_modules_lowered: usize,
     work_functions_lowered: usize,
+    // The declarations the front end holds after its declaration pass (D446, H14):
+    // the seeded surface and every parsed module's; a kept module's come from its
+    // artifact and are not among them.
+    work_declarations_checked: usize,
     scanned: usize,
     // `-j N` (D331): how many workers any phase may run, none asked is the phase's
     // own count; and `--perturb`, the schedule turned around so the harness can ask

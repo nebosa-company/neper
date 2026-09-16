@@ -8090,6 +8090,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         report.arena_used = mem.stats(a).used
         try report_phase(&report, "check declarations")
+        // The declarations collected (D446, H14): every module's, from lexed trees.
+        report.build.declarations_checked = checker.signature_function_count + checker.aggregate_count + checker.constant_count + checker.global_count
         var artifact_dir = ""
         if args.len > 6usize { artifact_dir = args[6usize] }
         if hot_build {
@@ -8500,6 +8502,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 loaded.work_bodies_checked = report.build.bodies_checked
                 loaded.work_modules_lowered = report.build.modules_lowered
                 loaded.work_functions_lowered = report.build.functions_lowered
+                loaded.work_declarations_checked = report.build.declarations_checked
                 var no_reasons: []u8 = zero
                 var reasons = no_reasons
                 if hot_load.on { reasons = hot_load.reason[0usize..loaded.count] }

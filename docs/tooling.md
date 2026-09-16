@@ -538,8 +538,12 @@ check policy the image was built under, `retained` (spec section 11: every row
 kept in both modes); `work` (D405, H14) is what the build did rather than kept --
 `bodies_checked` (modules whose function bodies were checked), `modules_lowered`
 and `functions_lowered` -- so a warm build over a stable cache reports zero of
-each, and a build after an edit the modules the edit reached; `--stats` prints
-the same three rows. Arrays use the
+each, and a build after an edit the modules the edit reached -- and
+`declarations_checked` (D446), the declarations the front end holds after its
+declaration pass: the seeded surface and every parsed module's, a kept module's
+coming from its artifact -- so a warm build over a stable cache reports the
+seeds alone (28 on the incremental fixture, against 403 cold) and a build after
+an edit the edited modules' too; `--stats` prints the same four rows. Arrays use the
 deterministic order in which their corresponding compiler operation is specified,
 and object keys use the order listed here.
 
