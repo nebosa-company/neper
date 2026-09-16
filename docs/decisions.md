@@ -10175,3 +10175,58 @@ its negation and a comparison -- and the schema takes the fields; both suites.
 Not yet: the interpreter's step count per constant (the counter is reset per
 call and the checker has no field left for a total) and the phase of an
 expression the lowering folds.
+
+## D469 -- Every dispatched command is in `--help` and `info`
+
+The binary has no `--help`: usage appears only on `E-CLI-9999`, in two texts
+that disagree with each other and with the dispatcher. The short-form one
+(`main.e` `tool_usage`) names four commands; the positional one names
+twenty-odd and omits `context-file`, `explain-file`, `uses-file`, the four
+`plan-*-file`, `query-batch`, `build-manifest-file`, `index-file`,
+`index-project`, `fmt-project`, `test-file`, `test-project`,
+`test-impact-file`, `dis-file`, `check-project`, `info` and `tokens`; `info`
+advertises the ten section 1 commands. Spec section 1 gains a non-functional
+requirements list whose first entry fixes the rule: `--help`, `info`'s
+`commands` and the dispatcher name one set, checked by conformance, and the
+`E-CLI-9999` usage is that text rather than a third list.
+
+Not yet: `--help` itself, and the conformance check.
+
+## D470 -- No runtime interpreter; `eval` rides the comptime one
+
+Asked whether a Python-style interactive mode would help the compiler's own
+development or an LLM writing neper. No: the loop a harness runs is
+`check`/`run`/`test` over the JSON stream, already sub-second, and the M2.5
+items that shorten it are H08, H09 and `test-impact-file`; a runtime
+interpreter is a second implementation of the arena, pointers, externs,
+threads and the trap protocol that must agree with the native path bit for
+bit under section 15's determinism, and a tree-walker is no use for the one
+workload that matters, the compiler compiling itself, where the C bootstrap
+is already the oracle (D456). What is owed is the comptime interpreter to
+spec section 9's promise -- structs, slices, strings and the arena, past
+D218-D222's integers, bools and arrays -- and `neper eval EXPR` is then a
+`const` initialiser folded and printed, ten lines on the CLI, unable to
+disagree with `const` because it is `const`. Recorded under M1's interpreter
+bullet in the roadmap.
+
+Not yet: the interpreter's missing value kinds, and `eval`.
+
+## D471 -- Windows resources: an `.rc` compiler and a `.rsrc` section
+
+Asked for what Delphi gives with `{$R}` and a `.rc`: icon, `VERSIONINFO`,
+manifest, images and custom resource types in the executable. The PE emitter
+writes two sections and no `.rsrc`, and the one embedding design the project
+has, `project.yaml` assets into a read-only section behind `e.asset`, is for
+the program's own data on every target -- Windows will not find an icon
+there. So a wave under the unnumbered toolchain list: `neper rc` compiling
+the RC statements the shell and loader need, with `#define NAME integer` as
+the entire preprocessor, and the own linker building the `.rsrc` directory,
+icon groups, the `VS_VERSIONINFO` tree and the manifest at id 1, byte for
+byte, inputs hashed into the build manifest. Linking a foreign `.res` comes
+first because it exercises the linker half alone. The boundary is kept: what
+Windows reads goes in `.rsrc` and is reached by `os.resource` on Windows;
+what the program reads goes through `e.asset` everywhere.
+
+Not yet: all of it; `project.yaml` has no resources key and the linker has no
+section table beyond the two.
+

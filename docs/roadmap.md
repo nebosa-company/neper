@@ -476,6 +476,11 @@ compiler, so M1 completes after M2's rewrite compiles itself, not before.
   convention only (spec §5, D17)
 - `err` + `try`, arenas, compile-time parameters in `[...]` and monomorphisation
 - Compile-time interpreter for `const` and `[...]` arguments
+  — to spec §9's promise that any function is callable: structs, slices, strings
+  and the arena as interpreter memory (D218–D222 stop at integers, bools and
+  arrays). Then `neper eval EXPR`: the expression parsed as a `const` initialiser,
+  folded by that interpreter and printed — no codegen, no link, and the comptime
+  ceiling (no I/O, externs or threads) by design. Not a runtime interpreter (D470)
 - The full debug-mode check table of spec §11 — bounds, null, tag, overflow,
   narrow, shift, enum, align — the trap protocol, `unreachable()`, and the arena
   fills
@@ -820,6 +825,52 @@ uses undocumented behavior or intrinsics. Thresholds may tighten after a version
 baseline, but may not be silently relaxed. A syntax/API change is justified by total
 model effort, repair behavior and review risk across the supported model/tokenizer
 matrix—not by character count or a single tokenizer.
+
+## Backlog — recorded, not scheduled
+
+Wanted, decided, and not being implemented now. Each has its D-row; none has a
+milestone or a progress row until it is picked up.
+
+- **`--help` and `info` name every dispatched command (D469, spec §1 NFR 1).** There
+  is no `--help`; the two `E-CLI-9999` usage texts disagree with each other and omit
+  some twenty commands the dispatcher accepts. One usage text shared by `--help`,
+  `-h`, `help` and both error sites, `info.commands` widened to the same set, and a
+  conformance check that the three agree with the dispatcher.
+- **`neper eval EXPR` on the comptime interpreter (D470).** Once the M1 interpreter
+  bullet reaches spec §9 -- structs, slices, strings and the arena -- `eval` is a
+  `const` initialiser folded and printed: no codegen, no link, the comptime ceiling
+  by design. No runtime interpreter, no REPL past this.
+- **Call the standard library `e.lib`.** The prose says "the standard library",
+  "stdlib" (`stdlib-hardening.md`), "core library" and "the library" for the one
+  thing, the `e.*` modules under `lib/e`. Adopt `e.lib` as the name everywhere a
+  document names it -- spec §1 and §2, `modules.md`, `module-apis.md`, `tooling.md`,
+  the README, `render_progress.py`'s row text -- and keep file names as they are.
+  A docs-only sweep; a D-row records the term.
+- **Windows resources: `.rc` compiler and `.rsrc` linking (D471).** The PE
+  emitter writes `.text` and `.idata` and nothing the shell or loader can read
+  about the program. This wave adds `neper rc FILE.rc -o FILE.res` and a `.rsrc`
+  section in the own linker, so an executable carries its icon, `VERSIONINFO`,
+  application manifest, images and custom resource types, and `project.yaml`
+  names the `.rc` per Windows target. The compiler covers the RC statements those
+  need — `ICON`, `CURSOR`, `BITMAP`, `VERSIONINFO`, `STRINGTABLE`, `RCDATA`,
+  `24 RT_MANIFEST`, `LANGUAGE`, and `NAME TYPE "file"` for user-defined types —
+  with `#define NAME integer` as its whole preprocessor: no `#include`, no
+  expressions, no C. The linker builds the type → name → language directory the
+  loader expects (names before ids, both ascending), splits an `.ico`/`.cur` into
+  its `RT_ICON`/`RT_GROUP_ICON` entries, serialises `VERSIONINFO` as the UTF-16,
+  DWORD-padded `VS_VERSIONINFO` tree, and places a manifest at id 1. The section
+  is byte-deterministic and every input's path, size and SHA-256 goes in the build
+  manifest. A `.res` compiled elsewhere links the same way, which is the first
+  increment; the own `rc` is the second. Runtime access is `os.resource(kind,
+  name)` on Windows only; `.rsrc` is for what Windows reads — application data
+  keeps going through `e.asset`, which is the same on every target, and a Linux
+  build records the `.rc` as not applicable rather than failing.
+- **`build --subsystem gui`.** The PE emitter hard-codes subsystem 3 (console); the
+  first windowed app wants 2 so no console window opens. One constant behind one
+  flag, recorded in the build manifest.
+- **`run --watch`.** Rebuild and rerun on a source change, the hot-restart loop a
+  sub-second build makes near enough to hot reload; a shell loop does it today.
+  Needs `e.fs.watch`.
 
 ## Deliberately not scheduled
 

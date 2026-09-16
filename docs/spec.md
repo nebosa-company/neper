@@ -62,6 +62,17 @@ Also a non-goal: **terseness for the typist.** Shorthand that saves a human
 keystrokes at the cost of a reader's certainty is a bad trade here, because the
 typist is not the constraint.
 
+### Non-functional requirements
+
+1. **Every command the compiler dispatches is documented by the binary itself.**
+   `neper --help` (and `-h`, and `help`) prints every command word and every flag
+   the dispatcher accepts, for the human at a terminal; `neper info --json`'s
+   `commands` names the same set for a harness (`tooling.md` §1). The two lists and
+   the dispatcher may not disagree: a conformance check compares the words `--help`
+   prints and `info` advertises against the words the dispatcher matches, and a
+   command that reaches the dispatcher without reaching both is a failing build.
+   Usage printed on `E-CLI-9999` is the same text, never a second, shorter list.
+
 ### The name
 
 A neper (Np) is the natural-log unit of ratio — the quiet sibling of the bel.
