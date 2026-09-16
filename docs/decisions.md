@@ -8696,3 +8696,17 @@ workers against 638 on eight; each worker touches some 120 MB of fresh arena
 page faults of eight workers touching at once are what the eighth worker buys.
 The builder's instruction is 180 bytes with a `check.Type` inside it and a
 token is 120: the sizes D306 named, and the next memory row's subject.
+
+(amended, the same day: the cache of oracle entries was designed and half
+written before the hot loader was read again. A hot build parses every changed
+module and its transitive imports, since declaring one needs its imports
+declared (D322) -- and a module inlines only from what it imports, so the
+oracle already sees exactly the candidates a rebuilt module can use, from
+trees that exist anyway. Caching the entries would spare the oracle's lowering
+of those candidates, some ten milliseconds, and not the parse. What an edited
+build pays is the parse of the import closure for its declarations -- fifty to
+ninety milliseconds on the compiler -- and the step that removes it is loading
+declarations from a kept module's Interface into the checker instead of from
+its tree: signatures, aggregates, constants and errors as the artifact already
+records them. That is H14's declaration-level reuse proper, a project of its own,
+and the entry cache is not a step toward it; it was dropped.)
