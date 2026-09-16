@@ -230,7 +230,14 @@ Each symbol contains `id`, `kind`, `name`, `qualified_name`, `module`, `signatur
 `span`, `selection_span`, `container_id`, `attributes`, and nullable `documentation`
 from spec §3's attached `///` lines. `id` is the zero-based
 record number among symbol records and is stable for identical source. Nullable
-fields are present as JSON null; no field is omitted.
+fields are present as JSON null; no field is omitted. A `local` (D483, H17) is a
+`let`/`var` binding -- each name of a tuple binding its own -- or a `for` variable,
+nested under its function like a `parameter`, its `span` and `selection_span` the
+name, its `signature` the name; a bare name in the body that is one of the
+function's locals or parameters declared before it is a `read`, `write`, `call` or
+`address` reference to that symbol, its `target_qualified_name` `module.fn.name`
+(spec section 5 lets no local shadow a module-scope name, so a known name is never
+a local). A comptime parameter is not yet a symbol.
 
 A `reference` record contains `source_span`, `role`, `spelling`, `target_id`,
 `target_qualified_name`, and `origin`. `role` is `import`, `type`, `call`, `read`,

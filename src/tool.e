@@ -653,7 +653,7 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
             known += 1usize
             running += 1usize
             // The ids a declaration's nested symbols will take (D258).
-            if known_symbol.kind == .Function || known_symbol.kind == .Type || known_symbol.kind == .Extern { running += index_nested_count(&tree, usize(known_symbol.token_start), usize(known_symbol.token_end) - 1usize) }
+            if known_symbol.kind == .Function || known_symbol.kind == .Type || known_symbol.kind == .Extern { running += index_nested_count(&tree, tokens[0usize..token_count], usize(known_symbol.token_start), usize(known_symbol.token_end) - 1usize) }
         }
         known_pass += 1usize
     }
@@ -759,12 +759,12 @@ fn index_record(out: *Out, root: str, path: str, source: str, module_name: str, 
 }
 
 // How many nested symbols index_nested will emit for the declaration at [first, last].
-fn index_nested_count(tree: *parse.Tree, first: usize, last: usize) -> usize {
+fn index_nested_count(tree: *parse.Tree, tokens: []const lex.Token, first: usize, last: usize) -> usize {
     var found = 0usize
     var node_index = 1usize
     while node_index < tree.count && found < 256usize {
         let node = tree.nodes[node_index]
-        if !node.top_level && usize(node.token_start) >= first && usize(node.token_start) <= last && usize(node.token_end) > usize(node.token_start) && index_nested_kind(node.kind).len != 0usize { found += 1usize }
+        if !node.top_level && usize(node.token_start) >= first && usize(node.token_start) <= last && usize(node.token_end) > usize(node.token_start) && index_nested_kind(node.kind).len != 0usize { found += index_nested_names(node, tokens) }
         node_index += 1usize
     }
     ret found
@@ -775,7 +775,40 @@ fn index_nested_kind(kind: syntax.Kind) -> str {
     if kind == .Parameter { ret "parameter" }
     if kind == .FieldDecl { ret "field" }
     if kind == .EnumMember || kind == .UnionMember { ret "member" }
+    // A `let`/`var` binding and a `for` variable are `local` symbols (D483, H17).
+    if kind == .Binding || kind == .ForStmt { ret "local" }
     ret ""
+}
+
+// How many symbols a nested node is: a tuple binding `let (a, b)` is one per name,
+// a `for` one, anything else one.
+fn index_nested_names(node: syntax.Node, tokens: []const lex.Token) -> usize {
+    if node.kind == .ForStmt { ret 1usize }
+    if node.kind != .Binding || tokens[usize(node.token_start)].kind != .PunctLParen { ret 1usize }
+    var count = 0usize
+    var at = usize(node.token_start)
+    while at < usize(node.token_end) {
+        if tokens[at].kind == .Identifier { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+// The token index of a nested node's `which`th name: the `for` variable after the
+// keyword, the names of a tuple binding in order, else the node's first token.
+fn index_nested_name(node: syntax.Node, tokens: []const lex.Token, which: usize) -> usize {
+    if node.kind == .ForStmt { ret usize(node.token_start) + 1usize }
+    if node.kind != .Binding || tokens[usize(node.token_start)].kind != .PunctLParen { ret usize(node.token_start) }
+    var seen = 0usize
+    var at = usize(node.token_start)
+    while at < usize(node.token_end) {
+        if tokens[at].kind == .Identifier {
+            if seen == which { ret at }
+            seen += 1usize
+        }
+        at += 1usize
+    }
+    ret usize(node.token_start)
 }
 
 // The parameters, fields and members declared inside the top-level declaration whose
@@ -787,6 +820,7 @@ fn index_nested_kind(kind: syntax.Kind) -> str {
 fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, module_name: str, owner: str, tree: *parse.Tree, tokens: []const lex.Token, first: usize, last: usize, container_id: usize, next_id: usize, refs: *IndexRefs) -> (usize, err) {
     var picked: [256]usize = zero
     var picked_count = 0usize
+    refs.owner = owner
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
@@ -802,16 +836,42 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
         }
         node_index += 1usize
     }
+    // The declaration's locals and parameters, for the references in its body (D483):
+    // each name, its id and the token it is declared at, in token order.
+    refs.local_count = 0usize
+    refs.local_first = first
+    refs.local_last = last
     var written = 0usize
-    while written < picked_count {
-        let node = tree.nodes[picked[written]]
-        let name_token = tokens[usize(node.token_start)]
-        // References inside the signature so far come before this symbol (D280).
-        let interleave_error = index_emit_references(refs, out, root, path, source, module_name, tree, tokens, name_token.start)
-        if interleave_error != ok { ret (0usize, interleave_error) }
-        let nested_error = index_record(out, root, path, source, module_name, next_id + written, index_nested_kind(node.kind), source[name_token.start..name_token.end], owner, tokens, usize(node.token_start), usize(node.token_end) - 1usize, usize(node.token_start), container_id)
-        if nested_error != ok { ret (0usize, nested_error) }
-        written += 1usize
+    var pick_at = 0usize
+    while pick_at < picked_count {
+        let node = tree.nodes[picked[pick_at]]
+        let names = index_nested_names(node, tokens)
+        var which = 0usize
+        while which < names {
+            let name_index = index_nested_name(node, tokens, which)
+            let name_token = tokens[name_index]
+            var record_first = usize(node.token_start)
+            var record_last = usize(node.token_end) - 1usize
+            if node.kind == .Binding || node.kind == .ForStmt {
+                record_first = name_index
+                record_last = name_index
+            }
+            let kind = index_nested_kind(node.kind)
+            if (node.kind == .Parameter || node.kind == .Binding || node.kind == .ForStmt) && refs.local_count < refs.local_names.len {
+                refs.local_names[refs.local_count] = source[name_token.start..name_token.end]
+                refs.local_ids[refs.local_count] = next_id + written
+                refs.local_starts[refs.local_count] = name_index
+                refs.local_count += 1usize
+            }
+            // References inside the signature so far come before this symbol (D280).
+            let interleave_error = index_emit_references(refs, out, root, path, source, module_name, tree, tokens, name_token.start)
+            if interleave_error != ok { ret (0usize, interleave_error) }
+            let nested_error = index_record(out, root, path, source, module_name, next_id + written, kind, source[name_token.start..name_token.end], owner, tokens, record_first, record_last, name_index, container_id)
+            if nested_error != ok { ret (0usize, nested_error) }
+            written += 1usize
+            which += 1usize
+        }
+        pick_at += 1usize
     }
     ret (written, ok)
 }
@@ -835,6 +895,17 @@ type IndexRefs = struct {
     picked: usize,
     next: usize,
     written: usize,
+    // The current declaration's locals and parameters (D483): a bare name in its
+    // body that is one of them, declared before the use -- the latest such, so a
+    // shadowing binding wins -- is a reference to that symbol.
+    local_names: []str,
+    local_ids: []usize,
+    local_starts: []usize,
+    local_count: usize,
+    local_first: usize,
+    local_last: usize,
+    // The owner's qualified name, for a local's `target_qualified_name`.
+    owner: str,
 }
 
 // The collection half: every candidate node, sorted by span start (D280).
@@ -852,6 +923,15 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
     if nodes_error != ok { ret (state, nodes_error) }
     let (roles, roles_error) = mem.alloc[usize](a, 4096usize)
     if roles_error != ok { ret (state, roles_error) }
+    let (local_names, local_names_error) = mem.alloc[str](a, 256usize)
+    if local_names_error != ok { ret (state, local_names_error) }
+    let (local_ids, local_ids_error) = mem.alloc[usize](a, 256usize)
+    if local_ids_error != ok { ret (state, local_ids_error) }
+    let (local_starts, local_starts_error) = mem.alloc[usize](a, 256usize)
+    if local_starts_error != ok { ret (state, local_starts_error) }
+    state.local_names = local_names
+    state.local_ids = local_ids
+    state.local_starts = local_starts
     var picked = 0usize
     var node_index = 1usize
     while node_index < tree.count {
@@ -951,6 +1031,34 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
                     }
                     known_at += 1usize
                 }
+            }
+            // A local of the current declaration (D483): the latest of its name
+            // declared before this use, inside the declaration; spec section 5 lets
+            // no local shadow a module-scope name, so a known name is never one.
+            var local_found = state.local_count
+            if qualified_import == 256usize && found == known_ids.len && node.kind == .NameExpr && first >= state.local_first && first <= state.local_last {
+                var local_at = 0usize
+                while local_at < state.local_count {
+                    if state.local_starts[local_at] < first && graph.same(state.local_names[local_at], name) { local_found = local_at }
+                    local_at += 1usize
+                }
+            }
+            if local_found < state.local_count {
+                var local_role = "read"
+                let after = first + 1usize
+                if after < tokens.len {
+                    if tokens[after].kind == .PunctLParen { local_role = "call" }
+                    if parse.is_assignment_op(tokens[after].kind) { local_role = "write" }
+                }
+                if first > 0usize && tokens[first - 1usize].kind == .PunctAmp && !graph.same(local_role, "write") { local_role = "address" }
+                var local_scratch: [512]u8 = zero
+                var local_scratch_at = nptest_copy(local_scratch[..], 0usize, state.owner)
+                local_scratch[local_scratch_at] = 46u8
+                local_scratch_at += 1usize
+                local_scratch_at = nptest_copy(local_scratch[..], local_scratch_at, name)
+                let local_error = reference_record(out, root, path, source, name_token, name_token, local_role, name, state.local_ids[local_found], true, local_scratch[0usize..local_scratch_at])
+                if local_error != ok { ret local_error }
+                state.written += 1usize
             }
             if qualified_import < 256usize || found < known_ids.len {
                 var role_name = "read"

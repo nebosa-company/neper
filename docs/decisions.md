@@ -10434,3 +10434,21 @@ the result. The reader is the key scan the other manifest readers are, with an
 array scanner that skips a nested array or object whole. Both suites: the two
 debug builds agree, and against a release build the mode and the artifact are
 named. Not yet: a cross-host comparison, which differs by design.
+
+## D483 -- Locals in the index
+
+`index` listed a function's parameters as symbols and nothing it declared inside;
+D477's rename of locals had to read `let`, `var` and `for` off the tokens itself.
+Now a `let`/`var` binding -- each name of a tuple binding its own -- and a `for`
+variable are `local` symbols nested under the function, at the name's token, and
+a bare `NameExpr` in the body that is one of the function's locals or parameters
+declared before it is a reference to that symbol, its role read off the tokens
+around it as the module-scope references' are (`read`, `write`, `call`,
+`address`). Resolution is the token order: the latest declaration of the name
+before the use, which is the right one since spec section 5 refuses a local
+that shadows an active binding, and a module-scope name is never a local. The
+nested count that pre-assigns ids counts a tuple binding's names. `index.e`
+gains three locals and four references, `index_project` one and two; the
+symbol ids after a function's first local shift accordingly. Not yet: comptime
+parameters as symbols, and locals in the rename plan (D376 renames module-scope
+names only).
