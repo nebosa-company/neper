@@ -9239,3 +9239,20 @@ read the reordered declaration.
 Not yet: an argument list longer than sixteen items, a removed parameter that
 the body still reads (the postcondition's re-check finds it), and a snapshot
 identity on the plans' results.
+
+## D416 -- An assignment records an alias as a binding does, and ends the one it replaces
+
+D393 recorded `let p = &x` and left `p = &y` unseen: `p` kept aliasing `x`, so a
+store through it while `y` was lent went unrefused and one while `x` was lent
+was refused for nothing. An assignment to a local now records what a binding
+records -- `&y` for a pointer, a place of `y` for a slice, a literal with `&y`
+in a field for a struct -- and nothing for any other value, which ends the alias
+the local held; a slice local rebound also ends the aliases other slice locals
+held of it, since they view what it viewed and not what it views now, which is
+the loss D395 named. The binding and the assignment share one `record_alias`.
+The corpus gains `reject/safety_thread_reassign` (a pointer moved to the lent
+local, refused naming it); a pointer moved away from it and a slice rebound
+elsewhere check clean.
+
+Not yet: `x = x[1..]`, which ends others' aliases of `x` although the storage is
+the same (a loss, never a refusal), and a struct with addresses in two fields.
