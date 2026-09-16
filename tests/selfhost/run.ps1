@@ -2182,7 +2182,7 @@ foreach ($subject in @('contract.main', 'contract.bump', 'contract.first', 'cont
     if ($LASTEXITCODE -ne 0) { throw "context-file --json failed on $subject" }
 }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contractActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/contract.x64-windows.expected.jsonl')).Hash) { throw "context-file --json contract facts differ from the conformance corpus" }
-# `query-batch --json --batch FILE` (D409, H16): five queries over one check, each its own
+# `query-batch --json --batch FILE` (D409, H16): six queries over one check, each its own
 # stream in order, two refused, the process exiting 2 for them; byte for byte per host.
 $batchActual = Join-Path $testBuild 'conformance-tools-batch.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" query-batch contract.e `"$repo`" x64 windows --json --batch batch.txt > `"$batchActual`""

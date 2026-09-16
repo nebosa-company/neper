@@ -4,3 +4,4 @@ uses contract.total
 
 context contract.nothing
 frobnicate x
+context contract.Counter 8

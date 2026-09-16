@@ -9296,3 +9296,24 @@ hash does not -- beside the stale-generator case, run by both suites.
 
 Not yet: a hand edit inside a `direct` mapping's span, which the map declares
 editable and which should not be refused; today the file's whole hash decides.
+
+## D419 -- A type is a context subject
+
+H08 lists other symbol kinds among what `context-file` did not answer; a harness
+asking what a struct is had the index's signature string and nothing the
+checker knew. `--symbol module.Name` naming a declared aggregate now answers
+with a subject of `kind` `type` and facts in a fixed order: the `signature` --
+the declaration's head, `struct`, `union`, `union enum` or `enum` with its
+backing type, and the resource's cleanup when it is one -- one `field` per
+field with its type as `context-file` spells types (an enum member with its
+value), the `layout` on the target from the layout pass (`compiler-proved`;
+`unknown` for a generic), then what the rules make of a value: `resource` (owed
+its cleanup on every exit, moves at most once, its fields read in its module
+alone, D348), `borrow` (holds a pointer: a value views what it points at and a
+store of `&x` into it aliases `x` through that field, D354/D413) or `copy`
+(plain data). The same budgets, cursor, `bytes` and `snapshot` as a function's
+answer; a subject that names neither a function nor a type is refused as
+before, with the message saying both. The batch corpus case gains a type line.
+
+Not yet: constants, globals and errors as subjects, an instance of a generic by
+its arguments, and the type facts in the catalogue.

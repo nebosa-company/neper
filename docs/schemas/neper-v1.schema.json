@@ -144,7 +144,7 @@
       "type":"object","additionalProperties":false,
       "required":["record","subject","kind","source","source_sha256","snapshot","target","checks","grammar_revision","span"],
       "properties":{
-        "record":{"const":"subject"},"subject":{"type":"string"},"kind":{"enum":["fn"]},
+        "record":{"const":"subject"},"subject":{"type":"string"},"kind":{"enum":["fn","type"]},
         "source":{"$ref":"#/$defs/source"},"source_sha256":{"$ref":"#/$defs/sha256"},"snapshot":{"type":"string","pattern":"^[0-9a-f]{16}$"},
         "target":{"type":"string"},"checks":{"enum":["retained","off"]},"grammar_revision":{"type":"integer","minimum":1},
         "span":{"$ref":"#/$defs/span"}
@@ -155,7 +155,7 @@
       "required":["record","kind","provenance","value"],
       "properties":{
         "record":{"const":"fact"},
-        "kind":{"enum":["signature","ownership","allocation","borrow","mutation","errors","threads","resources","boundary","call","dispatch","instance","discard","value"]},
+        "kind":{"enum":["signature","ownership","allocation","borrow","mutation","errors","threads","resources","boundary","call","dispatch","instance","discard","value","field","layout","resource","copy"]},
         "provenance":{"enum":["compiler-proved","declared-and-checked","trusted-external","runtime-observed","unknown"]},
         "value":{"type":"string"},"span":{"$ref":"#/$defs/span"}
       }

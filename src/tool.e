@@ -15,6 +15,7 @@ use codegen_x64
 use artifact_hash
 use disasm_x64
 use check
+use layout
 
 error Capacity
 error InvalidSource
@@ -2417,6 +2418,156 @@ fn program_snapshot(out: *Out, g: *graph.Graph) -> err {
     ret byte(out, 34u8)
 }
 
+// The declared aggregate `module.Name` names (D419), not an instance of a generic.
+fn context_aggregate(c: *check.Checker, g: *graph.Graph, module_name: str, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < c.aggregate_count {
+        let aggregate = c.aggregates[at]
+        if !aggregate.instance && aggregate.module_index < g.count && graph.same(g.modules[aggregate.module_index].name, module_name) && graph.same(aggregate.name, name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The context of a type (D419, H08): the subject, then the facts in a fixed order --
+// the declaration as a signature, one `field` per field or member with its type
+// (a member's value for an enum), the `layout` (size and alignment on the target),
+// then what the rules make of a value: `resource` when the type is a resource with
+// its cleanup, `borrow` when a value holds a pointer and so views something, else
+// `copy` -- every one `declared-and-checked` but the layout, which is compiler-proved.
+fn type_context_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, subject: str, aggregate_index: usize, budget: usize, byte_budget: usize, cursor: usize, target_name: str, checks: str) -> err {
+    let aggregate = c.aggregates[aggregate_index]
+    let module = g.modules[aggregate.module_index]
+    let (root, relative) = source_identity_of(g, module.path)
+    let (path, path_error) = manifest_slashes(a, relative)
+    if path_error != ok { ret path_error }
+    let (digest, digest_error) = manifest_sha256(a, module.text)
+    if digest_error != ok { ret digest_error }
+    out.lines = module.lines
+    try text(out, "{\"record\":\"subject\",\"subject\":")
+    try quoted(out, subject)
+    try text(out, ",\"kind\":\"type\",\"source\":")
+    try manifest_identity(out, root, relative)
+    try text(out, ",\"source_sha256\":")
+    try quoted(out, digest)
+    try text(out, ",\"snapshot\":")
+    try program_snapshot(out, g)
+    try text(out, ",\"target\":")
+    try quoted(out, target_name)
+    try text(out, ",\"checks\":")
+    try quoted(out, checks)
+    try text(out, ",\"grammar_revision\":3,\"span\":")
+    try point_span(out, root, path, module.text, aggregate.token)
+    try byte(out, 125u8)
+    try flush(out)
+    var page: Page = zero
+    page.cursor = cursor
+    page.budget = budget
+    page.byte_budget = byte_budget
+    var ty = check.make_type(.Named, aggregate.name, aggregate.module_index)
+    ty.has_element = true
+    ty.element = aggregate_index
+    // The declaration.
+    page.total += 1usize
+    if page.total > page.cursor && page_open(&page, out) {
+        try text(out, "{\"record\":\"fact\",\"kind\":\"signature\",\"provenance\":\"declared-and-checked\",\"value\":\"type ")
+        try text(out, aggregate.name)
+        if aggregate.kind == .Struct { try text(out, " = struct") }
+        if aggregate.kind == .Union { try text(out, " = union") }
+        if aggregate.kind == .TaggedUnion { try text(out, " = union enum") }
+        if aggregate.kind == .Enum {
+            try text(out, " = enum ")
+            try type_text(out, c, g, aggregate.backing_type, 0usize)
+        }
+        if aggregate.resource {
+            try text(out, " (resource, cleanup ")
+            try text(out, aggregate.cleanup)
+            try byte(out, 41u8)
+        }
+        try text(out, "\"}")
+        try flush(out)
+        page.written += 1usize
+    } else {
+        if page.total > page.cursor { page.omitted += 1usize }
+    }
+    // The fields, or the members.
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let field_index = aggregate.first_field + field_at
+        page.total += 1usize
+        if page.total > page.cursor && page_open(&page, out) {
+            let field = c.aggregate_fields[field_index]
+            try text(out, "{\"record\":\"fact\",\"kind\":\"field\",\"provenance\":\"declared-and-checked\",\"value\":\"")
+            try text(out, field.name)
+            if aggregate.kind == .Enum {
+                if field.has_enum_value {
+                    try text(out, " = ")
+                    if field.enum_negative { try byte(out, 45u8) }
+                    try decimal(out, field.enum_value)
+                }
+            } else {
+                try text(out, ": ")
+                try type_text(out, c, g, field.ty, 0usize)
+            }
+            try text(out, "\"}")
+            try flush(out)
+            page.written += 1usize
+        } else {
+            if page.total > page.cursor { page.omitted += 1usize }
+        }
+        field_at += 1usize
+    }
+    // The layout on the target.
+    page.total += 1usize
+    if page.total > page.cursor && page_open(&page, out) {
+        let (info, info_error) = layout.type_info(c, ty)
+        if info_error == ok {
+            try text(out, "{\"record\":\"fact\",\"kind\":\"layout\",\"provenance\":\"compiler-proved\",\"value\":\"")
+            try decimal(out, info.size)
+            try text(out, " bytes, aligned to ")
+            try decimal(out, info.alignment)
+            try text(out, "\"}")
+        } else {
+            try text(out, "{\"record\":\"fact\",\"kind\":\"layout\",\"provenance\":\"unknown\",\"value\":\"no layout: the type is generic or its size is not settled\"}")
+        }
+        try flush(out)
+        page.written += 1usize
+    } else {
+        if page.total > page.cursor { page.omitted += 1usize }
+    }
+    // What the rules make of a value of the type.
+    page.total += 1usize
+    if page.total > page.cursor && page_open(&page, out) {
+        if aggregate.resource {
+            try text(out, "{\"record\":\"fact\",\"kind\":\"resource\",\"provenance\":\"declared-and-checked\",\"value\":\"a resource: a value is owed its cleanup `")
+            try text(out, aggregate.cleanup)
+            try text(out, "` on every exit and moves at most once; its fields are read in its module alone\"}")
+        } else {
+            if check.holds_pointer(c, ty, 0usize) {
+                try text(out, "{\"record\":\"fact\",\"kind\":\"borrow\",\"provenance\":\"declared-and-checked\",\"value\":\"holds a pointer: a value views what it points at, and a store of `&x` into it aliases `x` through that field\"}")
+            } else {
+                try text(out, "{\"record\":\"fact\",\"kind\":\"copy\",\"provenance\":\"declared-and-checked\",\"value\":\"plain data: copied by value, no cleanup owed, no pointer held\"}")
+            }
+        }
+        try flush(out)
+        page.written += 1usize
+    } else {
+        if page.total > page.cursor { page.omitted += 1usize }
+    }
+    try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
+    try decimal(out, page.written)
+    try text(out, ",\"omitted\":")
+    try decimal(out, page.omitted)
+    try text(out, ",\"complete\":")
+    if page.omitted == 0usize { try text(out, "true") } else { try text(out, "false") }
+    try text(out, ",\"cursor\":")
+    try decimal(out, page.cursor + page.written)
+    try text(out, ",\"bytes\":")
+    try decimal(out, out.flushed)
+    try text(out, "}}")
+    ret flush(out)
+}
+
 // The subject record of a context answer (D361): the snapshot's identity and the
 // function's declaration point.
 fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative: str, path: str, source: str, digest: str, target_name: str, checks: str, declared_at: usize) -> err {
@@ -2700,7 +2851,12 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         }
     }
     if function_index == c.function_count {
-        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        // A type (D419, H08): the subject names an aggregate of the program.
+        if dot != subject.len {
+            let (aggregate_index, has_aggregate) = context_aggregate(c, g, subject[0usize..dot], subject[dot + 1usize..subject.len])
+            if has_aggregate { ret type_context_json(a, &out, c, g, subject, aggregate_index, budget, byte_budget, cursor, target_name, checks) }
+        }
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function or type of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
         try flush(&out)

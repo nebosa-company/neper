@@ -2298,7 +2298,7 @@ for contract_subject in contract.main contract.bump contract.first contract.tota
 done
 cmp -s "$contract_actual" "$conformance_root/tools/contract.x64-linux.expected.jsonl" || { printf '%s
 ' "context-file --json contract facts differ from the conformance corpus" >&2; exit 1; }
-# `query-batch --json --batch FILE` (D409, H16): five queries over one check, two refused.
+# `query-batch --json --batch FILE` (D409, H16): six queries over one check, two refused.
 batch_status=0
 (cd "$conformance_root/tools" && $test_build/neper-self query-batch contract.e "$repo" x64 linux --json --batch batch.txt > "$test_build/conformance-tools-batch.jsonl") || batch_status=$?
 [ "$batch_status" -eq 2 ]

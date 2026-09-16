@@ -284,6 +284,16 @@ about one declared function, under a record budget (64 by default):
   `unknown` for what it cannot know; `trusted-external` and `runtime-observed`
   are reserved for facts no command emits yet.
 
+A subject that names a declared type rather than a function (D419, H08) --
+`--symbol module.Name` for a struct, union, tagged union or enum -- answers with
+`kind` `type` and facts in a fixed order: the `signature` (the declaration's
+head, with the resource's cleanup when it is one), one `field` per field or
+member (a field's type, an enum member's value), the `layout` (size and
+alignment on the target, `compiler-proved`), then what the rules make of a
+value: `resource` (owed its cleanup, moves once, fields read in its module
+alone), `borrow` (holds a pointer: a value views what it points at) or `copy`
+(plain data). A subject that names neither is `E-CLI-9999` and exit 2.
+
 `neper context-file PATH ROOT ARCH OS --json --module module.name [--budget N]
 [--cursor N]` (D397, H11) is the catalogue: every declared, non-generic function
 of the module in declaration order, each a `subject` record followed by its

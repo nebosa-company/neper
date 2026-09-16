@@ -17,8 +17,15 @@
 {"record":"use","relation":"call","provenance":"compiler-proved","in":"contract.main","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":820,"byte_end":820,"line":28,"column":17,"end_line":28,"end_column":17,"column_utf16":17,"end_column_utf16":17}}
 {"record":"result","ok":true,"exit_code":0,"data":{"uses":1,"roots":0,"indirect_calls":0,"complete":true}}
 {"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
-{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the subject names no function of the program","span":null,"parent":null,"related":[],"fixes":[]}
+{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the subject names no function or type of the program","span":null,"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":2,"data":{"records":0,"omitted":0,"complete":true}}
 {"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the batch line is not a query: frobnicate x","span":null,"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":2,"data":{"records":0,"omitted":0,"complete":true}}
+{"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"subject","subject":"contract.Counter","kind":"type","source":{"root":"operand","path":"contract.e"},"source_sha256":"d286ec4151e4d2430c9c7e0ca38618124954f413719988572da6993a70a79edd","snapshot":"13c2a0bd6a71362a","target":"x64-windows","checks":"retained","grammar_revision":3,"span":{"source":{"root":"operand","path":"contract.e"},"byte_start":298,"byte_end":298,"line":8,"column":1,"end_line":8,"end_column":1,"column_utf16":1,"end_column_utf16":1}}
+{"record":"fact","kind":"signature","provenance":"declared-and-checked","value":"type Counter = struct"}
+{"record":"fact","kind":"field","provenance":"declared-and-checked","value":"hits: [4]i64"}
+{"record":"fact","kind":"layout","provenance":"compiler-proved","value":"32 bytes, aligned to 8"}
+{"record":"fact","kind":"copy","provenance":"declared-and-checked","value":"plain data: copied by value, no cleanup owed, no pointer held"}
+{"record":"result","ok":true,"exit_code":0,"data":{"records":4,"omitted":0,"complete":true,"cursor":4,"bytes":1044}}
