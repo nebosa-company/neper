@@ -3114,6 +3114,216 @@ fn list_close_offset(tokens: []const lex.Token, name_at: usize) -> (usize, bool,
 // and the postcondition are the rename's. A function named as a value or chosen by a
 // protocol cannot be migrated -- its type is its signature -- and the plan is refused
 // naming the first such site, so no half-migration is ever emitted.
+// The items of the list after the name at `name_at` (D415): the byte range of the
+// text between `(` and its match, and each item's byte range, split at the commas
+// of depth zero (a comma inside `(...)`, `[...]` or `{...}` stays), trimmed of the
+// layout around it. At most sixteen items; more is a list the plan refuses.
+type ListItems = struct {
+    inner_start: usize,
+    inner_end: usize,
+    item_start: [16]usize,
+    item_end: [16]usize,
+    count: usize,
+    found: bool,
+}
+
+fn list_items(tokens: []const lex.Token, name_at: usize) -> ListItems {
+    var items: ListItems = zero
+    var low = 0usize
+    var high = tokens.len
+    while low < high {
+        let mid = low + (high - low) / 2usize
+        if tokens[mid].start < name_at { low = mid + 1usize } else { high = mid }
+    }
+    if low >= tokens.len || tokens[low].start != name_at { ret items }
+    var at = low + 1usize
+    if at < tokens.len && tokens[at].kind == .PunctLBracket {
+        var bracket_depth = 0usize
+        while at < tokens.len {
+            if tokens[at].kind == .PunctLBracket { bracket_depth += 1usize }
+            if tokens[at].kind == .PunctRBracket {
+                bracket_depth = bracket_depth - 1usize
+                if bracket_depth == 0usize {
+                    at += 1usize
+                    break
+                }
+            }
+            at += 1usize
+        }
+    }
+    if at >= tokens.len || tokens[at].kind != .PunctLParen { ret items }
+    items.inner_start = tokens[at].end
+    at += 1usize
+    var depth = 0usize
+    var item_from = at
+    var has_item = false
+    while at < tokens.len {
+        let kind = tokens[at].kind
+        if kind == .PunctLParen || kind == .PunctLBracket || kind == .PunctLBrace { depth += 1usize }
+        if kind == .PunctRParen || kind == .PunctRBracket || kind == .PunctRBrace {
+            if depth == 0usize {
+                if has_item {
+                    if items.count >= 16usize { ret items }
+                    items.item_start[items.count] = tokens[item_from].start
+                    items.item_end[items.count] = tokens[at - 1usize].end
+                    items.count += 1usize
+                }
+                items.inner_end = tokens[at].start
+                items.found = true
+                ret items
+            }
+            depth = depth - 1usize
+        }
+        if kind == .PunctComma && depth == 0usize {
+            if has_item {
+                if items.count >= 16usize { ret items }
+                items.item_start[items.count] = tokens[item_from].start
+                items.item_end[items.count] = tokens[at - 1usize].end
+                items.count += 1usize
+            }
+            has_item = false
+            item_from = at + 1usize
+        } else {
+            if kind != .Newline && !has_item {
+                has_item = true
+                item_from = at
+            }
+        }
+        at += 1usize
+    }
+    ret items
+}
+
+// `plan-change-signature-file PATH ROOT ARCH OS --json --symbol module.name --order
+// I,J,...` (D415, H29): the parameters kept, in the order given, each an index into
+// the old list; an index left out removes that parameter, and no index may repeat.
+// The declaration's list and every resolved call's argument list are re-rendered
+// from the texts of their items -- what was written, in the new order, joined by
+// `, ` -- as one edit per site over the text between the parentheses. A function
+// named as a value or chosen by a protocol is refused as D406 refuses it; so is a
+// list with more items than the order names or more than sixteen.
+fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, order_text: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 1024usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "plan-change-signature")
+    let (function_index, has_function) = uses_subject(c, g, subject)
+    if !has_function { ret plan_refused(&out, "the subject names no function of the program") }
+    let function = c.functions[function_index]
+    // The order: indices into the old parameter list, none repeated, all in range.
+    var order: [16]usize = zero
+    var order_count = 0usize
+    var field_start = 0usize
+    var at = 0usize
+    while at <= order_text.len {
+        if at == order_text.len || order_text[at] == 44u8 {
+            let (value, value_ok) = plan_decimal(order_text[field_start..at])
+            if !value_ok || value >= function.parameter_count || order_count >= 16usize { ret plan_refused(&out, "the order is not a list of distinct indices into the parameters") }
+            var seen = 0usize
+            while seen < order_count {
+                if order[seen] == value { ret plan_refused(&out, "the order is not a list of distinct indices into the parameters") }
+                seen += 1usize
+            }
+            order[order_count] = value
+            order_count += 1usize
+            field_start = at + 1usize
+        }
+        at += 1usize
+    }
+    var scan = 0usize
+    while scan < c.explain_count {
+        let e = c.explains[scan]
+        let as_value = e.kind == 5u8 && e.function_index == function_index
+        let dispatched = e.kind == 1u8 && e.found && e.function_index == function_index
+        if (as_value || dispatched) && e.module_index < g.count {
+            let module = g.modules[e.module_index]
+            let (root, relative) = source_identity_of(g, module.path)
+            let (path, path_error) = manifest_slashes(a, relative)
+            if path_error != ok { ret path_error }
+            out.lines = module.lines
+            try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"")
+            try text(&out, function.name)
+            if as_value { try text(&out, " is named as a value here, and a value of a function type cannot change its signature: no change is planned") } else { try text(&out, " is chosen by a protocol here, whose signature is fixed: no change is planned") }
+            try text(&out, "\",\"span\":")
+            var here: lex.Token = zero
+            here.start = e.offset
+            here.end = e.offset
+            try point_span(&out, root, path, module.text, here)
+            try text(&out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
+            try flush(&out)
+            try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
+            try flush(&out)
+            ret Refused
+        }
+        scan += 1usize
+    }
+    let (sites, sites_error) = plan_sites(a, c, g, function_index, false)
+    if sites_error != ok { ret sites_error }
+    // Every site's list must be readable before any edit is written.
+    var probe = 0usize
+    while probe < sites.count {
+        let items = list_items(g.modules[sites.modules[probe]].tokens, sites.offsets[probe])
+        if !items.found || items.count != function.parameter_count { ret plan_refused(&out, "a site's list could not be read as the function's parameters or arguments") }
+        probe += 1usize
+    }
+    let (files, preconditions_error) = plan_preconditions(a, &out, g, sites)
+    if preconditions_error != ok { ret preconditions_error }
+    var site = 0usize
+    while site < sites.count {
+        let module = g.modules[sites.modules[site]]
+        let (root, relative) = source_identity_of(g, module.path)
+        let (path, path_error) = manifest_slashes(a, relative)
+        if path_error != ok { ret path_error }
+        out.lines = module.lines
+        let items = list_items(module.tokens, sites.offsets[site])
+        var first: lex.Token = zero
+        first.start = items.inner_start
+        first.end = items.inner_start
+        var last: lex.Token = zero
+        last.start = items.inner_end
+        last.end = items.inner_end
+        try text(&out, "{\"record\":\"edit\",\"op\":\"change-signature\",\"symbol\":")
+        try quoted_function(&out, c, g, function_index)
+        try text(&out, ",\"site\":")
+        if sites.kinds[site] == 0u8 { try text(&out, "\"declaration\"") } else { try text(&out, "\"use\"") }
+        try text(&out, ",\"span\":")
+        try token_span(&out, root, path, module.text, first, last)
+        try text(&out, ",\"replacement\":")
+        var replacement_storage: [2048]u8 = zero
+        var replacement_at = 0usize
+        var order_at = 0usize
+        while order_at < order_count {
+            if order_at != 0usize { replacement_at = nptest_copy(replacement_storage[..], replacement_at, ", ") }
+            let item = order[order_at]
+            replacement_at = nptest_copy(replacement_storage[..], replacement_at, module.text[items.item_start[item]..items.item_end[item]])
+            order_at += 1usize
+        }
+        try quoted(&out, replacement_storage[0usize..replacement_at])
+        try byte(&out, 125u8)
+        try flush(&out)
+        site += 1usize
+    }
+    try text(&out, "{\"record\":\"postcondition\",\"check\":\"check-file passes; context-file --symbol ")
+    try text(&out, subject)
+    try text(&out, " reports ")
+    try decimal(&out, order_count)
+    try text(&out, " parameters in the order given, and uses-file --symbol ")
+    try text(&out, subject)
+    try text(&out, " reports uses at ")
+    if sites.count > 0usize { try decimal(&out, sites.count - 1usize) } else { try decimal(&out, 0usize) }
+    try text(&out, " sites\"}")
+    try flush(&out)
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":")
+    try decimal(&out, sites.count)
+    try text(&out, ",\"files\":")
+    try decimal(&out, files)
+    try text(&out, ",\"complete\":")
+    if !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, "}}")
+    ret flush(&out)
+}
+
 fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, parameter: str, argument: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
     if storage_error != ok { ret storage_error }

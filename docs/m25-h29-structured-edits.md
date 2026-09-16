@@ -37,14 +37,16 @@ again, and the spans, applicable to this one.
 | `add-parameter-and-migrate` | `symbol`, the parameter, a default expression per call | as above | the declaration; each call gains the argument | as above |
 | `replace-expression` | a span and a replacement expression | the file's hash; the span is one expression node | one edit | `check-file` passes; the expression's type is unchanged |
 
-The first (D376), the third (D406, `plan-add-parameter-file --symbol m.f
---parameter "name: T" --argument EXPR`) and the fourth (D414,
-`plan-replace-expression-file --span START:END --with EXPR`) are delivered
-(section 4); the parameter goes last and every call gains the argument last, a
-function named as a value or chosen by a protocol is refused with the site, since
-its type is its signature, and a span that is not exactly one expression node is
-refused. `change-signature` is named here so that its plan shape is fixed before
-it exists: the same record kinds, the operation in `op`, no new record.
+All four are delivered: the rename (D376), `plan-add-parameter-file --symbol
+m.f --parameter "name: T" --argument EXPR` (D406), `plan-replace-expression-file
+--span START:END --with EXPR` (D414) and `plan-change-signature-file --symbol m.f
+--order I,J,...` (D415), the last re-rendering the declaration's list and every
+call's argument list from the items' own texts in the order given, a left-out
+index removing a parameter. The parameter goes last and every call gains the
+argument last; a function named as a value or chosen by a protocol is refused
+with the site, since its type is its signature; a span that is not exactly one
+expression node is refused; so is a repeated index. The same record kinds
+throughout, the operation in `op`, no new record per operation.
 
 ## 3. What a plan does not claim
 

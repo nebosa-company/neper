@@ -2118,6 +2118,25 @@ $replaceRefused = Join-Path $testBuild 'conformance-tools-plan-replace-refused.j
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-replace-expression-file contract.e `"$repo`" x64 windows --json --span 693:700 --with 1usize > `"$replaceRefused`""
 if ($LASTEXITCODE -ne 2) { throw "a plan over a span that is not one expression did not exit 2 (got $LASTEXITCODE)" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $replaceRefused).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_replace_refused.expected.jsonl')).Hash) { throw "a refused plan-replace-expression-file differs from the conformance corpus" }
+# `plan-change-signature-file --json` (D415, H29): the parameters reordered, every call
+# re-rendered, applied to a copy it checks; a repeated index is refused with exit 2.
+$signatureActual = Join-Path $testBuild 'conformance-tools-plan-signature.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-change-signature-file signature.e `"$repo`" x64 windows --json --symbol signature.adjust --order 2,0,1 > `"$signatureActual`""
+if ($LASTEXITCODE -ne 0) { throw "plan-change-signature-file --json failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $signatureActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_signature.expected.jsonl')).Hash) { throw "plan-change-signature-file --json differs from the conformance corpus" }
+$signatureScratch = Join-Path $testBuild 'plan-signature-scratch'
+if (Test-Path -LiteralPath $signatureScratch) { Remove-Item -LiteralPath $signatureScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $signatureScratch 'src') | Out-Null
+Copy-Item (Join-Path $conformanceRoot 'tools/signature.e') (Join-Path $signatureScratch 'src')
+& python (Join-Path $repo 'scripts/apply_plan.py') $signatureActual --root (Join-Path $signatureScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the change-signature plan did not apply' }
+$signatureChecked = & $compiler check-file (Join-Path $signatureScratch 'src/signature.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $signatureChecked -ne 'module check ok') { throw "the program with the changed signature does not check: $signatureChecked" }
+if (-not (Select-String -LiteralPath (Join-Path $signatureScratch 'src/signature.e') -Pattern 'fn adjust\(offset: f32, reading: f32, gain: f32\)' -Quiet)) { throw 'the signature was not reordered' }
+$signatureRefused = Join-Path $testBuild 'conformance-tools-plan-signature-refused.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-change-signature-file signature.e `"$repo`" x64 windows --json --symbol signature.adjust --order 0,0 > `"$signatureRefused`""
+if ($LASTEXITCODE -ne 2) { throw "a plan with a repeated index did not exit 2 (got $LASTEXITCODE)" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $signatureRefused).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_signature_refused.expected.jsonl')).Hash) { throw "a refused plan-change-signature-file differs from the conformance corpus" }
 # The subject's snapshot (D407, H15): the renamed program's differs from the original's.
 $snapshotBefore = (& $compiler context-file (Join-Path $conformanceRoot 'tools/explain.e') $repo 'x64' 'windows' --json --symbol explain.main --budget 1 | Select-String -Pattern '"snapshot":"([0-9a-f]{16})"').Matches[0].Groups[1].Value
 $snapshotAfter = (& $compiler context-file (Join-Path $planScratch 'src/explain.e') $repo 'x64' 'windows' --json --symbol explain.main --budget 1 | Select-String -Pattern '"snapshot":"([0-9a-f]{16})"').Matches[0].Groups[1].Value

@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"plan-change-signature","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the order is not a list of distinct indices into the parameters","span":null,"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":2,"data":{"edits":0,"files":0,"complete":true}}

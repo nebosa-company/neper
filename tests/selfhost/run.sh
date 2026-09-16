@@ -2429,6 +2429,20 @@ replace_refused=0
 (cd "$conformance_root/tools" && $test_build/neper-self plan-replace-expression-file contract.e "$repo" x64 linux --json --span 693:700 --with 1usize > "$test_build/conformance-tools-plan-replace-refused.jsonl") || replace_refused=$?
 [ "$replace_refused" -eq 2 ]
 cmp -s "$test_build/conformance-tools-plan-replace-refused.jsonl" "$conformance_root/tools/plan_replace_refused.expected.jsonl" || { echo "a refused plan-replace-expression-file differs from the conformance corpus" >&2; exit 1; }
+# `plan-change-signature-file --json` (D415, H29): the parameters reordered, applied and
+# checked; a repeated index is refused with exit 2.
+(cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature.e "$repo" x64 linux --json --symbol signature.adjust --order 2,0,1 > "$test_build/conformance-tools-plan-signature.jsonl")
+cmp -s "$test_build/conformance-tools-plan-signature.jsonl" "$conformance_root/tools/plan_signature.expected.jsonl" || { echo "plan-change-signature-file --json differs from the conformance corpus" >&2; exit 1; }
+signature_scratch="$test_build/plan-signature-scratch"
+rm -rf "$signature_scratch" && mkdir -p "$signature_scratch/src" && cp "$conformance_root/tools/signature.e" "$signature_scratch/src/"
+python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-signature.jsonl" --root "$signature_scratch/src" > /dev/null
+signature_checked=$($test_build/neper-self check-file "$signature_scratch/src/signature.e" "$repo" x64 linux)
+[ "$signature_checked" = 'module check ok' ]
+grep -q 'fn adjust(offset: f32, reading: f32, gain: f32)' "$signature_scratch/src/signature.e"
+signature_refused=0
+(cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature.e "$repo" x64 linux --json --symbol signature.adjust --order 0,0 > "$test_build/conformance-tools-plan-signature-refused.jsonl") || signature_refused=$?
+[ "$signature_refused" -eq 2 ]
+cmp -s "$test_build/conformance-tools-plan-signature-refused.jsonl" "$conformance_root/tools/plan_signature_refused.expected.jsonl" || { echo "a refused plan-change-signature-file differs from the conformance corpus" >&2; exit 1; }
 # The subject's snapshot (D407, H15): the renamed program's differs from the original's.
 snapshot_before=$($test_build/neper-self context-file "$conformance_root/tools/explain.e" "$repo" x64 linux --json --symbol explain.main --budget 1 | grep -o '"snapshot":"[0-9a-f]*"' | head -1)
 snapshot_after=$($test_build/neper-self context-file "$plan_scratch/src/explain.e" "$repo" x64 linux --json --symbol explain.main --budget 1 | grep -o '"snapshot":"[0-9a-f]*"' | head -1)

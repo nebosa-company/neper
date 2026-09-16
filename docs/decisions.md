@@ -9216,3 +9216,26 @@ suites apply the plan to a copy and check it.
 
 Not yet: `change-signature`, and the old expression's type in the plan as a
 fact, which would let a harness know the postcondition before applying.
+
+## D415 -- `plan-change-signature-file`: the four plan shapes all exist
+
+The last of the plan shapes D376 fixed: `plan-change-signature-file PATH ROOT
+ARCH OS --json --symbol module.name --order I,J,...`. The order lists the
+parameters kept, each an index into the old list, none repeated; a left-out
+index removes its parameter. Each site's list is read at the tokens
+(`list_items`): the text between `(` and its match, split at the commas of
+depth zero -- a comma inside a nested `(...)`, `[...]` or `{...}` stays with its
+item -- trimmed of layout; the declaration's list must have as many items as
+the function has parameters and every call's as many arguments, else the plan
+is refused before any edit is written. The edit per site replaces the text
+between the parentheses with the items' own texts in the new order, joined by
+`, `, so `adjust(first, 2.0, (0.5 + 0.25))` under `--order 2,0,1` becomes
+`adjust((0.5 + 0.25), first, 2.0)`. A function named as a value or chosen by a
+protocol is refused as D406 refuses it. The corpus gains `tools/signature.e`
+with `tools/plan_signature` and `tools/plan_signature_refused` (a repeated
+index), target-independent; both suites apply the plan to a copy, check it and
+read the reordered declaration.
+
+Not yet: an argument list longer than sixteen items, a removed parameter that
+the body still reads (the postcondition's re-check finds it), and a snapshot
+identity on the plans' results.
