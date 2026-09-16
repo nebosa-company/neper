@@ -2378,6 +2378,8 @@ cmp -s "$deadline_actual" "$conformance_root/tools/deadline.expected.jsonl" || {
 # Metamorphic tests (D438, H10): comments removed build the same image; declarations
 # reversed behave the same.
 python3 "$repo/benchmarks/metamorphic/metamorphic.py" "$test_build/neper-self" "$repo" x64 linux "$test_build/metamorphic" "$repo/tests/selfhost/fixtures/link/algo_sort/src/main.e" "$repo/tests/selfhost/fixtures/link/algo_bitset/src/main.e" "$repo/tests/selfhost/fixtures/link/control/src/main.e"
+# The bootstrap as the codegen's oracle (D456, H10).
+python3 "$repo/benchmarks/differential/bootstrap.py" "$test_build/neper-self" "$neper" "$repo" x64 linux "$test_build/bootstrap-oracle" "$repo/tests/neper0/arena-alloc.e" "$repo/tests/neper0/array.e" "$repo/tests/neper0/struct.e" "$repo/tests/neper0/slice.e" "$repo/tests/neper0/defer.e" "$repo/tests/neper0/range.e" "$repo/tests/neper0/unsigned-ops.e" "$repo/tests/neper0/multiple-return.e" "$repo/tests/neper0/constant-folding.e" "$repo/tests/neper0/enum-union-switch.e" "$repo/tests/neper0/generic-function.e" "$repo/tests/neper0/generic-aggregate.e" "$repo/tests/neper0/protocol-iteration.e" "$repo/tests/neper0/slice-iterate.e" "$repo/tests/neper0/slice-mutate.e" "$repo/tests/neper0/os-intrinsics.e" "$repo/tests/neper0/aggregate-abi.e"
 # Differential execution against an independent oracle (D449, H10).
 python3 "$repo/benchmarks/differential/differential.py" "$test_build/neper-self" "$repo" x64 linux "$test_build/differential" --cases 60 --seed 7
 # `--instances N` (D426, H06): a budget over the specializations a build makes.

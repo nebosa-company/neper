@@ -2339,6 +2339,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deadlineActual).Hash -ne (Get-
 $metamorphicOut = Join-Path $testBuild 'metamorphic'
 & python (Join-Path $repo 'benchmarks/metamorphic/metamorphic.py') $compiler $repo 'x64' 'windows' $metamorphicOut (Join-Path $PSScriptRoot 'fixtures\link\algo_sort\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\algo_bitset\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\control\src\main.e')
 if ($LASTEXITCODE -ne 0) { throw 'a metamorphic transformation changed what a fixture builds or does' }
+# The bootstrap as the codegen's oracle (D456, H10): seventeen neper0 programs built
+# by the C bootstrap and by this compiler must exit and print alike.
+& python (Join-Path $repo 'benchmarks/differential/bootstrap.py') $compiler $neper $repo 'x64' 'windows' (Join-Path $testBuild 'bootstrap-oracle') (Join-Path $repo 'tests\neper0\arena-alloc.e') (Join-Path $repo 'tests\neper0\array.e') (Join-Path $repo 'tests\neper0\struct.e') (Join-Path $repo 'tests\neper0\slice.e') (Join-Path $repo 'tests\neper0\defer.e') (Join-Path $repo 'tests\neper0\range.e') (Join-Path $repo 'tests\neper0\unsigned-ops.e') (Join-Path $repo 'tests\neper0\multiple-return.e') (Join-Path $repo 'tests\neper0\constant-folding.e') (Join-Path $repo 'tests\neper0\enum-union-switch.e') (Join-Path $repo 'tests\neper0\generic-function.e') (Join-Path $repo 'tests\neper0\generic-aggregate.e') (Join-Path $repo 'tests\neper0\protocol-iteration.e') (Join-Path $repo 'tests\neper0\slice-iterate.e') (Join-Path $repo 'tests\neper0\slice-mutate.e') (Join-Path $repo 'tests\neper0\os-intrinsics.e') (Join-Path $repo 'tests\neper0\aggregate-abi.e')
+if ($LASTEXITCODE -ne 0) { throw 'a program built by the bootstrap and by the self-hosted compiler behaves differently' }
 # Differential execution against an independent oracle (D449, H10): the library's
 # SHA-256, SHA3-256 and base64 over random inputs against Python's hashlib and base64.
 & python (Join-Path $repo 'benchmarks/differential/differential.py') $compiler $repo 'x64' 'windows' (Join-Path $testBuild 'differential') --cases 60 --seed 7

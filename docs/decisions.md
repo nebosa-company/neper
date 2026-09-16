@@ -9940,3 +9940,18 @@ for the rest, per host.
 
 Not yet: the arguments by the call's expression rather than its position,
 which a source edit between the query and the apply moves.
+
+## D456 -- The bootstrap as the codegen's oracle
+
+H10 asks for an oracle of the compiler's own code generation; D449's oracle
+checked the library's arithmetic, and the back end that made the code was
+still judged by itself. The C bootstrap is a second back end that shares no
+code with the self-hosted one, and `benchmarks/differential/bootstrap.py`
+builds each of seventeen `tests/neper0` programs with both, runs both images
+with no arguments, and holds their exit codes and output alike; a program the
+bootstrap refuses is named and skipped, never counted. Both suites run it,
+the Windows bootstrap on Windows and the Linux one in WSL. The H24 row is
+corrected to credit D426 as the whole-build instantiation budget it is.
+
+Not yet: programs with input, and the fixtures past the bootstrap's subset,
+for which the bootstrap is no oracle.
