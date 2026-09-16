@@ -34,7 +34,6 @@ EXTERN __imp_SetFilePointerEx:QWORD
 ; limit before `main` runs, for every process, however little it goes on to allocate.
 NP_ARENA_BYTES EQU 40000000h
 NP_ARENA_CHUNK EQU 100000h
-NP_ARENA_SMALL EQU 400000h
 
 .code
 
@@ -371,30 +370,11 @@ np_arena_alloc PROC
     ja arena_fail
     lea r9, [r10+rdx]
 
-; An allocation under four mebibytes is touched here (D339), a byte per page, so its
-; pages are committed by the handler above before the caller writes them -- and before
-; a kernel call does, which cannot fault its way to a commit: a socket receive, a
-; directory watch. A larger one -- a pool sized for a bigger program, a worker's arena
-; -- is committed as it is touched, and `read` and `write` touch their buffers before
-; the kernel sees them. Touching, not committing: an arena over a stack array or a
-; global is touched the same way and nothing is asked of the system for it.
-    cmp rdx, NP_ARENA_SMALL
-    jae arena_store
-    mov rax, [rcx]
-    test rax, rax
-    jz arena_fail
-    push rcx
-    push rdx
-    push r8
-    push r10
-    mov r8, rdx
-    lea rdx, [rax+r10]
-    call np_touch_range
-    pop r10
-    pop r8
-    pop rdx
-    pop rcx
-arena_store:
+; Nothing is touched here (D428; D339 touched every allocation under four mebibytes,
+; which made every page of every small pool resident whether written or not). The
+; pages are committed by the handler above as the program writes them; what a kernel
+; call writes, which cannot fault its way to a commit, is touched by `os.touch` at
+; the `e.os` call sites that hand it a buffer, and by `read` and `write` themselves.
     mov [rcx+16], r9
     mov rax, [rcx]
     test rax, rax
@@ -690,6 +670,15 @@ write_done:
     pop rbx
     ret
 neper_os_write ENDP
+
+; os.touch(p: *const u8, n: usize) (D428): the pages of a buffer a kernel call will
+; write, committed before the call by reading a byte of each, since the kernel cannot
+; fault its way to a commit. rcx = p, rdx = n.
+neper_os_touch PROC
+    mov r8, rdx
+    mov rdx, rcx
+    jmp np_touch_range
+neper_os_touch ENDP
 
 ; os.copy_bytes(dst: []u8, src: []const u8) (D329): the shorter length's worth of
 ; bytes, forwards. rcx = &dst, rdx = &src.

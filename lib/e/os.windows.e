@@ -185,6 +185,8 @@ fn arm_watch(state: *WatchState) -> err {
     var recursive_flag = 0i32
     if state.recursive { recursive_flag = 1i32 }
     var ignored = 0u32
+    // The kernel fills the buffer as changes arrive (D428): its pages committed first.
+    touch(&state.buffer[0usize], WATCH_BUFFER)
     if raw_read_changes(state.directory, &state.buffer[0usize], u32(WATCH_BUFFER), recursive_flag, WATCH_FILTER, &ignored, &state.overlapped, 0usize) == 0i32 {
         ret from_last_error()
     }
@@ -259,6 +261,7 @@ fn watch_path(a: *mem.Arena, base: str, name: *const u16, units: usize) -> (str,
         at += 1usize
     }
     if units == 0usize { ret (bytes[0usize..at], ok) }
+    touch(&bytes[at], units * 3usize)
     let converted = raw_narrow(CP_UTF8, 0u32, name, i32(units), &bytes[at], i32(units * 3usize), 0usize, 0usize)
     if converted <= 0i32 { ret ("", Failed) }
     ret (bytes[0usize..at + usize(converted)], ok)
@@ -1141,6 +1144,7 @@ fn widen(a: *mem.Arena, text: str) -> ([]u16, err) {
         units[0usize] = 0u16
         ret (units, ok)
     }
+    touch(mem.cast[*const u8](&units[0usize]), (text.len + 1usize) * 2usize)
     let converted = raw_widen(CP_UTF8, 0u32, &text[0usize], i32(text.len), &units[0usize], i32(text.len + 1usize))
     // With an explicit source length the call does not terminate what it writes, and a
     // zero result is a source that is not UTF-8 at all.
@@ -2212,6 +2216,7 @@ const MESSAGE_UNITS: usize = 1024usize
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) {
     let (units, units_error) = mem.alloc[u16](a, MESSAGE_UNITS)
     if units_error != ok { ret ("", OutOfMemory) }
+    touch(mem.cast[*const u8](&units[0usize]), MESSAGE_UNITS * 2usize)
     let written = raw_format_message(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0usize, u32(detail.native_code), 0u32, &units[0usize], u32(MESSAGE_UNITS), 0usize)
     if written == 0u32 { ret ("", NotFound) }
     // The system ends its messages with a period and a newline, which belongs to the display and
@@ -2226,6 +2231,7 @@ fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) {
     // A UTF-16 unit never becomes more than three UTF-8 bytes.
     let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
     if bytes_error != ok { ret ("", OutOfMemory) }
+    touch(&bytes[0usize], count * 3usize)
     let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
     if converted <= 0i32 { ret ("", Failed) }
     ret (bytes[0usize..usize(converted)], ok)
@@ -2346,6 +2352,7 @@ fn socket_send(s: Socket, src: []const u8) -> (usize, err) {
 
 fn socket_receive(s: Socket, dst: []u8) -> (usize, err) {
     if dst.len == 0usize { ret (0usize, ok) }
+    touch(&dst[0usize], dst.len)
     let taken = raw_socket_receive(s.raw, &dst[0usize], i32(dst.len), 0i32)
     if taken < 0i32 { ret (0usize, from_socket_error()) }
     ret (usize(taken), ok)
@@ -2364,6 +2371,7 @@ fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
     if dst.len == 0usize { ret (0usize, peer, ok) }
     var raw: RawAddress = zero
     var length = i32(RAW_IP6_SIZE)
+    touch(&dst[0usize], dst.len)
     let taken = raw_socket_receive_from(s.raw, &dst[0usize], i32(dst.len), 0i32, &raw, &length)
     if taken < 0i32 { ret (0usize, peer, from_socket_error()) }
     ret (usize(taken), decode_address(raw), ok)
@@ -2537,6 +2545,7 @@ fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> er
 // provider for nothing, so it is answered here.
 fn random(buffer: []u8) -> err {
     if buffer.len == 0usize { ret ok }
+    touch(&buffer[0usize], buffer.len)
     if raw_random(0usize, &buffer[0usize], u32(buffer.len), BCRYPT_SYSTEM_PREFERRED) != 0i32 { ret Failed }
     ret ok
 }
@@ -2643,6 +2652,7 @@ fn read_link(a: *mem.Arena, path: str) -> (str, err) {
         ret ("", open_error)
     }
     var returned = 0u32
+    touch(mem.cast[*const u8](&holder[0usize]), usize(MAXIMUM_REPARSE_DATA))
     let controlled = raw_device_control(handle, FSCTL_GET_REPARSE_POINT, 0usize, 0u32, &holder[0usize], MAXIMUM_REPARSE_DATA, &returned, 0usize)
     let closed = raw_close_handle(handle)
     if controlled == 0i32 {
@@ -2679,6 +2689,7 @@ fn read_link(a: *mem.Arena, path: str) -> (str, err) {
         mem.reset(a, checkpoint)
         ret ("", OutOfMemory)
     }
+    touch(&bytes[0usize], units * 3usize)
     let converted = raw_narrow(CP_UTF8, 0u32, &holder[0usize].path[offset], i32(units), &bytes[0usize], i32(units * 3usize), 0usize, 0usize)
     if converted <= 0i32 {
         mem.reset(a, checkpoint)
@@ -2699,6 +2710,7 @@ fn current_dir(a: *mem.Arena) -> (str, err) {
             mem.reset(a, checkpoint)
             ret ("", OutOfMemory)
         }
+        touch(mem.cast[*const u8](&units[0usize]), (capacity + 1usize) * 2usize)
         let written = raw_current_directory(u32(capacity + 1usize), &units[0usize])
         if written == 0u32 {
             let call_error = from_last_error()
@@ -2713,6 +2725,7 @@ fn current_dir(a: *mem.Arena) -> (str, err) {
                 mem.reset(a, checkpoint)
                 ret ("", OutOfMemory)
             }
+            touch(&bytes[0usize], count * 3usize)
             let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
             if converted <= 0i32 {
                 mem.reset(a, checkpoint)
@@ -2747,6 +2760,7 @@ fn env(a: *mem.Arena, name: str) -> (str, err) {
             mem.reset(a, checkpoint)
             ret ("", OutOfMemory)
         }
+        touch(mem.cast[*const u8](&units[0usize]), capacity * 2usize)
         let written = raw_environment_variable(&wide_name[0usize], &units[0usize], u32(capacity))
         if written == 0u32 {
             let code = raw_last_error()
@@ -2766,6 +2780,7 @@ fn env(a: *mem.Arena, name: str) -> (str, err) {
                 mem.reset(a, checkpoint)
                 ret ("", OutOfMemory)
             }
+            touch(&bytes[0usize], count * 3usize)
             let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
             if converted <= 0i32 {
                 mem.reset(a, checkpoint)
@@ -2819,6 +2834,7 @@ fn canonical(a: *mem.Arena, path: str) -> (str, err) {
             mem.reset(a, checkpoint)
             ret ("", OutOfMemory)
         }
+        touch(mem.cast[*const u8](&units[0usize]), capacity * 2usize)
         let written = raw_final_path(handle, &units[0usize], u32(capacity), FINAL_PATH_DOS)
         if written == 0u32 {
             let call_error = from_last_error()
@@ -2835,6 +2851,7 @@ fn canonical(a: *mem.Arena, path: str) -> (str, err) {
                 mem.reset(a, checkpoint)
                 ret ("", OutOfMemory)
             }
+            touch(&bytes[0usize], count * 3usize)
             let converted = raw_narrow(CP_UTF8, 0u32, &units[offset], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
             if converted <= 0i32 {
                 mem.reset(a, checkpoint)
@@ -2858,6 +2875,7 @@ fn executable_path(a: *mem.Arena) -> (str, err) {
             mem.reset(a, checkpoint)
             ret ("", OutOfMemory)
         }
+        touch(mem.cast[*const u8](&units[0usize]), capacity * 2usize)
         let written = raw_module_file_name(0usize, &units[0usize], u32(capacity))
         if written == 0u32 {
             let call_error = from_last_error()
@@ -2872,6 +2890,7 @@ fn executable_path(a: *mem.Arena) -> (str, err) {
                 mem.reset(a, checkpoint)
                 ret ("", OutOfMemory)
             }
+            touch(&bytes[0usize], count * 3usize)
             let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
             if converted <= 0i32 {
                 mem.reset(a, checkpoint)

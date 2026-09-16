@@ -9467,3 +9467,38 @@ project, and the manifest's rule tries the project's roots first) and under
 `toolchain-lib` from any other project.
 
 Not yet: the text form, which prints the path as the graph spelled it.
+
+## D428 -- The runtime touches what the kernel writes, not every allocation
+
+D340 had `np_arena_alloc` read a byte of every page of every allocation under
+four mebibytes, so that a buffer handed to a kernel call was committed before the
+call; the price was that every page of every small pool became resident whether
+written or not, and every worker paid the faults in its fresh reservation. Measured
+with `benchmarks/baseline/measure.py` (three runs, eight workers, this machine)
+against the D338 baseline: the compiler's own build peaked at 768 MB debug and
+1018 MB release (baseline 260 / 248), `sc500k` at 1107 / 1379 (baseline 731 / 695),
+and the eight-worker `check bodies` phase of the compiler's build was 59 / 70 ms.
+
+The allocation touches nothing now. The pages are committed by the fault handler as
+the program writes them, and what a kernel call writes is touched where the buffer
+is handed over: `os.touch(p: *const u8, n: usize)`, a seeded `e.os` intrinsic over
+`np_touch_range`, is called at every `e.os.windows` site that gives an imported call
+a buffer to fill -- the watch buffer, every path widening and narrowing, the error
+message, the current directory, an environment variable, a final path, the module
+file name, a socket receive, the random bytes, the reparse holder -- and `read` and
+`write` touch as before. A program's own buffer handed to an imported kernel call
+must have been written or touched first, which spec section 8 now says. The Linux
+variant needs nothing: the kernel faults user pages in on its own.
+
+Measured after: the compiler's build peaks at 309 MB debug and 322 MB release
+(+19% / +30% against the baseline, from +195% / +310%), `sc500k` at 744 / 708
+(+2% / +2%, from +51% / +98%); eight-worker `check bodies` 59 -> 41 ms debug and
+70 -> 50 release on the compiler, 215 -> 196 and 466 -> 443 on `sc500k`; cold
+builds -6% and warm -7% across the four cells. The runtime floor shrinks by the
+forty-one bytes the allocation's touch was; `neper_os_touch` sits beside
+`copy_bytes`, past the floor, since a procedure placed among the entry's callees
+moved `np_utf16_to_utf8` out of the floor and every image died at its entry.
+
+Not yet: the RSS budget itself on the compiler's release row (+30% against +10%),
+whose remainder is the crew's pools sized for the compiler and written; and a
+fixture that hands an untouched buffer to an imported call and reads `Failed`.

@@ -1548,6 +1548,7 @@ fn read(f: File, buf: []u8) -> (usize, err)
 fn write(f: File, buf: []const u8) -> (usize, err)
 fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err)
 fn copy_bytes(dst: []u8, src: []const u8)
+fn touch(p: *const u8, n: usize)
 fn sha256_blocks(state: []usize, bytes: []const u8) -> usize
 fn crc32c_bytes(crc: []usize, bytes: []const u8) -> usize
 fn close(f: own File) -> err

@@ -1966,10 +1966,14 @@ of it, free under overcommit; on Windows a fault handler that commits the chunk
 around the first access to any reserved private page -- and passes it to `main` as
 its first parameter (§13). That parameter is the only way to reach it. One
 consequence of committing on touch: memory the kernel writes on the program's
-behalf must be committed already, so an allocation under four mebibytes is touched
-by the runtime as it is made, and `os.read` and `os.write` touch their buffers;
-a buffer of four mebibytes or more handed to an imported kernel call (`recv`,
-`ReadDirectoryChangesW`) must have been written by the program first.
+behalf must be committed already, since a kernel-mode write cannot fault its way to
+a commit and the call fails instead. `os.read` and `os.write` touch their buffers,
+every `e.os` function that hands a buffer to an imported call for writing touches it
+first through `os.touch(p, n)` -- a byte of each page read -- and a program's own
+buffer handed to an imported kernel call (`recv`, `ReadDirectoryChangesW`) must have
+been written or touched by the program first (D428; D340 had the runtime touch every
+allocation under four mebibytes as it was made, which made every page of every small
+pool resident whether written or not).
 
 An `Arena` is a cursor, not an independently copyable owner. Copying an `Arena`
 value is legal only to transfer it to a new binding after the old binding is no

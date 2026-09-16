@@ -3616,6 +3616,15 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     try add_seeded_parameter(c, crc_index, "crc", usizes)
     try add_seeded_parameter(c, crc_index, "bytes", const_bytes)
 
+    // `os.touch(p: *const u8, n: usize)` (D428): the pages of a buffer a kernel call
+    // will write, committed before the call.
+    let (const_byte_pointer, const_byte_pointer_error) = seeded_composite_type(c, .Pointer, u8_type, true, os_module)
+    if const_byte_pointer_error != ok { ret const_byte_pointer_error }
+    let (touch_index, touch_error) = add_seeded_function(c, os_module, "touch", make_type(.Void, "void", os_module), false)
+    if touch_error != ok { ret touch_error }
+    try add_seeded_parameter(c, touch_index, "p", const_byte_pointer)
+    try add_seeded_parameter(c, touch_index, "n", usize_type)
+
     let (read_index, read_error) = add_seeded_function(c, os_module, "read", usize_type, true)
     if read_error != ok { ret read_error }
     try add_seeded_parameter(c, read_index, "f", file)

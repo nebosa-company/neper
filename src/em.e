@@ -715,6 +715,7 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_open") { ret ("open", true) }
     if same(name, "neper_os_seek") { ret ("seek", true) }
     if same(name, "neper_os_copy_bytes") { ret ("copy_bytes", true) }
+    if same(name, "neper_os_touch") { ret ("touch", true) }
     if same(name, "neper_os_sha256_blocks") { ret ("sha256_blocks", true) }
     if same(name, "neper_os_crc32c_bytes") { ret ("crc32c_bytes", true) }
     if same(name, "neper_os_read") { ret ("read", true) }

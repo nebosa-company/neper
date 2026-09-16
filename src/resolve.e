@@ -326,6 +326,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.os", "close", .Value, .Intrinsic)
     try seed(r, g, "e.os", "seek", .Value, .Intrinsic)
     try seed(r, g, "e.os", "copy_bytes", .Value, .Intrinsic)
+    try seed(r, g, "e.os", "touch", .Value, .Intrinsic)
     try seed(r, g, "e.os", "sha256_blocks", .Value, .Intrinsic)
     try seed(r, g, "e.os", "crc32c_bytes", .Value, .Intrinsic)
     try seed(r, g, "e.os", "thread_create", .Value, .Intrinsic)
