@@ -2083,7 +2083,10 @@ fn source_identity_of(g: *graph.Graph, path: str) -> (str, str) {
 // receiver type, and the choice -- the declared function, the supplied rule, or
 // none -- and `instance` the template and its arguments. Records the checker made
 // twice for one site (a re-check of the same call) are written once.
-fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
+// `failed` (D430): the program did not check; the records the checker made before it
+// stopped are written -- a dispatch that found nothing among them, with why -- and the
+// caller adds the diagnostic and the result.
+fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
@@ -2131,7 +2134,39 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
                 try byte(&out, 125u8)
             } else {
                 if e.builtin == .None {
-                    try text(&out, "{\"kind\":\"none\"}")
+                    // Why (D430, H06): the component the supplied rule refused, and a
+                    // function of the name declared where rule 4 does not look.
+                    try text(&out, "{\"kind\":\"none\",\"reason\":")
+                    if e.reason_kind == 1u8 { try text(&out, "\"a struct has no supplied rule\"") }
+                    if e.reason_kind == 2u8 {
+                        try text(&out, "\"the arm `")
+                        try text(&out, e.reason_name)
+                        try text(&out, "` of type ")
+                        try quoted_type_inner(&out, c, g, e.reason_type)
+                        try text(&out, " has no `")
+                        try text(&out, e.protocol)
+                        try text(&out, "`\"")
+                    }
+                    if e.reason_kind == 3u8 {
+                        try text(&out, "\"the element type ")
+                        try quoted_type_inner(&out, c, g, e.reason_type)
+                        try text(&out, " has no `")
+                        try text(&out, e.protocol)
+                        try text(&out, "`\"")
+                    }
+                    if e.reason_kind == 4u8 {
+                        try text(&out, "\"the rule does not cover ")
+                        try quoted_type_inner(&out, c, g, e.reason_type)
+                        try byte(&out, 34u8)
+                    }
+                    if e.reason_kind == 0u8 { try text(&out, "null") }
+                    try text(&out, ",\"candidates\":[")
+                    if e.candidate_index < c.function_count {
+                        try text(&out, "{\"function\":")
+                        try quoted_function(&out, c, g, e.candidate_index)
+                        try text(&out, ",\"reason\":\"declared outside the receiver's module\"}")
+                    }
+                    try text(&out, "]}")
                 } else {
                     try text(&out, "{\"kind\":\"supplied\",\"rule\":")
                     if e.builtin == .Cmp { try text(&out, "\"cmp\"") }
@@ -2176,6 +2211,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
         try flush(&out)
         written += 1usize
     }
+    if failed { ret ok }
     try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
     try decimal(&out, written)
     if c.explain_overflow { try text(&out, ",\"truncated\":true") }
@@ -4131,6 +4167,14 @@ fn type_text(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type, dept
     if ty.kind == .Function { ret text(out, "fn") }
     if ty.kind == .TypeParameter { ret text(out, "?") }
     ret text(out, ty.name)
+}
+
+// A type's name between backquotes inside a JSON string (D430): the spelling
+// `quoted_type` gives, without its quotes.
+fn quoted_type_inner(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type) -> err {
+    try byte(out, 96u8)
+    try type_text(out, c, g, ty, 0usize)
+    ret byte(out, 96u8)
 }
 
 fn quoted_function(out: *Out, c: *check.Checker, g: *graph.Graph, function_index: usize) -> err {

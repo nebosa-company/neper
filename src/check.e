@@ -470,6 +470,15 @@ type Explain = struct {
     template_index: usize,
     first_argument: usize,
     argument_count: usize,
+    // Why a dispatch found nothing (D430, H06): a function of the protocol's name
+    // declared in another module (`function_count` for none), and the first
+    // component the supplied rule refused -- kind 1 a struct, which no rule supplies;
+    // 2 an arm of a tagged union; 3 an element of a sequence; 4 a scalar the rule
+    // does not cover -- with the component's name and type.
+    candidate_index: usize,
+    reason_kind: u8,
+    reason_name: str,
+    reason_type: Type,
 }
 
 type Diagnostic = struct {
@@ -655,6 +664,10 @@ type Checker = struct {
     failure_has_token: bool,
     failure_detail: str,
     failure_detail2: str,
+    // A missing protocol's foreign candidate (D430, H09): a function of the name
+    // declared outside the receiver's module, `function_count` for none.
+    failure_candidate: usize,
+    failure_candidate_module: str,
     // The two types of the mismatch being reported (D401, H09): what the context
     // asked for and what the expression had, recorded where they part.
     failure_expected: Type,
@@ -8088,7 +8101,7 @@ fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
                 intrinsic_name = fresh.function.name
                 intrinsic_module = fresh.function.module_index
             }
-            c.explains[c.explain_count] = Explain { kind: 4u8, module_index: module_index, offset: offset, protocol: intrinsic_name, receiver: invalid_type(), function_index: callee, found: fresh.indirect, builtin: .None, template_index: intrinsic_module, first_argument: 0usize, argument_count: 0usize }
+            c.explains[c.explain_count] = Explain { kind: 4u8, module_index: module_index, offset: offset, protocol: intrinsic_name, receiver: invalid_type(), function_index: callee, found: fresh.indirect, builtin: .None, template_index: intrinsic_module, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
             c.explain_count += 1usize
         } else {
             c.explain_overflow = true
@@ -8705,7 +8718,7 @@ fn record_explain_field(c: *Checker, module_index: usize, offset: usize, field_i
         c.explain_overflow = true
         ret
     }
-    c.explains[c.explain_count] = Explain { kind: 6u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: field_index, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+    c.explains[c.explain_count] = Explain { kind: 6u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: field_index, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     c.explain_count += 1usize
 }
 
@@ -8718,8 +8731,59 @@ fn record_explain_value(c: *Checker, module_index: usize, node: syntax.Node, fun
     }
     var offset = 0usize
     if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
-    c.explains[c.explain_count] = Explain { kind: 5u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: function_index, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+    c.explains[c.explain_count] = Explain { kind: 5u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: function_index, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     c.explain_count += 1usize
+}
+
+// The first component of a receiver the supplied rule refuses (D430): the kind of
+// refusal, the component's name and its type; kind zero when the rule would have
+// applied or the receiver is not a shape the rules read.
+fn dispatch_refusal(c: *Checker, canonical: Type, protocol: str) -> (u8, str, Type) {
+    var none: Type = zero
+    if canonical.kind == .Named {
+        let (aggregate_index, found) = aggregate_for_type(c, canonical)
+        if !found { ret (0u8, "", none) }
+        let aggregate = c.aggregates[aggregate_index]
+        if aggregate.kind != .TaggedUnion { ret (1u8, "", none) }
+        var at = 0usize
+        while at < aggregate.field_count {
+            let field_index = aggregate.first_field + at
+            if field_index >= c.aggregate_field_count { ret (0u8, "", none) }
+            let arm = c.aggregate_fields[field_index]
+            if arm.ty.kind != .Void && !component_supplied(c, arm.ty, protocol) { ret (2u8, arm.name, arm.ty) }
+            at += 1usize
+        }
+        ret (0u8, "", none)
+    }
+    if canonical.kind == .Array || canonical.kind == .Slice || canonical.kind == .String {
+        let (element, element_error) = index_element_type(c, canonical, canonical.module_index)
+        if element_error != ok { ret (0u8, "", none) }
+        if !component_supplied(c, element, protocol) { ret (3u8, "", element) }
+        ret (0u8, "", none)
+    }
+    if canonical.kind == .Float || canonical.kind == .Pointer || canonical.kind == .Function { ret (4u8, "", canonical) }
+    ret (0u8, "", none)
+}
+
+fn component_supplied(c: *Checker, ty: Type, protocol: str) -> bool {
+    let (canonical, canonical_error) = canonical_type(c, ty)
+    if canonical_error != ok { ret false }
+    if same(protocol, "cmp") { ret comparable_component(c, ty, canonical, 1usize) }
+    if same(protocol, "eq") { ret equatable_component(c, ty, canonical, 1usize) }
+    if same(protocol, "hash") { ret hashable_component(c, ty, canonical, 1usize) }
+    ret false
+}
+
+// A function of the protocol's name for the type declared in a module that is not
+// the type's own (D430): rule 4 never reads it, and a harness is told so.
+fn foreign_protocol_candidate(c: *Checker, canonical: Type, protocol: str) -> usize {
+    var at = 0usize
+    while at < c.signature_function_count {
+        let candidate = c.functions[at]
+        if candidate.module_index != canonical.module_index && protocol_name_matches(canonical.name, candidate.name, protocol) { ret at }
+        at += 1usize
+    }
+    ret c.function_count
 }
 
 fn record_explain_dispatch(c: *Checker, module_index: usize, node: syntax.Node, protocol: str, receiver: Type, function_index: usize, found: bool, builtin: ProtocolBuiltin) {
@@ -8730,7 +8794,16 @@ fn record_explain_dispatch(c: *Checker, module_index: usize, node: syntax.Node, 
     }
     var offset = 0usize
     if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
-    c.explains[c.explain_count] = Explain { kind: 1u8, module_index: module_index, offset: offset, protocol: protocol, receiver: receiver, function_index: function_index, found: found, builtin: builtin, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+    c.explains[c.explain_count] = Explain { kind: 1u8, module_index: module_index, offset: offset, protocol: protocol, receiver: receiver, function_index: function_index, found: found, builtin: builtin, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
+    if !found && builtin == .None {
+        let (reason_kind, reason_name, reason_type) = dispatch_refusal(c, receiver, protocol)
+        c.explains[c.explain_count].reason_kind = reason_kind
+        c.explains[c.explain_count].reason_name = reason_name
+        c.explains[c.explain_count].reason_type = reason_type
+        c.explains[c.explain_count].candidate_index = foreign_protocol_candidate(c, receiver, protocol)
+    } else {
+        c.explains[c.explain_count].candidate_index = c.function_count
+    }
     c.explain_count += 1usize
 }
 
@@ -8742,7 +8815,7 @@ fn record_explain_instance(c: *Checker, module_index: usize, node: syntax.Node, 
     }
     var offset = 0usize
     if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
-    c.explains[c.explain_count] = Explain { kind: 2u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: template_index, first_argument: first_argument, argument_count: argument_count }
+    c.explains[c.explain_count] = Explain { kind: 2u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: template_index, first_argument: first_argument, argument_count: argument_count, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     c.explain_count += 1usize
 }
 
@@ -9005,6 +9078,11 @@ fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         let builtin = supplied_protocol(c, canonical, protocol)
         record_explain_dispatch(c, module_index, node, protocol, canonical, 0usize, false, builtin)
         if builtin != .None { ret (0usize, builtin, ok) }
+        if !c.failure_has_token {
+            c.failure_candidate = foreign_protocol_candidate(c, canonical, protocol)
+            c.failure_candidate_module = ""
+            if c.failure_candidate < c.function_count && c.functions[c.failure_candidate].module_index < g.count { c.failure_candidate_module = g.modules[c.functions[c.failure_candidate].module_index].name }
+        }
         record_failure(c, module_index, node, .ProtocolMissing, canonical.name, protocol)
         ret (0usize, .None, UnknownCallable)
     }
@@ -10135,7 +10213,7 @@ fn bind_return_types(c: *Checker, g: *graph.Graph, module_index: usize, statemen
                 if usize(statement.token_start) < c.token_count { offset = c.tokens[usize(statement.token_start)].start }
                 var deferred = 0usize
                 if c.defer_depth != 0usize { deferred = 1usize }
-                c.explains[c.explain_count] = Explain { kind: 3u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: deferred != 0usize, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+                c.explains[c.explain_count] = Explain { kind: 3u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: deferred != 0usize, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
                 c.explains[c.explain_count].function_index = explain_function_index(c, call.function)
                 c.explain_count += 1usize
             }

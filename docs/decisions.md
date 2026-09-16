@@ -9518,3 +9518,25 @@ width is free.
 
 Not yet: the profile in the build manifest, and a family without a public
 tokenizer.
+
+## D430 -- A dispatch that found nothing says why
+
+H06 asks for failed candidates with reasons; a `dispatch` record said
+`{"kind":"none"}` and the check failed with "declare `fn point_cmp` in the module
+that declares the type", which a harness that had declared it in another module
+could not act on. The record now carries `reason` -- why rule 4's supplied
+operation refused: a struct, which no rule supplies; the first arm of a tagged
+union or the element of a sequence with no such protocol, named with its type; a
+scalar the rule does not cover; null otherwise -- and `candidates`, a function of
+the protocol's name declared outside the receiver's module, which rule 4 never
+reads, with that reason. The E-NAME-9999 diagnostic names the same candidate.
+Since such a dispatch fails the check, `explain-file` over a program that does not
+check now answers the stream rather than a text diagnostic on stderr: the records
+made before the failure, the diagnostic as `check-file --json` spells it, a result
+of exit 1. The corpus gains `tools/explain_none` (a project: the struct with its
+`cmp` in another module) and `tools/explain_arm` (a tagged union whose arm is a
+struct); the schema admits the two fields.
+
+Not yet: every failed dispatch in one run (the checker stops at the first), a
+candidate whose signature is wrong rather than its module, and the reason for a
+`format` or `next` dispatch.

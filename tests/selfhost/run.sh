@@ -2366,6 +2366,14 @@ cmp -s "$uses_actual" "$conformance_root/tools/uses.expected.jsonl" || { printf 
 explain_actual="$test_build/conformance-tools-explain.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self explain-file explain.e "$repo" x64 linux --json > "$explain_actual")
 cmp -s "$explain_actual" "$conformance_root/tools/explain.expected.jsonl" || { printf '%s\n' "explain-file --json differs from the conformance corpus" >&2; exit 1; }
+# `explain-file --json` over a program that does not check (D430, H06).
+for explain_none in 'explain_none/src/main.e explain_none' 'explain_arm.e explain_arm'; do
+    set -- $explain_none
+    explain_none_status=0
+    (cd "$conformance_root/tools" && $test_build/neper-self explain-file "$1" "$repo" x64 linux --json > "$test_build/conformance-tools-$2.jsonl") || explain_none_status=$?
+    [ "$explain_none_status" -eq 1 ] || { echo "explain-file --json on $1 exited $explain_none_status, not 1" >&2; exit 1; }
+    cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { echo "explain-file --json on $1 differs from the conformance corpus" >&2; exit 1; }
+done
 $test_build/neper-self build-manifest-file "$conformance_root/tools/manifest.e" "$repo" x64 linux --json > "$manifest_actual"
 cmp -s "$manifest_actual" "$conformance_root/tools/manifest.x64-linux.expected.jsonl" || { printf '%s
 ' "build-manifest --json differs from the conformance corpus" >&2; exit 1; }

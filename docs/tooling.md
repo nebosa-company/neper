@@ -242,8 +242,14 @@ the same way written once:
   `next`, ...), `receiver` (the type as a program spells it, `module.Name`, `*T`,
   `[]T`, `[N]T` or a scalar), `selected` — `{"kind":"declared","function":
   "module.name"}` for the type's own declaration, `{"kind":"supplied","rule":
-  "eq"|"cmp"|"hash"}` for spec §9 rule 4's supplied operation, `{"kind":"none"}`
-  when neither exists (the check then fails, and the record says where) — and
+  "eq"|"cmp"|"hash"}` for spec §9 rule 4's supplied operation, `{"kind":"none",
+  "reason":...,"candidates":[...]}` when neither exists (D430, H06; the check then
+  fails, and the record says where): `reason` is why the supplied rule refused --
+  a struct, which no rule supplies; the first arm of a tagged union or the element
+  of a sequence that has no such protocol, named with its type; a scalar the rule
+  does not cover -- or null, and `candidates` lists a function of the protocol's
+  name declared outside the receiver's module, which rule 4 never reads, with its
+  reason — and
   `span`, the point where the call was checked, which for a template body is the
   template's site once per instance.
 - `instance` — a generic function instantiated: `template` (`module.name`),
@@ -256,8 +262,10 @@ the same way written once:
 
 The stream ends with `{"record":"result","ok":true,"exit_code":0,"data":{"records":N}}`,
 with `"truncated":true` beside `records` when the checker's table overflowed. A
-program that does not check emits the check diagnostic on stderr and exits 1, as
-`check-file` without `--json` does.
+program that does not check (D430) still answers the stream: the records the
+checker made before it stopped -- the dispatch that found nothing among them --
+then the diagnostic as `check-file --json` spells it and a result of exit 1; the
+E-NAME-9999 for a missing protocol names the foreign candidate too.
 
 ### Context
 

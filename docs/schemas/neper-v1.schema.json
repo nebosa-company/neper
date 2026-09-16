@@ -135,7 +135,7 @@
         "selected":{"oneOf":[
           {"type":"object","additionalProperties":false,"required":["kind","function"],"properties":{"kind":{"const":"declared"},"function":{"type":"string"}}},
           {"type":"object","additionalProperties":false,"required":["kind","rule"],"properties":{"kind":{"const":"supplied"},"rule":{"enum":["cmp","hash","eq"]}}},
-          {"type":"object","additionalProperties":false,"required":["kind"],"properties":{"kind":{"const":"none"}}}
+          {"type":"object","additionalProperties":false,"required":["kind","reason","candidates"],"properties":{"kind":{"const":"none"},"reason":{"type":["string","null"]},"candidates":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["function","reason"],"properties":{"function":{"type":"string"},"reason":{"type":"string"}}}}}}
         ]},
         "span":{"$ref":"#/$defs/span"}
       }

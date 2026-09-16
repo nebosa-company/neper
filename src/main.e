@@ -4472,7 +4472,18 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_snake_name(file, checker.failure_detail)
         try write_all(file, "_")
         try write_all(file, checker.failure_detail2)
-        ret write_all(file, "` in the module that declares the type")
+        try write_all(file, "` in the module that declares the type")
+        // The candidate rule 4 does not read (D430): named, so the fix is a move.
+        if checker.failure_candidate < checker.function_count {
+            try write_all(file, "; `")
+            if checker.failure_candidate_module.len != 0usize {
+                try write_all(file, checker.failure_candidate_module)
+                try write_all(file, ".")
+            }
+            try write_all(file, checker.functions[checker.failure_candidate].name)
+            try write_all(file, "` is declared outside it")
+        }
+        ret ok
     }
     if checker.failure_kind == .ProtocolSignature {
         try write_all(file, "protocol `")
@@ -7293,6 +7304,17 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     checker.explains = explains
     let check_error = check.run(&checker, &resolver, &loaded)
     if check_error != ok {
+        // `explain-file` over a program that does not check (D430, H06): the stream
+        // still -- what the checker decided before it stopped, the dispatch that found
+        // nothing with why, then the diagnostic and a result of exit 1.
+        if kind == 1usize {
+            try tool.explain_json(a, &checker, &loaded, true)
+            var stream = json_sink()
+            try print_check_diagnostic(&stream, &loaded, &checker, check_error)
+            try finish_report(&stream)
+            os.exit(1i32)
+            ret ok
+        }
         try print_check_diagnostic(report, &loaded, &checker, check_error)
         os.exit(1i32)
         ret ok
@@ -7303,7 +7325,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     target_at = tool.nptest_copy(target_storage[..], target_at + 1usize, args[5usize])
     let target_text = target_storage[0usize..target_at]
     var query_error = ok
-    if kind == 1usize { query_error = tool.explain_json(a, &checker, &loaded) }
+    if kind == 1usize { query_error = tool.explain_json(a, &checker, &loaded, false) }
     if kind == 2usize || kind == 5usize {
         var budget = 64usize
         var byte_budget = 0usize

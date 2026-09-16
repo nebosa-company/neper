@@ -2187,6 +2187,15 @@ $explainActual = Join-Path $testBuild 'conformance-tools-explain.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file explain.e `"$repo`" x64 windows --json > `"$explainActual`""
 if ($LASTEXITCODE -ne 0) { throw "explain-file --json failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain.expected.jsonl')).Hash) { throw "explain-file --json differs from the conformance corpus" }
+# `explain-file --json` over a program that does not check (D430, H06): the records
+# before the failure -- a dispatch that found nothing, with why and the foreign
+# candidate -- then the diagnostic and a result of exit 1.
+foreach ($explainNone in @(@('explain_none/src/main.e', 'explain_none'), @('explain_arm.e', 'explain_arm'))) {
+    $explainNoneActual = Join-Path $testBuild "conformance-tools-$($explainNone[1]).jsonl"
+    cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file $($explainNone[0]) `"$repo`" x64 windows --json > `"$explainNoneActual`""
+    if ($LASTEXITCODE -ne 1) { throw "explain-file --json on $($explainNone[0]) exited $LASTEXITCODE, not 1" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainNoneActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($explainNone[1]).expected.jsonl")).Hash) { throw "explain-file --json on $($explainNone[0]) differs from the conformance corpus" }
+}
 # `context-file --json` (D361): one function's facts with provenance, budgeted; the
 # target names the host, so the golden is per host.
 $contextActual = Join-Path $testBuild 'conformance-tools-context.jsonl'
