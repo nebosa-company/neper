@@ -1157,6 +1157,20 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
         }
         constant_at += 1usize
     }
+    var aggregate_marks: [8192]u8 = zero
+    mark_aggregate_uses(c, g, builder, module_index, aggregate_marks[..])
+    var aggregate_string_at = 0usize
+    while aggregate_string_at < c.aggregate_count && aggregate_string_at < aggregate_marks.len {
+        if aggregate_marks[aggregate_string_at] != 0u8 {
+            let marked = c.aggregates[aggregate_string_at]
+            if marked.module_index >= g.count { ret InvalidArtifact }
+            let (marked_module_name, marked_module_name_error) = intern(table, g.modules[marked.module_index].name)
+            if marked_module_name_error != ok { ret marked_module_name_error }
+            let (marked_name, marked_name_error) = intern(table, marked.name)
+            if marked_name_error != ok { ret marked_name_error }
+        }
+        aggregate_string_at += 1usize
+    }
     var string_marks: [8192]u8 = zero
     mark_body_constant_uses(c, g, module_index, string_marks[..])
     constant_at = 0usize
@@ -1711,6 +1725,109 @@ fn mark_body_constant_uses(c: *check.Checker, g: *graph.Graph, module_index: usi
     }
 }
 
+// The foreign aggregates a module's bodies can touch (D493, H14): every named type
+// in the signature of a function the module references, every aggregate spelled
+// `q.Name` in its tokens, and the aggregates of their fields, to a fixed point.
+// Each is a signature edge -- the aggregate's signature hash covers its fields in
+// order -- so a change to a layout the body reads rebuilds the module. Before, a
+// module kept as `edges-hold` read the old layout: a wrong program from a warm build.
+fn mark_type_aggregates(c: *check.Checker, ty: check.Type, module_index: usize, marks: []u8, changed: *bool) {
+    var subject = ty
+    if subject.kind == .Pointer || subject.kind == .Slice || subject.kind == .Array {
+        if !subject.has_element || subject.element >= c.type_count { ret }
+        mark_type_aggregates(c, c.types[subject.element], module_index, marks, changed)
+        ret
+    }
+    let (canonical, canonical_error) = check.canonical_type(c, subject)
+    if canonical_error != ok { ret }
+    let (aggregate_index, found) = check.aggregate_for_type(c, canonical)
+    if !found || aggregate_index >= marks.len { ret }
+    if c.aggregates[aggregate_index].module_index == module_index || marks[aggregate_index] != 0u8 { ret }
+    marks[aggregate_index] = 1u8
+    *changed = true
+}
+
+fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, marks: []u8) {
+    if module_index >= g.count { ret }
+    var changed = false
+    // The signatures the module references.
+    var at = 0usize
+    while at < builder.function_ref_count {
+        let (dependency_name, records_dependency) = module_dependency_reference(builder, module_index, at)
+        if records_dependency && builder.function_refs[at].module_index < g.count {
+            let (checked_function, found_function) = find_checked_function(c, builder.function_refs[at].module_index, dependency_name)
+            if found_function {
+                let function = c.functions[checked_function]
+                var parameter_at = 0usize
+                while parameter_at < function.parameter_count {
+                    if function.first_parameter + parameter_at < c.parameter_count { mark_type_aggregates(c, c.parameters[function.first_parameter + parameter_at].ty, module_index, marks, &changed) }
+                    parameter_at += 1usize
+                }
+                var return_at = 0usize
+                while return_at < function.return_count {
+                    if function.first_return + return_at < c.return_type_count { mark_type_aggregates(c, c.return_types[function.first_return + return_at], module_index, marks, &changed) }
+                    return_at += 1usize
+                }
+            }
+        }
+        at += 1usize
+    }
+    // The aggregates the module spells as `q.Name`.
+    let module = g.modules[module_index]
+    let tokens = module.tokens
+    var token_at = 0usize
+    while token_at + 2usize < tokens.len {
+        if tokens[token_at].kind == .Identifier && tokens[token_at + 1usize].kind == .PunctDot && tokens[token_at + 2usize].kind == .Identifier {
+            let qualifier = module.text[tokens[token_at].start..tokens[token_at].end]
+            let name = module.text[tokens[token_at + 2usize].start..tokens[token_at + 2usize].end]
+            var import_at = module.first_import
+            let import_end = module.first_import + module.import_count
+            while import_at < import_end {
+                if same(g.imports[import_at].qualifier, qualifier) {
+                    let imported = g.imports[import_at].target
+                    var aggregate_at = 0usize
+                    while aggregate_at < c.aggregate_count && aggregate_at < marks.len {
+                        if c.aggregates[aggregate_at].module_index == imported && same(c.aggregates[aggregate_at].name, name) {
+                            if marks[aggregate_at] == 0u8 { changed = true }
+                            marks[aggregate_at] = 1u8
+                        }
+                        aggregate_at += 1usize
+                    }
+                }
+                import_at += 1usize
+            }
+        }
+        token_at += 1usize
+    }
+    // The fields' aggregates, to a fixed point.
+    while changed {
+        changed = false
+        var aggregate_at = 0usize
+        while aggregate_at < c.aggregate_count && aggregate_at < marks.len {
+            if marks[aggregate_at] == 1u8 {
+                marks[aggregate_at] = 2u8
+                let aggregate = c.aggregates[aggregate_at]
+                var field_at = 0usize
+                while field_at < aggregate.field_count {
+                    if aggregate.first_field + field_at < c.aggregate_field_count { mark_type_aggregates(c, c.aggregate_fields[aggregate.first_field + field_at].ty, module_index, marks, &changed) }
+                    field_at += 1usize
+                }
+            }
+            aggregate_at += 1usize
+        }
+    }
+}
+
+fn aggregate_dependency_count(c: *check.Checker, marks: []u8) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < c.aggregate_count && at < marks.len {
+        if marks[at] != 0u8 { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
 fn foreign_constant_used_by_module(c: *check.Checker, module_index: usize, target_constant: usize) -> (bool, err) {
     if target_constant >= c.constant_count { ret (false, InvalidArtifact) }
     let target_item = c.constants[target_constant]
@@ -1813,7 +1930,9 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     try mark_module_references(builder, c, module_index)
     let (value_count, value_count_error) = value_dependency_count(c, g, module_index)
     if value_count_error != ok { ret value_count_error }
-    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count)
+    var aggregate_marks: [8192]u8 = zero
+    mark_aggregate_uses(c, g, builder, module_index, aggregate_marks[..])
+    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks[..]))
     var at = 0usize
     while at < builder.function_ref_count {
         let reference = builder.function_refs[at]
@@ -1881,6 +2000,26 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
             let (target_name, target_name_error) = string_index(table, template.name)
             if target_name_error != ok { ret target_name_error }
             try binary.byte(output, dependency_body_kind())
+            try binary.zeroes(output, 3usize)
+            try binary.little_u32(output, target_module)
+            try binary.little_u32(output, target_name)
+            try binary.little_u64(output, hash)
+        }
+        at += 1usize
+    }
+    // The aggregate edges (D493): a signature edge each, held by its fields.
+    at = 0usize
+    while at < c.aggregate_count && at < aggregate_marks.len {
+        if aggregate_marks[at] != 0u8 {
+            let aggregate = c.aggregates[at]
+            if aggregate.module_index >= g.count { ret InvalidArtifact }
+            let (hash, hash_error) = aggregate_signature_hash(c, g, at, scratch)
+            if hash_error != ok { ret hash_error }
+            let (target_module, target_module_error) = string_index(table, g.modules[aggregate.module_index].name)
+            if target_module_error != ok { ret target_module_error }
+            let (target_name, target_name_error) = string_index(table, aggregate.name)
+            if target_name_error != ok { ret target_name_error }
+            try binary.byte(output, dependency_signature_kind())
             try binary.zeroes(output, 3usize)
             try binary.little_u32(output, target_module)
             try binary.little_u32(output, target_name)

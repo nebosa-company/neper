@@ -10570,3 +10570,21 @@ the unsafe inventory is (D457): a field or member spelled like a constant marks
 an edge that holds, which costs nothing. `incremental_value` pins the fixture
 in both modes on both hosts: exit 8, the edit, `main=rebuilt:edge-changed`,
 exit 4, and the image the clean build's. Not yet: the fallback fixture.
+
+## D493 -- A layout a body reads is an edge
+
+D492's sibling: `let r = dep.make()` then `r.b`, with `Rec`'s fields reordered
+in `dep`, kept `main` as `edges-hold` -- its one edge was `make`'s signature,
+which names `Rec` and not its fields -- and the executable read the old offset.
+The artifact now records a signature edge to every foreign aggregate the body
+could have been lowered against: the named types in the signatures of the
+functions the module references (parameters and returns, through pointers,
+slices and arrays), the aggregates it spells as `q.Name`, and the aggregates of
+their fields, to a fixed point. An aggregate's signature hash covers its fields
+in order, so a reordered, retyped or extended record fails the edge and the
+module is rebuilt as `edge-changed`; a change that leaves the fields as they
+are -- a new method beside them -- holds. The set is an over-approximation by
+design: an edge to a layout the body never read is an edge that holds, at the
+cost of a hash. `incremental_layout` pins the case in both modes on both
+hosts, the warm image the clean build's. Not yet: a declaration index keyed by
+kind, so a type and a function of one name could not shadow each other's edge.

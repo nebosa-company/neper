@@ -1742,6 +1742,28 @@ foreach ($hotMode in @('--release', '--time')) {
     $valueCleanWritten = & $compiler emit-executable (Join-Path $valueScratch 'src\main.e') $repo 'x64' 'windows' $valueClean $hotMode 2>$null
     if ($LASTEXITCODE -ne 0 -or $valueCleanWritten -ne 'executable written') { throw "the clean build of the edited value fixture failed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $valueExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $valueClean).Hash) { throw "the warm build after a folded constant's edit is not the clean build ($hotMode)" }
+    # A layout a body reads is an edge (D493, H14): a warm build after the record a
+    # module reads through a signature was reordered rebuilds that module as
+    # `edge-changed`, still exits 7, and is the clean build of the edited tree.
+    $layoutScratch = Join-Path $testBuild 'layout-scratch'
+    if (Test-Path -LiteralPath $layoutScratch) { Remove-Item -LiteralPath $layoutScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\incremental_layout') $layoutScratch
+    $layoutExe = Join-Path $testBuild "layout$hotMode.exe"
+    $layoutFirst = & $compiler emit-executable (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $layoutFirst -ne 'executable written') { throw "the cold build of the layout fixture failed ($hotMode)" }
+    & $layoutExe
+    if ($LASTEXITCODE -ne 7) { throw "the layout fixture did not exit 7 before the edit ($hotMode)" }
+    Copy-Item (Join-Path $layoutScratch 'edits\dep_layout.e') (Join-Path $layoutScratch 'src\dep.e') -Force
+    $layoutSecond = & $compiler emit-executable (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $layoutSecond -ne 'executable written') { throw "the warm build after the layout's edit failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $layoutScratch ".neper\$hotManifestMode\build-manifest.json") 'main=rebuilt:edge-changed' 'dep=rebuilt:source-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after a read layout's edit does not say edge-changed ($hotMode)" }
+    & $layoutExe
+    if ($LASTEXITCODE -ne 7) { throw "the layout fixture did not exit 7 after the edit ($hotMode)" }
+    $layoutClean = Join-Path $testBuild "layout-clean$hotMode.exe"
+    $layoutCleanWritten = & $compiler emit-executable (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $layoutCleanWritten -ne 'executable written') { throw "the clean build of the edited layout fixture failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $layoutExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $layoutClean).Hash) { throw "the warm build after a read layout's edit is not the clean build ($hotMode)" }
     # A cyclic artifact reference (D472, H24): an artifact rewritten to import the module
     # that imports it is distrusted and rebuilt as `invalid-artifact`, the image is the
     # clean build's, and the linker over the forged set refuses or links without crashing.

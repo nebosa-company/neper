@@ -1897,6 +1897,22 @@ for hot_mode in --release --time; do
     [ "$value_status" -eq 4 ]
     [ "$("$test_build/neper-self" emit-executable "$value_scratch/src/main.e" "$repo" x64 linux "$test_build/value-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
     cmp "$test_build/value$hot_mode" "$test_build/value-clean$hot_mode"
+    # A layout a body reads is an edge (D493, H14): the module reading it is rebuilt.
+    layout_scratch="$test_build/layout-scratch"
+    rm -rf "$layout_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/incremental_layout" "$layout_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$layout_scratch/src/main.e" "$repo" x64 linux "$test_build/layout$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    layout_status=0
+    "$test_build/layout$hot_mode" || layout_status=$?
+    [ "$layout_status" -eq 7 ]
+    cp "$layout_scratch/edits/dep_layout.e" "$layout_scratch/src/dep.e"
+    [ "$("$test_build/neper-self" emit-executable "$layout_scratch/src/main.e" "$repo" x64 linux "$test_build/layout$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$layout_scratch/.neper/$hot_manifest_mode/build-manifest.json" main=rebuilt:edge-changed dep=rebuilt:source-changed
+    layout_status=0
+    "$test_build/layout$hot_mode" || layout_status=$?
+    [ "$layout_status" -eq 7 ]
+    [ "$("$test_build/neper-self" emit-executable "$layout_scratch/src/main.e" "$repo" x64 linux "$test_build/layout-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+    cmp "$test_build/layout$hot_mode" "$test_build/layout-clean$hot_mode"
     # A cyclic artifact reference (D472, H24): distrusted, rebuilt as invalid-artifact, the clean image.
     cycle_scratch="$test_build/cycle-scratch"
     rm -rf "$cycle_scratch"
