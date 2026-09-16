@@ -230,7 +230,10 @@ Each symbol contains `id`, `kind`, `name`, `qualified_name`, `module`, `signatur
 `span`, `selection_span`, `container_id`, `attributes`, and nullable `documentation`
 from spec §3's attached `///` lines. `id` is the zero-based
 record number among symbol records and is stable for identical source. Nullable
-fields are present as JSON null; no field is omitted. A `local` (D483, H17) is a
+fields are present as JSON null; no field is omitted. `neper index-file - ROOT
+ARCH OS --json --path REL` (D488) reads the module from stdin under the `--path`
+identity, as `tokens` and `parse` do (D289); its imports resolve as the file at
+`REL` would. A `local` (D483, H17) is a
 `let`/`var` binding -- each name of a tuple binding its own -- or a `for` variable,
 nested under its function like a `parameter`, its `span` and `selection_span` the
 name, its `signature` the name; a bare name in the body that is one of the

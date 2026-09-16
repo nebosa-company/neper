@@ -2842,7 +2842,24 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     report.file = os.stdout()
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
-    let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+    // `-` is stdin under the `--path` identity (D488), as `tokens` and `parse` have
+    // it (D289): the text is read here and the loader takes it as the root's.
+    var operand = args[2usize]
+    if same(operand, "-") {
+        if args.len != 9usize { ret tool_usage() }
+        let (piped, piped_error) = operand_text(a, "-")
+        if piped_error != ok {
+            try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
+            try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read")
+            try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"symbols\":0,\"references\":0}}\n")
+            os.exit(2i32)
+            ret ok
+        }
+        loaded.root_text = piped
+        loaded.root_text_given = true
+        operand = args[8usize]
+    }
+    let load_error = load_graph(a, &report, &loaded, operand, args[3usize], args[4usize], args[5usize])
     if load_error != ok {
         try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
         try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")

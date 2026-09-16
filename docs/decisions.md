@@ -10509,3 +10509,15 @@ sees the relation the rules hold the body to before it plans a write or a
 reset of the viewed local. `context_moves.e` gains a `views` subject with a
 pointer to an element and a slice of one array, both hosts; the other context
 pages are unchanged, none of their subjects takes a view.
+
+## D488 -- `-` on `index`
+
+`tokens`, `parse` and `fmt` read their operand from stdin under `--path` since
+D289; `index` could not, since it loads a module graph by path. The graph now
+carries a root text (`root_text`, given or not): `index-file - ROOT ARCH OS
+--json --path REL` reads stdin in the driver and the loader's first wave takes
+that text for module 0 in place of the file at `REL`, whose name and directory
+still name the module and resolve its imports. The stream is the file form's
+byte for byte, so both suites pipe `index.e` in and require `index.expected`.
+`check-file` and the query commands have the same loader and could take `-`
+the same way; they do not yet.

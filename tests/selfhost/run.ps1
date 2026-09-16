@@ -1989,6 +1989,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-Fil
 $stdinActual = Join-Path $testBuild 'conformance-stdin-fmt.e'
 cmd /c "`"$compiler`" fmt-file - < `"$(Join-Path $conformanceRoot 'tools\fmt.e')`" > `"$stdinActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\fmt.e')).Hash) { throw 'fmt from stdin is not the canonical source' }
+# `-` on `index` (D488): the module from stdin under its `--path` identity is the file's golden.
+$stdinActual = Join-Path $testBuild 'conformance-stdin-index.jsonl'
+cmd /c "`"$compiler`" index-file - `"$repo`" x64 windows --json --path index.e < `"$(Join-Path $conformanceRoot 'tools\index.e')`" > `"$stdinActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\index.expected.jsonl')).Hash) { throw 'index --json from stdin differs from the conformance corpus' }
 cmd /c "`"$compiler`" tokens --json - < `"$(Join-Path $conformanceRoot 'tokens\every_kind.e')`" > nul 2>&1"
 if ($LASTEXITCODE -ne 1) { throw "tokens - without --path exited $LASTEXITCODE, not 1" }
 # `--absolute-paths` (D290): the operand's absolute spelling as `absolute_path` beside its

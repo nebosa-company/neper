@@ -122,6 +122,10 @@ fn load_file(a: *mem.Arena, path: str) -> (str, err) {
 type Graph = struct {
     modules: []Module,
     imports: []Import,
+    // The root module's text when the operand was `-` (D488): read from stdin by the
+    // driver under the `--path` identity, so the loader takes it in place of a file.
+    root_text: str,
+    root_text_given: bool,
     token_scratch: []lex.Token,
     nodes: []syntax.Node,
     children: []u32,
@@ -895,8 +899,12 @@ fn begin(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: st
 fn wave_texts(a: *mem.Arena, g: *Graph, wave_start: usize, wave_end: usize) -> err {
     var module_index = wave_start
     while module_index < wave_end {
-        let (text, load_error) = source.load(a, g.modules[module_index].path)
-        if load_error != ok { ret load_error }
+        var text = g.root_text
+        if module_index != 0usize || !g.root_text_given {
+            let (loaded_text, load_error) = source.load(a, g.modules[module_index].path)
+            if load_error != ok { ret load_error }
+            text = loaded_text
+        }
         g.modules[module_index].text = text
         g.total_bytes += text.len
         if text.len > g.largest_bytes { g.largest_bytes = text.len }
