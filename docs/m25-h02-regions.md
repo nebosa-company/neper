@@ -52,9 +52,10 @@ question, which this subset does not ask (section 5).
 The arms of an `if` join as H01's states do: a value reset on one path and not the
 other is dangling-maybe, which no use accepts.
 
-A pointer local bound from `&x` -- `let first = &cells[0]` -- or a slice local
-bound from a place of `x` -- `let head = counts.hits[0..2]` (D395) -- is `x` by
-another name (D393, D394): once `x` dangles, `*first`, `first.field` and `first[i]`, read
+A pointer local bound from `&x` -- `let first = &cells[0]` -- a slice local
+bound from a place of `x` -- `let head = counts.hits[0..2]` (D395) -- or a struct
+local given `&x` in a field, `Context { target: &x, .. }` or `ctx.target = &x`,
+through that field alone (D413), is `x` by another name (D393, D394): once `x` dangles, `*first`, `first.field` and `first[i]`, read
 or stored to, are refused as `x`'s own use is, naming `x`; `first.len` is not,
 for the reason `x.len` is not. A pointer from anywhere else is not followed.
 

@@ -336,6 +336,10 @@ type Resource = struct {
     // one, when this local was bound from `&x`; a read or a store through it is a
     // read or a store of `x`, which the lending rule then sees.
     points_to: usize,
+    // The field the alias runs through (D413): empty for a pointer or slice local,
+    // whose every use reaches the target; the member's name for a struct local one
+    // of whose fields holds `&x`, where only a use through that field does.
+    points_to_field: str,
     view: bool,
     // H02's lexical subset (D354): a mark local's arena, as written; a region value's
     // mark, plus one; a view's container local, plus one; and why a value dangles
@@ -5608,7 +5612,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     if affine_kind(c, ty, 0usize) != 0u8 { state = 1u8 }
     var no_fields: []u8 = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "" }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -12943,9 +12947,18 @@ fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 // `&x`, and `x`.
 fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
     var base_index = node_index
+    // The member read on the base itself (D413): `s.p.hits` reaches `x` through `p`
+    // when `s.p` holds `&x`; `s.count` does not.
+    var through_member = ""
+    var has_member = false
     while tree.nodes[base_index].kind == .FieldExpr || tree.nodes[base_index].kind == .BracketPostfix || tree.nodes[base_index].kind == .UnaryExpr {
         let (deeper_index, has_deeper) = first_node_child(tree, tree.nodes[base_index])
         if !has_deeper { break }
+        if tree.nodes[base_index].kind == .FieldExpr && tree.nodes[deeper_index].kind == .NameExpr {
+            let (member, found_member) = field_expression_name(c, g.modules[module_index].text, tree, tree.nodes[base_index])
+            through_member = member
+            has_member = found_member
+        }
         base_index = deeper_index
     }
     let base = tree.nodes[base_index]
@@ -12954,9 +12967,35 @@ fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if token.kind != .Identifier { ret (0usize, false) }
     let (pointer_local, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
     if !found || c.resources[pointer_local].points_to == 0usize { ret (0usize, false) }
+    if c.resources[pointer_local].points_to_field.len != 0usize && (!has_member || !same(through_member, c.resources[pointer_local].points_to_field)) { ret (0usize, false) }
     let pointed = c.resources[pointer_local].points_to - 1usize
     if pointed >= c.local_count { ret (0usize, false) }
     ret (pointed, true)
+}
+
+// The first field of a struct literal given `&x` of a local (D413): which local, and
+// the field's name.
+fn literal_address_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, literal_index: usize) -> (usize, str, bool) {
+    let literal = tree.nodes[literal_index]
+    let text = g.modules[module_index].text
+    let end = usize(literal.first_child) + usize(literal.child_count)
+    var at = usize(literal.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            let item_index = parse.child_index_at(tree, at)
+            let item = tree.nodes[item_index]
+            if item.kind == .LiteralItem {
+                let name_token = c.tokens[usize(item.token_start)]
+                let (value_index, has_value) = first_node_child(tree, item)
+                if name_token.kind == .Identifier && has_value {
+                    let (pointed, is_address) = address_argument_local(c, g, tree, module_index, value_index)
+                    if is_address { ret (pointed, text[name_token.start..name_token.end], true) }
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret (0usize, "", false)
 }
 
 // The alias's target when a region reset or a container's change made it dangle (D394).
@@ -13245,8 +13284,17 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     }
     // `let p = &x` (D393): `p` points at `x` until it is bound again. A slice bound
     // from a place of `x` -- `x[a..b]`, `x.items`, `x` itself a slice -- views the
-    // same storage and is recorded the same way (D395).
+    // same storage and is recorded the same way (D395); a struct literal with `&x` in
+    // a field aliases `x` through that field (D413).
     c.resources[local_index].points_to = 0usize
+    c.resources[local_index].points_to_field = ""
+    if has_initializer && c.locals[local_index].ty.kind == .Named && tree.nodes[initializer_index].kind == .AggregateLiteral {
+        let (pointed, member, is_address) = literal_address_field(c, g, tree, module_index, initializer_index)
+        if is_address && pointed != local_index {
+            c.resources[local_index].points_to = pointed + 1usize
+            c.resources[local_index].points_to_field = member
+        }
+    }
     if has_initializer && c.locals[local_index].ty.kind == .Pointer {
         let (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
         if is_address && pointed != local_index { c.resources[local_index].points_to = pointed + 1usize }
@@ -13804,6 +13852,25 @@ fn resource_narrow_arm(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
 // that is a resource local is bound again as a `let` binds; a right-hand side that
 // names a resource local moves it, wherever it goes.
 fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, statement: syntax.Node, place_index: usize, initializer_index: usize, from_call: bool, call: CallInfo, tried: bool) -> err {
+    // `s.p = &x` (D413): `s` aliases `x` through `p` from here.
+    let place = tree.nodes[place_index]
+    if place.kind == .FieldExpr {
+        let (struct_index, has_struct) = first_node_child(tree, place)
+        if has_struct && tree.nodes[struct_index].kind == .NameExpr {
+            let struct_token = c.tokens[usize(tree.nodes[struct_index].token_start)]
+            if struct_token.kind == .Identifier {
+                let (struct_local, found_struct) = find_local(c, g.modules[module_index].text[struct_token.start..struct_token.end])
+                if found_struct && c.locals[struct_local].ty.kind == .Named {
+                    let (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
+                    let (member, has_member) = field_expression_name(c, g.modules[module_index].text, tree, place)
+                    if is_address && has_member && pointed != struct_local {
+                        c.resources[struct_local].points_to = pointed + 1usize
+                        c.resources[struct_local].points_to_field = member
+                    }
+                }
+            }
+        }
+    }
     if !any_affine_local(c) { ret ok }
     // The local the place is in, for a thread over this frame (D357): a store into
     // storage declared after what the thread reads is a store that dies first.

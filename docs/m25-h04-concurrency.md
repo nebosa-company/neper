@@ -74,7 +74,7 @@ view rule exists), cancellation.
   context indirectly (a callback environment, a struct of pointers).
 - Storage lent through a slice's elements -- what the parent reads through a
   slice over the same storage. A pointer local bound from `&x` is followed
-  (D393), as is a slice bound from a place of `x` (D395): a read or a store
+  (D393), as is a slice bound from a place of `x` (D395) and a struct local holding `&x` in a field, through that field (D413): a read or a store
   through it while `x` is lent is refused, and `&p.f` is an address like `&x.f`;
   a pointer that came from anywhere else is not.
 - Globals: a module-scope `var` read by both is not tracked; it is the program's

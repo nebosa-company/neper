@@ -9178,3 +9178,21 @@ tree, on the main thread, for `--stats` alone -- and the rows come out: 35
 files, 331,946 nodes, `bodies checked` 0, `modules lowered` 0, wall 91 ms for
 the compiler's own warm build. Both suites run one warm build under `--stats`
 and read the zero.
+
+## D413 -- A struct holding `&x` in a field aliases `x` through that field
+
+D393 and D395 followed a pointer local and a slice local; a struct local with
+`&x` in a field -- `var ctx = Context { target: &counter, rounds: 0 }`, or
+`ctx.target = &counter` -- was not followed, and `ctx.target.hits = 5` while
+`counter` was lent to a running thread raced unrefused. The binding of a struct
+local from a literal records the first field given `&x` of a local, and a store
+`s.f = &x` into a struct local records it too, as `points_to` with the field's
+name beside it (`points_to_field`); the alias walk then follows a struct local
+only through that field -- `ctx.target.hits` reaches `counter`, `ctx.rounds`
+does not -- so the lending, region and view rules refuse what they would refuse
+of `counter` itself and nothing else. The corpus gains
+`reject/safety_thread_field`; the compiler, the library and every fixture pass.
+
+Not yet: a struct with addresses in two fields (the first is the one followed),
+an alias whose target is rebound under it, and the same following for a
+pointer stored into an array element.

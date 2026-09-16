@@ -3554,10 +3554,11 @@ none becomes a trap:
   call given `&c`, where `c` is a local and the call takes no arena, is a view of
   `c`; a later call given `&c` through a `*T` parameter that gives back nothing
   holding a pointer mutates `c`, and every view of it is dangling (`E-SAFETY-0014`).
-  A pointer local bound from `&x`, or a slice local bound from a place of `x`
-  (`x[a..b]`, `x.items`, `x` itself a slice), is `x` by another name for both
-  (D394, D395): a read or a store through it once `x` dangles is refused the same
-  way, its `.len` excepted. Both are lexical and within one function: what is returned, stored,
+  A pointer local bound from `&x`, a slice local bound from a place of `x`
+  (`x[a..b]`, `x.items`, `x` itself a slice), or a struct local given `&x` in a
+  field `f` -- by its literal or by a store `s.f = &x` -- is `x` by another name
+  for both (D394, D395, D413), the struct through `f` alone: a read or a store
+  through it once `x` dangles is refused the same way, its `.len` excepted. Both are lexical and within one function: what is returned, stored,
   handed to a callback, an import or a thread, reached through any other pointer,
   or made by a cast is outside the rule, and `m25-h02-regions.md` says so.
 - A thread started over the address of this frame's storage -- `os.thread_create`
