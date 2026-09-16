@@ -172,6 +172,14 @@ a decision.
 The `compile threads` row of `--stats` reads 1 while eight workers run (it predates
 D321); the worker count is the `-j` value or eight.
 
+`benchmarks/baseline/gate.py NEW.json` (D366) judges a measurement against these
+budgets, cell by cell and measure by measure -- `ok`, `BREACH` with both numbers
+and the delta, or `missing` -- and exits 1 on any breach, which is what a merge
+reads. Run against `h01-windows-d351.json` it names twelve: the cold and warm
+compiler cells (+27%, +17-27%), the peak resident set everywhere (+24% to +269%),
+and the release cold cells of `sc500k` and `sc1m` (+12-14%) -- the D340 and D355
+breaches the decision rows carry, now in a form nothing drifts past.
+
 ## What this baseline is not
 
 - Not the H12 evaluation: no held-out task set, no model family, no repair run has

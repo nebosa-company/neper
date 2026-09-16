@@ -8040,3 +8040,21 @@ atomics through addresses while workers run are the valid shapes.
 Not yet, of H04: locks and guards as regions over the mutex (section 4 of the
 design), aliases through slices, pointer locals and globals, partial spawn
 failure over arrays, a perturbation fixture for a program's own threads.
+
+## D366 -- The performance gate: a measurement judged against the budgets
+
+H25 asks for registered workloads, budgets and comparable reports, and D338 gave
+the first two and a renderer for the third; what was missing was the judgment.
+`benchmarks/baseline/gate.py NEW.json` compares every cell of a `measure.py`
+result with the baseline cell of the same workload and mode against the budgets
+`m2-baseline.md` sets -- cold +10%, warm +15%, resident set +10%, arena not above,
+image +5% -- prints one line per measure, and exits 1 on any breach, so a merge
+can read it. On the D351 measurement it names twelve breaches: the compiler's cold
+and warm cells, the resident set on every cell (D340's commit-on-touch), and the
+release cold cells of the scale workloads (D355's retained checks) -- the numbers
+the decision rows already carry, in the form the gate was for. A breach is not a
+failure of the measurement; it is what a decision row has to name.
+
+Not yet, of H25: the gate in the suites (a measurement takes minutes and a quiet
+machine, and the suites have neither); Linux measurements after the baseline; the
+H25 report that replaces the budgets with its own.
