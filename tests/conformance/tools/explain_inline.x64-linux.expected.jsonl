@@ -1,0 +1,114 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"build","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"inline","symbol":"contract.bump","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"contract.first","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"contract.total","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"contract.main","decision":"not-a-candidate","reason":"the program root","pass":1}
+{"record":"inline","symbol":"e.mem.arena_from","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.mem.copy","decision":"not-a-candidate","reason":"generic, an instance is its instantiating module's own","pass":1}
+{"record":"inline","symbol":"e.mem.eq","decision":"not-a-candidate","reason":"generic, an instance is its instantiating module's own","pass":1}
+{"record":"inline","symbol":"e.os.current_thread_id","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.record_error_detail","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.record_cleanup_error_detail","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.os.from_errno","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.from_errno_cleanup","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.kind_from_mode","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.stat","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.lstat","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.to_timespec","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.os.mkdir","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.remove_file","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.remove_dir","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.executable_path","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.set_current_dir","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.set_mode","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.action_from_mask","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.os.watch_close","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.mapping_region","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.os.mapping_bytes","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.os.mapping_bytes_mut","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.mapping_flush","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.mapping_close","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.interest_mask","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.control_epoll","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.poller_register","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.poller_modify","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.poller_unregister","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.poller_wake","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.poller_close","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.family_value","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.entry_name","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.os.same_bytes","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.os.overridden","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.os.proc_group_terminate","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.proc_group_close","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.file_unlock","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.page_size","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.dup","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.peak_memory","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.kill","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.release","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.dlclose","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.socket_open","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.socket_close","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.socket_bind","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.socket_local_address","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.socket_listen","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.socket_connect","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.socket_send","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.socket_receive","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.folded","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.same_folded","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.os.hex_value","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.parse_literal","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.line_end","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.shutdown_value","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.socket_shutdown","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.stdin","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.os.file_handle","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.os.socket_handle","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.os.open_bits","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.os.dir_close","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.release_parent","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.parent_of","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"contract.bump","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"contract.first","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"contract.total","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.current_thread_id","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.record_error_detail","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.from_errno","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.from_errno_cleanup","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.kind_from_mode","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.mkdir","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.remove_file","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.remove_dir","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.set_current_dir","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.set_mode","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.watch_close","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.mapping_flush","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.mapping_close","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.interest_mask","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.control_epoll","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.poller_register","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.poller_modify","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.poller_unregister","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.poller_wake","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.poller_close","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.family_value","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.proc_group_terminate","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.proc_group_close","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.file_unlock","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.page_size","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.kill","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.release","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.dlclose","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.socket_close","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.socket_bind","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.socket_listen","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.socket_connect","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.folded","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.line_end","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.shutdown_value","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.socket_shutdown","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.dir_close","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.release_parent","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"result","ok":true,"exit_code":0,"data":{"executable":"conformance-tools-explain-inline.out","diagnostics":0}}

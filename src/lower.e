@@ -2019,15 +2019,44 @@ fn inline_cap(builder: *nir.Builder) -> usize {
     ret 40usize
 }
 
-// One inlining decision explained (D346, H20): "inline: module.function: <reason>".
-fn explain_inline(g: *graph.Graph, module_index: usize, name: str, reason: str) {
-    let (w1, e1) = os.write(os.stderr(), "inline: ")
-    let (w2, e2) = os.write(os.stderr(), g.modules[module_index].name)
-    let (w3, e3) = os.write(os.stderr(), ".")
-    let (w4, e4) = os.write(os.stderr(), name)
-    let (w5, e5) = os.write(os.stderr(), ": ")
-    let (w6, e6) = os.write(os.stderr(), reason)
-    let (w7, e7) = os.write(os.stderr(), "\n")
+// One inlining decision explained (D346, H20): "inline: module.function: <reason>",
+// or under `--json` (D408) the record `{"record":"inline","symbol":"module.function",
+// "decision":"inlinable"|"rejected"|"not-a-candidate","reason":"..."}`, appended to
+// the oracle's explanation storage for the driver to write after the phase.
+fn explain_inline(oracle: *nir.Builder, g: *graph.Graph, module_index: usize, name: str, reason: str) {
+    if oracle.explain_json {
+        explain_append(oracle, "{\"record\":\"inline\",\"symbol\":\"")
+        explain_append(oracle, g.modules[module_index].name)
+        explain_append(oracle, ".")
+        explain_append(oracle, name)
+        explain_append(oracle, "\",\"decision\":\"")
+        var split = 0usize
+        while split < reason.len && reason[split] != 58u8 { split += 1usize }
+        let decision = reason[0usize..split]
+        if check.same(decision, "not a candidate") { explain_append(oracle, "not-a-candidate") } else { explain_append(oracle, decision) }
+        explain_append(oracle, "\",\"reason\":\"")
+        if split + 2usize <= reason.len { explain_append(oracle, reason[split + 2usize..reason.len]) } else { explain_append(oracle, reason) }
+        // The pass: the first oracle lowers every candidate alone, the second lowers
+        // the first's entries against each other, and a decision can differ between them.
+        if oracle.has_oracle { explain_append(oracle, "\",\"pass\":2}\n") } else { explain_append(oracle, "\",\"pass\":1}\n") }
+    } else {
+        explain_append(oracle, "inline: ")
+        explain_append(oracle, g.modules[module_index].name)
+        explain_append(oracle, ".")
+        explain_append(oracle, name)
+        explain_append(oracle, ": ")
+        explain_append(oracle, reason)
+        explain_append(oracle, "\n")
+    }
+}
+
+fn explain_append(oracle: *nir.Builder, piece: str) {
+    if oracle.explain_count + piece.len > oracle.explain_bytes.len {
+        oracle.explain_overflow = true
+        ret
+    }
+    os.copy_bytes(oracle.explain_bytes[oracle.explain_count..oracle.explain_count + piece.len], piece)
+    oracle.explain_count += piece.len
 }
 
 fn find_inline_entry(builder: *nir.Builder, module_index: usize, name: str, instance: usize) -> (usize, bool) {
@@ -2111,10 +2140,10 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     }
                 }
                 if oracle.explain && wanted && (function.generic || function.external || function.intrinsic || check.same(name, "main") || function.return_count > 1usize) {
-                    if function.generic { explain_inline(g, module_index, name, "not a candidate: generic, an instance is its instantiating module's own") }
-                    if function.external || function.intrinsic { explain_inline(g, module_index, name, "not a candidate: no body of its own") }
-                    if check.same(name, "main") { explain_inline(g, module_index, name, "not a candidate: the program root") }
-                    if function.return_count > 1usize { explain_inline(g, module_index, name, "not a candidate: more than one result") }
+                    if function.generic { explain_inline(oracle, g, module_index, name, "not a candidate: generic, an instance is its instantiating module's own") }
+                    if function.external || function.intrinsic { explain_inline(oracle, g, module_index, name, "not a candidate: no body of its own") }
+                    if check.same(name, "main") { explain_inline(oracle, g, module_index, name, "not a candidate: the program root") }
+                    if function.return_count > 1usize { explain_inline(oracle, g, module_index, name, "not a candidate: more than one result") }
                 }
                 if wanted && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
                     // A result that comes back through a slot is decided before any lowering.
@@ -2127,7 +2156,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         hidden = return_layout.via_slot
                     }
                     if hidden {
-                        if oracle.explain { explain_inline(g, module_index, name, "not a candidate: its result comes back through a slot") }
+                        if oracle.explain { explain_inline(oracle, g, module_index, name, "not a candidate: its result comes back through a slot") }
                         node_index += 1usize
                         continue
                     }
@@ -2145,7 +2174,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     if lower_error == ok || lower_error == nir.TooLong { c.failure_has_token = false }
                     if lower_error == nir.TooLong {
                         // Past the cap: what was lowered so far goes, and so does the function.
-                        if oracle.explain { explain_inline(g, module_index, name, "rejected: its body is over the cap") }
+                        if oracle.explain { explain_inline(oracle, g, module_index, name, "rejected: its body is over the cap") }
                         nir.reset(oracle, checkpoint)
                         c.local_count = local_checkpoint
                         node_index += 1usize
@@ -2164,7 +2193,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         scan_at += 1usize
                     }
                     if oracle.explain {
-                        if calls_instance { explain_inline(g, module_index, name, "rejected: it calls a generic instance") } else { explain_inline(g, module_index, name, "inlinable: at or under the cap") }
+                        if calls_instance { explain_inline(oracle, g, module_index, name, "rejected: it calls a generic instance") } else { explain_inline(oracle, g, module_index, name, "inlinable: at or under the cap") }
                     }
                     if lowered.instruction_count <= inline_cap(oracle) && !calls_instance {
                         let entry_at = *entry_count

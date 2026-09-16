@@ -213,6 +213,11 @@
       "type":"object","additionalProperties":false,"required":["record","tool_version","language_profiles","commands","host_target","build_targets","cpu_levels","features"],
       "properties":{"record":{"const":"info"},"tool_version":{"type":"string"},"language_profiles":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["language_version","grammar_revision","stream_version","experimental"],"properties":{"language_version":{"type":"string"},"grammar_revision":{"type":"integer","minimum":1},"stream_version":{"type":"integer","minimum":1},"experimental":{"type":"boolean"}}}},"commands":{"type":"array","items":{"type":"string"}},"host_target":{"type":"string"},"build_targets":{"type":"array","items":{"type":"string"}},"cpu_levels":{"type":"array","items":{"type":"string"}},"features":{"type":"array","items":{"type":"string"}}}
     },
+    "inline": {
+      "type":"object","additionalProperties":false,
+      "required":["record","symbol","decision","reason","pass"],
+      "properties":{"record":{"const":"inline"},"symbol":{"type":"string"},"decision":{"enum":["inlinable","rejected","not-a-candidate","truncated"]},"reason":{"type":"string"},"pass":{"enum":[1,2]}}
+    },
     "formatted": {
       "type":"object","additionalProperties":false,"required":["record","text"],
       "properties":{"record":{"const":"formatted"},"text":{"type":"string"}}
@@ -246,7 +251,7 @@
       "properties":{"record":{"const":"disassembly"},"symbol":{"type":"string"},"target":{"type":"string"},"text":{"type":"string"}}
     },
     "streamRecord": {
-      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/use"},{"$ref":"#/$defs/root"},{"$ref":"#/$defs/precondition"},{"$ref":"#/$defs/planEdit"},{"$ref":"#/$defs/postcondition"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
+      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/use"},{"$ref":"#/$defs/root"},{"$ref":"#/$defs/precondition"},{"$ref":"#/$defs/planEdit"},{"$ref":"#/$defs/postcondition"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/inline"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
     },
     "sourceMap": {
       "type":"object","required":["schema","version","generated","generated_sha256","mappings"],

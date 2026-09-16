@@ -2068,6 +2068,12 @@ $runFloodActual = Join-Path $testBuild 'conformance-tools-run-flood.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_flood.e `"$repo`" x64 windows conformance-tools-run-flood.out --json --capture 50 > `"$runFloodActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runFloodActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_flood.expected.jsonl')).Hash) { throw "run --json --capture differs from the conformance corpus" }
 if ((Get-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-run-flood.out.stdout')).Length -ne 296) { throw 'the whole flood output is not in the file beside the executable' }
+# `--explain --json` (D408, H20): every inlining decision a record of the build stream,
+# in worker order -- one worker here, so module order -- byte for byte per host.
+$explainInlineActual = Join-Path $testBuild 'conformance-tools-explain-inline.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/contract.e `"$repo`" x64 windows conformance-tools-explain-inline.out --release --explain --json -j 1 > `"$explainInlineActual`""
+if ($LASTEXITCODE -ne 0) { throw "emit-executable --explain --json failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainInlineActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_inline.x64-windows.expected.jsonl')).Hash) { throw "emit-executable --explain --json differs from the conformance corpus" }
 # `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""

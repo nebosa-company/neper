@@ -3031,7 +3031,30 @@ fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signat
     if type_capacity == 0usize { type_capacity = 1usize }
     let (signature_types, signature_types_error) = mem.alloc[check.Type](a, type_capacity)
     if signature_types_error != ok { ret signature_types_error }
+    // The explanations' storage (D408): reserved, touched only under `--explain`.
+    let (explain_bytes, explain_error) = mem.alloc[u8](a, sized(65536usize, total, 4usize))
+    if explain_error != ok { ret explain_error }
+    builder.explain_bytes = explain_bytes
+    builder.explain_count = 0usize
+    builder.explain_overflow = false
     ret nir.init_signatures(signatures, signature_entries, signature_types)
+}
+
+// The explanations an oracle gathered (D408), written where they belong: the JSON
+// stream's records to stdout under `--json`, the text lines to stderr otherwise.
+fn flush_explanations(report: *Sink, oracle: *nir.Builder) -> err {
+    if !oracle.explain || oracle.explain_count == 0usize { ret ok }
+    if oracle.explain_json {
+        try write_all(report, oracle.explain_bytes[0usize..oracle.explain_count])
+    } else {
+        try stderr_text(oracle.explain_bytes[0usize..oracle.explain_count])
+    }
+    if oracle.explain_overflow {
+        if oracle.explain_json { try write_all(report, "{\"record\":\"inline\",\"symbol\":\"\",\"decision\":\"truncated\",\"reason\":\"the explanations outgrew their storage; the rest went unexplained\",\"pass\":1}\n") } else { try stderr_text("inline: (truncated: the explanations outgrew their storage)\n") }
+    }
+    oracle.explain_count = 0usize
+    oracle.explain_overflow = false
+    ret ok
 }
 
 // What the body pools are sized from (D314): the largest module when they hold one
@@ -6206,6 +6229,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
         w.oracle.release = true
         w.oracle.inline_cap = program.inline_cap
         w.oracle.explain = program.explain
+        w.oracle.explain_json = program.explain_json
         let (oracle_inlined, oracle_inlined_error) = mem.alloc[nir.InlinedRef](a, sized(1024usize, oracle_bytes, 64usize))
         if oracle_inlined_error != ok { ret oracle_inlined_error }
         w.oracle.inlined = oracle_inlined
@@ -6218,6 +6242,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
         w.second.release = true
         w.second.inline_cap = program.inline_cap
         w.second.explain = program.explain
+        w.second.explain_json = program.explain_json
         w.second.oracle = &w.oracle
         w.second.oracle_signatures = &w.oracle_signatures
         w.second.has_oracle = true
@@ -7662,6 +7687,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if trailing_flags {
             early_builder.inline_cap = inline_cap_flag(args)
             early_builder.explain = has_flag(args, "--explain")
+            early_builder.explain_json = report.json
         }
         if writes_executable {
             hot.on = hot_build
@@ -7681,6 +7707,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             try init_first_oracle(a, &first_oracle, &first_signatures, &checker, &loaded)
             first_oracle.inline_cap = early_builder.inline_cap
             first_oracle.explain = early_builder.explain
+            first_oracle.explain_json = early_builder.explain_json
         }
         if fused {
             if with_crew {
@@ -7767,6 +7794,17 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             builder.inline_entry_count = crew.second_all_count
             report.arena_used = mem.stats(a).used
             try report_phase(&report, "inline oracles")
+            // The workers' explanations (D408), in worker order, first oracle then second.
+            var explain_worker = 0usize
+            while explain_worker < crew.count {
+                try flush_explanations(&report, &crew.workers[explain_worker].oracle)
+                try flush_explanations(&report, &crew.workers[explain_worker].second)
+                explain_worker += 1usize
+            }
+            if crew.generous_made {
+                try flush_explanations(&report, &crew.workers[LOWER_WORKERS].oracle)
+                try flush_explanations(&report, &crew.workers[LOWER_WORKERS].second)
+            }
             if report.timing {
                 try report_count("first oracle entries", crew.first_all_count)
                 try report_count("second oracle entries", crew.second_all_count)
@@ -7804,6 +7842,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             let oracle_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, inline_entries, &inline_entry_count)
             report.arena_used = mem.stats(a).used
             try report_phase(&report, "inline oracles")
+            try flush_explanations(&report, &first_oracle)
             if report.timing {
                 try report_count("first oracle entries", first_entry_count)
                 try report_count("second oracle entries", inline_entry_count)

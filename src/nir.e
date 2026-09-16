@@ -301,6 +301,15 @@ type Builder = struct {
     // (`--explain`), as "inline: module.function: <decision>".
     inline_cap: usize,
     explain: bool,
+    // Where the explanations go (D408, H20): appended here by the oracle's worker,
+    // written out by the driver after the phase in worker order -- as records of the
+    // JSON stream under `--json`, as the text lines otherwise -- so eight workers'
+    // lines never interleave and the order is the same run to run. `explain_overflow`
+    // says the storage ran out and some decisions went unexplained.
+    explain_json: bool,
+    explain_bytes: []u8,
+    explain_count: usize,
+    explain_overflow: bool,
     // `--arena` (D225): the root arena's size the linker patches into the image, or
     // zero for the runtime's default.
     arena_bytes: usize,

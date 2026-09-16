@@ -446,6 +446,16 @@ Every JSON command ends with a `result` record containing `ok`, `exit_code`, and
 `data` object holding command-specific counts or artifact identifiers. Exit statuses remain those in
 spec.md §13; the record and process status must agree.
 
+`--explain` on a release build (D346, H20) explains every inlining decision --
+`inline: module.function: <decision>: <reason>` on stderr -- and under `--json`
+(D408) as `inline` records of the build stream: `symbol`, `decision`
+(`inlinable`, `rejected`, `not-a-candidate`, or `truncated` when the
+explanations outgrew their storage), `reason`, and `pass` (1 for the oracle that
+lowers every candidate alone, 2 for the one that lowers the first's entries
+against each other, where a decision can differ). The records are gathered per
+worker and written after the phase in worker order, so they never interleave and
+a given worker count gives the same order run to run; `-j 1` is module order.
+
 `--deadline MS` (D399, H16) on a build command (`emit-executable`, `emit-em-all`,
 `run`, with or without `--json`) is a wall-clock deadline: at every checkpoint
 between phases -- after load and parse, resolve, check declarations, settle, check

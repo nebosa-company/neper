@@ -2237,6 +2237,9 @@ cmp -s "$run_trap_actual" "$conformance_root/tools/run_trap.expected.jsonl" || {
 # `run --json --capture N` (D370, H18): a bounded record, the whole output in the file.
 (cd "$test_build" && ./neper-self run ../../../../tests/conformance/tools/run_flood.e "$repo" x64 linux conformance-tools-run-flood.out --json --capture 50 > "conformance-tools-run-flood.jsonl")
 cmp -s "$test_build/conformance-tools-run-flood.jsonl" "$conformance_root/tools/run_flood.expected.jsonl" || { echo "run --json --capture differs from the conformance corpus"; exit 1; }
+# `--explain --json` (D408, H20): every inlining decision a record of the build stream.
+(cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/contract.e "$repo" x64 linux conformance-tools-explain-inline.out --release --explain --json -j 1 > "conformance-tools-explain-inline.jsonl")
+cmp -s "$test_build/conformance-tools-explain-inline.jsonl" "$conformance_root/tools/explain_inline.x64-linux.expected.jsonl" || { echo "emit-executable --explain --json differs from the conformance corpus"; exit 1; }
 [ "$(stat -c %s "$test_build/conformance-tools-run-flood.out.stdout")" -eq 296 ]
 cmp -s "$test_build/conformance-tools-run-args.jsonl" "$conformance_root/tools/run_args.expected.jsonl" || { printf '%s
 ' "run --json with program arguments differs from the conformance corpus" >&2; exit 1; }

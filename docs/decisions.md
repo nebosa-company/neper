@@ -9083,3 +9083,24 @@ copy of the plan fixture has a different snapshot from the original.
 
 Not yet: the snapshot on the plans' and `uses-file`'s results (per-host goldens
 first), and the transaction boundary that would make a snapshot pinnable.
+
+## D408 -- Inlining decisions are records of the build stream
+
+H20 asks for explanation records in the JSON stream; D346's `--explain` wrote
+`inline: module.function: <reason>` lines to stderr from whichever worker made
+the decision, eight workers' `os.write` calls interleaving as they came, in an
+order that changed run to run, and under `--json` the stream carried none of it.
+Each oracle builder now gathers its explanations in storage of its own
+(reserved with the oracle's pools, touched only under `--explain`), and the
+driver writes them after the oracle phase in worker order, first oracle then
+second: as the text lines to stderr, or under `--json` as `inline` records to
+stdout -- `symbol`, `decision` (`inlinable`, `rejected`, `not-a-candidate`),
+`reason`, and `pass`, since the second oracle can decide a first-pass entry
+differently; storage that runs out ends with one `truncated` record. The
+corpus gains `tools/explain_inline`, per host (the `e.os` variant's functions
+are among the decisions), built with `-j 1` so the order is the module order;
+at eight workers the order is the assignment's, the same run to run.
+
+Not yet: the copies, allocations and register-pressure measurements H20 also
+asks for, and a per-call-site explanation (why a given call was or was not
+inlined) rather than per candidate.
