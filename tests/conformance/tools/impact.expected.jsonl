@@ -1,0 +1,5 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"test-impact","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"impact","test":"nested.deep.holds","affected":true,"span":{"source":{"root":"project-src","path":"nested/deep.e"},"byte_start":194,"byte_end":194,"line":7,"column":1,"end_line":7,"end_column":1,"column_utf16":1,"end_column_utf16":1}}
+{"record":"impact","test":"helper.doubles","affected":true,"span":{"source":{"root":"project-src","path":"helper.e"},"byte_start":106,"byte_end":106,"line":11,"column":1,"end_line":11,"end_column":1,"column_utf16":1,"end_column_utf16":1}}
+{"record":"impact","test":"helper.is_odd","affected":true,"span":{"source":{"root":"project-src","path":"helper.e"},"byte_start":200,"byte_end":200,"line":17,"column":1,"end_line":17,"end_column":1,"column_utf16":1,"end_column_utf16":1}}
+{"record":"result","ok":true,"exit_code":0,"data":{"tests":3,"affected":3,"complete":true}}

@@ -2237,6 +2237,17 @@ $deadlineOutput = & $compiler emit-executable (Join-Path $repo 'src/main.e') $re
 if ($LASTEXITCODE -ne 3) { throw "the compiler's build under a 150 ms deadline did not exit 3 (got $LASTEXITCODE)" }
 if (Test-Path -LiteralPath $deadlineInside) { throw 'a build cancelled inside a phase wrote an image' }
 if (($deadlineOutput -join "`n") -notmatch '"code":"E-CLI-0001"') { throw 'a build cancelled inside a phase did not say so' }
+# `test-impact-file --json --changed m1,m2` (D423, H10): the tests an edit reaches, over
+# the test project -- every test when `helper` changes, the nested one alone when
+# `nested.deep` does; a module the program has not is refused with exit 2.
+foreach ($impactCase in @(@('helper', 'impact'), @('nested.deep', 'impact_local'))) {
+    $impactActual = Join-Path $testBuild "conformance-tools-$($impactCase[1]).jsonl"
+    cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" test-impact-file test_project/src/nested/deep.e `"$repo`" x64 windows --json --changed $($impactCase[0]) > `"$impactActual`""
+    if ($LASTEXITCODE -ne 0) { throw "test-impact-file --json failed for $($impactCase[0])" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $impactActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($impactCase[1]).expected.jsonl")).Hash) { throw "test-impact-file --json differs from the conformance corpus for $($impactCase[0])" }
+}
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" test-impact-file test_project/src/nested/deep.e `"$repo`" x64 windows --json --changed nowhere > `"$(Join-Path $testBuild 'conformance-tools-impact-refused.jsonl')`""
+if ($LASTEXITCODE -ne 2) { throw "test-impact-file over an unknown module did not exit 2 (got $LASTEXITCODE)" }
 # `uses-file --json` (D362): every resolved use of one function, target-independent.
 $usesActual = Join-Path $testBuild 'conformance-tools-uses.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file explain.e `"$repo`" x64 windows --json --symbol explain.same > `"$usesActual`""

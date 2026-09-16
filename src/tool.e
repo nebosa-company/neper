@@ -2719,6 +2719,153 @@ fn expression_at(tokens: []const lex.Token, tree: *parse.Tree, byte_start: usize
     ret (0usize, false)
 }
 
+// `test-impact-file PATH ROOT ARCH OS --json --changed m1,m2,...` (D423, H10): which
+// `@test` functions of the program an edit to the named modules can reach. The
+// program is checked with the explain table open; the calls, dispatches,
+// instantiations and function values it recorded are the edges, an instance's the
+// template's; from each test, everything reachable over them is walked, and a test
+// that lies in a changed module or reaches a function in one is `affected`. A
+// module named that the program has not is a diagnostic and exit 2. One `impact`
+// record per test in module then declaration order, the result counting both.
+fn impact_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, changed_text: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.signature_function_count * 256usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "test-impact")
+    let (changed, changed_error) = mem.alloc[bool](a, g.count + 1usize)
+    if changed_error != ok { ret changed_error }
+    var module_at = 0usize
+    while module_at < g.count {
+        changed[module_at] = false
+        module_at += 1usize
+    }
+    var name_start = 0usize
+    var at = 0usize
+    while at <= changed_text.len {
+        if at == changed_text.len || changed_text[at] == 44u8 {
+            let name = changed_text[name_start..at]
+            var found = false
+            module_at = 0usize
+            while module_at < g.count {
+                if graph.same(g.modules[module_at].name, name) {
+                    changed[module_at] = true
+                    found = true
+                }
+                module_at += 1usize
+            }
+            if !found {
+                var message_storage: [512]u8 = zero
+                var message_at = nptest_copy(message_storage[..], 0usize, "the program has no module named ")
+                message_at = nptest_copy(message_storage[..], message_at, name)
+                try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":")
+                try quoted(&out, message_storage[0usize..message_at])
+                try text(&out, ",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+                try flush(&out)
+                try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"tests\":0,\"affected\":0,\"complete\":true}}")
+                try flush(&out)
+                ret Refused
+            }
+            name_start = at + 1usize
+        }
+        at += 1usize
+    }
+    // The edges, from the explain table: (caller, callee) per record, callee by template.
+    let (edge_from, from_error) = mem.alloc[usize](a, c.explain_count + 1usize)
+    if from_error != ok { ret from_error }
+    let (edge_to, to_error) = mem.alloc[usize](a, c.explain_count + 1usize)
+    if to_error != ok { ret to_error }
+    var edge_count = 0usize
+    var scan = 0usize
+    while scan < c.explain_count {
+        let e = c.explains[scan]
+        var callee = c.function_count
+        if e.kind == 4u8 && !e.found { callee = e.function_index }
+        if e.kind == 1u8 && e.found { callee = e.function_index }
+        if e.kind == 2u8 { callee = e.template_index }
+        if e.kind == 5u8 { callee = e.function_index }
+        if callee < c.function_count && e.module_index < g.count {
+            if callee < c.function_count && c.function_generics[callee].instance && c.function_generics[callee].template_index < c.function_count { callee = c.function_generics[callee].template_index }
+            let caller = enclosing_function(c, e.module_index, e.offset)
+            if caller < c.function_count {
+                edge_from[edge_count] = caller
+                edge_to[edge_count] = callee
+                edge_count += 1usize
+            }
+        }
+        scan += 1usize
+    }
+    let (reached, reached_error) = mem.alloc[bool](a, c.function_count + 1usize)
+    if reached_error != ok { ret reached_error }
+    let (stack, stack_error) = mem.alloc[usize](a, c.function_count + 1usize)
+    if stack_error != ok { ret stack_error }
+    var tests = 0usize
+    var affected_count = 0usize
+    var function_at = 0usize
+    while function_at < c.signature_function_count {
+        let function = c.functions[function_at]
+        if function.module_index < g.count && manifest_has_attribute(g.modules[function.module_index].text, function.source_start, "test") {
+            var affected = changed[function.module_index]
+            // The walk from this test.
+            var clear = 0usize
+            while clear < c.function_count {
+                reached[clear] = false
+                clear += 1usize
+            }
+            var depth = 0usize
+            stack[depth] = function_at
+            depth += 1usize
+            reached[function_at] = true
+            while depth > 0usize && !affected {
+                depth = depth - 1usize
+                let here = stack[depth]
+                var edge_at = 0usize
+                while edge_at < edge_count {
+                    if edge_from[edge_at] == here {
+                        let next = edge_to[edge_at]
+                        if !reached[next] {
+                            reached[next] = true
+                            if c.functions[next].module_index < g.count && changed[c.functions[next].module_index] { affected = true }
+                            if depth < stack.len {
+                                stack[depth] = next
+                                depth += 1usize
+                            }
+                        }
+                    }
+                    edge_at += 1usize
+                }
+            }
+            let module = g.modules[function.module_index]
+            let (root, relative) = source_identity_of(g, module.path)
+            let (path, path_error) = manifest_slashes(a, relative)
+            if path_error != ok { ret path_error }
+            out.lines = module.lines
+            var declaration: lex.Token = zero
+            declaration.start = function.source_start
+            declaration.end = function.source_start
+            try text(&out, "{\"record\":\"impact\",\"test\":")
+            try quoted_function(&out, c, g, function_at)
+            try text(&out, ",\"affected\":")
+            if affected { try text(&out, "true") } else { try text(&out, "false") }
+            try text(&out, ",\"span\":")
+            try point_span(&out, root, path, module.text, declaration)
+            try byte(&out, 125u8)
+            try flush(&out)
+            tests += 1usize
+            if affected { affected_count += 1usize }
+        }
+        function_at += 1usize
+    }
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"tests\":")
+    try decimal(&out, tests)
+    try text(&out, ",\"affected\":")
+    try decimal(&out, affected_count)
+    try text(&out, ",\"complete\":")
+    if !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, "}}")
+    ret flush(&out)
+}
+
 // A batch line no query reads (D409): a stream of its own, refused.
 fn batch_line_refused(a: *mem.Arena, line: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, line.len * 2usize + 1024usize)

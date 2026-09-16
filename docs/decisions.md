@@ -9381,3 +9381,22 @@ is not pinned.
 
 Not yet: a checkpoint inside a module (a function at a time), and the query
 commands under a deadline.
+
+## D423 -- `test-impact-file`: the tests an edit reaches
+
+H10 lists test impact queries; a harness that edited one module ran every test
+or guessed. `test-impact-file PATH ROOT ARCH OS --json --changed m1,m2,...`
+checks the program with the explain table open, takes its resolved calls,
+dispatches, instantiations and function values as the edges of a call graph --
+an instance's edge going to its template -- and walks from each `@test`
+function over them; a test that lies in a changed module or reaches a function
+in one is `affected`. One `impact` record per test, in module then declaration
+order, with the test's name, the verdict and the declaration's span; the
+result counts the tests and the affected ones, and says `complete:false` when
+the explain table overflowed, which a harness reads as "run them all". A module
+named that the program has not is refused with exit 2. The corpus gains two
+cases over the test project: `helper` changed (every test, the nested one
+through `helper.twice`) and `nested.deep` changed (that test alone).
+
+Not yet: impact through a shared global or a type whose layout changed (edges
+are calls), and a query by file paths rather than module names.

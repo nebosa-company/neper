@@ -7131,7 +7131,8 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
 // `kind` is 1 for `explain-file`, 2 for `context-file --symbol`, 3 for `uses-file`,
 // 4 for `plan-rename-file`, 5 for `context-file --module` (D397), 6 for
 // `plan-add-parameter-file` (D406), 7 for `query-batch` (D409), 8 for
-// `plan-replace-expression-file` (D414), 9 for `plan-change-signature-file` (D415).
+// `plan-replace-expression-file` (D414), 9 for `plan-change-signature-file` (D415), 10
+// for `test-impact-file` (D423).
 fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
@@ -7190,6 +7191,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     if kind == 7usize { query_error = query_batch(a, &checker, &loaded, args[8usize], target_text) }
     if kind == 8usize { query_error = tool.plan_replace_json(a, &checker, &loaded, args[8usize], args[10usize]) }
     if kind == 9usize { query_error = tool.plan_signature_json(a, &checker, &loaded, args[8usize], args[10usize]) }
+    if kind == 10usize { query_error = tool.impact_json(a, &checker, &loaded, args[8usize]) }
     // A refused query's stream said exit 2, and so does the process (D406).
     if query_error == tool.Refused {
         os.exit(2i32)
@@ -7573,6 +7575,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len == 11usize && same(args[1usize], "plan-change-signature-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--order") { ret query_file(a, &report, args, 9usize) }
     // `plan-replace-expression-file PATH ROOT ARCH OS --json --span START:END --with EXPR` (D414, H29).
     if args.len == 11usize && same(args[1usize], "plan-replace-expression-file") && same(args[6usize], "--json") && same(args[7usize], "--span") && same(args[9usize], "--with") && args[10usize].len != 0usize { ret query_file(a, &report, args, 8usize) }
+    // `test-impact-file PATH ROOT ARCH OS --json --changed m1,m2` (D423, H10): the tests an edit reaches.
+    if args.len == 9usize && same(args[1usize], "test-impact-file") && same(args[6usize], "--json") && same(args[7usize], "--changed") { ret query_file(a, &report, args, 10usize) }
     // `query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16): many queries, one check.
     if args.len == 9usize && same(args[1usize], "query-batch") && same(args[6usize], "--json") && same(args[7usize], "--batch") { ret query_file(a, &report, args, 7usize) }
     // `plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name --parameter "name: T" --argument EXPR` (D406, H17).

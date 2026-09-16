@@ -330,6 +330,20 @@ pagination is deterministic for identical source, and a source change --
 visible as a different `source_sha256` -- invalidates the cursor. A subject no
 function of the program has is an `E-CLI-9999` diagnostic and exit 2.
 
+### Test impact
+
+`neper test-impact-file PATH ROOT ARCH OS --json --changed m1,m2,...` (D423, H10)
+answers which `@test` functions of the program an edit to the named modules can
+reach: the program is checked with the explain table open, its resolved calls,
+dispatches, instantiations and function values are the edges (an instance's the
+template's), and from each test everything reachable is walked; a test that lies
+in a changed module or reaches a function in one is `affected`. One `impact`
+record per test (`test`, `affected`, `span`) in module then declaration order,
+the result counting `tests` and `affected`; a module the program has not is
+`E-CLI-9999` and exit 2. A harness runs the affected tests and no other after an
+edit, with the whole set the answer when the edges overflowed
+(`complete:false`).
+
 ### Uses
 
 `neper uses-file PATH ROOT ARCH OS --json --symbol module.name` (D362, H17) checks

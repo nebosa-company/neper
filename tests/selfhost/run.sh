@@ -2336,6 +2336,15 @@ $test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$de
 [ "$deadline_inside_status" = 3 ]
 [ ! -e "$deadline_inside" ]
 grep -q '"code":"E-CLI-0001"' "$test_build/deadline-inside.jsonl"
+# `test-impact-file --json --changed m1,m2` (D423, H10): the tests an edit reaches.
+for impact_case in 'helper impact' 'nested.deep impact_local'; do
+    set -- $impact_case
+    (cd "$conformance_root/tools" && $test_build/neper-self test-impact-file test_project/src/nested/deep.e "$repo" x64 linux --json --changed "$1" > "$test_build/conformance-tools-$2.jsonl")
+    cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { echo "test-impact-file --json differs from the conformance corpus for $1" >&2; exit 1; }
+done
+impact_refused=0
+(cd "$conformance_root/tools" && $test_build/neper-self test-impact-file test_project/src/nested/deep.e "$repo" x64 linux --json --changed nowhere > "$test_build/conformance-tools-impact-refused.jsonl") || impact_refused=$?
+[ "$impact_refused" -eq 2 ]
 # `uses-file --json` (D362): every resolved use of one function.
 uses_actual="$test_build/conformance-tools-uses.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self uses-file explain.e "$repo" x64 linux --json --symbol explain.same > "$uses_actual")
