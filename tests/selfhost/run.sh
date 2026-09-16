@@ -1660,6 +1660,16 @@ case "$bounds_shifted" in
 esac
 "$bounds_proof_path" nested
 "$bounds_proof_path" reslice
+# By-value snapshots (D358, H05): `f(x, &x)` reads the old `x`, in both modes.
+for snapshot_mode in debug release; do
+    snapshot_flag=''
+    [ "$snapshot_mode" = release ] && snapshot_flag='--release'
+    snapshot_path="$test_build/by-value-snapshot-$snapshot_mode-selfhost"
+    snapshot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/by_value_snapshot/src/main.e" "$repo" x64 linux "$snapshot_path" $snapshot_flag)
+    [ "$snapshot_written" = 'executable written' ]
+    chmod +x "$snapshot_path"
+    "$snapshot_path"
+done
 nocheck_path="$test_build/nocheck-selfhost"
 nocheck_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/nocheck/src/main.e" "$repo" x64 linux "$nocheck_path")
 [ "$nocheck_written" = 'executable written' ]

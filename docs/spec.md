@@ -1059,13 +1059,17 @@ caller's value unless it is declared `own` -- `fn close(f: own File) -> err` -- 
 which case the call moves the value in and the callee owns it; `own` is part of the
 signature and of the interface hash (§12). Aggregates larger than two machine words are
 passed by hidden reference; this is an ABI detail, not a semantic one — pass `*T`
-when you want the callee to mutate. What makes it an ABI detail is one rule,
-mirroring D14: **the storage of a by-value argument is not written by anyone for the
-duration of the call** — not by the callee, not by the caller through another
-pointer, not by another thread. Doing so is undefined behaviour. Under that rule the
-compiler may pass the caller's storage by address and never copy, with no alias
-analysis; `f(x, &x)` where `f` writes through its second parameter is the program's
-bug, not the compiler's. `Vec[T, N]` (§4) is the one exemption from the size rule: a
+when you want the callee to mutate. A by-value argument is a **snapshot** (D358,
+H05): the callee sees the value as it was when the argument was evaluated, whatever
+is written to the caller's storage during the call — by the callee through another
+pointer, by the caller's own pointer, by another thread. `f(x, &x)` where `f` writes
+through its second parameter reads the old `x` in its first. The compiler passes
+the caller's storage by address without a copy only where nothing can write it
+during the call: a local whose address the function never takes; a place reached
+through a pointer, a slice, a string or a global, and a local whose `&x` appears
+anywhere in the function, is copied to the call's own storage first. The copy is
+shallow: a pointer or slice field in the value still reaches what it points at.
+`Vec[T, N]` (§4) is the one exemption from the size rule: a
 vector is a register class, passed in vector registers at any width, never by hidden
 reference, and returned in them up to the per-target budget (Multiple return
 values, below); `Mask[T, N]` (§4), which has no size, is passed and returned as the

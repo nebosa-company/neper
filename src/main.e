@@ -6638,6 +6638,8 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
     while touched_at < crew.count {
         loaded.worker_bytes += graph.arena_touched(&crew.workers[touched_at].arena)
         report.build.bounds_elided += crew.workers[touched_at].builder.bounds_elided + crew.workers[touched_at].oracle.bounds_elided
+        report.build.snapshots_copied += crew.workers[touched_at].builder.snapshots_copied + crew.workers[touched_at].oracle.snapshots_copied
+        report.build.snapshots_elided += crew.workers[touched_at].builder.snapshots_elided + crew.workers[touched_at].oracle.snapshots_elided
         touched_at += 1usize
     }
     ret ok

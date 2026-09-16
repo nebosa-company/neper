@@ -274,6 +274,10 @@ type Builder = struct {
     proof_function_start: usize,
     proof_function_end: usize,
     bounds_elided: usize,
+    // By-value arguments copied for the call (D358, H05), and those passed by the
+    // caller's own storage because nothing can write it during the call.
+    snapshots_copied: usize,
+    snapshots_elided: usize,
     // The release build (D217): `nocheck` is that too, but `@nocheck` sets it for a
     // block, and section 11's debug fills do not come off with the checks.
     release: bool,

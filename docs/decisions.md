@@ -7836,3 +7836,32 @@ a detached thread must have.
 Not yet, of H04: shared mutable aliases across threads, lock capabilities and
 guard escape, worker arena sharing, partial spawn failure; the design for those
 is not written.
+
+## D358 -- A by-value argument is a snapshot, copied only where something could write it
+
+H05, delivered. Spec section 5 had D14's rule: the storage of a by-value aggregate
+is written by no one for the duration of the call, or the program is wrong -- an
+ordinary value argument carrying a restriction on the whole call. Now the
+argument is a snapshot: the callee sees the value at the argument's evaluation,
+and the lowering copies the caller's storage into the call's own before passing
+its address unless it can prove nothing writes it during the call. The proof is
+the one D356 uses: a local whose `&x` appears nowhere in the function has no
+pointer to it, so the frame's suspension is the whole guarantee; a place reached
+through a pointer, a slice, a string or a global, or a local whose address is
+taken anywhere, is copied. A value that is no place -- a call's result, a
+literal -- is fresh already. The copy is shallow, as H05 says: a pointer field
+still reaches its storage.
+
+In the compiler: 4,238 copies and 7,670 elisions per build, the copies almost all
+`c.tokens[at]`, `tree.nodes[i]` and their kin -- element reads through a pointer
+the callee is given too, which no local proof can clear. Cost against D357: cold
+wall +4% to +9%, the release image +5% (8,151,552 bytes). `--stats` reports both
+counts. The fixture `by_value_snapshot` holds `f(x, &x)`, a slice element the
+callee writes, a field of a struct whose address was taken with a pointer field
+that still reaches its target, and a fresh result, built in both modes; the D357
+compiler fails it.
+
+Not yet, of H05: the ABI contract's compatibility identity (the format is 9 for
+D355 already; nothing in the interface hash changes here), external ABI wrappers,
+and a proof through the callee's signature -- no pointer parameter and no global
+write -- which would clear most of the 4,238.

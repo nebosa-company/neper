@@ -1568,6 +1568,14 @@ foreach ($boundsMode in @('nested', 'reslice')) {
     & $boundsProofPath $boundsMode 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "the $boundsMode loop went wrong under its retained check" }
 }
+# By-value snapshots (D358, H05): `f(x, &x)` reads the old `x`, in both modes.
+foreach ($snapshotMode in @(@('debug', @()), @('release', @('--release')))) {
+    $snapshotPath = Join-Path $testBuild "by-value-snapshot-$($snapshotMode[0])-selfhost.exe"
+    $snapshotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\by_value_snapshot\src\main.e') $repo 'x64' 'windows' $snapshotPath @($snapshotMode[1])
+    if ($LASTEXITCODE -ne 0 -or $snapshotWritten -ne 'executable written') { throw "by-value snapshot fixture emission failed ($($snapshotMode[0]))" }
+    & $snapshotPath 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "a by-value argument saw a write made during its call ($($snapshotMode[0]))" }
+}
 # The release build: the same program traps on its first `+` in debug and, built with
 # `--release`, wraps, truncates, masks and saturates through to exit 0.
 $releaseSource = Join-Path $PSScriptRoot 'fixtures\link\release_build\src\main.e'

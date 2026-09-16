@@ -77,6 +77,9 @@ type Build = struct {
     unreached_bytes: usize,
     // Index checks the lowering left out under a `while i < x.len` proof (D356).
     bounds_elided: usize,
+    // By-value arguments copied for their call, and passed by address (D358).
+    snapshots_copied: usize,
+    snapshots_elided: usize,
 }
 
 fn record_phase(b: *Build, name: str, ms: usize) {
@@ -357,6 +360,8 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try number(b.unreached_bytes)
     try out(" bytes\n")
     try row_number("bounds checks elided", b.bounds_elided)
+    try row_number("by-value copies", b.snapshots_copied)
+    try row_number("by-value copies elided", b.snapshots_elided)
     // The worker arenas' high-water marks summed (D339): every phase's workers, what
     // each allocated, rounded to the runtime's chunk -- what the pools were sized to,
     // not what was committed, which is the pages touched and the peak below; the

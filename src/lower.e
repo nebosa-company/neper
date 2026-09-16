@@ -2648,6 +2648,38 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
     ret ok
 }
 
+// Whether the storage a by-value argument names could be written during the call
+// (D358, H05): a place reached through a pointer, a slice, a string or a global is
+// anyone's; a local's own storage is writable only through a pointer to it, so a
+// function that never takes `&x` passes `x` by address and copies nothing. A
+// value that is no place -- a call's result, a literal -- is fresh already.
+fn argument_can_change(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, argument_index: usize, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> bool {
+    var base_index = argument_index
+    var base = tree.nodes[base_index]
+    while base.kind == .FieldExpr || base.kind == .BracketPostfix {
+        let (inner_index, has_inner) = check.first_node_child(tree, base)
+        if !has_inner { break }
+        base_index = inner_index
+        base = tree.nodes[base_index]
+    }
+    if base.kind == .UnaryExpr { ret c.tokens[usize(base.token_start)].kind == .PunctStar }
+    if base.kind != .NameExpr { ret false }
+    let (name, has_name) = proof_name(c, g, tree, module_index, base_index)
+    if !has_name { ret false }
+    let (binding, bound) = find_binding(bindings, binding_count, name)
+    if !bound { ret true }
+    if binding.ty.kind == .Pointer || binding.ty.kind == .Slice || binding.ty.kind == .String { ret true }
+    var at = builder.proof_function_start
+    while at + 1usize < builder.proof_function_end && at + 1usize < c.token_count {
+        if c.tokens[at].kind == .PunctAmp && c.tokens[at + 1usize].kind == .Identifier {
+            let pointed = c.tokens[at + 1usize]
+            if check.same(g.modules[module_index].text[pointed.start..pointed.end], name) { ret true }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
 fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, captured: bool, call_out: *check.CallInfo, callee_out: *usize, arguments: []usize, argument_count: *usize) -> err {
     let (call, call_error) = check.check_call(c, g, tree, module_index, node)
     if call_error != ok { ret call_error }
@@ -2686,7 +2718,15 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
                 let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), parameter_type, builder, bindings, binding_count)
                 if value_error != ok { ret value_error }
                 var argument = value
-                if captured && aggregate_value(c, parameter_type) {
+                // A by-value aggregate is what the callee sees at this point (D358,
+                // H05): the caller's storage goes by address only when nothing can
+                // write it during the call, else a copy does.
+                var snapshot = captured
+                if !captured && aggregate_value(c, parameter_type) {
+                    snapshot = argument_can_change(c, g, tree, module_index, parse.child_index_at(tree, at), builder, bindings, binding_count)
+                    if snapshot { builder.snapshots_copied += 1usize } else { builder.snapshots_elided += 1usize }
+                }
+                if snapshot && aggregate_value(c, parameter_type) {
                     let (info, info_error) = layout.type_info(c, parameter_type)
                     if info_error != ok { ret info_error }
                     var slots = (info.size + 7usize) / 8usize
