@@ -157,7 +157,7 @@ fn main(a: *mem.Arena) -> err {
     options.stdio.stdout = said_write
     let (speaker, speaker_error) = os.spawn_with_options(a, options)
     if speaker_error != ok { os.exit(51i32) }
-    if os.close(said_write) != ok { os.exit(52i32) }
+    if os.close(options.stdio.stdout) != ok { os.exit(52i32) }
     var said: [8]u8 = zero
     var said_len = 0usize
     while said_len < said.len {

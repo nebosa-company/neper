@@ -1550,7 +1550,7 @@ fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err)
 fn copy_bytes(dst: []u8, src: []const u8)
 fn sha256_blocks(state: []usize, bytes: []const u8) -> usize
 fn crc32c_bytes(crc: []usize, bytes: []const u8) -> usize
-fn close(f: File) -> err
+fn close(f: own File) -> err
 fn stdin() -> File
 fn stdout() -> File
 fn stderr() -> File
@@ -1573,8 +1573,8 @@ fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> er
 fn pipe() -> (File, File, err)
 fn spawn(a: *mem.Arena, argv: []const str, stdio: Stdio) -> (Proc, err)
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err)
-fn wait(p: Proc) -> (i32, err)
-fn wait_usage(p: Proc) -> (ProcUsage, err)
+fn wait(p: own Proc) -> (i32, err)
+fn wait_usage(p: own Proc) -> (ProcUsage, err)
 fn kill(p: Proc) -> err
 fn exit(code: i32)
 fn args(a: *mem.Arena) -> ([]str, err)
@@ -1587,8 +1587,8 @@ fn release(p: *u8, n: usize) -> err
 fn clock(c: Clock) -> (i64, err)
 fn peak_memory() -> (usize, err)
 fn thread_create[Ctx: type](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)
-fn thread_join(t: Thread) -> err
-fn thread_detach(t: Thread) -> err
+fn thread_join(t: own Thread) -> err
+fn thread_detach(t: own Thread) -> err
 fn wait_u32(p: *Atomic[u32], expected: u32, timeout_ns: i64) -> err
 fn wake_one_u32(p: *Atomic[u32])
 fn wake_all_u32(p: *Atomic[u32])
@@ -2040,8 +2040,8 @@ type Thread = os.Thread
 const DEFAULT_STACK: usize = 1048576
 
 fn spawn[Ctx: type](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)
-fn join(thread: Thread) -> err
-fn detach(thread: Thread) -> err
+fn join(thread: own Thread) -> err
+fn detach(thread: own Thread) -> err
 ```
 
 ### `e.sync`

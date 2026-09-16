@@ -15,9 +15,10 @@ fn write_whole(a: *mem.Arena, path: str, bytes: []const u8) -> err {
     let (file, open_error) = os.open(a, path, flags)
     if open_error != ok { ret open_error }
     let (written, write_error) = os.write(file, bytes)
+    let close_error = os.close(file)
     if write_error != ok { ret write_error }
     if written != bytes.len { ret os.Failed }
-    ret os.close(file)
+    ret close_error
 }
 
 fn ends_with(text: str, suffix: str) -> bool {

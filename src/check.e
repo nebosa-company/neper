@@ -9,6 +9,7 @@ use resolve
 use syntax
 
 error Capacity
+error ResourceViolation
 error Unsupported
 error MissingContext
 error TypeMismatch
@@ -49,6 +50,15 @@ error NonExhaustiveSwitch
 type DiagnosticKind = enum u8 {
     None,
     Generic,
+    // Section 11's static resource rules (D345, H01).
+    ResourceUseAfterMove,
+    ResourceCleanupForgotten,
+    ResourcePartialMove,
+    ResourceOverwrite,
+    ResourceUndef,
+    ResourceUnchecked,
+    ResourceDeferredConsumed,
+    ResourceMovedInLoop,
     AssignmentImmutable,
     IndexedArrayImmutable,
     IndexedElementsImmutable,
@@ -187,6 +197,8 @@ type GenericArgument = struct {
 type Parameter = struct {
     name: str,
     ty: Type,
+    // `own` (D345): the callee takes ownership of the argument, and its obligation.
+    own: bool,
 }
 
 type Function = struct {
@@ -276,6 +288,14 @@ type Local = struct {
     name: str,
     ty: Type,
     mutable: bool,
+    // The resource state (D345): Plain for a local that is not affine; else where the
+    // value is, the token it was acquired or moved at, whether it must be consumed,
+    // and the `err` local it was bound beside while that error is untested.
+    state: u8,
+    acquired: usize,
+    obligated: bool,
+    bound_err: usize,
+    has_bound_err: bool,
 }
 
 type Alias = struct {
@@ -448,6 +468,13 @@ type Checker = struct {
     arena: *mem.Arena,
     graph: *graph.Graph,
     has_graph: bool,
+    // Where each open loop body's and breakable body's locals begin (D345): `continue`
+    // and `break` audit the obligations declared inside what they leave.
+    loop_locals: [64]usize,
+    break_locals: [64]usize,
+    // The resource pass runs in the body sweep alone (D345): the lowering re-walks
+    // bodies in its own order and partially, and states depend on the walk.
+    resources_on: bool,
     // The interpreter's state (D218): set once the signatures are collected, the per-module
     // trees and tokens it keeps, the constant being evaluated for its reports, its budget.
     signatures_ready: bool,
@@ -2895,7 +2922,15 @@ fn collect_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *
     let (ty, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
     if type_error != ok { ret type_error }
     if ty.kind == .Void { ret InvalidType }
-    c.parameters[c.parameter_count] = Parameter { name: name, ty: ty }
+    // `own` sits between the colon and the type's first token.
+    var own = false
+    var scan = usize(node.token_start)
+    while scan < usize(tree.nodes[type_index].token_start) && scan < c.token_count {
+        let token = c.tokens[scan]
+        if token.kind == .Identifier && same(g.modules[module_index].text[token.start..token.end], "own") && scan > usize(node.token_start) { own = true }
+        scan += 1usize
+    }
+    c.parameters[c.parameter_count] = Parameter { name: name, ty: ty, own: own }
     c.parameter_count += 1usize
     ret ok
 }
@@ -3115,6 +3150,28 @@ fn declaration_import(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     ret ("", "", false)
 }
 
+// Whether the attribute run above a declaration names `name`.
+fn declaration_has_attribute(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, name: str) -> bool {
+    let text = g.modules[module_index].text
+    var at = node_index
+    while at > 1usize {
+        at = at - 1usize
+        let node = tree.nodes[at]
+        if !node.top_level { continue }
+        if node.kind != .Attribute { ret false }
+        var token_at = usize(node.token_start)
+        while token_at < usize(node.token_end) && token_at < c.token_count {
+            let token = c.tokens[token_at]
+            if token.kind == .Identifier {
+                if same(text[token.start..token.end], name) { ret true }
+                break
+            }
+            token_at += 1usize
+        }
+    }
+    ret false
+}
+
 fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, node_index: usize) -> err {
     if c.function_count == c.functions.len { ret Capacity }
     let (name, name_error) = function_name(c, g.modules[module_index].text, node)
@@ -3267,7 +3324,7 @@ fn add_seeded_function(c: *Checker, module_index: usize, name: str, return_type:
 
 fn add_seeded_parameter(c: *Checker, function_index: usize, name: str, ty: Type) -> err {
     if function_index >= c.function_count || c.parameter_count == c.parameters.len { ret Capacity }
-    c.parameters[c.parameter_count] = Parameter { name: name, ty: ty }
+    c.parameters[c.parameter_count] = Parameter { name: name, ty: ty, own: false }
     c.parameter_count += 1usize
     c.functions[function_index].parameter_count += 1usize
     ret ok
@@ -5327,7 +5384,9 @@ fn find_local(c: *Checker, name: str) -> (usize, bool) {
 
 fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     if c.local_count == c.locals.len { ret Capacity }
-    c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
+    var state = 0u8
+    if affine_kind(c, ty, 0usize) != 0u8 { state = 1u8 }
+    c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable, state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false }
     c.local_count += 1usize
     ret ok
 }
@@ -5802,7 +5861,7 @@ fn instantiate_function(c: *Checker, owner_module_index: usize, template_index: 
         let source = c.parameters[template.first_parameter + at]
         let (specialized, specialize_error) = substitute_type(c, template_index, first_argument, source.ty)
         if specialize_error != ok { ret (0usize, specialize_error) }
-        c.parameters[c.parameter_count] = Parameter { name: source.name, ty: specialized }
+        c.parameters[c.parameter_count] = Parameter { name: source.name, ty: specialized, own: source.own }
         c.parameter_count += 1usize
         at += 1usize
     }
@@ -7330,7 +7389,7 @@ fn formatter_instance(c: *Checker, owner_module_index: usize, target_module: usi
     if arena { instance.return_count = 2usize }
     var fill = 0usize
     while fill < argument_types.len {
-        c.parameters[c.parameter_count] = Parameter { name: "", ty: argument_types[fill] }
+        c.parameters[c.parameter_count] = Parameter { name: "", ty: argument_types[fill], own: false }
         c.parameter_count += 1usize
         fill += 1usize
     }
@@ -7377,8 +7436,8 @@ fn formatter_sink_instance(c: *Checker, owner_module_index: usize, io_module: us
     instance.parameter_count = 2usize
     instance.first_return = c.return_type_count
     instance.return_count = 1usize
-    c.parameters[c.parameter_count] = Parameter { name: "ctx", ty: make_type(.Pointer, "", io_module) }
-    c.parameters[c.parameter_count + 1usize] = Parameter { name: "bytes", ty: bytes }
+    c.parameters[c.parameter_count] = Parameter { name: "ctx", ty: make_type(.Pointer, "", io_module), own: false }
+    c.parameters[c.parameter_count + 1usize] = Parameter { name: "bytes", ty: bytes, own: false }
     c.parameter_count += 2usize
     let return_error = store_return_type(c, make_type(.Err, "err", io_module))
     if return_error != ok { ret (0usize, return_error) }
@@ -7759,6 +7818,13 @@ fn meta_access_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
 }
 
 fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
+    let (info, call_error) = check_call_cached(c, g, tree, module_index, node)
+    if call_error != ok { ret (info, call_error) }
+    let resource_error = resource_call(c, g, tree, module_index, node, info)
+    ret (info, resource_error)
+}
+
+fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
     var slot = 0usize
     if c.call_cache.len != 0usize && c.call_generation != 0usize {
         slot = (usize(node.token_start) * 31usize + usize(node.token_end)) % c.call_cache.len
@@ -9807,7 +9873,23 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
             result_count = remaining
         }
         if !tuple && result_count == 0usize { ret TypeMismatch }
-        ret bind_return_types(c, g, module_index, node, binding, call, result_count, declared, mutable)
+        // A `try` is an exit before anything is bound (D345).
+        if tried { try resource_audit(c, g, module_index, node, 0usize, .ResourceCleanupForgotten) }
+        let first_local = c.local_count
+        try bind_return_types(c, g, module_index, node, binding, call, result_count, declared, mutable)
+        // The resources bound (D345): owned, or unchecked beside the `err` bound last.
+        var err_local = c.local_count
+        var has_err_local = false
+        if !tried && c.local_count > first_local && c.locals[c.local_count - 1usize].ty.kind == .Err {
+            err_local = c.local_count - 1usize
+            has_err_local = true
+        }
+        var bound_at = first_local
+        while bound_at < c.local_count {
+            try resource_bind_local(c, g, tree, module_index, bound_at, node, initializer_index, true, true, call, tried, err_local, has_err_local)
+            bound_at += 1usize
+        }
+        ret ok
     }
     if tuple {
         record_failure(c, module_index, node, .MultipleBindingCount, "", "")
@@ -9838,6 +9920,8 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
     let (name, has_name) = first_name(c, g.modules[module_index].text, binding)
     if !has_name { ret ok }
     try add_local(c, name, result, mutable)
+    var no_call: CallInfo = zero
+    try resource_bind_local(c, g, tree, module_index, c.local_count - 1usize, node, initializer_index, has_initializer, false, no_call, false, 0usize, false)
     ret ok
 }
 
@@ -9869,11 +9953,12 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                 ret ReturnType
             }
             if expression_error != ok { ret expression_error }
+            try resource_return_value(c, g, tree, module_index, parse.child_index_at(tree, at))
             return_index += 1usize
         }
         at += 1usize
     }
-    ret ok
+    ret resource_audit(c, g, module_index, node, 0usize, .ResourceCleanupForgotten)
 }
 
 fn check_children(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
@@ -9889,6 +9974,15 @@ fn check_children(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
 fn check_block(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
     let checkpoint = c.local_count
     let block_error = check_children(c, r, g, tree, module_index, node, function)
+    // The block's own resources at its end (D345): a `ret` or `try` inside audited
+    // everything already, and left nothing owned to find here.
+    if block_error == ok && c.local_count > checkpoint && !resource_diverges(c, g, tree, module_index, node) {
+        var closing = node
+        if node.token_end > node.token_start { closing.token_start = node.token_end - 1u32 }
+        let audit_error = resource_audit(c, g, module_index, closing, checkpoint, .ResourceCleanupForgotten)
+        c.local_count = checkpoint
+        ret audit_error
+    }
     c.local_count = checkpoint
     ret block_error
 }
@@ -9938,6 +10032,12 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
     }
     var first = true
     var at = usize(node.first_child)
+    var condition_node = 0usize
+    // The arms' states (D345): the first arm's, then joined with each later arm's;
+    // an arm that diverges leaves no state to join.
+    var joined: []u8 = zero
+    var joined_count = 0usize
+    var arm_total = 0usize
     while at < end {
         if parse.child_is_node_at(tree, at) {
             let child_index = parse.child_index_at(tree, at)
@@ -9947,12 +10047,25 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
                 if condition_error == TypeMismatch { ret InvalidCondition }
                 if condition_error != ok { ret condition_error }
                 if condition_type.kind != .Bool { ret InvalidCondition }
+                condition_node = child_index
                 first = false
             } else {
                 if node.kind == .WhileStmt {
+                    if c.loop_depth < c.loop_locals.len { c.loop_locals[c.loop_depth] = c.local_count }
+                    if c.break_depth < c.break_locals.len { c.break_locals[c.break_depth] = c.local_count }
                     c.loop_depth += 1usize
                     c.break_depth += 1usize
                 }
+                // The resources before an arm (D345): an `if`'s arms are joined after,
+                // a loop's body must leave the outer ones as it found them.
+                var before: []u8 = zero
+                let tracked = any_affine_local(c)
+                if tracked {
+                    let (snapshot, snapshot_error) = resource_snapshot(c, c.local_count)
+                    if snapshot_error != ok { ret snapshot_error }
+                    before = snapshot
+                }
+                if tracked && node.kind == .IfStmt { resource_narrow_arm(c, g, tree, module_index, condition_node, arm_total) }
                 var branch_error = ok
                 if child.kind == .Block {
                     branch_error = check_block(c, r, g, tree, module_index, child, function)
@@ -9964,9 +10077,40 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
                     c.break_depth = c.break_depth - 1usize
                 }
                 if branch_error != ok { ret branch_error }
+                if tracked {
+                    if node.kind == .WhileStmt {
+                        try resource_loop_check(c, g, module_index, child, before)
+                    } else {
+                        let (after, after_error) = resource_snapshot(c, c.local_count)
+                        if after_error != ok { ret after_error }
+                        resource_restore(c, before)
+                        if !resource_diverges(c, g, tree, module_index, child) {
+                            if joined_count == 0usize { joined = after } else { resource_join_states(joined, after) }
+                            joined_count += 1usize
+                        }
+                        arm_total += 1usize
+                    }
+                }
             }
         }
         at += 1usize
+    }
+    // The join (D345): with two arms both states were joined; with one, the arm's
+    // state is joined with the fall-through's, which is the state before it. And an
+    // `if e != ok { <diverges> }` leaves the resources bound beside `e` owned.
+    if node.kind == .IfStmt && arm_total != 0usize && any_affine_local(c) {
+        if arm_total == 1usize {
+            if joined_count == 1usize {
+                // The fall-through is the missing else: for `if e == ok`, the path the
+                // error is not ok on, where the resource is null.
+                resource_narrow_arm(c, g, tree, module_index, condition_node, 1usize)
+                resource_join(c, joined)
+            } else {
+                resource_narrow(c, g, tree, module_index, condition_node)
+            }
+        } else {
+            if joined_count != 0usize { resource_restore(c, joined) }
+        }
     }
     ret ok
 }
@@ -9992,7 +10136,7 @@ fn check_try_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     let (remaining, try_error) = check_try_results(c, call, function)
     if try_error != ok { ret try_error }
     if remaining != 0usize { ret ArgumentCount }
-    ret ok
+    ret resource_audit(c, g, module_index, node, 0usize, .ResourceCleanupForgotten)
 }
 
 fn ascii_lower(byte: u8) -> u8 {
@@ -10417,11 +10561,21 @@ fn check_for_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
             if names[1usize].len != 0usize { try add_local(c, names[1usize], element, false) }
         }
     }
+    if c.loop_depth < c.loop_locals.len { c.loop_locals[c.loop_depth] = c.local_count }
+    if c.break_depth < c.break_locals.len { c.break_locals[c.break_depth] = c.local_count }
     c.loop_depth += 1usize
     c.break_depth += 1usize
+    var before: []u8 = zero
+    let tracked = any_affine_local(c)
+    if tracked {
+        let (snapshot, snapshot_error) = resource_snapshot(c, c.local_count)
+        if snapshot_error != ok { ret snapshot_error }
+        before = snapshot
+    }
     let body_error = check_block(c, r, g, tree, module_index, tree.nodes[block_index], function)
     c.loop_depth = c.loop_depth - 1usize
     c.break_depth = c.break_depth - 1usize
+    if body_error == ok && tracked { try resource_loop_check(c, g, module_index, tree.nodes[block_index], before) }
     c.local_count = checkpoint
     ret body_error
 }
@@ -10690,6 +10844,9 @@ fn check_dependent_switch(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
 }
 
 fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
+    // The arms' resource states (D345), joined after the switch.
+    var joined: []u8 = zero
+    var joined_count = 0usize
     var subject_index = 0usize
     var has_subject = false
     let end = usize(node.first_child) + usize(node.child_count)
@@ -10767,7 +10924,16 @@ fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                         ret capture_error
                     }
                 }
+                if c.break_depth < c.break_locals.len { c.break_locals[c.break_depth] = checkpoint }
                 c.break_depth += 1usize
+                // The resources before the arm (D345), for the join after every arm.
+                var before: []u8 = zero
+                let tracked = any_affine_local(c)
+                if tracked {
+                    let (snapshot, snapshot_error) = resource_snapshot(c, checkpoint)
+                    if snapshot_error != ok { ret snapshot_error }
+                    before = snapshot
+                }
                 arm_at = usize(arm.first_child)
                 var body_error = ok
                 while arm_at < arm_end {
@@ -10781,7 +10947,20 @@ fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                     arm_at += 1usize
                 }
                 c.break_depth = c.break_depth - 1usize
-                if body_error == ok && switch_arm_returns(c, tree, module_index, arm) { returning_arm_count += 1usize }
+                let arm_returns = switch_arm_returns(c, tree, module_index, arm)
+                if body_error == ok && arm_returns { returning_arm_count += 1usize }
+                if body_error == ok && tracked && !arm_returns && !resource_diverges(c, g, tree, module_index, arm) {
+                    var closing = arm
+                    if arm.token_end > arm.token_start { closing.token_start = arm.token_end - 1u32 }
+                    body_error = resource_audit(c, g, module_index, closing, checkpoint, .ResourceCleanupForgotten)
+                    if body_error == ok {
+                        let (after, after_error) = resource_snapshot(c, checkpoint)
+                        if after_error != ok { ret after_error }
+                        if joined_count == 0usize { joined = after } else { resource_join_states(joined, after) }
+                        joined_count += 1usize
+                    }
+                }
+                if tracked { resource_restore(c, before) }
                 c.local_count = checkpoint
                 if body_error != ok { ret body_error }
             }
@@ -10983,7 +11162,9 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         let (place_type, place_error) = assignment_place_type(c, g, tree, module_index, first_index)
         if place_error != ok { ret place_error }
         let (actual, expression_error) = check_expr(c, g, tree, module_index, initializer_index, place_type)
-        ret expression_error
+        if expression_error != ok { ret expression_error }
+        var no_call: CallInfo = zero
+        ret resource_assign(c, g, tree, module_index, node, first_index, initializer_index, false, no_call, false)
     }
     if initializer.kind != .CallExpr { ret ArgumentCount }
     let (call, call_error) = check_call(c, g, tree, module_index, initializer)
@@ -11022,6 +11203,7 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
             if return_error != ok { ret return_error }
             let (contextual, context_error) = apply_context(c, result_type, place_type)
             if context_error != ok { ret context_error }
+            try resource_assign(c, g, tree, module_index, node, parse.child_index_at(tree, at), initializer_index, true, call, tried)
             result_index += 1usize
         }
         at += 1usize
@@ -11032,6 +11214,10 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
 fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, function: Function) -> err {
     let node = tree.nodes[node_index]
     if node.kind == .Block { ret check_block(c, r, g, tree, module_index, node, function) }
+    // The resources a statement reads (D345), before anything it moves.
+    if node.kind != .DeferStmt && node.kind != .NocheckStmt && any_affine_local(c) {
+        try resource_uses(c, g, tree, module_index, node_index, node.kind == .AssignmentStmt)
+    }
     if node.kind == .BindingStmt { ret check_binding(c, r, g, tree, module_index, node, function) }
     if node.kind == .ReturnStmt { ret check_return(c, g, tree, module_index, node, function) }
     if node.kind == .IfStmt || node.kind == .WhileStmt { ret check_condition_statement(c, r, g, tree, module_index, node, function) }
@@ -11043,10 +11229,12 @@ fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tre
             record_failure(c, module_index, node, .BreakOutsideControl, "", "")
             ret Unsupported
         }
+        try resource_audit(c, g, module_index, node, c.break_locals[c.break_depth - 1usize], .ResourceCleanupForgotten)
         ret ok
     }
     if node.kind == .ContinueStmt {
         if c.loop_depth == 0usize { ret Unsupported }
+        try resource_audit(c, g, module_index, node, c.loop_locals[c.loop_depth - 1usize], .ResourceCleanupForgotten)
         ret ok
     }
     if node.kind == .CallStmt { ret check_call_statement(c, g, tree, module_index, node) }
@@ -11310,6 +11498,12 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
         let parameter = c.parameters[function.first_parameter + parameter_index]
         if parameter.ty.kind == .Other { ret Unsupported }
         try add_local(c, parameter.name, parameter.ty, false)
+        // An `own` parameter carries its obligation into the body (D345); a borrowed
+        // one is owned by the caller and owes nothing here.
+        if parameter.own && c.locals[c.local_count - 1usize].state != resource_plain() {
+            c.locals[c.local_count - 1usize].obligated = affine_kind(c, parameter.ty, 0usize) == 2u8
+            c.locals[c.local_count - 1usize].acquired = usize(node.token_start)
+        }
         parameter_index += 1usize
     }
     let end = usize(node.first_child) + usize(node.child_count)
@@ -11329,7 +11523,17 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     ret ok
 }
 
-fn check_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+fn check_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, node_index: usize) -> err {
+    let resources_before = c.resources_on
+    // An `@unsafe` function (D345) is the audited wrapper: it touches a resource's
+    // bits and discharges obligations by raw means the checker cannot see.
+    c.resources_on = !declaration_has_attribute(c, g, tree, module_index, node_index, "unsafe")
+    let checked = check_function_swept(c, r, g, tree, module_index, node)
+    c.resources_on = resources_before
+    ret checked
+}
+
+fn check_function_swept(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
     begin_call_scope(c)
     let (name, name_error) = function_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
@@ -11425,7 +11629,7 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, skip: []cons
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
-            if node.top_level && node.kind == .FnDecl { try check_function(c, r, g, &tree, module_index, node) }
+            if node.top_level && node.kind == .FnDecl { try check_function(c, r, g, &tree, module_index, node, node_index) }
             node_index += 1usize
         }
         module_index += 1usize
@@ -11617,7 +11821,7 @@ fn bodies_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_inde
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .FnDecl { try check_function(c, r, g, &tree, module_index, node) }
+        if node.top_level && node.kind == .FnDecl { try check_function(c, r, g, &tree, module_index, node, node_index) }
         node_index += 1usize
     }
     ret ok
@@ -11671,6 +11875,14 @@ fn run_declarations(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 }
 
 fn diagnostic_code(kind: DiagnosticKind) -> str {
+    if kind == .ResourceUseAfterMove { ret "E-SAFETY-0001" }
+    if kind == .ResourceCleanupForgotten { ret "E-SAFETY-0002" }
+    if kind == .ResourcePartialMove { ret "E-SAFETY-0003" }
+    if kind == .ResourceOverwrite { ret "E-SAFETY-0006" }
+    if kind == .ResourceUndef { ret "E-SAFETY-0007" }
+    if kind == .ResourceUnchecked { ret "E-SAFETY-0008" }
+    if kind == .ResourceDeferredConsumed { ret "E-SAFETY-0009" }
+    if kind == .ResourceMovedInLoop { ret "E-SAFETY-0011" }
     if kind == .TryInsideDefer || kind == .TryCast || kind == .TryNotFallible || kind == .TryNoPropagate { ret "E-ERROR-9999" }
     // docs/diagnostics.md: section 9's reflection and section 8's atomics under their
     // own categories (D215). A constant cycle stays E-TYPE-9999: the bootstrap says so
@@ -11698,6 +11910,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
 // for every one of them before.
 fn error_name(value: err) -> str {
     if value == Capacity { ret "check.Capacity" }
+    if value == ResourceViolation { ret "check.ResourceViolation" }
     if value == Unsupported { ret "check.Unsupported" }
     if value == MissingContext { ret "check.MissingContext" }
     if value == TypeMismatch { ret "check.TypeMismatch" }
@@ -11756,4 +11969,516 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .AggregateMemberUnknown { ret "aggregate member has an unknown or unsized type" }
     if kind == .BindingUnknownNamed { ret "binding has an unknown named type" }
     ret "type checking failed"
+}
+
+// ---- Resources (D345, M2.5 H01) ------------------------------------------------------
+//
+// A resource type is affine: a value of it is moved at most once, and one with a
+// cleanup is obligated: consumed on every exit of the block that owns it. This pass
+// rides the body check: every local of an affine type carries a state, the statement
+// checks move it, the arms of an `if` or `switch` join it, a loop's body must leave
+// it as it found it, and every exit audits the obligations still live. The seeded
+// handles of `e.os` are the resource types for now -- `File`, `Proc` and `Thread` --
+// with `close`, `wait`, `wait_usage`, `thread_join` and `thread_detach` consuming
+// their first argument and the three standard streams borrowed; a user-declared
+// resource and an `own` parameter are the syntax of the next step.
+//
+// States: Plain (the local is not affine), Owned, Moved, Null (`zero`), Reserved (a
+// `defer` consumes it at the block's exit), Maybe (moved on one path and not another),
+// Unchecked (returned beside an `err` that has not been tested yet).
+fn resource_plain() -> u8 { ret 0u8 }
+fn resource_owned() -> u8 { ret 1u8 }
+fn resource_moved() -> u8 { ret 2u8 }
+fn resource_null() -> u8 { ret 3u8 }
+fn resource_reserved() -> u8 { ret 4u8 }
+fn resource_maybe() -> u8 { ret 5u8 }
+fn resource_unchecked() -> u8 { ret 6u8 }
+
+fn module_is_os(c: *Checker, module_index: usize) -> bool {
+    if !c.has_graph || module_index >= c.graph.count { ret false }
+    ret same(c.graph.modules[module_index].name, "e.os")
+}
+
+// 0: not affine; 2: affine and obligated (the type names a cleanup). The seeded
+// handles alone for now: containment through aggregates and arrays waits on the
+// partial-move rule of the next step, so a struct holding a `File` is not tracked.
+fn affine_kind(c: *Checker, ty: Type, depth: usize) -> u8 {
+    if ty.kind != .Named { ret 0u8 }
+    if module_is_os(c, ty.module_index) && (same(ty.name, "File") || same(ty.name, "Proc") || same(ty.name, "Thread")) { ret 2u8 }
+    ret 0u8
+}
+
+// Whether the callee's parameter takes ownership: declared `own`, or the seeded
+// closers' first.
+fn parameter_consumes(c: *Checker, function: Function, index: usize) -> bool {
+    if index < function.parameter_count && function.first_parameter + index < c.parameter_count && c.parameters[function.first_parameter + index].own { ret true }
+    if index != 0usize || !module_is_os(c, function.module_index) { ret false }
+    ret same(function.name, "close") || same(function.name, "wait") || same(function.name, "wait_usage") || same(function.name, "thread_join") || same(function.name, "thread_detach")
+}
+
+// Whether the callee hands out a handle the process owns: no obligation on it.
+fn producer_borrowed(c: *Checker, function: Function) -> bool {
+    if !module_is_os(c, function.module_index) { ret false }
+    ret same(function.name, "stdin") || same(function.name, "stdout") || same(function.name, "stderr")
+}
+
+fn resource_local_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .NameExpr { ret (0usize, false) }
+    let token = c.tokens[usize(node.token_start)]
+    if token.kind != .Identifier { ret (0usize, false) }
+    let name = g.modules[module_index].text[token.start..token.end]
+    let (local_index, found) = find_local(c, name)
+    if !found || c.locals[local_index].state == resource_plain() { ret (0usize, false) }
+    ret (local_index, true)
+}
+
+fn any_affine_local(c: *Checker) -> bool {
+    if !c.resources_on { ret false }
+    var at = 0usize
+    while at < c.local_count {
+        if c.locals[at].state != resource_plain() { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn line_detail(c: *Checker, g: *graph.Graph, module_index: usize, token_index: usize) -> str {
+    if token_index >= c.token_count { ret "" }
+    let line = lex.line_of(g.modules[module_index].text, g.modules[module_index].lines, c.tokens[token_index].start)
+    ret decimal_text(c, line)
+}
+
+fn decimal_text(c: *Checker, value: usize) -> str {
+    var digits: [24]u8 = zero
+    var v = value
+    var n = 0usize
+    if v == 0usize {
+        digits[23usize] = 48u8
+        n = 1usize
+    }
+    while v > 0usize {
+        digits[23usize - n] = u8(48usize + v % 10usize)
+        v = v / 10usize
+        n += 1usize
+    }
+    let (text, text_error) = mem.alloc[u8](c.arena, n)
+    if text_error != ok { ret "" }
+    var at = 0usize
+    while at < n {
+        text[at] = digits[24usize - n + at]
+        at += 1usize
+    }
+    ret text[0usize..n]
+}
+
+// The uses in a statement's expressions, before the statement moves anything: a
+// moved, maybe-moved or unchecked resource read here is the error, at its use. The
+// walk stops at a block, whose statements are checked on their own, and skips an
+// assignment's place, which is written, not read.
+fn resource_uses(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, skip_first_name: bool) -> err {
+    ret resource_uses_under(c, g, tree, module_index, node_index, skip_first_name, .Block)
+}
+
+fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, skip_first_name: bool, parent: syntax.Kind) -> err {
+    let node = tree.nodes[node_index]
+    if node.kind == .Block { ret ok }
+    if node.kind == .NameExpr {
+        let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+        if !is_resource { ret ok }
+        let state = c.locals[local_index].state
+        if state == resource_moved() || state == resource_maybe() {
+            record_failure(c, module_index, node, .ResourceUseAfterMove, c.locals[local_index].name, line_detail(c, g, module_index, c.locals[local_index].acquired))
+            ret ResourceViolation
+        }
+        // An unchecked value may be moved whole into another binding, which takes the
+        // untested error along, or returned beside its error; it cannot be read.
+        let moved_whole = parent == .BindingStmt || parent == .AssignmentStmt || parent == .ReturnStmt
+        if state == resource_unchecked() && !moved_whole {
+            record_failure(c, module_index, node, .ResourceUnchecked, c.locals[local_index].name, line_detail(c, g, module_index, c.locals[local_index].acquired))
+            ret ResourceViolation
+        }
+        ret ok
+    }
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    var first = true
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if !(first && skip_first_name && tree.nodes[child_index].kind == .NameExpr) {
+                try resource_uses_under(c, g, tree, module_index, child_index, false, node.kind)
+            }
+            first = false
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// A local consumed: by a move into another binding or an aggregate, by an `own`
+// argument, by `ret`. It has to be owned to be consumed.
+fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
+    if !c.resources_on { ret ok }
+    let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+    if !is_resource { ret ok }
+    let node = tree.nodes[node_index]
+    let state = c.locals[local_index].state
+    if state == resource_reserved() {
+        record_failure(c, module_index, node, .ResourceDeferredConsumed, c.locals[local_index].name, line_detail(c, g, module_index, c.locals[local_index].acquired))
+        ret ResourceViolation
+    }
+    // A null resource may be handed on -- `ret (file, Unsupported)` is the contract
+    // for a failed acquisition -- and nothing is owed for it.
+    if state == resource_null() { ret ok }
+    if state != resource_owned() {
+        record_failure(c, module_index, node, .ResourceUseAfterMove, c.locals[local_index].name, line_detail(c, g, module_index, c.locals[local_index].acquired))
+        ret ResourceViolation
+    }
+    // Consumed by a deferred call: reserved, and discharged at the block's exit.
+    if c.defer_depth != 0usize {
+        c.locals[local_index].state = resource_reserved()
+        c.locals[local_index].acquired = usize(node.token_start)
+        ret ok
+    }
+    c.locals[local_index].state = resource_moved()
+    c.locals[local_index].acquired = usize(node.token_start)
+    ret ok
+}
+
+// The arguments of a checked call that its callee consumes: moved. `resource_uses`
+// ran before, so `f(x, x)` fails at the second argument here, as a move of a moved.
+fn resource_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, info: CallInfo) -> err {
+    if !c.resources_on || info.is_cast || info.protocol_pending || !any_affine_local(c) { ret ok }
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    var child_position = 0usize
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            if child_position != 0usize && parameter_consumes(c, info.function, child_position - 1usize) {
+                try resource_consume(c, g, tree, module_index, parse.child_index_at(tree, at))
+            }
+            child_position += 1usize
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// A local bound to a resource-typed value: from a call's result -- owned when the
+// call cannot fail or was `try`d, unchecked until its error is tested otherwise,
+// nothing at all from a borrowed producer -- from another local, which is moved,
+// or from `zero`.
+fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, local_index: usize, statement: syntax.Node, initializer_index: usize, has_initializer: bool, from_call: bool, call: CallInfo, tried: bool, err_local: usize, has_err_local: bool) -> err {
+    if !c.resources_on { ret ok }
+    let kind = affine_kind(c, c.locals[local_index].ty, 0usize)
+    if kind == 0u8 { ret ok }
+    c.locals[local_index].acquired = usize(statement.token_start)
+    c.locals[local_index].obligated = kind == 2u8
+    if contains_token(c, usize(statement.token_start), usize(statement.token_end), .KwUndef) {
+        record_failure(c, module_index, statement, .ResourceUndef, c.locals[local_index].name, "")
+        ret ResourceViolation
+    }
+    if !has_initializer || contains_token(c, usize(statement.token_start), usize(statement.token_end), .KwZero) {
+        c.locals[local_index].state = resource_null()
+        c.locals[local_index].obligated = false
+        ret ok
+    }
+    if from_call {
+        if producer_borrowed(c, call.function) {
+            c.locals[local_index].state = resource_owned()
+            c.locals[local_index].obligated = false
+            ret ok
+        }
+        c.locals[local_index].state = resource_owned()
+        if !tried && has_err_local {
+            c.locals[local_index].state = resource_unchecked()
+            c.locals[local_index].bound_err = err_local
+            c.locals[local_index].has_bound_err = true
+        }
+        ret ok
+    }
+    // Not a call: another local, moved; or an expression that made a value (an
+    // aggregate literal moving its fields), owned.
+    let initializer = tree.nodes[initializer_index]
+    if initializer.kind == .NameExpr {
+        let (source_index, source_is_resource) = resource_local_of(c, g, tree, module_index, initializer_index)
+        if source_is_resource && c.locals[source_index].state == resource_unchecked() {
+            // Moved before its error was tested: the state and the error come along.
+            c.locals[local_index].state = resource_unchecked()
+            c.locals[local_index].bound_err = c.locals[source_index].bound_err
+            c.locals[local_index].has_bound_err = c.locals[source_index].has_bound_err
+            c.locals[source_index].state = resource_moved()
+            ret ok
+        }
+        try resource_consume(c, g, tree, module_index, initializer_index)
+        c.locals[local_index].state = resource_owned()
+        if source_is_resource && !c.locals[source_index].obligated { c.locals[local_index].obligated = false }
+        ret ok
+    }
+    if initializer.kind == .FieldExpr || initializer.kind == .BracketPostfix {
+        c.locals[local_index].state = resource_owned()
+        c.locals[local_index].obligated = false
+        ret ok
+    }
+    try resource_move_literal_fields(c, g, tree, module_index, initializer_index)
+    c.locals[local_index].state = resource_owned()
+    ret ok
+}
+
+// A value that names a resource local outright is moved by what takes it -- a
+// binding, a `ret`, a store into a field or an element. One named inside an
+// aggregate literal is not, in this step: aggregates are not tracked yet.
+fn resource_move_literal_fields(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
+    let node = tree.nodes[node_index]
+    if node.kind == .NameExpr { ret resource_consume(c, g, tree, module_index, node_index) }
+    ret ok
+}
+
+// Every obligation still live among the locals from `from` up is reported at the
+// exit `node`; a reserved one is discharged by its `defer` at that exit.
+fn resource_audit(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node, from: usize, exit_kind: DiagnosticKind) -> err {
+    if !c.resources_on { ret ok }
+    var at = from
+    while at < c.local_count {
+        let local = c.locals[at]
+        if local.obligated && (local.state == resource_owned() || local.state == resource_maybe() || local.state == resource_unchecked()) {
+            record_failure(c, module_index, node, exit_kind, local.name, line_detail(c, g, module_index, local.acquired))
+            ret ResourceViolation
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// The states of the locals below `count`, kept for a join.
+fn resource_snapshot(c: *Checker, count: usize) -> ([]u8, err) {
+    let (states, states_error) = mem.alloc[u8](c.arena, count + 1usize)
+    if states_error != ok { ret (states, states_error) }
+    var at = 0usize
+    while at < count {
+        states[at] = c.locals[at].state
+        at += 1usize
+    }
+    ret (states[0usize..count], ok)
+}
+
+fn resource_restore(c: *Checker, states: []const u8) {
+    var at = 0usize
+    while at < states.len && at < c.local_count {
+        c.locals[at].state = states[at]
+        at += 1usize
+    }
+}
+
+// The join of two arms: the same state stays; anything else is Maybe, which no later
+// use or exit accepts, since one path moved the value and the other did not.
+// Two arms' states joined into the first.
+fn resource_join_states(into: []u8, other: []const u8) {
+    var at = 0usize
+    while at < into.len && at < other.len {
+        into[at] = resource_join_one(into[at], other[at])
+        at += 1usize
+    }
+}
+
+// The same state stays; nothing owned on either path -- moved, or null -- is moved;
+// anything else is Maybe, which no later use or exit accepts.
+fn resource_join_one(a: u8, b: u8) -> u8 {
+    if a == b || a == resource_plain() { ret a }
+    let a_gone = a == resource_moved() || a == resource_null()
+    let b_gone = b == resource_moved() || b == resource_null()
+    if a_gone && b_gone { ret resource_moved() }
+    // Unchecked on one path and null on the other is still the error's to decide.
+    if a == resource_unchecked() && b == resource_null() { ret a }
+    if b == resource_unchecked() && a == resource_null() { ret b }
+    ret resource_maybe()
+}
+
+fn resource_join(c: *Checker, other: []const u8) {
+    var at = 0usize
+    while at < other.len && at < c.local_count {
+        c.locals[at].state = resource_join_one(c.locals[at].state, other[at])
+        at += 1usize
+    }
+}
+
+// After a loop's body: an outer local it consumed would be used moved by the next
+// iteration, unless the body owned it again before the end.
+fn resource_loop_check(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node, before: []const u8) -> err {
+    var at = 0usize
+    while at < before.len && at < c.local_count {
+        if c.locals[at].state != before[at] && before[at] == resource_owned() {
+            record_failure(c, module_index, node, .ResourceMovedInLoop, c.locals[at].name, line_detail(c, g, module_index, c.locals[at].acquired))
+            ret ResourceViolation
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// A condition over an `err` local: which, and its local. 0: neither; 1: `e != ok`;
+// 2: `e == ok`; 3: `e == Error`; 4: `e != Error`, for one particular error.
+fn resource_err_test(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, condition_index: usize) -> (usize, usize) {
+    let condition = tree.nodes[condition_index]
+    if condition.kind != .BinaryExpr { ret (0usize, 0usize) }
+    let (left_index, has_left) = first_node_child(tree, condition)
+    if !has_left { ret (0usize, 0usize) }
+    let left = tree.nodes[left_index]
+    if left.kind != .NameExpr { ret (0usize, 0usize) }
+    var which = 0usize
+    var against_ok = false
+    var scan = usize(left.token_end)
+    while scan < usize(condition.token_end) {
+        if c.tokens[scan].kind == .PunctBangEq { which = 1usize }
+        if c.tokens[scan].kind == .PunctEqEq { which = 2usize }
+        if c.tokens[scan].kind == .KwOk { against_ok = true }
+        scan += 1usize
+    }
+    if which == 0usize { ret (0usize, 0usize) }
+    if !against_ok {
+        if which == 2usize { which = 3usize } else { which = 4usize }
+    }
+    let token = c.tokens[usize(left.token_start)]
+    let name = g.modules[module_index].text[token.start..token.end]
+    let (err_index, found) = find_local(c, name)
+    if !found || c.locals[err_index].ty.kind != .Err { ret (0usize, 0usize) }
+    ret (which, err_index)
+}
+
+fn resource_set_bound(c: *Checker, err_index: usize, state: u8) {
+    var at = 0usize
+    while at < c.local_count {
+        if c.locals[at].state == resource_unchecked() && c.locals[at].has_bound_err && c.locals[at].bound_err == err_index { c.locals[at].state = state }
+        at += 1usize
+    }
+}
+
+// `if e != ok { <diverges> }`: the resources bound beside `e` are owned past the if.
+fn resource_narrow(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, condition_index: usize) {
+    let (which, err_index) = resource_err_test(c, g, tree, module_index, condition_index)
+    // `!= ok` diverged: ok here, owned. `== ok` diverged: an error here, null.
+    // `!= Error` diverged: that error here, null. `== Error` diverged: unknown still.
+    if which == 1usize { resource_set_bound(c, err_index, resource_owned()) }
+    if which == 2usize || which == 4usize { resource_set_bound(c, err_index, resource_null()) }
+}
+
+// Inside an arm of `if e == ok` / `if e != ok`: owned in the arm the error is ok in,
+// null in the other.
+fn resource_narrow_arm(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, condition_index: usize, arm: usize) {
+    let (which, err_index) = resource_err_test(c, g, tree, module_index, condition_index)
+    if which == 0usize { ret }
+    if which <= 2usize {
+        var owned_arm = 1usize
+        if which == 2usize { owned_arm = 0usize }
+        if arm == owned_arm { resource_set_bound(c, err_index, resource_owned()) } else { resource_set_bound(c, err_index, resource_null()) }
+        ret
+    }
+    // Against one particular error: null where it is that error, unknown elsewhere.
+    var null_arm = 0usize
+    if which == 4usize { null_arm = 1usize }
+    if arm == null_arm { resource_set_bound(c, err_index, resource_null()) }
+}
+
+// An assignment: a place that is an owned resource cannot be overwritten; a place
+// that is a resource local is bound again as a `let` binds; a right-hand side that
+// names a resource local moves it, wherever it goes.
+fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, statement: syntax.Node, place_index: usize, initializer_index: usize, from_call: bool, call: CallInfo, tried: bool) -> err {
+    if !c.resources_on { ret ok }
+    let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, place_index)
+    // A store into a field or an element moves the value into the aggregate, which
+    // owns it from then on; the aggregate itself is not tracked in this step.
+    if !is_resource {
+        if !from_call {
+            resource_err_copied(c, g, tree, module_index, place_index, initializer_index)
+            try resource_move_literal_fields(c, g, tree, module_index, initializer_index)
+        }
+        ret ok
+    }
+    let state = c.locals[local_index].state
+    if state == resource_owned() || state == resource_reserved() || state == resource_unchecked() || state == resource_maybe() {
+        if c.locals[local_index].obligated || state == resource_reserved() {
+            record_failure(c, module_index, statement, .ResourceOverwrite, c.locals[local_index].name, line_detail(c, g, module_index, c.locals[local_index].acquired))
+            ret ResourceViolation
+        }
+    }
+    ret resource_bind_local(c, g, tree, module_index, local_index, statement, initializer_index, true, from_call, call, tried, 0usize, false)
+}
+
+// `open_error = retry_error`: the resources bound beside the source error are bound
+// beside the destination from here on, so a test of it narrows them.
+fn resource_err_copied(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, place_index: usize, initializer_index: usize) {
+    let place = tree.nodes[place_index]
+    let initializer = tree.nodes[initializer_index]
+    if place.kind != .NameExpr || initializer.kind != .NameExpr { ret }
+    let text = g.modules[module_index].text
+    let place_token = c.tokens[usize(place.token_start)]
+    let source_token = c.tokens[usize(initializer.token_start)]
+    if place_token.kind != .Identifier || source_token.kind != .Identifier { ret }
+    let (dest, dest_found) = find_local(c, text[place_token.start..place_token.end])
+    let (source, source_found) = find_local(c, text[source_token.start..source_token.end])
+    if !dest_found || !source_found || c.locals[dest].ty.kind != .Err || c.locals[source].ty.kind != .Err { ret }
+    var at = 0usize
+    while at < c.local_count {
+        if c.locals[at].has_bound_err && c.locals[at].bound_err == source { c.locals[at].bound_err = dest }
+        at += 1usize
+    }
+}
+
+// Whether a statement leaves the function for good: it returns (the checker's rule
+// for `ret`, `try` and the arms that all do), or it ends in `os.exit` or
+// `unreachable`, after which nothing is owed. A block ending so is not audited.
+fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> bool {
+    if statement_returns(c, tree, module_index, node) { ret true }
+    var last = node
+    if node.kind == .Block || node.kind == .SwitchArm {
+        var found = false
+        let end = usize(node.first_child) + usize(node.child_count)
+        var at = usize(node.first_child)
+        while at < end {
+            if parse.child_is_node_at(tree, at) {
+                let child = tree.nodes[parse.child_index_at(tree, at)]
+                if check_statement_kind(child.kind) {
+                    last = child
+                    found = true
+                }
+            }
+            at += 1usize
+        }
+        if !found { ret false }
+        if last.kind == .Block { ret resource_diverges(c, g, tree, module_index, last) }
+    }
+    if last.kind != .CallStmt { ret false }
+    let (call_index, has_call) = first_node_child(tree, last)
+    if !has_call { ret false }
+    let call = tree.nodes[call_index]
+    if call.kind != .CallExpr { ret false }
+    let (callee_index, has_callee) = first_node_child(tree, call)
+    if !has_callee { ret false }
+    let callee = tree.nodes[callee_index]
+    let text = g.modules[module_index].text
+    if callee.kind == .NameExpr {
+        let token = c.tokens[usize(callee.token_start)]
+        ret token.kind == .KwUnreachable
+    }
+    if callee.kind == .FieldExpr || callee.kind == .MemberExpr {
+        // `os.exit(...)`: the qualifier and the member, as spelled.
+        let first = c.tokens[usize(callee.token_start)]
+        let member = c.tokens[usize(callee.token_end) - 1usize]
+        ret same(text[first.start..first.end], "os") && same(text[member.start..member.end], "exit")
+    }
+    ret false
+}
+
+// A returned value that names a resource local: moved out to the caller, whatever
+// its state but moved -- an unchecked one goes with the error it was bound beside.
+fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
+    if !c.resources_on { ret ok }
+    let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+    if !is_resource { ret ok }
+    if c.locals[local_index].state == resource_unchecked() {
+        c.locals[local_index].state = resource_moved()
+        ret ok
+    }
+    ret resource_consume(c, g, tree, module_index, node_index)
 }

@@ -2113,6 +2113,11 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     oracle.instruction_limit = inline_cap() + 1usize
                     let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, oracle_defers)
                     oracle.instruction_limit = 0usize
+                    // The lowering arms the checker's failure position at every statement it
+                    // takes (D345); a body lowered or discarded leaves it disarmed, or a
+                    // later module's check failure would be reported at this body's last
+                    // statement, as every release-build check error after an oracle was.
+                    if lower_error == ok || lower_error == nir.TooLong { c.failure_has_token = false }
                     if lower_error == nir.TooLong {
                         // Past the cap: what was lowered so far goes, and so does the function.
                         nir.reset(oracle, checkpoint)
@@ -3726,7 +3731,13 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         ret bind_call_results(c, g, module_index, binding_node, &results, mutable, builder, bindings, binding_count)
     }
     let (name, has_name) = check.first_name(c, g.modules[module_index].text, binding_node)
-    if !has_name { ret parse.InvalidSyntax }
+    // `let _ = f()` (section 7's discard, D345): the call for its effects, its one
+    // value dropped. The deferred form had its own path; the plain one was refused.
+    if !has_name {
+        if !found_initializer { ret parse.InvalidSyntax }
+        let (dropped, dropped_type, drop_error) = lower_expression(c, g, tree, module_index, initializer_index, declared, builder, bindings, *binding_count)
+        ret drop_error
+    }
     let mutable = c.tokens[usize(node.token_start)].kind == .KwVar
     var value = 0usize
     var value_type = declared

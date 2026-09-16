@@ -107,7 +107,7 @@ type CodeRelocation = struct {
     symbol_index: usize,
 }
 
-fn format_version() -> usize { ret 7usize }
+fn format_version() -> usize { ret 8usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -518,6 +518,9 @@ fn write_function_signature_canonical(c: *check.Checker, g: *graph.Graph, functi
         if function.first_parameter + at >= c.parameter_count { ret InvalidArtifact }
         let parameter = c.parameters[function.first_parameter + at]
         try canonical_text(output, parameter.name)
+        // `own` is part of the signature (D345): a caller compiled against a borrowing
+        // parameter has to be checked again when it starts taking ownership.
+        if parameter.own { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
         try write_type_canonical(c, g, parameter.ty, output)
         at += 1usize
     }

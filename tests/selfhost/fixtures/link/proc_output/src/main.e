@@ -159,7 +159,7 @@ fn main(a: *mem.Arena) -> err {
     let (plain, plain_error) = proc.spawn(a, command, streams)
     if plain_error != ok { os.exit(61i32) }
     var plain_child = plain
-    if os.close(writing) != ok { os.exit(62i32) }
+    if os.close(streams.stdout) != ok { os.exit(62i32) }
     var nothing: [8]u8 = zero
     let (silent, silent_error) = os.read(reading, nothing[..])
     if silent_error != ok { os.exit(63i32) }

@@ -45,14 +45,16 @@ fn main(a: *mem.Arena) -> err {
     let (made, made_error) = os.open(a, "np-io-eof.txt", make)
     if made_error != ok { ret made_error }
     let (put, put_error) = os.write(made, "abc")
+    let made_close = os.close(made)
     if put_error != ok { ret put_error }
     if put != 3usize { ret Failed }
-    if os.close(made) != ok { ret Failed }
+    if made_close != ok { ret Failed }
     var take: os.OpenFlags = zero
     take.read = true
     let (opened, opened_error) = os.open(a, "np-io-eof.txt", take)
     if opened_error != ok { ret opened_error }
     var opened_file = opened
+    defer let _ = os.close(opened_file)
     var from_file = io.file_reader(&opened_file)
     var file_window: [8]u8 = zero
     let (from_file_count, from_file_error) = io.read(&from_file, file_window[..])
@@ -61,7 +63,6 @@ fn main(a: *mem.Arena) -> err {
     let (past, past_error) = io.read(&from_file, file_window[..])
     if past_error != io.End { ret Failed }
     if past != 0usize { ret Failed }
-    if os.close(opened_file) != ok { ret Failed }
     if os.remove_file(a, "np-io-eof.txt") != ok { ret Failed }
 
     // Writing into a fixed slice, and the sink reporting what it could take.

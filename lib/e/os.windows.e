@@ -2085,7 +2085,8 @@ fn peak_memory() -> (usize, err) {
 
 // `wait`, and what the child's peak was: the handle is closed by the wait, so the peak is
 // read in the same call, between the exit and the close (D311).
-fn wait_usage(p: Proc) -> (ProcUsage, err) {
+@unsafe
+fn wait_usage(p: own Proc) -> (ProcUsage, err) {
     var usage: ProcUsage = zero
     usage.exit_code = -1i32
     if raw_wait_for_single_object(p.raw, WAIT_INFINITE) != WAIT_OBJECT_0 { ret (usage, from_last_error()) }

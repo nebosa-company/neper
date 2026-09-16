@@ -1,4 +1,4 @@
-# neper concrete grammar — revision 1
+# neper concrete grammar — revision 2
 
 # Status: normative companion to docs/spec.md. This file specifies concrete syntax;
 # spec.md specifies typing, legality, evaluation and runtime semantics.
@@ -32,7 +32,7 @@ extern_decl     = `extern` `fn` value_name comptime_params? signature ;
 
 signature       = `(` parameter_list? `)` (`->` return_spec)? ;
 parameter_list  = parameter (`,` parameter)* `,`? ;
-parameter       = value_name `:` type_expr
+parameter       = value_name `:` `own`? type_expr
                 | value_name `:` `...`
                 | `...` ;
 return_spec     = type_expr | `(` type_list `)` ;

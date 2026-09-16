@@ -1,3 +1,3 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"fmt","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"schema":"neper-stream","version":1,"record":"header","command":"fmt","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
 {"record":"formatted","text":"// `fmt --json` (D234): canonical layout -- indentation, operator and delimiter spacing,\n// comments preserved, blank runs collapsed to one.\nuse e.mem\n\nconst LIMIT: i32 = 10i32\n\nfn classify(value: i32) -> i32 {\n    var total = value +% 1i32 // running total\n    // negate through a unary operator\n    let flipped = -total\n    if flipped < 0i32 && total > LIMIT {\n        ret total * 2i32\n    } else {\n        ret flipped\n    }\n}\n\nfn main(a: *mem.Arena, args: []str) -> err {\n    let n = classify(3i32)\n    ret ok\n}\n"}
 {"record":"result","ok":true,"exit_code":0,"data":{}}

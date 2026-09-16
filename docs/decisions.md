@@ -7403,3 +7403,61 @@ says an internal failure does. Under `--json` the diagnostic is a location-free
 record and the result follows it, validated against the schema; without, the
 `error[code]` line precedes the runtime's own, which still names the error. The
 short forms dispatch through the same function, so a failure is reported once.
+## D345 -- Resources are affine and owed: the H01 rules checked over the seeded handles
+
+M2.5 stage C's first cut of H01 (`m25-h01-ownership.md`), implemented under its
+recommended answers as stated assumptions: signature-only transfer (no call-site
+keyword), the parameter spelling `own`, aggregates untracked for now, the standard
+streams borrowed, `@unsafe` as a function attribute, partial moves not yet a rule
+since aggregates are not yet tracked. `mem.Arena` is left plain for this step.
+
+**The rules** (spec section 11, "Resources: static rules"): `os.File`, `os.Proc` and
+`os.Thread` are affine and obligated; a parameter borrows unless declared `own`; a
+binding from a resource local, a `ret` of one, a store of one into a field or an
+element and an argument to an `own` parameter move it; every exit of the owning
+block audits what is still owed; a `defer` that consumes reserves; a value returned
+beside an untested `err` is unchecked until the error is tested, by `try` or by an
+`if` against `ok` or against one error, in either arm or diverging; a loop body
+leaves the outer resources as it found them; `@unsafe` functions are exempt. Seven
+codes are registered and pinned (E-SAFETY-0001, 0002, 0006, 0007, 0008, 0009, 0011),
+each naming the local and the line it was acquired or moved at; the accept fixture
+holds every valid shape.
+
+**The checker.** A state per affine local rides the body sweep (D326) alone: the
+lowering's re-walk of bodies is partial and in its own order, so the pass is off
+there (`resources_on`), and it is off inside `@unsafe`. Statements scan their uses
+first, then move; `if` and `switch` arms are snapshotted, restored and joined (the
+same state stays, nothing-owned on both paths is nothing owed, anything else is
+Maybe, which no use or exit accepts); an arm that returns, `os.exit`s or reaches
+`unreachable()` contributes no state; `break` and `continue` audit the locals of
+what they leave, by a stack of checkpoints per loop and per breakable body. Cost:
+nothing measurable on the compiler's own build, since only bodies with an affine
+local pay.
+
+**`own`.** A contextual word before a parameter's type (grammar revision 2; the
+`tokens`/`parse` registries are unchanged, since it lexes as an identifier), carried
+on the `Parameter` record and into the canonical signature the artifacts hash, so a
+callee that starts taking ownership rebuilds its callers (artifact format 8; checked
+by hand: dropping `own` from `thread.join` makes a hot build re-check and refuse
+the fixture that leaks). The seeded closers -- `close`, `wait`, `wait_usage`,
+`thread_join`, `thread_detach` -- consume by table; `e.thread`'s `join`/`detach`
+and the fences say `own` now.
+
+**What the rules found.** In the compiler: `run_program` and `nptest_spawn` leaked
+the stdout capture when opening the stderr one failed, and leaked the child process
+when a close failed after a successful spawn; `source.load`'s readers closed the
+file on the reader's behalf by convention the signature did not say; `manifest_file`
+held the manifest open across five early exits. In the library: `proc.spawn_piped`
+closed pipe ends it had handed to the child's `Streams`. In the fixtures: thirteen
+files opened and not closed on an error path, and two closes through a stream the
+struct owned. Two compiler bugs surfaced on the way: a release build reported any
+check failure after an inlining oracle at a stale token, since the lowering armed
+the checker's failure position and never disarmed it; and `let _ = f()` -- section
+7's discard -- could not be lowered outside a `defer`.
+
+**Not yet:** aggregates and arrays holding resources (containment, partial moves,
+E-SAFETY-0003), the representation opacity (E-SAFETY-0010), copies through
+generics, `mem.bitcast` and reflection (E-SAFETY-0005), the move-while-borrowed rule
+(E-SAFETY-0004), user-declared `resource` types with a named cleanup, `os.dup`, and
+`mem.Arena` as an affine type. The bootstrap is untouched: `own` appears in library
+and fixture sources only, and the compiler's own sources restructure instead.

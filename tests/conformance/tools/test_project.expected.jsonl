@@ -1,4 +1,4 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"test","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"schema":"neper-stream","version":1,"record":"header","command":"test","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
 {"record":"test","name":"doubles","module":"helper","file":{"root":"operand","path":"helper.e"},"line":11,"outcome":"passed","error":"ok","message":null,"duration_ms":0,"timeout_s":60,"stdout":"","stderr":"","trap":null}
 {"record":"test","name":"is_odd","module":"helper","file":{"root":"operand","path":"helper.e"},"line":17,"outcome":"failed","error":"helper.Odd","message":null,"duration_ms":0,"timeout_s":60,"stdout":"","stderr":"error: nptest-runner.Odd\n","trap":null}
 {"record":"test","name":"holds","module":"nested.deep","file":{"root":"operand","path":"nested/deep.e"},"line":7,"outcome":"passed","error":"ok","message":null,"duration_ms":0,"timeout_s":60,"stdout":"","stderr":"","trap":null}

@@ -22,10 +22,10 @@ fn spawn[Ctx: type](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err) {
     ret (started, start_error)
 }
 
-fn join(thread: Thread) -> err {
+fn join(thread: own Thread) -> err {
     ret os.thread_join(thread)
 }
 
-fn detach(thread: Thread) -> err {
+fn detach(thread: own Thread) -> err {
     ret os.thread_detach(thread)
 }

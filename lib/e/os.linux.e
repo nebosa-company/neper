@@ -1518,7 +1518,8 @@ fn peak_memory() -> (usize, err) {
 
 // `wait`, and what the child's peak was: `wait4` hands both back at once, and after the
 // reap there is nowhere else to ask (D311).
-fn wait_usage(p: Proc) -> (ProcUsage, err) {
+@unsafe
+fn wait_usage(p: own Proc) -> (ProcUsage, err) {
     var usage: ProcUsage = zero
     usage.exit_code = -1i32
     var status = 0u32

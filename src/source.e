@@ -14,46 +14,46 @@ fn load(a: *mem.Arena, path: str) -> (str, err) {
     // that size: growing from four kibibytes by doubling allocated and copied twice
     // the file, which a worker's arena has no room for. What cannot seek -- a pipe --
     // is read the growing way.
+    // The file is this function's to close (D345): the readers borrow it, and the
+    // close's own error stands only where the read succeeded.
+    var text = ""
+    var read_error = ok
+    var sized = false
     let (size, size_error) = os.seek(file, 0i64, .End)
     if size_error == ok {
         let (start, start_error) = os.seek(file, 0i64, .Start)
         if start_error == ok {
-            let (text, read_error) = read_sized(a, file, usize(size))
-            ret (text, read_error)
+            let (sized_text, sized_error) = read_sized(a, file, usize(size))
+            text = sized_text
+            read_error = sized_error
+            sized = true
         }
     }
-    let (text, read_error) = read_all(a, file)
-    ret (text, read_error)
+    if !sized {
+        let (all_text, all_error) = read_all(a, file)
+        text = all_text
+        read_error = all_error
+    }
+    let close_error = os.close(file)
+    if read_error != ok { ret ("", read_error) }
+    if close_error != ok { ret ("", close_error) }
+    ret (text, ok)
 }
 
 fn read_sized(a: *mem.Arena, file: os.File, size: usize) -> (str, err) {
     let (buffer, allocation_error) = mem.alloc[u8](a, size + 1usize)
-    if allocation_error != ok {
-        let close_error = os.close(file)
-        ret ("", allocation_error)
-    }
+    if allocation_error != ok { ret ("", allocation_error) }
     var used = 0usize
     while used < size {
         let (count, read_error) = os.read(file, buffer[used..size])
-        if read_error != ok {
-            let close_error = os.close(file)
-            ret ("", read_error)
-        }
+        if read_error != ok { ret ("", read_error) }
         if count == 0usize { break }
         used += count
     }
     // A file that grew past its size as it was read is read to its new end.
     let (extra, extra_error) = os.read(file, buffer[used..size + 1usize])
-    if extra_error != ok {
-        let close_error = os.close(file)
-        ret ("", extra_error)
-    }
-    if extra != 0usize {
-        let close_error = os.close(file)
-        ret ("", Grew)
-    }
-    let close_error = os.close(file)
-    if close_error != ok { ret ("", close_error) }
+    if extra_error != ok { ret ("", extra_error) }
+    if extra != 0usize { ret ("", Grew) }
     ret (buffer[..used], ok)
 }
 
@@ -90,7 +90,6 @@ fn read_all(a: *mem.Arena, file: os.File) -> (str, err) {
     var capacity = 4096usize
     let (initial, allocation_error) = mem.alloc[u8](a, capacity)
     if allocation_error != ok {
-        let close_error = os.close(file)
         ret ("", allocation_error)
     }
     var buffer = initial
@@ -100,7 +99,6 @@ fn read_all(a: *mem.Arena, file: os.File) -> (str, err) {
             capacity = capacity + capacity
             let (grown, grow_error) = mem.alloc[u8](a, capacity)
             if grow_error != ok {
-                let close_error = os.close(file)
                 ret ("", grow_error)
             }
             var i = 0usize
@@ -112,13 +110,10 @@ fn read_all(a: *mem.Arena, file: os.File) -> (str, err) {
         }
         let (count, read_error) = os.read(file, buffer[used..])
         if read_error != ok {
-            let close_error = os.close(file)
             ret ("", read_error)
         }
         if count == 0usize { break }
         used += count
     }
-    let close_error = os.close(file)
-    if close_error != ok { ret ("", close_error) }
     ret (buffer[..used], ok)
 }

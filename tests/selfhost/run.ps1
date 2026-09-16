@@ -1800,7 +1800,7 @@ if (-not $absoluteText.Contains($absoluteField)) { throw "--absolute-paths did n
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $absoluteActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tokens\every_kind.expected.jsonl')).Hash) { throw '--absolute-paths changed more than absolute_path on tokens' }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1), @('reject', 'module_missing', 1), @('reject', 'qualifier_collision', 1), @('reject', 'reserved_local', 1), @('reject', 'try_not_fallible', 1), @('reject', 'return_count', 1), @('reject', 'generic_inference', 1), @('reject', 'condition_type', 1), @('reject', 'atomic_ordering', 1), @('reject', 'nesting', 1))) {
+foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1), @('reject', 'module_missing', 1), @('reject', 'qualifier_collision', 1), @('reject', 'reserved_local', 1), @('reject', 'try_not_fallible', 1), @('reject', 'return_count', 1), @('reject', 'generic_inference', 1), @('reject', 'condition_type', 1), @('reject', 'atomic_ordering', 1), @('reject', 'nesting', 1), @('accept', 'safety', 0), @('reject', 'safety_use_after_move', 1), @('reject', 'safety_cleanup_forgotten', 1), @('reject', 'safety_overwrite', 1), @('reject', 'safety_undef', 1), @('reject', 'safety_unchecked', 1), @('reject', 'safety_deferred_consumed', 1), @('reject', 'safety_moved_in_loop', 1))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
     $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
     $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
@@ -2071,7 +2071,7 @@ foreach ($case in @(
     @('test', '{"tests":0}', "test-file `"$noOperand`" `"$repo`" x64 windows `"$testBuild`" --json"))) {
     cmd /c "`"$compiler`" $($case[2]) > `"$unreadableActual`""
     if ($LASTEXITCODE -ne 2) { throw "$($case[0]) --json on an unreadable operand exited $LASTEXITCODE, not 2" }
-    $unreadableExpected = "{`"schema`":`"neper-stream`",`"version`":1,`"record`":`"header`",`"command`":`"$($case[0])`",`"tool_version`":`"0.1.0`",`"language_version`":`"0.1`",`"grammar_revision`":1}`n{`"record`":`"diagnostic`",`"severity`":`"error`",`"code`":`"E-CLI-9999`",`"message`":`"the operand cannot be read`",`"span`":null,`"parent`":null,`"related`":[],`"fixes`":[]}`n{`"record`":`"result`",`"ok`":false,`"exit_code`":2,`"data`":$($case[1])}`n"
+    $unreadableExpected = "{`"schema`":`"neper-stream`",`"version`":1,`"record`":`"header`",`"command`":`"$($case[0])`",`"tool_version`":`"0.1.0`",`"language_version`":`"0.1`",`"grammar_revision`":2}`n{`"record`":`"diagnostic`",`"severity`":`"error`",`"code`":`"E-CLI-9999`",`"message`":`"the operand cannot be read`",`"span`":null,`"parent`":null,`"related`":[],`"fixes`":[]}`n{`"record`":`"result`",`"ok`":false,`"exit_code`":2,`"data`":$($case[1])}`n"
     if ([IO.File]::ReadAllText($unreadableActual) -ne $unreadableExpected) { throw "$($case[0]) --json on an unreadable operand is not section 1's envelope" }
 }
 # Every record of the corpus against docs/schemas/neper-v1.schema.json (D250). The
@@ -2583,7 +2583,7 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 7 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 8 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 8) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'

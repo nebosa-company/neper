@@ -1,3 +1,3 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
 {"record":"diagnostic","severity":"error","code":"E-NAME-0003","message":"`target` is a reserved name and cannot name a local or parameter","span":{"source":{"root":"operand","path":"reserved_local.e"},"byte_start":64,"byte_end":70,"line":4,"column":9,"end_line":4,"end_column":15,"column_utf16":9,"end_column_utf16":15},"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

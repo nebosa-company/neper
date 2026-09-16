@@ -12,7 +12,7 @@ and rejects `--json` and `--absolute-paths`. The first
 line is always this header, with keys in the shown order:
 
 ```json
-{"schema":"neper-stream","version":1,"record":"header","command":"index","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"schema":"neper-stream","version":1,"record":"header","command":"index","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
 ```
 
 Every later object has a `record` discriminator. Diagnostics are records in the same

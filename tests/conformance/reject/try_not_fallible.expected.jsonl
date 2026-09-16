@@ -1,3 +1,3 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
 {"record":"diagnostic","severity":"error","code":"E-ERROR-9999","message":"try propagates an err, so the enclosing function must return one","span":{"source":{"root":"operand","path":"try_not_fallible.e"},"byte_start":70,"byte_end":73,"line":8,"column":5,"end_line":8,"end_column":8,"column_utf16":5,"end_column_utf16":8},"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

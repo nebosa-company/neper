@@ -257,13 +257,15 @@ fn main(a: *mem.Arena) -> err {
     var made_file = made
     var file_out = io.file_writer(&made_file)
     let file_write = ini.write(&file_out, &document)
+    let made_close = os.close(made_file)
     if file_write != ok { ret file_write }
-    if os.close(made_file) != ok { os.exit(50i32) }
+    if made_close != ok { os.exit(50i32) }
     var take_flags: os.OpenFlags = zero
     take_flags.read = true
     let (opened, opened_error) = os.open(a, "np-ini.txt", take_flags)
     if opened_error != ok { ret opened_error }
     var opened_file = opened
+    defer let _ = os.close(opened_file)
     let (from_file, from_file_error) = ini.reader(a, io.file_reader(&opened_file), strict)
     if from_file_error != ok { ret from_file_error }
     var file_reader = from_file
@@ -273,7 +275,6 @@ fn main(a: *mem.Arena) -> err {
     if expect_entry(&file_reader, "paths", "escaped", "a\tb\nc") != ok { os.exit(54i32) }
     if expect_entry(&file_reader, "paths", "bare", "value with ; inside") != ok { os.exit(55i32) }
     if expect_end(&file_reader) != ok { os.exit(56i32) }
-    if os.close(opened_file) != ok { os.exit(57i32) }
     if os.remove_file(a, "np-ini.txt") != ok { os.exit(58i32) }
     ret ok
 }

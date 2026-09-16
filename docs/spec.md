@@ -1054,7 +1054,10 @@ fn name(p: T) -> (R, err) { ... }
 fn name(p: T) { ... } // returns void
 ```
 
-Parameters are immutable bindings. Aggregates larger than two machine words are
+Parameters are immutable bindings. A parameter of a resource type (§11) borrows the
+caller's value unless it is declared `own` -- `fn close(f: own File) -> err` -- in
+which case the call moves the value in and the callee owns it; `own` is part of the
+signature and of the interface hash (§12). Aggregates larger than two machine words are
 passed by hidden reference; this is an ABI detail, not a semantic one — pass `*T`
 when you want the callee to mutate. What makes it an ABI detail is one rule,
 mirroring D14: **the storage of a by-value argument is not written by anyone for the
@@ -3445,6 +3448,46 @@ a library could not build one from the constructs it has. Assertion helpers stay
 libraries (§13): `test.assert` returns `test.Failed` rather than trap, and
 `unreachable()` is for the path that cannot happen. Inside `@gpu` the CPU build carries the message;
 the device build lowers `unreachable()` to the backend's trap instruction.
+
+### Resources: static rules
+
+A **resource type** is affine: a value of it lives in one place and is moved at most
+once; one with a **cleanup** is also obligated: consumed on every exit of the block
+that owns it. In this revision the resource types are `os.File`, `os.Proc` and
+`os.Thread`, whose cleanups are `os.close`, `os.wait`/`os.wait_usage` and
+`os.thread_join`/`os.thread_detach` (D345; a declared `resource` type is the next
+revision's). These rules are checked statically, in every build mode, and none
+becomes a trap:
+
+- A parameter borrows unless it is declared `own`: `fn close(f: own File) -> err`.
+  Passing a resource to an `own` parameter moves it; the callee owns it and its
+  obligation. A `let`/`var` from a resource local, a `ret` of one, and a store of one
+  into a field or an element move it. Everything else -- `&x`, a borrowed argument,
+  a comparison -- borrows.
+- A moved value cannot be used again (`E-SAFETY-0001`); one moved on some path and
+  not another cannot be used or left at an exit (`E-SAFETY-0001`, `E-SAFETY-0002`).
+- An owned value of an obligated type must be consumed on every exit of the block
+  that owns it -- the block's end, `ret`, a `try` that returns, `break`, `continue`
+  -- or reserved by a `defer` that consumes it, which runs at that exit
+  (`E-SAFETY-0002`). `os.exit` and `unreachable()` are exits that owe nothing.
+- `var f: File = zero` is the null resource: owned by nobody, assignable, passable
+  on. `undef` of a resource type is refused (`E-SAFETY-0007`). Assigning over an
+  owned obligated value is refused (`E-SAFETY-0006`).
+- A resource returned beside an `err` is null when the error is not `ok`. Until that
+  error is tested -- by `try`, or by `if e != ok`, `if e == ok`, `if e == Error`
+  in either arm or with a diverging arm -- the value cannot be read
+  (`E-SAFETY-0008`); it can be moved whole or returned beside its error.
+- A `defer` that consumes a value reserves it: a later move or close of it is refused
+  (`E-SAFETY-0009`).
+- A resource declared outside a loop and consumed inside its body is refused unless
+  the body owns it again before the back edge (`E-SAFETY-0011`).
+- A function marked `@unsafe` is the audited wrapper: inside it the rules are not
+  applied, since it discharges obligations by means the checker cannot see -- the
+  `e.os` implementations are such functions. The three standard streams from
+  `os.stdin`/`os.stdout`/`os.stderr` are borrowed: owned by the process, never owed.
+
+Aggregates that hold resources are not yet tracked: a store into a field moves the
+value in, and the aggregate is the owner from then on, closed through its fields.
 
 ### Debug fills
 

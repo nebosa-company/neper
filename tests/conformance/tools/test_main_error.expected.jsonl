@@ -1,4 +1,4 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"test","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"schema":"neper-stream","version":1,"record":"header","command":"test","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
 {"record":"diagnostic","severity":"error","code":"E-TYPE-0002","message":"initializer type does not match binding","span":{"source":{"root":"operand","path":"test_main_error.e"},"byte_start":481,"byte_end":484,"line":24,"column":5,"end_line":24,"end_column":8,"column_utf16":5,"end_column_utf16":8},"parent":null,"related":[{"message":"in the generated source","span":{"source":{"root":"operand","path":"nptest-runner.e"},"byte_start":548,"byte_end":551,"line":26,"column":5,"end_line":26,"end_column":8,"column_utf16":5,"end_column_utf16":8}}],"fixes":[]}
 {"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the tests could not be compiled","span":null,"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":2,"data":{"tests":0}}

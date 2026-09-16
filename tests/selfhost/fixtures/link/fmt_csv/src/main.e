@@ -271,21 +271,24 @@ fn main(a: *mem.Arena) -> err {
     var file_out = io.file_writer(&made_file)
     var file_row: csv.Row = zero
     file_row.fields = second[..]
-    try csv.write_row(&file_out, file_row, csv.csv())
-    try csv.write_row(&file_out, file_row, csv.csv())
-    if os.close(made_file) != ok { ret Failed }
+    let first_row = csv.write_row(&file_out, file_row, csv.csv())
+    let second_row = csv.write_row(&file_out, file_row, csv.csv())
+    let made_close = os.close(made_file)
+    if first_row != ok { ret first_row }
+    if second_row != ok { ret second_row }
+    if made_close != ok { ret Failed }
     var take_flags: os.OpenFlags = zero
     take_flags.read = true
     let (opened, opened_error) = os.open(a, "np-csv.txt", take_flags)
     if opened_error != ok { ret opened_error }
     var opened_file = opened
+    defer let _ = os.close(opened_file)
     let (from_file, from_file_error) = csv.reader(a, io.file_reader(&opened_file), csv.csv(), 0usize, 0usize)
     if from_file_error != ok { ret from_file_error }
     var file_reader = from_file
     try expect_row(&file_reader, second[..])
     try expect_row(&file_reader, second[..])
     try expect_end(&file_reader)
-    if os.close(opened_file) != ok { ret Failed }
     if os.remove_file(a, "np-csv.txt") != ok { ret Failed }
     ret ok
 }

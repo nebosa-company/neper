@@ -1927,7 +1927,7 @@ cmp -s "$test_build/conformance-absolute-tokens.jsonl" "$conformance_root/tokens
 ' "--absolute-paths changed more than absolute_path on tokens" >&2; exit 1; }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1' 'reject module_missing 1' 'reject qualifier_collision 1' 'reject reserved_local 1' 'reject try_not_fallible 1' 'reject return_count 1' 'reject generic_inference 1' 'reject condition_type 1' 'reject atomic_ordering 1' 'reject nesting 1'; do
+for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1' 'reject module_missing 1' 'reject qualifier_collision 1' 'reject reserved_local 1' 'reject try_not_fallible 1' 'reject return_count 1' 'reject generic_inference 1' 'reject condition_type 1' 'reject atomic_ordering 1' 'reject nesting 1' 'accept safety 0' 'reject safety_use_after_move 1' 'reject safety_cleanup_forgotten 1' 'reject safety_overwrite 1' 'reject safety_undef 1' 'reject safety_unchecked 1' 'reject safety_deferred_consumed 1' 'reject safety_moved_in_loop 1'; do
     set -- $conformance_case
     conformance_actual="$test_build/conformance-$1-$2.jsonl"
     conformance_stderr="$test_build/conformance-$1-$2.stderr"
@@ -2225,7 +2225,7 @@ for unreadable_case in 'tokens {"tokens":0,"diagnostics":1} tokens --json' 'pars
         test-file) "$test_build/neper-self" test-file "$test_build/no-such-operand.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-unreadable.jsonl" || unreadable_status=$? ;;
     esac
     [ "$unreadable_status" -eq 2 ]
-    printf '%s\n' "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"$unreadable_command\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}" '{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the operand cannot be read","span":null,"parent":null,"related":[],"fixes":[]}' "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":$unreadable_data}" > "$test_build/conformance-unreadable.expected.jsonl"
+    printf '%s\n' "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"$unreadable_command\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}" '{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the operand cannot be read","span":null,"parent":null,"related":[],"fixes":[]}' "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":$unreadable_data}" > "$test_build/conformance-unreadable.expected.jsonl"
     cmp -s "$test_build/conformance-unreadable.jsonl" "$test_build/conformance-unreadable.expected.jsonl" || { printf '%s
 ' "$unreadable_command --json on an unreadable operand is not section 1's envelope" >&2; exit 1; }
 done
@@ -2820,7 +2820,7 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '7' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '8' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '8' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]

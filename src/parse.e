@@ -347,6 +347,12 @@ fn parse_parameter_node(p: *Parser) -> err {
         try skip_soft(p)
         try require(p, .PunctColon)
         try skip_soft(p)
+        // `own` before the type (D345): the parameter takes ownership of a resource.
+        // A contextual word, not a keyword: it is one only where a type follows it.
+        if p.current.kind == .Identifier && lex.text_is(p.scanner.source, p.current.start, p.current.end, "own") {
+            try advance(p)
+            try skip_soft(p)
+        }
         if p.current.kind == .PunctEllipsis {
             try advance(p)
         } else {

@@ -1,4 +1,4 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"index","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"schema":"neper-stream","version":1,"record":"header","command":"index","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
 {"record":"symbol","id":0,"kind":"module","name":"main","qualified_name":"main","module":"main","signature":null,"span":null,"selection_span":null,"container_id":null,"attributes":[],"documentation":null}
 {"record":"reference","source_span":{"source":{"root":"operand","path":"src/main.e"},"byte_start":154,"byte_end":159,"line":3,"column":5,"end_line":3,"end_column":10,"column_utf16":5,"end_column_utf16":10},"role":"import","spelling":"e.mem","target_id":null,"target_qualified_name":"e.mem","origin":"source"}
 {"record":"reference","source_span":{"source":{"root":"operand","path":"src/main.e"},"byte_start":164,"byte_end":168,"line":4,"column":5,"end_line":4,"end_column":9,"column_utf16":5,"end_column_utf16":9},"role":"import","spelling":"util","target_id":null,"target_qualified_name":"util","origin":"source"}

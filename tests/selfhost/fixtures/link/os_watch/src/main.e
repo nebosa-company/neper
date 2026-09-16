@@ -56,8 +56,9 @@ fn write_file_of(a: *mem.Arena, path: str, fill: u8) -> err {
     payload[2usize] = fill
     payload[3usize] = fill
     let (written, write_error) = os.write(file, payload[..])
+    let close_error = os.close(file)
     if write_error != ok { ret write_error }
-    ret os.close(file)
+    ret close_error
 }
 
 fn main(a: *mem.Arena) -> err {

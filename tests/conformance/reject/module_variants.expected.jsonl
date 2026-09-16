@@ -1,3 +1,3 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
 {"record":"diagnostic","severity":"error","code":"E-MODULE-9999","message":"`use host` has more than one source variant for the target","span":{"source":{"root":"operand","path":"main.e"},"byte_start":0,"byte_end":0,"line":1,"column":1,"end_line":1,"end_column":1,"column_utf16":1,"end_column_utf16":1},"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

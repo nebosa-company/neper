@@ -57,9 +57,10 @@ fn write_file_of(a: *mem.Arena, path: str, count: usize, fill: u8) -> err {
         at += 1usize
     }
     let (written, write_error) = os.write(file, payload[0usize..count])
+    let close_error = os.close(file)
     if write_error != ok { ret write_error }
     if written != count { ret os.Failed }
-    ret os.close(file)
+    ret close_error
 }
 
 // A run that failed part way leaves its scratch behind, and the very first thing this

@@ -13,6 +13,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let flags = os.OpenFlags { read: true, write: true, create: true, truncate: true, append: false }
     let (f, open_error) = os.open(a, args[1usize], flags)
     if open_error != ok { ret open_error }
+    defer let _ = os.close(f)
     let (written, write_error) = os.write(f, "hello world")
     if write_error != ok { ret write_error }
     if written != 11usize { ret Failed }
@@ -60,5 +61,5 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Before the beginning is not.
     let (invalid, invalid_error) = os.seek(f, 0i64 - 1i64, os.SeekWhence.Start)
     if invalid_error == ok { ret Failed }
-    ret os.close(f)
+    ret ok
 }

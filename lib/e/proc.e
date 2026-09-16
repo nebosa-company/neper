@@ -154,10 +154,11 @@ fn spawn_piped(a: *mem.Arena, command: Command) -> (Child, err) {
         process = started
         failure = spawn_error
     }
-    // Whether or not the child exists, its ends are not the caller's to keep.
-    let closed_in_read = os.close(in_read)
-    let closed_out_write = os.close(out_write)
-    let closed_err_write = os.close(err_write)
+    // Whether or not the child exists, its ends are not the caller's to keep: they
+    // went into `theirs`, and are closed from there.
+    let closed_in_read = os.close(theirs.stdin)
+    let closed_out_write = os.close(theirs.stdout)
+    let closed_err_write = os.close(theirs.stderr)
     if failure != ok {
         let closed_in_write = os.close(in_write)
         let closed_out_read = os.close(out_read)

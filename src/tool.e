@@ -178,7 +178,7 @@ fn span(out: *Out, root: str, path: str, byte_start: usize, byte_end: usize, lin
 fn header(out: *Out, command: str) -> err {
     try text(out, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":")
     try quoted(out, command)
-    try text(out, ",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}")
+    try text(out, ",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}")
     ret flush(out)
 }
 
@@ -201,7 +201,7 @@ fn info_json(a: *mem.Arena, host: str) -> err {
     var out: Out = zero
     out.bytes = storage
     try header(&out, "info")
-    try text(&out, "{\"record\":\"info\",\"tool_version\":\"0.1.0\",\"language_profiles\":[{\"language_version\":\"0.1\",\"grammar_revision\":1,\"stream_version\":1,\"experimental\":false}],\"commands\":[\"build\",\"check\",\"dis\",\"fmt\",\"index\",\"info\",\"parse\",\"run\",\"test\",\"tokens\"],\"host_target\":")
+    try text(&out, "{\"record\":\"info\",\"tool_version\":\"0.1.0\",\"language_profiles\":[{\"language_version\":\"0.1\",\"grammar_revision\":2,\"stream_version\":1,\"experimental\":false}],\"commands\":[\"build\",\"check\",\"dis\",\"fmt\",\"index\",\"info\",\"parse\",\"run\",\"test\",\"tokens\"],\"host_target\":")
     try quoted(&out, host)
     // ponytail: the emitter selects nothing above SSE2 and SIMD lowers as lane loops (D148),
     // so x64-v1 is the one level this build honours; list the others when `--cpu` exists.
@@ -2135,7 +2135,7 @@ fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (us
 // The object, into `out`, without a newline: the command flushes it as a record and a
 // build saves it as a file. An empty `artifact_path` is no artifact.
 fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph, mode: str, artifact_path: str, artifact_sha256: str) -> err {
-    try text(out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1,\"target\":\"")
+    try text(out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2,\"target\":\"")
     try text(out, arch)
     try byte(out, 45u8)
     try text(out, os_name)
@@ -2295,6 +2295,18 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     let (manifest_path, path_error) = manifest_join(a, mode_dir, "build-manifest.json")
     if path_error != ok { ret path_error }
     let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
+    let (digest, digest_error) = manifest_sha256(a, packed)
+    if digest_error != ok { ret digest_error }
+    let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    let (relative_path, relative_error) = manifest_artifact_path(a, g.project.root, artifact_path)
+    if relative_error != ok { ret relative_error }
+    try manifest_write(a, &out, arch, os_name, g, mode, relative_path, digest)
+    try byte(&out, 10u8)
+    // The file is opened once the text is ready (D345): every exit before this has
+    // nothing to close.
     // `.neper/<mode>/` is made when it is missing (D287): each level once, an `Exists`
     // answer meaning another build got there first. The open comes before hashing, so a
     // root that cannot take the directory costs nothing but the error (D267).
@@ -2309,16 +2321,6 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
         open_error = retry_error
     }
     if open_error != ok { ret open_error }
-    let (digest, digest_error) = manifest_sha256(a, packed)
-    if digest_error != ok { ret digest_error }
-    let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize)
-    if storage_error != ok { ret storage_error }
-    var out: Out = zero
-    out.bytes = storage
-    let (relative_path, relative_error) = manifest_artifact_path(a, g.project.root, artifact_path)
-    if relative_error != ok { ret relative_error }
-    try manifest_write(a, &out, arch, os_name, g, mode, relative_path, digest)
-    try byte(&out, 10u8)
     var at = 0usize
     var write_error = ok
     while at < out.count && write_error == ok {
