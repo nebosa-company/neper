@@ -9104,3 +9104,27 @@ at eight workers the order is the assignment's, the same run to run.
 Not yet: the copies, allocations and register-pressure measurements H20 also
 asks for, and a per-call-site explanation (why a given call was or was not
 inlined) rather than per candidate.
+
+## D409 -- `query-batch`: many queries, one check
+
+H16 asks for bounded multi-request reuse without mandating a daemon, and D372
+measured one process per query and kept it -- 25 ms for a small check, 269 ms
+for the whole compiler, per query. A harness that asks twenty questions about
+one snapshot paid twenty checks. `query-batch PATH ROOT ARCH OS --json --batch
+FILE` loads, resolves and checks the program once, with the explain table open,
+and answers every line of the batch file (`-` for standard input) from it:
+`context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [...]`, `uses
+SYMBOL`. Each answer is the same whole stream the one-query command writes,
+header to result, in the line's order, so a harness splits at the headers and
+nothing about a record changed; a blank line is passed over, a line no query
+reads gets a diagnostic stream of its own, and the process exits 2 once every
+line is answered if any was refused. For that, a refused query is now an error
+(`tool.Refused`) the one-query driver turns into exit 2 and the batch moves
+past, where D406 had the query writer exit the process itself. Measured on the
+compiler's own source: twenty `context` queries, 447 ms in one batch, 6.6 s as
+twenty processes. The corpus gains `tools/batch` -- five lines, two refused --
+per host.
+
+Not yet: plans in a batch (a plan's preconditions are the snapshot it binds to,
+and a batch that edits between lines would need them re-read), pinned
+snapshots and eviction, and the retained-memory report after warmup.

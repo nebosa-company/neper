@@ -20,6 +20,9 @@ error Capacity
 error InvalidSource
 // A plan's site whose list could not be found at the tokens (D406).
 error InvalidPlan
+// A query answered with a refusal (D406, D409): its stream has been written, with a
+// result of exit code 2; the caller decides whether the process ends with it.
+error Refused
 
 // One record at a time: built here, printed whole, so a line is never split.
 type Out = struct {
@@ -2438,6 +2441,24 @@ fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative:
     ret flush(out)
 }
 
+// A batch line no query reads (D409): a stream of its own, refused.
+fn batch_line_refused(a: *mem.Arena, line: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, line.len * 2usize + 1024usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "context")
+    var message_storage: [1024]u8 = zero
+    var message_at = nptest_copy(message_storage[..], 0usize, "the batch line is not a query: ")
+    message_at = nptest_copy(message_storage[..], message_at, line)
+    try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":")
+    try quoted(&out, message_storage[0usize..message_at])
+    try text(&out, ",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+    try flush(&out)
+    try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
+    ret flush(&out)
+}
+
 // `context-file PATH ROOT ARCH OS --json --module module.name [--budget N] [--cursor N]`
 // (D397, H11): the catalogue -- every declared, non-generic function of one module
 // in declaration order, each a `subject` record and its contract facts, under one
@@ -2465,9 +2486,9 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
         try flush(&out)
-        // The process status agrees with the record (D406): a refused query exits 2.
-        os.exit(2i32)
-        ret ok
+        // The process status agrees with the record (D406): a refused query is
+        // `Refused`, which one query's driver turns into exit 2 and a batch moves past (D409).
+        ret Refused
     }
     let module = g.modules[module_index]
     let (root, relative) = source_identity_of(g, module.path)
@@ -2557,9 +2578,9 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
         try flush(&out)
-        // The process status agrees with the record (D406): a refused query exits 2.
-        os.exit(2i32)
-        ret ok
+        // The process status agrees with the record (D406): a refused query is
+        // `Refused`, which one query's driver turns into exit 2 and a batch moves past (D409).
+        ret Refused
     }
     let function = c.functions[function_index]
     let module = g.modules[function.module_index]
@@ -2724,9 +2745,9 @@ fn uses_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str) ->
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"uses\":0,\"roots\":0,\"complete\":true}}")
         try flush(&out)
-        // The process status agrees with the record (D406): a refused query exits 2.
-        os.exit(2i32)
-        ret ok
+        // The process status agrees with the record (D406): a refused query is
+        // `Refused`, which one query's driver turns into exit 2 and a batch moves past (D409).
+        ret Refused
     }
     let function = c.functions[function_index]
     var written = 0usize
@@ -2979,9 +3000,9 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
         try flush(&out)
-        // The process status agrees with the record (D406): a refused query exits 2.
-        os.exit(2i32)
-        ret ok
+        // The process status agrees with the record (D406): a refused query is
+        // `Refused`, which one query's driver turns into exit 2 and a batch moves past (D409).
+        ret Refused
     }
     let function = c.functions[function_index]
     // A site the plan cannot migrate: the name as a value, or a protocol's choice.
@@ -3008,9 +3029,7 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
             try flush(&out)
             try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
             try flush(&out)
-            // The process status agrees with the record (D406): a refused query exits 2.
-            os.exit(2i32)
-            ret ok
+            ret Refused
         }
         scan += 1usize
     }
@@ -3078,9 +3097,9 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
         try flush(&out)
-        // The process status agrees with the record (D406): a refused query exits 2.
-        os.exit(2i32)
-        ret ok
+        // The process status agrees with the record (D406): a refused query is
+        // `Refused`, which one query's driver turns into exit 2 and a batch moves past (D409).
+        ret Refused
     }
     let function = c.functions[function_index]
     let (sites, sites_error) = plan_sites(a, c, g, function_index, true)

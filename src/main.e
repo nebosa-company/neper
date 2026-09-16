@@ -7072,7 +7072,7 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
 // checked with the checker's explain table open, then the command's writer.
 // `kind` is 1 for `explain-file`, 2 for `context-file --symbol`, 3 for `uses-file`,
 // 4 for `plan-rename-file`, 5 for `context-file --module` (D397), 6 for
-// `plan-add-parameter-file` (D406).
+// `plan-add-parameter-file` (D406), 7 for `query-batch` (D409).
 fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
@@ -7098,7 +7098,13 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
         os.exit(1i32)
         ret ok
     }
-    if kind == 1usize { try tool.explain_json(a, &checker, &loaded) }
+    var target_storage: [64]u8 = zero
+    var target_at = tool.nptest_copy(target_storage[..], 0usize, args[4usize])
+    target_storage[target_at] = 45u8
+    target_at = tool.nptest_copy(target_storage[..], target_at + 1usize, args[5usize])
+    let target_text = target_storage[0usize..target_at]
+    var query_error = ok
+    if kind == 1usize { query_error = tool.explain_json(a, &checker, &loaded) }
     if kind == 2usize || kind == 5usize {
         var budget = 64usize
         var byte_budget = 0usize
@@ -7111,19 +7117,93 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
             if same(args[flag_at], "--cursor") && decimal_ok(args[flag_at + 1usize]) { cursor = decimal_value(args[flag_at + 1usize]) }
             flag_at += 2usize
         }
-        var target_storage: [64]u8 = zero
-        var target_at = tool.nptest_copy(target_storage[..], 0usize, args[4usize])
-        target_storage[target_at] = 45u8
-        target_at = tool.nptest_copy(target_storage[..], target_at + 1usize, args[5usize])
-        let target_text = target_storage[0usize..target_at]
-        if kind == 2usize { try tool.context_json(a, &checker, &loaded, args[8usize], budget, byte_budget, cursor, target_text, "retained") }
+        if kind == 2usize { query_error = tool.context_json(a, &checker, &loaded, args[8usize], budget, byte_budget, cursor, target_text, "retained") }
         // The catalogue (D397): every function of a module, contract facts alone.
-        if kind == 5usize { try tool.catalog_json(a, &checker, &loaded, args[8usize], budget, byte_budget, cursor, target_text, "retained") }
+        if kind == 5usize { query_error = tool.catalog_json(a, &checker, &loaded, args[8usize], budget, byte_budget, cursor, target_text, "retained") }
     }
-    if kind == 3usize { try tool.uses_json(a, &checker, &loaded, args[8usize]) }
-    if kind == 4usize { try tool.plan_rename_json(a, &checker, &loaded, args[8usize], args[10usize]) }
-    if kind == 6usize { try tool.plan_parameter_json(a, &checker, &loaded, args[8usize], args[10usize], args[12usize]) }
+    if kind == 3usize { query_error = tool.uses_json(a, &checker, &loaded, args[8usize]) }
+    if kind == 4usize { query_error = tool.plan_rename_json(a, &checker, &loaded, args[8usize], args[10usize]) }
+    if kind == 6usize { query_error = tool.plan_parameter_json(a, &checker, &loaded, args[8usize], args[10usize], args[12usize]) }
+    // The batch (D409, H16): one program loaded, resolved and checked, and every
+    // line of the batch file answered from it as its own stream, in order.
+    if kind == 7usize { query_error = query_batch(a, &checker, &loaded, args[8usize], target_text) }
+    // A refused query's stream said exit 2, and so does the process (D406).
+    if query_error == tool.Refused {
+        os.exit(2i32)
+        ret ok
+    }
+    if query_error != ok { ret query_error }
     os.exit(0i32)
+    ret ok
+}
+
+// `query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16): the batch file --
+// `-` for standard input -- holds one query per line, words separated by spaces:
+// `context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [BUDGET [BYTES [CURSOR]]]`,
+// `uses SYMBOL`. Each line's answer is a whole stream (header to result), written in
+// the line's order, so a harness splits the output at the headers; a blank line is
+// passed over, a line no query reads gets a diagnostic stream of its own. A refused
+// query or an unreadable line makes the process exit 2 once every line is answered.
+fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, batch_path: str, target_text: str) -> err {
+    var batch = ""
+    if same(batch_path, "-") {
+        let (from_stdin, stdin_error) = source.load_stdin(a)
+        if stdin_error != ok { ret stdin_error }
+        batch = from_stdin
+    } else {
+        let (from_file, file_error) = source.load(a, batch_path)
+        if file_error != ok { ret file_error }
+        batch = from_file
+    }
+    var refused = false
+    var line_start = 0usize
+    while line_start < batch.len {
+        var line_end = line_start
+        while line_end < batch.len && batch[line_end] != 10u8 { line_end += 1usize }
+        var line = batch[line_start..line_end]
+        if line.len != 0usize && line[line.len - 1usize] == 13u8 { line = line[0usize..line.len - 1usize] }
+        line_start = line_end + 1usize
+        if line.len == 0usize { continue }
+        // The words: the query, its subject, up to three numbers.
+        var words: [5]str = zero
+        var word_count = 0usize
+        var at = 0usize
+        while at < line.len && word_count < 5usize {
+            while at < line.len && line[at] == 32u8 { at += 1usize }
+            let word_start = at
+            while at < line.len && line[at] != 32u8 { at += 1usize }
+            if at > word_start {
+                words[word_count] = line[word_start..at]
+                word_count += 1usize
+            }
+        }
+        var budget = 64usize
+        var byte_budget = 0usize
+        var cursor = 0usize
+        if word_count > 2usize && decimal_ok(words[2usize]) { budget = decimal_value(words[2usize]) }
+        if word_count > 3usize && decimal_ok(words[3usize]) { byte_budget = decimal_value(words[3usize]) }
+        if word_count > 4usize && decimal_ok(words[4usize]) { cursor = decimal_value(words[4usize]) }
+        var line_error = ok
+        var known = false
+        if word_count >= 2usize && same(words[0usize], "context") {
+            known = true
+            line_error = tool.context_json(a, checker, loaded, words[1usize], budget, byte_budget, cursor, target_text, "retained")
+        }
+        if word_count >= 2usize && same(words[0usize], "catalog") {
+            known = true
+            line_error = tool.catalog_json(a, checker, loaded, words[1usize], budget, byte_budget, cursor, target_text, "retained")
+        }
+        if word_count >= 2usize && same(words[0usize], "uses") {
+            known = true
+            line_error = tool.uses_json(a, checker, loaded, words[1usize])
+        }
+        if !known {
+            try tool.batch_line_refused(a, line)
+            line_error = tool.Refused
+        }
+        if line_error == tool.Refused { refused = true } else { if line_error != ok { ret line_error } }
+    }
+    if refused { ret tool.Refused }
     ret ok
 }
 
@@ -7414,6 +7494,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len == 9usize && same(args[1usize], "uses-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") { ret query_file(a, &report, args, 3usize) }
     // `plan-rename-file PATH ROOT ARCH OS --json --symbol module.name --to NEW` (D376, H29).
     if args.len == 11usize && same(args[1usize], "plan-rename-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--to") && identifier_ok(args[10usize]) { ret query_file(a, &report, args, 4usize) }
+    // `query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16): many queries, one check.
+    if args.len == 9usize && same(args[1usize], "query-batch") && same(args[6usize], "--json") && same(args[7usize], "--batch") { ret query_file(a, &report, args, 7usize) }
     // `plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name --parameter "name: T" --argument EXPR` (D406, H17).
     if args.len == 13usize && same(args[1usize], "plan-add-parameter-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--parameter") && same(args[11usize], "--argument") && args[10usize].len != 0usize && args[12usize].len != 0usize { ret query_file(a, &report, args, 6usize) }
     // `check-file PATH ROOT ARCH OS [--json]`: with `--json`, the stream of docs/tooling.md

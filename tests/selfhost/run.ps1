@@ -2141,6 +2141,12 @@ foreach ($subject in @('contract.main', 'contract.bump', 'contract.first', 'cont
     if ($LASTEXITCODE -ne 0) { throw "context-file --json failed on $subject" }
 }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contractActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/contract.x64-windows.expected.jsonl')).Hash) { throw "context-file --json contract facts differ from the conformance corpus" }
+# `query-batch --json --batch FILE` (D409, H16): five queries over one check, each its own
+# stream in order, two refused, the process exiting 2 for them; byte for byte per host.
+$batchActual = Join-Path $testBuild 'conformance-tools-batch.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" query-batch contract.e `"$repo`" x64 windows --json --batch batch.txt > `"$batchActual`""
+if ($LASTEXITCODE -ne 2) { throw "query-batch with refused lines did not exit 2 (got $LASTEXITCODE)" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $batchActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/batch.x64-windows.expected.jsonl')).Hash) { throw "query-batch --json differs from the conformance corpus" }
 # The catalogue (D397, H11): every function of the module, subjects and facts under one
 # budget; the byte budget (D400, H08) ends the page at the record that crosses it.
 $catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'

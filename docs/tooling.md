@@ -293,6 +293,16 @@ alike. A page may end inside a function's facts; the next page continues them,
 and they belong to the last subject written. A name no module of the program
 has is an `E-CLI-9999` diagnostic and exit 2.
 
+`neper query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16) answers many
+queries from one check: the batch file (`-` for standard input) holds one query
+per line -- `context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [BUDGET
+[BYTES [CURSOR]]]`, `uses SYMBOL` -- and each line's answer is a whole stream,
+header to result, written in the line's order, so a harness splits the output
+at the headers. A blank line is passed over; a line no query reads gets a
+diagnostic stream of its own. A refused query or an unreadable line makes the
+process exit 2 once every line is answered. Measured on the compiler's own
+source: twenty `context` queries in one batch 447 ms, as twenty processes 6.6 s.
+
 Both forms take `--bytes N` beside `--budget` (D400, H08): a budget in serialized
 bytes, measured on what has been flushed; the record that crosses it is the last
 written and the rest is omitted, so a page is at most the budget plus one record.

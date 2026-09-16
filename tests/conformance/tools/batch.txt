@@ -1,0 +1,6 @@
+context contract.main 4
+catalog contract 6
+uses contract.total
+
+context contract.nothing
+frobnicate x
