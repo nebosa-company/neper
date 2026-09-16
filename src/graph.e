@@ -108,6 +108,13 @@ fn spelling_of(a: *mem.Arena, g: *Graph, given: str) -> (str, err) {
     ret (spelled[0usize..at], ok)
 }
 
+// A file's bytes (D467): the loader `source` gives, for a module that does not
+// name `source` -- `tool` has a parameter of that name in forty places.
+fn load_file(a: *mem.Arena, path: str) -> (str, err) {
+    let (text, load_error) = source.load(a, path)
+    ret (text, load_error)
+}
+
 type Graph = struct {
     modules: []Module,
     imports: []Import,

@@ -2060,6 +2060,15 @@ fn fmt_result(out: *Out) -> err {
 // Section 2's source identifier of a module (D265): `project-src` or `project-lib` with the
 // path under that root, `toolchain-lib` under the toolchain's `lib`, and otherwise the
 // operand by its basename; separators come out as `/`.
+// A path with a suffix appended, in the arena.
+fn path_with_suffix(a: *mem.Arena, path: str, suffix: str) -> (str, err) {
+    let (buffer, buffer_error) = mem.alloc[u8](a, path.len + suffix.len)
+    if buffer_error != ok { ret ("", buffer_error) }
+    os.copy_bytes(buffer[0usize..path.len], path)
+    os.copy_bytes(buffer[path.len..path.len + suffix.len], suffix)
+    ret (buffer[0usize..path.len + suffix.len], ok)
+}
+
 fn manifest_source(out: *Out, g: *graph.Graph, path: str) -> err {
     let (root, relative) = source_identity_of(g, path)
     ret manifest_identity(out, root, relative)
@@ -4790,6 +4799,25 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         try quoted(out, digest)
         try byte(out, 125u8)
         at += 1usize
+    }
+    // The operand's source map (D467, H19): an input of the build when it is beside
+    // the operand, hashed like the sources, so a map-only change shows in the
+    // manifest while the code's identity -- the artifacts', the executable's -- is
+    // untouched, which is the H19 rule. The maps of other modules the compiler
+    // never reads, and they are not listed.
+    if g.count != 0usize {
+        let (map_path, map_path_error) = path_with_suffix(a, g.modules[0usize].path, ".map.json")
+        if map_path_error != ok { ret map_path_error }
+        let (map_text, map_error) = graph.load_file(a, map_path)
+        if map_error == ok {
+            try text(out, ",{\"source\":")
+            try manifest_source(out, g, map_path)
+            try text(out, ",\"sha256\":")
+            let (map_digest, map_digest_error) = manifest_sha256(a, map_text)
+            if map_digest_error != ok { ret map_digest_error }
+            try quoted(out, map_digest)
+            try text(out, ",\"kind\":\"source-map\"}")
+        }
     }
     // Every module but the root is a dependency (D265): its interface is its source with
     // every function body removed, so an edit inside a body moves `body_sha256` alone.

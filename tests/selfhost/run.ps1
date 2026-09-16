@@ -2446,6 +2446,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtCheckActual).Hash -ne (Get-
 $manifestActual = Join-Path $testBuild 'conformance-tools-manifest.jsonl'
 cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/manifest.e')`" `"$repo`" x64 windows --json > `"$manifestActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/manifest.x64-windows.expected.jsonl')).Hash) { throw "build-manifest --json differs from the conformance corpus" }
+# The operand's source map as an input (D467, H19): listed with its hash and `kind`.
+$manifestMapActual = Join-Path $testBuild 'conformance-tools-manifest-map.jsonl'
+cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/generated_map.e')`" `"$repo`" x64 windows --json > `"$manifestMapActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestMapActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/manifest_map.x64-windows.expected.jsonl')).Hash) { throw "the manifest of an operand with a source map differs from the conformance corpus" }
 # On a project (D265): inputs under `project-src`, and the one module beyond the root as a
 # dependency with its interface hash -- the source with function bodies left out -- and its
 # body hash.

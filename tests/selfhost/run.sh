@@ -2454,6 +2454,9 @@ for explain_none in 'explain_none/src/main.e explain_none' 'explain_arm.e explai
     cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { echo "explain-file --json on $1 differs from the conformance corpus" >&2; exit 1; }
 done
 $test_build/neper-self build-manifest-file "$conformance_root/tools/manifest.e" "$repo" x64 linux --json > "$manifest_actual"
+# The operand's source map as an input (D467, H19).
+$test_build/neper-self build-manifest-file "$conformance_root/tools/generated_map.e" "$repo" x64 linux --json > "$test_build/conformance-tools-manifest-map.jsonl"
+cmp -s "$test_build/conformance-tools-manifest-map.jsonl" "$conformance_root/tools/manifest_map.x64-linux.expected.jsonl" || { printf '%s\n' "the manifest of an operand with a source map differs from the conformance corpus" >&2; exit 1; }
 cmp -s "$manifest_actual" "$conformance_root/tools/manifest.x64-linux.expected.jsonl" || { printf '%s
 ' "build-manifest --json differs from the conformance corpus" >&2; exit 1; }
 # On a project (D265): inputs under `project-src`, and the one module beyond the root as a

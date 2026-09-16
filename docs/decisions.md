@@ -10139,3 +10139,21 @@ dispatch found nothing; both suites.
 
 Not yet: provenance through inlining, where the lowering has the site and the
 diagnostic (a trap's backtrace) has only the frame.
+
+## D467 -- The source map in the build manifest
+
+H19 asks that maps be part of the tooling's cache identity, and that a map-only
+change refresh diagnostics without rebuilding code. The second was already so:
+the artifacts and the executable are keyed on the sources, and a map is read
+fresh on every check. The first was not: the manifest listed the sources and
+said nothing of the map that shaped their diagnostics. The operand's
+`<file>.e.map.json`, when present, is now an entry of `inputs` after the
+sources, with its hash and `kind: "source-map"` -- a harness comparing two
+manifests sees a map change as a change, and sees that no artifact moved. Only
+the operand's map is listed, since only it is read. `tool` could not import
+`source` (a parameter of that name in forty places shadows the qualifier), so
+`graph.load_file` lends it the loader. The corpus gains `manifest_map` per
+host, over `generated_map.e`; both suites.
+
+Not yet: the nested map (D465) as an input too, and provenance through
+inlining.

@@ -539,7 +539,8 @@ source identifiers and SHA-256 hashes; libraries carry the requested name, order
 search roots, resolved source identifier or absolute external path, and SHA-256;
 assets carry logical name, source identifier, media type, sorted attributes, byte
 size and SHA-256;
-artifacts carry project-relative paths, kind, target and SHA-256; `unsafe` is the
+artifacts carry project-relative paths, kind, target and SHA-256; the operand's
+source map, when present, is an input with `kind: "source-map"` (D467); `unsafe` is the
 inventory of the program's unsafe boundaries (D355, D371, H03/H27) -- one entry per
 `@unsafe` function and `@nocheck` block (`provenance: "declared"`) and per `extern
 fn`, `mem.cast`, `mem.bitcast` and bare `union` site (`provenance: "trusted"`: the
@@ -715,6 +716,14 @@ record's `related` carries the site that first asked for that instance --
 that module. The template body's span stays primary: it is where the text
 that failed is. A diagnostic that already carries a related location (a
 resource's other site, D364) keeps it. `reject/instance_site.e` is the shape.
+
+The map in the build's identity (D467, H19): the operand's `<file>.e.map.json`,
+when it is there, is an entry of the manifest's `inputs` with its `sha256` and
+`kind: "source-map"`, after the sources. A map-only change therefore changes
+the manifest and nothing else: artifacts, the executable and the incremental
+decisions are keyed on the sources, so diagnostics refresh while no code is
+rebuilt. Other modules' maps are never read by the compiler and are not
+listed.
 
 ## 9. Conformance and compatibility
 
