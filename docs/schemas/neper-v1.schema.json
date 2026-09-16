@@ -219,6 +219,11 @@
       "required":["record","test","affected","span"],
       "properties":{"record":{"const":"impact"},"test":{"type":"string"},"affected":{"type":"boolean"},"span":{"$ref":"#/$defs/span"}}
     },
+    "progress": {
+      "type":"object","additionalProperties":false,
+      "required":["record","phase","ms","arena_mb","elapsed_ms"],
+      "properties":{"record":{"const":"progress"},"phase":{"type":"string"},"ms":{"type":"integer","minimum":0},"arena_mb":{"type":"integer","minimum":0},"elapsed_ms":{"type":"integer","minimum":0}}
+    },
     "instance_cost": {
       "type":"object","additionalProperties":false,
       "required":["record","symbol","instance","instructions","bytes"],
@@ -262,7 +267,7 @@
       "properties":{"record":{"const":"disassembly"},"symbol":{"type":"string"},"target":{"type":"string"},"text":{"type":"string"}}
     },
     "streamRecord": {
-      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/use"},{"$ref":"#/$defs/root"},{"$ref":"#/$defs/precondition"},{"$ref":"#/$defs/planEdit"},{"$ref":"#/$defs/postcondition"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/inline"},{"$ref":"#/$defs/instance_cost"},{"$ref":"#/$defs/impact"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
+      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/use"},{"$ref":"#/$defs/root"},{"$ref":"#/$defs/precondition"},{"$ref":"#/$defs/planEdit"},{"$ref":"#/$defs/postcondition"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/inline"},{"$ref":"#/$defs/instance_cost"},{"$ref":"#/$defs/progress"},{"$ref":"#/$defs/impact"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
     },
     "sourceMap": {
       "type":"object","required":["schema","version","generated","generated_sha256","mappings"],

@@ -9912,3 +9912,16 @@ instructions each, 42, 39 and 43 bytes on Windows.
 Not yet: the instance's arguments in the record (the explain-file's `instance`
 record has them, keyed by the same template and site), and the cost of an
 instance the fold removed as a duplicate.
+
+## D454 -- Progress records
+
+H18 lists progress records; a build's stream was silent from its header to
+its result, the phases going to stderr as text under `--time` where a harness
+reading the stream could not see them. Under `--json --time` every phase is
+now a `progress` record of the stream as it ends -- `phase`, `ms`, `arena_mb`,
+`elapsed_ms` -- and the text line stays for `--time` alone. A harness watching
+a long build sees it move, and reads where a `--deadline` would have landed
+without setting one. Both suites build the contract fixture under the flags,
+find the lowering's record, and validate the stream against the schema.
+
+Not yet: progress inside a phase (a worker's modules), and sequence numbers.

@@ -575,6 +575,12 @@ against each other, where a decision can differ). The records are gathered per
 worker and written after the phase in worker order, so they never interleave and
 a given worker count gives the same order run to run; `-j 1` is module order.
 
+`--json --time` on a build (D454, H18) makes every phase a `progress` record of
+the stream -- `phase`, `ms` (the phase's own), `arena_mb` and `elapsed_ms`
+(since the build began) -- written as the phase ends, so a harness watching
+the stream sees the build move and can read where a deadline would land;
+without `--json` the same is the text `time` line on stderr.
+
 `--deadline MS` (D399, H16) on a build command (`emit-executable`, `emit-em-all`,
 `run`, with or without `--json`) is a wall-clock deadline: at every checkpoint
 between phases -- after load and parse, resolve, check declarations, settle, check

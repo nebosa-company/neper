@@ -1765,6 +1765,22 @@ fn report_phase(report: *Sink, name: str) -> err {
         report.phase_started = now
         ret ok
     }
+    report.phase_started = now
+    // Under `--json --time` (D454, H18) the phase is a `progress` record of the
+    // stream -- the phase, its milliseconds, the arena's megabytes, the milliseconds
+    // since the build began -- so a harness watching the stream sees the build move
+    // and knows where a deadline would land; otherwise the text line on stderr.
+    if report.json {
+        try write_all(report, "{\"record\":\"progress\",\"phase\":")
+        try write_json_string(report, name)
+        try write_all(report, ",\"ms\":")
+        try write_usize(report, (now - started) / 1000000usize)
+        try write_all(report, ",\"arena_mb\":")
+        try write_usize(report, report.arena_used / 1048576usize)
+        try write_all(report, ",\"elapsed_ms\":")
+        try write_usize(report, (now - report.build.started) / 1000000usize)
+        ret write_all(report, "}\n")
+    }
     var line_storage: [128]u8 = zero
     var line = capture_sink(line_storage[..])
     try write_all(&line, "time ")
@@ -1774,7 +1790,6 @@ fn report_phase(report: *Sink, name: str) -> err {
     try write_all(&line, " ms, arena ")
     try write_usize(&line, report.arena_used / 1048576usize)
     try write_all(&line, " MB\n")
-    report.phase_started = now
     ret stderr_text(line_storage[..line.count])
 }
 

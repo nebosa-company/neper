@@ -2108,12 +2108,14 @@ $explainInlineActual = Join-Path $testBuild 'conformance-tools-explain-inline.js
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/contract.e `"$repo`" x64 windows conformance-tools-explain-inline.out --release --explain --json -j 1 > `"$explainInlineActual`""
 if ($LASTEXITCODE -ne 0) { throw "emit-executable --explain --json failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainInlineActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_inline.x64-windows.expected.jsonl')).Hash) { throw "emit-executable --explain --json differs from the conformance corpus" }
-# Per-instance cost (D453, H06): every generic instance's instructions and bytes as
-# `instance-cost` records of the build stream, after the lowering.
-$explainInstancesActual = Join-Path $testBuild 'conformance-tools-explain-instances.jsonl'
-cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/instances.e `"$repo`" x64 windows conformance-tools-explain-instances.out --release --explain --json -j 1 > `"$explainInstancesActual`""
-if ($LASTEXITCODE -ne 0) { throw "emit-executable --explain --json over instances failed" }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainInstancesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_instances.x64-windows.expected.jsonl')).Hash) { throw "the instance-cost records differ from the conformance corpus" }
+# Progress records (D454, H18): under `--json --time` every phase is a record of the
+# stream, valid against the schema, and the result still ends it.
+$progressActual = Join-Path $testBuild 'conformance-tools-progress.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/contract.e `"$repo`" x64 windows conformance-tools-progress.out --json --time > `"$progressActual`""
+if ($LASTEXITCODE -ne 0) { throw "emit-executable --json --time failed" }
+if ((Select-String -LiteralPath $progressActual -Pattern '"record":"progress","phase":"lower and codegen"' -Quiet) -ne $true) { throw 'the build stream under --time carries no progress record for the lowering' }
+& python (Join-Path $repo 'scripts/validate_stream.py') $progressActual
+if ($LASTEXITCODE -ne 0) { throw 'the progress records do not validate against the schema' }
 # Per-instance cost (D453, H06): every generic instance's instructions and bytes as
 # `instance-cost` records of the build stream, after the lowering.
 $explainInstancesActual = Join-Path $testBuild 'conformance-tools-explain-instances.jsonl'
