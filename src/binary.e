@@ -145,7 +145,10 @@ fn read_u16(bytes: []const u8, offset: usize) -> (usize, err) {
 
 // The word at an offset the caller has bounded (D324): one value, no error, for the
 // readers that take a record's words in a row.
+// The guard is the proof (D388): the four loads under `offset + 4 > len` carry no
+// check of their own, where they carried four.
 fn read_u32_at(bytes: []const u8, offset: usize) -> usize {
+    if offset + 4usize > bytes.len { ret 0usize }
     ret usize(bytes[offset]) | (usize(bytes[offset + 1usize]) << 8usize) | (usize(bytes[offset + 2usize]) << 16usize) | (usize(bytes[offset + 3usize]) << 24usize)
 }
 

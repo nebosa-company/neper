@@ -8615,3 +8615,37 @@ than marked). The compiler's own build reports 476 checks elided; measured
 What the warm build still spends: the artifact readers (`binary.read_u32_at`,
 `em.code_relocation_raw`, `link_copy_artifact`) and the hashes of every module's
 text and code, which the next profile is for.
+
+## D388 -- The hash reads its words inline, and a reader's guard is its proof
+
+The warm profile after D387 (`benchmarks/scale/profile_warm.sh`) still put
+`artifact_hash.read_u64` first at 11% with `xxhash64` behind it: the hash of
+every module's text and every artifact's code went through a two-result call
+per eight bytes, its `err` result through a slot, for a bound the loop had
+already established. The stripe loop now runs under `while at + 32usize <=
+bytes.len` and reads its thirty-two bytes inline -- D385's slack proof leaves
+every load unchecked, and there is no call -- and the tail loop reads its eight
+the same way; the hashes are the same bits, which the manifest goldens attest.
+`binary.read_u32_at`, the artifact readers' unguarded word read (four checks per
+relocation record), guards itself with `if offset + 4usize > bytes.len { ret
+0usize }`: D387's negated offset form makes the guard the proof, one check for
+four. The compiler's own build reports 523 checks elided; measured
+(`h29-windows-d388.json`): the compiler cold 603 ms in release (from 619), warm
+115 (from 132), against the baseline's 416 and 53.
+
+What the warm build spends now, in the profile's order: the manifest's byte
+scan (D383, ~8%), the artifact readers, `lex.line_of` for the inventory's
+sites, the name lookups of the settle. The stage's cold cost against the
+baseline is D355's retained checks in the compiler's own body plus the checker's
+resource pass; the warm cost is the artifact path's byte work.
+
+## D389 -- The inventory's line numbers counted once per module, not once per site
+
+`lex.line_of` at 3.6% of a warm build was the manifest's unsafe inventory asking
+the line of every site in a kept module: a kept module was never scanned, so it
+has no line table, and `line_of` without one counts newlines from the start of
+the text -- once per site, and `os.windows.e` has a hundred and fifty sites in
+three thousand lines. The scan keeps a newline cursor and advances it to each
+site as it finds them, so every byte is counted once per module, and the line
+table is not needed. The inventory is the same (the `manifest_unsafe` golden and
+a warm build's ninety-two library sites, checked against the source).

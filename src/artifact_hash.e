@@ -61,16 +61,13 @@ fn xxhash64(bytes: []const u8) -> (usize, err) {
         var lane2: usize = prime2()
         var lane3: usize = 0usize
         var lane4: usize = 0usize -% prime1()
-        let limit = bytes.len - 32usize
-        while at <= limit {
-            let (word1, word1_error) = read_u64(bytes, at)
-            if word1_error != ok { ret (0usize, word1_error) }
-            let (word2, word2_error) = read_u64(bytes, at + 8usize)
-            if word2_error != ok { ret (0usize, word2_error) }
-            let (word3, word3_error) = read_u64(bytes, at + 16usize)
-            if word3_error != ok { ret (0usize, word3_error) }
-            let (word4, word4_error) = read_u64(bytes, at + 24usize)
-            if word4_error != ok { ret (0usize, word4_error) }
+        // The four words read inline under the loop's slack (D388): thirty-two loads
+        // and no call, where each word was a two-result call with its own guard.
+        while at + 32usize <= bytes.len {
+            let word1 = usize(bytes[at + 0usize]) | (usize(bytes[at + 1usize]) << 8usize) | (usize(bytes[at + 2usize]) << 16usize) | (usize(bytes[at + 3usize]) << 24usize) | (usize(bytes[at + 4usize]) << 32usize) | (usize(bytes[at + 5usize]) << 40usize) | (usize(bytes[at + 6usize]) << 48usize) | (usize(bytes[at + 7usize]) << 56usize)
+            let word2 = usize(bytes[at + 8usize]) | (usize(bytes[at + 9usize]) << 8usize) | (usize(bytes[at + 10usize]) << 16usize) | (usize(bytes[at + 11usize]) << 24usize) | (usize(bytes[at + 12usize]) << 32usize) | (usize(bytes[at + 13usize]) << 40usize) | (usize(bytes[at + 14usize]) << 48usize) | (usize(bytes[at + 15usize]) << 56usize)
+            let word3 = usize(bytes[at + 16usize]) | (usize(bytes[at + 17usize]) << 8usize) | (usize(bytes[at + 18usize]) << 16usize) | (usize(bytes[at + 19usize]) << 24usize) | (usize(bytes[at + 20usize]) << 32usize) | (usize(bytes[at + 21usize]) << 40usize) | (usize(bytes[at + 22usize]) << 48usize) | (usize(bytes[at + 23usize]) << 56usize)
+            let word4 = usize(bytes[at + 24usize]) | (usize(bytes[at + 25usize]) << 8usize) | (usize(bytes[at + 26usize]) << 16usize) | (usize(bytes[at + 27usize]) << 24usize) | (usize(bytes[at + 28usize]) << 32usize) | (usize(bytes[at + 29usize]) << 40usize) | (usize(bytes[at + 30usize]) << 48usize) | (usize(bytes[at + 31usize]) << 56usize)
             lane1 = round(lane1, word1)
             lane2 = round(lane2, word2)
             lane3 = round(lane3, word3)
@@ -87,8 +84,7 @@ fn xxhash64(bytes: []const u8) -> (usize, err) {
     }
     hash = hash +% bytes.len
     while at + 8usize <= bytes.len {
-        let (word, word_error) = read_u64(bytes, at)
-        if word_error != ok { ret (0usize, word_error) }
+        let word = usize(bytes[at + 0usize]) | (usize(bytes[at + 1usize]) << 8usize) | (usize(bytes[at + 2usize]) << 16usize) | (usize(bytes[at + 3usize]) << 24usize) | (usize(bytes[at + 4usize]) << 32usize) | (usize(bytes[at + 5usize]) << 40usize) | (usize(bytes[at + 6usize]) << 48usize) | (usize(bytes[at + 7usize]) << 56usize)
         hash = xor(hash, round(0usize, word))
         hash = rotate_left(hash, 27usize) *% prime1() +% prime4()
         at += 8usize
