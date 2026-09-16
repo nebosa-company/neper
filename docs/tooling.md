@@ -559,8 +559,10 @@ the `result` has `exit_code` 3 and `data.cancelled_after`, and no image and no
 manifest are written; an artifact a hot build's worker had already published is
 complete on its own and stays. Inside the two long phases -- the body sweep and
 the lowering -- every worker checks the deadline between the modules it holds
-(D422), so a cancellation waits for the module in hand and no longer for the
-phase; `cancelled_after` then names the phase and "between modules". A deadline is not a work budget (D218's comptime
+(D422), and the body sweep between the functions of a module too (D441), so a
+cancellation waits for the function in hand and no longer for the module;
+`cancelled_after` then names the phase and "between modules" or "between
+functions". A deadline is not a work budget (D218's comptime
 budgets are): the same build under the same deadline may finish on one machine and
 be cancelled on another, which is what a harness's deadline means. `--deadline 0`
 is a deadline already passed and cancels at the first checkpoint, the corpus's

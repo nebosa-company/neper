@@ -9707,3 +9707,18 @@ changes the card and `--check` says so.
 
 Not yet: the marking on the card's rules and commands, and on the API
 catalogue.
+
+## D441 -- The deadline is read between functions
+
+D422 had every worker check the deadline between its modules, so a cancellation
+waited for the module in hand -- `check.e`, on the compiler's own build, some
+seventy milliseconds of one worker. The checker now carries the deadline
+(`deadline_ns` from `started_ns`, copied into every fork) and `bodies_module`
+reads the monotonic clock before each function, answering `Cancelled` past it;
+the worker turns that into the crew's cancellation and `cancelled_after` says
+"the body sweep, between functions". The clock is one read per function,
+nothing a build without `--deadline` pays. The D422 suite step -- the
+compiler's own release build under a deadline of 150 ms -- holds, exit 3 and
+no image, and now cancels inside the sweep.
+
+Not yet: the clock inside a long function, and between lowering's functions.

@@ -1,6 +1,7 @@
 // Type-checking foundation. Unsupported forms fail explicitly.
 
 use e.mem
+use e.os
 use graph
 use lookup
 use lex
@@ -18,6 +19,8 @@ const resource_maybe: u8 = 5u8
 const resource_unchecked: u8 = 6u8
 
 error Capacity
+// The build's deadline passed between two functions of the body sweep (D441, H16).
+error Cancelled
 error ResourceViolation
 error Unsupported
 error MissingContext
@@ -497,6 +500,12 @@ type Diagnostic = struct {
 
 type Checker = struct {
     resolver: *resolve.Resolver,
+    // The build's deadline (D441, H16): nanoseconds of the monotonic clock since
+    // `started_ns`, zero for none; the body sweep reads the clock between functions
+    // and answers `Cancelled` past it, so a cancellation waits for one function and
+    // not for a module. Copied into every worker's fork.
+    deadline_ns: usize,
+    started_ns: usize,
     // Where each module's rows lie in the program-wide tables (D320), for the artifact
     // writer: em's nine tables, a first and an end per module, and how far each table
     // was scanned. The checker only carries them; `em.update_spans` fills them.
@@ -12355,6 +12364,14 @@ fn finish_declarations(c: *Checker) -> err {
     ret ok
 }
 
+// Whether the build's deadline has passed (D441): the clock read once per function.
+fn past_deadline(c: *Checker) -> bool {
+    if c.deadline_ns == 0usize { ret false }
+    let (ticks, clock_error) = os.clock(.Monotonic)
+    if clock_error != ok || ticks < 0i64 { ret false }
+    ret usize(ticks) - c.started_ns >= c.deadline_ns
+}
+
 fn bodies_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_index: usize) -> err {
     var tree: parse.Tree = zero
     try graph.parse_module(g, module_index, &tree)
@@ -12363,7 +12380,10 @@ fn bodies_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_inde
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .FnDecl { try check_function(c, r, g, &tree, module_index, node, node_index) }
+        if node.top_level && node.kind == .FnDecl {
+            if past_deadline(c) { ret Cancelled }
+            try check_function(c, r, g, &tree, module_index, node, node_index)
+        }
         node_index += 1usize
     }
     ret ok

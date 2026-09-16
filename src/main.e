@@ -6113,6 +6113,8 @@ type LowerWorker = struct {
     // and which builder it was lowering into: 1 the first oracle, 2 the second, 3 the
     // program's.
     failed_lowering: bool,
+    // The cancellation came from inside a module's body sweep (D441).
+    cancelled_inside: bool,
     failed_builder: usize,
     // Taken over by the generous worker during the body sweep: its first entries are
     // the generous worker's, not its own partial ones.
@@ -6566,6 +6568,13 @@ fn body_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, from
         // check to have run: the candidates are small and call no instance.
         if body_wanted(w, module_index) {
             let check_error = check.bodies_module(&w.checker, w.resolver, w.loaded, module_index)
+            if check_error == check.Cancelled {
+                // The deadline passed between two functions (D441): the same
+                // cancellation as between modules, said to be inside one.
+                stop_worker(w, at, Cancelled, 0usize)
+                w.cancelled_inside = true
+                ret
+            }
             if check_error != ok {
                 stop_worker(w, at, check_error, 0usize)
                 ret
@@ -6921,6 +6930,7 @@ fn crew_failure(report: *Sink, loaded: *graph.Graph, w: *LowerWorker) -> err {
     // A worker that stopped at the deadline (D422): the build is cancelled, not failed.
     if w.failure == Cancelled {
         if w.failed_lowering { ret cancel_build(report, "lowering, between modules") }
+        if w.cancelled_inside { ret cancel_build(report, "the body sweep, between functions") }
         ret cancel_build(report, "the body sweep, between modules")
     }
     // The injected fault (D435, H24): the build dies as a crash would, no image.
@@ -8005,6 +8015,12 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         var checker: check.Checker = zero
         try init_cli_checker(a, &checker, &loaded, &report)
         checker.arena = a
+        // The deadline inside the body sweep (D441, H16): the checker reads the clock
+        // between functions, in the program checker and every fork of it.
+        if report.deadline_set {
+            checker.deadline_ns = report.deadline_ns
+            checker.started_ns = report.build.started
+        }
         // The declarations first; then, incrementally, the edge rule decides the kept
         // modules from the Interfaces they give, and only the other bodies are checked
         // (D224). `keep` is what lowering skips below.
