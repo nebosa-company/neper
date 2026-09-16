@@ -4069,6 +4069,12 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
         ret ok
     }
     let boolean = check.make_type(.Bool, "bool", module_index)
+    // `if i < x.len && ... { ... }` (D378): the leftmost conjunct is evaluated before
+    // the rest and before the block, so its proof opens over both -- an expression
+    // assigns nothing, and `&i` anywhere in the function is refused by the proof.
+    let (conjunct_index, is_conjunction) = proof_leftmost_conjunct(c, tree, condition_index)
+    var proved_conjunct = false
+    if is_conjunction { proved_conjunct = proof_open(c, g, tree, module_index, conjunct_index, branches[0usize], builder, bindings, *binding_count) }
     let (condition, condition_type, condition_error) = lower_expression(c, g, tree, module_index, condition_index, boolean, builder, bindings, *binding_count)
     if condition_error != ok { ret condition_error }
     let (decision, ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, c.tokens[usize(node.token_start)])
@@ -4078,7 +4084,13 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let true_block = builder.block_count
     let (true_index, true_error) = nir.begin_block(builder)
     if true_error != ok || true_index != true_block { ret nir.InvalidControlFlow }
-    try lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers)
+    // `if i < x.len { ... }` is the same proof as the loop's, over the true block
+    // (D377): the guard read the length the access sees.
+    var proved = false
+    if !is_conjunction { proved = proof_open(c, g, tree, module_index, condition_index, branches[0usize], builder, bindings, *binding_count) }
+    let true_body_error = lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers)
+    if proved || proved_conjunct { builder.proof_count = builder.proof_count - 1usize }
+    if true_body_error != ok { ret true_body_error }
     var true_exit = 0usize
     let true_falls_through = !builder.blocks[builder.current_block].terminated
     if true_falls_through {
@@ -4224,6 +4236,25 @@ fn proof_open(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     builder.proof_ok[builder.proof_count] = true
     builder.proof_count += 1usize
     ret true
+}
+
+// The leftmost operand of an `&&` chain -- `a` of `a && b && c` -- or the node
+// itself when it is not a conjunction.
+fn proof_leftmost_conjunct(c: *check.Checker, tree: *parse.Tree, node_index: usize) -> (usize, bool) {
+    var at = node_index
+    var found = false
+    while true {
+        let node = tree.nodes[at]
+        if node.kind != .BinaryExpr { ret (at, found) }
+        let (left_index, has_left) = check.first_node_child(tree, node)
+        if !has_left { ret (at, found) }
+        var operator_at = usize(tree.nodes[left_index].token_end)
+        while operator_at < usize(node.token_end) && c.tokens[operator_at].kind == .Newline { operator_at += 1usize }
+        if c.tokens[operator_at].kind != .PunctAndAnd { ret (at, found) }
+        at = left_index
+        found = true
+    }
+    ret (at, found)
 }
 
 // Whether an open proof covers `x[i]` at this node: the same names, before the

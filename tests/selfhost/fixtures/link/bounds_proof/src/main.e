@@ -3,7 +3,7 @@
 // `shifted` reads `items[at]` after `at += 1` in the same body, `nested` writes `at`
 // inside an inner loop, and `reslice` assigns `items` in the body -- each keeps its
 // check, and `shifted` trips it: with a count that reaches the end, the read past
-// it traps as section 11 says. Under `--stats` the build reports three elided.
+// it traps as section 11 says. Under `--stats` the build reports the elided ones.
 use e.mem
 use e.str
 
@@ -54,6 +54,32 @@ fn reslice(items: []const u32) -> u32 {
     ret total
 }
 
+// The guard form (D377): `if at < items.len` proves `items[at]` in its block the
+// way the loop does; `guarded_shifted` writes `at` first and keeps its check.
+fn guarded(items: []const u32, at: usize) -> u32 {
+    var total = 0u32
+    if at < items.len { total = items[at] }
+    ret total
+}
+
+fn guarded_shifted(items: []const u32, start: usize) -> u32 {
+    var total = 0u32
+    var at = start
+    if at < items.len {
+        at += 1usize
+        total = items[at]
+    }
+    ret total
+}
+
+// The conjunct form (D378): the leftmost `at < items.len` proves the accesses in
+// the rest of the condition and in the block.
+fn conjunct(items: []const u32, at: usize) -> u32 {
+    var total = 0u32
+    if at < items.len && items[at] != 0u32 { total = items[at] }
+    ret total
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var mode = ""
     if args.len > 1usize { mode = args[1usize] }
@@ -73,6 +99,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if str.eq(mode, "reslice") {
         if reslice(values[..]) != 9u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "guarded") {
+        if guarded(values[..], args.len + 2usize) != 5u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "conjunct") {
+        if conjunct(values[..], args.len + 2usize) != 5u32 { ret mem.Exhausted }
+        if conjunct(values[..], args.len + 3usize) != 0u32 { ret mem.Exhausted }
+        if conjunct(values[..], args.len + 1usize) != 4u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "guarded_shifted") {
+        if guarded_shifted(values[..], args.len + 2usize) == 0u32 { ret mem.Exhausted }
         ret ok
     }
     if sum(values[..]) != 29u32 { ret mem.Exhausted }

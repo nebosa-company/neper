@@ -24,10 +24,16 @@ lowered; the index instruction is emitted without its check; `--stats` reports
 `bounds checks elided`. The fixture `bounds_proof` holds the eliminated case and
 three retained ones -- the index read after its increment (which traps at the
 end), an increment inside a nested loop, and the slice reassigned in the body --
-as H03's acceptance asks. Further proofs -- a prior check on the same operand, a
+as H03's acceptance asks. The same proof opens over the true block of
+`if i < x.len { ... }` (D377): the guard read the length the access sees, and the
+body's first write of `i` bounds it as the loop's does; `guarded` and
+`guarded_shifted` in the fixture are its eliminated and retained cases, and the
+compiler's own build reports 336 checks elided with both forms; the leftmost
+conjunct of an `&&` condition opens the same proof over the rest of the condition
+and the block (D378: 354). Further proofs -- a prior check on the same operand, a
 bound through a second local (`while at < count` with `count <= x.len`), a field
-base (`c.tokens[at]`) -- are the follow-up, and the compiler's own hot loops are
-mostly of those shapes, which is why the cost below stands.
+base (`c.tokens[at]`) -- are the follow-up, and the compiler's own hot loops are mostly of
+those shapes, which is why the cost below stands.
 
 ## 2. Unsafe operations
 
