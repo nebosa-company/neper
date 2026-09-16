@@ -62,6 +62,11 @@ returns `(Guard, err)`, `Invalid` when the lock was not taken, and on the err
 path nothing is owed -- the convention of every acquiring call. The guard refers to the lock's
 identity (`g.m`), not to the data it protects.
 
+`sync.ReadGuard` and `sync.WriteGuard` (D433) are the same shape over an
+`RwLock`, one resource per side since the releases differ: `read_guard` /
+`try_read_guard` / `read_release`, `write_guard` / `try_write_guard` /
+`write_release`; the fixtures `sync_rwguard` and `reject/safety_rwguard_leak`.
+
 Not designed yet, the second half: the data as a view of the guard (H02's view
 rule over the guard's lifetime, so a borrow of the protected data cannot survive
 the release), reentrancy, condition-variable wait and reacquire through a guard

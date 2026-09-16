@@ -211,6 +211,44 @@ fn rwlock_write_unlock(l: *RwLock) {
     os.wake_all_u32(&l.state)
 }
 
+// A read or a write lock held as a value (D433, H04): `Guard`'s shape over the
+// `RwLock`, one resource per side since the two releases differ -- a read guard is
+// owed to `read_release`, a write guard to `write_release`, and the checker holds
+// each to its own closer. The guard is the lock's, not the data's, as `Guard` is.
+
+type ReadGuard = resource(read_release) struct { l: *RwLock }
+type WriteGuard = resource(write_release) struct { l: *RwLock }
+
+fn read_guard(l: *RwLock) -> ReadGuard {
+    rwlock_read_lock(l)
+    ret ReadGuard { l: l }
+}
+
+fn try_read_guard(l: *RwLock) -> (ReadGuard, err) {
+    var g = ReadGuard { l: l }
+    if rwlock_try_read_lock(l) { ret (g, ok) }
+    ret (g, Invalid)
+}
+
+fn read_release(g: own ReadGuard) {
+    rwlock_read_unlock(g.l)
+}
+
+fn write_guard(l: *RwLock) -> WriteGuard {
+    rwlock_write_lock(l)
+    ret WriteGuard { l: l }
+}
+
+fn try_write_guard(l: *RwLock) -> (WriteGuard, err) {
+    var g = WriteGuard { l: l }
+    if rwlock_try_write_lock(l) { ret (g, ok) }
+    ret (g, Invalid)
+}
+
+fn write_release(g: own WriteGuard) {
+    rwlock_write_unlock(g.l)
+}
+
 // ---- Condition ------------------------------------------------------------
 //
 // The state is a generation counter, never a flag: a waiter reads it before releasing

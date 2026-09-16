@@ -9571,3 +9571,23 @@ goldens are re-pinned, and the schema requires the field.
 
 Not yet: a fix over more than one source, and an applier for fixes beside
 `scripts/apply_plan.py`.
+
+## D433 -- Read and write locks held as values
+
+H04's guard (D379) covered the mutex; an `RwLock` was still taken and released by
+two calls the exit audit could not pair. `e.sync` gains `ReadGuard` and
+`WriteGuard`, one `resource(...)` per side since the two releases differ:
+`read_guard(&l)` takes the read side and is owed to `read_release`,
+`write_guard(&l)` the write side to `write_release`, the `try_` forms answer
+`Invalid` and owe nothing, and H01's rules make an early exit with either held
+E-SAFETY-0002 and a second release E-SAFETY-0001, with no rule of their own.
+The link fixture `sync_rwguard` runs two readers under read guards beside a
+writer whose two steps under one write guard no reader sees apart, a failed
+writer under `defer`, and a `try_read_guard` refused while the write guard is
+held; `reject/safety_rwguard_leak` pins the leak. The fixture's first draft
+returned `Failed` with the write guard still held on the path where the read
+guard was wrongly granted, and E-SAFETY-0002 refused it -- the rule doing for
+the fixture what it is for.
+
+Not yet: the data as a view of the guard, and a guard that can be downgraded
+from write to read without a release between.

@@ -2068,6 +2068,8 @@ type Event = struct { state: Atomic[u32], manual_reset: bool }
 type Once = struct { state: Atomic[u32] }
 type Barrier = struct { state: *void }
 type Guard = resource(release) struct { m: *Mutex }
+type ReadGuard = resource(read_release) struct { l: *RwLock }
+type WriteGuard = resource(write_release) struct { l: *RwLock }
 error Invalid
 
 fn mutex() -> Mutex
@@ -2087,6 +2089,12 @@ fn rwlock_write_lock(l: *RwLock)
 fn rwlock_try_write_lock(l: *RwLock) -> bool
 fn rwlock_write_lock_for(l: *RwLock, timeout: time.Duration) -> bool
 fn rwlock_write_unlock(l: *RwLock)
+fn read_guard(l: *RwLock) -> ReadGuard
+fn try_read_guard(l: *RwLock) -> (ReadGuard, err)
+fn read_release(g: own ReadGuard)
+fn write_guard(l: *RwLock) -> WriteGuard
+fn try_write_guard(l: *RwLock) -> (WriteGuard, err)
+fn write_release(g: own WriteGuard)
 fn condition() -> Condition
 fn condition_wait(c: *Condition, m: *Mutex)
 fn condition_wait_for(c: *Condition, m: *Mutex, timeout: time.Duration) -> bool
