@@ -3641,6 +3641,22 @@ python3 "$repo/benchmarks/metamorphic/format_tree.py" "$test_build/neper-self" "
 chmod +x "$test_build/neper-lib-formatted"
 [ "$("$test_build/neper-lib-formatted" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-lib-formatted")" = 'executable written' ]
 cmp "$test_build/neper-by-lib-formatted" "$stable_compiler_path"
+# The library's fields reversed and its declarations reordered (D551, H10): the compiler built against each builds the stable stage.
+for lib_on_turn in "reverse_fields.py lib-fields" "reorder_declarations.py lib-order"; do
+    set -- $lib_on_turn
+    rm -rf "$test_build/$2"
+    mkdir -p "$test_build/$2"
+    cp -r "$repo/src" "$test_build/$2/src"
+    if [ "$1" = reverse_fields.py ]; then
+        python3 "$repo/benchmarks/metamorphic/$1" "$test_build/neper-self" "$repo/lib" "$test_build/$2/lib" > /dev/null
+    else
+        python3 "$repo/benchmarks/metamorphic/$1" "$repo/lib" "$test_build/$2/lib" > /dev/null
+    fi
+    [ "$("$own_compiler_path" emit-executable "$test_build/$2/src/main.e" "$test_build/$2" x64 linux "$test_build/neper-$2")" = 'executable written' ]
+    chmod +x "$test_build/neper-$2"
+    [ "$("$test_build/neper-$2" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-$2")" = 'executable written' ]
+    cmp "$test_build/neper-by-$2" "$stable_compiler_path"
+done
 # The turns in release (D533, H10): the release self-build twice, the image-holding trees, the turn compilers, the library.
 [ "$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-own-release" --release)" = 'executable written' ]
 [ "$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-own-release-again" --release)" = 'executable written' ]

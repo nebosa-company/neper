@@ -11396,3 +11396,21 @@ entries, `fn(*void, i64, os.SeekWhence)`, are that node with a type and
 no name. A nested `Parameter` is a symbol only when its first token is a
 name followed by `:`; the corpus's `index.e` gains a function-typed field,
 whose entries are no symbols, and its golden is regenerated.
+
+## D551 -- The library's fields reversed and its declarations reordered
+
+The last two turns over the library. `reverse_fields.py` and
+`reorder_declarations.py` walk a tree now; a project of the compiler's
+sources over the turned library builds a compiler whose build of the
+original tree is the stable stage byte for byte, in both suites -- one
+turn on, as D530 and D531 are, since a layout reaches the image. The
+reversal found two layouts that are not the program's to choose. The
+foreign modules, `os.windows.e` and `os.linux.e`, lay their structs out
+for the other side of an `extern` -- OVERLAPPED, sockaddr -- and the
+compiler built against them reversed failed its first system call,
+`e.os.Denied`. And `e.mem`'s `Arena` is the embedded runtime's (D149):
+the runtime source is compiled before any program and hands `main` an
+arena of `base`, `cap`, `off` in that order, so a program reading it the
+other way round found its arena exhausted at the first allocation. Both
+keep their layouts under the turn; the twelve hundred fields of the other
+hundred and nine modules move.

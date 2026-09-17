@@ -3624,6 +3624,29 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $formattedLibCompiler))
 $byFormattedLib = Join-Path $testBuild 'neper-by-lib-formatted.exe'
 & $formattedLibCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byFormattedLib | Out-Null
 if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $byFormattedLib).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built against the formatted library does not build the stable stage' }
+# The library's fields reversed and its declarations reordered (D551, H10): each turn
+# in a project of the compiler's sources, the compiler built against it, and the
+# compiler that one builds from the original tree is the stable stage -- one turn on,
+# since a layout reaches the image. The foreign modules and `e.mem` keep their
+# layouts: the other side of an `extern` and the embedded runtime read them.
+foreach ($libOnTurn in @(@('reverse_fields.py', 'lib-fields', $true), @('reorder_declarations.py', 'lib-order', $false))) {
+    $libOnProject = Join-Path $testBuild $libOnTurn[1]
+    if (Test-Path -LiteralPath $libOnProject) { Remove-Item -LiteralPath $libOnProject -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $libOnProject | Out-Null
+    Copy-Item -Recurse (Join-Path $repo 'src') (Join-Path $libOnProject 'src')
+    if ($libOnTurn[2]) {
+        & python (Join-Path $repo "benchmarks/metamorphic/$($libOnTurn[0])") $compiler (Join-Path $repo 'lib') (Join-Path $libOnProject 'lib') | Out-Null
+    } else {
+        & python (Join-Path $repo "benchmarks/metamorphic/$($libOnTurn[0])") (Join-Path $repo 'lib') (Join-Path $libOnProject 'lib') | Out-Null
+    }
+    if ($LASTEXITCODE -ne 0) { throw "the library could not be turned by $($libOnTurn[0])" }
+    $libOnCompiler = Join-Path $testBuild "neper-$($libOnTurn[1]).exe"
+    & $ownCompilerPath emit-executable (Join-Path $libOnProject 'src\main.e') $libOnProject 'x64' 'windows' $libOnCompiler | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $libOnCompiler)) { throw "the compiler did not build against the library turned by $($libOnTurn[0])" }
+    $byLibOn = Join-Path $testBuild "neper-by-$($libOnTurn[1]).exe"
+    & $libOnCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byLibOn | Out-Null
+    if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $byLibOn).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler built against the library turned by $($libOnTurn[0]) does not build the stable stage" }
+}
 # The turns in release (D533, H10): the release self-build is the release stable
 # stage, built twice byte for byte; the trees whose image holds -- blanked, hoisted,
 # locals renamed -- build the same release image; the compilers of the other turns

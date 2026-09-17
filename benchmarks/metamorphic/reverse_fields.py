@@ -18,10 +18,19 @@ os.makedirs(out_dir)
 
 
 def reversed_fields(path):
+    text = open(path, 'rb').read()
+    # A module with foreign declarations (D551) lays its structs out for the other
+    # side -- `os.windows.e`'s OVERLAPPED, `os.linux.e`'s sockaddr -- and reversing
+    # them is not a turn but a different program: it goes over as it is. So does
+    # `e.mem`: its `Arena` is the runtime's, laid out by the embedded runtime source
+    # (D149) before any program is compiled, and a program reading it the other way
+    # round finds its arena exhausted at the first allocation.
+    foreign = b'\nextern fn' in text or b'\n@import' in text or b'\n@export' in text or text.startswith(b'extern fn') or text.startswith(b'@import')
+    if foreign or os.path.basename(path) == 'mem.e':
+        return text, 0
     p = subprocess.run([compiler, 'tokens', path, '--json'], capture_output=True)
     if p.returncode != 0:
         sys.exit('reverse_fields: tokens of %s failed' % path)
-    text = open(path, 'rb').read()
     toks = []
     for line in p.stdout.decode('utf-8').splitlines():
         record = json.loads(line)
@@ -72,14 +81,17 @@ def reversed_fields(path):
 
 
 total = 0
-for name in sorted(os.listdir(src_dir)):
-    source = os.path.join(src_dir, name)
-    if not os.path.isfile(source):
-        continue
-    if name.endswith('.e'):
-        text, count = reversed_fields(source)
-        open(os.path.join(out_dir, name), 'wb').write(text)
-        total += count
-    else:
-        shutil.copy(source, os.path.join(out_dir, name))
+# Every directory under the tree (D551): the library's modules sit in packages.
+for dirpath, dirs, files in os.walk(src_dir):
+    rel = os.path.relpath(dirpath, src_dir)
+    target_dir = os.path.join(out_dir, rel) if rel != '.' else out_dir
+    os.makedirs(target_dir, exist_ok=True)
+    for name in sorted(files):
+        source = os.path.join(dirpath, name)
+        if name.endswith('.e'):
+            text, count = reversed_fields(source)
+            open(os.path.join(target_dir, name), 'wb').write(text)
+            total += count
+        else:
+            shutil.copy(source, os.path.join(target_dir, name))
 print('fields moved', total)

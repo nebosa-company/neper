@@ -39,14 +39,17 @@ def reordered(path):
 
 
 total = 0
-for name in sorted(os.listdir(src_dir)):
-    source = os.path.join(src_dir, name)
-    if not os.path.isfile(source):
-        continue
-    if name.endswith('.e'):
-        text, count = reordered(source)
-        open(os.path.join(out_dir, name), 'wb').write(text)
-        total += count
-    else:
-        shutil.copy(source, os.path.join(out_dir, name))
+# Every directory under the tree (D551): the library's modules sit in packages.
+for dirpath, dirs, files in os.walk(src_dir):
+    rel = os.path.relpath(dirpath, src_dir)
+    target_dir = os.path.join(out_dir, rel) if rel != '.' else out_dir
+    os.makedirs(target_dir, exist_ok=True)
+    for name in sorted(files):
+        source = os.path.join(dirpath, name)
+        if name.endswith('.e'):
+            text, count = reordered(source)
+            open(os.path.join(target_dir, name), 'wb').write(text)
+            total += count
+        else:
+            shutil.copy(source, os.path.join(target_dir, name))
 print('blocks', total)
