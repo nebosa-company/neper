@@ -1860,6 +1860,12 @@ for hot_mode in --release --time; do
     hot_manifest="$hot_scratch/.neper/$hot_manifest_mode/build-manifest.json"
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable e.os=kept:stable work.bodies_checked=0 work.modules_lowered=0 work.functions_lowered=0 work.declarations_checked=29
     cmp "$hot_exe" "$hot_clean"
+    # Trivia apart from identity (D504, H14): a comment edit on its own line keeps every module.
+    cp "$hot_fixture/edits/dep_comment.e" "$hot_source/dep.e"
+    [ "$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = 'executable written' ]
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable
+    cmp "$hot_exe" "$hot_clean"
+    cp "$hot_fixture/src/dep.e" "$hot_source/dep.e"
     # `--stats` on a warm build (D412): the kept modules are parsed for the counts.
     $test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --stats 2>&1 | grep -q 'bodies checked | 0'
     # The compiler is an identity (D398, H15): a warm build by another compiler

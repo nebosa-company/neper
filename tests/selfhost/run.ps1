@@ -1687,6 +1687,15 @@ foreach ($hotMode in @('--release', '--time')) {
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable' 'e.os=kept:stable' 'work.bodies_checked=0' 'work.modules_lowered=0' 'work.functions_lowered=0' 'work.declarations_checked=28'
     if ($LASTEXITCODE -ne 0) { throw "the warm hot build's manifest does not say every module was kept stable and no work was done ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a warm hot build is not the clean build ($hotMode)" }
+    # Trivia apart from identity (D504, H14): a comment's words changed on their own
+    # line keep every module, `stable`, and the image is the clean build's.
+    Copy-Item (Join-Path $hotFixture 'edits\dep_comment.e') (Join-Path $hotSource 'dep.e')
+    $hotComment = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotComment -ne 'executable written') { throw "the warm build after a comment edit failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable'
+    if ($LASTEXITCODE -ne 0) { throw "a comment edit did not keep the module stable ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm build after a comment edit is not the clean build ($hotMode)" }
+    Copy-Item (Join-Path $hotFixture 'src\dep.e') (Join-Path $hotSource 'dep.e')
     # `--stats` on a warm build (D412): the kept modules are parsed for the counts, and
     # the work rows say nothing was done.
     $hotStats = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --stats 2>&1

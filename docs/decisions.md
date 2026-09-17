@@ -10737,3 +10737,19 @@ the module by it: the trap's span and the frame's `source` are now that
 module's, under its own root as the manifest names it (D427), the span's byte
 offset read from its text. The test runner's path passes no graph and keeps
 its behaviour. `run_trap_module` pins a trap two frames deep on both hosts.
+
+## D504 -- Trivia apart from the identity
+
+H14 asks that trivia be separated from semantic identity; D438 showed the
+image byte-identical with every comment removed, and yet a word changed in a
+comment rebuilt the module as `source-changed`, and every module that inlined
+from it. The artifact's source hash is now taken over the text with each
+comment's body left out -- `//` to the end of its line, the line break kept --
+by hashing the runs between comments and folding them, so an edit inside a
+comment that moves no line keeps the artifact and a line added or removed does
+not, since the line tables the artifact carries would be wrong. A `//` inside
+a string, a raw string or a character literal is text. The manifest's input
+hashes stay the bytes' own: the snapshot changes, the cache does not. Both
+suites edit a comment of the incremental fixture in both modes and require
+every module `stable` and the clean image; every artifact of an older cache
+is rebuilt once, under the new hash.

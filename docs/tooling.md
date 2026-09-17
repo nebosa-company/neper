@@ -594,7 +594,9 @@ read whose null check the block left out, at its line under the block's
 function -- a `*` before a name or a `(`, not after `:`, `[` or `->`; `incremental` (D363, H14) is what an
 `--incremental` build decided per module, in graph order -- `decision` `kept` or
 `rebuilt` and `reason`: `stable` (source and every dependency unchanged),
-`edges-hold` (source unchanged, every imported interface still as recorded),
+`edges-hold` (source unchanged, every imported interface still as recorded --
+"unchanged" leaving every comment's body out, D504, so an edit inside a comment
+that moves no line is no change),
 `edge-changed` (an imported interface differs), `source-changed`, `mode-changed`,
 `no-artifact`, `invalid-artifact` (a file that failed its checksum or layout
 validation, rebuilt like a missing one), `compiler-changed` (written by another

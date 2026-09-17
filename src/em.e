@@ -2461,9 +2461,83 @@ fn write_globals(builder: *nir.Builder, c: *check.Checker, module_index: usize, 
 
 // The text's hash, straight over its bytes (D324): it was copied into a scratch
 // buffer first, which a worker thread has none of.
+// The identity of a module's text (D504, H14): its bytes with every comment's body
+// left out -- from `//` to the end of the line, the line break kept -- hashed by
+// segments, so an edit inside a comment that moves no line keeps the artifact, and
+// one that adds or removes a line does not, since the line tables the artifact
+// carries would be wrong. A `//` inside a string, a raw string or a character
+// literal is text, not a comment. The bytes' own hash stays the manifest's.
 fn source_text_hash(text: str) -> (usize, err) {
-    let (source_hash, source_hash_error) = artifact_hash.xxhash64(text)
-    ret (source_hash, source_hash_error)
+    var combined = 0usize
+    var segment_start = 0usize
+    var at = 0usize
+    while at < text.len {
+        let byte_here = text[at]
+        if byte_here == 34u8 {
+            at += 1usize
+            while at < text.len && text[at] != 34u8 && text[at] != 10u8 {
+                if text[at] == 92u8 { at += 1usize }
+                at += 1usize
+            }
+            at += 1usize
+            continue
+        }
+        if byte_here == 39u8 {
+            at += 1usize
+            while at < text.len && text[at] != 39u8 && text[at] != 10u8 {
+                if text[at] == 92u8 { at += 1usize }
+                at += 1usize
+            }
+            at += 1usize
+            continue
+        }
+        if byte_here == 114u8 && at + 1usize < text.len && (text[at + 1usize] == 34u8 || text[at + 1usize] == 35u8) && (at == 0usize || !identifier_byte(text[at - 1usize])) {
+            // A raw string: `r"..."` or `r#..."..."#...` with as many hashes as opened.
+            var hashes = 0usize
+            var open_at = at + 1usize
+            while open_at < text.len && text[open_at] == 35u8 {
+                hashes += 1usize
+                open_at += 1usize
+            }
+            if open_at < text.len && text[open_at] == 34u8 {
+                at = open_at + 1usize
+                var closed = false
+                while at < text.len && !closed {
+                    if text[at] == 34u8 {
+                        var closes = at + 1usize + hashes <= text.len
+                        var hash_at = 0usize
+                        while closes && hash_at < hashes {
+                            if text[at + 1usize + hash_at] != 35u8 { closes = false }
+                            hash_at += 1usize
+                        }
+                        if closes {
+                            at += 1usize + hashes
+                            closed = true
+                        }
+                    }
+                    if !closed { at += 1usize }
+                }
+                continue
+            }
+        }
+        if byte_here == 47u8 && at + 1usize < text.len && text[at + 1usize] == 47u8 {
+            let (segment_hash, segment_error) = artifact_hash.xxhash64(text[segment_start..at])
+            if segment_error != ok { ret (0usize, segment_error) }
+            combined = (combined *% artifact_hash.prime1()) ^ segment_hash
+            while at < text.len && text[at] != 10u8 { at += 1usize }
+            segment_start = at
+            continue
+        }
+        at += 1usize
+    }
+    let (last_hash, last_error) = artifact_hash.xxhash64(text[segment_start..text.len])
+    if last_error != ok { ret (0usize, last_error) }
+    ret ((combined *% artifact_hash.prime1()) ^ last_hash, ok)
+}
+
+fn identifier_byte(byte_here: u8) -> bool {
+    let named = (byte_here >= 97u8 && byte_here <= 122u8) || (byte_here >= 65u8 && byte_here <= 90u8) || (byte_here >= 48u8 && byte_here <= 57u8) || byte_here == 95u8
+    ret named
 }
 
 fn write_debug(c: *check.Checker, g: *graph.Graph, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
