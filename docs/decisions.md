@@ -10753,3 +10753,19 @@ hashes stay the bytes' own: the snapshot changes, the cache does not. Both
 suites edit a comment of the incremental fixture in both modes and require
 every module `stable` and the clean image; every artifact of an older cache
 is rebuilt once, under the new hash.
+
+## D505 -- The crew's one shared scratch table
+
+The Windows suite's stage 3, built while the machine ran other builds, was
+210 bytes short of stage 2: `runtime_pe_x64.imports_within` had lost
+`if 4991usize < limit { ret 17usize }`. D500 folds an `if` over constants by
+copying the condition into the checker's constant-expression table,
+evaluating the copy and dropping it; `fork_checker` (D326) gives each worker
+its own tail of every table a body check appends to -- except that one, so
+eight workers wrote their copies at the same index of the program's table,
+and a worker evaluating its comparison with a parameter could find another
+worker's comparison of two constants there, settled false, and drop the
+branch. Each worker's checker now forks the constant expressions as it does
+the rest: the program's entries copied, a tail of its own after them. The
+image is again the same alone and six builds at a time; the fixed point,
+`-j 1` and `-j 3 --perturb` stay the gate, since a race has no fixture.

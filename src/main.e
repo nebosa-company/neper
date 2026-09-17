@@ -7491,6 +7491,14 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
     if types_error != ok { ret types_error }
     try copy_types(types, from.types[0usize..from.type_count])
     into.types = types
+    // The constant expressions too (D505): a body's fold (D500) and a comptime call
+    // copy the expression into the table and drop it after, so eight workers on the
+    // program's one table wrote over each other's copies, and a comparison with a
+    // parameter could evaluate as another worker's constant and fold a branch away.
+    let (constant_exprs, constant_exprs_error) = mem.alloc[check.ConstantExpr](a, from.constant_expr_count + sized(4096usize, bytes, 256usize))
+    if constant_exprs_error != ok { ret constant_exprs_error }
+    try copy_constant_exprs(constant_exprs, from.constant_exprs[0usize..from.constant_expr_count])
+    into.constant_exprs = constant_exprs
     let (locals, locals_error) = mem.alloc[check.Local](a, from.locals.len)
     if locals_error != ok { ret locals_error }
     into.locals = locals
@@ -7562,6 +7570,15 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
 }
 
 fn copy_functions(into: []check.Function, from: []check.Function) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_constant_exprs(into: []check.ConstantExpr, from: []check.ConstantExpr) -> err {
     var at = 0usize
     while at < from.len {
         into[at] = from[at]
