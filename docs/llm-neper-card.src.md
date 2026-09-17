@@ -114,6 +114,12 @@ lexical token. Prefer `usize` where the width is free; a fixed-width name costs 
 
 ## Tool-assisted navigation
 
+Command standing is rendered from the compiler and both self-host suites. `verified`
+means the command is implemented and exercised there; `present` means implemented
+without that evidence; `planned` means this card names it before the compiler does:
+
+{{commands}}
+
 `neper index --json` is versioned JSONL (stream version 1, tool {{tool_version}}). It
 exposes every `symbol` with kind, name, qualified name, module, signature, spans,
 attributes, and documentation; it also exposes every `reference` with role, spelling,

@@ -5,8 +5,9 @@
 
 The card's syntax sections are the grammar's own productions, copied from
 docs/grammar.ebnf; its keyword list is every alphabetic terminal of that grammar; its
-diagnostic families are docs/diagnostics.md's registry; its versions are the ones the
-compiler writes in every stream header (src/main.e). The prose around them is
+diagnostic families are docs/diagnostics.md's registry; documented commands are
+marked from the compiler and suites; its versions are the ones the compiler writes
+in every stream header (src/main.e). The prose around them is
 docs/llm-neper-card.src.md. The rendered card carries the grammar revision, the
 language and tool versions and a content hash, so a card and the grammar cannot
 drift: the suites run --check.
@@ -84,6 +85,20 @@ def family_line(family, entries):
     return line
 diagnostics = '\n'.join(family_line(family, entries) for family, entries in sorted(families.items()))
 
+# The compact card's command surface and its standing (D566, H11/H28), by the same
+# rule as diagnostics: source plus suite is verified, source alone is present, and a
+# documented command absent from the compiler is planned.
+COMMANDS = ['index', 'tokens', 'parse', 'fmt', 'context-file', 'uses-file',
+            'explain-file', 'plan-rename-file', 'plan-add-parameter-file',
+            'plan-change-signature-file', 'plan-replace-expression-file',
+            'apply-plan', 'test-impact-file', 'test-file', 'query-batch', 'check-file']
+command_rows = ['| command | standing |', '|---|---|']
+for command in COMMANDS:
+    implemented = '"%s"' % command in main_source
+    state = 'verified' if implemented and command in suites else ('present' if implemented else 'planned')
+    command_rows.append('| `%s` | %s |' % (command, state))
+commands = '\n'.join(command_rows)
+
 # The token cost of the grammar's terminals per public tokenizer (D429, H26), from the
 # profiles D375 writes: every profile must be of this grammar revision, or the card
 # would state a cost the grammar no longer has.
@@ -117,7 +132,7 @@ for key, value in [
     ('{{keywords}}', ' '.join('`%s`' % k for k in keywords)),
     ('{{declarations}}', block(DECLARATIONS)), ('{{types}}', block(TYPES)),
     ('{{statements}}', block(STATEMENTS)), ('{{expressions}}', block(EXPRESSIONS)),
-    ('{{diagnostics}}', diagnostics), ('{{token_costs}}', token_costs),
+    ('{{diagnostics}}', diagnostics), ('{{commands}}', commands), ('{{token_costs}}', token_costs),
 ]:
     body = body.replace(key, value)
 if '{{' in body:

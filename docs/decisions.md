@@ -11661,3 +11661,17 @@ An `inlined` run still names the innermost function in `from`; when the copy pas
 through another body it adds `through`, ordered from the innermost intermediate
 outward. Direct copies remain byte-for-byte unchanged. Both host goldens now
 distinguish the direct `add` run from the `add` run copied through `twice`.
+
+## D566 -- The language card marks command standing
+
+The generated language card described the semantic commands without stating which
+ones had executable evidence. Its renderer now applies the same three-state rule it
+already uses for diagnostic codes to the card's compact command surface: `verified`
+when both `src/main.e` and the self-host suites name the command, `present` when only
+the implementation does, and `planned` when only the card names it. The rendered
+table currently marks all sixteen documented navigation, query, plan, apply and test
+commands verified.
+
+The names remain the intentionally small surface the card teaches; their standing is
+derived rather than declared. The existing card hash and `render_card.py --check` in
+both suites make any implementation, suite or rendered-table drift fail.
