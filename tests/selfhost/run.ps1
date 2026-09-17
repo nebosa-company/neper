@@ -2414,6 +2414,49 @@ $aliasBuilt = & $compiler emit-executable (Join-Path $aliasScratch 'src\main.e')
 if ($LASTEXITCODE -ne 0 -or $aliasBuilt -ne 'executable written') { throw "the renamed program through an alias does not build: $aliasBuilt" }
 & $aliasExe
 if ($LASTEXITCODE -ne 8) { throw "the renamed program through an alias behaves differently (exit $LASTEXITCODE)" }
+# A function only a constant reaches (D510, H17): its call in the initializer is a
+# use, and the rename plan rewrites it; before, the plan had the declaration alone.
+$comptimeFixture = Join-Path $conformanceRoot 'tools\uses_comptime'
+$comptimeUsesActual = Join-Path $testBuild 'conformance-tools-uses-comptime.jsonl'
+cmd /c "cd /d `"$comptimeFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol main.twice > `"$comptimeUsesActual`""
+if ($LASTEXITCODE -ne 0) { throw 'uses-file --json of a function only a constant reaches failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $comptimeUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_comptime.expected.jsonl')).Hash) { throw 'uses-file --json of a function only a constant reaches differs from the conformance corpus' }
+$comptimePlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-comptime.jsonl'
+cmd /c "cd /d `"$comptimeFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol main.twice --to double > `"$comptimePlanActual`""
+if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json of a function only a constant reaches failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $comptimePlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename_comptime.x64-windows.expected.jsonl')).Hash) { throw 'plan-rename-file --json of a function only a constant reaches differs from the conformance corpus' }
+$comptimeScratch = Join-Path $testBuild 'comptime-scratch'
+if (Test-Path -LiteralPath $comptimeScratch) { Remove-Item -LiteralPath $comptimeScratch -Recurse -Force }
+Copy-Item -Recurse $comptimeFixture $comptimeScratch
+& $compiler apply-plan $comptimePlanActual --root (Join-Path $comptimeScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the rename plan of a function only a constant reaches did not apply' }
+$comptimeExe = Join-Path $testBuild 'comptime-renamed.exe'
+$comptimeBuilt = & $compiler emit-executable (Join-Path $comptimeScratch 'src\main.e') $repo 'x64' 'windows' $comptimeExe 2>&1
+if ($LASTEXITCODE -ne 0 -or $comptimeBuilt -ne 'executable written') { throw "the renamed program of a function only a constant reaches does not build: $comptimeBuilt" }
+& $comptimeExe
+if ($LASTEXITCODE -ne 8) { throw "the renamed program of a function only a constant reaches behaves differently (exit $LASTEXITCODE)" }
+# A function taken as a value and called through it (D511, H17): its two `value`
+# uses, the one indirect call counted, and the rename plan rewriting both sites and
+# the declaration, applied to a copy that builds and runs the same.
+$callbackFixture = Join-Path $conformanceRoot 'tools\uses_callback'
+$callbackUsesActual = Join-Path $testBuild 'conformance-tools-uses-callback.jsonl'
+cmd /c "cd /d `"$callbackFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol main.twice > `"$callbackUsesActual`""
+if ($LASTEXITCODE -ne 0) { throw 'uses-file --json of a callback failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $callbackUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_callback.expected.jsonl')).Hash) { throw 'uses-file --json of a callback differs from the conformance corpus' }
+$callbackPlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-callback.jsonl'
+cmd /c "cd /d `"$callbackFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol main.twice --to double > `"$callbackPlanActual`""
+if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json of a callback failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $callbackPlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename_callback.x64-windows.expected.jsonl')).Hash) { throw 'plan-rename-file --json of a callback differs from the conformance corpus' }
+$callbackScratch = Join-Path $testBuild 'callback-scratch'
+if (Test-Path -LiteralPath $callbackScratch) { Remove-Item -LiteralPath $callbackScratch -Recurse -Force }
+Copy-Item -Recurse $callbackFixture $callbackScratch
+& $compiler apply-plan $callbackPlanActual --root (Join-Path $callbackScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the rename plan of a callback did not apply' }
+$callbackExe = Join-Path $testBuild 'callback.exe'
+$callbackBuilt = & $compiler emit-executable (Join-Path $callbackScratch 'src\main.e') $repo 'x64' 'windows' $callbackExe 2>&1
+if ($LASTEXITCODE -ne 0 -or $callbackBuilt -ne 'executable written') { throw "the renamed program of a callback does not build: $callbackBuilt" }
+& $callbackExe
+if ($LASTEXITCODE -ne 8) { throw "the renamed program of a callback behaves differently (exit $LASTEXITCODE)" }
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan byte for byte,
 # applied to a copy it checks; a span that is not one expression is refused with exit 2.
 $replaceActual = Join-Path $testBuild 'conformance-tools-plan-replace.jsonl'

@@ -2733,6 +2733,32 @@ cmp -s "$test_build/alias-scratch/src/other.e" "$alias_fixture/src/other.e"
 alias_status=0
 "$test_build/alias" || alias_status=$?
 [ "$alias_status" -eq 8 ]
+# A function only a constant reaches (D510, H17): its call in the initializer is a use the rename plan rewrites.
+comptime_fixture="$conformance_root/tools/uses_comptime"
+(cd "$comptime_fixture" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol main.twice > "$test_build/conformance-tools-uses-comptime.jsonl")
+cmp -s "$test_build/conformance-tools-uses-comptime.jsonl" "$conformance_root/tools/uses_comptime.expected.jsonl" || { echo "uses-file --json of a function only a constant reaches differs from the conformance corpus" >&2; exit 1; }
+(cd "$comptime_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol main.twice --to double > "$test_build/conformance-tools-plan-rename-comptime.jsonl")
+cmp -s "$test_build/conformance-tools-plan-rename-comptime.jsonl" "$conformance_root/tools/plan_rename_comptime.x64-linux.expected.jsonl" || { echo "plan-rename-file --json of a function only a constant reaches differs from the conformance corpus" >&2; exit 1; }
+rm -rf "$test_build/comptime-scratch"
+cp -r "$comptime_fixture" "$test_build/comptime-scratch"
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename-comptime.jsonl" --root "$test_build/comptime-scratch/src" > /dev/null
+[ "$("$test_build/neper-self" emit-executable "$test_build/comptime-scratch/src/main.e" "$repo" x64 linux "$test_build/comptime-renamed" 2>/dev/null)" = 'executable written' ]
+comptime_status=0
+"$test_build/comptime-renamed" || comptime_status=$?
+[ "$comptime_status" -eq 8 ]
+# A function taken as a value and called through it (D511, H17): value uses, the plan rewriting them.
+callback_fixture="$conformance_root/tools/uses_callback"
+(cd "$callback_fixture" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol main.twice > "$test_build/conformance-tools-uses-callback.jsonl")
+cmp -s "$test_build/conformance-tools-uses-callback.jsonl" "$conformance_root/tools/uses_callback.expected.jsonl" || { echo "uses-file --json of a callback differs from the conformance corpus" >&2; exit 1; }
+(cd "$callback_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol main.twice --to double > "$test_build/conformance-tools-plan-rename-callback.jsonl")
+cmp -s "$test_build/conformance-tools-plan-rename-callback.jsonl" "$conformance_root/tools/plan_rename_callback.x64-linux.expected.jsonl" || { echo "plan-rename-file --json of a callback differs from the conformance corpus" >&2; exit 1; }
+rm -rf "$test_build/callback-scratch"
+cp -r "$callback_fixture" "$test_build/callback-scratch"
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename-callback.jsonl" --root "$test_build/callback-scratch/src" > /dev/null
+[ "$("$test_build/neper-self" emit-executable "$test_build/callback-scratch/src/main.e" "$repo" x64 linux "$test_build/callback" 2>/dev/null)" = 'executable written' ]
+callback_status=0
+"$test_build/callback" || callback_status=$?
+[ "$callback_status" -eq 8 ]
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan, applied and
 # checked; a span that is not one expression is refused with exit 2.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-replace-expression-file contract.e "$repo" x64 linux --json --span 693:703 --with 131072usize > "$test_build/conformance-tools-plan-replace.jsonl")

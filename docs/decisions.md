@@ -10829,3 +10829,27 @@ records and the plan per host. Writing it found that an operand given as
 itself was under `project-src`: the root is `.` and the loader spells the
 others as `./src/dep.e`, which the relative test did not take. It takes the
 `./` now, so every module of such a build is named under the project.
+
+## D510 -- A call at compile time is a use
+
+H17's acceptance names the comptime-only reference, and the fixture found it
+missing: `uses-file` of a function called only in a constant's initializer
+reported no use, and the rename plan carried the declaration alone, leaving
+the call behind -- applied, the program would not build. The initializer is
+copied into the constant-expression table and evaluated by the interpreter,
+which no body check sees. The copy now keeps the call's module and byte
+offset, and a successful evaluation records a `call` at that site, as a
+body's call is recorded, so `uses-file`, the plans and the impact walk see
+it; the offset is taken at copy time, since the tokens in hand at evaluation
+are whichever module's the interpreter is in. `uses_comptime` pins the use
+and the plan on both hosts, applied to a copy that builds and exits the same.
+
+## D511 -- The callback fixture
+
+H17's acceptance names callbacks. `uses_callback` binds `twice` to a local,
+passes it as an argument and calls it only through `apply`'s parameter:
+`uses-file` reports the two sites where the name is a value and counts the
+one call through a value, which no name can trace, and the rename plan
+rewrites both sites and the declaration, applied to a copy that builds and
+exits as before. Both suites pin the records and the plan per host; the
+compiler needed no change.

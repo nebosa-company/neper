@@ -435,6 +435,11 @@ type ConstantExpr = struct {
     first_argument: usize,
     argument_count: usize,
     site: syntax.Node,
+    // Where a call was written (D510, H17): the module of the initializer and the
+    // call's byte offset, taken when the expression is copied, since the tokens in
+    // hand at evaluation are whichever module's the interpreter is in.
+    site_module: usize,
+    site_offset: usize,
 }
 
 // Spec section 5: `var` at module scope is mutable static storage, zero-initialised unless
@@ -4234,6 +4239,8 @@ fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         item.kind = .Call
         item.module_index = module_index
         item.site = node
+        item.site_module = module_index
+        if usize(node.token_start) < c.token_count { item.site_offset = c.tokens[usize(node.token_start)].start }
         if callee.kind == .NameExpr {
             let callee_token = c.tokens[usize(callee.token_start)]
             if callee_token.kind != .Identifier { ret (0usize, InvalidConstant) }
@@ -4667,6 +4674,7 @@ fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) 
         c.interp_depth = 0usize
         let (result, result_type, call_error) = interp_call(c, c.graph, expression.module_index, expression.name, values[..expression.argument_count], types[..expression.argument_count], expression.site, expression.module_index)
         if call_error != ok { ret (normalized_integer(0usize, false), invalid_type(), call_error) }
+        record_explain_comptime_call(c, expression)
         let (contextual_type, context_error) = apply_context(c, result_type, expected)
         if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
         ret (result, contextual_type, ok)
@@ -8979,6 +8987,22 @@ fn record_explain_dispatch(c: *Checker, module_index: usize, node: syntax.Node, 
     } else {
         c.explains[c.explain_count].candidate_index = c.function_count
     }
+    c.explain_count += 1usize
+}
+
+// A call evaluated at compile time (D510, H17): a constant's initializer calls the
+// function, which no body check sees, so `uses-file`, the plans and the impact walk
+// missed a function only a constant reaches -- a rename plan left its call behind.
+// The record is a `call` at the call's site, as a body's would be.
+fn record_explain_comptime_call(c: *Checker, expression: ConstantExpr) {
+    if c.explains.len == 0usize { ret }
+    let (function_index, found) = find_function(c, expression.module_index, expression.name)
+    if !found { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    c.explains[c.explain_count] = Explain { kind: 4u8, module_index: expression.site_module, offset: expression.site_offset, protocol: "", receiver: invalid_type(), function_index: function_index, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     c.explain_count += 1usize
 }
 

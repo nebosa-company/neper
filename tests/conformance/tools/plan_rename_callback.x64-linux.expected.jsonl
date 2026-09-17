@@ -1,0 +1,7 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"plan-rename","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"precondition","source":{"root":"project-src","path":"main.e"},"sha256":"b57eedc2af0225a585a8a9f40973bb050e5f5c99a4f147e4b975101718e1791d"}
+{"record":"edit","op":"rename-symbol","symbol":"main.twice","site":"declaration","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":347,"byte_end":352,"line":7,"column":4,"end_line":7,"end_column":9,"column_utf16":4,"end_column_utf16":9},"replacement":"double"}
+{"record":"edit","op":"rename-symbol","symbol":"main.twice","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":494,"byte_end":499,"line":16,"column":16,"end_line":16,"end_column":21,"column_utf16":16,"end_column_utf16":21},"replacement":"double"}
+{"record":"edit","op":"rename-symbol","symbol":"main.twice","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":544,"byte_end":549,"line":17,"column":45,"end_line":17,"end_column":50,"column_utf16":45,"end_column_utf16":50},"replacement":"double"}
+{"record":"postcondition","check":"check-file passes; uses-file --symbol main.double reports uses at 2 sites and main.twice names no function"}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":1,"complete":true,"snapshot":"24327dc8169ee213"}}

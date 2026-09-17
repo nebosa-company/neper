@@ -437,7 +437,9 @@ edit, with the whole set the answer when the edges overflowed
 `neper uses-file PATH ROOT ARCH OS --json --symbol module.name` (D362, H17) checks
 the program and lists every use of one declared function the checker resolved,
 anywhere in the program, by module then byte offset: a `use` record with
-`relation` -- `call` (a direct call, of the function or of one of its instances),
+`relation` -- `call` (a direct call, of the function or of one of its instances -- a call in a
+constant's initializer, evaluated at compile time, included, D510, so a function
+only a constant reaches has that use and the plans that site),
 `dispatch` (a protocol call that chose it), `instance` (an instantiation of it),
 `value` (its name taken as a function value) -- `provenance` (`compiler-proved`),
 `in` (the function the use lies in), and `span`. A subject `module.Type.field`
