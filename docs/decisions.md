@@ -11105,3 +11105,14 @@ check is one turn on: the compiler built from the renamed sources must build
 the original sources to the stable stage byte for byte, which both suites
 hold. It did at the first attempt; the index of D528 names the references it
 needs.
+
+## D530 -- The compiler with its fields reversed
+
+The fifth turn over the compiler is D477's `fields`: `benchmarks/metamorphic/
+reverse_fields.py` reverses the fields of every `struct` of `src/` through
+the token stream, twelve hundred and forty-seven of them, so every record of
+the compiler has another layout. Nothing in the compiler reads a struct by
+its layout -- no `bitcast` between records, no foreign struct, artifacts
+written field by field -- and the compiler built from the reversed sources
+builds the original sources to the stable stage byte for byte, which both
+suites hold. Six seconds a suite, the token streams being the cost.

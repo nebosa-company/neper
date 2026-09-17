@@ -3532,6 +3532,19 @@ $byResymbolled = Join-Path $testBuild 'neper-by-resymbolled.exe'
 & $resymbolledCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byResymbolled | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byResymbolled)) { throw 'the compiler with renamed symbols did not build the compiler' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byResymbolled).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with renamed symbols does not build the stable stage' }
+# The compiler with every struct's fields reversed (D530, H10): another layout for
+# every one of its records, and the compiler built from the result builds the original
+# sources to the stable stage byte for byte -- nothing in it reads a struct by layout.
+$reversedSrc = Join-Path $testBuild 'reversed-src'
+& python (Join-Path $repo 'benchmarks/metamorphic/reverse_fields.py') $compiler (Join-Path $repo 'src') (Join-Path $reversedSrc 'src')
+if ($LASTEXITCODE -ne 0) { throw 'the fields of the compiler could not be reversed' }
+$reversedCompiler = Join-Path $testBuild 'neper-reversed.exe'
+& $ownCompilerPath emit-executable (Join-Path $reversedSrc 'src\main.e') $repo 'x64' 'windows' $reversedCompiler | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $reversedCompiler)) { throw 'the compiler did not build from its sources with the fields reversed' }
+$byReversed = Join-Path $testBuild 'neper-by-reversed.exe'
+& $reversedCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byReversed | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byReversed)) { throw 'the compiler with reversed fields did not build the compiler' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byReversed).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with reversed fields does not build the stable stage' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
