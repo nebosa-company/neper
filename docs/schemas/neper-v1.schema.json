@@ -365,7 +365,8 @@
             "context",
             "uses",
             "plan-rename",
-            "manifest"
+            "manifest",
+            "query-batch"
           ]
         },
         "tool_version": {

@@ -2548,6 +2548,12 @@ batch_status=0
 [ "$batch_status" -eq 2 ]
 cmp -s "$test_build/conformance-tools-batch.jsonl" "$conformance_root/tools/batch.x64-linux.expected.jsonl" || { printf '%s
 ' "query-batch --json differs from the conformance corpus" >&2; exit 1; }
+# A batch over a program that does not check (D523, H18): one stream, exit 1.
+batch_broken_status=0
+(cd "$conformance_root/tools" && "$test_build/neper-self" query-batch query_broken.e "$repo" x64 linux --json --batch batch_broken.txt > "$test_build/conformance-tools-batch-broken.jsonl" 2> "$test_build/conformance-tools-batch-broken.stderr") || batch_broken_status=$?
+[ "$batch_broken_status" -eq 1 ]
+[ ! -s "$test_build/conformance-tools-batch-broken.stderr" ]
+cmp -s "$test_build/conformance-tools-batch-broken.jsonl" "$conformance_root/tools/batch_broken.expected.jsonl" || { echo "query-batch over a program that does not check differs from the conformance corpus" >&2; exit 1; }
 # A batch retains nothing between lines (D410, H16): `memory` before and after three
 # queries reports the same arena use.
 batch_used=$($test_build/neper-self query-batch "$conformance_root/tools/contract.e" "$repo" x64 linux --json --batch "$conformance_root/tools/batch_memory.txt" | grep -o '"arena_used":[0-9]*' | sort -u | wc -l)

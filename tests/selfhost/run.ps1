@@ -2710,6 +2710,14 @@ $batchActual = Join-Path $testBuild 'conformance-tools-batch.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" query-batch contract.e `"$repo`" x64 windows --json --batch batch.txt > `"$batchActual`""
 if ($LASTEXITCODE -ne 2) { throw "query-batch with refused lines did not exit 2 (got $LASTEXITCODE)" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $batchActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/batch.x64-windows.expected.jsonl')).Hash) { throw "query-batch --json differs from the conformance corpus" }
+# A batch over a program that does not check (D523, H18): one stream under `query-batch`,
+# the diagnostic, exit 1 -- no line of it can be answered.
+$batchBroken = Join-Path $testBuild 'conformance-tools-batch-broken.jsonl'
+$batchBrokenStderr = Join-Path $testBuild 'conformance-tools-batch-broken.stderr'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" query-batch query_broken.e `"$repo`" x64 windows --json --batch batch_broken.txt > `"$batchBroken`" 2> `"$batchBrokenStderr`""
+if ($LASTEXITCODE -ne 1) { throw "query-batch over a program that does not check exited $LASTEXITCODE, not 1" }
+if ((Get-Item -LiteralPath $batchBrokenStderr).Length -ne 0) { throw 'query-batch over a program that does not check wrote to stderr' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $batchBroken).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/batch_broken.expected.jsonl')).Hash) { throw 'query-batch over a program that does not check differs from the conformance corpus' }
 # A batch retains nothing between lines (D410, H16): `memory` before and after three
 # queries reports the same arena use.
 $batchMemory = & $compiler query-batch (Join-Path $conformanceRoot 'tools/contract.e') $repo 'x64' 'windows' --json --batch (Join-Path $conformanceRoot 'tools/batch_memory.txt')

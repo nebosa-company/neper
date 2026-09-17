@@ -8818,6 +8818,7 @@ fn query_command_name(kind: usize) -> str {
     if kind == 8usize { ret "plan-replace-expression" }
     if kind == 9usize { ret "plan-change-signature" }
     if kind == 10usize { ret "test-impact" }
+    if kind == 7usize { ret "query-batch" }
     ret "explain"
 }
 
@@ -8876,17 +8877,10 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
         // Every other query over a program that does not check (D520, H08, H18): the
         // stream still -- its header, the diagnostic, a result of exit 1 -- where a
         // harness reading JSON had found the diagnostic as text on stderr and nothing
-        // on stdout. The batch answers each line its own way.
-        if kind != 7usize {
-            try print_check_diagnostic(report, &loaded, &checker, check_error)
-            try finish_report(report)
-            os.exit(1i32)
-            ret ok
-        }
-        report.pending_header = ""
-        report.json = false
-        report.file = os.stderr()
+        // on stdout. The batch too (D523): one stream under `query-batch`, since no
+        // line of it can be answered.
         try print_check_diagnostic(report, &loaded, &checker, check_error)
+        try finish_report(report)
         os.exit(1i32)
         ret ok
     }

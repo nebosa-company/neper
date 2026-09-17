@@ -11007,3 +11007,12 @@ dropped once the disassembly writes its own; and `manifest`, a command name
 the header carries for this case alone, since the object itself is not a
 stream -- section 1's envelope in place of it, the loader's record and a
 result of exit 1. `query_syntax` pins both on both hosts.
+
+## D523 -- A batch that cannot be answered is one stream
+
+D520 left the batch answering a program that does not check its own way,
+which the probe found to be text on stderr, and D521's held header named it
+`explain` when the program did not load. A batch whose program does not
+check or load has no line it can answer: it is one stream now, under a
+`query-batch` header the header enum gains, the diagnostic and a result of
+exit 1. `batch_broken` pins it on both hosts.
