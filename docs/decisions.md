@@ -11702,3 +11702,22 @@ The stream schema admits the full H11 vocabulary -- `planned`, `present`,
 evidence it has. An absent or merely planned API cannot enter this checked-source
 catalogue, and no function is called `verified` until an explicit API-to-executable-
 test relation exists. The existing per-target catalogue goldens pin the new field.
+
+## D569 -- Each language version keeps its own generated card
+
+`render_card.py` now writes both the existing current alias,
+`docs/llm-neper-card.md`, and a language-qualified archival path derived from the
+compiler's stream version, currently `docs/llm-neper-card-0.1.md`. The two files are
+the same stamped render. `--check` requires both, so a missing or stale qualified
+card fails both self-host suites; when the compiler advances its language version,
+the renderer writes a new path and leaves the old card intact.
+
+The version remains read from `src/main.e`, not repeated in a manifest or command
+line. The filename, heading, generated header, grammar revision and content hash make
+old and revised cards distinguishable while the unqualified alias keeps existing
+consumers working.
+
+This is the fifth feature since D564, so the progress artifact is regenerated. It
+now credits D565's nested inline origin chain, D566's command standing, D567's rule
+standing, D568's target-supported API catalogue and this versioned card: compiler
+86.74, modules 76.64, tooling 83.12.
