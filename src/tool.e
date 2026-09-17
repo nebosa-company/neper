@@ -3079,6 +3079,25 @@ fn batch_memory(a: *mem.Arena) -> err {
 // is one `edit` (`replace-expression`, site `use`) with the file's hash as its
 // precondition and the postcondition that re-checking passes with the expression's
 // type unchanged, which the checker at apply time decides.
+// An edit inside regeneration-owned text (D512, H19): the operand's map says the
+// range is the generator's, so the edit record names the owner and where in the
+// generator's input its bytes begin; `apply-plan` refuses such an edit.
+fn owned_note(out: *Out, g: *graph.Graph, module_index: usize, offset: usize) -> err {
+    if module_index != 0usize { ret ok }
+    var at = 0usize
+    while at < g.owned_count {
+        if offset >= g.owned_starts[at] && offset < g.owned_ends[at] {
+            try text(out, ",\"owner\":\"generator\",\"original\":{\"source\":{\"root\":\"operand\",\"path\":")
+            try quoted(out, g.owned_original_paths[at])
+            try text(out, "},\"byte_start\":")
+            try decimal(out, g.owned_original_starts[at] + (offset - g.owned_starts[at]))
+            ret byte(out, 125u8)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn plan_replace_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, span_text: str, replacement: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize)
     if storage_error != ok { ret storage_error }
@@ -3133,6 +3152,7 @@ fn plan_replace_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, span_tex
     try token_span(&out, root, path, module.text, first, last)
     try text(&out, ",\"replacement\":")
     try quoted(&out, replacement)
+    try owned_note(&out, g, 0usize, byte_start)
     try byte(&out, 125u8)
     try flush(&out)
     try text(&out, "{\"record\":\"postcondition\",\"check\":\"check-file passes; the expression at the span has the type the replaced one had\"}")
@@ -4153,6 +4173,7 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
             order_at += 1usize
         }
         try quoted(&out, replacement_storage[0usize..replacement_at])
+        try owned_note(&out, g, sites.modules[site], first.start)
         try byte(&out, 125u8)
         try flush(&out)
         site += 1usize
@@ -4321,6 +4342,7 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
             replacement_at = nptest_copy(replacement_storage[..], replacement_at, site_text)
         }
         try quoted(&out, replacement_storage[0usize..replacement_at])
+        try owned_note(&out, g, sites.modules[site], insert.start)
         try byte(&out, 125u8)
         try flush(&out)
         site += 1usize
@@ -4421,6 +4443,7 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
         try token_span(&out, root, path, module.text, name_token, name_token)
         try text(&out, ",\"replacement\":")
         try quoted(&out, to)
+        try owned_note(&out, g, site_modules[site], site_offsets[site])
         try byte(&out, 125u8)
         try flush(&out)
         site += 1usize
@@ -4515,6 +4538,7 @@ fn plan_rename_sites_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph
         try token_span(out, root, path, module.text, name_token, name_token)
         try text(out, ",\"replacement\":")
         try quoted(out, to)
+        try owned_note(out, g, sites.modules[site], sites.offsets[site])
         try byte(out, 125u8)
         try flush(out)
         site += 1usize

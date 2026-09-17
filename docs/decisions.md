@@ -10857,3 +10857,20 @@ one call through a value, which no name can trace, and the rename plan
 rewrites both sites and the declaration, applied to a copy that builds and
 exits as before. Both suites pin the records and the plan per host; the
 compiler needed no change.
+
+## D512 -- An edit the generator owns
+
+H17 names the generated reference and H19 regeneration-aware edits: a plan
+whose site lies in text a source map marks `"edit": "generator"` would be
+applied to a file the generator rewrites, and undone. The operand's map is
+read for every query (D264, D373); its generator-owned mappings now sit on
+the graph as byte ranges, and each of the five plan writers -- rename,
+change-signature, add-parameter, replace-expression, the field and error
+renames -- marks an edit inside one with `owner: generator` and `original`,
+the generator's input and the byte where the edited text begins in it.
+`apply-plan` refuses a plan carrying such an edit with `E-TOOL-0003`, nothing
+applied, so the harness edits the original and plans again. `plan_generated`
+pins the plan per host and the refusal on both. A query reads the map
+quietly -- a stale one is left unread, its diagnostics being the check's to
+report -- and only the operand's, as before: a generated dependency is not
+yet marked.

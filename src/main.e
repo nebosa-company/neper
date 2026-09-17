@@ -3473,6 +3473,9 @@ type Sink = struct {
     // A stale or malformed map (section 8, D300): reported as E-TOOL-0001 up front, the
     // analysis still run for its own diagnostics, and the command failing with no artifact.
     map_stale: bool,
+    // A query reads the map for the plans' ownership alone (D512): a stale or
+    // malformed one is not reported into its stream, only left unread.
+    map_quiet: bool,
     map_source: str,
     // The tables hold the operand's mappings in the first eight slots and, from
     // `nest_base`, the nested map's (D465); the bootstrap mistypes a slice of a
@@ -3807,6 +3810,23 @@ fn write_rooted_span(report: *Sink, root: str, identity: str, at: lex.Span, oper
     ret write_all(report, "}")
 }
 
+// The operand's regeneration-owned ranges (D512, H19): from its own map's first
+// slots, the mappings whose `edit` is `generator`, onto the graph for the plans.
+fn note_owned_ranges(report: *Sink, loaded: *graph.Graph) {
+    var mapping = 0usize
+    while mapping < report.map_count && mapping < 8usize {
+        if report.map_edit[mapping] == 2u8 && loaded.owned_count < 8usize {
+            let slot = loaded.owned_count
+            loaded.owned_starts[slot] = report.map_generated_start[mapping]
+            loaded.owned_ends[slot] = report.map_generated_end[mapping]
+            loaded.owned_original_paths[slot] = report.map_original_path[mapping]
+            loaded.owned_original_starts[slot] = report.map_original_start[mapping]
+            loaded.owned_count += 1usize
+        }
+        mapping += 1usize
+    }
+}
+
 // The mapping a token of `path` falls inside, or `map_count` for none.
 fn map_index(report: *Sink, path: str, at: lex.Span, has_token: bool) -> usize {
     if !has_token || report.map_count == 0usize || !same(path, report.map_source) { ret report.map_count }
@@ -3995,13 +4015,14 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
             // A hand edit, told from a stale map (D418, H19): the generated file is
             // not what the map recorded while the generator's input still is, so
             // nothing regenerated it -- someone edited the output.
+            if report.map_quiet { ret ok }
             if map_input_unchanged(a, document, operand) {
                 try emit_command_diagnostic(report, "E-TOOL-0002", "the generated source was edited after generation: its hash is not the map's while the generator's input is unchanged; regenerate it, or drop the map to own the edit")
             } else {
                 try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is stale: its hash is not the operand's")
             }
         } else {
-            try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is malformed")
+            if !report.map_quiet { try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is malformed") }
         }
         ret ok
     }
@@ -4019,14 +4040,14 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
             let (input_text, input_error) = source.load(a, input_path)
             if input_error != ok {
                 report.map_stale = true
-                try emit_command_diagnostic(report, "E-TOOL-0001", "the generator's input named by the source map is missing")
+                if !report.map_quiet { try emit_command_diagnostic(report, "E-TOOL-0001", "the generator's input named by the source map is missing") }
                 ret ok
             }
             let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
             if input_digest_error != ok { ret input_digest_error }
             if !same(input_digest, input_hash) {
                 report.map_stale = true
-                try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source is stale: the generator's input changed since it was generated")
+                if !report.map_quiet { try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source is stale: the generator's input changed since it was generated") }
                 ret ok
             }
         }
@@ -4035,7 +4056,7 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
         let (inputs_status, inputs_name) = map_inputs_status(a, generator, operand)
         if inputs_status != 0usize {
             report.map_stale = true
-            try emit_map_input_diagnostic(a, report, inputs_status, inputs_name)
+            if !report.map_quiet { try emit_map_input_diagnostic(a, report, inputs_status, inputs_name) }
             ret ok
         }
     }
@@ -4326,6 +4347,9 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
         }
         if same(kind, "edit") {
             if PLAN_EDITS == edit_count { ret apply_plan_refused(sink, "E-TOOL-9999", "the plan has more edits than apply-plan holds") }
+            // An edit the generator owns (D512, H19): the text is regenerated from its
+            // input, so applying it here would be undone; the record names the original.
+            if json_key_at(line, "\"owner\":\"generator\"") != line.len { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit lies in generated text a generator owns; make it in the original the edit names; nothing applied") }
             let (path, path_error) = plan_source_path(a, line, root, project_src)
             if path_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "an edit names a source root apply-plan has no directory for") }
             var file_at = 0usize
@@ -8713,6 +8737,13 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     try init_cli_graph(a, &loaded)
     let load_error = load_graph(a, report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
     if load_error != ok { ret load_error }
+    // The operand's map, for what a generator owns (D512): read quietly, since a
+    // query's stream begins with its own header.
+    if loaded.count != 0usize {
+        report.map_quiet = true
+        try load_source_map(a, report, args[2usize], loaded.modules[0usize].text)
+        note_owned_ranges(report, &loaded)
+    }
     var resolver: resolve.Resolver = zero
     try init_cli_resolver(a, &resolver, &loaded, report)
     let resolve_error = resolve.collect(&resolver, &loaded)
@@ -9206,6 +9237,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         let load_error = load_graph(a, &report, &loaded, operand, args[3usize], args[4usize], args[5usize])
         if load_error == ok && loaded.count != 0usize && !loaded.root_text_given { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
+        // The ranges the generator owns (D512), for the plans' edit records.
+        note_owned_ranges(&report, &loaded)
         if load_error != ok {
             // Not a diagnostic of the source but of the command: the operand itself.
             if !report.json { ret load_error }

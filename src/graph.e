@@ -156,6 +156,15 @@ type Graph = struct {
     overlay_paths: []str,
     overlay_texts: []str,
     overlay_count: usize,
+    // The operand's regeneration-owned ranges (D512, H19): the mappings of its
+    // source map whose `edit` is `generator`, as byte ranges of module 0's text, and
+    // where in the generator's input each begins; a plan's edit inside one is the
+    // generator's to make, not a harness's.
+    owned_count: usize,
+    owned_starts: [8]usize,
+    owned_ends: [8]usize,
+    owned_original_paths: [8]str,
+    owned_original_starts: [8]usize,
     token_scratch: []lex.Token,
     nodes: []syntax.Node,
     children: []u32,

@@ -2759,6 +2759,17 @@ cp -r "$callback_fixture" "$test_build/callback-scratch"
 callback_status=0
 "$test_build/callback" || callback_status=$?
 [ "$callback_status" -eq 8 ]
+# A plan into generated text (D512, H19): the owned edit named, apply-plan refusing.
+generated_fixture="$conformance_root/tools/plan_generated"
+(cd "$generated_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol deep.pick --to choose > "$test_build/conformance-tools-plan-generated.jsonl")
+cmp -s "$test_build/conformance-tools-plan-generated.jsonl" "$conformance_root/tools/plan_generated.x64-linux.expected.jsonl" || { echo "plan-rename-file --json over a generated root differs from the conformance corpus" >&2; exit 1; }
+rm -rf "$test_build/generated-scratch"
+cp -r "$generated_fixture" "$test_build/generated-scratch"
+generated_status=0
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-generated.jsonl" --root "$test_build/generated-scratch/src" > "$test_build/generated-apply.txt" 2>&1 || generated_status=$?
+[ "$generated_status" -eq 2 ]
+grep -q 'a generator owns' "$test_build/generated-apply.txt"
+cmp -s "$test_build/generated-scratch/src/deep.e" "$generated_fixture/src/deep.e"
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan, applied and
 # checked; a span that is not one expression is refused with exit 2.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-replace-expression-file contract.e "$repo" x64 linux --json --span 693:703 --with 131072usize > "$test_build/conformance-tools-plan-replace.jsonl")

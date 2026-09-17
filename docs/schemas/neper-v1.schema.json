@@ -3,351 +3,2788 @@
   "$id": "https://neper.invalid/schema/neper-v1.schema.json",
   "title": "neper version 1 machine protocols",
   "oneOf": [
-    {"$ref":"#/$defs/streamRecord"},
-    {"$ref":"#/$defs/sourceMap"},
-    {"$ref":"#/$defs/buildManifest"},
-    {"$ref":"#/$defs/modulePlan"},
-    {"$ref":"#/$defs/packageManifest"}
+    {
+      "$ref": "#/$defs/streamRecord"
+    },
+    {
+      "$ref": "#/$defs/sourceMap"
+    },
+    {
+      "$ref": "#/$defs/buildManifest"
+    },
+    {
+      "$ref": "#/$defs/modulePlan"
+    },
+    {
+      "$ref": "#/$defs/packageManifest"
+    }
   ],
   "$defs": {
-    "sha256": {"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "tokenKind": {
-      "enum":["KW_USE","KW_TYPE","KW_CONST","KW_VAR","KW_LET","KW_FN","KW_RET","KW_IF","KW_ELSE","KW_WHILE","KW_FOR","KW_IN","KW_SWITCH","KW_CASE","KW_DEFAULT","KW_BREAK","KW_CONTINUE","KW_DEFER","KW_TRY","KW_STRUCT","KW_UNION","KW_ENUM","KW_ERROR","KW_WHEN","KW_TRUE","KW_FALSE","KW_NIL","KW_OK","KW_AS","KW_ZERO","KW_UNDEF","KW_EXTERN","KW_UNREACHABLE","KW_SHARED","PUNCT_ELLIPSIS","PUNCT_RANGE","PUNCT_ARROW","PUNCT_EQ_EQ","PUNCT_BANG_EQ","PUNCT_LT_EQ","PUNCT_GT_EQ","PUNCT_SHIFT_LEFT","PUNCT_SHIFT_RIGHT","PUNCT_ADD_WRAP","PUNCT_SUB_WRAP","PUNCT_MUL_WRAP","PUNCT_ADD_ASSIGN","PUNCT_SUB_ASSIGN","PUNCT_MUL_ASSIGN","PUNCT_DIV_ASSIGN","PUNCT_REM_ASSIGN","PUNCT_ADD_WRAP_ASSIGN","PUNCT_SUB_WRAP_ASSIGN","PUNCT_MUL_WRAP_ASSIGN","PUNCT_SHIFT_LEFT_ASSIGN","PUNCT_SHIFT_RIGHT_ASSIGN","PUNCT_BIT_AND_ASSIGN","PUNCT_BIT_XOR_ASSIGN","PUNCT_BIT_OR_ASSIGN","PUNCT_AND_AND","PUNCT_OR_OR","PUNCT_AT","PUNCT_DOT","PUNCT_COMMA","PUNCT_COLON","PUNCT_ASSIGN","PUNCT_LPAREN","PUNCT_RPAREN","PUNCT_LBRACKET","PUNCT_RBRACKET","PUNCT_LBRACE","PUNCT_RBRACE","PUNCT_STAR","PUNCT_SLASH","PUNCT_PERCENT","PUNCT_PLUS","PUNCT_MINUS","PUNCT_LT","PUNCT_GT","PUNCT_AMP","PUNCT_CARET","PUNCT_PIPE","PUNCT_BANG","PUNCT_TILDE","PUNCT_UNDERSCORE","IDENTIFIER","INTEGER","FLOAT","STRING","RAW_STRING","CHARACTER","NEWLINE","EOF","INVALID"]
+      "enum": [
+        "KW_USE",
+        "KW_TYPE",
+        "KW_CONST",
+        "KW_VAR",
+        "KW_LET",
+        "KW_FN",
+        "KW_RET",
+        "KW_IF",
+        "KW_ELSE",
+        "KW_WHILE",
+        "KW_FOR",
+        "KW_IN",
+        "KW_SWITCH",
+        "KW_CASE",
+        "KW_DEFAULT",
+        "KW_BREAK",
+        "KW_CONTINUE",
+        "KW_DEFER",
+        "KW_TRY",
+        "KW_STRUCT",
+        "KW_UNION",
+        "KW_ENUM",
+        "KW_ERROR",
+        "KW_WHEN",
+        "KW_TRUE",
+        "KW_FALSE",
+        "KW_NIL",
+        "KW_OK",
+        "KW_AS",
+        "KW_ZERO",
+        "KW_UNDEF",
+        "KW_EXTERN",
+        "KW_UNREACHABLE",
+        "KW_SHARED",
+        "PUNCT_ELLIPSIS",
+        "PUNCT_RANGE",
+        "PUNCT_ARROW",
+        "PUNCT_EQ_EQ",
+        "PUNCT_BANG_EQ",
+        "PUNCT_LT_EQ",
+        "PUNCT_GT_EQ",
+        "PUNCT_SHIFT_LEFT",
+        "PUNCT_SHIFT_RIGHT",
+        "PUNCT_ADD_WRAP",
+        "PUNCT_SUB_WRAP",
+        "PUNCT_MUL_WRAP",
+        "PUNCT_ADD_ASSIGN",
+        "PUNCT_SUB_ASSIGN",
+        "PUNCT_MUL_ASSIGN",
+        "PUNCT_DIV_ASSIGN",
+        "PUNCT_REM_ASSIGN",
+        "PUNCT_ADD_WRAP_ASSIGN",
+        "PUNCT_SUB_WRAP_ASSIGN",
+        "PUNCT_MUL_WRAP_ASSIGN",
+        "PUNCT_SHIFT_LEFT_ASSIGN",
+        "PUNCT_SHIFT_RIGHT_ASSIGN",
+        "PUNCT_BIT_AND_ASSIGN",
+        "PUNCT_BIT_XOR_ASSIGN",
+        "PUNCT_BIT_OR_ASSIGN",
+        "PUNCT_AND_AND",
+        "PUNCT_OR_OR",
+        "PUNCT_AT",
+        "PUNCT_DOT",
+        "PUNCT_COMMA",
+        "PUNCT_COLON",
+        "PUNCT_ASSIGN",
+        "PUNCT_LPAREN",
+        "PUNCT_RPAREN",
+        "PUNCT_LBRACKET",
+        "PUNCT_RBRACKET",
+        "PUNCT_LBRACE",
+        "PUNCT_RBRACE",
+        "PUNCT_STAR",
+        "PUNCT_SLASH",
+        "PUNCT_PERCENT",
+        "PUNCT_PLUS",
+        "PUNCT_MINUS",
+        "PUNCT_LT",
+        "PUNCT_GT",
+        "PUNCT_AMP",
+        "PUNCT_CARET",
+        "PUNCT_PIPE",
+        "PUNCT_BANG",
+        "PUNCT_TILDE",
+        "PUNCT_UNDERSCORE",
+        "IDENTIFIER",
+        "INTEGER",
+        "FLOAT",
+        "STRING",
+        "RAW_STRING",
+        "CHARACTER",
+        "NEWLINE",
+        "EOF",
+        "INVALID"
+      ]
     },
     "syntaxKind": {
-      "enum":["File","UseDecl","Attribute","TypeDecl","ConstDecl","VarDecl","ErrorDecl","FnDecl","ExternDecl","ComptimeParam","Parameter","ReturnSpec","StructType","UnionType","EnumType","UnionEnumType","FieldDecl","EnumMember","UnionMember","PointerType","SliceType","ArrayType","FunctionType","NamedType","Block","Binding","BindingStmt","AssignmentStmt","CallStmt","TryStmt","ReturnStmt","DeferStmt","NocheckStmt","SharedVarStmt","BreakStmt","ContinueStmt","IfStmt","WhileStmt","ForStmt","WhenStmt","SwitchStmt","SwitchArm","UnaryExpr","BinaryExpr","FieldExpr","BracketPostfix","CallExpr","NameExpr","MemberExpr","GroupExpr","AggregateLiteral","LiteralItem","LiteralExpr","ErrorNode"]
+      "enum": [
+        "File",
+        "UseDecl",
+        "Attribute",
+        "TypeDecl",
+        "ConstDecl",
+        "VarDecl",
+        "ErrorDecl",
+        "FnDecl",
+        "ExternDecl",
+        "ComptimeParam",
+        "Parameter",
+        "ReturnSpec",
+        "StructType",
+        "UnionType",
+        "EnumType",
+        "UnionEnumType",
+        "FieldDecl",
+        "EnumMember",
+        "UnionMember",
+        "PointerType",
+        "SliceType",
+        "ArrayType",
+        "FunctionType",
+        "NamedType",
+        "Block",
+        "Binding",
+        "BindingStmt",
+        "AssignmentStmt",
+        "CallStmt",
+        "TryStmt",
+        "ReturnStmt",
+        "DeferStmt",
+        "NocheckStmt",
+        "SharedVarStmt",
+        "BreakStmt",
+        "ContinueStmt",
+        "IfStmt",
+        "WhileStmt",
+        "ForStmt",
+        "WhenStmt",
+        "SwitchStmt",
+        "SwitchArm",
+        "UnaryExpr",
+        "BinaryExpr",
+        "FieldExpr",
+        "BracketPostfix",
+        "CallExpr",
+        "NameExpr",
+        "MemberExpr",
+        "GroupExpr",
+        "AggregateLiteral",
+        "LiteralItem",
+        "LiteralExpr",
+        "ErrorNode"
+      ]
     },
     "source": {
-      "type":"object",
-      "additionalProperties":false,
-      "required":["root","path"],
-      "properties":{
-        "root":{"enum":["project","project-src","project-lib","toolchain-lib","operand","generated","external"]},
-        "path":{"type":"string"},
-        "absolute_path":{"type":"string"}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "path"
+      ],
+      "properties": {
+        "root": {
+          "enum": [
+            "project",
+            "project-src",
+            "project-lib",
+            "toolchain-lib",
+            "operand",
+            "generated",
+            "external"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "absolute_path": {
+          "type": "string"
+        }
       }
     },
     "span": {
-      "type":"object",
-      "additionalProperties":false,
-      "required":["source","byte_start","byte_end","line","column","end_line","end_column","column_utf16","end_column_utf16"],
-      "properties":{
-        "source":{"$ref":"#/$defs/source"},
-        "byte_start":{"type":"integer","minimum":0},
-        "byte_end":{"type":"integer","minimum":0},
-        "line":{"type":"integer","minimum":1},
-        "column":{"type":"integer","minimum":1},
-        "end_line":{"type":"integer","minimum":1},
-        "end_column":{"type":"integer","minimum":1},
-        "column_utf16":{"type":"integer","minimum":1},
-        "end_column_utf16":{"type":"integer","minimum":1}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "byte_start",
+        "byte_end",
+        "line",
+        "column",
+        "end_line",
+        "end_column",
+        "column_utf16",
+        "end_column_utf16"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "byte_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byte_end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column_utf16": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_column_utf16": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "edit": {
-      "type":"object","additionalProperties":false,"required":["span","replacement"],
-      "properties":{"span":{"$ref":"#/$defs/span"},"replacement":{"type":"string"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "span",
+        "replacement"
+      ],
+      "properties": {
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "replacement": {
+          "type": "string"
+        }
+      }
     },
     "fix": {
-      "type":"object","additionalProperties":false,"required":["message","applicability","edits","preconditions"],
-      "properties":{
-        "message":{"type":"string"},
-        "applicability":{"enum":["machine","maybe"]},
-        "edits":{"type":"array","items":{"$ref":"#/$defs/edit"}},
-        "preconditions":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source","sha256"],"properties":{"source":{"$ref":"#/$defs/source"},"sha256":{"$ref":"#/$defs/sha256"}}}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "message",
+        "applicability",
+        "edits",
+        "preconditions"
+      ],
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "applicability": {
+          "enum": [
+            "machine",
+            "maybe"
+          ]
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/edit"
+          }
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source",
+              "sha256"
+            ],
+            "properties": {
+              "source": {
+                "$ref": "#/$defs/source"
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        }
       }
     },
     "header": {
-      "type":"object","additionalProperties":false,
-      "required":["schema","version","record","command","tool_version","language_version","grammar_revision"],
-      "properties":{
-        "schema":{"const":"neper-stream"},"version":{"const":1},"record":{"const":"header"},
-        "command":{"enum":["apply-plan","compare-manifests","plan-add-parameter","plan-replace-expression","plan-change-signature","test-impact","build","check","run","test","fmt","tokens","parse","index","dis","info","explain","context","uses","plan-rename"]},"tool_version":{"type":"string"},
-        "language_version":{"type":"string"},"grammar_revision":{"type":"integer","minimum":1}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "record",
+        "command",
+        "tool_version",
+        "language_version",
+        "grammar_revision"
+      ],
+      "properties": {
+        "schema": {
+          "const": "neper-stream"
+        },
+        "version": {
+          "const": 1
+        },
+        "record": {
+          "const": "header"
+        },
+        "command": {
+          "enum": [
+            "apply-plan",
+            "compare-manifests",
+            "plan-add-parameter",
+            "plan-replace-expression",
+            "plan-change-signature",
+            "test-impact",
+            "build",
+            "check",
+            "run",
+            "test",
+            "fmt",
+            "tokens",
+            "parse",
+            "index",
+            "dis",
+            "info",
+            "explain",
+            "context",
+            "uses",
+            "plan-rename"
+          ]
+        },
+        "tool_version": {
+          "type": "string"
+        },
+        "language_version": {
+          "type": "string"
+        },
+        "grammar_revision": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "diagnostic": {
-      "type":"object","additionalProperties":false,
-      "required":["record","severity","code","message","span","related","fixes","parent"],
-      "properties":{
-        "record":{"const":"diagnostic"},"severity":{"enum":["error","note"]},
-        "code":{"type":"string","pattern":"^E-[A-Z]+-[0-9]{4}$"},"message":{"type":"string"},
-        "expected":{"type":"string"},"actual":{"type":"string"},
-        "span":{"oneOf":[{"$ref":"#/$defs/span"},{"type":"null"}]},
-        "related":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["message","span"],"properties":{"message":{"type":"string"},"span":{"$ref":"#/$defs/span"}}}},
-        "fixes":{"type":"array","items":{"$ref":"#/$defs/fix"}},
-        "parent":{"type":["integer","null"],"minimum":0}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "severity",
+        "code",
+        "message",
+        "span",
+        "related",
+        "fixes",
+        "parent"
+      ],
+      "properties": {
+        "record": {
+          "const": "diagnostic"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "note"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^E-[A-Z]+-[0-9]{4}$"
+        },
+        "message": {
+          "type": "string"
+        },
+        "expected": {
+          "type": "string"
+        },
+        "actual": {
+          "type": "string"
+        },
+        "span": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "message",
+              "span"
+            ],
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "span": {
+                "$ref": "#/$defs/span"
+              }
+            }
+          }
+        },
+        "fixes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/fix"
+          }
+        },
+        "parent": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
       }
     },
     "token": {
-      "type":"object","additionalProperties":false,
-      "required":["record","index","kind","lexeme","span","leading_trivia"],
-      "properties":{
-        "record":{"const":"token"},"index":{"type":"integer","minimum":0},
-        "kind":{"$ref":"#/$defs/tokenKind"},"lexeme":{"$ref":"#/$defs/captured"},"span":{"$ref":"#/$defs/span"},
-        "leading_trivia":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["kind","text","span"],"properties":{"kind":{"enum":["space","comment","bom"]},"text":{"type":"string"},"span":{"$ref":"#/$defs/span"}}}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "index",
+        "kind",
+        "lexeme",
+        "span",
+        "leading_trivia"
+      ],
+      "properties": {
+        "record": {
+          "const": "token"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "$ref": "#/$defs/tokenKind"
+        },
+        "lexeme": {
+          "$ref": "#/$defs/captured"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "leading_trivia": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "text",
+              "span"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "space",
+                  "comment",
+                  "bom"
+                ]
+              },
+              "text": {
+                "type": "string"
+              },
+              "span": {
+                "$ref": "#/$defs/span"
+              }
+            }
+          }
+        }
       }
     },
     "syntaxChild": {
-      "oneOf":[
-        {"type":"object","additionalProperties":false,"required":["token"],"properties":{"token":{"type":"integer","minimum":0}}},
-        {"type":"object","additionalProperties":false,"required":["node"],"properties":{"node":{"$ref":"#/$defs/syntaxNode"}}}
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "token"
+          ],
+          "properties": {
+            "token": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "node"
+          ],
+          "properties": {
+            "node": {
+              "$ref": "#/$defs/syntaxNode"
+            }
+          }
+        }
       ]
     },
     "syntaxNode": {
-      "type":"object","additionalProperties":false,"required":["kind","span","token_start","token_end","children"],
-      "properties":{
-        "kind":{"$ref":"#/$defs/syntaxKind"},"span":{"$ref":"#/$defs/span"},
-        "token_start":{"type":"integer","minimum":0},"token_end":{"type":"integer","minimum":0},
-        "children":{"type":"array","items":{"$ref":"#/$defs/syntaxChild"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "span",
+        "token_start",
+        "token_end",
+        "children"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/syntaxKind"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "token_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "token_end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/syntaxChild"
+          }
+        }
       }
     },
     "syntax": {
-      "type":"object","additionalProperties":false,"required":["record","root"],
-      "properties":{"record":{"const":"syntax"},"root":{"$ref":"#/$defs/syntaxNode"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "root"
+      ],
+      "properties": {
+        "record": {
+          "const": "syntax"
+        },
+        "root": {
+          "$ref": "#/$defs/syntaxNode"
+        }
+      }
     },
     "symbol": {
-      "type":"object","additionalProperties":false,
-      "required":["record","id","kind","name","qualified_name","module","signature","span","selection_span","container_id","attributes","documentation"],
-      "properties":{
-        "record":{"const":"symbol"},"id":{"type":"integer","minimum":0},
-        "kind":{"enum":["module","fn","kernel","test","type","field","member","const","module_var","parameter","local","error","extern","intrinsic"]},
-        "name":{"type":"string"},"qualified_name":{"type":"string"},"module":{"type":"string"},
-        "signature":{"type":["string","null"]},"span":{"oneOf":[{"$ref":"#/$defs/span"},{"type":"null"}]},
-        "selection_span":{"oneOf":[{"$ref":"#/$defs/span"},{"type":"null"}]},
-        "container_id":{"type":["integer","null"],"minimum":0},
-        "attributes":{"type":"array","items":{"type":"string"}},"documentation":{"type":["string","null"]}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "id",
+        "kind",
+        "name",
+        "qualified_name",
+        "module",
+        "signature",
+        "span",
+        "selection_span",
+        "container_id",
+        "attributes",
+        "documentation"
+      ],
+      "properties": {
+        "record": {
+          "const": "symbol"
+        },
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "module",
+            "fn",
+            "kernel",
+            "test",
+            "type",
+            "field",
+            "member",
+            "const",
+            "module_var",
+            "parameter",
+            "local",
+            "error",
+            "extern",
+            "intrinsic"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "qualified_name": {
+          "type": "string"
+        },
+        "module": {
+          "type": "string"
+        },
+        "signature": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "span": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selection_span": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "container_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "documentation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
     "reference": {
-      "type":"object","additionalProperties":false,
-      "required":["record","source_span","role","spelling","target_id","target_qualified_name","origin"],
-      "properties":{
-        "record":{"const":"reference"},"source_span":{"$ref":"#/$defs/span"},
-        "role":{"enum":["import","type","call","read","write","address","protocol","instantiate"]},
-        "spelling":{"type":"string"},"target_id":{"type":["integer","null"],"minimum":0},
-        "target_qualified_name":{"type":["string","null"]},"origin":{"enum":["source","compiler"]}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "source_span",
+        "role",
+        "spelling",
+        "target_id",
+        "target_qualified_name",
+        "origin"
+      ],
+      "properties": {
+        "record": {
+          "const": "reference"
+        },
+        "source_span": {
+          "$ref": "#/$defs/span"
+        },
+        "role": {
+          "enum": [
+            "import",
+            "type",
+            "call",
+            "read",
+            "write",
+            "address",
+            "protocol",
+            "instantiate"
+          ]
+        },
+        "spelling": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "target_qualified_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "origin": {
+          "enum": [
+            "source",
+            "compiler"
+          ]
+        }
       }
     },
     "dispatch": {
-      "type":"object","additionalProperties":false,
-      "required":["record","protocol","receiver","selected","span"],
-      "properties":{
-        "record":{"const":"dispatch"},"protocol":{"type":"string"},"receiver":{"type":"string"},
-        "selected":{"oneOf":[
-          {"type":"object","additionalProperties":false,"required":["kind","function"],"properties":{"kind":{"const":"declared"},"function":{"type":"string"}}},
-          {"type":"object","additionalProperties":false,"required":["kind","rule"],"properties":{"kind":{"const":"supplied"},"rule":{"enum":["cmp","hash","eq"]}}},
-          {"type":"object","additionalProperties":false,"required":["kind","reason","candidates"],"properties":{"kind":{"const":"none"},"reason":{"type":["string","null"]},"candidates":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["function","reason"],"properties":{"function":{"type":"string"},"reason":{"type":"string"}}}}}}
-        ]},
-        "span":{"$ref":"#/$defs/span"}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "protocol",
+        "receiver",
+        "selected",
+        "span"
+      ],
+      "properties": {
+        "record": {
+          "const": "dispatch"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "receiver": {
+          "type": "string"
+        },
+        "selected": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "function"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "declared"
+                },
+                "function": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "rule"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "supplied"
+                },
+                "rule": {
+                  "enum": [
+                    "cmp",
+                    "hash",
+                    "eq"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "reason",
+                "candidates"
+              ],
+              "properties": {
+                "kind": {
+                  "const": "none"
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "function",
+                      "reason"
+                    ],
+                    "properties": {
+                      "function": {
+                        "type": "string"
+                      },
+                      "reason": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
       }
     },
     "subject": {
-      "type":"object","additionalProperties":false,
-      "required":["record","subject","kind","source","source_sha256","snapshot","target","checks","grammar_revision","span"],
-      "properties":{
-        "record":{"const":"subject"},"subject":{"type":"string"},"kind":{"enum":["fn","type","const","global"]},
-        "source":{"$ref":"#/$defs/source"},"source_sha256":{"$ref":"#/$defs/sha256"},"snapshot":{"type":"string","pattern":"^[0-9a-f]{16}$"},
-        "target":{"type":"string"},"checks":{"enum":["retained","off"]},"grammar_revision":{"type":"integer","minimum":1},
-        "span":{"$ref":"#/$defs/span"}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "subject",
+        "kind",
+        "source",
+        "source_sha256",
+        "snapshot",
+        "target",
+        "checks",
+        "grammar_revision",
+        "span"
+      ],
+      "properties": {
+        "record": {
+          "const": "subject"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "fn",
+            "type",
+            "const",
+            "global"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "snapshot": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "target": {
+          "type": "string"
+        },
+        "checks": {
+          "enum": [
+            "retained",
+            "off"
+          ]
+        },
+        "grammar_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
       }
     },
     "fact": {
-      "type":"object","additionalProperties":false,
-      "required":["record","kind","provenance","value"],
-      "properties":{
-        "record":{"const":"fact"},
-        "kind":{"enum":["signature","ownership","allocation","borrow","mutation","errors","threads","resources","boundary","call","dispatch","instance","discard","value","field","layout","resource","copy","phase","move","dependency"]},
-        "provenance":{"enum":["compiler-proved","declared-and-checked","trusted-external","runtime-observed","unknown"]},
-        "value":{"type":"string"},"span":{"$ref":"#/$defs/span"}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "kind",
+        "provenance",
+        "value"
+      ],
+      "properties": {
+        "record": {
+          "const": "fact"
+        },
+        "kind": {
+          "enum": [
+            "signature",
+            "ownership",
+            "allocation",
+            "borrow",
+            "mutation",
+            "errors",
+            "threads",
+            "resources",
+            "boundary",
+            "call",
+            "dispatch",
+            "instance",
+            "discard",
+            "value",
+            "field",
+            "layout",
+            "resource",
+            "copy",
+            "phase",
+            "move",
+            "dependency"
+          ]
+        },
+        "provenance": {
+          "enum": [
+            "compiler-proved",
+            "declared-and-checked",
+            "trusted-external",
+            "runtime-observed",
+            "unknown"
+          ]
+        },
+        "value": {
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
       }
     },
     "use": {
-      "type":"object","additionalProperties":false,
-      "required":["record","relation","provenance","in","span"],
-      "properties":{
-        "record":{"const":"use"},"relation":{"enum":["call","dispatch","instance","value","field","error"]},
-        "provenance":{"enum":["compiler-proved"]},"in":{"type":"string"},"span":{"$ref":"#/$defs/span"}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "relation",
+        "provenance",
+        "in",
+        "span"
+      ],
+      "properties": {
+        "record": {
+          "const": "use"
+        },
+        "relation": {
+          "enum": [
+            "call",
+            "dispatch",
+            "instance",
+            "value",
+            "field",
+            "error"
+          ]
+        },
+        "provenance": {
+          "enum": [
+            "compiler-proved"
+          ]
+        },
+        "in": {
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
       }
     },
     "root": {
-      "type":"object","additionalProperties":false,
-      "required":["record","kind","value"],
-      "properties":{"record":{"const":"root"},"kind":{"enum":["entry","test","export"]},"value":{"type":"string"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "record": {
+          "const": "root"
+        },
+        "kind": {
+          "enum": [
+            "entry",
+            "test",
+            "export"
+          ]
+        },
+        "value": {
+          "type": "string"
+        }
+      }
     },
     "precondition": {
-      "type":"object","additionalProperties":false,
-      "required":["record","source","sha256"],
-      "properties":{"record":{"const":"precondition"},"source":{"$ref":"#/$defs/source"},"sha256":{"$ref":"#/$defs/sha256"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "source",
+        "sha256"
+      ],
+      "properties": {
+        "record": {
+          "const": "precondition"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
     },
     "planEdit": {
-      "type":"object","additionalProperties":false,
-      "required":["record","op","symbol","site","span","replacement"],
-      "properties":{"record":{"const":"edit"},"op":{"enum":["rename-symbol","change-signature","add-parameter-and-migrate","replace-expression"]},"symbol":{"type":"string"},"site":{"enum":["declaration","use"]},"span":{"$ref":"#/$defs/span"},"replacement":{"type":"string"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "op",
+        "symbol",
+        "site",
+        "span",
+        "replacement"
+      ],
+      "properties": {
+        "record": {
+          "const": "edit"
+        },
+        "op": {
+          "enum": [
+            "rename-symbol",
+            "change-signature",
+            "add-parameter-and-migrate",
+            "replace-expression"
+          ]
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "site": {
+          "enum": [
+            "declaration",
+            "use"
+          ]
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        },
+        "replacement": {
+          "type": "string"
+        },
+        "owner": {
+          "enum": [
+            "generator"
+          ]
+        },
+        "original": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "byte_start"
+          ],
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/source"
+            },
+            "byte_start": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
     },
     "postcondition": {
-      "type":"object","additionalProperties":false,
-      "required":["record","check"],
-      "properties":{"record":{"const":"postcondition"},"check":{"type":"string"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "check"
+      ],
+      "properties": {
+        "record": {
+          "const": "postcondition"
+        },
+        "check": {
+          "type": "string"
+        }
+      }
     },
     "discard": {
-      "type":"object","additionalProperties":false,
-      "required":["record","function","deferred","span"],
-      "properties":{
-        "record":{"const":"discard"},"function":{"type":"string"},"deferred":{"type":"boolean"},
-        "span":{"$ref":"#/$defs/span"}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "function",
+        "deferred",
+        "span"
+      ],
+      "properties": {
+        "record": {
+          "const": "discard"
+        },
+        "function": {
+          "type": "string"
+        },
+        "deferred": {
+          "type": "boolean"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
       }
     },
     "phase": {
-      "type":"object","additionalProperties":false,
-      "required":["record","construct","phase","span"],
-      "properties":{
-        "record":{"const":"phase"},"construct":{"enum":["if","const"]},"phase":{"enum":["comptime"]},"taken":{"type":"boolean"},
-        "symbol":{"type":"string"},"type":{"type":"string"},"value":{"type":"string"},
-        "span":{"$ref":"#/$defs/span"}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "construct",
+        "phase",
+        "span"
+      ],
+      "properties": {
+        "record": {
+          "const": "phase"
+        },
+        "construct": {
+          "enum": [
+            "if",
+            "const"
+          ]
+        },
+        "phase": {
+          "enum": [
+            "comptime"
+          ]
+        },
+        "taken": {
+          "type": "boolean"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
       }
     },
     "layout": {
-      "type":"object","additionalProperties":false,
-      "required":["record","type","kind","size","align","fields","span"],
-      "properties":{
-        "record":{"const":"layout"},"type":{"type":"string"},"kind":{"enum":["struct","union","tagged-union","enum"]},
-        "size":{"type":"integer","minimum":0},"align":{"type":"integer","minimum":1},
-        "fields":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string"},"type":{"type":"string"},"offset":{"type":"integer","minimum":0},"size":{"type":"integer","minimum":0},"value":{"type":"integer"}}}},
-        "span":{"$ref":"#/$defs/span"}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "type",
+        "kind",
+        "size",
+        "align",
+        "fields",
+        "span"
+      ],
+      "properties": {
+        "record": {
+          "const": "layout"
+        },
+        "type": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "struct",
+            "union",
+            "tagged-union",
+            "enum"
+          ]
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "align": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "value": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
       }
     },
     "instance": {
-      "type":"object","additionalProperties":false,
-      "required":["record","template","arguments","span"],
-      "properties":{
-        "record":{"const":"instance"},"template":{"type":"string"},
-        "arguments":{"type":"array","items":{"type":"string"}},
-        "span":{"$ref":"#/$defs/span"}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "template",
+        "arguments",
+        "span"
+      ],
+      "properties": {
+        "record": {
+          "const": "instance"
+        },
+        "template": {
+          "type": "string"
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
       }
     },
     "result": {
-      "type":"object","additionalProperties":false,"required":["record","ok","exit_code","data"],
-      "properties":{"record":{"const":"result"},"ok":{"type":"boolean"},"exit_code":{"enum":[0,1,2,3]},"data":{"type":"object","additionalProperties":{"type":["string","number","integer","boolean","null"]}}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "ok",
+        "exit_code",
+        "data"
+      ],
+      "properties": {
+        "record": {
+          "const": "result"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "exit_code": {
+          "enum": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      }
     },
     "info": {
-      "type":"object","additionalProperties":false,"required":["record","tool_version","language_profiles","commands","host_target","build_targets","cpu_levels","features"],
-      "properties":{"record":{"const":"info"},"tool_version":{"type":"string"},"language_profiles":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["language_version","grammar_revision","stream_version","experimental"],"properties":{"language_version":{"type":"string"},"grammar_revision":{"type":"integer","minimum":1},"stream_version":{"type":"integer","minimum":1},"experimental":{"type":"boolean"}}}},"commands":{"type":"array","items":{"type":"string"}},"host_target":{"type":"string"},"build_targets":{"type":"array","items":{"type":"string"}},"cpu_levels":{"type":"array","items":{"type":"string"}},"features":{"type":"array","items":{"type":"string"}}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "tool_version",
+        "language_profiles",
+        "commands",
+        "host_target",
+        "build_targets",
+        "cpu_levels",
+        "features"
+      ],
+      "properties": {
+        "record": {
+          "const": "info"
+        },
+        "tool_version": {
+          "type": "string"
+        },
+        "language_profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "language_version",
+              "grammar_revision",
+              "stream_version",
+              "experimental"
+            ],
+            "properties": {
+              "language_version": {
+                "type": "string"
+              },
+              "grammar_revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "stream_version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "experimental": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "host_target": {
+          "type": "string"
+        },
+        "build_targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cpu_levels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "impact": {
-      "type":"object","additionalProperties":false,
-      "required":["record","test","affected","span"],
-      "properties":{"record":{"const":"impact"},"test":{"type":"string"},"affected":{"type":"boolean"},"span":{"$ref":"#/$defs/span"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "test",
+        "affected",
+        "span"
+      ],
+      "properties": {
+        "record": {
+          "const": "impact"
+        },
+        "test": {
+          "type": "string"
+        },
+        "affected": {
+          "type": "boolean"
+        },
+        "span": {
+          "$ref": "#/$defs/span"
+        }
+      }
     },
     "progress": {
-      "type":"object","additionalProperties":false,
-      "required":["record","phase","ms","arena_mb","elapsed_ms"],
-      "properties":{"record":{"const":"progress"},"phase":{"type":"string"},"ms":{"type":"integer","minimum":0},"arena_mb":{"type":"integer","minimum":0},"elapsed_ms":{"type":"integer","minimum":0}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "phase",
+        "ms",
+        "arena_mb",
+        "elapsed_ms"
+      ],
+      "properties": {
+        "record": {
+          "const": "progress"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "arena_mb": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     },
     "instance_cost": {
-      "type":"object","additionalProperties":false,
-      "required":["record","symbol","instance","instructions","bytes"],
-      "properties":{"record":{"const":"instance-cost"},"symbol":{"type":"string"},"instance":{"type":"integer","minimum":1},"instructions":{"type":"integer","minimum":0},"bytes":{"type":"integer","minimum":0}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "symbol",
+        "instance",
+        "instructions",
+        "bytes"
+      ],
+      "properties": {
+        "record": {
+          "const": "instance-cost"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "instructions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     },
     "inline": {
-      "type":"object","additionalProperties":false,
-      "required":["record","symbol","decision","reason","pass"],
-      "properties":{"record":{"const":"inline"},"symbol":{"type":"string"},"decision":{"enum":["inlinable","rejected","not-a-candidate","truncated"]},"reason":{"type":"string"},"pass":{"enum":[1,2]}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "symbol",
+        "decision",
+        "reason",
+        "pass"
+      ],
+      "properties": {
+        "record": {
+          "const": "inline"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "inlinable",
+            "rejected",
+            "not-a-candidate",
+            "truncated"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "pass": {
+          "enum": [
+            1,
+            2
+          ]
+        }
+      }
     },
     "formatted": {
-      "type":"object","additionalProperties":false,"required":["record","text"],
-      "properties":{"record":{"const":"formatted"},"text":{"type":"string"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "text"
+      ],
+      "properties": {
+        "record": {
+          "const": "formatted"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
     },
     "test": {
-      "type":"object","additionalProperties":false,"required":["record","name","module","file","line","outcome","error","message","duration_ms","timeout_s","stdout","stderr","trap"],
-      "properties":{"record":{"const":"test"},"name":{"type":"string"},"module":{"type":"string"},"file":{"$ref":"#/$defs/source"},"line":{"type":"integer","minimum":1},"outcome":{"enum":["passed","failed","crashed","timeout"]},"error":{"type":["string","null"]},"message":{"type":["string","null"]},"duration_ms":{"type":"integer","minimum":0},"timeout_s":{"type":"number","exclusiveMinimum":0},"stdout":{"$ref":"#/$defs/captured"},"stderr":{"$ref":"#/$defs/captured"},"trap":{"oneOf":[{"$ref":"#/$defs/trapPayload"},{"type":"null"}]}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "name",
+        "module",
+        "file",
+        "line",
+        "outcome",
+        "error",
+        "message",
+        "duration_ms",
+        "timeout_s",
+        "stdout",
+        "stderr",
+        "trap"
+      ],
+      "properties": {
+        "record": {
+          "const": "test"
+        },
+        "name": {
+          "type": "string"
+        },
+        "module": {
+          "type": "string"
+        },
+        "file": {
+          "$ref": "#/$defs/source"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "outcome": {
+          "enum": [
+            "passed",
+            "failed",
+            "crashed",
+            "timeout"
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeout_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "stdout": {
+          "$ref": "#/$defs/captured"
+        },
+        "stderr": {
+          "$ref": "#/$defs/captured"
+        },
+        "trap": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/trapPayload"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     },
     "captured": {
-      "oneOf":[{"type":"string"},{"type":"object","additionalProperties":false,"required":["encoding","data"],"properties":{"encoding":{"const":"base64"},"data":{"type":"string","contentEncoding":"base64","pattern":"^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"}}}]
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "encoding",
+            "data"
+          ],
+          "properties": {
+            "encoding": {
+              "const": "base64"
+            },
+            "data": {
+              "type": "string",
+              "contentEncoding": "base64",
+              "pattern": "^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+            }
+          }
+        }
+      ]
     },
     "trapPayload": {
-      "type":"object","additionalProperties":false,"required":["kind","span","values","backtrace"],
-      "properties":{"kind":{"type":"string"},"span":{"oneOf":[{"$ref":"#/$defs/span"},{"type":"null"}]},"values":{"type":"array","items":{"type":"string"}},"backtrace":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["function","source","line"],"properties":{"function":{"type":"string"},"source":{"oneOf":[{"$ref":"#/$defs/source"},{"type":"null"}]},"line":{"type":["integer","null"],"minimum":1}}}}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "span",
+        "values",
+        "backtrace"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "span": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/span"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "backtrace": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "function",
+              "source",
+              "line"
+            ],
+            "properties": {
+              "function": {
+                "type": "string"
+              },
+              "source": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/source"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "line": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
     },
     "testSummary": {
-      "type":"object","additionalProperties":false,"required":["record","passed","failed","crashed","timeout","total","duration_ms"],
-      "properties":{
-        "record":{"const":"test_summary"},
-        "passed":{"type":"integer","minimum":0},"failed":{"type":"integer","minimum":0},
-        "crashed":{"type":"integer","minimum":0},"timeout":{"type":"integer","minimum":0},
-        "total":{"type":"integer","minimum":0},"duration_ms":{"type":"integer","minimum":0}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "passed",
+        "failed",
+        "crashed",
+        "timeout",
+        "total",
+        "duration_ms"
+      ],
+      "properties": {
+        "record": {
+          "const": "test_summary"
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "crashed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "run": {
-      "type":"object","additionalProperties":false,"required":["record","process_exit_code","stdout","stderr","trap"],
-      "properties":{"record":{"const":"run"},"process_exit_code":{"type":"integer"},"stdout":{"$ref":"#/$defs/captured"},"stderr":{"$ref":"#/$defs/captured"},"trap":{"oneOf":[{"$ref":"#/$defs/trapPayload"},{"type":"null"}]}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "process_exit_code",
+        "stdout",
+        "stderr",
+        "trap"
+      ],
+      "properties": {
+        "record": {
+          "const": "run"
+        },
+        "process_exit_code": {
+          "type": "integer"
+        },
+        "stdout": {
+          "$ref": "#/$defs/captured"
+        },
+        "stderr": {
+          "$ref": "#/$defs/captured"
+        },
+        "trap": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/trapPayload"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     },
     "stats": {
-      "type":"object","required":["record","files","wall_time_ms","execution_time_ms","exit_code"],
-      "properties":{"record":{"const":"stats"}},
-      "additionalProperties":{"type":["string","number","integer","boolean","null"]}
+      "type": "object",
+      "required": [
+        "record",
+        "files",
+        "wall_time_ms",
+        "execution_time_ms",
+        "exit_code"
+      ],
+      "properties": {
+        "record": {
+          "const": "stats"
+        }
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "integer",
+          "boolean",
+          "null"
+        ]
+      }
     },
     "difference": {
-      "type":"object","additionalProperties":false,"required":["record","kind","name","left","right"],
-      "properties":{"record":{"const":"difference"},"kind":{"enum":["target","mode","root_module","tool_version","options.checks","input","dependency","artifact"]},"name":{"type":"string"},"left":{"type":["string","null"]},"right":{"type":["string","null"]}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "kind",
+        "name",
+        "left",
+        "right"
+      ],
+      "properties": {
+        "record": {
+          "const": "difference"
+        },
+        "kind": {
+          "enum": [
+            "target",
+            "mode",
+            "root_module",
+            "tool_version",
+            "options.checks",
+            "input",
+            "dependency",
+            "artifact"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "left": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "right": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
     },
     "disassembly": {
-      "type":"object","additionalProperties":false,"required":["record","symbol","target","text"],
-      "properties":{"record":{"const":"disassembly"},"symbol":{"type":"string"},"target":{"type":"string"},"text":{"type":"string"}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "symbol",
+        "target",
+        "text"
+      ],
+      "properties": {
+        "record": {
+          "const": "disassembly"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
     },
     "streamRecord": {
-      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/phase"},{"$ref":"#/$defs/layout"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/use"},{"$ref":"#/$defs/root"},{"$ref":"#/$defs/precondition"},{"$ref":"#/$defs/planEdit"},{"$ref":"#/$defs/postcondition"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/inline"},{"$ref":"#/$defs/instance_cost"},{"$ref":"#/$defs/progress"},{"$ref":"#/$defs/impact"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/stats"},{"$ref":"#/$defs/difference"},{"$ref":"#/$defs/disassembly"}]
+      "oneOf": [
+        {
+          "$ref": "#/$defs/header"
+        },
+        {
+          "$ref": "#/$defs/diagnostic"
+        },
+        {
+          "$ref": "#/$defs/token"
+        },
+        {
+          "$ref": "#/$defs/syntax"
+        },
+        {
+          "$ref": "#/$defs/symbol"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/dispatch"
+        },
+        {
+          "$ref": "#/$defs/instance"
+        },
+        {
+          "$ref": "#/$defs/discard"
+        },
+        {
+          "$ref": "#/$defs/phase"
+        },
+        {
+          "$ref": "#/$defs/layout"
+        },
+        {
+          "$ref": "#/$defs/subject"
+        },
+        {
+          "$ref": "#/$defs/fact"
+        },
+        {
+          "$ref": "#/$defs/use"
+        },
+        {
+          "$ref": "#/$defs/root"
+        },
+        {
+          "$ref": "#/$defs/precondition"
+        },
+        {
+          "$ref": "#/$defs/planEdit"
+        },
+        {
+          "$ref": "#/$defs/postcondition"
+        },
+        {
+          "$ref": "#/$defs/result"
+        },
+        {
+          "$ref": "#/$defs/info"
+        },
+        {
+          "$ref": "#/$defs/inline"
+        },
+        {
+          "$ref": "#/$defs/instance_cost"
+        },
+        {
+          "$ref": "#/$defs/progress"
+        },
+        {
+          "$ref": "#/$defs/impact"
+        },
+        {
+          "$ref": "#/$defs/formatted"
+        },
+        {
+          "$ref": "#/$defs/test"
+        },
+        {
+          "$ref": "#/$defs/testSummary"
+        },
+        {
+          "$ref": "#/$defs/run"
+        },
+        {
+          "$ref": "#/$defs/stats"
+        },
+        {
+          "$ref": "#/$defs/difference"
+        },
+        {
+          "$ref": "#/$defs/disassembly"
+        }
+      ]
     },
     "sourceMap": {
-      "type":"object","required":["schema","version","generated","generated_sha256","mappings"],
-      "properties":{
-        "schema":{"const":"neper-source-map"},"version":{"enum":[1,2]},
-        "generated":{"$ref":"#/$defs/source"},"generated_sha256":{"$ref":"#/$defs/sha256"},
-        "generator":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string"},"input":{"type":"string"},"input_sha256":{"$ref":"#/$defs/sha256"},"inputs":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"type":"string"},"sha256":{"$ref":"#/$defs/sha256"}}}}}},
-        "mappings":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["generated_span","original_span","name"],"properties":{"generated_span":{"$ref":"#/$defs/span"},"original_span":{"$ref":"#/$defs/span"},"name":{"type":["string","null"]},"edit":{"enum":["direct","generator","unknown"]}}}}
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "generated",
+        "generated_sha256",
+        "mappings"
+      ],
+      "properties": {
+        "schema": {
+          "const": "neper-source-map"
+        },
+        "version": {
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "generated": {
+          "$ref": "#/$defs/source"
+        },
+        "generated_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "generator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "input": {
+              "type": "string"
+            },
+            "input_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "inputs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "sha256"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "$ref": "#/$defs/sha256"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "generated_span",
+              "original_span",
+              "name"
+            ],
+            "properties": {
+              "generated_span": {
+                "$ref": "#/$defs/span"
+              },
+              "original_span": {
+                "$ref": "#/$defs/span"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "edit": {
+                "enum": [
+                  "direct",
+                  "generator",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        }
       },
-      "additionalProperties":false
+      "additionalProperties": false
     },
     "buildManifest": {
-      "type":"object","required":["schema","version","tool_version","language_version","grammar_revision","target","mode","root_module","inputs","dependencies","libraries","assets","artifacts","unsafe","incremental","options","work"],
-      "properties":{
-        "schema":{"const":"neper-build-manifest"},"version":{"const":1},
-        "tool_version":{"type":"string"},"language_version":{"type":"string"},
-        "grammar_revision":{"type":"integer","minimum":1},"target":{"type":"string"},
-        "mode":{"enum":["debug","release"]},"root_module":{"type":["string","null"]},
-        "inputs":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source","sha256"],"properties":{"source":{"$ref":"#/$defs/source"},"sha256":{"$ref":"#/$defs/sha256"},"kind":{"enum":["source-map"]}}}},
-        "dependencies":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["module","interface_sha256","body_sha256"],"properties":{"module":{"type":"string"},"interface_sha256":{"$ref":"#/$defs/sha256"},"body_sha256":{"$ref":"#/$defs/sha256"}}}},
-        "libraries":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["requested","search_roots","resolved","sha256"],"properties":{"requested":{"type":"string"},"search_roots":{"type":"array","items":{"type":"string"}},"resolved":{"oneOf":[{"$ref":"#/$defs/source"},{"type":"string"}]},"sha256":{"$ref":"#/$defs/sha256"}}}},
-        "assets":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name","source","media_type","attributes","size","sha256"],"properties":{"name":{"type":"string"},"source":{"$ref":"#/$defs/source"},"media_type":{"type":"string"},"attributes":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name","value"],"properties":{"name":{"type":"string"},"value":{"type":"string"}}}},"size":{"type":"integer","minimum":0},"sha256":{"$ref":"#/$defs/sha256"}}}},
-        "artifacts":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["path","kind","target","sha256"],"properties":{"path":{"type":"string"},"kind":{"type":"string"},"target":{"type":"string"},"sha256":{"$ref":"#/$defs/sha256"}}}},
-        "unsafe":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["kind","provenance","module","function","line"],"properties":{"kind":{"enum":["unsafe","nocheck","extern","cast","bitcast","union","deref"]},"provenance":{"enum":["declared","trusted"]},"module":{"type":"string"},"function":{"type":"string"},"line":{"type":"integer","minimum":0}}}},
-        "incremental":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["module","decision","reason"],"properties":{"module":{"type":"string"},"decision":{"enum":["kept","rebuilt"]},"reason":{"enum":["no-artifact","invalid-artifact","source-changed","mode-changed","compiler-changed","options-changed","stable","edges-hold","edge-changed"]},"artifact_crc32c":{"type":"string","pattern":"^[0-9a-f]{8}$"}}}},
-        "options":{"type":"object","required":["checks"],"properties":{"checks":{"enum":["retained","off"]}}},
-        "work":{"type":"object","additionalProperties":false,"required":["bodies_checked","modules_lowered","functions_lowered","declarations_checked"],"properties":{"bodies_checked":{"type":"integer","minimum":0},"modules_lowered":{"type":"integer","minimum":0},"functions_lowered":{"type":"integer","minimum":0},"declarations_checked":{"type":"integer","minimum":0}}}
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "tool_version",
+        "language_version",
+        "grammar_revision",
+        "target",
+        "mode",
+        "root_module",
+        "inputs",
+        "dependencies",
+        "libraries",
+        "assets",
+        "artifacts",
+        "unsafe",
+        "incremental",
+        "options",
+        "work"
+      ],
+      "properties": {
+        "schema": {
+          "const": "neper-build-manifest"
+        },
+        "version": {
+          "const": 1
+        },
+        "tool_version": {
+          "type": "string"
+        },
+        "language_version": {
+          "type": "string"
+        },
+        "grammar_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "target": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "debug",
+            "release"
+          ]
+        },
+        "root_module": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source",
+              "sha256"
+            ],
+            "properties": {
+              "source": {
+                "$ref": "#/$defs/source"
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "kind": {
+                "enum": [
+                  "source-map"
+                ]
+              }
+            }
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "module",
+              "interface_sha256",
+              "body_sha256"
+            ],
+            "properties": {
+              "module": {
+                "type": "string"
+              },
+              "interface_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "body_sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        },
+        "libraries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "requested",
+              "search_roots",
+              "resolved",
+              "sha256"
+            ],
+            "properties": {
+              "requested": {
+                "type": "string"
+              },
+              "search_roots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "resolved": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/source"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "source",
+              "media_type",
+              "attributes",
+              "size",
+              "sha256"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "source": {
+                "$ref": "#/$defs/source"
+              },
+              "media_type": {
+                "type": "string"
+              },
+              "attributes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "value"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "kind",
+              "target",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        },
+        "unsafe": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "provenance",
+              "module",
+              "function",
+              "line"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "unsafe",
+                  "nocheck",
+                  "extern",
+                  "cast",
+                  "bitcast",
+                  "union",
+                  "deref"
+                ]
+              },
+              "provenance": {
+                "enum": [
+                  "declared",
+                  "trusted"
+                ]
+              },
+              "module": {
+                "type": "string"
+              },
+              "function": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "incremental": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "module",
+              "decision",
+              "reason"
+            ],
+            "properties": {
+              "module": {
+                "type": "string"
+              },
+              "decision": {
+                "enum": [
+                  "kept",
+                  "rebuilt"
+                ]
+              },
+              "reason": {
+                "enum": [
+                  "no-artifact",
+                  "invalid-artifact",
+                  "source-changed",
+                  "mode-changed",
+                  "compiler-changed",
+                  "options-changed",
+                  "stable",
+                  "edges-hold",
+                  "edge-changed"
+                ]
+              },
+              "artifact_crc32c": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}$"
+              }
+            }
+          }
+        },
+        "options": {
+          "type": "object",
+          "required": [
+            "checks"
+          ],
+          "properties": {
+            "checks": {
+              "enum": [
+                "retained",
+                "off"
+              ]
+            }
+          }
+        },
+        "work": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bodies_checked",
+            "modules_lowered",
+            "functions_lowered",
+            "declarations_checked"
+          ],
+          "properties": {
+            "bodies_checked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "modules_lowered": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "functions_lowered": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "declarations_checked": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
       },
-      "additionalProperties":false
+      "additionalProperties": false
     },
     "modulePlan": {
-      "type":"object","required":["schema","version","status","qualifier_policy","api_catalog","tiers","layers","modules","packages"],
-      "properties":{
-        "schema":{"const":"neper-module-plan"},"version":{"const":1},
-        "status":{"const":"design"},"qualifier_policy":{"const":"last-segment-or-explicit-alias"},
-        "api_catalog":{"const":"module-apis.md"},
-        "tiers":{"type":"array","minItems":3,"maxItems":3,"uniqueItems":true,"items":{"type":"object","additionalProperties":false,"required":["id","meaning","modules"],"properties":{"id":{"enum":["core","extended","experimental"]},"meaning":{"enum":["required-first-stable","stable-independent-delivery","no-compatibility-promise"]},"modules":{"type":"array","minItems":1,"uniqueItems":true,"items":{"type":"string","pattern":"^e(\\.[a-z][a-z0-9_]*)+$"}}},"allOf":[{"if":{"properties":{"id":{"const":"core"}}},"then":{"properties":{"meaning":{"const":"required-first-stable"}}}},{"if":{"properties":{"id":{"const":"extended"}}},"then":{"properties":{"meaning":{"const":"stable-independent-delivery"}}}},{"if":{"properties":{"id":{"const":"experimental"}}},"then":{"properties":{"meaning":{"const":"no-compatibility-promise"}}}}]}},
-        "layers":{"type":"array","minItems":7,"maxItems":7,"uniqueItems":true,"items":{"type":"object","additionalProperties":false,"required":["id","name","may_depend_on"],"properties":{"id":{"type":"integer","minimum":0,"maximum":6},"name":{"type":"string","pattern":"^[a-z][a-z0-9-]*$"},"may_depend_on":{"type":"array","uniqueItems":true,"items":{"type":"integer","minimum":0,"maximum":6}}}}},
-        "modules":{"type":"array","minItems":1,"uniqueItems":true,"items":{"type":"object","additionalProperties":false,"required":["name","layer","surface","milestone","schedule","direct_dependencies","blocked_by"],"properties":{"name":{"type":"string","pattern":"^e(\\.[a-z][a-z0-9_]*)+$"},"layer":{"type":"integer","minimum":0,"maximum":6},"surface":{"enum":["spec","source","partial","planned"]},"milestone":{"enum":["M1","M2","M3",null]},"schedule":{"enum":["scheduled","later","deferred","unscheduled","not-targeted"]},"direct_dependencies":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^e(\\.[a-z][a-z0-9_]*)+$"}},"blocked_by":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^([a-z][a-z0-9-]*|e(\\.[a-z][a-z0-9_]*)+)$"}}},"allOf":[{"if":{"properties":{"schedule":{"const":"scheduled"}}},"then":{"properties":{"milestone":{"enum":["M1","M2","M3"]}}}},{"if":{"properties":{"schedule":{"enum":["later","deferred","unscheduled","not-targeted"]}}},"then":{"properties":{"milestone":{"type":"null"}}}}]}},
-        "packages":{"type":"array","uniqueItems":true,"items":{"type":"object","additionalProperties":false,"required":["name","schedule","blocked_by"],"properties":{"name":{"type":"string","pattern":"^x\\.[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"},"schedule":{"enum":["later","deferred","unscheduled","not-targeted"]},"blocked_by":{"type":"array","uniqueItems":true,"items":{"type":"string","pattern":"^([a-z][a-z0-9-]*|e(\\.[a-z][a-z0-9_]*)+)$"}}}}}
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "status",
+        "qualifier_policy",
+        "api_catalog",
+        "tiers",
+        "layers",
+        "modules",
+        "packages"
+      ],
+      "properties": {
+        "schema": {
+          "const": "neper-module-plan"
+        },
+        "version": {
+          "const": 1
+        },
+        "status": {
+          "const": "design"
+        },
+        "qualifier_policy": {
+          "const": "last-segment-or-explicit-alias"
+        },
+        "api_catalog": {
+          "const": "module-apis.md"
+        },
+        "tiers": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "meaning",
+              "modules"
+            ],
+            "properties": {
+              "id": {
+                "enum": [
+                  "core",
+                  "extended",
+                  "experimental"
+                ]
+              },
+              "meaning": {
+                "enum": [
+                  "required-first-stable",
+                  "stable-independent-delivery",
+                  "no-compatibility-promise"
+                ]
+              },
+              "modules": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^e(\\.[a-z][a-z0-9_]*)+$"
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "id": {
+                      "const": "core"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "meaning": {
+                      "const": "required-first-stable"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "id": {
+                      "const": "extended"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "meaning": {
+                      "const": "stable-independent-delivery"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "id": {
+                      "const": "experimental"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "meaning": {
+                      "const": "no-compatibility-promise"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "layers": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "may_depend_on"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "may_depend_on": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 6
+                }
+              }
+            }
+          }
+        },
+        "modules": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "layer",
+              "surface",
+              "milestone",
+              "schedule",
+              "direct_dependencies",
+              "blocked_by"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^e(\\.[a-z][a-z0-9_]*)+$"
+              },
+              "layer": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6
+              },
+              "surface": {
+                "enum": [
+                  "spec",
+                  "source",
+                  "partial",
+                  "planned"
+                ]
+              },
+              "milestone": {
+                "enum": [
+                  "M1",
+                  "M2",
+                  "M3",
+                  null
+                ]
+              },
+              "schedule": {
+                "enum": [
+                  "scheduled",
+                  "later",
+                  "deferred",
+                  "unscheduled",
+                  "not-targeted"
+                ]
+              },
+              "direct_dependencies": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^e(\\.[a-z][a-z0-9_]*)+$"
+                }
+              },
+              "blocked_by": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^([a-z][a-z0-9-]*|e(\\.[a-z][a-z0-9_]*)+)$"
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "schedule": {
+                      "const": "scheduled"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "milestone": {
+                      "enum": [
+                        "M1",
+                        "M2",
+                        "M3"
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "schedule": {
+                      "enum": [
+                        "later",
+                        "deferred",
+                        "unscheduled",
+                        "not-targeted"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "milestone": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "packages": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "schedule",
+              "blocked_by"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^x\\.[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+              },
+              "schedule": {
+                "enum": [
+                  "later",
+                  "deferred",
+                  "unscheduled",
+                  "not-targeted"
+                ]
+              },
+              "blocked_by": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^([a-z][a-z0-9-]*|e(\\.[a-z][a-z0-9_]*)+)$"
+                }
+              }
+            }
+          }
+        }
       },
-      "additionalProperties":false
+      "additionalProperties": false
     },
     "packageManifest": {
-      "type":"object","required":["schema","version","name","package_version","license","source","source_sha256","dependencies"],
-      "properties":{
-        "schema":{"const":"neper-package"},"version":{"const":1},"name":{"type":"string"},
-        "package_version":{"type":"string"},"license":{"type":"string"},"source":{"type":"string"},
-        "source_sha256":{"$ref":"#/$defs/sha256"},
-        "dependencies":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name","package_version","source","source_sha256"],"properties":{"name":{"type":"string"},"package_version":{"type":"string"},"source":{"type":"string"},"source_sha256":{"$ref":"#/$defs/sha256"}}}}
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "name",
+        "package_version",
+        "license",
+        "source",
+        "source_sha256",
+        "dependencies"
+      ],
+      "properties": {
+        "schema": {
+          "const": "neper-package"
+        },
+        "version": {
+          "const": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "package_version": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "package_version",
+              "source",
+              "source_sha256"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "package_version": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "source_sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        }
       },
-      "additionalProperties":false
+      "additionalProperties": false
     }
   }
 }

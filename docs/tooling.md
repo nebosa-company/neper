@@ -475,6 +475,13 @@ outside its file, or a plan whose result was not `ok`), each file's edits go on 
 the highest offset down and the file is published through `.tmp` and one replace;
 plain, it prints `applied N edits to PATH` per file and the `postcondition`; with
 `--json`, a stream whose result carries `edits`, `files` and `postcondition`.
+An `edit` inside a range the operand's source map marks `"edit": "generator"`
+(D512, H19) carries `"owner": "generator"` and `original` -- the generator's input
+and the byte where the edited text begins in it -- since the generated file is
+regenerated from that input and an edit made in it would be undone; `apply-plan`
+refuses such a plan with `E-TOOL-0003`, nothing applied. The other edits of the
+plan are plain, so a harness edits the original and re-plans.
+
 `neper compare-manifests A B [--json]` (D482) holds two build manifests against
 each other by what identifies a build -- `target`, `mode`, `root_module`,
 `tool_version`, `options.checks`, every input by path and hash, every dependency

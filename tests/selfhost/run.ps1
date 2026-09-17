@@ -2457,6 +2457,19 @@ $callbackBuilt = & $compiler emit-executable (Join-Path $callbackScratch 'src\ma
 if ($LASTEXITCODE -ne 0 -or $callbackBuilt -ne 'executable written') { throw "the renamed program of a callback does not build: $callbackBuilt" }
 & $callbackExe
 if ($LASTEXITCODE -ne 8) { throw "the renamed program of a callback behaves differently (exit $LASTEXITCODE)" }
+# A plan into generated text (D512, H19): the edit at the mapped call site names its
+# owner and the original, the declaration's edit does not, and apply-plan refuses.
+$generatedFixture = Join-Path $conformanceRoot 'tools\plan_generated'
+$generatedPlanActual = Join-Path $testBuild 'conformance-tools-plan-generated.jsonl'
+cmd /c "cd /d `"$generatedFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol deep.pick --to choose > `"$generatedPlanActual`""
+if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json over a generated root failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $generatedPlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_generated.x64-windows.expected.jsonl')).Hash) { throw 'plan-rename-file --json over a generated root differs from the conformance corpus' }
+$generatedScratch = Join-Path $testBuild 'generated-scratch'
+if (Test-Path -LiteralPath $generatedScratch) { Remove-Item -LiteralPath $generatedScratch -Recurse -Force }
+Copy-Item -Recurse $generatedFixture $generatedScratch
+$generatedApply = & $compiler apply-plan $generatedPlanActual --root (Join-Path $generatedScratch 'src') 2>&1 | Out-String
+if ($LASTEXITCODE -ne 2 -or $generatedApply -notmatch 'a generator owns') { throw "apply-plan did not refuse an edit a generator owns (exit $LASTEXITCODE): $generatedApply" }
+if ((Get-Content -Raw -LiteralPath (Join-Path $generatedScratch 'src\deep.e')) -ne (Get-Content -Raw -LiteralPath (Join-Path $generatedFixture 'src\deep.e'))) { throw 'a refused plan applied its plain edit' }
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan byte for byte,
 # applied to a copy it checks; a span that is not one expression is refused with exit 2.
 $replaceActual = Join-Path $testBuild 'conformance-tools-plan-replace.jsonl'
