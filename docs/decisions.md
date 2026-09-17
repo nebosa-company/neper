@@ -11128,3 +11128,17 @@ and it builds the original sources to the stable stage byte for byte, which
 both suites hold. With it every transformation of the harness that can be
 turned on the compiler has been: the formatter, the comments, the literals,
 the locals, the symbols, the fields, the order.
+
+## D532 -- The library turned too
+
+The turns of D525-D531 read `src/`; the standard library reaches every image
+the compiler makes, and a program's own `lib/` shadows the toolchain's, so a
+turn over it is a project: the compiler's sources as they are beside `lib/`
+transformed, built as that project. `strip_comments.py` and
+`hoist_constants.py` walk a tree now, and both suites build the compiler
+against the library with every comment blanked and again with every literal
+hoisted, and require the stable stage byte for byte. The locals, symbols,
+fields and order turns are not taken over the library: the per-target `os`
+variants declare foreign structs and `@import`ed functions whose names and
+layouts are the platform's, and an unreached module is not built, so the
+check would be partial where it is not wrong.

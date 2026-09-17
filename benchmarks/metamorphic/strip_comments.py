@@ -2,7 +2,8 @@
 
     python benchmarks/metamorphic/strip_comments.py COMPILER SRC_DIR OUT_DIR
 
-Each `.e` file under SRC_DIR is copied to OUT_DIR with every comment's bytes -- read
+Each `.e` file under SRC_DIR, its subdirectories included (D532: `lib/` too), is
+copied to OUT_DIR with every comment's bytes -- read
 from the lossless token stream's trivia -- replaced by spaces, so every line and
 column holds; every other file is copied as it is. A compiler built from the result
 must be the compiler built from the original, byte for byte: comments are trivia, and
@@ -32,11 +33,14 @@ def blanked(path):
     return bytes(text)
 
 
-for name in sorted(os.listdir(src_dir)):
-    source = os.path.join(src_dir, name)
-    if not os.path.isfile(source):
-        continue
-    if name.endswith('.e'):
-        open(os.path.join(out_dir, name), 'wb').write(blanked(source))
-    else:
-        shutil.copy(source, os.path.join(out_dir, name))
+for dirpath, dirs, files in os.walk(src_dir):
+    dirs.sort()
+    rel = os.path.relpath(dirpath, src_dir)
+    target = out_dir if rel == '.' else os.path.join(out_dir, rel)
+    os.makedirs(target, exist_ok=True)
+    for name in sorted(files):
+        source = os.path.join(dirpath, name)
+        if name.endswith('.e'):
+            open(os.path.join(target, name), 'wb').write(blanked(source))
+        else:
+            shutil.copy(source, os.path.join(target, name))

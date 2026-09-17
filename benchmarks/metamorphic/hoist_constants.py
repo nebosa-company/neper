@@ -2,8 +2,8 @@
 
     python benchmarks/metamorphic/hoist_constants.py COMPILER SRC_DIR OUT_DIR
 
-The metamorphic harness's `constants` transformation (D508) over a whole tree: in
-each `.e` file every typed integer literal outside a `const` and a `case` label is
+The metamorphic harness's `constants` transformation (D508) over a whole tree, its
+subdirectories included (D532: `lib/` too): in each `.e` file every typed integer literal outside a `const` and a `case` label is
 replaced by a module-scope `const` of the same type and value, one per distinct
 literal, named to the literal's length so every column holds, the declarations
 appended at the end. A compiler built from the result must be the compiler built
@@ -50,11 +50,14 @@ def hoisted(path):
     return bytes(out)
 
 
-for name in sorted(os.listdir(src_dir)):
-    source = os.path.join(src_dir, name)
-    if not os.path.isfile(source):
-        continue
-    if name.endswith('.e'):
-        open(os.path.join(out_dir, name), 'wb').write(hoisted(source))
-    else:
-        shutil.copy(source, os.path.join(out_dir, name))
+for dirpath, dirs, files in os.walk(src_dir):
+    dirs.sort()
+    rel = os.path.relpath(dirpath, src_dir)
+    target = out_dir if rel == '.' else os.path.join(out_dir, rel)
+    os.makedirs(target, exist_ok=True)
+    for name in sorted(files):
+        source = os.path.join(dirpath, name)
+        if name.endswith('.e'):
+            open(os.path.join(target, name), 'wb').write(hoisted(source))
+        else:
+            shutil.copy(source, os.path.join(target, name))
