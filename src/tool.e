@@ -4283,8 +4283,9 @@ fn list_items(tokens: []const lex.Token, name_at: usize) -> ListItems {
 // The declaration's list and every resolved call's argument list are re-rendered
 // from the texts of their items -- what was written, in the new order, joined by
 // `, ` -- as one edit per site over the text between the parentheses. A function
-// named as a value or chosen by a protocol is refused as D406 refuses it; so is a
-// list with more items than the order names or more than sixteen.
+// named as a value or chosen by a protocol is refused as D406 refuses it; the
+// process entry point is fixed too. So is a list with more items than the order
+// names or more than sixteen.
 // Whether an identifier token spelled `name` lies in a module's text between two
 // byte offsets (D439): a function body's use of a parameter, read from the tokens.
 fn body_names(module: graph.Module, from: usize, to: usize, name: str) -> bool {
@@ -4306,6 +4307,9 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
     let (function_index, has_function) = uses_subject(c, g, subject)
     if !has_function { ret plan_refused(&out, "the subject names no function of the program") }
     let function = c.functions[function_index]
+    if function.module_index < g.count && graph.same(function.name, "main") && function.module_index == 0usize {
+        ret plan_refused(&out, "the program's entry point has a fixed signature")
+    }
     // The order: indices into the old parameter list, none repeated, all in range.
     var order: [16]usize = zero
     var order_count = 0usize

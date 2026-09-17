@@ -3687,6 +3687,16 @@ chmod +x "$test_build/neper-resymbolled"
 by_resymbolled_written=$("$test_build/neper-resymbolled" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-resymbolled")
 [ "$by_resymbolled_written" = 'executable written' ]
 cmp "$test_build/neper-by-resymbolled" "$stable_compiler_path"
+# The compiler with a conflict-free set of parameter lists reversed (D562, H10,
+# H17): one checked query batch supplies the structured plans, apply-plan commits
+# their edits together, and the result builds the stable stage.
+python3 "$repo/benchmarks/metamorphic/reorder_parameters.py" "$test_build/neper-self" "$repo" "$repo/src" "$test_build/parameter-src/src" linux
+parameter_written=$("$own_compiler_path" emit-executable "$test_build/parameter-src/src/main.e" "$repo" x64 linux "$test_build/neper-parameters")
+[ "$parameter_written" = 'executable written' ]
+chmod +x "$test_build/neper-parameters"
+by_parameters_written=$("$test_build/neper-parameters" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-parameters")
+[ "$by_parameters_written" = 'executable written' ]
+cmp "$test_build/neper-by-parameters" "$stable_compiler_path"
 # The compiler with every struct's fields reversed (D530, H10): built from `src/` so, it builds the stable stage.
 python3 "$repo/benchmarks/metamorphic/reverse_fields.py" "$test_build/neper-self" "$repo/src" "$test_build/reversed-src/src"
 reversed_written=$("$own_compiler_path" emit-executable "$test_build/reversed-src/src/main.e" "$repo" x64 linux "$test_build/neper-reversed")
@@ -3752,7 +3762,7 @@ for release_tree in blanked-src hoisted-src renamed-src; do
     [ "$("$own_compiler_path" emit-executable "$test_build/$release_tree/src/main.e" "$repo" x64 linux "$test_build/neper-release-$release_tree" --release)" = 'executable written' ]
     cmp "$test_build/neper-release-$release_tree" "$test_build/neper-own-release"
 done
-for turn_compiler in neper-formatted neper-resymbolled neper-reversed neper-reordered; do
+for turn_compiler in neper-formatted neper-resymbolled neper-parameters neper-reversed neper-reordered; do
     [ "$("$test_build/$turn_compiler" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/release-by-$turn_compiler" --release)" = 'executable written' ]
     cmp "$test_build/release-by-$turn_compiler" "$test_build/neper-own-release"
 done

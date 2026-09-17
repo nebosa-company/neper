@@ -402,7 +402,8 @@ emits that whole-image boundary once for each of its subjects.
 answers many
 queries from one check: the batch file (`-` for standard input) holds one query
 per line -- `context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [BUDGET
-[BYTES [CURSOR]]]`, `uses SYMBOL`, `memory` -- and each line's answer is a whole stream,
+[BYTES [CURSOR]]]`, `uses SYMBOL`, `signature SYMBOL ORDER`, `memory` -- and each
+line's answer is a whole stream,
 header to result, written in the line's order, so a harness splits the output
 at the headers. A blank line is passed over; a line no query reads gets a
 diagnostic stream of its own. A refused query or an unreadable line makes the
@@ -422,6 +423,12 @@ reset. `queries_completed` counts successful context, catalogue and uses lines
 before this memory report. Thus a report after warmup shows both the completed
 work, its peak, and that live memory
 returned to the session baseline instead of merely relying on process exit.
+
+`signature SYMBOL ORDER` (D562, H10/H29) is the batch form of
+`plan-change-signature-file`: `ORDER` is the same comma-separated list of old
+parameter indices. It lets a transformation request many independent signature
+plans from one checked snapshot; each answer remains a complete plan stream and a
+fixed-signature function is refused only in its own stream.
 
 Standalone `--unchecked` applies one intended image policy to the whole batch
 (D556, H27). Every `context` and `catalog` answer then has the same `checks: "off"`
@@ -538,10 +545,14 @@ re-checks; `neper apply-plan PLAN.jsonl --root DIR [--project-src DIR] [--json]`
 (D481) is the applier: every precondition's file must hash as recorded or nothing is
 written (`E-TOOL-0003`, exit 2, the file named in the message as the precondition
 spells it and carried as `symbol` (D547); and the same code for an edit with no
-precondition or outside its file, or a plan whose result was not `ok`), each file's edits go on from
-the highest offset down and the file is published through `.tmp` and one replace;
+precondition or outside its file, overlapping edits, or a plan whose result was not
+`ok`), each file's original spans are ordered and rendered into one final buffer,
+then the file is published through `.tmp` and one replace;
 plain, it prints `applied N edits to PATH` per file and the `postcondition`; with
-`--json`, a stream whose result carries `edits`, `files` and `postcondition`.
+`--json`, a stream whose result carries `edits`, `files` and `postcondition`. Its
+edit table is sized from the plan (D562), rather than imposing a 4,096-edit ceiling,
+and rendering allocates one output per file rather than one per edit, so one
+transactional compiler-wide change fits the ordinary arena and stays all-or-nothing.
 An `edit` inside a range the operand's source map marks `"edit": "generator"`
 (D512, H19) carries `"owner": "generator"` and `original` -- the generator's input
 and the byte where the edited text begins in it -- since the generated file is
@@ -585,8 +596,8 @@ module.name --order I,J,...` (D415, H29) plans a reordering or removal: the
 order lists the parameters kept as indices into the old list, none repeated;
 the declaration's list and every resolved call's argument list are re-rendered
 from the texts of their items in that order, one `change-signature` edit per
-site over the text between the parentheses; a function named as a value or
-chosen by a protocol, a repeated or out-of-range index, a list of more than
+site over the text between the parentheses; the program entry point, a function
+named as a value or chosen by a protocol, a repeated or out-of-range index, a list of more than
 sixteen items, or a parameter left out of the order that the body still names
 (D439) is refused. Every refused query (a subject that names nothing, a
 plan that cannot be made) exits 2 as its result says.

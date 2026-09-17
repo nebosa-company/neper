@@ -3651,6 +3651,19 @@ $byResymbolled = Join-Path $testBuild 'neper-by-resymbolled.exe'
 & $resymbolledCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byResymbolled | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byResymbolled)) { throw 'the compiler with renamed symbols did not build the compiler' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byResymbolled).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with renamed symbols does not build the stable stage' }
+# The compiler with a conflict-free set of parameter lists reversed (D562, H10,
+# H17): one checked query batch supplies the structured plans, apply-plan commits
+# their twelve thousand edits together, and the result builds the stable stage.
+$parameterSrc = Join-Path $testBuild 'parameter-src'
+& python (Join-Path $repo 'benchmarks/metamorphic/reorder_parameters.py') $compiler $repo (Join-Path $repo 'src') (Join-Path $parameterSrc 'src') windows
+if ($LASTEXITCODE -ne 0) { throw 'the parameters of the compiler could not be reordered' }
+$parameterCompiler = Join-Path $testBuild 'neper-parameters.exe'
+& $ownCompilerPath emit-executable (Join-Path $parameterSrc 'src\main.e') $repo 'x64' 'windows' $parameterCompiler | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $parameterCompiler)) { throw 'the compiler did not build from its sources with parameters reordered' }
+$byParameters = Join-Path $testBuild 'neper-by-parameters.exe'
+& $parameterCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byParameters | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byParameters)) { throw 'the compiler with reordered parameters did not build the compiler' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byParameters).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with reordered parameters does not build the stable stage' }
 # The compiler with every struct's fields reversed (D530, H10): another layout for
 # every one of its records, and the compiler built from the result builds the original
 # sources to the stable stage byte for byte -- nothing in it reads a struct by layout.
@@ -3747,7 +3760,7 @@ foreach ($releaseTree in @($blankedSrc, $hoistedSrc, $renamedSrc)) {
     & $ownCompilerPath emit-executable (Join-Path $releaseTree 'src\main.e') $repo 'x64' 'windows' $releaseTurn --release | Out-Null
     if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseTurn).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseStable).Hash) { throw "the release build of $(Split-Path -Leaf $releaseTree) is not the release stable stage" }
 }
-foreach ($turnCompiler in @($formattedCompiler, $resymbolledCompiler, $reversedCompiler, $reorderedCompiler)) {
+foreach ($turnCompiler in @($formattedCompiler, $resymbolledCompiler, $parameterCompiler, $reversedCompiler, $reorderedCompiler)) {
     $releaseBy = Join-Path $testBuild ('release-by-' + (Split-Path -Leaf $turnCompiler))
     & $turnCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseBy --release | Out-Null
     if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseBy).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseStable).Hash) { throw "$(Split-Path -Leaf $turnCompiler) does not build the release stable stage" }

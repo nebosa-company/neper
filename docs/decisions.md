@@ -11589,3 +11589,26 @@ Both self-host suites parse a real timed build, require more than one progress e
 require the exact sequence `1..N`, require the result to be the final record, and
 validate the stream against the schema. This closes H18's sequence-order slice while
 backpressure and disconnect behavior remain separate transport work.
+
+## D562 -- The compiler's parameters reordered by its own plans
+
+The H10 turn now reverses parameter lists through the compiler's structured
+signature planner rather than text substitution. `query-batch` accepts `signature
+SYMBOL ORDER`, so the transformer obtains all plans from one checked snapshot. It
+selects a deterministic conflict-free set of whole plans: two independently valid
+plans can have nested edit spans when an argument contains another planned call, and
+combining those spans would let the outer replacement overwrite the inner one. The
+selected plans are merged with their file preconditions and committed once by
+`apply-plan`.
+
+The first compiler-wide plan carried almost twelve thousand edits, exposing the
+applier's fixed 4,096-edit table and its full-file allocation after every edit. The
+table is now sized from the plan; each file's disjoint original spans are ordered,
+validated and rendered into one final allocation. The turn also found
+that `main.main` was not protected even though the process entry ABI fixes its
+signature. The signature planner now refuses the entry point as it already refuses
+function values and protocol choices. On both hosts the resulting turn reverses
+1,571 functions in 11,990 edits, refuses the two fixed signatures, skips 53
+overlapping plan sets, builds, and then builds the original compiler to the stable
+stage byte for byte. The debug and release paths are both held by the self-host
+suites.

@@ -4482,7 +4482,6 @@ fn save_executable(a: *mem.Arena, path: str, bytes: []u8, os_name: str) -> err {
 // root: `operand` under --root, `project-src` under --project-src (default --root).
 // `scripts/apply_plan.py` (D376) was the only applier before this.
 const PLAN_FILES: usize = 64usize
-const PLAN_EDITS: usize = 4096usize
 
 fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     var out = stderr_sink()
@@ -4517,18 +4516,31 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     }
     let (plan, plan_error) = graph.load_file(a, args[2usize])
     if plan_error != ok { ret apply_plan_refused(sink, "E-CLI-9999", "the plan cannot be read") }
+    // Size the edit tables from the plan (D562, H29): compiler-wide structured
+    // changes legitimately exceed the former fixed cap of 4,096 edits.
+    var plan_edits = 0usize
+    var count_start = 0usize
+    while count_start < plan.len {
+        var count_end = count_start
+        while count_end < plan.len && plan[count_end] != 10u8 { count_end += 1usize }
+        if same(json_str_after(plan[count_start..count_end], "\"record\":\""), "edit") { plan_edits += 1usize }
+        count_start = count_end + 1usize
+    }
+    let edit_capacity = plan_edits + 1usize
     let (file_paths, file_paths_error) = mem.alloc[str](a, PLAN_FILES)
     if file_paths_error != ok { ret file_paths_error }
     let (file_texts, file_texts_error) = mem.alloc[str](a, PLAN_FILES)
     if file_texts_error != ok { ret file_texts_error }
-    let (edit_file, edit_file_error) = mem.alloc[usize](a, PLAN_EDITS)
+    let (edit_file, edit_file_error) = mem.alloc[usize](a, edit_capacity)
     if edit_file_error != ok { ret edit_file_error }
-    let (edit_start, edit_start_error) = mem.alloc[usize](a, PLAN_EDITS)
+    let (edit_start, edit_start_error) = mem.alloc[usize](a, edit_capacity)
     if edit_start_error != ok { ret edit_start_error }
-    let (edit_end, edit_end_error) = mem.alloc[usize](a, PLAN_EDITS)
+    let (edit_end, edit_end_error) = mem.alloc[usize](a, edit_capacity)
     if edit_end_error != ok { ret edit_end_error }
-    let (edit_text, edit_text_error) = mem.alloc[str](a, PLAN_EDITS)
+    let (edit_text, edit_text_error) = mem.alloc[str](a, edit_capacity)
     if edit_text_error != ok { ret edit_text_error }
+    let (edit_order, edit_order_error) = mem.alloc[usize](a, edit_capacity)
+    if edit_order_error != ok { ret edit_order_error }
     var file_count = 0usize
     var edit_count = 0usize
     var succeeded = false
@@ -4557,7 +4569,7 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
             file_count += 1usize
         }
         if same(kind, "edit") {
-            if PLAN_EDITS == edit_count { ret apply_plan_refused(sink, "E-TOOL-9999", "the plan has more edits than apply-plan holds") }
+            if edit_file.len == edit_count { ret apply_plan_refused(sink, "E-TOOL-9999", "the plan has more edits than apply-plan holds") }
             // An edit the generator owns (D512, H19): the text is regenerated from its
             // input, so applying it here would be undone; the record names the original.
             if json_key_at(line, "\"owner\":\"generator\"") != line.len { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit lies in generated text a generator owns; make it in the original the edit names; nothing applied") }
@@ -4580,38 +4592,54 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
         if same(kind, "postcondition") { postcondition = json_str_after(line, "\"check\":\"") }
     }
     if !succeeded { ret apply_plan_refused(sink, "E-TOOL-0003", "the plan did not succeed; nothing applied") }
-    // Per file, the edits from the highest offset down: each is spliced into a fresh
-    // copy, so an earlier span is where the plan said it was.
+    // Per file, order the original spans and build the result once (D562). Splicing
+    // a fresh full-file copy for each edit exhausted the ordinary 64 MiB arena on a
+    // compiler-wide plan even after its edit table had grown to fit.
     var file_at = 0usize
     while file_at < file_count {
-        var text = file_texts[file_at]
-        var applied = 0usize
-        while true {
-            // The unapplied edit of this file with the highest start.
-            var best = edit_count
-            var edit_at = 0usize
-            while edit_at < edit_count {
-                if edit_file[edit_at] == file_at && edit_start[edit_at] != PLAN_APPLIED && (best == edit_count || edit_start[edit_at] > edit_start[best]) { best = edit_at }
-                edit_at += 1usize
+        var ordered = 0usize
+        var edit_at = 0usize
+        while edit_at < edit_count {
+            if edit_file[edit_at] == file_at {
+                var slot = ordered
+                while slot > 0usize && edit_start[edit_order[slot - 1usize]] > edit_start[edit_at] {
+                    edit_order[slot] = edit_order[slot - 1usize]
+                    slot = slot - 1usize
+                }
+                edit_order[slot] = edit_at
+                ordered += 1usize
             }
-            if best == edit_count { break }
-            let (spliced, splice_error) = mem.alloc[u8](a, text.len - (edit_end[best] - edit_start[best]) + edit_text[best].len)
-            if splice_error != ok { ret splice_error }
-            var n = nptest_append(spliced, 0usize, text[0usize..edit_start[best]])
-            n = nptest_append(spliced, n, edit_text[best])
-            n = nptest_append(spliced, n, text[edit_end[best]..text.len])
-            text = spliced[0usize..n]
-            edit_start[best] = PLAN_APPLIED
-            applied += 1usize
+            edit_at += 1usize
         }
-        if applied != 0usize {
-            let (bytes, bytes_error) = mem.alloc[u8](a, text.len)
+        if ordered != 0usize {
+            let original = file_texts[file_at]
+            var final_len = original.len
+            var cursor = 0usize
+            var order_at = 0usize
+            while order_at < ordered {
+                let edit = edit_order[order_at]
+                if edit_start[edit] < cursor { ret apply_plan_refused(sink, "E-TOOL-0003", "edits overlap; nothing applied") }
+                final_len = final_len - (edit_end[edit] - edit_start[edit]) + edit_text[edit].len
+                cursor = edit_end[edit]
+                order_at += 1usize
+            }
+            let (bytes, bytes_error) = mem.alloc[u8](a, final_len)
             if bytes_error != ok { ret bytes_error }
-            let n = nptest_append(bytes, 0usize, text)
+            var n = 0usize
+            cursor = 0usize
+            order_at = 0usize
+            while order_at < ordered {
+                let edit = edit_order[order_at]
+                n = nptest_append(bytes, n, original[cursor..edit_start[edit]])
+                n = nptest_append(bytes, n, edit_text[edit])
+                cursor = edit_end[edit]
+                order_at += 1usize
+            }
+            n = nptest_append(bytes, n, original[cursor..original.len])
             try save_bytes(a, file_paths[file_at], bytes[0usize..n])
             if !json {
                 try write_all(&out, "applied ")
-                try write_usize(&out, applied)
+                try write_usize(&out, ordered)
                 try write_all(&out, " edits to ")
                 try write_all(&out, file_paths[file_at])
                 try write_all(&out, "\n")
@@ -4635,9 +4663,6 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
     try write_json_string(&out, postcondition)
     ret write_all(&out, "}}\n")
 }
-
-// An edit's start once it is spliced in: no span reaches this.
-const PLAN_APPLIED: usize = 4294967295usize
 
 // The file the refusal is about (D547, H29), named in the message as the plan's
 // precondition spells it and carried as `symbol`, so a harness re-plans from it.
@@ -9317,7 +9342,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
 // H16/H27): the batch file --
 // `-` for standard input -- holds one query per line, words separated by spaces:
 // `context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [BUDGET [BYTES [CURSOR]]]`,
-// `uses SYMBOL`, `memory` (D410: the arena's use and capacity, for a harness
+// `uses SYMBOL`, `signature SYMBOL ORDER` (D562), `memory` (D410: the arena's use and capacity, for a harness
 // that watches what a batch retains). Each line's answer is a whole stream (header to result), written in
 // the line's order, so a harness splits the output at the headers; a blank line is
 // passed over, a line no query reads gets a diagnostic stream of its own. A refused
@@ -9394,6 +9419,11 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
             known = true
             query = true
             line_error = tool.uses_json(a, checker, loaded, words[1usize])
+        }
+        if word_count == 3usize && same(words[0usize], "signature") {
+            known = true
+            query = true
+            line_error = tool.plan_signature_json(a, checker, loaded, words[1usize], words[2usize])
         }
         if !known {
             try tool.batch_line_refused(a, line)
