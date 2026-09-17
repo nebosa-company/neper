@@ -399,8 +399,7 @@ emits that whole-image boundary once for each of its subjects.
 answers many
 queries from one check: the batch file (`-` for standard input) holds one query
 per line -- `context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [BUDGET
-[BYTES [CURSOR]]]`, `uses SYMBOL`, `memory` (the arena's `arena_used` and
-`arena_capacity`) -- and each line's answer is a whole stream,
+[BYTES [CURSOR]]]`, `uses SYMBOL`, `memory` -- and each line's answer is a whole stream,
 header to result, written in the line's order, so a harness splits the output
 at the headers. A blank line is passed over; a line no query reads gets a
 diagnostic stream of its own. A refused query or an unreadable line makes the
@@ -410,6 +409,14 @@ before and after a run of queries reports the same `arena_used`, which both
 suites assert. Measured on the compiler's own source: twenty `context` queries
 in one batch 447 ms, as twenty processes 6.6 s; five hundred and fifty lines 3.2
 s with the arena where it started.
+
+The `memory` result separates retained and temporary storage (D558, H16):
+`arena_used` is live allocation and `arena_capacity` is reserved capacity;
+`snapshot_used` is the checked graph/checker before the batch input is loaded;
+`session_used` is the baseline retained for the batch; and `request_peak` is the
+largest temporary allocation of any completed line before its request arena was
+reset. Thus a report after warmup shows both the peak work and that live memory
+returned to the session baseline instead of merely relying on process exit.
 
 Standalone `--unchecked` applies one intended image policy to the whole batch
 (D556, H27). Every `context` and `catalog` answer then has the same `checks: "off"`

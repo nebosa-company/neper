@@ -700,6 +700,12 @@ after warmup and reclamation, not just process-exit memory. H25 sets named laten
 and memory limits before tuning; allocator reservation and live allocations are
 reported separately.
 
+The batch transport now exposes the first reusable accounting slice (D558): live
+and reserved arena bytes, the checked snapshot, the session baseline after loading
+the batch, and peak temporary request bytes. The before/after fixture proves that a
+nonzero peak is reclaimed to the same retained baseline. Eviction, pinning and the
+10,000-cycle fixed-budget acceptance remain open.
+
 ## 20. H17 — semantic search and safe change planning
 
 **M2.5 delivery: compiler-backed CPU search and rename/move/delete planning.**

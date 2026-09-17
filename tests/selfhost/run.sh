@@ -2637,10 +2637,10 @@ batch_broken_status=0
 [ "$batch_broken_status" -eq 1 ]
 [ ! -s "$test_build/conformance-tools-batch-broken.stderr" ]
 cmp -s "$test_build/conformance-tools-batch-broken.jsonl" "$conformance_root/tools/batch_broken.expected.jsonl" || { echo "query-batch over a program that does not check differs from the conformance corpus" >&2; exit 1; }
-# A batch retains nothing between lines (D410, H16): `memory` before and after three
-# queries reports the same arena use.
-batch_used=$($test_build/neper-self query-batch "$conformance_root/tools/contract.e" "$repo" x64 linux --json --batch "$conformance_root/tools/batch_memory.txt" | grep -o '"arena_used":[0-9]*' | sort -u | wc -l)
-[ "$batch_used" -eq 1 ]
+# A batch retains nothing between lines (D410, D558, H16): `memory` separates
+# the checked snapshot, the session baseline and the largest temporary request.
+batch_memory=$($test_build/neper-self query-batch "$conformance_root/tools/contract.e" "$repo" x64 linux --json --batch "$conformance_root/tools/batch_memory.txt")
+printf '%s\n' "$batch_memory" | python3 -c "import json,sys; rows=[json.loads(line)['data'] for line in sys.stdin if '\"arena_used\"' in line]; assert len(rows)==2; assert rows[0]['request_peak']==0 and rows[1]['request_peak']>0; assert rows[0]['session_used']==rows[1]['session_used']==rows[1]['arena_used']; assert rows[1]['snapshot_used']<rows[1]['session_used']; assert rows[1]['arena_capacity']>=rows[1]['arena_used']"
 # The catalogue (D397, H11): every function of the module, subjects and facts under one
 # budget; the byte budget (D400, H08) ends the page at the record that crosses it.
 catalog_actual="$test_build/conformance-tools-catalog.jsonl"

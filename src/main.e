@@ -9317,6 +9317,9 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
 // passed over, a line no query reads gets a diagnostic stream of its own. A refused
 // query or an unreadable line makes the process exit 2 once every line is answered.
 fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, batch_path: str, target_text: str, checks: str) -> err {
+    // The checked graph and checker are the reusable snapshot. The batch input is
+    // session storage; each line after it is temporary request storage (D558, H16).
+    let snapshot_used = mem.stats(a).used
     var batch = ""
     if same(batch_path, "-") {
         let (from_stdin, stdin_error) = source.load_stdin(a)
@@ -9327,6 +9330,8 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
         if file_error != ok { ret file_error }
         batch = from_file
     }
+    let session_used = mem.stats(a).used
+    var request_peak = 0usize
     var refused = false
     var line_start = 0usize
     while line_start < batch.len {
@@ -9365,7 +9370,7 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
         let request_mark = mem.mark(a)
         if word_count >= 1usize && same(words[0usize], "memory") {
             known = true
-            line_error = tool.batch_memory(a)
+            line_error = tool.batch_memory(a, snapshot_used, session_used, request_peak)
         }
         if word_count >= 2usize && same(words[0usize], "context") {
             known = true
@@ -9382,6 +9387,10 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
         if !known {
             try tool.batch_line_refused(a, line)
             line_error = tool.Refused
+        }
+        let request_end = mem.stats(a).used
+        if request_end > session_used && request_end - session_used > request_peak {
+            request_peak = request_end - session_used
         }
         mem.reset(a, request_mark)
         if line_error == tool.Refused { refused = true } else { if line_error != ok { ret line_error } }

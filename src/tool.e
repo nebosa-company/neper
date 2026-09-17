@@ -3273,10 +3273,10 @@ fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative:
     ret flush(out)
 }
 
-// The `memory` line of a batch (D410, H16): the arena's bytes in use and its
-// capacity, as a stream of its own. Asked before and after a run of queries,
-// the two `arena_used` are equal when the batch retains nothing between lines.
-fn batch_memory(a: *mem.Arena) -> err {
+// The `memory` line of a batch (D410, D558, H16): live versus reserved arena
+// bytes, the checked snapshot below the batch input, the session baseline after
+// that input, and the largest completed request before its storage was reclaimed.
+fn batch_memory(a: *mem.Arena, snapshot_used: usize, session_used: usize, request_peak: usize) -> err {
     let stats = mem.stats(a)
     var storage: [1024]u8 = zero
     var out: Out = zero
@@ -3286,6 +3286,12 @@ fn batch_memory(a: *mem.Arena) -> err {
     try decimal(&out, stats.used)
     try text(&out, ",\"arena_capacity\":")
     try decimal(&out, stats.capacity)
+    try text(&out, ",\"snapshot_used\":")
+    try decimal(&out, snapshot_used)
+    try text(&out, ",\"session_used\":")
+    try decimal(&out, session_used)
+    try text(&out, ",\"request_peak\":")
+    try decimal(&out, request_peak)
     try text(&out, "}}")
     ret flush(&out)
 }

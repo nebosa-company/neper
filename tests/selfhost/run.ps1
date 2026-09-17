@@ -2788,12 +2788,12 @@ cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" query-b
 if ($LASTEXITCODE -ne 1) { throw "query-batch over a program that does not check exited $LASTEXITCODE, not 1" }
 if ((Get-Item -LiteralPath $batchBrokenStderr).Length -ne 0) { throw 'query-batch over a program that does not check wrote to stderr' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $batchBroken).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/batch_broken.expected.jsonl')).Hash) { throw 'query-batch over a program that does not check differs from the conformance corpus' }
-# A batch retains nothing between lines (D410, H16): `memory` before and after three
-# queries reports the same arena use.
+# A batch retains nothing between lines (D410, D558, H16): `memory` separates
+# the checked snapshot, the session baseline and the largest temporary request.
 $batchMemory = & $compiler query-batch (Join-Path $conformanceRoot 'tools/contract.e') $repo 'x64' 'windows' --json --batch (Join-Path $conformanceRoot 'tools/batch_memory.txt')
 if ($LASTEXITCODE -ne 0) { throw "query-batch with memory lines failed" }
-$batchUsed = @($batchMemory | Select-String -Pattern '"arena_used":(\d+)' -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value })
-if ($batchUsed.Count -ne 2 -or $batchUsed[0] -ne $batchUsed[1]) { throw "the batch retained memory between lines ($($batchUsed -join ' / '))" }
+$batchMemoryRecords = @($batchMemory | Where-Object { $_ -match '"arena_used"' } | ForEach-Object { ($_ | ConvertFrom-Json).data })
+if ($batchMemoryRecords.Count -ne 2 -or $batchMemoryRecords[0].request_peak -ne 0 -or $batchMemoryRecords[1].request_peak -le 0 -or $batchMemoryRecords[0].session_used -ne $batchMemoryRecords[1].session_used -or $batchMemoryRecords[1].arena_used -ne $batchMemoryRecords[1].session_used -or $batchMemoryRecords[1].snapshot_used -ge $batchMemoryRecords[1].session_used -or $batchMemoryRecords[1].arena_capacity -lt $batchMemoryRecords[1].arena_used) { throw "the batch retained request memory or reported the wrong accounting ($($batchMemoryRecords | ConvertTo-Json -Compress))" }
 # The catalogue (D397, H11): every function of the module, subjects and facts under one
 # budget; the byte budget (D400, H08) ends the page at the record that crosses it.
 $catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'

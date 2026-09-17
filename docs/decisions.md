@@ -11522,3 +11522,20 @@ unsafe array exactly with the source build's cold manifest in debug and release,
 verify every artifact digest, and require the unchecked policy to survive an
 artifact-only read. H27's one-command boundary enumeration now covers source
 contexts, batches and modules available only as artifacts.
+
+## D558 -- Retained memory after warmup
+
+The `query-batch` `memory` line used to report only total arena use and capacity.
+Equal numbers before and after several queries proved reclamation, but did not say
+how much of the live allocation was the checked snapshot, what the batch session
+retained, or how large a temporary request became. It therefore could not provide
+H16's retained-memory report after warmup except by inference.
+
+The result now adds `snapshot_used`, measured before the batch input is loaded;
+`session_used`, the retained baseline after that input; and `request_peak`, the
+largest allocation above the baseline at the end of a completed request and before
+its arena reset. Existing `arena_used` and `arena_capacity` remain the live and
+reserved totals. Both suites require a zero peak before the first query, a nonzero
+peak after context/catalogue/uses queries, the same session baseline before and
+after, live memory returned exactly to that baseline, and reserved memory no smaller
+than live memory. Snapshot eviction and pinning remain H16's separate open work.
