@@ -4326,13 +4326,16 @@ fn proof_path(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
 }
 
 // Whether `word` is one of the path's dot-separated names: a write to any of them
-// may change what the path reaches.
-fn proof_path_names(path: str, word: str) -> bool {
+// may change what the path reaches. A bare name -- not after a `.` -- can only be
+// the path's root (D528): a local spelled like a field, `modules` beside
+// `g.modules`, had counted as a write to the field and kept a check the proof held.
+fn proof_path_names(path: str, word: str, is_field: bool) -> bool {
     var segment_start = 0usize
     var at = 0usize
     while at <= path.len {
         if at == path.len || path[at] == 46u8 {
-            if check.same(path[segment_start..at], word) { ret true }
+            let is_root = segment_start == 0usize
+            if check.same(path[segment_start..at], word) && (is_root != is_field) { ret true }
             segment_start = at + 1usize
         }
         at += 1usize
@@ -4363,7 +4366,9 @@ fn proof_alias_base(c: *check.Checker, g: *graph.Graph, module_index: usize, bui
             var scan = builder.proof_function_start
             while scan < builder.proof_function_end && scan < c.token_count {
                 let token = c.tokens[scan]
-                if token.kind == .Identifier && check.same(text[token.start..token.end], base_name) && proof_token_writes(c, scan, builder.proof_function_end) { ret ("", false) }
+                // A field spelled like the base -- `w.modules = ...` -- is not the local (D528).
+                let is_field = scan > 0usize && c.tokens[scan - 1usize].kind == .PunctDot
+                if token.kind == .Identifier && !is_field && check.same(text[token.start..token.end], base_name) && proof_token_writes(c, scan, builder.proof_function_end) { ret ("", false) }
                 scan += 1usize
             }
             ret (base_name, true)
@@ -4530,11 +4535,12 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
         }
         if token.kind == .Identifier {
             let word = g.modules[module_index].text[token.start..token.end]
-            if check.same(word, index_name) && proof_token_writes(c, scan, body_end) {
+            let is_field = scan > 0usize && c.tokens[scan - 1usize].kind == .PunctDot
+            if !is_field && check.same(word, index_name) && proof_token_writes(c, scan, body_end) {
                 if scan < first_assign { first_assign = scan }
                 if loop_depth != 0usize { nested_write = true }
             }
-            if proof_path_names(base_name, word) && proof_token_writes(c, scan, body_end) { base_written = true }
+            if proof_path_names(base_name, word, is_field) && proof_token_writes(c, scan, body_end) { base_written = true }
         }
         // A call in the body, spelled or not: `f(`, `x.f(`, `g[T](`, a `for` over a
         // protocol, `==` and `!=` that may dispatch to a supplied `eq`.

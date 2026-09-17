@@ -3508,6 +3508,16 @@ $hoistedCompiler = Join-Path $testBuild 'neper-hoisted.exe'
 & $ownCompilerPath emit-executable (Join-Path $hoistedSrc 'src\main.e') $repo 'x64' 'windows' $hoistedCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $hoistedCompiler)) { throw 'the compiler did not build from its sources with the literals hoisted' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hoistedCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built with its literals hoisted is not the stable stage' }
+# The compiler with its locals renamed (D528, H10, H17): every local and parameter of
+# `src/` renamed through the index, and the compiler built from the result is the
+# stable stage byte for byte -- the index names every reference of a large module.
+$renamedSrc = Join-Path $testBuild 'renamed-src'
+& python (Join-Path $repo 'benchmarks/metamorphic/rename_locals.py') $compiler $repo (Join-Path $repo 'src') (Join-Path $renamedSrc 'src') windows
+if ($LASTEXITCODE -ne 0) { throw 'the locals of the compiler could not be renamed' }
+$renamedCompiler = Join-Path $testBuild 'neper-renamed.exe'
+& $ownCompilerPath emit-executable (Join-Path $renamedSrc 'src\main.e') $repo 'x64' 'windows' $renamedCompiler | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $renamedCompiler)) { throw 'the compiler did not build from its sources with the locals renamed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $renamedCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built with its locals renamed is not the stable stage' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

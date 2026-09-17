@@ -1026,8 +1026,9 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
 // `f(` is a call, `f[` an instantiation, `= x` a write, `&x` an address, a type position
 // a type, a `use` an import, anything else a read. A bare name is one of the operand's
 // own symbols or nothing: spec section 5 lets no local shadow a module-scope name, so
-// the match is the resolution. Records go out sorted by span start.
-// ponytail: 4096 references per module is the cap; raise it when a module has more.
+// the match is the resolution. Records go out sorted by span start. The tables are
+// sized by the tree (D528): a cap of four thousand had dropped every later reference
+// of a large module without a word, which renaming the compiler's locals found.
 type IndexRefs = struct {
     known_names: []const str,
     known_ids: []const usize,
@@ -1062,17 +1063,18 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
     let (paths, paths_error) = mem.alloc[str](a, 256usize)
     if paths_error != ok { ret (state, paths_error) }
     var imports = 0usize
-    let (starts, starts_error) = mem.alloc[usize](a, 4096usize)
+    let candidates = tree.count + 16usize
+    let (starts, starts_error) = mem.alloc[usize](a, candidates)
     if starts_error != ok { ret (state, starts_error) }
-    let (nodes, nodes_error) = mem.alloc[usize](a, 4096usize)
+    let (nodes, nodes_error) = mem.alloc[usize](a, candidates)
     if nodes_error != ok { ret (state, nodes_error) }
-    let (roles, roles_error) = mem.alloc[usize](a, 4096usize)
+    let (roles, roles_error) = mem.alloc[usize](a, candidates)
     if roles_error != ok { ret (state, roles_error) }
-    let (local_names, local_names_error) = mem.alloc[str](a, 256usize)
+    let (local_names, local_names_error) = mem.alloc[str](a, 4096usize)
     if local_names_error != ok { ret (state, local_names_error) }
-    let (local_ids, local_ids_error) = mem.alloc[usize](a, 256usize)
+    let (local_ids, local_ids_error) = mem.alloc[usize](a, 4096usize)
     if local_ids_error != ok { ret (state, local_ids_error) }
-    let (local_starts, local_starts_error) = mem.alloc[usize](a, 256usize)
+    let (local_starts, local_starts_error) = mem.alloc[usize](a, 4096usize)
     if local_starts_error != ok { ret (state, local_starts_error) }
     state.local_names = local_names
     state.local_ids = local_ids
@@ -1102,7 +1104,7 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
         if node.kind == .NameExpr || node.kind == .NamedType { role = 1usize }
         var wanted = role == 0usize
         if role == 1usize && usize(node.token_end) > usize(node.token_start) && tokens[usize(node.token_start)].kind == .Identifier { wanted = true }
-        if wanted && picked < 4096usize {
+        if wanted && picked < nodes.len {
             var slot = picked
             while slot > 0usize && usize(tree.nodes[nodes[slot - 1usize]].token_start) > usize(node.token_start) {
                 nodes[slot] = nodes[slot - 1usize]

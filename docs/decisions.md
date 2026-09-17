@@ -11069,3 +11069,24 @@ and the hoisted compiler is the stable stage byte for byte, which both suites
 hold with `benchmarks/metamorphic/hoist_constants.py`. A program guarding by
 a named limit, as the standard library and the compiler do, loses the checks
 the guard proves.
+
+## D528 -- The index names every reference
+
+The metamorphic turn taken with D477's transformation -- every local and
+parameter of `src/` renamed through the index -- built nothing: `check.e`
+renamed a function's first two locals and not its later uses, and the index
+had reported thirty-six hundred references for fifteen thousand lines. The
+collector capped its candidates at four thousand and dropped the rest without
+a word, a ponytail cap D271 set for small modules and D484's fixtures never
+reached; the locals table was capped at two hundred and fifty-six per
+declaration the same way. The tables are sized by the tree now, and the
+compiler built from its sources with twenty-two thousand locals renamed is
+the stable stage byte for byte, which both suites hold with
+`benchmarks/metamorphic/rename_locals.py`. Every consumer of the index over a
+large module -- the rename plans of D515, the metamorphic harness, an editor
+-- had been reading an incomplete graph presented as complete. The renamed
+compiler then built five hundred bytes smaller than the original: the proofs'
+token scans for a write to a local took a field spelled like it -- `w.modules
+= ...` beside a parameter `modules`, `wave_count` its length -- for a write to
+the local and kept the check; a name after a `.` is a field, and the scans
+say so now, one more check elided in the compiler's own build.
