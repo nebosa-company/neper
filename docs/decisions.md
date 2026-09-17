@@ -11317,3 +11317,15 @@ fault, `fmt-project` keeps every source since layout has no target -- and
 the result's `modules` counts what was taken. The corpus project gains
 `util.arm64.e`, which would fail alone, and its index stream is unchanged on
 both hosts.
+
+## D545 -- The safety family's symbol
+
+H18's typed facts reach the safety rules: every `E-SAFETY-*` diagnostic
+carries `symbol`, the name its message puts in backticks -- the resource
+local that was moved, left owned, overwritten, copied or lent, the view
+that dangles, the type whose cleanup or fields the rule names -- since the
+checker's detail is that name in every branch of the family, and a harness
+that reads the subject as a field no longer parses the sentence. The one
+branch whose detail may be empty, an array's missing undefined value, is
+left without. The thirty-four safety and region fixtures of the corpus are
+regenerated, each gaining the field and nothing else.

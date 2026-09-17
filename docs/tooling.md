@@ -784,6 +784,11 @@ lowered the module, and a warm build copies them -- the manifest phase of the
 compiler's own warm build fell from 20 ms to 4 -- scanning only the modules it
 parsed, so the inventory is whole either way.
 
+Every `E-SAFETY-*` diagnostic carries `symbol` (D545, H18): the name in its
+message's backticks -- the resource local, the view, or the resource type whose
+cleanup or fields the rule is about -- so a harness reads the subject as a field,
+as D514's name facts and D401's `expected`/`actual` are read.
+
 `--fault-cancel N` (D540, H16) on a build makes the deadline pass at the Nth
 statement checked or lowered, so a suite can see a cancellation inside a function
 without a clock: the body sweep and the lowering read the deadline every four

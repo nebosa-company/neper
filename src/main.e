@@ -5835,6 +5835,10 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     report.related_token = checker.failure_related
     report.has_related = checker.failure_has_related
     report.related_note = checker.failure_related_note
+    // The safety family's typed fact (D545, H18): the name in the message's
+    // backticks -- the resource, view or type the rule is about -- as `symbol`.
+    let code = check.diagnostic_code(checker.failure_kind)
+    if code.len > 9usize && same(code[0usize..9usize], "E-SAFETY-") && checker.failure_detail.len != 0usize { report.symbol_text = checker.failure_detail }
     // A failure in an instance's body (D466, H19): the instance is the last one
     // checked with the template's name in the failing module -- `checked` is set
     // before its body is walked -- and its first request site is related, in
