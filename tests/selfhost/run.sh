@@ -3621,6 +3621,25 @@ cp "$test_build/renamed-src/src/check.e" "$warm_project/src/check.e"
 [ "$("$own_compiler_path" emit-executable "$warm_project/src/main.e" "$repo" x64 linux "$test_build/neper-warm-turns" --incremental)" = 'executable written' ]
 python3 "$repo/scripts/check_incremental.py" "$warm_manifest" check=rebuilt:source-changed lex=kept:stable main=kept:edges-hold
 cmp "$test_build/neper-warm-turns" "$test_build/neper-warm-turns-cold"
+# The warm path under the turns in release (D536, H14): the same three edits over a cold release build with artifacts.
+warm_release="$test_build/warm-turns-release"
+rm -rf "$warm_release"
+mkdir -p "$warm_release"
+cp -r "$repo/src" "$warm_release/src"
+warm_release_manifest="$warm_release/.neper/release/build-manifest.json"
+[ "$("$own_compiler_path" emit-executable "$warm_release/src/main.e" "$repo" x64 linux "$test_build/neper-warm-release-cold" --release --incremental)" = 'executable written' ]
+cp "$test_build/blanked-src/src/"*.e "$warm_release/src/"
+[ "$("$own_compiler_path" emit-executable "$warm_release/src/main.e" "$repo" x64 linux "$test_build/neper-warm-release" --release --incremental)" = 'executable written' ]
+python3 -c "import json,sys; m=json.load(open(sys.argv[1])); sys.exit(0 if all(e['reason']=='stable' for e in m['incremental']) else 1)" "$warm_release_manifest"
+cmp "$test_build/neper-warm-release" "$test_build/neper-warm-release-cold"
+cp "$test_build/hoisted-src/src/lex.e" "$warm_release/src/lex.e"
+[ "$("$own_compiler_path" emit-executable "$warm_release/src/main.e" "$repo" x64 linux "$test_build/neper-warm-release" --release --incremental)" = 'executable written' ]
+python3 "$repo/scripts/check_incremental.py" "$warm_release_manifest" lex=rebuilt:source-changed binary=kept:stable
+cmp "$test_build/neper-warm-release" "$test_build/neper-warm-release-cold"
+cp "$test_build/renamed-src/src/check.e" "$warm_release/src/check.e"
+[ "$("$own_compiler_path" emit-executable "$warm_release/src/main.e" "$repo" x64 linux "$test_build/neper-warm-release" --release --incremental)" = 'executable written' ]
+python3 "$repo/scripts/check_incremental.py" "$warm_release_manifest" check=rebuilt:source-changed lex=kept:stable
+cmp "$test_build/neper-warm-release" "$test_build/neper-warm-release-cold"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

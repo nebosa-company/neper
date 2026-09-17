@@ -11183,3 +11183,13 @@ signature now, the type and `own` remaining, and the same turn rebuilds
 `check` alone with the sixteen kept by their edges. A body edge still
 carries the declaration's tokens (D214), so a caller that inlined the
 function is rebuilt on the rename, which is conservative and rare.
+
+## D536 -- The warm path under the turns, in release
+
+D534's warm turns built in debug, where no body edge is taken; release is
+where the inlining oracles make them. Both suites now build the compiler
+cold in release with artifacts and take the same three edits: every comment
+blanked keeps all thirty-five `stable`; `lex` hoisted rebuilds `lex`, and
+by their body edges the two modules that inline from it, `edge-changed`,
+the rest kept; `check` renamed the same; the image the cold release build's
+each time. The release warm path held at the first attempt.

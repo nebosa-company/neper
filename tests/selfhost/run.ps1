@@ -3630,6 +3630,33 @@ if ($LASTEXITCODE -ne 0) { throw 'the warm build of the compiler after renaming 
 & python (Join-Path $repo 'scripts/check_incremental.py') $warmManifest 'check=rebuilt:source-changed' 'lex=kept:stable' 'main=kept:edges-hold'
 if ($LASTEXITCODE -ne 0) { throw 'the warm build after renaming one module''s locals did not keep the rest' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmCold).Hash) { throw 'the warm build after renaming one module''s locals is not the cold build' }
+# The warm path under the turns in release (D536, H14): the same three edits over a
+# cold release build with artifacts; a module that inlines from the edited one is
+# rebuilt by its body edge, and the image is the cold release build's each time.
+$warmRelease = Join-Path $testBuild 'warm-turns-release'
+if (Test-Path -LiteralPath $warmRelease) { Remove-Item -LiteralPath $warmRelease -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $warmRelease | Out-Null
+Copy-Item -Recurse (Join-Path $repo 'src') (Join-Path $warmRelease 'src')
+$warmReleaseExe = Join-Path $testBuild 'neper-warm-release.exe'
+$warmReleaseCold = Join-Path $testBuild 'neper-warm-release-cold.exe'
+$warmReleaseManifest = Join-Path $warmRelease '.neper\release\build-manifest.json'
+& $ownCompilerPath emit-executable (Join-Path $warmRelease 'src\main.e') $repo 'x64' 'windows' $warmReleaseCold --release --incremental | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the cold release build of the compiler with artifacts failed' }
+Copy-Item (Join-Path $blankedSrc 'src\*.e') (Join-Path $warmRelease 'src')
+& $ownCompilerPath emit-executable (Join-Path $warmRelease 'src\main.e') $repo 'x64' 'windows' $warmReleaseExe --release --incremental | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the warm release build after blanking every comment failed' }
+if (((Get-Content -Raw -LiteralPath $warmReleaseManifest | ConvertFrom-Json).incremental | Where-Object { $_.reason -ne 'stable' }).Count -ne 0) { throw 'a warm release build after blanking every comment rebuilt a module' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmReleaseExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmReleaseCold).Hash) { throw 'the warm release build after blanking every comment is not the cold build' }
+Copy-Item (Join-Path $hoistedSrc 'src\lex.e') (Join-Path $warmRelease 'src\lex.e')
+& $ownCompilerPath emit-executable (Join-Path $warmRelease 'src\main.e') $repo 'x64' 'windows' $warmReleaseExe --release --incremental | Out-Null
+& python (Join-Path $repo 'scripts/check_incremental.py') $warmReleaseManifest 'lex=rebuilt:source-changed' 'binary=kept:stable'
+if ($LASTEXITCODE -ne 0) { throw 'the warm release build after hoisting one module did not rebuild it alone' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmReleaseExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmReleaseCold).Hash) { throw 'the warm release build after hoisting one module is not the cold build' }
+Copy-Item (Join-Path $renamedSrc 'src\check.e') (Join-Path $warmRelease 'src\check.e')
+& $ownCompilerPath emit-executable (Join-Path $warmRelease 'src\main.e') $repo 'x64' 'windows' $warmReleaseExe --release --incremental | Out-Null
+& python (Join-Path $repo 'scripts/check_incremental.py') $warmReleaseManifest 'check=rebuilt:source-changed' 'lex=kept:stable'
+if ($LASTEXITCODE -ne 0) { throw 'the warm release build after renaming one module''s locals did not rebuild it' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmReleaseExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmReleaseCold).Hash) { throw 'the warm release build after renaming one module''s locals is not the cold build' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
