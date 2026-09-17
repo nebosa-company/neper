@@ -1377,7 +1377,11 @@ fn quoted_listing(out: *Out, listing: []const u8, start: usize, builder: *nir.Bu
 // function's listing (D269): one line per instruction -- the function-relative offset,
 // the Intel-order mnemonic and operands, then the bytes after `;` -- from a linear sweep
 // over the encodings emit_x64 produces; a byte the sweep does not know is a `db` line.
-fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const u8, machine_count: usize, relocations: []const codegen_x64.Relocation, relocation_count: usize) -> err {
+// Inlined ranges (D542, H19): `inlined` lists, per function, the runs of its code
+// whose line entries fall in another function -- the copy of a callee's body in a
+// release build -- as `from`, `start` and `end` (function-relative, `end` exclusive)
+// and the callee's `line` the run begins at; empty in a debug build.
+fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const u8, machine_count: usize, relocations: []const codegen_x64.Relocation, relocation_count: usize, functions: []const check.Function, g: *graph.Graph, lines: []const codegen_x64.LineEntry, line_count: usize) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, machine_count * 64usize + 8192usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
@@ -1422,6 +1426,7 @@ fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builde
         // (D278): the displacements were resolved before this, so the target is known.
         try quoted_listing(&out, listing[0usize..listed], start, builder, offsets, relocations, relocation_count)
         mem.reset(a, checkpoint)
+        try inlined_ranges(&out, function, start, stop, functions, g, lines, line_count)
         try byte(&out, 125u8)
         try flush(&out)
         at += 1usize
@@ -1430,6 +1435,74 @@ fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builde
     try decimal(&out, builder.function_count)
     try text(&out, "}}")
     ret flush(&out)
+}
+
+// The function of a line entry (D542): its module by path, the function of the
+// module whose source holds the line, as `frame_origin` finds a frame's (D519).
+fn line_function(functions: []const check.Function, g: *graph.Graph, entry: codegen_x64.LineEntry) -> (usize, bool) {
+    // The entry's path is the module's reproducible spelling (D337), the root's too.
+    var module_at = 0usize
+    while module_at < g.count {
+        if graph.same(g.modules[module_at].spelling, entry.path) || graph.same(g.modules[module_at].path, entry.path) { break }
+        module_at += 1usize
+    }
+    if module_at >= g.count || entry.line == 0usize || entry.line > g.modules[module_at].lines.len { ret (0usize, false) }
+    let offset = g.modules[module_at].lines[entry.line - 1usize]
+    var at = 0usize
+    while at < functions.len {
+        if functions[at].module_index == module_at && offset >= functions[at].source_start && offset < functions[at].source_end { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn inlined_ranges(out: *Out, function: nir.Function, start: usize, stop: usize, functions: []const check.Function, g: *graph.Graph, lines: []const codegen_x64.LineEntry, line_count: usize) -> err {
+    try text(out, ",\"inlined\":[")
+    var written = 0usize
+    var run_function = functions.len
+    var run_start = 0usize
+    var run_line = 0usize
+    var at = 0usize
+    while at < line_count {
+        let entry = lines[at]
+        at += 1usize
+        if entry.offset < start || entry.offset >= stop { continue }
+        let (owner, found) = line_function(functions, g, entry)
+        // The function's own lines, or a line of no function, end a run.
+        var own = !found
+        if found && functions[owner].module_index < g.count && graph.same(g.modules[functions[owner].module_index].name, function.module_name) && graph.same(functions[owner].name, function.name) { own = true }
+        var next_function = functions.len
+        if !own { next_function = owner }
+        if next_function == run_function { continue }
+        if run_function != functions.len {
+            try inlined_range(out, g, functions[run_function], run_start - start, entry.offset - start, run_line, &written)
+        }
+        run_function = next_function
+        run_start = entry.offset
+        run_line = entry.line
+    }
+    if run_function != functions.len {
+        try inlined_range(out, g, functions[run_function], run_start - start, stop - start, run_line, &written)
+    }
+    ret byte(out, 93u8)
+}
+
+fn inlined_range(out: *Out, g: *graph.Graph, callee: check.Function, range_start: usize, range_end: usize, line: usize, written: *usize) -> err {
+    // A line entry with no code before the next -- a `ret` folded away -- is no run.
+    if range_start == range_end { ret ok }
+    if *written != 0usize { try byte(out, 44u8) }
+    *written += 1usize
+    try text(out, "{\"from\":\"")
+    if callee.module_index < g.count { try quoted_body(out, g.modules[callee.module_index].name) }
+    try byte(out, 46u8)
+    try quoted_body(out, callee.name)
+    try text(out, "\",\"start\":")
+    try decimal(out, range_start)
+    try text(out, ",\"end\":")
+    try decimal(out, range_end)
+    try text(out, ",\"line\":")
+    try decimal(out, line)
+    ret byte(out, 125u8)
 }
 
 // docs/tooling.md section 6's canonical layout, the deterministic local rules (D234):

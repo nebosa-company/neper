@@ -9494,7 +9494,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // check left out and the release results in their place (D204), and the inliner
     // on (D211); `emit-em-all` takes it too, and `--incremental` with it in any order.
     let trailing_flags = args.len >= 8usize && (args.len <= 16usize || has_dashdash(args)) && flags_known(args)
-    let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all") || same(args[1usize], "run")) && has_flag(args, "--release")
+    let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all") || same(args[1usize], "run") || same(args[1usize], "dis-file")) && has_flag(args, "--release")
     // `--unchecked` (D355, H03): section 11's memory rows left out of the whole image,
     // an unsafe boundary the manifest records as `checks: off`; not the default of
     // any mode.
@@ -9512,7 +9512,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     let incremental_build = trailing_flags && same(args[1usize], "emit-em-all") && has_flag(args, "--incremental")
     let writes_all_em = (args.len == 7usize || trailing_flags) && same(args[1usize], "emit-em-all")
     // `dis-file PATH ROOT ARCH OS --json` (D233): the codegen pipeline, then per-function bytes.
-    let disassemble = args.len == 7usize && same(args[1usize], "dis-file") && same(args[6usize], "--json")
+    // `dis-file ... --json --release` (D542): the release image, its inlined ranges named.
+    let disassemble = (args.len == 7usize || trailing_flags) && same(args[1usize], "dis-file") && same(args[6usize], "--json")
     if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable || writes_em || writes_all_em || disassemble {
         let emit_object = same(args[1usize], "object-file") || writes_object
         let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em || writes_all_em || disassemble
@@ -10012,7 +10013,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                     os.exit(1i32)
                 }
                 report.pending_header = ""
-                try tool.disassembly_json(a, args[4usize], args[5usize], &builder, code.function_offsets, code.machine.bytes, code.machine.count, code.relocations, code.relocation_count)
+                try tool.disassembly_json(a, args[4usize], args[5usize], &builder, code.function_offsets, code.machine.bytes, code.machine.count, code.relocations, code.relocation_count, checker.functions[0usize..checker.function_count], &loaded, code.lines, code.line_count)
                 ret ok
             }
             if writes_executable {

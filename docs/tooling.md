@@ -616,7 +616,12 @@ which case the files hold the rest. A flooding child therefore costs the harness
 most two bounds of memory and never a pipe: the streams are files, drained by the
 OS. It does not stream raw child bytes into the JSONL
 channel. `dis --json` emits one `disassembly` record per function with `symbol`,
-`target`, and `text`. These records precede the final command `result`.
+`target`, `text` and `inlined` (D542): with `--release` after `--json`, the release
+image is listed, and `inlined` names each run of the function's code that is the
+copy of another function's body -- `from` as `module.function`, `start` and `end`
+as function-relative byte offsets, `end` exclusive, and the callee's `line` the
+run begins at; the innermost callee for a copy through a copy, and empty in a
+debug build. These records precede the final command `result`.
 
 Every build writes `.neper/<mode>/build-manifest.json`. It is one canonical JSON
 object with `schema:"neper-build-manifest"`, `version:1`, `tool_version`,

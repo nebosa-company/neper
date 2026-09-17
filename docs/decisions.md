@@ -11269,3 +11269,18 @@ artifact buffer grows with the largest module too, and the diagnostic names
 the staging buffer. A function of sixty thousand statements builds in a
 second, in both modes, and answers its arithmetic; both suites build one of
 thirty thousand and seven and read the seven.
+
+## D542 -- The inlined runs in the disassembly
+
+`dis-file --json` takes `--release` after `--json` and lists the release
+image, and every `disassembly` record carries `inlined`: the runs of the
+function's code whose line entries fall in another function's source -- the
+copy of a callee's body -- each as `from`, the callee `module.function`,
+`start` and `end` relative to the function, and the callee's `line` the run
+begins at. The line table already carried the provenance, since a backtrace
+frame in a copy is named from it (D519); the disassembly reads it the same
+way, a run ending where the function's own lines or another callee's begin,
+and a line entry with no code before the next -- a `ret` folded away -- is no
+run. A copy through a copy names the innermost callee; the chain is not yet
+kept. The fixture inlines `add` twice into `main`, once through `twice`, and
+both suites pin the record per host; the debug records gain an empty list.

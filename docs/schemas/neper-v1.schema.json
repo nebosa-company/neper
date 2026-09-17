@@ -1891,7 +1891,8 @@
         "record",
         "symbol",
         "target",
-        "text"
+        "text",
+        "inlined"
       ],
       "properties": {
         "record": {
@@ -1905,6 +1906,36 @@
         },
         "text": {
           "type": "string"
+        },
+        "inlined": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "start",
+              "end",
+              "line"
+            ],
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
         }
       }
     },
