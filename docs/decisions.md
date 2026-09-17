@@ -10769,3 +10769,20 @@ branch. Each worker's checker now forks the constant expressions as it does
 the rest: the program's entries copied, a tail of its own after them. The
 image is again the same alone and six builds at a time; the fixed point,
 `-j 1` and `-j 3 --perturb` stay the gate, since a race has no fixture.
+
+## D506 -- The deterministic half of the gate, in the suites
+
+H25's gate (D366) judged a measurement of times, memory and images against the
+baseline, and no suite ran it: the times are a distribution, and the compiler
+workload changes with every commit. Two of its measures are functions of the
+program and the worker count alone -- the image's bytes and the workers' arena
+high-water, the same on every run of one compiler over the same bytes, as
+D505's repair made sure again -- and the sc500k workload is the same bytes on
+every host, generated from the fixed seed. `benchmarks/baseline/static.py`
+builds it in both modes on eight workers and writes those two per cell from
+the `stats` record; `gate.py` reads a measurement without times as missing
+those measures, and holds the two to `results/static-<host>.json` -- the image
+within its budget of five percent, the arena not above. Both suites run it
+with the stable stage after the fixed point, and a breach fails the suite:
+re-pinning the baseline is the decision row that names the cause. The timed
+half stays a measurement, outside the suites.

@@ -3257,6 +3257,14 @@ foreach ($jobsCase in @(@('-j', '1'), @('-j', '3', '--perturb'))) {
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $jobsPath)) { throw "the compiler did not build under $jobsCase" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $jobsPath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler built under $jobsCase is not the stable stage" }
 }
+# The deterministic half of the performance gate (D506, H25): the image and the workers'
+# arena high-water of sc500k in both modes, built by the stable stage on eight workers,
+# against the host's static baseline; a breach is a number a decision row has to name.
+$staticMeasured = Join-Path $testBuild 'static-windows.json'
+& python (Join-Path $repo 'benchmarks/baseline/static.py') --compiler $ownCompilerPath --repo $repo --host windows --out $staticMeasured --fixtures (Join-Path $testBuild 'baseline-fixtures')
+if ($LASTEXITCODE -ne 0) { throw 'the static measurement of sc500k failed' }
+& python (Join-Path $repo 'benchmarks/baseline/gate.py') $staticMeasured --baseline (Join-Path $repo 'benchmarks/baseline/results/static-windows.json')
+if ($LASTEXITCODE -ne 0) { throw 'the static performance gate breached: re-pin benchmarks/baseline/results/static-windows.json in the decision that names why' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

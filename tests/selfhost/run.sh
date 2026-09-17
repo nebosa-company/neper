@@ -3373,6 +3373,9 @@ for jobs_case in '-j 1' '-j 3 --perturb'; do
     [ "$jobs_written" = 'executable written' ]
     cmp "$jobs_path" "$stable_compiler_path"
 done
+# The deterministic half of the performance gate (D506, H25): sc500k's image and arenas against the static baseline.
+python3 "$repo/benchmarks/baseline/static.py" --compiler "$own_compiler_path" --repo "$repo" --host linux --out "$test_build/static-linux.json" --fixtures "$test_build/baseline-fixtures"
+python3 "$repo/benchmarks/baseline/gate.py" "$test_build/static-linux.json" --baseline "$repo/benchmarks/baseline/results/static-linux.json"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

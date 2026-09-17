@@ -172,6 +172,13 @@ a decision.
 The `compile threads` row of `--stats` reads 1 while eight workers run (it predates
 D321); the worker count is the `-j` value or eight.
 
+The arena and the image are the same on every run of one compiler over the same
+bytes, so those two are held exactly by both suites (D506): `static.py` builds
+`sc500k` in both modes on eight workers with the stable stage and `gate.py` judges
+the `stats` record's `worker_arenas_reached_mb` and `executable_size_bytes` against
+`results/static-<host>.json`, one per host since the images differ by their runtime.
+The arena is held not above and the image within five percent, as the budgets say. A breach fails the suite; re-pinning the file is the decision row that names why.
+
 `benchmarks/baseline/gate.py NEW.json` (D366) judges a measurement against these
 budgets, cell by cell and measure by measure -- `ok`, `BREACH` with both numbers
 and the delta, or `missing` -- and exits 1 on any breach, which is what a merge

@@ -8,7 +8,8 @@
 # budgets"). A cell the baseline lacks is reported and not judged. The report is one
 # line per measure per cell -- `ok`, `BREACH` with both numbers and the delta, or
 # `missing` -- then a summary; the exit status is 1 when any measure breached, which
-# is what a merge gate reads. A breach is not a failure of the measurement: it is
+# is what a merge gate reads. A static measurement (`static.py`, D506) carries only
+# the arena and the image: its cells have no times, and those measures are missing. A breach is not a failure of the measurement: it is
 # the number a decision row has to name (D352, D355), and the gate exists so it is
 # named rather than drifted past.
 import argparse, json, os, sys
@@ -28,8 +29,8 @@ with open(baseline_path, encoding='utf-8') as f:
     base = json.load(f)
 
 BUDGETS = [
-    ('cold p50', lambda c: c['cold']['p50'], 0.10),
-    ('warm p50', lambda c: c['warm']['p50'], 0.15),
+    ('cold p50', lambda c: c.get('cold', {}).get('p50'), 0.10),
+    ('warm p50', lambda c: c.get('warm', {}).get('p50'), 0.15),
     ('peak RSS', lambda c: c.get('peak_mb'), 0.10),
     ('arena high-water', lambda c: c.get('arena_mb'), 0.0),
     ('image', lambda c: c.get('image_bytes'), 0.05),
