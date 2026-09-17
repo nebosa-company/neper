@@ -351,7 +351,21 @@ fn trap_line_count(source: str) -> usize {
 // the `operand` source. `values` is the record's text after the kind, as one entry:
 // the operands are in there, and which words are operands is the check's business.
 // Without a record the payload is null.
-fn trap_json(out: *Out, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str, line_offset: usize) -> err {
+// A frame or a trap in a module other than the operand (D503): the file the child
+// printed is that module's reproducible spelling (D337), so the graph finds it, its
+// source is named under its own root as the manifest names it (D427), and its text
+// gives the span. A graph of no modules -- the test runner's path without one --
+// leaves such a frame's source null as before.
+fn trap_module(g: *graph.Graph, file: str) -> (usize, bool) {
+    var at = 1usize
+    while at < g.count {
+        if graph.same(g.modules[at].spelling, file) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn trap_json(out: *Out, g: *graph.Graph, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str, line_offset: usize) -> err {
     var at = 0usize
     var found = stderr_bytes.len
     while at + 7usize <= stderr_bytes.len && found == stderr_bytes.len {
@@ -375,7 +389,14 @@ fn trap_json(out: *Out, stderr_bytes: str, module_name: str, path: str, source: 
         let (offset, column_utf16) = trap_byte_at(source, line - line_offset, column)
         try span(out, "operand", path, offset, offset, line - line_offset, column, line - line_offset, column, column_utf16, column_utf16)
     } else {
-        try text(out, "null")
+        let (trap_module_index, in_module) = trap_module(g, file)
+        if in_module && line > 0usize && line <= trap_line_count(g.modules[trap_module_index].text) {
+            let (root, relative) = source_identity_of(g, g.modules[trap_module_index].path)
+            let (offset, column_utf16) = trap_byte_at(g.modules[trap_module_index].text, line, column)
+            try span(out, root, relative, offset, offset, line, column, line, column, column_utf16, column_utf16)
+        } else {
+            try text(out, "null")
+        }
     }
     var values_start = kind_end + 1usize
     if values_start < stderr_bytes.len && stderr_bytes[values_start] == 58u8 { values_start += 1usize }
@@ -405,7 +426,12 @@ fn trap_json(out: *Out, stderr_bytes: str, module_name: str, path: str, source: 
         try text(out, "{\"function\":")
         try trap_function(out, stderr_bytes[cursor + 5usize..function_end], module_name, spelled, frame_file, frame_line, line_offset, line_count)
         try text(out, ",\"source\":")
-        try trap_source(out, path, frame_file, spelled, frame_line, line_offset, line_count)
+        let (frame_module, frame_in_module) = trap_module(g, frame_file)
+        if frame_in_module && !graph.same(frame_file, spelled) {
+            try manifest_source(out, g, g.modules[frame_module].path)
+        } else {
+            try trap_source(out, path, frame_file, spelled, frame_line, line_offset, line_count)
+        }
         try text(out, ",\"line\":")
         if frame_line == 0usize {
             try text(out, "null")
@@ -441,7 +467,7 @@ fn test_error_name(out: *Out, stderr_bytes: str, module_name: str, spelled: str)
 // record, with section 11's trap record read back as the `trap` payload (D253).
 // `spelled` is the operand as the child prints it -- its reproducible spelling (D337),
 // it; `path` is section 2's operand identity, the basename.
-fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str) -> err {
+fn run_record(a: *mem.Arena, g: *graph.Graph, status: i32, stdout_bytes: str, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, (stdout_bytes.len + stderr_bytes.len) * 6usize + 256usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
@@ -458,7 +484,7 @@ fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str, 
     try text(&out, ",\"stderr\":")
     try captured(&out, stderr_bytes)
     try text(&out, ",\"trap\":")
-    try trap_json(&out, stderr_bytes, module_name, path, source, spelled, 0usize)
+    try trap_json(&out, g, stderr_bytes, module_name, path, source, spelled, 0usize)
     try byte(&out, 125u8)
     ret flush(&out)
 }
@@ -5571,7 +5597,8 @@ fn test_record(out: *Out, module_name: str, root: str, path: str, source: str, s
             probe += 1usize
         }
         if recorded {
-            try trap_json(out, stderr_bytes, module_name, path, source, spelled, 2usize)
+            var no_graph: graph.Graph = zero
+            try trap_json(out, &no_graph, stderr_bytes, module_name, path, source, spelled, 2usize)
         } else {
             try text(out, "{\"kind\":\"exit\",\"span\":null,\"values\":[\"")
             if status < 0i32 {
@@ -5583,7 +5610,8 @@ fn test_record(out: *Out, module_name: str, root: str, path: str, source: str, s
             try text(out, "\"],\"backtrace\":[]}")
         }
     } else {
-        try trap_json(out, stderr_bytes, module_name, path, source, spelled, 2usize)
+        var no_graph_either: graph.Graph = zero
+        try trap_json(out, &no_graph_either, stderr_bytes, module_name, path, source, spelled, 2usize)
     }
     try byte(out, 125u8)
     ret flush(out)

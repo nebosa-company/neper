@@ -9830,7 +9830,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                         os.exit(2i32)
                         ret ok
                     }
-                    try tool.run_record(a, status, stdout_captured, stderr_captured, loaded.modules[0usize].name, basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].spelling)
+                    try tool.run_record(a, &loaded, status, stdout_captured, stderr_captured, loaded.modules[0usize].name, basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].spelling)
                     try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"executable\":")
                     try write_json_string(&report, args[6usize])
                     try write_all(&report, ",\"process_exit_code\":")

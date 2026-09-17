@@ -2199,6 +2199,11 @@ python3 -c "import json,sys,hashlib; m=json.load(open(sys.argv[1])); want=hashli
 overlay_status=0
 "$test_build/overlay" || overlay_status=$?
 [ "$overlay_status" -eq 8 ]
+# A trap inside a dependency (D503): the run record names the module's source and line.
+(cd "$test_build" && ./neper-self run "$conformance_root/tools/run_trap_module/src/main.e" "$repo" x64 linux conformance-tools-run-trap-module.out --json > "conformance-tools-run-trap-module.jsonl") || true
+grep -q '"trap":{"kind":"bounds","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":[0-9]*,"byte_end":[0-9]*,"line":3' "$test_build/conformance-tools-run-trap-module.jsonl"
+grep -q '{"function":"deep.pick","source":{"root":"project-src","path":"deep.e"},"line":3}' "$test_build/conformance-tools-run-trap-module.jsonl"
+python3 "$repo/scripts/validate_stream.py" "$test_build/conformance-tools-run-trap-module.jsonl"
 # `-` on `check-file` (D490) and `index` (D488): the module from stdin under its `--path` identity is the file's golden.
 stdin_check_status=0
 $test_build/neper-self check-file - "$repo" x64 linux --json --path scope.e < "$conformance_root/reject/scope.e" > "$test_build/conformance-stdin-check.jsonl" || stdin_check_status=$?

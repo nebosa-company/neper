@@ -2091,6 +2091,13 @@ if ($overlayInput -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $o
 $overlayPlain = & $compiler emit-executable (Join-Path $overlayScratch 'src\main.e') $repo 'x64' 'windows' $overlayExe 2>&1
 & $overlayExe
 if ($LASTEXITCODE -ne 8) { throw "the build without the overlay did not read the file (exit $LASTEXITCODE)" }
+# A trap inside a dependency (D503): the run record names the module's source and line.
+$trapModuleActual = Join-Path $testBuild 'conformance-tools-run-trap-module.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" run `"$(Join-Path $conformanceRoot 'tools\run_trap_module\src\main.e')`" `"$repo`" x64 windows conformance-tools-run-trap-module.out --json > `"$trapModuleActual`""
+if ((Select-String -LiteralPath $trapModuleActual -Pattern '"trap":\{"kind":"bounds","span":\{"source":\{"root":"project-src","path":"deep.e"\},"byte_start":\d+,"byte_end":\d+,"line":3' -Quiet) -ne $true) { throw 'a trap inside a dependency does not name its source' }
+if ((Select-String -LiteralPath $trapModuleActual -Pattern '\{"function":"deep.pick","source":\{"root":"project-src","path":"deep.e"\},"line":3\}' -Quiet) -ne $true) { throw 'a frame inside a dependency does not name its source' }
+& python (Join-Path $repo 'scripts/validate_stream.py') $trapModuleActual
+if ($LASTEXITCODE -ne 0) { throw 'the run record over a trap in a dependency does not validate' }
 # `-` on `check-file` (D490) and `index` (D488): the module from stdin under its `--path` identity is the file's golden.
 $stdinActual = Join-Path $testBuild 'conformance-stdin-check.jsonl'
 cmd /c "`"$compiler`" check-file - `"$repo`" x64 windows --json --path scope.e < `"$(Join-Path $conformanceRoot 'reject\scope.e')`" > `"$stdinActual`""

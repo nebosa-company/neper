@@ -10726,3 +10726,14 @@ bytes finds the artifact current. The file on disk is never read for that
 module and never written. Both suites build the value fixture with its edit
 as an overlay of `dep.e`, exit 4, the file unchanged, the manifest naming the
 overlay's hash, and exit 8 again without the flag.
+
+## D503 -- A trap in another module, sourced
+
+`run --json`'s trap payload named the operand's source when the trap or a
+frame lay in it, and `null` otherwise -- a bounds trap inside a dependency had
+a `kind`, a function name and a line, and no file. The child prints each
+frame's file as the module's reproducible spelling (D337), so the graph finds
+the module by it: the trap's span and the frame's `source` are now that
+module's, under its own root as the manifest names it (D427), the span's byte
+offset read from its text. The test runner's path passes no graph and keeps
+its behaviour. `run_trap_module` pins a trap two frames deep on both hosts.
