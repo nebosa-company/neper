@@ -1,0 +1,8 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"plan-rename","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"precondition","source":{"root":"project-src","path":"main.e"},"sha256":"581f12022e2b72d31429e9c9fcd9cf93ddad83f13f43b9eb6cbed0ac6925bc1a"}
+{"record":"precondition","source":{"root":"project-src","path":"deep.e"},"sha256":"f758e0e71b5a7c31ca25ea41ca9675e5330f3c95517fc2fc9eb3b2657f34fbe3"}
+{"record":"edit","op":"rename-symbol","symbol":"deep.pick","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":430,"byte_end":434,"line":11,"column":19,"end_line":11,"end_column":23,"column_utf16":19,"end_column_utf16":23},"replacement":"choose"}
+{"record":"edit","op":"rename-symbol","symbol":"deep.pick","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":460,"byte_end":464,"line":12,"column":20,"end_line":12,"end_column":24,"column_utf16":20,"end_column_utf16":24},"replacement":"choose"}
+{"record":"edit","op":"rename-symbol","symbol":"deep.pick","site":"declaration","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":3,"byte_end":7,"line":1,"column":4,"end_line":1,"end_column":8,"column_utf16":4,"end_column_utf16":8},"replacement":"choose"}
+{"record":"postcondition","check":"check-file passes; uses-file --symbol deep.choose reports uses at 2 sites and deep.pick names no function"}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":2,"complete":true,"snapshot":"3ed096e8e834a201"}}

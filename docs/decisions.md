@@ -10814,3 +10814,18 @@ every column holds, the declarations appended at the end of the module. A
 constant folds into its uses, so the image must be byte-identical in both
 modes and the program must behave the same; the four fixtures hold under it
 in both suites, 6 to 39 constants each.
+
+## D509 -- Uses through an alias, and the module beside the operand
+
+H17's acceptance names shadowed names and aliases. `uses_alias` is the
+fixture: `main` imports `deep as d` and `other`, both declare `pick`, and a
+local is spelled `pick` too; `uses-file` of `deep.pick` reports the two calls
+through `d` and nothing else, `other.pick` its own two, and the rename plan
+rewrites those two sites and the declaration in `deep.e`, applied to a copy
+that builds and exits as before, `other.e` untouched. Both suites pin the
+records and the plan per host. Writing it found that an operand given as
+`src/main.e` from the project root put the modules found beside it under
+`operand` in every record and in the manifest's inputs, while the operand
+itself was under `project-src`: the root is `.` and the loader spells the
+others as `./src/dep.e`, which the relative test did not take. It takes the
+`./` now, so every module of such a build is named under the project.

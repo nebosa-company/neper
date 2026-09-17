@@ -98,6 +98,9 @@ fn discover(a: *mem.Arena, named_file: str) -> (Project, err) {
 
 fn relative_under(path: str, root: str, source_root: str) -> (str, bool) {
     var offset = 0usize
+    // A root of `.` (D509): the operand is spelled as given, `src/main.e`, and the
+    // modules found beside it as `./src/dep.e`; both are under the project.
+    if same(root, ".") && path.len > 2usize && path[0usize] == 46u8 && is_separator(path[1usize]) { offset = 2usize }
     if !same(root, ".") {
         if path.len <= root.len { ret ("", false) }
         var i = 0usize

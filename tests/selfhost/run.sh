@@ -2718,6 +2718,21 @@ plan_sites=$($test_build/neper-self uses-file "$plan_scratch/src/explain.e" "$re
 plan_again=0
 "$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null 2>&1 || plan_again=$?
 [ "$plan_again" -ne 0 ]
+# Uses and a rename through an alias, past a same-spelled function and local (D509, H17).
+alias_fixture="$conformance_root/tools/uses_alias"
+(cd "$alias_fixture" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol deep.pick > "$test_build/conformance-tools-uses-alias.jsonl")
+cmp -s "$test_build/conformance-tools-uses-alias.jsonl" "$conformance_root/tools/uses_alias.expected.jsonl" || { echo "uses-file --json through an alias differs from the conformance corpus" >&2; exit 1; }
+[ "$(cd "$alias_fixture" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol other.pick | grep -c '"record":"use"')" -eq 2 ]
+(cd "$alias_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol deep.pick --to choose > "$test_build/conformance-tools-plan-rename-alias.jsonl")
+cmp -s "$test_build/conformance-tools-plan-rename-alias.jsonl" "$conformance_root/tools/plan_rename_alias.x64-linux.expected.jsonl" || { echo "plan-rename-file --json through an alias differs from the conformance corpus" >&2; exit 1; }
+rm -rf "$test_build/alias-scratch"
+cp -r "$alias_fixture" "$test_build/alias-scratch"
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename-alias.jsonl" --root "$test_build/alias-scratch/src" > /dev/null
+cmp -s "$test_build/alias-scratch/src/other.e" "$alias_fixture/src/other.e"
+[ "$("$test_build/neper-self" emit-executable "$test_build/alias-scratch/src/main.e" "$repo" x64 linux "$test_build/alias" 2>/dev/null)" = 'executable written' ]
+alias_status=0
+"$test_build/alias" || alias_status=$?
+[ "$alias_status" -eq 8 ]
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan, applied and
 # checked; a span that is not one expression is refused with exit 2.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-replace-expression-file contract.e "$repo" x64 linux --json --span 693:703 --with 131072usize > "$test_build/conformance-tools-plan-replace.jsonl")

@@ -2389,6 +2389,31 @@ $planUses = & $compiler uses-file (Join-Path $planScratch 'src/explain.e') $repo
 if ($LASTEXITCODE -ne 0 -or (($planUses | Where-Object { $_ -match '"record":"use"' }) | ForEach-Object { ($_ -replace '.*"byte_start":(\d+).*', '$1') } | Sort-Object -Unique).Count -ne 2) { throw 'the renamed function is not used at the two sites' }
 & $compiler apply-plan $planActual --root (Join-Path $planScratch 'src') 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) { throw 'a plan over changed files was applied' }
+# Uses and a rename through an alias, past a same-spelled function and local (D509,
+# H17): from inside the project with the operand as `src/main.e`, every module under
+# `project-src`; the plan applied to a copy checks and runs the same.
+$aliasFixture = Join-Path $conformanceRoot 'tools\uses_alias'
+$aliasUsesActual = Join-Path $testBuild 'conformance-tools-uses-alias.jsonl'
+cmd /c "cd /d `"$aliasFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol deep.pick > `"$aliasUsesActual`""
+if ($LASTEXITCODE -ne 0) { throw 'uses-file --json through an alias failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $aliasUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_alias.expected.jsonl')).Hash) { throw 'uses-file --json through an alias differs from the conformance corpus' }
+$aliasOther = cmd /c "cd /d `"$aliasFixture`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol other.pick"
+if ($LASTEXITCODE -ne 0 -or ($aliasOther | Where-Object { $_ -match '"record":"use"' }).Count -ne 2) { throw 'the same-spelled function of the other module does not have its own two uses' }
+$aliasPlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-alias.jsonl'
+cmd /c "cd /d `"$aliasFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol deep.pick --to choose > `"$aliasPlanActual`""
+if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json through an alias failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $aliasPlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename_alias.x64-windows.expected.jsonl')).Hash) { throw 'plan-rename-file --json through an alias differs from the conformance corpus' }
+$aliasScratch = Join-Path $testBuild 'alias-scratch'
+if (Test-Path -LiteralPath $aliasScratch) { Remove-Item -LiteralPath $aliasScratch -Recurse -Force }
+Copy-Item -Recurse $aliasFixture $aliasScratch
+& $compiler apply-plan $aliasPlanActual --root (Join-Path $aliasScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the rename plan through an alias did not apply' }
+if ((Get-Content -Raw -LiteralPath (Join-Path $aliasScratch 'src\other.e')) -ne (Get-Content -Raw -LiteralPath (Join-Path $aliasFixture 'src\other.e'))) { throw 'the rename through an alias touched the same-spelled function of the other module' }
+$aliasExe = Join-Path $testBuild 'alias.exe'
+$aliasBuilt = & $compiler emit-executable (Join-Path $aliasScratch 'src\main.e') $repo 'x64' 'windows' $aliasExe 2>&1
+if ($LASTEXITCODE -ne 0 -or $aliasBuilt -ne 'executable written') { throw "the renamed program through an alias does not build: $aliasBuilt" }
+& $aliasExe
+if ($LASTEXITCODE -ne 8) { throw "the renamed program through an alias behaves differently (exit $LASTEXITCODE)" }
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan byte for byte,
 # applied to a copy it checks; a span that is not one expression is refused with exit 2.
 $replaceActual = Join-Path $testBuild 'conformance-tools-plan-replace.jsonl'
