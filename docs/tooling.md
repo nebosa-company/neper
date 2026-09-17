@@ -477,7 +477,9 @@ declaration are the sites, the same records as a function's; and every function
 of the type's module spelled with the type's name by section 12's convention --
 `rec_cmp`, `rec_eq`, `rec_hash`, `rec_format`, `rec_next` for `Rec` -- is renamed
 with it (D517), `pair_cmp`, at its declaration and every use, since the lookup
-that finds it is by the spelling. It checks
+that finds it is by the spelling. For the same reason a subject that is such a
+function -- `deep.rec_cmp` -- is refused a name of its own (D518): the plan says
+whose `cmp` it is by its spelling and exits 2, and the type's rename is the way. It checks
 the program and emits one `precondition` record per file the rename touches --
 `source` and the file's SHA-256 as read -- then one `edit` record per site: `op`
 `rename-symbol`, `symbol`, `site` (`declaration` or `use`), the `span` of the name

@@ -10939,3 +10939,16 @@ recorded, to the new spelling, `pair_cmp`; the sites of the type and of its
 followers go out in one order, and the postcondition counts the followers.
 `plan_rename_type` gains a `cmp` and a sort over the type, and the renamed
 program sorts and exits as before on both hosts.
+
+## D518 -- A function found by its spelling keeps it
+
+The probe behind D517, turned around: `plan-rename-file` over `deep.rec_cmp`
+to `compare` made a plan of two edits, and the program it left no longer
+checked, `sort.in_place` finding no `cmp` for `Rec`. A function spelled
+`<snake>_<op>` for a type of its module, `op` one of section 12's -- `eq`,
+`cmp`, `hash`, `format`, `next`, `next_err` -- is found by that spelling at
+every lookup, none of which is a use the checker records at the function's
+name, so a name of its own is refused: the plan's diagnostic says whose `cmp`
+it is and that the type's rename carries it (D517), exit 2, nothing planned.
+Both suites pin the refusal. A change of such a function's signature is not
+refused: the protocol's shape is checked where it is looked up.

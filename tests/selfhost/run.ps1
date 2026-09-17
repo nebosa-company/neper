@@ -2501,6 +2501,11 @@ if ($LASTEXITCODE -ne 0 -or $typeBuilt -ne 'executable written') { throw "the pr
 & $typeExe
 if ($LASTEXITCODE -ne 12) { throw "the program with a renamed type behaves differently (exit $LASTEXITCODE)" }
 if ((Select-String -LiteralPath (Join-Path $typeScratch 'src\deep.e') -Pattern 'fn pair_cmp' -Quiet) -ne $true) { throw 'the rename plan over a type did not carry its cmp function' }
+# A function found by its spelling (D518, H17): renaming `rec_cmp` on its own is refused, the type named.
+$protocolRefused = Join-Path $testBuild 'conformance-tools-plan-rename-protocol-refused.jsonl'
+cmd /c "cd /d `"$typeFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol deep.rec_cmp --to compare > `"$protocolRefused`""
+if ($LASTEXITCODE -ne 2) { throw "a rename of a protocol function by its own name did not exit 2 (got $LASTEXITCODE)" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $protocolRefused).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename_protocol_refused.expected.jsonl')).Hash) { throw 'a refused rename of a protocol function differs from the conformance corpus' }
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan byte for byte,
 # applied to a copy it checks; a span that is not one expression is refused with exit 2.
 $replaceActual = Join-Path $testBuild 'conformance-tools-plan-replace.jsonl'

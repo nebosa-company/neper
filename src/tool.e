@@ -4478,6 +4478,27 @@ fn type_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, 
     ret flush(out)
 }
 
+// Whether a function is a protocol's by its spelling (D518): `<snake>_<op>` for a
+// type declared in its module, `op` one of section 12's -- `eq`, `cmp`, `hash`,
+// `format`, `next`, `next_err`; the type's name and the op when it is.
+fn protocol_spelling(c: *check.Checker, g: *graph.Graph, function_index: usize) -> (str, str, bool) {
+    let function = c.functions[function_index]
+    var symbol_index = 0usize
+    while symbol_index < c.resolver.count {
+        let symbol = c.resolver.symbols[symbol_index]
+        if symbol.kind == .Type && symbol.module_index == function.module_index {
+            var prefix: [128]u8 = zero
+            let prefix_len = em.snake_protocol_name(symbol.name, "", prefix[..])
+            if prefix_len != 0usize && function.name.len > prefix_len && graph.same(function.name[0usize..prefix_len], prefix[0usize..prefix_len]) {
+                let op = function.name[prefix_len..function.name.len]
+                if graph.same(op, "eq") || graph.same(op, "cmp") || graph.same(op, "hash") || graph.same(op, "format") || graph.same(op, "next") || graph.same(op, "next_err") { ret (symbol.name, op, true) }
+            }
+        }
+        symbol_index += 1usize
+    }
+    ret ("", "", false)
+}
+
 // The type a subject `module.Name` names (D515): its symbol, when it is one.
 fn uses_type_subject(c: *check.Checker, g: *graph.Graph, subject: str) -> (usize, bool) {
     var dot = subject.len
@@ -4801,6 +4822,21 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
         ret Refused
     }
     let function = c.functions[function_index]
+    // A function found by its spelling (D518, H17): `rec_cmp` is `Rec`'s `cmp` by
+    // section 12's convention, so a name of its own would leave every lookup behind;
+    // the rename is refused and the type named -- the type's rename carries it (D517).
+    let (spelled_type, spelled_op, is_spelled) = protocol_spelling(c, g, function_index)
+    if is_spelled {
+        var message_storage: [512]u8 = zero
+        var message_at = nptest_copy(message_storage[..], 0usize, "`")
+        message_at = nptest_copy(message_storage[..], message_at, subject)
+        message_at = nptest_copy(message_storage[..], message_at, "` is the `")
+        message_at = nptest_copy(message_storage[..], message_at, spelled_op)
+        message_at = nptest_copy(message_storage[..], message_at, "` of `")
+        message_at = nptest_copy(message_storage[..], message_at, spelled_type)
+        message_at = nptest_copy(message_storage[..], message_at, "` by its spelling, which every lookup of the protocol is by: rename the type, which carries it, or declare the new spelling beside it")
+        ret plan_refused(&out, message_storage[0usize..message_at])
+    }
     let (sites, sites_error) = plan_sites(a, c, g, function_index, true)
     if sites_error != ok { ret sites_error }
     let site_modules = sites.modules
