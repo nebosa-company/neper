@@ -663,6 +663,13 @@ where the table leaves the column blank). Values are scalars under the rule
 `result.data` has, numbers bare; without `--json` the table on stderr is
 unchanged, and the two are one row list rendered twice.
 
+`--overlay PATH=FILE` (D502, H15) on a build command, any number of times, reads
+the module at PATH -- spelled as the loader spells it, or a suffix of that on a
+separator, `dep.e` or `src/dep.e` -- from FILE instead of its own file: an
+editor's unsaved buffer. The overlay's bytes are the module's for the build, its
+hash the input's in the manifest and the artifact's identity, and the file on
+disk is not touched; a build without the flag reads the file again.
+
 `--deadline MS` (D399, H16) on a build command (`emit-executable`, `emit-em-all`,
 `run`, with or without `--json`) is a wall-clock deadline: at every checkpoint
 between phases -- after load and parse, resolve, check declarations, settle, check

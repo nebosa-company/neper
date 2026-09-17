@@ -2073,6 +2073,24 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-Fil
 $stdinActual = Join-Path $testBuild 'conformance-stdin-fmt.e'
 cmd /c "`"$compiler`" fmt-file - < `"$(Join-Path $conformanceRoot 'tools\fmt.e')`" > `"$stdinActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\fmt.e')).Hash) { throw 'fmt from stdin is not the canonical source' }
+# `--overlay PATH=FILE` (D502, H15): a module's text from another file -- the value
+# fixture's dependency from its edit -- without touching the tree: the build exits
+# the edit's way, and the manifest records the overlay's hash as the input's.
+$overlayScratch = Join-Path $testBuild 'overlay-scratch'
+if (Test-Path -LiteralPath $overlayScratch) { Remove-Item -LiteralPath $overlayScratch -Recurse -Force }
+Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\incremental_value') $overlayScratch
+$overlayExe = Join-Path $testBuild 'overlay.exe'
+$overlayBuilt = & $compiler emit-executable (Join-Path $overlayScratch 'src\main.e') $repo 'x64' 'windows' $overlayExe --overlay "dep.e=$(Join-Path $overlayScratch 'edits\dep_limit.e')" 2>&1
+if ($LASTEXITCODE -ne 0 -or $overlayBuilt -ne 'executable written') { throw "the build over an overlay failed: $overlayBuilt" }
+& $overlayExe
+if ($LASTEXITCODE -ne 4) { throw "the build over an overlay did not take the overlay's text (exit $LASTEXITCODE)" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $overlayScratch 'src\dep.e')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $repo 'tests\selfhost\fixtures\link\incremental_value\src\dep.e')).Hash) { throw 'the overlay touched the file' }
+$overlayManifest = Get-Content -Raw -LiteralPath (Join-Path $overlayScratch '.neper\debug\build-manifest.json') | ConvertFrom-Json
+$overlayInput = ($overlayManifest.inputs | Where-Object { $_.source.path -eq 'dep.e' }).sha256
+if ($overlayInput -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $overlayScratch 'edits\dep_limit.e')).Hash.ToLower()) { throw "the manifest does not record the overlay's hash as the input's" }
+$overlayPlain = & $compiler emit-executable (Join-Path $overlayScratch 'src\main.e') $repo 'x64' 'windows' $overlayExe 2>&1
+& $overlayExe
+if ($LASTEXITCODE -ne 8) { throw "the build without the overlay did not read the file (exit $LASTEXITCODE)" }
 # `-` on `check-file` (D490) and `index` (D488): the module from stdin under its `--path` identity is the file's golden.
 $stdinActual = Join-Path $testBuild 'conformance-stdin-check.jsonl'
 cmd /c "`"$compiler`" check-file - `"$repo`" x64 windows --json --path scope.e < `"$(Join-Path $conformanceRoot 'reject\scope.e')`" > `"$stdinActual`""

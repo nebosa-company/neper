@@ -114,6 +114,30 @@ fn spelling_of(a: *mem.Arena, g: *Graph, given: str) -> (str, err) {
 
 // A file's bytes (D467): the loader `source` gives, for a module that does not
 // name `source` -- `tool` has a parameter of that name in forty places.
+// The overlay for a module's path (D502): the one spelled as the path is, byte for
+// byte under the host's rule for a path byte, or as a suffix of it after a separator.
+fn overlay_for(g: *Graph, path: str) -> (str, bool) {
+    var at = 0usize
+    while at < g.overlay_count {
+        let spelled = g.overlay_paths[at]
+        if path_matches(path, spelled) { ret (g.overlay_texts[at], true) }
+        at += 1usize
+    }
+    ret ("", false)
+}
+
+fn path_matches(path: str, spelled: str) -> bool {
+    if spelled.len == 0usize || spelled.len > path.len { ret false }
+    let from = path.len - spelled.len
+    if from != 0usize && path[from - 1usize] != 47u8 && path[from - 1usize] != 92u8 { ret false }
+    var at = 0usize
+    while at < spelled.len {
+        if !project.path_byte_equal(path[from + at], spelled[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 fn load_file(a: *mem.Arena, path: str) -> (str, err) {
     let (text, load_error) = source.load(a, path)
     ret (text, load_error)
@@ -126,6 +150,12 @@ type Graph = struct {
     // driver under the `--path` identity, so the loader takes it in place of a file.
     root_text: str,
     root_text_given: bool,
+    // Overlays (D502, H15): a module's text from a file other than its own -- an
+    // editor's unsaved buffer -- named by the module's path as given or by a suffix
+    // of it on a separator; the loader takes the overlay's bytes for that module.
+    overlay_paths: []str,
+    overlay_texts: []str,
+    overlay_count: usize,
     token_scratch: []lex.Token,
     nodes: []syntax.Node,
     children: []u32,
@@ -901,9 +931,14 @@ fn wave_texts(a: *mem.Arena, g: *Graph, wave_start: usize, wave_end: usize) -> e
     while module_index < wave_end {
         var text = g.root_text
         if module_index != 0usize || !g.root_text_given {
-            let (loaded_text, load_error) = source.load(a, g.modules[module_index].path)
-            if load_error != ok { ret load_error }
-            text = loaded_text
+            let (overlay, overlaid) = overlay_for(g, g.modules[module_index].path)
+            if overlaid {
+                text = overlay
+            } else {
+                let (loaded_text, load_error) = source.load(a, g.modules[module_index].path)
+                if load_error != ok { ret load_error }
+                text = loaded_text
+            }
         }
         g.modules[module_index].text = text
         g.total_bytes += text.len

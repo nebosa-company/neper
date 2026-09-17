@@ -2185,6 +2185,20 @@ for conformance_case in 'tokens every_kind 0' 'tokens hostile 1' 'parse every_ki
 done
 # `-` reads stdin under `--path` (D289): a fixture piped in with its basename as the
 # identity is its own golden, for tokens, parse and fmt; `-` without `--path` is usage.
+# `--overlay PATH=FILE` (D502, H15): a module's text from another file, the tree untouched.
+overlay_scratch="$test_build/overlay-scratch"
+rm -rf "$overlay_scratch"
+cp -r "$repo/tests/selfhost/fixtures/link/incremental_value" "$overlay_scratch"
+[ "$("$test_build/neper-self" emit-executable "$overlay_scratch/src/main.e" "$repo" x64 linux "$test_build/overlay" --overlay "dep.e=$overlay_scratch/edits/dep_limit.e" 2>/dev/null)" = "executable written" ]
+overlay_status=0
+"$test_build/overlay" || overlay_status=$?
+[ "$overlay_status" -eq 4 ]
+cmp -s "$overlay_scratch/src/dep.e" "$repo/tests/selfhost/fixtures/link/incremental_value/src/dep.e"
+python3 -c "import json,sys,hashlib; m=json.load(open(sys.argv[1])); want=hashlib.sha256(open(sys.argv[2],'rb').read()).hexdigest(); sys.exit(0 if any(i['source']['path']=='dep.e' and i['sha256']==want for i in m['inputs']) else 1)" "$overlay_scratch/.neper/debug/build-manifest.json" "$overlay_scratch/edits/dep_limit.e"
+[ "$("$test_build/neper-self" emit-executable "$overlay_scratch/src/main.e" "$repo" x64 linux "$test_build/overlay" 2>/dev/null)" = "executable written" ]
+overlay_status=0
+"$test_build/overlay" || overlay_status=$?
+[ "$overlay_status" -eq 8 ]
 # `-` on `check-file` (D490) and `index` (D488): the module from stdin under its `--path` identity is the file's golden.
 stdin_check_status=0
 $test_build/neper-self check-file - "$repo" x64 linux --json --path scope.e < "$conformance_root/reject/scope.e" > "$test_build/conformance-stdin-check.jsonl" || stdin_check_status=$?

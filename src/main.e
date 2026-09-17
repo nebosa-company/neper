@@ -770,7 +770,33 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write")
+    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--overlay")
+}
+
+// `--overlay PATH=FILE` (D502, H15), any number of times: the module at PATH -- as
+// the loader spells it, or a suffix of that on a separator -- is read from FILE
+// instead, an editor's buffer for a file not yet saved. The texts are read here,
+// before the load; a FILE that cannot be read is the operand's own failure.
+fn load_overlays(a: *mem.Arena, args: []str, loaded: *graph.Graph) -> err {
+    var at = 7usize
+    while at + 1usize < args.len {
+        if same(args[at], "--") { ret ok }
+        if same(args[at], "--overlay") {
+            let spec = args[at + 1usize]
+            var split = 0usize
+            while split < spec.len && spec[split] != 61u8 { split += 1usize }
+            if split == 0usize || split == spec.len { ret tool_usage() }
+            if loaded.overlay_count == loaded.overlay_paths.len { ret tool_usage() }
+            let (text, load_error) = source.load(a, spec[split + 1usize..spec.len])
+            if load_error != ok { ret load_error }
+            loaded.overlay_paths[loaded.overlay_count] = spec[0usize..split]
+            loaded.overlay_texts[loaded.overlay_count] = text
+            loaded.overlay_count += 1usize
+        }
+        if takes_value(args[at]) { at += 1usize }
+        at += 1usize
+    }
+    ret ok
 }
 
 // A flag with a decimal after it: the value, and whether the flag was given at all.
@@ -821,7 +847,7 @@ fn flags_known(args: []str) -> bool {
             if !size_ok { ret false }
             at += 1usize
         } else {
-            if same(args[at], "--project") {
+            if same(args[at], "--project") || same(args[at], "--overlay") {
                 if at + 1usize >= args.len { ret false }
                 at += 1usize
             } else {
@@ -3035,6 +3061,12 @@ fn validate_cli_parse(a: *mem.Arena, report: *Sink, path: str, text: str) -> err
 fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
     // Modules and imports are the two pools that exist before anything is measured
     // (D306); the tree pool starts small and grows to the largest module as it loads.
+    let (overlay_paths, overlay_paths_error) = mem.alloc[str](a, 64usize)
+    if overlay_paths_error != ok { ret overlay_paths_error }
+    let (overlay_texts, overlay_texts_error) = mem.alloc[str](a, 64usize)
+    if overlay_texts_error != ok { ret overlay_texts_error }
+    loaded.overlay_paths = overlay_paths
+    loaded.overlay_texts = overlay_texts
     let (modules, modules_error) = mem.alloc[graph.Module](a, 8192usize)
     if modules_error != ok { ret modules_error }
     let (imports, imports_error) = mem.alloc[graph.Import](a, 262144usize)
@@ -9236,6 +9268,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
+        // The overlays (D502): an editor's buffers in place of files, before the load.
+        try load_overlays(a, args, &loaded)
         // Every command that writes or reads artifacts knows which compiler it is (D398).
         if writes_em || writes_all_em || hot_build { learn_compiler_identity(a, &loaded, args[0usize], args) }
         if trailing_flags {

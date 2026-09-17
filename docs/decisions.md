@@ -10712,3 +10712,17 @@ mutable pointer (D395), and refuses a read after. Each such site is now a
 `borrow` fact of the context page, compiler-proved, naming the local and what
 ended it. `context_moves.e` gains `ends`, a slice of an allocation in a
 region the function resets, pinned per host.
+
+## D502 -- Overlays: a module's text from another file
+
+H15 named in-memory overlays; D488 and D490 gave the root module its text from
+stdin, and an editor with several unsaved buffers needs the same for any
+module. `--overlay PATH=FILE`, any number of times on a build, names a module
+by its path as the loader spells it or by a suffix of that on a separator, and
+the loader's text wave takes FILE's bytes for it -- the hot path included, so
+the overlay's hash is what the artifact is keyed by and what the manifest
+records as the input's, and a later build from the saved file with the same
+bytes finds the artifact current. The file on disk is never read for that
+module and never written. Both suites build the value fixture with its edit
+as an overlay of `dep.e`, exit 4, the file unchanged, the manifest naming the
+overlay's hash, and exit 8 again without the flag.
