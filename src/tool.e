@@ -3770,7 +3770,9 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
     if module_index == g.count {
         try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no module of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
-        try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
+        try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"subject\":")
+        try quoted(&out, module_name)
+        try text(&out, ",\"standing\":\"unavailable\",\"records\":0,\"omitted\":0,\"complete\":true}}")
         try flush(&out)
         // The process status agrees with the record (D406): a refused query is
         // `Refused`, which one query's driver turns into exit 2 and a batch moves past (D409).

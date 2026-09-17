@@ -2666,6 +2666,12 @@ catalog_actual="$test_build/conformance-tools-catalog.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self context-file contract.e "$repo" x64 linux --json --module contract --budget 64 --bytes 3000 > "$catalog_actual")
 cmp -s "$catalog_actual" "$conformance_root/tools/catalog.x64-linux.expected.jsonl" || { printf '%s
 ' "context-file --module differs from the conformance corpus" >&2; exit 1; }
+# A planned-only module (D571, H11/SL11) is named and unavailable, never callable.
+unavailable_catalog_actual="$test_build/conformance-tools-catalog-unavailable.jsonl"
+unavailable_catalog_status=0
+(cd "$conformance_root/tools" && $test_build/neper-self context-file contract.e "$repo" x64 linux --json --module e.gpu --budget 64 > "$unavailable_catalog_actual") || unavailable_catalog_status=$?
+[ "$unavailable_catalog_status" -eq 2 ]
+cmp -s "$unavailable_catalog_actual" "$conformance_root/tools/catalog_unavailable.expected.jsonl" || { echo "the unavailable module catalogue differs from the conformance corpus" >&2; exit 1; }
 # API verification (D570, H11): a non-test function reached by an executable @test
 # is verified and names one witness; test functions do not verify themselves.
 verified_catalog_actual="$test_build/conformance-tools-catalog-verified.jsonl"

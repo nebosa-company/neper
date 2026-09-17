@@ -11737,3 +11737,16 @@ from names or documentation. The existing multi-module test project pins both si
 functions remain merely target-supported (including the deliberately failing one).
 Both host suites also keep the refactored `test-impact-file` output byte-for-byte
 unchanged and execute the project tests, so the named witness is not a dead fixture.
+
+## D571 -- An absent catalogue subject is explicitly unavailable
+
+When `context-file --module` cannot find the requested module in the checked program,
+its refused result now repeats that subject with `standing: "unavailable"`, alongside
+the existing diagnostic and exit 2. The result comes from the checked graph alone: the
+compiler does not read `modules.json` or turn the design plan into an availability
+registry.
+
+Both host suites query `e.gpu`, a planned module with no installed source, and require
+the same three-record golden. Thus a planned-only name has a machine-readable negative
+answer and cannot be confused with the `supported-on-target` or `verified` subjects
+that only checked source can produce. Batch catalogues share this refusal path.

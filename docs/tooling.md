@@ -388,7 +388,10 @@ contract facts (the signature through `resources`/`boundary`; the body's
 decisions are `--symbol`'s), under one budget that counts subjects and facts
 alike. A page may end inside a function's facts; the next page continues them,
 and they belong to the last subject written. A name no module of the program
-has is an `E-CLI-9999` diagnostic and exit 2.
+has is an `E-CLI-9999` diagnostic and exit 2. Its result data repeats the requested
+`subject` with `standing: "unavailable"` (D571, H11/SL11). This is a statement about
+the checked program, not an inference from the design-only module plan; both direct
+and batch catalogue queries therefore cannot present a planned-only module as callable.
 
 Both direct forms take standalone `--unchecked` among their paging and overlay
 flags (D555, H27). It describes the intended whole-image check policy rather than

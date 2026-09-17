@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the subject names no module of the program","span":null,"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":2,"data":{"subject":"e.gpu","standing":"unavailable","records":0,"omitted":0,"complete":true}}

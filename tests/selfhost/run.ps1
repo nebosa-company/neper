@@ -2821,6 +2821,11 @@ $catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file contract.e `"$repo`" x64 windows --json --module contract --budget 64 --bytes 3000 > `"$catalogActual`""
 if ($LASTEXITCODE -ne 0) { throw "context-file --module failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $catalogActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/catalog.x64-windows.expected.jsonl')).Hash) { throw "context-file --module differs from the conformance corpus" }
+# A planned-only module (D571, H11/SL11) is named and unavailable, never callable.
+$unavailableCatalogActual = Join-Path $testBuild 'conformance-tools-catalog-unavailable.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file contract.e `"$repo`" x64 windows --json --module e.gpu --budget 64 > `"$unavailableCatalogActual`""
+if ($LASTEXITCODE -ne 2) { throw "the unavailable module catalogue exited $LASTEXITCODE, not 2" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $unavailableCatalogActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/catalog_unavailable.expected.jsonl')).Hash) { throw "the unavailable module catalogue differs from the conformance corpus" }
 # API verification (D570, H11): a non-test function reached by an executable @test
 # is verified and names one witness; test functions do not verify themselves.
 $verifiedCatalogActual = Join-Path $testBuild 'conformance-tools-catalog-verified.jsonl'
