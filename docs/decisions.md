@@ -11170,5 +11170,16 @@ over the same bytes; a token's column never moves with it, which the trap
 records need. Both suites now build the compiler cold with artifacts and hold
 the warm path: every module blanked keeps all thirty-five `stable` with the
 cold image; `lex` hoisted rebuilds `lex` alone, its twenty-two importers kept
-by their edges; `check` with its locals renamed rebuilds `check` and, its parameter names being its interface's, the modules that import it; the
+by their edges; `check` with its locals renamed rebuilds `check` and, at the time, the modules that import it, its parameter names being its interface's -- which D535 ends; the
 image the cold build's each time.
+
+## D535 -- A parameter's name is not its signature
+
+D534's warm turn showed `check` with its locals renamed rebuilding sixteen
+importers as `edge-changed`: the canonical signature the edge rule hashes
+carried each parameter's name. A call is positional, so a caller compiled
+against `n` is compiled against `count` the same; the name is out of the
+signature now, the type and `own` remaining, and the same turn rebuilds
+`check` alone with the sixteen kept by their edges. A body edge still
+carries the declaration's tokens (D214), so a caller that inlined the
+function is rebuilt on the rename, which is conservative and rare.

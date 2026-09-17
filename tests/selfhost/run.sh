@@ -3619,7 +3619,7 @@ python3 "$repo/scripts/check_incremental.py" "$warm_manifest" lex=rebuilt:source
 cmp "$test_build/neper-warm-turns" "$test_build/neper-warm-turns-cold"
 cp "$test_build/renamed-src/src/check.e" "$warm_project/src/check.e"
 [ "$("$own_compiler_path" emit-executable "$warm_project/src/main.e" "$repo" x64 linux "$test_build/neper-warm-turns" --incremental)" = 'executable written' ]
-python3 "$repo/scripts/check_incremental.py" "$warm_manifest" check=rebuilt:source-changed lex=kept:stable main=rebuilt:edge-changed
+python3 "$repo/scripts/check_incremental.py" "$warm_manifest" check=rebuilt:source-changed lex=kept:stable main=kept:edges-hold
 cmp "$test_build/neper-warm-turns" "$test_build/neper-warm-turns-cold"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]

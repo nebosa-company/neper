@@ -532,7 +532,9 @@ fn write_function_signature_canonical(c: *check.Checker, g: *graph.Graph, functi
     while at < function.parameter_count {
         if function.first_parameter + at >= c.parameter_count { ret InvalidArtifact }
         let parameter = c.parameters[function.first_parameter + at]
-        try canonical_text(output, parameter.name)
+        // A parameter's name is not its signature (D535, H14): a call is positional,
+        // so a caller compiled against `n` is compiled against `count` the same, and
+        // a rename no longer rebuilds every importer; the type and `own` remain.
         // `own` is part of the signature (D345): a caller compiled against a borrowing
         // parameter has to be checked again when it starts taking ownership.
         if parameter.own { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }

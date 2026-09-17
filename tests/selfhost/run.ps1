@@ -3627,7 +3627,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmExe).Hash -ne (Get-FileHas
 Copy-Item (Join-Path $renamedSrc 'src\check.e') (Join-Path $warmProject 'src\check.e')
 & $ownCompilerPath emit-executable (Join-Path $warmProject 'src\main.e') $repo 'x64' 'windows' $warmExe --incremental | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the warm build of the compiler after renaming one module''s locals failed' }
-& python (Join-Path $repo 'scripts/check_incremental.py') $warmManifest 'check=rebuilt:source-changed' 'lex=kept:stable' 'main=rebuilt:edge-changed'
+& python (Join-Path $repo 'scripts/check_incremental.py') $warmManifest 'check=rebuilt:source-changed' 'lex=kept:stable' 'main=kept:edges-hold'
 if ($LASTEXITCODE -ne 0) { throw 'the warm build after renaming one module''s locals did not keep the rest' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmCold).Hash) { throw 'the warm build after renaming one module''s locals is not the cold build' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
