@@ -10952,3 +10952,18 @@ name, so a name of its own is refused: the plan's diagnostic says whose `cmp`
 it is and that the type's rename carries it (D517), exit 2, nothing planned.
 Both suites pin the refusal. A change of such a function's signature is not
 refused: the protocol's shape is checked where it is looked up.
+
+## D519 -- A frame inlined from another module names its origin
+
+A release build of `run_trap_module` inlines `deep.pick` into `main`, and the
+trap's backtrace read `main.main` at `deep.e:3`: the runtime names the
+function whose code holds the site, and the line table names the file and
+line the code came from (D207). The record now says what those two facts
+mean together: a frame whose line lies in a module other than its function's
+carries `inlined_from`, the function of that module whose source range holds
+the line, found from the checker's declarations after the build. The
+runtime's format is unchanged; the origin is derived where the graph and the
+checker are. Found beside it: the operand's own frames and the trap's span
+were named under `operand` while every other record of a project build named
+`main.e` under `project-src`; they are under the operand's identity now. Both
+suites pin the release frame and the operand's frame.

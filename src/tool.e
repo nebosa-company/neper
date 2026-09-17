@@ -305,8 +305,10 @@ fn trap_line_end(bytes: str, from: usize) -> usize {
 // A frame's source: the operand, when the frame's file is the operand as the child
 // spells it and the line lies inside the operand's own text; null otherwise, since the
 // printed path does not say which root another module lies under.
-fn trap_source(out: *Out, path: str, file: str, spelled: str, line: usize, line_offset: usize, line_count: usize) -> err {
+fn trap_source(out: *Out, g: *graph.Graph, path: str, file: str, spelled: str, line: usize, line_offset: usize, line_count: usize) -> err {
     if graph.same(file, spelled) && line > line_offset && line - line_offset <= line_count {
+        // The operand under its identity (D519) when the graph is there.
+        if g.count != 0usize { ret manifest_source(out, g, g.modules[0usize].path) }
         try text(out, "{\"root\":\"operand\",\"path\":")
         try quoted(out, path)
         ret byte(out, 125u8)
@@ -373,7 +375,39 @@ fn trap_module(g: *graph.Graph, file: str) -> (usize, bool) {
     ret (0usize, false)
 }
 
-fn trap_json(out: *Out, g: *graph.Graph, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str, line_offset: usize) -> err {
+// A frame whose file is a module other than its function's (D519, H19): the body
+// was inlined there, so the frame names, as `inlined_from`, the function of that
+// module whose source holds the line -- the one the runtime's frame cannot name,
+// its code lying inside the caller's. The functions are the checker's, empty for
+// the test runner's path.
+fn frame_origin(out: *Out, functions: []const check.Function, g: *graph.Graph, frame_module: usize, line: usize) -> err {
+    if frame_module >= g.count || line == 0usize { ret ok }
+    let module = g.modules[frame_module]
+    if line > module.lines.len { ret ok }
+    let offset = module.lines[line - 1usize]
+    var at = 0usize
+    while at < functions.len {
+        let function = functions[at]
+        if function.module_index == frame_module && offset >= function.source_start && offset < function.source_end {
+            try text(out, ",\"inlined_from\":\"")
+            try quoted_body(out, module.name)
+            try byte(out, 46u8)
+            try quoted_body(out, function.name)
+            ret byte(out, 34u8)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// The module part of a frame's `module.function`.
+fn frame_module_name(function: str) -> str {
+    var dot = 0usize
+    while dot < function.len && function[dot] != 46u8 { dot += 1usize }
+    ret function[0usize..dot]
+}
+
+fn trap_json(out: *Out, g: *graph.Graph, functions: []const check.Function, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str, line_offset: usize) -> err {
     var at = 0usize
     var found = stderr_bytes.len
     while at + 7usize <= stderr_bytes.len && found == stderr_bytes.len {
@@ -395,7 +429,16 @@ fn trap_json(out: *Out, g: *graph.Graph, stderr_bytes: str, module_name: str, pa
     try text(out, ",\"span\":")
     if graph.same(file, spelled) && line > line_offset && line - line_offset <= line_count {
         let (offset, column_utf16) = trap_byte_at(source, line - line_offset, column)
-        try span(out, "operand", path, offset, offset, line - line_offset, column, line - line_offset, column, column_utf16, column_utf16)
+        // The operand under its own identity (D519): the project's when it has one,
+        // as every other record names it; the test runner's path has no graph.
+        var operand_root = "operand"
+        var operand_path = path
+        if g.count != 0usize {
+            let (identity_root, identity_relative) = source_identity_of(g, g.modules[0usize].path)
+            operand_root = identity_root
+            operand_path = identity_relative
+        }
+        try span(out, operand_root, operand_path, offset, offset, line - line_offset, column, line - line_offset, column, column_utf16, column_utf16)
     } else {
         let (trap_module_index, in_module) = trap_module(g, file)
         if in_module && line > 0usize && line <= trap_line_count(g.modules[trap_module_index].text) {
@@ -435,16 +478,20 @@ fn trap_json(out: *Out, g: *graph.Graph, stderr_bytes: str, module_name: str, pa
         try trap_function(out, stderr_bytes[cursor + 5usize..function_end], module_name, spelled, frame_file, frame_line, line_offset, line_count)
         try text(out, ",\"source\":")
         let (frame_module, frame_in_module) = trap_module(g, frame_file)
-        if frame_in_module && !graph.same(frame_file, spelled) {
+        if frame_in_module {
             try manifest_source(out, g, g.modules[frame_module].path)
         } else {
-            try trap_source(out, path, frame_file, spelled, frame_line, line_offset, line_count)
+            try trap_source(out, g, path, frame_file, spelled, frame_line, line_offset, line_count)
         }
         try text(out, ",\"line\":")
         if frame_line == 0usize {
             try text(out, "null")
         } else {
             if graph.same(frame_file, spelled) && frame_line > line_offset && frame_line - line_offset <= line_count { try decimal(out, frame_line - line_offset) } else { try decimal(out, frame_line) }
+        }
+        // Inlined (D519): the frame's function is of one module, its line of another.
+        if frame_in_module && !graph.same(frame_module_name(stderr_bytes[cursor + 5usize..function_end]), g.modules[frame_module].name) {
+            try frame_origin(out, functions, g, frame_module, frame_line)
         }
         try byte(out, 125u8)
         frames += 1usize
@@ -475,7 +522,7 @@ fn test_error_name(out: *Out, stderr_bytes: str, module_name: str, spelled: str)
 // record, with section 11's trap record read back as the `trap` payload (D253).
 // `spelled` is the operand as the child prints it -- its reproducible spelling (D337),
 // it; `path` is section 2's operand identity, the basename.
-fn run_record(a: *mem.Arena, g: *graph.Graph, status: i32, stdout_bytes: str, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str) -> err {
+fn run_record(a: *mem.Arena, g: *graph.Graph, functions: []const check.Function, status: i32, stdout_bytes: str, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, (stdout_bytes.len + stderr_bytes.len) * 6usize + 256usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
@@ -492,7 +539,7 @@ fn run_record(a: *mem.Arena, g: *graph.Graph, status: i32, stdout_bytes: str, st
     try text(&out, ",\"stderr\":")
     try captured(&out, stderr_bytes)
     try text(&out, ",\"trap\":")
-    try trap_json(&out, g, stderr_bytes, module_name, path, source, spelled, 0usize)
+    try trap_json(&out, g, functions, stderr_bytes, module_name, path, source, spelled, 0usize)
     try byte(&out, 125u8)
     ret flush(&out)
 }
@@ -6042,7 +6089,8 @@ fn test_record(out: *Out, module_name: str, root: str, path: str, source: str, s
         }
         if recorded {
             var no_graph: graph.Graph = zero
-            try trap_json(out, &no_graph, stderr_bytes, module_name, path, source, spelled, 2usize)
+            var no_functions: []const check.Function = zero
+            try trap_json(out, &no_graph, no_functions, stderr_bytes, module_name, path, source, spelled, 2usize)
         } else {
             try text(out, "{\"kind\":\"exit\",\"span\":null,\"values\":[\"")
             if status < 0i32 {
@@ -6055,7 +6103,8 @@ fn test_record(out: *Out, module_name: str, root: str, path: str, source: str, s
         }
     } else {
         var no_graph_either: graph.Graph = zero
-        try trap_json(out, &no_graph_either, stderr_bytes, module_name, path, source, spelled, 2usize)
+        var no_functions_either: []const check.Function = zero
+        try trap_json(out, &no_graph_either, no_functions_either, stderr_bytes, module_name, path, source, spelled, 2usize)
     }
     try byte(out, 125u8)
     ret flush(out)

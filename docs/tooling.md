@@ -591,7 +591,11 @@ one `record:"test_summary"`, then the command `result`. The summary contains exp
 `run --json` captures the program's stdout and stderr into files beside the
 executable (`<exe>.stdout`, `<exe>.stderr`) and emits one `run` record with
 `process_exit_code`, `stdout`, `stderr`, and nullable `trap`; captured bytes use
-§2's representation. The record is **bounded** (D370, H18): it holds the first
+§2's representation. A backtrace frame whose line lies in a module other than its
+function's -- a body inlined there in a release build -- names that module's
+function holding the line as `inlined_from` (D519, H19), the frame's `function`
+staying the one whose code holds the site; the operand's own frames and the trap's
+span are under the operand's identity, `project-src` in a project. The record is **bounded** (D370, H18): it holds the first
 `--capture N` bytes of each stream, a mebibyte without the flag, and the command's
 `result.data` carries `stdout_bytes` and `stderr_bytes` (the whole streams' sizes),
 `capture_limit`, and `captured_complete` -- `false` when either stream was cut, in

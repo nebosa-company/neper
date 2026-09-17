@@ -1729,6 +1729,9 @@
                   "null"
                 ],
                 "minimum": 1
+              },
+              "inlined_from": {
+                "type": "string"
               }
             }
           }

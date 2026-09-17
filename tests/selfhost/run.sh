@@ -2222,6 +2222,11 @@ overlay_status=0
 grep -q '"trap":{"kind":"bounds","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":[0-9]*,"byte_end":[0-9]*,"line":3' "$test_build/conformance-tools-run-trap-module.jsonl"
 grep -q '{"function":"deep.pick","source":{"root":"project-src","path":"deep.e"},"line":3}' "$test_build/conformance-tools-run-trap-module.jsonl"
 python3 "$repo/scripts/validate_stream.py" "$test_build/conformance-tools-run-trap-module.jsonl"
+grep -q '{"function":"main.main","source":{"root":"project-src","path":"main.e"},"line":9}' "$test_build/conformance-tools-run-trap-module.jsonl"
+# Provenance through inlining (D519, H19): the release frame at deep.e names deep.pick as inlined_from.
+(cd "$test_build" && ./neper-self run "$conformance_root/tools/run_trap_module/src/main.e" "$repo" x64 linux conformance-tools-run-trap-inlined.out --release --json > "conformance-tools-run-trap-inlined.jsonl") || true
+grep -q '{"function":"main.main","source":{"root":"project-src","path":"deep.e"},"line":3,"inlined_from":"deep.pick"}' "$test_build/conformance-tools-run-trap-inlined.jsonl"
+python3 "$repo/scripts/validate_stream.py" "$test_build/conformance-tools-run-trap-inlined.jsonl"
 # The index marks the boundaries a declaration holds (D513, H27).
 (cd "$conformance_root/tools/manifest_unsafe" && "$test_build/neper-self" index-file src/main.e "$repo" x64 linux --json > "$test_build/conformance-tools-index-unsafe.jsonl")
 cmp -s "$test_build/conformance-tools-index-unsafe.jsonl" "$conformance_root/tools/index_unsafe.expected.jsonl" || { echo "index-file --json over the unsafe fixture differs from the conformance corpus" >&2; exit 1; }

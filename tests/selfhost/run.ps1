@@ -2123,6 +2123,15 @@ if ((Select-String -LiteralPath $trapModuleActual -Pattern '"trap":\{"kind":"bou
 if ((Select-String -LiteralPath $trapModuleActual -Pattern '\{"function":"deep.pick","source":\{"root":"project-src","path":"deep.e"\},"line":3\}' -Quiet) -ne $true) { throw 'a frame inside a dependency does not name its source' }
 & python (Join-Path $repo 'scripts/validate_stream.py') $trapModuleActual
 if ($LASTEXITCODE -ne 0) { throw 'the run record over a trap in a dependency does not validate' }
+# The operand's own frame under its identity (D519): `project-src`, as the trap's span is.
+if ((Select-String -LiteralPath $trapModuleActual -Pattern '\{"function":"main.main","source":\{"root":"project-src","path":"main.e"\},"line":9\}' -Quiet) -ne $true) { throw 'the operand frame of a trap record is not under its identity' }
+# Provenance through inlining (D519, H19): in release, `deep.pick` is inlined into `main`,
+# and the frame at `deep.e` names it as `inlined_from`.
+$trapInlinedActual = Join-Path $testBuild 'conformance-tools-run-trap-inlined.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" run `"$(Join-Path $conformanceRoot 'tools\run_trap_module\src\main.e')`" `"$repo`" x64 windows conformance-tools-run-trap-inlined.out --release --json > `"$trapInlinedActual`""
+if ((Select-String -LiteralPath $trapInlinedActual -Pattern '\{"function":"main.main","source":\{"root":"project-src","path":"deep.e"\},"line":3,"inlined_from":"deep.pick"\}' -Quiet) -ne $true) { throw 'a frame inlined from another module does not name its origin' }
+& python (Join-Path $repo 'scripts/validate_stream.py') $trapInlinedActual
+if ($LASTEXITCODE -ne 0) { throw 'the run record over an inlined trap does not validate' }
 # The index marks the boundaries a declaration holds (D513, H27): the unsafe fixture's
 # symbols carry the kinds of the manifest's inventory that name them.
 $indexUnsafeActual = Join-Path $testBuild 'conformance-tools-index-unsafe.jsonl'
