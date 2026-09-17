@@ -10843,6 +10843,10 @@ body's call is recorded, so `uses-file`, the plans and the impact walk see
 it; the offset is taken at copy time, since the tokens in hand at evaluation
 are whichever module's the interpreter is in. `uses_comptime` pins the use
 and the plan on both hosts, applied to a copy that builds and exits the same.
+The two words on every constant expression are what D506's gate named: the
+workers' arenas over sc500k rose 2270 to 2276 MB debug and 2980 to 2982 MB
+release on Windows, 2269 to 2273 and 2974 to 2981 on Linux, the images
+unchanged; the static baselines are re-pinned to these.
 
 ## D511 -- The callback fixture
 

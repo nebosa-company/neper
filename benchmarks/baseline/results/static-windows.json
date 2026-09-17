@@ -5,20 +5,20 @@
  "host": "windows",
  "jobs": 8,
  "compiler": "stage 2 (neper-big / neper-linux, cross-compiled) at the revision",
- "revision": "b492c1552eee507536178313e9b662c5e21af441",
+ "revision": "53ef6f37dc9c50c1f5769c413e774b54f2533c4f",
  "cells": [
   {
    "workload": "sc500k",
    "mode": "debug",
    "command": "D:\\repos\\neper-cot\\build\\neper-big.exe emit-executable D:\\Temp\\claude\\scratch475\\fixtures-win\\sc500k\\src\\main.e D:\\repos\\neper-cot x64 windows D:\\Temp\\claude\\scratch475\\fixtures-win\\sc500k\\static-debug.exe -j 8 --stats --json",
-   "arena_mb": 2270,
+   "arena_mb": 2276,
    "image_bytes": 2982400
   },
   {
    "workload": "sc500k",
    "mode": "release",
    "command": "D:\\repos\\neper-cot\\build\\neper-big.exe emit-executable D:\\Temp\\claude\\scratch475\\fixtures-win\\sc500k\\src\\main.e D:\\repos\\neper-cot x64 windows D:\\Temp\\claude\\scratch475\\fixtures-win\\sc500k\\static-release.exe --release -j 8 --stats --json",
-   "arena_mb": 2980,
+   "arena_mb": 2982,
    "image_bytes": 2081792
   }
  ]
