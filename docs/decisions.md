@@ -11764,3 +11764,16 @@ planned-only module, and both per-target batch goldens pin that exact subject an
 standing. The compiler still reads no design registry; only checked declarations can
 produce callable subject records, while the batch's unrelated invalid-line refusal
 remains unchanged.
+
+## D573 -- Generic API signatures keep their compile-time parameters
+
+`context-file --symbol` now reports a generic declaration's complete checked
+signature. Its whole header, from `fn` to the body, is copied from the declaration's
+checked token range through the existing JSON-string escaper. Dependent shapes such
+as `[N]u8` are therefore not reconstructed as `[0]u8` from a lossy settled type, and
+a named type parameter is no longer printed as `?`.
+
+The existing `context_moves.width` query pins the correction on both targets:
+`fn width[T: type](v: T) -> usize`. This is retrieval evidence for the template
+itself, not evidence that every possible instantiation is supported; catalogue
+standing remains a separate claim.

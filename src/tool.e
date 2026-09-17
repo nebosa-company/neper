@@ -2854,6 +2854,37 @@ fn dependency_facts(a: *mem.Arena, out: *Out, g: *graph.Graph, module_index: usi
     ret ok
 }
 
+// A generic declaration's whole header, from `fn` to its body. Its checker types
+// deliberately do not retain dependent spellings such as `[N]u8`; the checked token
+// range does, and `quoted` makes even a multiline signature one JSON string (D573).
+fn generic_signature(c: *check.Checker, g: *graph.Graph, function_index: usize) -> (str, err) {
+    if function_index >= c.function_count || c.function_generics[function_index].comptime_count == 0usize { ret ("", parse.InvalidSyntax) }
+    let function = c.functions[function_index]
+    if function.module_index >= g.count { ret ("", parse.InvalidSyntax) }
+    let module = g.modules[function.module_index]
+    var token_at = 0usize
+    while token_at < module.tokens.len && module.tokens[token_at].end <= function.source_start { token_at += 1usize }
+    var start = function.source_start
+    var found_fn = false
+    while token_at < module.tokens.len && module.tokens[token_at].start < function.source_end {
+        let token = module.tokens[token_at]
+        if !found_fn {
+            if token.kind == .KwFn {
+                start = token.start
+                found_fn = true
+            }
+        } else {
+            if token.kind == .PunctLBrace {
+                var end = token.start
+                while end > start && (module.text[end - 1usize] == 32u8 || module.text[end - 1usize] == 9u8 || module.text[end - 1usize] == 10u8 || module.text[end - 1usize] == 13u8) { end = end - 1usize }
+                ret (module.text[start..end], ok)
+            }
+        }
+        token_at += 1usize
+    }
+    ret ("", parse.InvalidSyntax)
+}
+
 // One function's contract facts (D361, D396), in their fixed order, counted
 // against the page: the signature, an ownership fact per `own` parameter, the
 // caller's contract per pointer parameter, the errors, the thread start, then the
@@ -2865,32 +2896,40 @@ fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index:
     // Signature.
     page.total += 1usize
     if page.total > page.cursor && page_open(page, out) {
-        try text(out, "{\"record\":\"fact\",\"kind\":\"signature\",\"provenance\":\"declared-and-checked\",\"value\":\"fn ")
-        try text(out, function.name)
-        try byte(out, 40u8)
-        var parameter_at = 0usize
-        while parameter_at < function.parameter_count {
-            if parameter_at != 0usize { try text(out, ", ") }
-            let parameter = c.parameters[function.first_parameter + parameter_at]
-            try text(out, parameter.name)
-            try text(out, ": ")
-            if parameter.own { try text(out, "own ") }
-            try type_text(out, c, g, parameter.ty, 0usize)
-            parameter_at += 1usize
-        }
-        try byte(out, 41u8)
-        if function.return_count != 0usize {
-            try text(out, " -> ")
-            if function.return_count > 1usize { try byte(out, 40u8) }
-            var return_at = 0usize
-            while return_at < function.return_count {
-                if return_at != 0usize { try text(out, ", ") }
-                try type_text(out, c, g, c.return_types[function.first_return + return_at], 0usize)
-                return_at += 1usize
+        try text(out, "{\"record\":\"fact\",\"kind\":\"signature\",\"provenance\":\"declared-and-checked\",\"value\":")
+        if c.function_generics[function_index].comptime_count != 0usize {
+            let (signature, signature_error) = generic_signature(c, g, function_index)
+            if signature_error != ok { ret signature_error }
+            try quoted(out, signature)
+        } else {
+            try text(out, "\"fn ")
+            try text(out, function.name)
+            try byte(out, 40u8)
+            var parameter_at = 0usize
+            while parameter_at < function.parameter_count {
+                if parameter_at != 0usize { try text(out, ", ") }
+                let parameter = c.parameters[function.first_parameter + parameter_at]
+                try text(out, parameter.name)
+                try text(out, ": ")
+                if parameter.own { try text(out, "own ") }
+                try type_text(out, c, g, parameter.ty, 0usize)
+                parameter_at += 1usize
             }
-            if function.return_count > 1usize { try byte(out, 41u8) }
+            try byte(out, 41u8)
+            if function.return_count != 0usize {
+                try text(out, " -> ")
+                if function.return_count > 1usize { try byte(out, 40u8) }
+                var return_at = 0usize
+                while return_at < function.return_count {
+                    if return_at != 0usize { try text(out, ", ") }
+                    try type_text(out, c, g, c.return_types[function.first_return + return_at], 0usize)
+                    return_at += 1usize
+                }
+                if function.return_count > 1usize { try byte(out, 41u8) }
+            }
+            try byte(out, 34u8)
         }
-        try text(out, "\"}")
+        try byte(out, 125u8)
         try flush(out)
         page.written += 1usize
     } else {
