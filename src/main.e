@@ -7065,11 +7065,12 @@ fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker)
 }
 
 // The bodies checked one function at a time (D553, H09): where `check.run` stopped
-// at the program's first failing function, `check-file` prints that function's
-// diagnostic, clears it and goes on to the next, so a harness reads every
+// at the program's first failing function, `check-file --json` prints that
+// function's diagnostic, clears it and goes on to the next, so a harness reads every
 // function's first error from one run; the instances the bodies made follow, each
-// the same way. A failure with no token -- a limit, the deadline, an internal one --
-// is answered as the error for the caller to print, as before.
+// the same way. The plain output stops at the first, as neper-0's does, which the
+// parity fixtures hold. A failure with no token -- a limit, the deadline, an
+// internal one -- is answered as the error for the caller to print, as before.
 fn check_file_bodies(report: *Sink, checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
     var failures = 0usize
     let body_failure = check_bodies_each(report, checker, resolver, loaded, &failures)
@@ -7099,6 +7100,8 @@ fn check_bodies_each(report: *Sink, checker: *check.Checker, resolver: *resolve.
                     try print_check_diagnostic(report, loaded, checker, body_error)
                     check.clear_failure(checker)
                     *failures += 1usize
+                    // The plain output keeps to the first (D553): neper-0's parity.
+                    if !report.json { ret ok }
                 }
             }
             node_index += 1usize
@@ -7114,6 +7117,7 @@ fn check_bodies_each(report: *Sink, checker: *check.Checker, resolver: *resolve.
                 try print_check_diagnostic(report, loaded, checker, instance_error)
                 check.clear_failure(checker)
                 *failures += 1usize
+                if !report.json { ret ok }
             }
         }
         instance_index += 1usize

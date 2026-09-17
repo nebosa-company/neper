@@ -11448,5 +11448,7 @@ their first had hidden: `safety_borrowed`'s `main` leaves its file owned
 at the `try`, and `safety_pushed_twice`'s list over a resource fails
 inside `push[File]` and `reserve[File]`, the container over an obligated
 resource being H02's open gap, each chained to the request in `main`
-(D543). The build's crew stops at its first failure as it did: a worker's
-failure is the build's.
+(D543). The plain output keeps to the first failure: the neper-0 parity
+fixtures compare it with the bootstrap's word for word, and a harness reads
+the stream. The build's crew stops at its first failure as it did: a
+worker's failure is the build's.
