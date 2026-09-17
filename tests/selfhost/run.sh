@@ -2580,6 +2580,12 @@ cmp -s "$uses_actual" "$conformance_root/tools/uses.expected.jsonl" || { printf 
 explain_actual="$test_build/conformance-tools-explain.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self explain-file explain.e "$repo" x64 linux --json > "$explain_actual")
 cmp -s "$explain_actual" "$conformance_root/tools/explain.expected.jsonl" || { printf '%s\n' "explain-file --json differs from the conformance corpus" >&2; exit 1; }
+# An `if` over constants folds (D500): two phase records, the program runs.
+(cd "$conformance_root/tools" && $test_build/neper-self explain-file fold_const.e "$repo" x64 linux --json > "$test_build/conformance-tools-fold-const.jsonl")
+cmp -s "$test_build/conformance-tools-fold-const.jsonl" "$conformance_root/tools/fold_const.expected.jsonl" || { echo "the constant folds differ from the conformance corpus" >&2; exit 1; }
+[ "$(grep -o '"record":"phase","construct":"if"' "$test_build/conformance-tools-fold-const.jsonl" | wc -l)" -eq 2 ]
+(cd "$conformance_root/tools" && $test_build/neper-self emit-executable fold_const.e "$repo" x64 linux "$test_build/fold-const" --release > /dev/null)
+"$test_build/fold-const"
 # The phase and the layouts (D463, H06).
 (cd "$conformance_root/tools" && $test_build/neper-self explain-file explain_fold.e "$repo" x64 linux --json > "$test_build/conformance-tools-explain-fold.jsonl")
 cmp -s "$test_build/conformance-tools-explain-fold.jsonl" "$conformance_root/tools/explain_fold.expected.jsonl" || { printf '%s\n' "the phase and layout records differ from the conformance corpus" >&2; exit 1; }

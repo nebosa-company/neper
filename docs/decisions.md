@@ -10684,3 +10684,21 @@ then the generated span with its `edit` note as before. `nested_deep.e` is
 three maps deep and pins the shape; the one-level and stale fixtures are
 unchanged byte for byte. Not yet: a chain past three levels, which stops at
 the third and shows it as the root.
+
+## D500 -- An `if` over constants folds
+
+D138 folded an `if` whose condition was one `meta` question against a
+constant; every other condition was a branch, including `if LIMIT > 2usize`
+over two constants, which the lowering compared at run time though both
+sides were settled before any body was checked. `comptime_condition` now
+tries the interpreter after the meta form: the condition -- a comparison,
+`&&` or `||` -- is copied as a constant expression (D218's copy, dropped
+after), and if the copy holds no call and every name is a constant, it is
+evaluated under `bool` and the branch is settled; a local, a call or a failed
+evaluation leaves it to run time and records nothing of the attempt, the
+mismatch fields restored. Both passes ask the same function, so the checker
+and the lowering agree on which arm exists, and `explain-file` writes the
+`phase` record as for D138's folds. `fold_const.e` pins two folds and a
+branch over a local; `comptime_steps`'s `if TOTAL != 4950i64` folds now too, at
+no step of the interpreter's count -- a comparison of settled values is not a
+statement -- so its golden stands.

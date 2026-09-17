@@ -7513,7 +7513,61 @@ fn comptime_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     let node = tree.nodes[node_index]
     if node.kind != .BinaryExpr { ret (false, false) }
     let op = binary_operator(c, tree, node)
-    if op != .PunctEqEq && op != .PunctBangEq { ret (false, false) }
+    if op != .PunctEqEq && op != .PunctBangEq {
+        let (folded, settled) = constant_condition(c, g, tree, module_index, node_index)
+        ret (folded, settled)
+    }
+    let (meta_taken, meta_settled) = meta_condition(c, g, tree, module_index, node_index)
+    if meta_settled { ret (meta_taken, true) }
+    let (folded, settled) = constant_condition(c, g, tree, module_index, node_index)
+    ret (folded, settled)
+}
+
+// A condition over constants alone (D500): a comparison, `&&` or `||` whose operands
+// are constants, literals and operators on them -- no local, no call -- is settled
+// by the interpreter that settles a `const`, as `meta_condition` settles a question
+// about a type. The expression is copied for the evaluation and dropped after; a
+// name the copy cannot resolve as a constant, a call, or a failed evaluation leaves
+// the branch to run time, and nothing is recorded of the attempt.
+fn constant_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, bool) {
+    if !c.signatures_ready || c.constant_exprs.len == 0usize { ret (false, false) }
+    let node = tree.nodes[node_index]
+    let op = binary_operator(c, tree, node)
+    if !is_comparison(op) && op != .PunctAndAnd && op != .PunctOrOr { ret (false, false) }
+    let expressions_before = c.constant_expr_count
+    let expected_before = c.failure_expected
+    let actual_before = c.failure_actual
+    let mismatch_before = c.failure_mismatch_end
+    let (copied, copy_error) = copy_constant_expr(c, g, tree, module_index, node_index)
+    var settled = false
+    var truth = false
+    if copy_error == ok {
+        // A call in the condition is left to run time: the fold is for constants.
+        var has_call = false
+        var scan = expressions_before
+        while scan < c.constant_expr_count {
+            if c.constant_exprs[scan].kind == .Call { has_call = true }
+            scan += 1usize
+        }
+        if !has_call {
+            let (value, value_type, value_error) = evaluate_constant_expr(c, copied, make_type(.Bool, "bool", module_index))
+            if value_error == ok && value_type.kind == .Bool {
+                settled = true
+                truth = value.magnitude != 0usize
+            }
+        }
+    }
+    c.constant_expr_count = expressions_before
+    c.failure_expected = expected_before
+    c.failure_actual = actual_before
+    c.failure_mismatch_end = mismatch_before
+    ret (truth, settled)
+}
+
+// A question about a type against a constant (D138): `meta.kind[T]() == .Int`.
+fn meta_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, bool) {
+    let node = tree.nodes[node_index]
+    let op = binary_operator(c, tree, node)
     var children: [2]usize = zero
     var count = 0usize
     let end = usize(node.first_child) + usize(node.child_count)

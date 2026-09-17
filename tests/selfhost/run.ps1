@@ -2472,6 +2472,18 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainActual).Hash -ne (Get-F
 # `explain-file --json` over a program that does not check (D430, H06): the records
 # before the failure -- a dispatch that found nothing, with why and the foreign
 # candidate -- then the diagnostic and a result of exit 1.
+# An `if` over constants folds (D500): two settled conditions as `phase` records, the
+# one over a local none, and the program runs; pinned by the corpus.
+$foldConstActual = Join-Path $testBuild 'conformance-tools-fold-const.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file fold_const.e `"$repo`" x64 windows --json > `"$foldConstActual`""
+if ($LASTEXITCODE -ne 0) { throw "explain-file --json on fold_const.e failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $foldConstActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/fold_const.expected.jsonl')).Hash) { throw 'the constant folds differ from the conformance corpus' }
+if ((Select-String -LiteralPath $foldConstActual -Pattern '"record":"phase","construct":"if"' -AllMatches | ForEach-Object { $_.Matches.Count } | Measure-Object -Sum).Sum -ne 2) { throw 'a constant condition did not fold, or one over a local did' }
+$foldConstExe = Join-Path $testBuild 'fold-const.exe'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-executable fold_const.e `"$repo`" x64 windows `"$foldConstExe`" --release > nul"
+if ($LASTEXITCODE -ne 0) { throw "the fold_const fixture did not build" }
+& $foldConstExe
+if ($LASTEXITCODE -ne 0) { throw "the fold_const fixture exited $LASTEXITCODE" }
 # The phase and the layouts (D463, H06): a settled `if` is a `phase` record per way it
 # folded, and the operand's aggregates end the stream with their layouts.
 $explainFoldActual = Join-Path $testBuild 'conformance-tools-explain-fold.jsonl'
