@@ -3593,14 +3593,15 @@ $byReordered = Join-Path $testBuild 'neper-by-reordered.exe'
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byReordered)) { throw 'the compiler with reordered declarations did not build the compiler' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byReordered).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with reordered declarations does not build the stable stage' }
 # The standard library turned too (D532, H10): a project of the compiler's sources as
-# they are and `lib/` with every comment blanked, then with every literal hoisted,
-# built to the stable stage byte for byte -- the library reaches every image.
-foreach ($libTurn in @(@('strip_comments.py', 'lib-blanked'), @('hoist_constants.py', 'lib-hoisted'))) {
+# they are and `lib/` with every comment blanked, then with every literal hoisted, then
+# with every local and parameter renamed (D550), built to the stable stage byte for
+# byte -- the library reaches every image.
+foreach ($libTurn in @(@('strip_comments.py', 'lib-blanked', @()), @('hoist_constants.py', 'lib-hoisted', @()), @('rename_locals.py', 'lib-renamed', @($repo)))) {
     $libProject = Join-Path $testBuild $libTurn[1]
     if (Test-Path -LiteralPath $libProject) { Remove-Item -LiteralPath $libProject -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $libProject | Out-Null
     Copy-Item -Recurse (Join-Path $repo 'src') (Join-Path $libProject 'src')
-    & python (Join-Path $repo "benchmarks/metamorphic/$($libTurn[0])") $compiler (Join-Path $repo 'lib') (Join-Path $libProject 'lib')
+    & python (Join-Path $repo "benchmarks/metamorphic/$($libTurn[0])") $compiler @($libTurn[2]) (Join-Path $repo 'lib') (Join-Path $libProject 'lib')
     if ($LASTEXITCODE -ne 0) { throw "the library could not be turned by $($libTurn[0])" }
     $libCompiler = Join-Path $testBuild "neper-$($libTurn[1]).exe"
     & $ownCompilerPath emit-executable (Join-Path $libProject 'src\main.e') $libProject 'x64' 'windows' $libCompiler | Out-Null

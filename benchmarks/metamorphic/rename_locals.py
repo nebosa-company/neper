@@ -54,10 +54,18 @@ def renamed(path):
         out[s:e] = new_names[sid]
     return bytes(out), len(symbols)
 total = 0
-for name in sorted(os.listdir(src_dir)):
-    source = os.path.join(src_dir, name)
-    if not os.path.isfile(source): continue
-    if name.endswith('.e'):
-        b, n = renamed(source); open(os.path.join(out_dir, name), 'wb').write(b); total += n
-    else: shutil.copy(source, os.path.join(out_dir, name))
+# Every directory under the tree (D550): the library's modules sit in packages.
+for dirpath, dirs, files in os.walk(src_dir):
+    rel = os.path.relpath(dirpath, src_dir)
+    target_dir = os.path.join(out_dir, rel) if rel != '.' else out_dir
+    os.makedirs(target_dir, exist_ok=True)
+    for name in sorted(files):
+        source = os.path.join(dirpath, name)
+        # Another target's variant, `os.linux.e` on windows (D544), is not this
+        # program's module: it cannot be indexed here and goes over as it is.
+        parts = name.split('.')
+        other_target = len(parts) == 3 and parts[1] not in (host_os, 'x64')
+        if name.endswith('.e') and not other_target:
+            b, n = renamed(source); open(os.path.join(target_dir, name), 'wb').write(b); total += n
+        else: shutil.copy(source, os.path.join(target_dir, name))
 print('renamed', total)

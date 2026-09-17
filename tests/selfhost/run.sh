@@ -3616,14 +3616,18 @@ chmod +x "$test_build/neper-reordered"
 by_reordered_written=$("$test_build/neper-reordered" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-reordered")
 [ "$by_reordered_written" = 'executable written' ]
 cmp "$test_build/neper-by-reordered" "$stable_compiler_path"
-# The standard library turned too (D532, H10): the compiler built against `lib/` blanked, then hoisted, is the stable stage.
-for lib_turn in "strip_comments.py lib-blanked" "hoist_constants.py lib-hoisted"; do
+# The standard library turned too (D532, H10): the compiler built against `lib/` blanked, then hoisted, then its locals renamed (D550), is the stable stage.
+for lib_turn in "strip_comments.py lib-blanked" "hoist_constants.py lib-hoisted" "rename_locals.py lib-renamed $repo"; do
     set -- $lib_turn
     lib_project="$test_build/$2"
     rm -rf "$lib_project"
     mkdir -p "$lib_project"
     cp -r "$repo/src" "$lib_project/src"
-    python3 "$repo/benchmarks/metamorphic/$1" "$test_build/neper-self" "$repo/lib" "$lib_project/lib"
+    if [ "$1" = rename_locals.py ]; then
+        python3 "$repo/benchmarks/metamorphic/$1" "$test_build/neper-self" "$repo" "$repo/lib" "$lib_project/lib" linux > /dev/null
+    else
+        python3 "$repo/benchmarks/metamorphic/$1" "$test_build/neper-self" "$repo/lib" "$lib_project/lib"
+    fi
     lib_written=$("$own_compiler_path" emit-executable "$lib_project/src/main.e" "$lib_project" x64 linux "$test_build/neper-$2")
     [ "$lib_written" = 'executable written' ]
     cmp "$test_build/neper-$2" "$stable_compiler_path"

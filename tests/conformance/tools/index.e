@@ -10,6 +10,10 @@ type Pair = struct {
     b: i32,
 }
 type Colour = enum u8 { Red, Green }
+/// A function type's entries are types, not parameters (D550).
+type Hook = struct {
+    run: fn(*mem.Arena, i32) -> err,
+}
 error Bad
 var counter: i32 = 0i32
 /// Adds two numbers.

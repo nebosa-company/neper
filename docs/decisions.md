@@ -11383,3 +11383,16 @@ the stable stage byte for byte, in both suites. The compiler built against
 the formatted library is not itself the stable image: the formatter moves
 lines, and lines reach the image as trap sites, so this turn is one on as
 D525's is. It held at the first attempt.
+
+## D550 -- The library's locals renamed
+
+D528's turn over the library: `rename_locals.py` walks a tree now, leaves
+another target's variant as it is (D544), and renames the library's twelve
+thousand six hundred locals and parameters; the compiler built against
+the result is the stable stage byte for byte, in both suites. The first
+attempt renamed `i64` and `os` in `e.io`'s `Seeker`: the index made a
+`parameter` symbol of every `Parameter` node, and a function type's
+entries, `fn(*void, i64, os.SeekWhence)`, are that node with a type and
+no name. A nested `Parameter` is a symbol only when its first token is a
+name followed by `:`; the corpus's `index.e` gains a function-typed field,
+whose entries are no symbols, and its golden is regenerated.

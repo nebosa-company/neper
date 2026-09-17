@@ -909,7 +909,7 @@ fn index_nested_count(tree: *parse.Tree, tokens: []const lex.Token, first: usize
     var node_index = 1usize
     while node_index < tree.count && found < 256usize {
         let node = tree.nodes[node_index]
-        if !node.top_level && usize(node.token_start) >= first && usize(node.token_start) <= last && usize(node.token_end) > usize(node.token_start) && index_nested_kind(node.kind).len != 0usize { found += index_nested_names(node, tokens) }
+        if !node.top_level && usize(node.token_start) >= first && usize(node.token_start) <= last && usize(node.token_end) > usize(node.token_start) && index_nested_kind(node.kind).len != 0usize && index_nested_named(node, tokens) { found += index_nested_names(node, tokens) }
         node_index += 1usize
     }
     ret found
@@ -937,6 +937,15 @@ fn index_nested_names(node: syntax.Node, tokens: []const lex.Token) -> usize {
         at += 1usize
     }
     ret count
+}
+
+// Whether a nested node declares a name (D550): a `Parameter` of a function type,
+// `fn(*void, i64)`, is a type alone, and the index had made a `parameter` symbol
+// of `i64` and `os` -- renaming the library's locals renamed the types.
+fn index_nested_named(node: syntax.Node, tokens: []const lex.Token) -> bool {
+    if node.kind != .Parameter { ret true }
+    let name_at = usize(node.token_start)
+    ret name_at + 1usize < usize(node.token_end) && tokens[name_at].kind == .Identifier && tokens[name_at + 1usize].kind == .PunctColon
 }
 
 // The token index of a nested node's `which`th name: the `for` variable after the
@@ -969,7 +978,7 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if !node.top_level && usize(node.token_start) >= first && usize(node.token_start) <= last && usize(node.token_end) > usize(node.token_start) && index_nested_kind(node.kind).len != 0usize && picked_count < 256usize {
+        if !node.top_level && usize(node.token_start) >= first && usize(node.token_start) <= last && usize(node.token_end) > usize(node.token_start) && index_nested_kind(node.kind).len != 0usize && index_nested_named(node, tokens) && picked_count < 256usize {
             // Insertion by token position keeps the list ordered as it grows.
             var slot = picked_count
             while slot > 0usize && usize(tree.nodes[picked[slot - 1usize]].token_start) > usize(node.token_start) {
