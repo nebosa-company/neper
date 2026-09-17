@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"build","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-LINK-0002","message":"`e.mem.Arena` is not laid out as the runtime reads it: `base: *u8` at 0, `cap: usize` at 8, `off: usize` at 16, twenty-four bytes","span":{"source":{"root":"project-lib","path":"e/mem.e"},"byte_start":500,"byte_end":504,"line":7,"column":1,"end_line":7,"end_column":5,"column_utf16":1,"end_column_utf16":5},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

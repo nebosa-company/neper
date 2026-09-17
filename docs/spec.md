@@ -1919,7 +1919,10 @@ its fields from the arena as it stands — `used` is `off`, `capacity` is `cap` 
 does nothing else, so "how much of this arena did that phase use" is an ordinary line
 in every build mode. An `Arena` carries no counters: a high-water mark across `reset`
 calls and a count of allocations would each cost a branch and a store in every
-`alloc`, and `alloc` being a bump and a bounds compare is what D3 buys. `size_of` and `align_of` are compile-time constants and the only way to
+`alloc`, and `alloc` being a bump and a bounds compare is what D3 buys. `Arena`'s layout is the
+runtime's (D552): `base` at 0, `cap` at 8, `off` at 16, twenty-four bytes, read in
+place by the embedded runtime's `alloc`, `mark` and `reset`; a library that lays it
+out otherwise is refused at the build, `E-LINK-0002`. `size_of` and `align_of` are compile-time constants and the only way to
 name a type's size. `mem.cast[P](p)` explicitly fills the first comptime parameter
 and infers trailing `Q` from `p` under §9; both must be pointer types, and the
 intrinsic then applies §4's pointer-cast rules. `mem.bitcast[T](x)` similarly infers

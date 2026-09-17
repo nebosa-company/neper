@@ -8,6 +8,7 @@ use decimal
 use codegen_x64
 use em
 use em_link
+use layout
 use error_table
 use emit_x64
 use graph
@@ -5926,6 +5927,36 @@ fn clear_name_facts(report: *Sink) {
     report.near_text = ""
 }
 
+// `e.mem.Arena` is the runtime's (D552, H05): `neper_mem_alloc`, `mark` and `reset`
+// are the embedded runtime's code (D149), compiled before any program, and they read
+// `base` at 0, `cap` at 8 and `off` at 16 of the arena the program hands them. A
+// library whose `Arena` is laid out otherwise -- its fields reversed found the arena
+// "exhausted" at the first allocation -- is refused here, at the declaration, before
+// anything is lowered against it.
+fn verify_runtime_arena(report: *Sink, checker: *check.Checker, g: *graph.Graph) -> err {
+    let (mem_module, has_mem) = graph.find_module(g, "e.mem")
+    if !has_mem { ret ok }
+    var at = 0usize
+    while at < checker.aggregate_count {
+        let aggregate = checker.aggregates[at]
+        if aggregate.module_index == mem_module && same(aggregate.name, "Arena") {
+            let arena = check.make_type(.Named, "Arena", mem_module)
+            let (info, info_error) = layout.type_info(checker, arena)
+            let (base, base_error) = layout.field(checker, arena, "base")
+            let (cap, cap_error) = layout.field(checker, arena, "cap")
+            let (off, off_error) = layout.field(checker, arena, "off")
+            let laid_out = info_error == ok && base_error == ok && cap_error == ok && off_error == ok && info.size == 24usize && base.offset == 0usize && cap.offset == 8usize && off.offset == 16usize && base.ty.kind == .Pointer && cap.ty.kind == .Integer && off.ty.kind == .Integer
+            if laid_out { ret ok }
+            try print_token_diagnostic(report, g, mem_module, aggregate.token, "E-LINK-0002", "`e.mem.Arena` is not laid out as the runtime reads it: `base: *u8` at 0, `cap: usize` at 8, `off: usize` at 16, twenty-four bytes")
+            try finish_report(report)
+            os.exit(1i32)
+            ret ok
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn print_token_diagnostic(report: *Sink, g: *graph.Graph, module_index: usize, token: lex.Token, code: str, message: str) -> err {
     var path = "<unknown>"
     if module_index < g.count { path = g.modules[module_index].path }
@@ -9788,6 +9819,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         report.arena_used = mem.stats(a).used
         try report_phase(&report, "check declarations")
+        // The runtime's arena (D552): `e.mem.Arena` laid out as the runtime reads it.
+        if check_error == ok { try verify_runtime_arena(&report, &checker, &loaded) }
         // The declarations collected (D446, H14): every module's, from lexed trees.
         report.build.declarations_checked = checker.signature_function_count + checker.aggregate_count + checker.constant_count + checker.global_count
         var artifact_dir = ""

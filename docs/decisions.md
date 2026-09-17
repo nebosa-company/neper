@@ -11414,3 +11414,19 @@ arena of `base`, `cap`, `off` in that order, so a program reading it the
 other way round found its arena exhausted at the first allocation. Both
 keep their layouts under the turn; the twelve hundred fields of the other
 hundred and nine modules move.
+
+## D552 -- The runtime's arena, checked
+
+D551 found that `e.mem.Arena` is not the library's to lay out: the
+embedded runtime (D149) is compiled before any program, and its `alloc`,
+`mark` and `reset` read `base` at 0, `cap` at 8 and `off` at 16 of
+whatever arena the program hands them, so a library with the fields the
+other way round ran until its first allocation and found the arena
+exhausted, with nothing to say which side was wrong. The build checks the
+layout once its declarations are known: the `Arena` of the program's
+`e.mem` must be twenty-four bytes with a pointer at 0 and integers at 8
+and 16, or the build is refused at the declaration, `E-LINK-0002`, the
+expected layout in the message. The corpus gains `reject/arena_layout`, a
+project whose own `e.mem` reverses the fields, and both suites pin the
+build stream. `check-file` does not refuse it: the contract is the
+runtime's, and the check belongs to the build that links one.

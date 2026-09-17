@@ -2369,7 +2369,8 @@ cmp -s "$test_build/conformance-tools-info-version.jsonl" "$conformance_root/too
 # directory when it is missing (D254, D287); the repo is the corpus's project root, so
 # the mode directory is removed first to prove the build makes it.
 rm -rf "$repo/.neper/debug"
-for build_case in 'tools/build.e build 0' 'reject/scope.e build_reject 1'; do
+# The runtime's arena (D552, H05): a project whose own e.mem lays Arena out otherwise is refused at the build, E-LINK-0002.
+for build_case in 'tools/build.e build 0' 'reject/scope.e build_reject 1' 'reject/arena_layout/src/main.e arena_layout 1'; do
     set -- $build_case
     build_status=0
     (cd "$test_build" && ./neper-self emit-executable "$conformance_root/$1" "$repo" x64 linux "conformance-tools-$2.out" --json > "conformance-tools-$2.jsonl") || build_status=$?

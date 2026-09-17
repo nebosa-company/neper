@@ -2257,7 +2257,8 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $versionActual).Hash -ne (Get-F
 # directory when it is missing (D254, D287); the repo is the corpus's project root, so
 # the mode directory is removed first to prove the build makes it.
 if (Test-Path -LiteralPath (Join-Path $repo '.neper\debug')) { Remove-Item -Recurse -Force -LiteralPath (Join-Path $repo '.neper\debug') }
-foreach ($case in @(@('tools\build.e', 'build', 0), @('reject\scope.e', 'build_reject', 1))) {
+# The runtime's arena (D552, H05): a project whose own `e.mem` lays `Arena` out otherwise is refused at the build, E-LINK-0002.
+foreach ($case in @(@('tools\build.e', 'build', 0), @('reject\scope.e', 'build_reject', 1), @('reject\arena_layout\src\main.e', 'arena_layout', 1))) {
     $buildActual = Join-Path $testBuild "conformance-tools-$($case[1]).jsonl"
     cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot $case[0])`" `"$repo`" x64 windows conformance-tools-$($case[1]).out --json > `"$buildActual`""
     if ($LASTEXITCODE -ne $case[2]) { throw "emit-executable --json on $($case[0]) exited $LASTEXITCODE" }
