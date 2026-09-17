@@ -11155,3 +11155,20 @@ turns (formatted, symbols renamed, fields reversed, declarations reversed)
 build the release stable stage from the original sources, and so does the
 compiler built against the turned library. Nine release builds a suite, some
 seconds. Every turn held at the first attempt.
+
+## D534 -- Trailing whitespace out of the identity, and the warm path under the turns
+
+The turns of D525-D533 built cold; the warm path is where the identity of a
+module's text decides what is kept, and a probe replaced one module of the
+compiler by its blanked text after a cold build with artifacts: the module
+was rebuilt as `source-changed`, since D504's identity dropped a comment's
+bytes but not the spaces the blanking left in their place, nor the carriage
+return of a CRLF file the comment had swallowed. The canonical text is now
+built line by line -- the comment gone, then the line's trailing spaces, tabs
+and carriage return with it -- and hashed as one, the key and D507's SHA-256
+over the same bytes; a token's column never moves with it, which the trap
+records need. Both suites now build the compiler cold with artifacts and hold
+the warm path: every module blanked keeps all thirty-five `stable` with the
+cold image; `lex` hoisted rebuilds `lex` alone, its twenty-two importers kept
+by their edges; `check` with its locals renamed rebuilds `check` and, its parameter names being its interface's, the modules that import it; the
+image the cold build's each time.

@@ -3598,6 +3598,38 @@ foreach ($libTurn in @('lib-blanked', 'lib-hoisted')) {
     & $ownCompilerPath emit-executable (Join-Path $testBuild "$libTurn\src\main.e") (Join-Path $testBuild $libTurn) 'x64' 'windows' $libRelease --release | Out-Null
     if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $libRelease).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseStable).Hash) { throw "the release build against $libTurn is not the release stable stage" }
 }
+# The warm path under the turns (D534, H14): a project of the compiler's sources
+# built cold with artifacts, then every module replaced by its blanked text -- every
+# module kept `stable` and the image the cold build's -- then one module by its
+# hoisted text and one by its locals-renamed text -- that module rebuilt, the rest
+# kept, the image the cold build's each time.
+$warmProject = Join-Path $testBuild 'warm-turns'
+if (Test-Path -LiteralPath $warmProject) { Remove-Item -LiteralPath $warmProject -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $warmProject | Out-Null
+Copy-Item -Recurse (Join-Path $repo 'src') (Join-Path $warmProject 'src')
+$warmExe = Join-Path $testBuild 'neper-warm-turns.exe'
+$warmCold = Join-Path $testBuild 'neper-warm-turns-cold.exe'
+$warmManifest = Join-Path $warmProject '.neper\debug\build-manifest.json'
+& $ownCompilerPath emit-executable (Join-Path $warmProject 'src\main.e') $repo 'x64' 'windows' $warmCold --incremental | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the cold build of the compiler with artifacts failed' }
+Copy-Item (Join-Path $blankedSrc 'src\*.e') (Join-Path $warmProject 'src')
+& $ownCompilerPath emit-executable (Join-Path $warmProject 'src\main.e') $repo 'x64' 'windows' $warmExe --incremental | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the warm build of the compiler after blanking every comment failed' }
+$warmDecisions = (Get-Content -Raw -LiteralPath $warmManifest | ConvertFrom-Json).incremental
+if (($warmDecisions | Where-Object { $_.reason -ne 'stable' }).Count -ne 0) { throw 'a warm build after blanking every comment of the compiler rebuilt a module' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmCold).Hash) { throw 'the warm build after blanking every comment is not the cold build' }
+Copy-Item (Join-Path $hoistedSrc 'src\lex.e') (Join-Path $warmProject 'src\lex.e')
+& $ownCompilerPath emit-executable (Join-Path $warmProject 'src\main.e') $repo 'x64' 'windows' $warmExe --incremental | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the warm build of the compiler after hoisting one module failed' }
+& python (Join-Path $repo 'scripts/check_incremental.py') $warmManifest 'lex=rebuilt:source-changed' 'check=kept:edges-hold' 'main=kept:edges-hold' 'binary=kept:stable'
+if ($LASTEXITCODE -ne 0) { throw 'the warm build after hoisting one module did not keep the rest' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmCold).Hash) { throw 'the warm build after hoisting one module is not the cold build' }
+Copy-Item (Join-Path $renamedSrc 'src\check.e') (Join-Path $warmProject 'src\check.e')
+& $ownCompilerPath emit-executable (Join-Path $warmProject 'src\main.e') $repo 'x64' 'windows' $warmExe --incremental | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the warm build of the compiler after renaming one module''s locals failed' }
+& python (Join-Path $repo 'scripts/check_incremental.py') $warmManifest 'check=rebuilt:source-changed' 'lex=kept:stable' 'main=rebuilt:edge-changed'
+if ($LASTEXITCODE -ne 0) { throw 'the warm build after renaming one module''s locals did not keep the rest' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmCold).Hash) { throw 'the warm build after renaming one module''s locals is not the cold build' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

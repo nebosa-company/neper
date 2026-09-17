@@ -3602,6 +3602,25 @@ for lib_turn in lib-blanked lib-hoisted; do
     [ "$("$own_compiler_path" emit-executable "$test_build/$lib_turn/src/main.e" "$test_build/$lib_turn" x64 linux "$test_build/neper-$lib_turn-release" --release)" = 'executable written' ]
     cmp "$test_build/neper-$lib_turn-release" "$test_build/neper-own-release"
 done
+# The warm path under the turns (D534, H14): cold with artifacts, then blanked (all stable), hoisted lex (rebuilt), renamed check (rebuilt); the cold image every time.
+warm_project="$test_build/warm-turns"
+rm -rf "$warm_project"
+mkdir -p "$warm_project"
+cp -r "$repo/src" "$warm_project/src"
+warm_manifest="$warm_project/.neper/debug/build-manifest.json"
+[ "$("$own_compiler_path" emit-executable "$warm_project/src/main.e" "$repo" x64 linux "$test_build/neper-warm-turns-cold" --incremental)" = 'executable written' ]
+cp "$test_build/blanked-src/src/"*.e "$warm_project/src/"
+[ "$("$own_compiler_path" emit-executable "$warm_project/src/main.e" "$repo" x64 linux "$test_build/neper-warm-turns" --incremental)" = 'executable written' ]
+python3 -c "import json,sys; m=json.load(open(sys.argv[1])); sys.exit(0 if all(e['reason']=='stable' for e in m['incremental']) else 1)" "$warm_manifest"
+cmp "$test_build/neper-warm-turns" "$test_build/neper-warm-turns-cold"
+cp "$test_build/hoisted-src/src/lex.e" "$warm_project/src/lex.e"
+[ "$("$own_compiler_path" emit-executable "$warm_project/src/main.e" "$repo" x64 linux "$test_build/neper-warm-turns" --incremental)" = 'executable written' ]
+python3 "$repo/scripts/check_incremental.py" "$warm_manifest" lex=rebuilt:source-changed check=kept:edges-hold main=kept:edges-hold binary=kept:stable
+cmp "$test_build/neper-warm-turns" "$test_build/neper-warm-turns-cold"
+cp "$test_build/renamed-src/src/check.e" "$warm_project/src/check.e"
+[ "$("$own_compiler_path" emit-executable "$warm_project/src/main.e" "$repo" x64 linux "$test_build/neper-warm-turns" --incremental)" = 'executable written' ]
+python3 "$repo/scripts/check_incremental.py" "$warm_manifest" check=rebuilt:source-changed lex=kept:stable main=rebuilt:edge-changed
+cmp "$test_build/neper-warm-turns" "$test_build/neper-warm-turns-cold"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

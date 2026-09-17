@@ -5050,7 +5050,7 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
         let (old, old_error) = load_artifact(a, artifact_path)
         if old_error == ok {
             let (old_hash, old_hash_error) = em.artifact_source_hash(old)
-            let (new_hash, new_hash_error) = em.source_text_hash(g.modules[module_at].text)
+            let (new_hash, new_hash_error) = em.source_text_hash(a, g.modules[module_at].text)
             let (old_mode, old_mode_error) = em.artifact_mode(old)
             let (sha_now, sha_error) = artifact_hash.sha256_hex(a, g.modules[module_at].text)
             if sha_error != ok { ret sha_error }
@@ -6008,7 +6008,7 @@ fn artifact_identity(a: *mem.Arena, old: []const u8, old_error: err, text_now: s
     if old_error == em.InvalidArtifact { ret (6u8, false) }
     if old_error != ok { ret (0u8, false) }
     let (old_hash, old_hash_error) = em.artifact_source_hash(old)
-    let (new_hash, new_hash_error) = em.source_text_hash(text_now)
+    let (new_hash, new_hash_error) = em.source_text_hash(a, text_now)
     let (old_mode, old_mode_error) = em.artifact_mode(old)
     let (old_compiler, old_compiler_error) = em.artifact_compiler_hash(old)
     if old_hash_error != ok || old_mode_error != ok || old_compiler_error != ok || new_hash_error != ok { ret (6u8, false) }

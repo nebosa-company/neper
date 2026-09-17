@@ -2461,28 +2461,23 @@ fn write_globals(builder: *nir.Builder, c: *check.Checker, module_index: usize, 
 
 // The text's hash, straight over its bytes (D324): it was copied into a scratch
 // buffer first, which a worker thread has none of.
-// The identity of a module's text (D504, H14): its bytes with every comment's body
-// left out -- from `//` to the end of the line, the line break kept -- hashed by
-// segments, so an edit inside a comment that moves no line keeps the artifact, and
-// one that adds or removes a line does not, since the line tables the artifact
-// carries would be wrong. A `//` inside a string, a raw string or a character
+// The identity of a module's text (D504, D534, H14): the canonical text -- every
+// comment's body left out, `//` to the end of its line, and every line's trailing
+// spaces and tabs with it, the line breaks kept -- hashed as one, so an edit
+// inside a comment, a comment added at a line's end or blanked to spaces, keeps the
+// artifact, and one that adds or removes a line does not, since the line tables the
+// artifact carries would be wrong; nor does one that moves a token's column, which
+// the trap records carry. A `//` inside a string, a raw string or a character
 // literal is text, not a comment. The bytes' own hash stays the manifest's. The
 // key is a candidate (D507, H15): the artifact also carries the canonical text's
 // SHA-256, which a hit is verified by when the bytes are not the artifact's.
-fn source_text_hash(text: str) -> (usize, err) {
-    var combined = 0usize
-    var segment_start = 0usize
-    while segment_start < text.len {
-        let (comment_at, comment_end) = next_comment(text, segment_start)
-        if comment_at == text.len { break }
-        let (segment_hash, segment_error) = artifact_hash.xxhash64(text[segment_start..comment_at])
-        if segment_error != ok { ret (0usize, segment_error) }
-        combined = (combined *% 11400714819323198485usize) ^ segment_hash
-        segment_start = comment_end
-    }
-    let (last_hash, last_error) = artifact_hash.xxhash64(text[segment_start..text.len])
-    if last_error != ok { ret (0usize, last_error) }
-    ret ((combined *% 11400714819323198485usize) ^ last_hash, ok)
+fn source_text_hash(a: *mem.Arena, text: str) -> (usize, err) {
+    let checkpoint = mem.mark(a)
+    let (canonical, canonical_error) = comment_blind_text(a, text)
+    if canonical_error != ok { ret (0usize, canonical_error) }
+    let (hash, hash_error) = artifact_hash.xxhash64(canonical)
+    mem.reset(a, checkpoint)
+    ret (hash, hash_error)
 }
 
 // The next comment at or after `from`: where it starts and where its body ends --
@@ -2555,16 +2550,35 @@ fn comment_blind_text(a: *mem.Arena, text: str) -> (str, err) {
     let (storage, storage_error) = mem.alloc[u8](a, text.len)
     if storage_error != ok { ret ("", storage_error) }
     var count = 0usize
-    var segment_start = 0usize
-    while segment_start < text.len {
-        let (comment_at, comment_end) = next_comment(text, segment_start)
-        var copy_at = segment_start
-        while copy_at < comment_at {
+    var line_start = 0usize
+    var next_comment_at = 0usize
+    var next_comment_end = 0usize
+    var comment_known = false
+    while line_start < text.len {
+        var line_end = line_start
+        while line_end < text.len && text[line_end] != 10u8 { line_end += 1usize }
+        // The line's text ends at its comment, when one starts inside it.
+        if !comment_known || next_comment_at < line_start {
+            let (found_at, found_end) = next_comment(text, line_start)
+            next_comment_at = found_at
+            next_comment_end = found_end
+            comment_known = true
+        }
+        var content_end = line_end
+        if next_comment_at < line_end { content_end = next_comment_at }
+        // Trailing spaces, tabs and a carriage return go with it (D534): they move no token.
+        while content_end > line_start && (text[content_end - 1usize] == 32u8 || text[content_end - 1usize] == 9u8 || text[content_end - 1usize] == 13u8) { content_end = content_end - 1usize }
+        var copy_at = line_start
+        while copy_at < content_end {
             storage[count] = text[copy_at]
             count += 1usize
             copy_at += 1usize
         }
-        segment_start = comment_end
+        if line_end < text.len {
+            storage[count] = 10u8
+            count += 1usize
+        }
+        line_start = line_end + 1usize
     }
     ret (storage[0usize..count], ok)
 }
@@ -2593,7 +2607,7 @@ fn identifier_byte(byte_here: u8) -> bool {
 
 fn write_debug(c: *check.Checker, g: *graph.Graph, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     if module_index >= g.count { ret InvalidArtifact }
-    let (source_hash, source_hash_error) = source_text_hash(g.modules[module_index].text)
+    let (source_hash, source_hash_error) = source_text_hash(c.arena, g.modules[module_index].text)
     if source_hash_error != ok { ret source_hash_error }
     let (path_index, path_error) = string_index(table, g.modules[module_index].spelling)
     if path_error != ok { ret path_error }

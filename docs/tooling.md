@@ -639,8 +639,9 @@ function -- a `*` before a name or a `(`, not after `:`, `[` or `->`; `increment
 `--incremental` build decided per module, in graph order -- `decision` `kept` or
 `rebuilt` and `reason`: `stable` (source and every dependency unchanged),
 `edges-hold` (source unchanged, every imported interface still as recorded --
-"unchanged" leaving every comment's body out, D504, so an edit inside a comment
-that moves no line is no change; the 64-bit key is a candidate, D507, and a hit
+"unchanged" leaving every comment's body out, D504, and every line's trailing
+spaces, tabs and carriage return, D534, so an edit inside a comment that moves no
+line is no change, nor a comment added at a line's end or blanked to spaces; the 64-bit key is a candidate, D507, and a hit
 is proved by the bytes' SHA-256 when they are the artifact's and by the canonical
 text's otherwise, the artifact carrying both, so a collision is a source change),
 `edge-changed` (an imported interface differs), `source-changed`, `mode-changed`,
