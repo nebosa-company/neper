@@ -606,6 +606,22 @@ fn emit_bool_check(c: *check.Checker, source: usize, source_type: check.Type, in
     ret ok
 }
 
+// Section 11's `invalid` row for a tagged union (D554): the bytes read as the
+// value have to name one of its arms. The result of a bitcast to an aggregate is
+// its address, so read the tag at offset zero and validate it through the same
+// member walk as an enum representation.
+fn emit_tagged_union_check(c: *check.Checker, value: usize, ty: check.Type, builder: *nir.Builder, token: lex.Token) -> err {
+    let (aggregate_index, found) = check.aggregate_for_type(c, ty)
+    if !found { ret check.InvalidType }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind != .TaggedUnion || aggregate.backing_type.kind != .Integer { ret check.InvalidType }
+    let (tag, tag_error) = component_at(c, aggregate.backing_type, value, 0usize, builder, token)
+    if tag_error != ok { ret tag_error }
+    let (tag_type, found_tag) = check.tagged_union_tag_type(c, ty)
+    if !found_tag { ret check.InvalidType }
+    ret emit_enum_check(c, tag, tag, tag_type, builder, token, "invalid")
+}
+
 fn lower_bitcast(c: *check.Checker, source: usize, source_type: check.Type, into: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     let (source_info, source_info_error) = layout.type_info(c, source_type)
     if source_info_error != ok { ret (0usize, source_info_error) }
@@ -645,6 +661,22 @@ fn lower_bitcast(c: *check.Checker, source: usize, source_type: check.Type, into
     let address_operand_error = nir.add_operand(builder, load_instruction, source)
     if address_operand_error != ok { ret (0usize, address_operand_error) }
     ret (loaded, ok)
+}
+
+// The raw unsigned word of a scalar representation (D554). Validate what the
+// bitcast produced rather than assuming its input was itself an integer: a
+// one-byte array may be read as a bool or enum just as a u8 may.
+fn representation_bits(c: *check.Checker, value: usize, ty: check.Type, module_index: usize, builder: *nir.Builder, token: lex.Token) -> (usize, check.Type, err) {
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (0usize, check.invalid_type(), info_error) }
+    var unsigned_name = "u64"
+    if info.size == 1usize { unsigned_name = "u8" }
+    if info.size == 2usize { unsigned_name = "u16" }
+    if info.size == 4usize { unsigned_name = "u32" }
+    if info.size != 1usize && info.size != 2usize && info.size != 4usize && info.size != 8usize { ret (0usize, check.invalid_type(), check.InvalidType) }
+    let unsigned_type = check.make_type(.Integer, unsigned_name, module_index)
+    let (bits, bits_error) = lower_bitcast(c, value, ty, unsigned_type, builder, token)
+    ret (bits, unsigned_type, bits_error)
 }
 
 fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
@@ -3650,20 +3682,26 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                 // The representation row of `invalid` (D548, H03): bytes read as a
                 // `bool` or an enum are checked as `Kind(x)` checks its integer --
                 // `invalid`, not `enum`, since no conversion was written.
-                if call_info.mem_bitcast && !builder.nocheck && lowered_argument_type.kind == .Integer {
+                if call_info.mem_bitcast && !builder.nocheck {
                     let (representation, representation_error) = check.canonical_type(c, call_info.cast)
                     if representation_error != ok { ret (0usize, call_info.cast, representation_error) }
                     if representation.kind == .Bool {
-                        let bool_check_error = emit_bool_check(c, argument, lowered_argument_type, call_info.cast, builder, c.tokens[usize(node.token_start)])
+                        let (bits, bits_type, bits_error) = representation_bits(c, punned, call_info.cast, call_info.cast.module_index, builder, c.tokens[usize(node.token_start)])
+                        if bits_error != ok { ret (0usize, call_info.cast, bits_error) }
+                        let bool_check_error = emit_bool_check(c, bits, bits_type, call_info.cast, builder, c.tokens[usize(node.token_start)])
                         if bool_check_error != ok { ret (0usize, call_info.cast, bool_check_error) }
                     }
                     if representation.kind == .Named {
                         let (aggregate_index, found) = check.aggregate_for_type(c, representation)
                         if found && c.aggregates[aggregate_index].kind == .Enum {
-                            let (unsigned_bits, unsigned_bits_error) = unsigned_bits_of(c, argument, lowered_argument_type, call_info.cast.module_index, builder, c.tokens[usize(node.token_start)])
-                            if unsigned_bits_error != ok { ret (0usize, call_info.cast, unsigned_bits_error) }
-                            let member_check_error = emit_enum_check(c, unsigned_bits, unsigned_bits, representation, builder, c.tokens[usize(node.token_start)], "invalid")
+                            let (bits, bits_type, bits_error) = representation_bits(c, punned, call_info.cast, call_info.cast.module_index, builder, c.tokens[usize(node.token_start)])
+                            if bits_error != ok { ret (0usize, call_info.cast, bits_error) }
+                            let member_check_error = emit_enum_check(c, bits, bits, representation, builder, c.tokens[usize(node.token_start)], "invalid")
                             if member_check_error != ok { ret (0usize, call_info.cast, member_check_error) }
+                        }
+                        if found && c.aggregates[aggregate_index].kind == .TaggedUnion {
+                            let tag_check_error = emit_tagged_union_check(c, punned, representation, builder, c.tokens[usize(node.token_start)])
+                            if tag_check_error != ok { ret (0usize, call_info.cast, tag_check_error) }
                         }
                     }
                 }

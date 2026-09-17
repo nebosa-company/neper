@@ -3420,7 +3420,7 @@ better arguments for compiling `@gpu` functions both ways (§13).
 | Narrowing cast to a value not representable (§4) | `narrow` | trap | integer: truncate — the C result; float-to-integer: saturate, NaN to `0` |
 | Shift by a count `>=` the width (§6) | `shift` | trap | count masked to `width - 1` |
 | Integer-to-`enum` cast naming no member (§4) | `enum` | trap | trap |
-| Invalid value representation, arena/builder state or consumed debug-tracked handle where a section names an `invalid` check | `invalid` | trap | undefined behavior |
+| Invalid value representation, arena/builder state or consumed debug-tracked handle where a section names an `invalid` check | `invalid` | trap | `mem.bitcast` to `bool`, an enum or a tagged union: trap; otherwise undefined behavior |
 | `simd.load_aligned`/`store_aligned` at an address not aligned to the vector width (§4) | `align` | trap | trap |
 | `unreachable()` reached | `unreachable` | trap | trap |
 | Divergent control flow at `gpu.barrier()` or a subgroup builtin, or a non-uniform `lane` argument to a subgroup operation — the CPU build of a kernel only (§10) | `barrier` | trap | off |
@@ -3437,8 +3437,10 @@ release behaviour that varied by target would break the sentence above. The
 **memory rows** — `bounds`, `null`, `tag`, `align` — keep their check in release
 (D355, H03): an optimized build is a checked build, and an out-of-range write, a
 `nil` dereference, a wrong-member read or a misaligned vector access traps in it
-with the record a debug build writes. Only `barrier` (the CPU build of a kernel) and
-`invalid` come off in release, since their checks are not one compare; so a value
+with the record a debug build writes. A `mem.bitcast` that reads bytes as `bool`, an
+enum or a tagged union validates the resulting representation in release too (D548,
+D554); `@nocheck` or `--unchecked` is how that check is omitted. `barrier` (the CPU
+build of a kernel) and the other `invalid` cases come off in release; so a value
 that could only be read as an `invalid` check is not made: `= undef` of a type that
 admits only its members -- `bool`, an enum, a tagged union, or a struct or array
 holding one -- is refused (`E-SAFETY-0017`, D475), as `= zero` of a type with no

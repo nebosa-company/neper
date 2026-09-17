@@ -1431,8 +1431,9 @@ $enumTrapOutput = & $enumTrapPath level 2>&1
 if ($LASTEXITCODE -ne 134 -or ($enumTrapOutput -join "`n") -notmatch 'main\.e:20:17: trap\[enum\]: no member of Level has value -6') { throw "the level case did not trap as section 11 says: exit $LASTEXITCODE, $($enumTrapOutput -join "`n")" }
 & $enumTrapPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'an enum cast naming a member trapped' }
-# The `invalid` row for a representation (D548, H03): bytes read as a `bool` or an enum
-# through `mem.bitcast` trap in debug and in release, and not under `--unchecked`.
+# The `invalid` row for a representation (D548, D554, H03): bytes read as a `bool`,
+# an enum or a tagged union through `mem.bitcast` trap in debug and in release, and
+# not under `--unchecked`.
 $invalidTrapSource = Join-Path $PSScriptRoot 'fixtures\link\trap_invalid\src\main.e'
 foreach ($invalidMode in @(@('debug', @()), @('release', @('--release')), @('unchecked', @('--release', '--unchecked')))) {
     $invalidTrapPath = Join-Path $testBuild "trap-invalid-$($invalidMode[0]).exe"
@@ -1441,13 +1442,23 @@ foreach ($invalidMode in @(@('debug', @()), @('release', @('--release')), @('unc
     $invalidTrapOutput = & $invalidTrapPath bool 2>&1
     if ($invalidMode[0] -eq 'unchecked') {
         if ($LASTEXITCODE -ne 0) { throw "an unchecked pun to bool trapped (exit $LASTEXITCODE)" }
+        foreach ($uncheckedRepresentation in @('color', 'bool-bytes', 'color-bytes', 'union')) {
+            & $invalidTrapPath $uncheckedRepresentation 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "an unchecked pun to $uncheckedRepresentation trapped (exit $LASTEXITCODE)" }
+        }
     } else {
-        if ($LASTEXITCODE -ne 134 -or ($invalidTrapOutput -join "`n") -notmatch 'main\.e:14:17: trap\[invalid\]: no bool has value 7') { throw "the bool case did not trap as section 11 says ($($invalidMode[0])): exit $LASTEXITCODE, $($invalidTrapOutput -join ' ')" }
+        if ($LASTEXITCODE -ne 134 -or ($invalidTrapOutput -join "`n") -notmatch 'main\.e:16:17: trap\[invalid\]: no bool has value 7') { throw "the bool case did not trap as section 11 says ($($invalidMode[0])): exit $LASTEXITCODE, $($invalidTrapOutput -join ' ')" }
         $invalidTrapOutput = & $invalidTrapPath color 2>&1
-        if ($LASTEXITCODE -ne 134 -or ($invalidTrapOutput -join "`n") -notmatch 'main\.e:18:17: trap\[invalid\]: no member of Color has value 7') { throw "the color case did not trap as section 11 says ($($invalidMode[0])): exit $LASTEXITCODE, $($invalidTrapOutput -join ' ')" }
+        if ($LASTEXITCODE -ne 134 -or ($invalidTrapOutput -join "`n") -notmatch 'main\.e:20:17: trap\[invalid\]: no member of Color has value 7') { throw "the color case did not trap as section 11 says ($($invalidMode[0])): exit $LASTEXITCODE, $($invalidTrapOutput -join ' ')" }
+        $invalidTrapOutput = & $invalidTrapPath bool-bytes 2>&1
+        if ($LASTEXITCODE -ne 134 -or ($invalidTrapOutput -join "`n") -notmatch 'main\.e:25:17: trap\[invalid\]: no bool has value 7') { throw "the bool byte-array case did not trap as section 11 says ($($invalidMode[0])): exit $LASTEXITCODE, $($invalidTrapOutput -join ' ')" }
+        $invalidTrapOutput = & $invalidTrapPath color-bytes 2>&1
+        if ($LASTEXITCODE -ne 134 -or ($invalidTrapOutput -join "`n") -notmatch 'main\.e:30:17: trap\[invalid\]: no member of Color has value 7') { throw "the enum byte-array case did not trap as section 11 says ($($invalidMode[0])): exit $LASTEXITCODE, $($invalidTrapOutput -join ' ')" }
+        $invalidTrapOutput = & $invalidTrapPath union 2>&1
+        if ($LASTEXITCODE -ne 134 -or ($invalidTrapOutput -join "`n") -notmatch 'main\.e:35:21: trap\[invalid\]: no member of Maybe has value 7') { throw "the tagged-union case did not trap as section 11 says ($($invalidMode[0])): exit $LASTEXITCODE, $($invalidTrapOutput -join ' ')" }
     }
     & $invalidTrapPath none 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "a pun to a bool or a member trapped ($($invalidMode[0]))" }
+    if ($LASTEXITCODE -ne 0) { throw "a pun to a valid representation trapped ($($invalidMode[0]))" }
 }
 # The `narrow` row: a checked integer cast whose value does not fit, by width, by sign
 # and by both, and the meant truncation `T.trunc(x)` that never checks.

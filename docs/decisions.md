@@ -11452,3 +11452,21 @@ resource being H02's open gap, each chained to the request in `main`
 fixtures compare it with the bootstrap's word for word, and a harness reads
 the stream. The build's crew stops at its first failure as it did: a
 worker's failure is the build's.
+
+## D554 -- The tagged union's punned tag
+
+`mem.bitcast[Maybe](raw)` could put any byte in a tagged union's tag. A tag that
+named no arm survived the bitcast, so an exhaustive switch and every protocol
+over the union began from a representation the language says cannot exist. A
+bitcast into a tagged union now reads the resulting tag at offset zero and checks
+it against every declared arm through the enum representation check. It traps
+`invalid`, naming the union and the tag value, in debug and checked release; an
+`@nocheck` block or `--unchecked` image leaves it out as the explicit boundary.
+
+`link/trap_invalid` now puns an eight-byte array into a union with a payload. Tag
+seven traps in both checked modes, tag one passes, and the same invalid bytes pass
+under `--unchecked`, on both hosts. Its existing bool and enum cases also gain
+one-byte-array inputs: validation now reads the representation the bitcast produced,
+not only an integer input's bits. This closes the direct-bitcast part of H03's
+tagged-union representation gap. Bytes introduced through `mem.cast` or a foreign
+write remain outside this check and remain stated as open.

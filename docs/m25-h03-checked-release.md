@@ -7,9 +7,10 @@ asks for, cut to what the compiler can promise today, with its record (D355).
 
 Optimization and check removal are separate. A release build (`--release`) keeps
 every row of spec section 11's table that is one compare -- `bounds`, `null`,
-`tag`, `align` -- and gives the arithmetic rows their defined release results
+`tag`, `align` -- plus the representation check on a `mem.bitcast` to `bool`, an
+enum or a tagged union (D548, D554), and gives the arithmetic rows their defined release results
 (wrap, truncate, saturate, mask), as before. What a release build removes is the
-debug fills and the two rows that are not a compare, `barrier` and `invalid`. The
+debug fills, `barrier`, and the `invalid` cases not created by those bitcasts. The
 label is not "safe release": section 11 says which rows are kept, and H01 and H02
 say what the checks cannot establish -- a null check is not liveness, a bounds
 check is not a validly constructed slice.
@@ -70,10 +71,11 @@ made under the old policy is rebuilt rather than linked.
 ## 4. Obligations not yet met
 
 - Check elimination with proofs, and the codegen tests for eliminated checks.
-- `invalid` in release: the representation row (bytes read as `bool`, an enum or a
-  tag through `mem.cast` or a foreign write) stays off. The `zero`/`undef` half is
-  closed at compile time (D475): `= undef` of a type that admits only its members
-  is refused as `E-SAFETY-0017`, as `= zero` of a type with no member at zero was.
+- `invalid` in release: bytes introduced through `mem.cast` or a foreign write can
+  still carry an invalid representation. Direct `mem.bitcast` creation is closed for
+  `bool`, enums and tagged unions (D548, D554). The `zero`/`undef` half is closed at
+  compile time (D475): `= undef` of a type that admits only its members is refused as
+  `E-SAFETY-0017`, as `= zero` of a type with no member at zero was.
 - Definite initialization of fields and elements: not checked beyond `undef` of a
   resource (H01).
 - The arithmetic rows' debug/release divergence (trap against wrap) is unchanged
