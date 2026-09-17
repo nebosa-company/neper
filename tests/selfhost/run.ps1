@@ -3573,6 +3573,31 @@ foreach ($libTurn in @(@('strip_comments.py', 'lib-blanked'), @('hoist_constants
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $libCompiler)) { throw "the compiler did not build against the library turned by $($libTurn[0])" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $libCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler built against the library turned by $($libTurn[0]) is not the stable stage" }
 }
+# The turns in release (D533, H10): the release self-build is the release stable
+# stage, built twice byte for byte; the trees whose image holds -- blanked, hoisted,
+# locals renamed -- build the same release image; the compilers of the other turns
+# and of the library's build the release stable stage.
+$releaseStable = Join-Path $testBuild 'neper-own-release.exe'
+& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseStable --release | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $releaseStable)) { throw 'the release self-build failed' }
+$releaseAgain = Join-Path $testBuild 'neper-own-release-again.exe'
+& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseAgain --release | Out-Null
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $releaseAgain).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseStable).Hash) { throw 'the release self-build is not byte-for-byte deterministic' }
+foreach ($releaseTree in @($blankedSrc, $hoistedSrc, $renamedSrc)) {
+    $releaseTurn = Join-Path $testBuild ("neper-release-" + (Split-Path -Leaf $releaseTree) + '.exe')
+    & $ownCompilerPath emit-executable (Join-Path $releaseTree 'src\main.e') $repo 'x64' 'windows' $releaseTurn --release | Out-Null
+    if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseTurn).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseStable).Hash) { throw "the release build of $(Split-Path -Leaf $releaseTree) is not the release stable stage" }
+}
+foreach ($turnCompiler in @($formattedCompiler, $resymbolledCompiler, $reversedCompiler, $reorderedCompiler)) {
+    $releaseBy = Join-Path $testBuild ('release-by-' + (Split-Path -Leaf $turnCompiler))
+    & $turnCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseBy --release | Out-Null
+    if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseBy).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseStable).Hash) { throw "$(Split-Path -Leaf $turnCompiler) does not build the release stable stage" }
+}
+foreach ($libTurn in @('lib-blanked', 'lib-hoisted')) {
+    $libRelease = Join-Path $testBuild "neper-$libTurn-release.exe"
+    & $ownCompilerPath emit-executable (Join-Path $testBuild "$libTurn\src\main.e") (Join-Path $testBuild $libTurn) 'x64' 'windows' $libRelease --release | Out-Null
+    if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $libRelease).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseStable).Hash) { throw "the release build against $libTurn is not the release stable stage" }
+}
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

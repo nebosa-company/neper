@@ -11142,3 +11142,16 @@ fields and order turns are not taken over the library: the per-target `os`
 variants declare foreign structs and `@import`ed functions whose names and
 layouts are the platform's, and an unreached module is not built, so the
 check would be partial where it is not wrong.
+
+## D533 -- The turns in release
+
+The turns of D525-D532 built the compiler in debug; release is where the
+inlining oracles and the elisions live, and the suites had no release
+self-build to hold anything to. They build one now, twice, byte for byte --
+the release fixed point beside the debug one -- and take every turn against
+it: the trees whose image must hold (comments blanked, literals hoisted,
+locals renamed) build the same release image, the compilers of the other
+turns (formatted, symbols renamed, fields reversed, declarations reversed)
+build the release stable stage from the original sources, and so does the
+compiler built against the turned library. Nine release builds a suite, some
+seconds. Every turn held at the first attempt.

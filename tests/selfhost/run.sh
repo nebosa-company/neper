@@ -3586,6 +3586,22 @@ for lib_turn in "strip_comments.py lib-blanked" "hoist_constants.py lib-hoisted"
     [ "$lib_written" = 'executable written' ]
     cmp "$test_build/neper-$2" "$stable_compiler_path"
 done
+# The turns in release (D533, H10): the release self-build twice, the image-holding trees, the turn compilers, the library.
+[ "$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-own-release" --release)" = 'executable written' ]
+[ "$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-own-release-again" --release)" = 'executable written' ]
+cmp "$test_build/neper-own-release-again" "$test_build/neper-own-release"
+for release_tree in blanked-src hoisted-src renamed-src; do
+    [ "$("$own_compiler_path" emit-executable "$test_build/$release_tree/src/main.e" "$repo" x64 linux "$test_build/neper-release-$release_tree" --release)" = 'executable written' ]
+    cmp "$test_build/neper-release-$release_tree" "$test_build/neper-own-release"
+done
+for turn_compiler in neper-formatted neper-resymbolled neper-reversed neper-reordered; do
+    [ "$("$test_build/$turn_compiler" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/release-by-$turn_compiler" --release)" = 'executable written' ]
+    cmp "$test_build/release-by-$turn_compiler" "$test_build/neper-own-release"
+done
+for lib_turn in lib-blanked lib-hoisted; do
+    [ "$("$own_compiler_path" emit-executable "$test_build/$lib_turn/src/main.e" "$test_build/$lib_turn" x64 linux "$test_build/neper-$lib_turn-release" --release)" = 'executable written' ]
+    cmp "$test_build/neper-$lib_turn-release" "$test_build/neper-own-release"
+done
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
