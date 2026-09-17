@@ -11357,3 +11357,16 @@ the message and as the record's `symbol`, the command diagnostic gaining
 the fact a span diagnostic has (D514); a precondition's file that cannot
 be read is named the same way. Both suites read the name from the
 refusal of the stale rename plan they already make.
+
+## D548 -- Bytes read as a bool or an enum are checked
+
+Section 11's `invalid` row named the representation check and nothing
+made it: `mem.bitcast[bool](7u8)` was `true` and something else, and
+`mem.bitcast[Color](7u8)` a `Color` no member names, where `Color(7u8)`
+has trapped `enum` since D197. A pun whose target is `bool` or an enum, from
+an integer, is checked as the conversion is -- the bits as the unsigned type
+of their width, compared with 1 or with every member -- and traps `invalid`,
+"no bool has value 7", "no member of Color has value 7", at the pun, in
+debug and in release, and not under `--unchecked` or in a `@nocheck` block.
+A tagged union's tag, bytes through `mem.cast` and a foreign write stay
+unchecked. The fixture `link/trap_invalid` runs in every mode in both suites.

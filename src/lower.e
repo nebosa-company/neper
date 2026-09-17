@@ -308,7 +308,9 @@ fn append_text(storage: []u8, write_at: *usize, text: str) -> err {
     ret ok
 }
 
-fn emit_enum_check(c: *check.Checker, converted: usize, source: usize, ty: check.Type, builder: *nir.Builder, token: lex.Token) -> err {
+// `trap_kind` is section 11's row: `enum` for `Kind(x)`, `invalid` for bytes read
+// as the enum through `mem.bitcast` (D548).
+fn emit_enum_check(c: *check.Checker, converted: usize, source: usize, ty: check.Type, builder: *nir.Builder, token: lex.Token, trap_kind: str) -> err {
     let (aggregate_index, found) = check.aggregate_for_type(c, ty)
     if !found { ret check.InvalidType }
     let aggregate = c.aggregates[aggregate_index]
@@ -355,7 +357,7 @@ fn emit_enum_check(c: *check.Checker, converted: usize, source: usize, ty: check
     try append_text(storage[..], &write_at, suffix)
     let (message, message_error) = nir.intern_string(builder, storage[..])
     if message_error != ok { ret message_error }
-    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "enum", ty.module_index), false, message + 1usize, token)
+    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, trap_kind, ty.module_index), false, message + 1usize, token)
     if trap_error != ok { ret trap_error }
     try nir.add_operand(builder, trap_instruction, source)
     let after_block = builder.block_count
@@ -555,6 +557,50 @@ fn emit_null_check(c: *check.Checker, pointer: usize, pointer_type: check.Type, 
     if message_error != ok { ret message_error }
     let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "null", pointer_type.module_index), false, message + 1usize, token)
     if trap_error != ok { ret trap_error }
+    let (after_index, after_error) = nir.begin_block(builder)
+    if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
+    ret ok
+}
+
+// An integer's bits as the unsigned type of its width (D548): what a load and a member
+// constant both give, so the member check compares like with like.
+fn unsigned_bits_of(c: *check.Checker, value: usize, value_type: check.Type, module_index: usize, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    var unsigned_name = "u64"
+    let width = check.integer_width(value_type)
+    if width == 8usize { unsigned_name = "u8" }
+    if width == 16usize { unsigned_name = "u16" }
+    if width == 32usize { unsigned_name = "u32" }
+    let unsigned_type = check.make_type(.Integer, unsigned_name, module_index)
+    let (bits_instruction, bits, bits_error) = nir.emit(builder, .Cast, unsigned_type, true, 1usize, token)
+    if bits_error != ok { ret (0usize, bits_error) }
+    let bits_operand_error = nir.add_operand(builder, bits_instruction, value)
+    if bits_operand_error != ok { ret (0usize, bits_operand_error) }
+    ret (bits, ok)
+}
+
+// Section 11's `invalid` row for a `bool` (D548): the byte read as one is 0 or 1.
+fn emit_bool_check(c: *check.Checker, source: usize, source_type: check.Type, into: check.Type, builder: *nir.Builder, token: lex.Token) -> err {
+    let (bits, bits_error) = unsigned_bits_of(c, source, source_type, into.module_index, builder, token)
+    if bits_error != ok { ret bits_error }
+    let unsigned_type = check.make_type(.Integer, "u8", into.module_index)
+    let (one_instruction, one, one_error) = nir.emit(builder, .ConstInteger, unsigned_type, true, 1usize, token)
+    if one_error != ok { ret one_error }
+    let boolean = check.make_type(.Bool, "bool", into.module_index)
+    let (fits, fits_error) = emit_supplied_compare(builder, .LessEqual, boolean, bits, one, token)
+    if fits_error != ok { ret fits_error }
+    let trap_block = builder.block_count
+    let after_block = builder.block_count + 1usize
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, fits)
+    try nir.set_branch_targets(builder, decision, after_block, trap_block)
+    let (trap_index, trap_block_error) = nir.begin_block(builder)
+    if trap_block_error != ok || trap_index != trap_block { ret nir.InvalidControlFlow }
+    let (message, message_error) = nir.intern_string(builder, "no bool has value ")
+    if message_error != ok { ret message_error }
+    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "invalid", into.module_index), false, message + 1usize, token)
+    if trap_error != ok { ret trap_error }
+    try nir.add_operand(builder, trap_instruction, bits)
     let (after_index, after_error) = nir.begin_block(builder)
     if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
     ret ok
@@ -3600,7 +3646,28 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             // carry that name so arithmetic on it selects (D210).
             if call_info.mem_bitcast || call_info.mem_address {
                 let (punned, punned_error) = lower_bitcast(c, argument, lowered_argument_type, call_info.cast, builder, c.tokens[usize(node.token_start)])
-                ret (punned, call_info.cast, punned_error)
+                if punned_error != ok { ret (0usize, call_info.cast, punned_error) }
+                // The representation row of `invalid` (D548, H03): bytes read as a
+                // `bool` or an enum are checked as `Kind(x)` checks its integer --
+                // `invalid`, not `enum`, since no conversion was written.
+                if call_info.mem_bitcast && !builder.nocheck && lowered_argument_type.kind == .Integer {
+                    let (representation, representation_error) = check.canonical_type(c, call_info.cast)
+                    if representation_error != ok { ret (0usize, call_info.cast, representation_error) }
+                    if representation.kind == .Bool {
+                        let bool_check_error = emit_bool_check(c, argument, lowered_argument_type, call_info.cast, builder, c.tokens[usize(node.token_start)])
+                        if bool_check_error != ok { ret (0usize, call_info.cast, bool_check_error) }
+                    }
+                    if representation.kind == .Named {
+                        let (aggregate_index, found) = check.aggregate_for_type(c, representation)
+                        if found && c.aggregates[aggregate_index].kind == .Enum {
+                            let (unsigned_bits, unsigned_bits_error) = unsigned_bits_of(c, argument, lowered_argument_type, call_info.cast.module_index, builder, c.tokens[usize(node.token_start)])
+                            if unsigned_bits_error != ok { ret (0usize, call_info.cast, unsigned_bits_error) }
+                            let member_check_error = emit_enum_check(c, unsigned_bits, unsigned_bits, representation, builder, c.tokens[usize(node.token_start)], "invalid")
+                            if member_check_error != ok { ret (0usize, call_info.cast, member_check_error) }
+                        }
+                    }
+                }
+                ret (punned, call_info.cast, ok)
             }
             if call_info.math_sqrt {
                 let (root_instruction, root, root_error) = nir.emit(builder, .Sqrt, call_info.cast, true, 0usize, c.tokens[usize(node.token_start)])
@@ -3626,7 +3693,7 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                 if bits_error != ok { ret (0usize, call_info.cast, bits_error) }
                 let bits_operand_error = nir.add_operand(builder, bits_instruction, argument)
                 if bits_operand_error != ok { ret (0usize, call_info.cast, bits_operand_error) }
-                let enum_check_error = emit_enum_check(c, bits, argument, call_info.cast, builder, c.tokens[usize(node.token_start)])
+                let enum_check_error = emit_enum_check(c, bits, argument, call_info.cast, builder, c.tokens[usize(node.token_start)], "enum")
                 if enum_check_error != ok { ret (0usize, call_info.cast, enum_check_error) }
                 ret (bits, call_info.cast, ok)
             }

@@ -1930,7 +1930,9 @@ sizes — and the result is `x`'s bytes read as a `T`, so a pun never needs a `u
 slice, function pointer, `type`, `Atomic`, or target address-space value at any depth.
 This prevents it from casting away `const`, inventing provenance, changing an address
 space or manufacturing a callable address. A pointer or slice operand in device code
-is `mem.cast` by another name and is banned with it.
+is `mem.cast` by another name and is banned with it. Bytes read as a `bool` or as an
+enum are §11's `invalid` check in a checked build (D548): a byte that is not 0 or 1,
+or a value that names no member, traps `invalid` at the pun.
 
 `mem.address_of(p)` is the other direction, and the only one there is: `p`'s address as
 a `usize`, with `T` inferred from the pointer. It is not a `bitcast` — that rule refuses

@@ -1359,6 +1359,34 @@ esac
 # The `enum` row, which traps in every mode: `Kind(x)` naming no member, unsigned and
 # signed, and the same casts naming members untouched.
 enum_trap_path="$test_build/trap-enum-selfhost"
+# The `invalid` row for a representation (D548, H03): bytes read as a bool or an enum through mem.bitcast trap, debug and release, not unchecked.
+for invalid_mode in "debug" "release --release" "unchecked --release --unchecked"; do
+    set -- $invalid_mode
+    invalid_name="$1"
+    shift
+    invalid_trap_path="$test_build/trap-invalid-$invalid_name"
+    [ "$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_invalid/src/main.e" "$repo" x64 linux "$invalid_trap_path" "$@")" = 'executable written' ]
+    chmod +x "$invalid_trap_path"
+    invalid_status=0
+    invalid_output=$("$invalid_trap_path" bool 2>&1) || invalid_status=$?
+    if [ "$invalid_name" = unchecked ]; then
+        [ "$invalid_status" -eq 0 ]
+    else
+        [ "$invalid_status" -eq 134 ]
+        case "$invalid_output" in
+            *'main.e:14:17: trap[invalid]: no bool has value 7'*) ;;
+            *) printf '%s\n' "the bool case did not trap as section 11 says ($invalid_name): $invalid_output" >&2; exit 1 ;;
+        esac
+        invalid_status=0
+        invalid_output=$("$invalid_trap_path" color 2>&1) || invalid_status=$?
+        [ "$invalid_status" -eq 134 ]
+        case "$invalid_output" in
+            *'main.e:18:17: trap[invalid]: no member of Color has value 7'*) ;;
+            *) printf '%s\n' "the color case did not trap as section 11 says ($invalid_name): $invalid_output" >&2; exit 1 ;;
+        esac
+    fi
+    "$invalid_trap_path" none > /dev/null 2>&1
+done
 enum_trap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_enum/src/main.e" "$repo" x64 linux "$enum_trap_path")
 [ "$enum_trap_written" = 'executable written' ]
 chmod +x "$enum_trap_path"
