@@ -6,8 +6,9 @@
 The card's syntax sections are the grammar's own productions, copied from
 docs/grammar.ebnf; its keyword list is every alphabetic terminal of that grammar; its
 diagnostic families are docs/diagnostics.md's registry; documented commands are
-marked from the compiler and suites; its versions are the ones the compiler writes
-in every stream header (src/main.e). The prose around them is
+marked from the compiler and suites; displayed grammar rules are marked from the
+normative grammar; its versions are the ones the compiler writes in every stream
+header (src/main.e). The prose around them is
 docs/llm-neper-card.src.md. The rendered card carries the grammar revision, the
 language and tool versions and a content hash, so a card and the grammar cannot
 drift: the suites run --check.
@@ -51,6 +52,14 @@ EXPRESSIONS = ['expression', 'postfix', 'postfix_part', 'primary', 'literal']
 for name in DECLARATIONS + TYPES + STATEMENTS + EXPRESSIONS:
     if name not in productions:
         sys.exit('render_card: grammar.ebnf has no production %s' % name)
+
+# Rule standing (D567, H11/H28) is deliberately narrower than broad parser-suite
+# coverage: without a fixture-to-production map, the grammar proves that a displayed
+# rule is present but not that the rule has direct executable evidence.
+rule_rows = ['| rule | standing |', '|---|---|']
+for name in DECLARATIONS + TYPES + STATEMENTS + EXPRESSIONS:
+    rule_rows.append('| `%s` | present |' % name)
+rules = '\n'.join(rule_rows)
 
 # Keywords: the alphabetic terminals of the productions, not of the notation comments,
 # and not `_`, which is a binding, nor lexer fragments of a number.
@@ -130,6 +139,7 @@ body = template
 for key, value in [
     ('{{revision}}', revision), ('{{language_version}}', language_version), ('{{tool_version}}', tool_version),
     ('{{keywords}}', ' '.join('`%s`' % k for k in keywords)),
+    ('{{rules}}', rules),
     ('{{declarations}}', block(DECLARATIONS)), ('{{types}}', block(TYPES)),
     ('{{statements}}', block(STATEMENTS)), ('{{expressions}}', block(EXPRESSIONS)),
     ('{{diagnostics}}', diagnostics), ('{{commands}}', commands), ('{{token_costs}}', token_costs),

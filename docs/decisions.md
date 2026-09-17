@@ -11675,3 +11675,16 @@ commands verified.
 The names remain the intentionally small surface the card teaches; their standing is
 derived rather than declared. The existing card hash and `render_card.py --check` in
 both suites make any implementation, suite or rendered-table drift fail.
+
+## D567 -- The language card marks grammar-rule standing
+
+Every grammar production displayed by the generated language card now has a standing
+row derived from the normative grammar. All displayed rules are `present`: the
+renderer has copied each named production from `docs/grammar.ebnf` and still refuses
+to render if one is absent.
+
+No rule is marked `verified`. The repository has broad parser-suite coverage but no
+explicit fixture-to-production map, so treating that coverage as direct evidence for
+each individual rule would overstate what the evidence says. A future executable map
+can promote rows to `verified` without introducing a second hand-maintained grammar
+registry; until then, the generated table and card hash expose the honest boundary.

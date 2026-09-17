@@ -12,6 +12,15 @@ not the render of its grammar revision is stale.
 Every alphabetic terminal of the grammar: {{keywords}}. None may name a value, type,
 field or module.
 
+## Grammar rule standing
+
+`present` means the rule is copied from the normative grammar. `verified` is reserved
+for a rule with explicit executable evidence; the repository does not yet map parser
+fixtures to individual productions, so broad parser-suite coverage is not overstated
+as per-rule verification.
+
+{{rules}}
+
 ## Declarations
 
 Declarations start at column 0. Blocks use braces; statements are newline-separated.
