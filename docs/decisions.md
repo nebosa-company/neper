@@ -11207,3 +11207,13 @@ hundred helpers named for the type -- for a protocol's, and renamed them
 with it. Only section 12's spellings follow now: `<snake>_eq`, `_cmp`,
 `_hash`, `_format`, `_next`, `_next_err`, the ones a lookup finds by the
 name; a helper merely named for the type keeps its own.
+
+## D538 -- The signature plans over the compiler
+
+D537's turn taken with the other two plans: `check.same`'s two parameters in
+the other order, `plan-change-signature-file` rewriting the declaration and
+the argument lists of its five hundred and forty calls, and a parameter
+`extra: usize` added with `0usize` at every call by
+`plan-add-parameter-file`; each applied to a project of the sources, and the
+compiler built from each builds the stable stage byte for byte, which both
+suites hold. Both held at the first attempt.

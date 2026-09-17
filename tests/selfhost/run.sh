@@ -3641,13 +3641,22 @@ cp "$test_build/renamed-src/src/check.e" "$warm_release/src/check.e"
 python3 "$repo/scripts/check_incremental.py" "$warm_release_manifest" check=rebuilt:source-changed lex=kept:stable
 cmp "$test_build/neper-warm-release" "$test_build/neper-warm-release-cold"
 # The plans over the compiler (D537, H17, H29): check.same and check.Type renamed by plan, applied, and the result builds the stable stage.
-for plan_turn in "check.same alike plan-fn" "check.Type Kind2 plan-type"; do
-    set -- $plan_turn
+# And the signature plans (D538): the parameters of check.same reordered, then one added.
+plan_turn_command() {
+    case "$1" in
+        plan-fn) "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol check.same --to alike ;;
+        plan-type) "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol check.Type --to Kind2 ;;
+        plan-order) "$test_build/neper-self" plan-change-signature-file src/main.e "$repo" x64 linux --json --symbol check.same --order 1,0 ;;
+        plan-add) "$test_build/neper-self" plan-add-parameter-file src/main.e "$repo" x64 linux --json --symbol check.same --parameter "extra: usize" --argument 0usize ;;
+    esac
+}
+for plan_turn in plan-fn plan-type plan-order plan-add; do
+    set -- x x "$plan_turn"
     plan_project="$test_build/$3"
     rm -rf "$plan_project"
     mkdir -p "$plan_project"
     cp -r "$repo/src" "$plan_project/src"
-    (cd "$plan_project" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol "$1" --to "$2" > "$test_build/$3.jsonl")
+    (cd "$plan_project" && plan_turn_command "$3" > "$test_build/$3.jsonl")
     "$test_build/neper-self" apply-plan "$test_build/$3.jsonl" --root "$plan_project/src" > /dev/null
     [ "$("$own_compiler_path" emit-executable "$plan_project/src/main.e" "$repo" x64 linux "$test_build/neper-$3")" = 'executable written' ]
     chmod +x "$test_build/neper-$3"
