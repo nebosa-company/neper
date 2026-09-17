@@ -10702,3 +10702,13 @@ and the lowering agree on which arm exists, and `explain-file` writes the
 branch over a local; `comptime_steps`'s `if TOTAL != 4950i64` folds now too, at
 no step of the interpreter's count -- a comparison of settled values is not a
 statement -- so its golden stands.
+
+## D501 -- A view's end as a fact
+
+D487 made a view a fact; where it ends is the other half of what a harness
+needs before an edit: the checker marks a view dangling at a `mem.reset` of
+the region it was taken in (D354) and at a call given its container by
+mutable pointer (D395), and refuses a read after. Each such site is now a
+`borrow` fact of the context page, compiler-proved, naming the local and what
+ended it. `context_moves.e` gains `ends`, a slice of an allocation in a
+region the function resets, pinned per host.

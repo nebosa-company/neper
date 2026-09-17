@@ -2239,7 +2239,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
         first = false
         last = e
         // Calls, values and field accesses (D420) are `uses-file`'s and `context-file`'s.
-        if e.module_index >= g.count || e.kind == 4u8 || e.kind == 5u8 || e.kind == 6u8 || e.kind == 7u8 || e.kind == 9u8 || e.kind == 10u8 { continue }
+        if e.module_index >= g.count || e.kind == 4u8 || e.kind == 5u8 || e.kind == 6u8 || e.kind == 7u8 || e.kind == 9u8 || e.kind == 10u8 || e.kind == 11u8 { continue }
         let module = g.modules[e.module_index]
         let (root, relative) = source_identity_of(g, module.path)
         let (path, path_error) = manifest_slashes(a, relative)
@@ -3558,6 +3558,12 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         // with no kind before, which was not a record at all.
         if e.kind == 8u8 {
             if e.found { try text(&out, "\"phase\",\"provenance\":\"compiler-proved\",\"value\":\"an if settled at compile time: the true arm is taken\"") } else { try text(&out, "\"phase\",\"provenance\":\"compiler-proved\",\"value\":\"an if settled at compile time: the false arm is taken\"") }
+        }
+        // A view ended (D501, H02): the local, and what ended it.
+        if e.kind == 11u8 {
+            try text(&out, "\"borrow\",\"provenance\":\"compiler-proved\",\"value\":\"")
+            try text(&out, e.reason_name)
+            if e.reason_kind == 1u8 { try text(&out, " views nothing from here: the region it was taken in is reset\"") } else { try text(&out, " views nothing from here: what it views is given to a call by pointer\"") }
         }
         // A view taken (D487, H17): the local and the local it views.
         if e.kind == 10u8 {

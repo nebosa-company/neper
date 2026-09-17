@@ -19,6 +19,16 @@ fn open_and_close(a: *mem.Arena) -> err {
     ret os.close(held)
 }
 
+fn ends(a: *mem.Arena) -> usize {
+    let mark = mem.mark(a)
+    let (bytes, alloc_error) = mem.alloc[u8](a, 4usize)
+    if alloc_error != ok { ret 0usize }
+    let part = bytes[1usize..3usize]
+    let seen = part.len
+    mem.reset(a, mark)
+    ret seen
+}
+
 fn views() -> usize {
     var items: [4]u8 = zero
     let first = &items[0usize]
@@ -28,6 +38,7 @@ fn views() -> usize {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     if views() != 6usize { ret mem.Exhausted }
+    if ends(a) != 2usize { ret mem.Exhausted }
     if width[i64](1i64) != 8usize { ret mem.Exhausted }
     ret open_and_close(a)
 }

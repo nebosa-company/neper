@@ -2505,7 +2505,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contextActual).Hash -ne (Get-F
 # A body's moves and folded ifs as facts (D486, H17): two subjects of one fixture.
 $movesActual = Join-Path $testBuild 'conformance-tools-context-moves.jsonl'
 if (Test-Path -LiteralPath $movesActual) { Remove-Item -LiteralPath $movesActual }
-foreach ($movesSubject in @('context_moves.open_and_close', 'context_moves.width', 'context_moves.views')) {
+foreach ($movesSubject in @('context_moves.open_and_close', 'context_moves.width', 'context_moves.views', 'context_moves.ends')) {
     cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file context_moves.e `"$repo`" x64 windows --json --symbol $movesSubject --budget 16 >> `"$movesActual`""
     if ($LASTEXITCODE -ne 0) { throw "context-file --json --symbol $movesSubject exited $LASTEXITCODE" }
 }

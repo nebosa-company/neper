@@ -9024,6 +9024,21 @@ fn record_explain_borrow(c: *Checker, module_index: usize, node: syntax.Node, na
     c.explain_count += 1usize
 }
 
+// A view ended (D501, H02): the local whose view the call ends -- a `mem.reset` of
+// the region it was taken in (1), or a call given the container by mutable pointer
+// (2) -- for `context-file`'s facts, at the call.
+fn record_explain_view_end(c: *Checker, module_index: usize, node: syntax.Node, name: str, how: u8) {
+    if c.explains.len == 0usize { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    var offset = 0usize
+    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    c.explains[c.explain_count] = Explain { kind: 11u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: how, reason_name: name, reason_type: invalid_type() }
+    c.explain_count += 1usize
+}
+
 // The first request of an instance (D466): kept as its site; later requests of the
 // same instance leave it.
 fn note_instance_site(c: *Checker, instance_index: usize, module_index: usize, node: syntax.Node) {
@@ -13037,6 +13052,7 @@ fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
                 c.resources[at].state = resource_moved
                 c.resources[at].dangling = 1u8
                 c.resources[at].acquired = usize(node.token_start)
+                record_explain_view_end(c, module_index, node, c.locals[at].name, 1u8)
             }
             at += 1usize
         }
@@ -13057,6 +13073,7 @@ fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
                         c.resources[at].state = resource_moved
                         c.resources[at].dangling = 2u8
                         c.resources[at].acquired = usize(node.token_start)
+                        record_explain_view_end(c, module_index, node, c.locals[at].name, 2u8)
                     }
                     at += 1usize
                 }
