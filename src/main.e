@@ -3458,6 +3458,12 @@ type Sink = struct {
     // when the diagnostic is not one.
     expected_text: str,
     actual_text: str,
+    // The names of a name diagnostic (D514, H18), as fields beside the message: the
+    // name that failed, the module or type it was looked up in, and the nearest
+    // candidate offered; empty when the diagnostic is not one.
+    symbol_text: str,
+    owner_text: str,
+    near_text: str,
     operand_path: str,
     // The roots a module's identity is spelled under (D427): the graph's, copied when
     // it is loaded, since the sink is made before the program is.
@@ -3548,6 +3554,18 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
         try write_json_string(report, report.expected_text)
         try write_all(report, ",\"actual\":")
         try write_json_string(report, report.actual_text)
+    }
+    if report.symbol_text.len != 0usize {
+        try write_all(report, ",\"symbol\":")
+        try write_json_string(report, report.symbol_text)
+        if report.owner_text.len != 0usize {
+            try write_all(report, ",\"owner\":")
+            try write_json_string(report, report.owner_text)
+        }
+        if report.near_text.len != 0usize {
+            try write_all(report, ",\"near\":")
+            try write_json_string(report, report.near_text)
+        }
     }
     try write_all(report, ",\"span\":")
     if mapping < report.map_count {
@@ -5739,6 +5757,13 @@ fn module_lines(g: *graph.Graph, module_index: usize) -> []usize {
     ret none[0usize..0usize]
 }
 
+// The name facts of one diagnostic (D514), cleared once it is written.
+fn clear_name_facts(report: *Sink) {
+    report.symbol_text = ""
+    report.owner_text = ""
+    report.near_text = ""
+}
+
 fn print_token_diagnostic(report: *Sink, g: *graph.Graph, module_index: usize, token: lex.Token, code: str, message: str) -> err {
     var path = "<unknown>"
     if module_index < g.count { path = g.modules[module_index].path }
@@ -6521,6 +6546,11 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
         }
         // The nearest name as a fix (D445, H09): named in the message and offered as
         // one `maybe` edit over the token.
+        // The name as a fact (D514, H18): the token's text, and the candidate.
+        if resolver.failure_module < g.count && resolver.failure_token.end <= g.modules[resolver.failure_module].text.len {
+            report.symbol_text = g.modules[resolver.failure_module].text[resolver.failure_token.start..resolver.failure_token.end]
+        }
+        report.near_text = resolver.failure_near
         if resolver.failure_near.len != 0usize {
             var near_storage: [256]u8 = zero
             var near_at = tool.nptest_copy(near_storage[..], 0usize, "unknown value name; did you mean `")
@@ -6532,9 +6562,12 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
             report.fix_kind = 4u8
             let near_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", near_storage[0usize..near_at])
             report.fix_text = ""
+            clear_name_facts(report)
             ret near_emitted
         }
-        ret print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
+        let unknown_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
+        clear_name_facts(report)
+        ret unknown_emitted
     }
     // An unknown type name (D485, H09): at its token, the nearest type in scope
     // named and offered as a `maybe` fix, as an unknown value name is.
@@ -6552,8 +6585,11 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
             report.fix_end = resolver.failure_token.end
             report.fix_kind = 4u8
         }
+        report.symbol_text = resolver.failure_name
+        report.near_text = resolver.failure_near
         let type_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", type_storage[0usize..type_at])
         report.fix_text = ""
+        clear_name_facts(report)
         ret type_emitted
     }
     // A module without the member named (D447, H09): the module and the member in
@@ -6574,8 +6610,12 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
             report.fix_end = resolver.failure_token.end
             report.fix_kind = 4u8
         }
+        report.symbol_text = resolver.failure_name
+        report.owner_text = resolver.failure_owner
+        report.near_text = resolver.failure_near
         let member_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", member_storage[0usize..member_at])
         report.fix_text = ""
+        clear_name_facts(report)
         ret member_emitted
     }
     // Declaration and scope collisions carry an exact token and the offending

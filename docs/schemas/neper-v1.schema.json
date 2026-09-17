@@ -415,6 +415,15 @@
         "actual": {
           "type": "string"
         },
+        "symbol": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "near": {
+          "type": "string"
+        },
         "span": {
           "oneOf": [
             {

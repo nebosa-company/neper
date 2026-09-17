@@ -10887,3 +10887,15 @@ union, a `bitcast` or a `cast` without the manifest. The inventory is scanned
 once per indexed module and read as the manifest writes it. `index_unsafe`
 pins the fixture's symbols on both hosts, and the index goldens carry the
 field.
+
+## D514 -- Typed name facts
+
+H18 asks for typed diagnostic facts, and a harness reading ``unknown type
+`Colr`; did you mean `Colour`?`` had to parse the message for the two names.
+The name diagnostics now carry them as fields beside the message, the way a
+mismatch carries `expected` and `actual` (D401): `symbol`, the name that
+failed; `owner`, the module or type it was looked up in, for a member; and
+`near`, the candidate the message offers, when there is one. An unknown value
+name without a candidate carries `symbol` alone. The near fixtures and the
+goldens that hold an unknown name carry the fields; the messages are as they
+were.

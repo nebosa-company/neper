@@ -141,7 +141,11 @@ type -- carries both types as two further fields, `expected` and `actual`, in th
 spelling `context-file` uses for types, and names them in its message (``type
 mismatch: expected `i32`, found `u64` ``) except for a returned value, whose
 words the bootstrap parity fixes; a diagnostic that is not a mismatch has neither
-field.
+field. A name diagnostic (D514, H18) -- an unknown value name, an unknown type, a
+module without the member named -- carries the name as `symbol`, the module or
+type it was looked up in as `owner` when there is one, and the nearest candidate
+the message offers as `near` when there is one, so a harness reads the names
+without parsing the message.
 Every `E-SAFETY` diagnostic that is about two sites carries the other one as its
 `related` entry (D364, H09): the acquisition for a forgotten cleanup, an overwrite,
 an untested acquisition or a loop consumption; the move for a use after move; the
