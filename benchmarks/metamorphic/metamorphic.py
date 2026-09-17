@@ -2,7 +2,7 @@
 
     python benchmarks/metamorphic/metamorphic.py COMPILER ROOT ARCH OS OUTDIR FIXTURE_MAIN...
 
-Six transformations that must not change what a program does, applied to each
+Seven transformations that must not change what a program does, applied to each
 fixture's root module and checked against the untouched build:
 
 - `comments`: every comment is removed through the lossless token stream, the
@@ -26,6 +26,10 @@ fixture's root module and checked against the untouched build:
   label is replaced by a module-scope `const` of the same type and value, named
   to the literal's length so the columns hold, the declarations appended at the
   end; a constant folds into its uses, so the image must be byte-identical.
+- `formatted` (D525): the root module through `neper fmt -`, which must be
+  idempotent -- formatting the result again changes nothing -- and a layout
+  change, so the image may differ (trap records carry columns) but the program
+  must behave the same.
 
 Exit 1 on the first fixture whose transformed build differs, with what differed.
 """
@@ -301,6 +305,17 @@ def constants_extracted(main, tokens_json_lines):
     return bytes(out)
 
 
+def formatted(main):
+    text = open(main, 'rb').read()
+    p = subprocess.run([compiler, 'fmt', '-'], input=text, capture_output=True)
+    if p.returncode != 0:
+        sys.exit('metamorphic: fmt of %s failed: %s' % (main, p.stderr.decode('utf-8', 'replace')))
+    again = subprocess.run([compiler, 'fmt', '-'], input=p.stdout, capture_output=True)
+    if again.returncode != 0 or again.stdout != p.stdout:
+        sys.exit('metamorphic: fmt of %s is not idempotent' % main)
+    return p.stdout
+
+
 def variant_dir(fixture_dir, name):
     d = os.path.join(outdir, name)
     if os.path.exists(d):
@@ -392,4 +407,15 @@ for main in fixtures:
         ran_a, ran_b = run([a], cwd=outdir), run([b], cwd=outdir)
         if (ran_a.returncode, ran_a.stdout) != (ran_b.returncode, ran_b.stdout):
             sys.exit('metamorphic: %s with extracted constants behaves differently (%d vs %d)' % (name, ran_a.returncode, ran_b.returncode))
-    print('metamorphic: %s holds under comments, reorder, renamed, fields, symbols and constants' % name)
+    # formatted: the same behaviour, fmt idempotent.
+    laid_out = variant_dir(fixture_dir, name + '-formatted')
+    laid_out_main = os.path.join(laid_out, 'src', 'main.e')
+    open(laid_out_main, 'wb').write(formatted(original_main))
+    for release in (False, True):
+        a = os.path.join(outdir, '%s-original-%d%s' % (name, release, exe))
+        b = os.path.join(outdir, '%s-formatted-%d%s' % (name, release, exe))
+        build(laid_out_main, b, release)
+        ran_a, ran_b = run([a], cwd=outdir), run([b], cwd=outdir)
+        if (ran_a.returncode, ran_a.stdout) != (ran_b.returncode, ran_b.stdout):
+            sys.exit('metamorphic: %s formatted behaves differently (%d vs %d)' % (name, ran_a.returncode, ran_b.returncode))
+    print('metamorphic: %s holds under comments, reorder, renamed, fields, symbols, constants and formatted' % name)

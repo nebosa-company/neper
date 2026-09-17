@@ -3466,6 +3466,28 @@ $staticMeasured = Join-Path $testBuild 'static-windows.json'
 if ($LASTEXITCODE -ne 0) { throw 'the static measurement of sc500k failed' }
 & python (Join-Path $repo 'benchmarks/baseline/gate.py') $staticMeasured --baseline (Join-Path $repo 'benchmarks/baseline/results/static-windows.json')
 if ($LASTEXITCODE -ne 0) { throw 'the static performance gate breached: re-pin benchmarks/baseline/results/static-windows.json in the decision that names why' }
+# The formatted compiler (D525, H10): every module of the compiler through `fmt -` into a
+# scratch tree, a compiler built from it, and the compiler it builds from the original
+# sources is the stable stage byte for byte -- the formatter changed nothing that reaches
+# the code, over sixty-five thousand lines.
+$formattedSrc = Join-Path $testBuild 'formatted-src'
+if (Test-Path -LiteralPath $formattedSrc) { Remove-Item -LiteralPath $formattedSrc -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $formattedSrc 'src') | Out-Null
+Get-ChildItem -LiteralPath (Join-Path $repo 'src') -File | ForEach-Object {
+    if ($_.Extension -eq '.e') {
+        cmd /c "`"$compiler`" fmt - < `"$($_.FullName)`" > `"$(Join-Path $formattedSrc "src\$($_.Name)")`""
+        if ($LASTEXITCODE -ne 0) { throw "fmt of $($_.Name) failed" }
+    } else {
+        Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $formattedSrc 'src')
+    }
+}
+$formattedCompiler = Join-Path $testBuild 'neper-formatted.exe'
+& $ownCompilerPath emit-executable (Join-Path $formattedSrc 'src\main.e') $repo 'x64' 'windows' $formattedCompiler | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $formattedCompiler)) { throw 'the compiler did not build from its formatted sources' }
+$formattedBuilt = Join-Path $testBuild 'neper-by-formatted.exe'
+& $formattedCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $formattedBuilt | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $formattedBuilt)) { throw 'the compiler built from formatted sources did not build the compiler' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $formattedBuilt).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built from formatted sources does not build the stable stage' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

@@ -11028,3 +11028,18 @@ D502 has it. A plan over overlays writes its preconditions from the buffers'
 bytes, so it applies once they are saved and to nothing else. Both suites
 check a root buffer with a second call and a dependency buffer that does not
 check, the files untouched and read again without the flag.
+
+## D525 -- The formatter as a metamorphic transformation
+
+`neper fmt` is a layout formatter that must change nothing a program does
+(tooling section 6), and the corpus fixed its rules on small fixtures. The
+metamorphic harness now holds it to that over programs: `formatted` puts the
+root module through `fmt -`, requires formatting the result again to change
+nothing, and the program to behave the same, the image free to differ since
+trap records carry columns. And both suites hold it to that over the compiler
+itself: every module of `src/` through `fmt -` into a scratch tree, a
+compiler built from it, and the compiler that one builds from the original
+sources must be the stable stage byte for byte -- the formatter's contract
+over sixty-five thousand lines, the compiler's own sources not being
+formatted, which is what makes the check bite. Found on the way: `fmt FILE`
+formats in place, so a probe formats `-` from stdin.

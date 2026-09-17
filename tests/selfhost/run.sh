@@ -3519,6 +3519,22 @@ done
 # The deterministic half of the performance gate (D506, H25): sc500k's image and arenas against the static baseline.
 python3 "$repo/benchmarks/baseline/static.py" --compiler "$own_compiler_path" --repo "$repo" --host linux --out "$test_build/static-linux.json" --fixtures "$test_build/baseline-fixtures"
 python3 "$repo/benchmarks/baseline/gate.py" "$test_build/static-linux.json" --baseline "$repo/benchmarks/baseline/results/static-linux.json"
+# The formatted compiler (D525, H10): built from every module through `fmt -`, it builds the stable stage.
+formatted_src="$test_build/formatted-src"
+rm -rf "$formatted_src"
+mkdir -p "$formatted_src/src"
+for module in "$repo"/src/*; do
+    case "$module" in
+        *.e) "$test_build/neper-self" fmt - < "$module" > "$formatted_src/src/$(basename "$module")" ;;
+        *) cp "$module" "$formatted_src/src/" ;;
+    esac
+done
+formatted_written=$("$own_compiler_path" emit-executable "$formatted_src/src/main.e" "$repo" x64 linux "$test_build/neper-formatted")
+[ "$formatted_written" = 'executable written' ]
+chmod +x "$test_build/neper-formatted"
+by_formatted_written=$("$test_build/neper-formatted" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-formatted")
+[ "$by_formatted_written" = 'executable written' ]
+cmp "$test_build/neper-by-formatted" "$stable_compiler_path"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
