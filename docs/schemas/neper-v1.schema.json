@@ -927,6 +927,14 @@
             "off"
           ]
         },
+        "standing": {
+          "enum": [
+            "planned",
+            "present",
+            "supported-on-target",
+            "verified"
+          ]
+        },
         "grammar_revision": {
           "type": "integer",
           "minimum": 1

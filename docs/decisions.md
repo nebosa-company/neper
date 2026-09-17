@@ -11688,3 +11688,17 @@ explicit fixture-to-production map, so treating that coverage as direct evidence
 each individual rule would overstate what the evidence says. A future executable map
 can promote rows to `verified` without introducing a second hand-maintained grammar
 registry; until then, the generated table and card hash expose the honest boundary.
+
+## D568 -- API catalogue standing comes from the checked target
+
+Each function subject emitted by `context-file --module` now carries
+`"standing":"supported-on-target"`. The catalogue is produced only after the whole
+program has checked for the requested concrete target, so that standing follows from
+the same compiler evidence as the signatures and contract facts; it is not a second
+API registry.
+
+The stream schema admits the full H11 vocabulary -- `planned`, `present`,
+`supported-on-target` and `verified` -- but the compiler does not overstate the
+evidence it has. An absent or merely planned API cannot enter this checked-source
+catalogue, and no function is called `verified` until an explicit API-to-executable-
+test relation exists. The existing per-target catalogue goldens pin the new field.

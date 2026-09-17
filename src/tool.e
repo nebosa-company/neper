@@ -3348,7 +3348,7 @@ fn type_context_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Grap
 
 // The subject record of a context answer (D361): the snapshot's identity and the
 // function's declaration point.
-fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative: str, path: str, source: str, digest: str, target_name: str, checks: str, declared_at: usize) -> err {
+fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative: str, path: str, source: str, digest: str, target_name: str, checks: str, standing: str, declared_at: usize) -> err {
     try text(out, "{\"record\":\"subject\",\"subject\":")
     try quoted(out, subject)
     try text(out, ",\"kind\":\"fn\",\"source\":")
@@ -3361,6 +3361,10 @@ fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative:
     try quoted(out, target_name)
     try text(out, ",\"checks\":")
     try quoted(out, checks)
+    if standing.len != 0usize {
+        try text(out, ",\"standing\":")
+        try quoted(out, standing)
+    }
     try text(out, ",\"grammar_revision\":3,\"span\":")
     var declaration: lex.Token = zero
     declaration.start = declared_at
@@ -3747,7 +3751,7 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
                 var subject_at = nptest_copy(subject_storage, 0usize, module_name)
                 if subject_at < subject_storage.len { subject_storage[subject_at] = 46u8 }
                 subject_at = nptest_copy(subject_storage, subject_at + 1usize, function.name)
-                try subject_record(&out, g, subject_storage[0usize..subject_at], root, relative, path, module.text, digest, target_name, checks, function.source_start)
+                try subject_record(&out, g, subject_storage[0usize..subject_at], root, relative, path, module.text, digest, target_name, checks, "supported-on-target", function.source_start)
                 page.written += 1usize
             } else {
                 if page.total > page.cursor { page.omitted += 1usize }
@@ -3839,7 +3843,7 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
     if digest_error != ok { ret digest_error }
     out.lines = module.lines
     // The subject record: identity of the snapshot and the subject, always written.
-    try subject_record(&out, g, subject, root, relative, path, module.text, digest, target_name, checks, function.source_start)
+    try subject_record(&out, g, subject, root, relative, path, module.text, digest, target_name, checks, "", function.source_start)
     var page: Page = zero
     page.cursor = cursor
     page.budget = budget
