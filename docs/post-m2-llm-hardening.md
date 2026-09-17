@@ -704,7 +704,12 @@ The batch transport now exposes the first reusable accounting slice (D558): live
 and reserved arena bytes, the checked snapshot, the session baseline after loading
 the batch, and peak temporary request bytes. The before/after fixture proves that a
 nonzero peak is reclaimed to the same retained baseline. Eviction, pinning and the
-10,000-cycle fixed-budget acceptance remain open.
+full edit/query/revert fixed-budget acceptance remain open.
+
+The fixed-budget batch soak now runs ten thousand context queries against one checked
+snapshot on both hosts (D559). Its final memory report counts all ten thousand,
+records a nonzero temporary peak, and has returned exactly to the original session
+baseline. Edit/revert cycling, eviction and pinning remain open.
 
 ## 20. H17 — semantic search and safe change planning
 

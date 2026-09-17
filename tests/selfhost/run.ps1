@@ -2794,6 +2794,19 @@ $batchMemory = & $compiler query-batch (Join-Path $conformanceRoot 'tools/contra
 if ($LASTEXITCODE -ne 0) { throw "query-batch with memory lines failed" }
 $batchMemoryRecords = @($batchMemory | Where-Object { $_ -match '"arena_used"' } | ForEach-Object { ($_ | ConvertFrom-Json).data })
 if ($batchMemoryRecords.Count -ne 2 -or $batchMemoryRecords[0].request_peak -ne 0 -or $batchMemoryRecords[1].request_peak -le 0 -or $batchMemoryRecords[0].session_used -ne $batchMemoryRecords[1].session_used -or $batchMemoryRecords[1].arena_used -ne $batchMemoryRecords[1].session_used -or $batchMemoryRecords[1].snapshot_used -ge $batchMemoryRecords[1].session_used -or $batchMemoryRecords[1].arena_capacity -lt $batchMemoryRecords[1].arena_used) { throw "the batch retained request memory or reported the wrong accounting ($($batchMemoryRecords | ConvertTo-Json -Compress))" }
+# Ten thousand queries under one fixed snapshot (D559, H16): all complete, the
+# largest request is reported, and live allocation returns to the session baseline.
+$batchSoakInput = Join-Path $testBuild 'batch-soak.txt'
+$batchSoakOutput = Join-Path $testBuild 'batch-soak.jsonl'
+$batchSoakText = [Text.StringBuilder]::new(280000)
+$null = $batchSoakText.AppendLine('memory')
+for ($batchSoakAt = 0; $batchSoakAt -lt 10000; $batchSoakAt++) { $null = $batchSoakText.AppendLine('context contract.main 8') }
+$null = $batchSoakText.AppendLine('memory')
+[IO.File]::WriteAllText($batchSoakInput, $batchSoakText.ToString())
+cmd /c "`"$compiler`" query-batch `"$(Join-Path $conformanceRoot 'tools/contract.e')`" `"$repo`" x64 windows --json --batch `"$batchSoakInput`" > `"$batchSoakOutput`""
+if ($LASTEXITCODE -ne 0) { throw "the 10,000-query batch soak failed" }
+$batchSoakMemory = @(Select-String -LiteralPath $batchSoakOutput -Pattern '"arena_used"' | ForEach-Object { ($_.Line | ConvertFrom-Json).data })
+if ($batchSoakMemory.Count -ne 2 -or $batchSoakMemory[0].queries_completed -ne 0 -or $batchSoakMemory[1].queries_completed -ne 10000 -or $batchSoakMemory[1].request_peak -le 0 -or $batchSoakMemory[0].session_used -ne $batchSoakMemory[1].session_used -or $batchSoakMemory[1].arena_used -ne $batchSoakMemory[1].session_used) { throw "the 10,000-query batch did not reclaim to its fixed baseline ($($batchSoakMemory | ConvertTo-Json -Compress))" }
 # The catalogue (D397, H11): every function of the module, subjects and facts under one
 # budget; the byte budget (D400, H08) ends the page at the record that crosses it.
 $catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'

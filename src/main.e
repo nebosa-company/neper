@@ -9332,6 +9332,7 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
     }
     let session_used = mem.stats(a).used
     var request_peak = 0usize
+    var queries_completed = 0usize
     var refused = false
     var line_start = 0usize
     while line_start < batch.len {
@@ -9362,6 +9363,7 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
         if word_count > 4usize && decimal_ok(words[4usize]) { cursor = decimal_value(words[4usize]) }
         var line_error = ok
         var known = false
+        var query = false
         // A request arena of its own (D410, H16): what a query allocates -- its
         // output storage, its site tables -- is given back when the line is answered,
         // so a batch of a thousand lines holds what one line holds. The snapshot --
@@ -9370,18 +9372,21 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
         let request_mark = mem.mark(a)
         if word_count >= 1usize && same(words[0usize], "memory") {
             known = true
-            line_error = tool.batch_memory(a, snapshot_used, session_used, request_peak)
+            line_error = tool.batch_memory(a, snapshot_used, session_used, request_peak, queries_completed)
         }
         if word_count >= 2usize && same(words[0usize], "context") {
             known = true
+            query = true
             line_error = tool.context_json(a, checker, loaded, words[1usize], budget, byte_budget, cursor, target_text, checks)
         }
         if word_count >= 2usize && same(words[0usize], "catalog") {
             known = true
+            query = true
             line_error = tool.catalog_json(a, checker, loaded, words[1usize], budget, byte_budget, cursor, target_text, checks)
         }
         if word_count >= 2usize && same(words[0usize], "uses") {
             known = true
+            query = true
             line_error = tool.uses_json(a, checker, loaded, words[1usize])
         }
         if !known {
@@ -9393,6 +9398,7 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
             request_peak = request_end - session_used
         }
         mem.reset(a, request_mark)
+        if query && line_error == ok { queries_completed += 1usize }
         if line_error == tool.Refused { refused = true } else { if line_error != ok { ret line_error } }
     }
     if refused { ret tool.Refused }

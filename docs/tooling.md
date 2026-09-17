@@ -415,7 +415,9 @@ The `memory` result separates retained and temporary storage (D558, H16):
 `snapshot_used` is the checked graph/checker before the batch input is loaded;
 `session_used` is the baseline retained for the batch; and `request_peak` is the
 largest temporary allocation of any completed line before its request arena was
-reset. Thus a report after warmup shows both the peak work and that live memory
+reset. `queries_completed` counts successful context, catalogue and uses lines
+before this memory report. Thus a report after warmup shows both the completed
+work, its peak, and that live memory
 returned to the session baseline instead of merely relying on process exit.
 
 Standalone `--unchecked` applies one intended image policy to the whole batch

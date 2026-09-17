@@ -11539,3 +11539,18 @@ reserved totals. Both suites require a zero peak before the first query, a nonze
 peak after context/catalogue/uses queries, the same session baseline before and
 after, live memory returned exactly to that baseline, and reserved memory no smaller
 than live memory. Snapshot eviction and pinning remain H16's separate open work.
+
+## D559 -- Ten thousand reclaimed queries
+
+The retained-memory fields become an acceptance test rather than a short example.
+Each self-host suite now runs ten thousand context queries against one checked
+snapshot and one fixed arena, bracketed by `memory` lines. A memory result gains
+`queries_completed`, the count of successful context, catalogue and uses requests
+before that report, so the final assertion proves that the whole soak ran rather
+than only observing a process that remained alive.
+
+On both hosts the initial count is zero, the final count is ten thousand, temporary
+request allocation has a nonzero peak, and live allocation after the last request is
+exactly the original session baseline. This satisfies H16's ten-thousand-query and
+retained-memory-after-warmup slice without introducing a persistent server; edit and
+revert cycles, snapshot pinning/eviction and backpressure remain open.

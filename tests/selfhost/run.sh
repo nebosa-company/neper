@@ -2641,6 +2641,21 @@ cmp -s "$test_build/conformance-tools-batch-broken.jsonl" "$conformance_root/too
 # the checked snapshot, the session baseline and the largest temporary request.
 batch_memory=$($test_build/neper-self query-batch "$conformance_root/tools/contract.e" "$repo" x64 linux --json --batch "$conformance_root/tools/batch_memory.txt")
 printf '%s\n' "$batch_memory" | python3 -c "import json,sys; rows=[json.loads(line)['data'] for line in sys.stdin if '\"arena_used\"' in line]; assert len(rows)==2; assert rows[0]['request_peak']==0 and rows[1]['request_peak']>0; assert rows[0]['session_used']==rows[1]['session_used']==rows[1]['arena_used']; assert rows[1]['snapshot_used']<rows[1]['session_used']; assert rows[1]['arena_capacity']>=rows[1]['arena_used']"
+# Ten thousand queries under one fixed snapshot (D559, H16): all complete and
+# live allocation returns to the session baseline after a nonzero request peak.
+batch_soak_input="$test_build/batch-soak.txt"
+batch_soak_output="$test_build/batch-soak.jsonl"
+{
+    printf 'memory\n'
+    batch_soak_at=0
+    while [ "$batch_soak_at" -lt 10000 ]; do
+        printf 'context contract.main 8\n'
+        batch_soak_at=$((batch_soak_at + 1))
+    done
+    printf 'memory\n'
+} > "$batch_soak_input"
+"$test_build/neper-self" query-batch "$conformance_root/tools/contract.e" "$repo" x64 linux --json --batch "$batch_soak_input" > "$batch_soak_output"
+python3 -c "import json,sys; rows=[json.loads(line)['data'] for line in open(sys.argv[1]) if '\"arena_used\"' in line]; assert len(rows)==2; assert rows[0]['queries_completed']==0 and rows[1]['queries_completed']==10000; assert rows[1]['request_peak']>0; assert rows[0]['session_used']==rows[1]['session_used']==rows[1]['arena_used']" "$batch_soak_output"
 # The catalogue (D397, H11): every function of the module, subjects and facts under one
 # budget; the byte budget (D400, H08) ends the page at the record that crosses it.
 catalog_actual="$test_build/conformance-tools-catalog.jsonl"

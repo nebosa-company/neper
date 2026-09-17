@@ -3276,7 +3276,7 @@ fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative:
 // The `memory` line of a batch (D410, D558, H16): live versus reserved arena
 // bytes, the checked snapshot below the batch input, the session baseline after
 // that input, and the largest completed request before its storage was reclaimed.
-fn batch_memory(a: *mem.Arena, snapshot_used: usize, session_used: usize, request_peak: usize) -> err {
+fn batch_memory(a: *mem.Arena, snapshot_used: usize, session_used: usize, request_peak: usize, queries_completed: usize) -> err {
     let stats = mem.stats(a)
     var storage: [1024]u8 = zero
     var out: Out = zero
@@ -3292,6 +3292,8 @@ fn batch_memory(a: *mem.Arena, snapshot_used: usize, session_used: usize, reques
     try decimal(&out, session_used)
     try text(&out, ",\"request_peak\":")
     try decimal(&out, request_peak)
+    try text(&out, ",\"queries_completed\":")
+    try decimal(&out, queries_completed)
     try text(&out, "}}")
     ret flush(&out)
 }
