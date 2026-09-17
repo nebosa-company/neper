@@ -3540,6 +3540,11 @@ python3 "$repo/benchmarks/metamorphic/strip_comments.py" "$test_build/neper-self
 blanked_written=$("$own_compiler_path" emit-executable "$test_build/blanked-src/src/main.e" "$repo" x64 linux "$test_build/neper-blanked")
 [ "$blanked_written" = 'executable written' ]
 cmp "$test_build/neper-blanked" "$stable_compiler_path"
+# The compiler with its literals hoisted (D527, H03, H10): built from `src/` with every typed literal a constant, it is the stable stage.
+python3 "$repo/benchmarks/metamorphic/hoist_constants.py" "$test_build/neper-self" "$repo/src" "$test_build/hoisted-src/src"
+hoisted_written=$("$own_compiler_path" emit-executable "$test_build/hoisted-src/src/main.e" "$repo" x64 linux "$test_build/neper-hoisted")
+[ "$hoisted_written" = 'executable written' ]
+cmp "$test_build/neper-hoisted" "$stable_compiler_path"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

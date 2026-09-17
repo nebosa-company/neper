@@ -4181,6 +4181,38 @@ fn proof_by_width(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
 // `usize(b)` with `b: u8` are below 256 (`u16`, 65536); `e & N` with a literal `N` is
 // below `N + 1` whatever `e` is; `K + e` with a literal `K` and a bounded `e` is below
 // `K + bound`; a parenthesised expression is its inside's. Anything else is unbounded.
+// A constant the proofs read (D527, H03): an integer literal, or the name of a
+// settled integer `const` -- bare, or qualified through a `use` -- which folds to
+// the same value; a named constant had been no bound at all, so `at + LIMIT < len`
+// kept a check `at + 3usize < len` elided.
+fn proof_constant(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind == .LiteralExpr {
+        let (constant, constant_type, constant_error) = check.integer_literal_value(c, g.modules[module_index].text, node)
+        if constant_error != ok { ret (0usize, false) }
+        ret (constant, true)
+    }
+    var constant_module = module_index
+    var name = ""
+    if node.kind == .NameExpr {
+        if usize(node.token_start) >= c.token_count { ret (0usize, false) }
+        let token = c.tokens[usize(node.token_start)]
+        if token.kind != .Identifier { ret (0usize, false) }
+        name = g.modules[module_index].text[token.start..token.end]
+    } else {
+        if node.kind != .FieldExpr { ret (0usize, false) }
+        let (target_module, member, found) = check.qualified_member(c, g, tree, module_index, node)
+        if !found { ret (0usize, false) }
+        constant_module = target_module
+        name = member
+    }
+    let (constant_index, is_constant) = check.find_constant(c, constant_module, name)
+    if !is_constant { ret (0usize, false) }
+    let constant = c.constants[constant_index]
+    if constant.state != 2u8 || constant.ty.kind != .Integer || constant.value.negative { ret (0usize, false) }
+    ret (constant.value.magnitude, true)
+}
+
 fn proof_bound(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, index_index: usize) -> (usize, bool) {
     let node = tree.nodes[index_index]
     let text = g.modules[module_index].text
@@ -4237,15 +4269,15 @@ fn proof_bound(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
             at += 1usize
         }
         if right_index == left_index { ret (0usize, false) }
-        var literal_index = right_index
         var other_index = left_index
-        if tree.nodes[literal_index].kind != .LiteralExpr {
-            literal_index = left_index
+        var (constant, is_constant) = proof_constant(c, g, tree, module_index, right_index)
+        if !is_constant {
             other_index = right_index
+            let (left_constant, left_is_constant) = proof_constant(c, g, tree, module_index, left_index)
+            constant = left_constant
+            is_constant = left_is_constant
         }
-        if tree.nodes[literal_index].kind != .LiteralExpr { ret (0usize, false) }
-        let (constant, constant_type, constant_error) = check.integer_literal_value(c, text, tree.nodes[literal_index])
-        if constant_error != ok { ret (0usize, false) }
+        if !is_constant { ret (0usize, false) }
         if operator == .PunctAmp { ret (constant + 1usize, true) }
         let (other_bound, other_bounded) = proof_bound(c, g, tree, module_index, other_index)
         if !other_bounded { ret (0usize, false) }
@@ -4706,9 +4738,9 @@ fn proof_offset_form(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         if parse.child_is_node_at(tree, at) { right_index = parse.child_index_at(tree, at) }
         at += 1usize
     }
-    if right_index == left_index || tree.nodes[left_index].kind != .NameExpr || tree.nodes[right_index].kind != .LiteralExpr { ret (0usize, 0usize, false) }
-    let (constant, constant_type, constant_error) = check.integer_literal_value(c, g.modules[module_index].text, tree.nodes[right_index])
-    if constant_error != ok { ret (0usize, 0usize, false) }
+    if right_index == left_index || tree.nodes[left_index].kind != .NameExpr { ret (0usize, 0usize, false) }
+    let (constant, is_constant) = proof_constant(c, g, tree, module_index, right_index)
+    if !is_constant { ret (0usize, 0usize, false) }
     ret (left_index, constant, true)
 }
 

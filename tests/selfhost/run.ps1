@@ -3498,6 +3498,16 @@ $blankedCompiler = Join-Path $testBuild 'neper-blanked.exe'
 & $ownCompilerPath emit-executable (Join-Path $blankedSrc 'src\main.e') $repo 'x64' 'windows' $blankedCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $blankedCompiler)) { throw 'the compiler did not build from its sources without comments' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $blankedCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built without its comments is not the stable stage' }
+# The compiler with its literals hoisted (D527, H03, H10): every typed integer literal of
+# `src/` made a module constant, and the compiler built from the result is the stable
+# stage byte for byte -- the proofs read a named constant as they read a literal.
+$hoistedSrc = Join-Path $testBuild 'hoisted-src'
+& python (Join-Path $repo 'benchmarks/metamorphic/hoist_constants.py') $compiler (Join-Path $repo 'src') (Join-Path $hoistedSrc 'src')
+if ($LASTEXITCODE -ne 0) { throw 'the literals of the compiler could not be hoisted' }
+$hoistedCompiler = Join-Path $testBuild 'neper-hoisted.exe'
+& $ownCompilerPath emit-executable (Join-Path $hoistedSrc 'src\main.e') $repo 'x64' 'windows' $hoistedCompiler | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $hoistedCompiler)) { throw 'the compiler did not build from its sources with the literals hoisted' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hoistedCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built with its literals hoisted is not the stable stage' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

@@ -11054,3 +11054,18 @@ holds, and both suites build a compiler from the result and require it to be
 the stable stage byte for byte -- the line tables and trap records carrying
 lines and columns the blanks keep, the six thousand comments of the compiler
 reaching nothing. Five seconds a suite, the token streams being the cost.
+
+## D527 -- A named constant is a literal to the proofs
+
+The metamorphic turn of D525 and D526, taken with D508's transformation --
+every typed integer literal of `src/` hoisted to a module constant, nineteen
+hundred and fifty of them -- built a compiler three kilobytes larger than the
+stable stage, in twenty-eight functions: the bounds and overflow proofs of
+lowering read a literal by its token, so `at + 1usize < args.len` proved the
+access `args[at]` and `at + K00005 < args.len` did not, and the check stayed.
+The proofs now read a constant -- an integer literal, or the name of a
+settled integer `const`, bare or through a `use` qualifier -- as one value,
+and the hoisted compiler is the stable stage byte for byte, which both suites
+hold with `benchmarks/metamorphic/hoist_constants.py`. A program guarding by
+a named limit, as the standard library and the compiler do, loses the checks
+the guard proves.
