@@ -2773,6 +2773,9 @@ generated_status=0
 [ "$generated_status" -eq 2 ]
 grep -q 'a generator owns' "$test_build/generated-apply.txt"
 cmp -s "$test_build/generated-scratch/src/deep.e" "$generated_fixture/src/deep.e"
+# The uses of a type (D516, H17): every annotation and literal naming it.
+(cd "$conformance_root/tools/plan_rename_type" && "$test_build/neper-self" uses-file src/main.e "$repo" x64 linux --json --symbol deep.Rec > "$test_build/conformance-tools-uses-type.jsonl")
+cmp -s "$test_build/conformance-tools-uses-type.jsonl" "$conformance_root/tools/uses_type.expected.jsonl" || { echo "uses-file --json over a type differs from the conformance corpus" >&2; exit 1; }
 # A type's rename (D515, H17, H29): every reference and the declaration, applied and run.
 type_fixture="$conformance_root/tools/plan_rename_type"
 (cd "$type_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol deep.Rec --to Pair > "$test_build/conformance-tools-plan-rename-type.jsonl")

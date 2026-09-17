@@ -3763,9 +3763,13 @@ fn uses_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str) ->
     // An error (D451, H17): `module.Name`, every value naming it.
     let (error_symbol, is_error) = uses_error_subject(c, g, subject)
     if is_error { ret sites_uses_json(a, &out, c, g, 7u8, error_symbol, "error") }
+    // A type (D516, H17): `module.Name`, every annotation and literal naming it,
+    // from the index of every module, as the type's rename plan finds them.
+    let (type_symbol, is_type) = uses_type_subject(c, g, subject)
+    if is_type { ret type_uses_json(a, &out, c, g, subject, type_symbol) }
     let (function_index, has_function) = uses_subject(c, g, subject)
     if !has_function {
-        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function, field or error of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function, type, field or error of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"uses\":0,\"roots\":0,\"complete\":true}}")
         try flush(&out)
@@ -4440,6 +4444,39 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
     ret flush(&out)
 }
 
+// The uses of a type (D516, H17): one `use` record per site the index resolves to
+// it, relation `type`, in the function the site lies in; the declaration is not a use.
+fn type_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, subject: str, type_symbol: usize) -> err {
+    let (sites, sites_error) = type_sites(a, c, g, subject, type_symbol)
+    if sites_error != ok { ret sites_error }
+    var written = 0usize
+    var site = 0usize
+    while site < sites.count {
+        if sites.kinds[site] != 0u8 {
+            let module = g.modules[sites.modules[site]]
+            let (root, relative) = source_identity_of(g, module.path)
+            let (path, path_error) = manifest_slashes(a, relative)
+            if path_error != ok { ret path_error }
+            out.lines = module.lines
+            var here: lex.Token = zero
+            here.start = sites.offsets[site]
+            here.end = sites.offsets[site]
+            try text(out, "{\"record\":\"use\",\"relation\":\"type\",\"provenance\":\"compiler-proved\",\"in\":")
+            try quoted_function(out, c, g, enclosing_function(c, sites.modules[site], sites.offsets[site]))
+            try text(out, ",\"span\":")
+            try point_span(out, root, path, module.text, here)
+            try byte(out, 125u8)
+            try flush(out)
+            written += 1usize
+        }
+        site += 1usize
+    }
+    try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"uses\":")
+    try decimal(out, written)
+    try text(out, ",\"roots\":0,\"indirect_calls\":0,\"complete\":true}}")
+    ret flush(out)
+}
+
 // The type a subject `module.Name` names (D515): its symbol, when it is one.
 fn uses_type_subject(c: *check.Checker, g: *graph.Graph, subject: str) -> (usize, bool) {
     var dot = subject.len
@@ -4478,21 +4515,21 @@ fn captured_number(line: str, key: str, from: usize) -> (usize, usize, bool) {
     ret (0usize, line.len, false)
 }
 
-// The rename of a type (D515, H17, H29): every module's index is taken in memory,
-// and each `reference` record whose `target_qualified_name` is the type -- an
-// annotation, a literal, a qualified or a bare spelling -- gives a site, its name
-// the last bytes of the reference's span; the type's own `symbol` record gives the
-// declaration's. The plan is the same shape as a function's.
-fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, subject: str, type_symbol: usize, to: str) -> err {
+// The sites of a type across the program (D515, D516): every module's index is
+// taken in memory, and each `reference` record whose `target_qualified_name` is the
+// type -- an annotation, a literal, a qualified or a bare spelling -- gives a site,
+// its name the last bytes of the reference's span; the type's own `symbol` record
+// gives the declaration's, kind 0. In (module, offset) order.
+fn type_sites(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, type_symbol: usize) -> (PlanSites, err) {
     let symbol = c.resolver.symbols[type_symbol]
     let name = symbol.name
     var sites: PlanSites = zero
     let (site_modules, modules_error) = mem.alloc[usize](a, 4096usize)
-    if modules_error != ok { ret modules_error }
+    if modules_error != ok { ret (sites, modules_error) }
     let (site_offsets, offsets_error) = mem.alloc[usize](a, 4096usize)
-    if offsets_error != ok { ret offsets_error }
+    if offsets_error != ok { ret (sites, offsets_error) }
     let (site_kinds, kinds_error) = mem.alloc[u8](a, 4096usize)
-    if kinds_error != ok { ret kinds_error }
+    if kinds_error != ok { ret (sites, kinds_error) }
     var site_count = 0usize
     var module_at = 0usize
     while module_at < g.count {
@@ -4501,13 +4538,13 @@ fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.
         // The whole index at once, where the command flushes it record by record:
         // a module of many short declarations runs to thirty bytes per source byte.
         let (storage, storage_error) = mem.alloc[u8](a, module.text.len * 40usize + 65536usize)
-        if storage_error != ok { ret storage_error }
+        if storage_error != ok { ret (sites, storage_error) }
         var taken: Out = zero
         taken.bytes = storage
         taken.capture = true
         let (root, relative) = source_identity_of(g, module.path)
         let (index_exit, index_error) = index_json_into(a, &taken, root, relative, module.text, module.name, module_at, c.resolver.symbols[0usize..c.resolver.count], c.resolver.count, "")
-        if index_error != ok { ret index_error }
+        if index_error != ok { ret (sites, index_error) }
         let records = taken.bytes[0usize..taken.count]
         var line_start = 0usize
         while line_start < records.len {
@@ -4546,7 +4583,7 @@ fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.
                 }
             }
             if is_site {
-                if site_count == site_modules.len { ret Capacity }
+                if site_count == site_modules.len { ret (sites, Capacity) }
                 site_modules[site_count] = module_at
                 site_offsets[site_count] = offset
                 site_kinds[site_count] = 1u8
@@ -4561,6 +4598,19 @@ fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.
     sites.offsets = site_offsets
     sites.kinds = site_kinds
     sites.count = site_count
+    ret (sites, ok)
+}
+
+// The rename of a type (D515, H17, H29): the plan is the same shape as a function's.
+fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, subject: str, type_symbol: usize, to: str) -> err {
+    let symbol = c.resolver.symbols[type_symbol]
+    let name = symbol.name
+    let (sites, sites_error) = type_sites(a, c, g, subject, type_symbol)
+    if sites_error != ok { ret sites_error }
+    let site_modules = sites.modules
+    let site_offsets = sites.offsets
+    let site_kinds = sites.kinds
+    let site_count = sites.count
     let (files, preconditions_error) = plan_preconditions(a, out, g, sites)
     if preconditions_error != ok { ret preconditions_error }
     var site = 0usize

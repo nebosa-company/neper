@@ -10917,3 +10917,11 @@ compiler does it from inside now. `plan_rename_type` pins six edits over two
 modules per host, applied to a copy that builds and exits the same. Found on
 the way: `index-file` over `e.mem` and `e.os` failed, since a seeded symbol
 has no tokens; the index leaves those out now.
+
+## D516 -- The uses of a type
+
+`uses-file` refused a type as `plan-rename-file` had. The sites D515 finds
+for the rename are the uses: a subject naming a type now reports one `use`
+per annotation or literal that resolves to it, relation `type`, in the
+function the site lies in, from the index of every module; the declaration
+is not a use. `uses_type` pins five sites over two modules on both hosts.

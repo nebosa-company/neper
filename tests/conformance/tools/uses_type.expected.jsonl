@@ -1,0 +1,7 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"uses","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"use","relation":"type","provenance":"compiler-proved","in":"main.total","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":353,"byte_end":353,"line":8,"column":15,"end_line":8,"end_column":15,"column_utf16":15,"end_column_utf16":15}}
+{"record":"use","relation":"type","provenance":"compiler-proved","in":"main.main","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":430,"byte_end":430,"line":13,"column":15,"end_line":13,"end_column":15,"column_utf16":15,"end_column_utf16":15}}
+{"record":"use","relation":"type","provenance":"compiler-proved","in":"main.main","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":479,"byte_end":479,"line":14,"column":14,"end_line":14,"end_column":14,"column_utf16":14,"end_column_utf16":14}}
+{"record":"use","relation":"type","provenance":"compiler-proved","in":"deep.make","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":70,"byte_end":70,"line":3,"column":22,"end_line":3,"end_column":22,"column_utf16":22,"end_column_utf16":22}}
+{"record":"use","relation":"type","provenance":"compiler-proved","in":"deep.make","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":84,"byte_end":84,"line":4,"column":9,"end_line":4,"end_column":9,"column_utf16":9,"end_column_utf16":9}}
+{"record":"result","ok":true,"exit_code":0,"data":{"uses":5,"roots":0,"indirect_calls":0,"complete":true}}

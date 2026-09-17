@@ -448,7 +448,9 @@ anywhere in the program, by module then byte offset: a `use` record with
 constant's initializer, evaluated at compile time, included, D510, so a function
 only a constant reaches has that use and the plans that site),
 `dispatch` (a protocol call that chose it), `instance` (an instantiation of it),
-`value` (its name taken as a function value) -- `provenance` (`compiler-proved`),
+`value` (its name taken as a function value), or `type` (D516: the subject names a
+type, and every annotation and literal naming it, through a qualifier or bare, from
+the index of every module, is a use) -- `provenance` (`compiler-proved`),
 `in` (the function the use lies in), and `span`. A subject `module.Type.field`
 (D420, H17) names a field: its uses are every access `x.field` and every literal
 `{ field: .. }` the checker typed, relation `field`, and `plan-rename-file` over

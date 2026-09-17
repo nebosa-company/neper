@@ -2476,6 +2476,11 @@ Copy-Item -Recurse $generatedFixture $generatedScratch
 $generatedApply = & $compiler apply-plan $generatedPlanActual --root (Join-Path $generatedScratch 'src') 2>&1 | Out-String
 if ($LASTEXITCODE -ne 2 -or $generatedApply -notmatch 'a generator owns') { throw "apply-plan did not refuse an edit a generator owns (exit $LASTEXITCODE): $generatedApply" }
 if ((Get-Content -Raw -LiteralPath (Join-Path $generatedScratch 'src\deep.e')) -ne (Get-Content -Raw -LiteralPath (Join-Path $generatedFixture 'src\deep.e'))) { throw 'a refused plan applied its plain edit' }
+# The uses of a type (D516, H17): every annotation and literal naming it, in both modules.
+$typeUsesActual = Join-Path $testBuild 'conformance-tools-uses-type.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\plan_rename_type')`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol deep.Rec > `"$typeUsesActual`""
+if ($LASTEXITCODE -ne 0) { throw 'uses-file --json over a type failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $typeUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_type.expected.jsonl')).Hash) { throw 'uses-file --json over a type differs from the conformance corpus' }
 # A type's rename (D515, H17, H29): every reference through the alias and bare, and the
 # declaration; applied to a copy, the program builds and exits the same.
 $typeFixture = Join-Path $conformanceRoot 'tools\plan_rename_type'
