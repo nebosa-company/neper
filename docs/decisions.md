@@ -11777,3 +11777,18 @@ The existing `context_moves.width` query pins the correction on both targets:
 `fn width[T: type](v: T) -> usize`. This is retrieval evidence for the template
 itself, not evidence that every possible instantiation is supported; catalogue
 standing remains a separate claim.
+
+## D574 -- Module catalogues include generic API templates
+
+`context-file --module` now includes generic declarations instead of silently
+omitting them. An uninstantiated template is `present`: its declaration was checked,
+but no concrete target support is claimed for every possible argument. When an
+executable `@test` reaches a concrete instance, the existing checked call graph
+normalises that instance to its template, promotes the catalogue subject to
+`verified`, and names the witnessing test.
+
+The test-project catalogue pins both boundaries on both targets: `helper.same` is
+verified through `nested.deep.holds`, while unused `helper.untouched` remains present.
+This completes the D570-D574 batch, so the generated progress page now credits the
+checked API-to-test relation, explicit unavailable subjects, exact generic signatures,
+and generic catalogue coverage without claiming the pending SL01-SL11 migrations.

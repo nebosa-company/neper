@@ -17,3 +17,11 @@ fn doubles(a: *mem.Arena) -> err {
 fn is_odd(a: *mem.Arena) -> err {
     ret Odd
 }
+
+fn same[T: type](x: T) -> T {
+    ret x
+}
+
+fn untouched[T: type](x: T) -> T {
+    ret x
+}

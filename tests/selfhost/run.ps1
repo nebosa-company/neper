@@ -2826,8 +2826,8 @@ $unavailableCatalogActual = Join-Path $testBuild 'conformance-tools-catalog-unav
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file contract.e `"$repo`" x64 windows --json --module e.gpu --budget 64 > `"$unavailableCatalogActual`""
 if ($LASTEXITCODE -ne 2) { throw "the unavailable module catalogue exited $LASTEXITCODE, not 2" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $unavailableCatalogActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/catalog_unavailable.expected.jsonl')).Hash) { throw "the unavailable module catalogue differs from the conformance corpus" }
-# API verification (D570, H11): a non-test function reached by an executable @test
-# is verified and names one witness; test functions do not verify themselves.
+# API verification (D570, D574, H11): a non-test function reached by an executable
+# @test is verified and names one witness; an unused generic template stays present.
 $verifiedCatalogActual = Join-Path $testBuild 'conformance-tools-catalog-verified.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file test_project/src/nested/deep.e `"$repo`" x64 windows --json --module helper --budget 64 > `"$verifiedCatalogActual`""
 if ($LASTEXITCODE -ne 0) { throw "the verified API catalogue failed" }

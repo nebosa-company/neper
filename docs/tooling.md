@@ -385,8 +385,8 @@ with `standing: "unavailable"` (D572, H11/SL11), by the same checked-program
 boundary as an unavailable module catalogue.
 
 `neper context-file PATH ROOT ARCH OS --json --module module.name [--budget N]
-[--cursor N] [--unchecked]` (D397, H11) is the catalogue: every declared, non-generic function
-of the module in declaration order, each a `subject` record followed by its
+[--cursor N] [--unchecked]` (D397, D574, H11) is the catalogue: every declared
+function template of the module in declaration order, each a `subject` record followed by its
 contract facts (the signature through `resources`/`boundary`; the body's
 decisions are `--symbol`'s), under one budget that counts subjects and facts
 alike. A page may end inside a function's facts; the next page continues them,
@@ -395,6 +395,8 @@ has is an `E-CLI-9999` diagnostic and exit 2. Its result data repeats the reques
 `subject` with `standing: "unavailable"` (D571, H11/SL11). This is a statement about
 the checked program, not an inference from the design-only module plan; both direct
 and batch catalogue queries therefore cannot present a planned-only module as callable.
+A generic template is `present`; when an executable test reaches a concrete instance,
+the checked call graph promotes the template to `verified` and names that test (D574).
 
 Both direct forms take standalone `--unchecked` among their paging and overlay
 flags (D555, H27). It describes the intended whole-image check policy rather than

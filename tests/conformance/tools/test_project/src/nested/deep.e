@@ -5,6 +5,6 @@ use helper
 
 @test
 fn holds(a: *mem.Arena) -> err {
-    if helper.twice(4i32) == 8i32 { ret ok }
+    if helper.same[i32](helper.twice(4i32)) == 8i32 { ret ok }
     ret helper.Odd
 }

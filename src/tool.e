@@ -3785,7 +3785,7 @@ fn batch_line_refused(a: *mem.Arena, line: str) -> err {
 }
 
 // `context-file PATH ROOT ARCH OS --json --module module.name [--budget N] [--cursor N]`
-// (D397, H11): the catalogue -- every declared, non-generic function of one module
+// (D397, D574, H11): the catalogue -- every declared function template of one module
 // in declaration order, each a `subject` record and its contract facts, under one
 // record budget that counts subjects and facts alike. A page may end inside a
 // function's facts; the next page continues them, and the last subject written
@@ -3835,13 +3835,14 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
     var candidate = 0usize
     while candidate < c.signature_function_count {
         let function = c.functions[candidate]
-        if function.module_index == module_index && !function.generic && function.source_end > function.source_start {
+        if function.module_index == module_index && function.source_end > function.source_start {
             page.total += 1usize
             if page.total > page.cursor && page_open(&page, &out) {
                 var subject_at = nptest_copy(subject_storage, 0usize, module_name)
                 if subject_at < subject_storage.len { subject_storage[subject_at] = 46u8 }
                 subject_at = nptest_copy(subject_storage, subject_at + 1usize, function.name)
                 var standing = "supported-on-target"
+                if function.generic { standing = "present" }
                 if verified_by[candidate] < c.function_count { standing = "verified" }
                 try subject_record(&out, g, subject_storage[0usize..subject_at], root, relative, path, module.text, digest, target_name, checks, standing, function.source_start)
                 page.written += 1usize
