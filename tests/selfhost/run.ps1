@@ -3607,6 +3607,22 @@ foreach ($libTurn in @(@('strip_comments.py', 'lib-blanked'), @('hoist_constants
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $libCompiler)) { throw "the compiler did not build against the library turned by $($libTurn[0])" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $libCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler built against the library turned by $($libTurn[0]) is not the stable stage" }
 }
+# The formatted library (D549, H10): every module of `lib/` through `fmt -` into a
+# project of the compiler's sources, the compiler built against it, and the compiler
+# that one builds from the original tree is the stable stage byte for byte -- the
+# formatter moves lines, which reach the image as trap sites, so the turn is one on.
+$formattedLib = Join-Path $testBuild 'lib-formatted'
+if (Test-Path -LiteralPath $formattedLib) { Remove-Item -LiteralPath $formattedLib -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $formattedLib | Out-Null
+Copy-Item -Recurse (Join-Path $repo 'src') (Join-Path $formattedLib 'src')
+& python (Join-Path $repo 'benchmarks/metamorphic/format_tree.py') $compiler (Join-Path $repo 'lib') (Join-Path $formattedLib 'lib') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the library could not be formatted' }
+$formattedLibCompiler = Join-Path $testBuild 'neper-lib-formatted.exe'
+& $ownCompilerPath emit-executable (Join-Path $formattedLib 'src\main.e') $formattedLib 'x64' 'windows' $formattedLibCompiler | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $formattedLibCompiler)) { throw 'the compiler did not build against the formatted library' }
+$byFormattedLib = Join-Path $testBuild 'neper-by-lib-formatted.exe'
+& $formattedLibCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byFormattedLib | Out-Null
+if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $byFormattedLib).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built against the formatted library does not build the stable stage' }
 # The turns in release (D533, H10): the release self-build is the release stable
 # stage, built twice byte for byte; the trees whose image holds -- blanked, hoisted,
 # locals renamed -- build the same release image; the compilers of the other turns

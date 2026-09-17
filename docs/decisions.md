@@ -11370,3 +11370,16 @@ of their width, compared with 1 or with every member -- and traps `invalid`,
 debug and in release, and not under `--unchecked` or in a `@nocheck` block.
 A tagged union's tag, bytes through `mem.cast` and a foreign write stay
 unchecked. The fixture `link/trap_invalid` runs in every mode in both suites.
+
+## D549 -- The formatted library
+
+D525 formatted the compiler's own modules and D532 turned the library by
+blanking and hoisting; the formatter had not been over the library. It is
+now: `benchmarks/metamorphic/format_tree.py` puts every `.e` under a tree
+through `fmt -` into another, a hundred and four of the library's hundred
+and twelve modules moved by it, and a project of the compiler's sources
+over that library builds a compiler whose build of the original tree is
+the stable stage byte for byte, in both suites. The compiler built against
+the formatted library is not itself the stable image: the formatter moves
+lines, and lines reach the image as trap sites, so this turn is one on as
+D525's is. It held at the first attempt.

@@ -3628,6 +3628,15 @@ for lib_turn in "strip_comments.py lib-blanked" "hoist_constants.py lib-hoisted"
     [ "$lib_written" = 'executable written' ]
     cmp "$test_build/neper-$2" "$stable_compiler_path"
 done
+# The formatted library (D549, H10): the compiler built against `lib/` formatted builds the stable stage from the original tree.
+rm -rf "$test_build/lib-formatted"
+mkdir -p "$test_build/lib-formatted"
+cp -r "$repo/src" "$test_build/lib-formatted/src"
+python3 "$repo/benchmarks/metamorphic/format_tree.py" "$test_build/neper-self" "$repo/lib" "$test_build/lib-formatted/lib" > /dev/null
+[ "$("$own_compiler_path" emit-executable "$test_build/lib-formatted/src/main.e" "$test_build/lib-formatted" x64 linux "$test_build/neper-lib-formatted")" = 'executable written' ]
+chmod +x "$test_build/neper-lib-formatted"
+[ "$("$test_build/neper-lib-formatted" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-lib-formatted")" = 'executable written' ]
+cmp "$test_build/neper-by-lib-formatted" "$stable_compiler_path"
 # The turns in release (D533, H10): the release self-build twice, the image-holding trees, the turn compilers, the library.
 [ "$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-own-release" --release)" = 'executable written' ]
 [ "$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-own-release-again" --release)" = 'executable written' ]
