@@ -2499,6 +2499,39 @@ fn page_open(page: *Page, out: *Out) -> bool {
     ret page.byte_budget == 0usize || out.flushed < page.byte_budget
 }
 
+// The subject's module's dependencies (D498, H08): one fact per imported module,
+// naming it and its interface hash -- what the manifest's `dependencies` record
+// as `interface_sha256` -- so a harness holding an answer knows which interfaces
+// it rests on and sees one change without the whole snapshot. Counted against the
+// page like the contract facts, after them and before the body's decisions.
+fn dependency_facts(a: *mem.Arena, out: *Out, g: *graph.Graph, module_index: usize, page: *Page) -> err {
+    if module_index >= g.count { ret ok }
+    let module = g.modules[module_index]
+    var import_at = module.first_import
+    let import_end = module.first_import + module.import_count
+    while import_at < import_end {
+        let imported = g.imports[import_at].target
+        if imported < g.count {
+            page.total += 1usize
+            if page.total > page.cursor && page_open(page, out) {
+                let (digest, digest_error) = manifest_interface_sha256(a, g, imported)
+                if digest_error != ok { ret digest_error }
+                try text(out, "{\"record\":\"fact\",\"kind\":\"dependency\",\"provenance\":\"compiler-proved\",\"value\":\"")
+                try text(out, g.modules[imported].name)
+                try text(out, " interface ")
+                try text(out, digest)
+                try text(out, "\"}")
+                try flush(out)
+                page.written += 1usize
+            } else {
+                if page.total > page.cursor { page.omitted += 1usize }
+            }
+        }
+        import_at += 1usize
+    }
+    ret ok
+}
+
 // One function's contract facts (D361, D396), in their fixed order, counted
 // against the page: the signature, an ownership fact per `own` parameter, the
 // caller's contract per pointer parameter, the errors, the thread start, then the
@@ -3439,6 +3472,7 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
     page.budget = budget
     page.byte_budget = byte_budget
     try contract_facts(&out, c, g, function_index, &page)
+    try dependency_facts(a, &out, g, function.module_index, &page)
     var written = page.written
     var omitted = page.omitted
     var total = page.total

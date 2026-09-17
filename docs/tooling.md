@@ -329,7 +329,10 @@ about one declared function, under a record budget (64 by default):
   caller's views dangle); `errors` when a result is `err` (`fallible`, or `partial`
   beside other results); `threads` when the body starts a thread; then
   `resources` (the checker's rules held for the body) or
-  `boundary` (an `@unsafe` function, where they were not applied); then the body's
+  `boundary` (an `@unsafe` function, where they were not applied); then a
+  `dependency` fact per module the subject's module imports (D498, H08), naming
+  it and its interface hash -- the manifest's `interface_sha256` -- so an answer
+  can be held against the interfaces it rests on; then the body's
   decisions in source order -- `call` (the resolved target, or `unknown` for a
   call through a value), `dispatch`, `instance`, `discard`, `value` (a function
   named as a value), `move` (D486, H17: a resource consumed at the site --

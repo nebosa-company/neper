@@ -10657,3 +10657,15 @@ space is a product; strings and comments are skipped. The checker's own
 record of the skipped check would need the lowering, which `build-manifest-file`
 does not run, and the two paths must list the same sites (D457). The corpus
 fixture gains a product, a pointer type and two dereferences in its block.
+
+## D498 -- Dependency hashes on the context page
+
+H08 asked that a context answer carry the dependency hashes it rests on, not
+only the program's snapshot (D407), which changes with any edit anywhere. A
+function's page now has a `dependency` fact per module its module imports --
+the module's name and its interface hash, the same `interface_sha256` the
+manifest records (D320) -- after the contract facts and before the body's
+decisions, counted against the page as they are. A harness that cached an
+answer compares the interfaces it names; an edit that changes none of them,
+inside another module's bodies, leaves the answer standing. Every context
+golden gains its subjects' imports, re-pinned on both hosts.
