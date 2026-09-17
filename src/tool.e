@@ -210,6 +210,15 @@ fn header(out: *Out, command: str) -> err {
     ret flush(out)
 }
 
+// A stream's header alone (D520): for a query that fails before its records.
+fn stream_header(a: *mem.Arena, command: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, 512usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    ret header(&out, command)
+}
+
 fn result(out: *Out, succeeded: bool, exit_code: usize, tokens: usize, diagnostics: usize) -> err {
     if succeeded { try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":") } else { try text(out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":") }
     try decimal(out, exit_code)

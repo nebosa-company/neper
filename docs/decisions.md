@@ -10967,3 +10967,16 @@ checker are. Found beside it: the operand's own frames and the trap's span
 were named under `operand` while every other record of a project build named
 `main.e` under `project-src`; they are under the operand's identity now. Both
 suites pin the release frame and the operand's frame.
+
+## D520 -- A broken source answers as a stream
+
+H08's acceptance names partial and broken sources, and a probe found
+`context-file --json` over a program with one type error printing that
+error as text on stderr and nothing on stdout: a harness reading the JSON
+stream read nothing. `explain-file` had been given the stream shape for the
+case (D430); every other query has it now -- `context-file`, the catalogue,
+`uses-file`, the four plans, `test-impact-file` -- its header, the diagnostic
+as a record, a result of exit 1, and stderr empty. The batch keeps answering
+each line its own way. `query_broken` pins three of them on both hosts. The
+answer stops at the diagnostic: what the checker decided about the functions
+that do check is not yet offered, as `explain-file` offers its records.

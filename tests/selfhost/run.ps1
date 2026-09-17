@@ -2795,6 +2795,17 @@ foreach ($impactCase in @(@('helper', 'impact'), @('nested.deep', 'impact_local'
 }
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" test-impact-file test_project/src/nested/deep.e `"$repo`" x64 windows --json --changed nowhere > `"$(Join-Path $testBuild 'conformance-tools-impact-refused.jsonl')`""
 if ($LASTEXITCODE -ne 2) { throw "test-impact-file over an unknown module did not exit 2 (got $LASTEXITCODE)" }
+# A query over a program that does not check (D520, H08, H18): the stream, exit 1.
+foreach ($brokenCase in @(@('context-file', '--symbol', 'query_broken.helper', 'context_broken'), @('uses-file', '--symbol', 'query_broken.helper', 'uses_broken'), @('plan-rename-file', '--symbol', 'query_broken.helper', 'plan_rename_broken'))) {
+    $brokenActual = Join-Path $testBuild "conformance-tools-$($brokenCase[3]).jsonl"
+    $brokenStderr = Join-Path $testBuild "conformance-tools-$($brokenCase[3]).stderr"
+    $brokenTail = ''
+    if ($brokenCase[0] -eq 'plan-rename-file') { $brokenTail = ' --to aide' }
+    cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" $($brokenCase[0]) query_broken.e `"$repo`" x64 windows --json $($brokenCase[1]) $($brokenCase[2])$brokenTail > `"$brokenActual`" 2> `"$brokenStderr`""
+    if ($LASTEXITCODE -ne 1) { throw "$($brokenCase[0]) --json over a program that does not check exited $LASTEXITCODE, not 1" }
+    if ((Get-Item -LiteralPath $brokenStderr).Length -ne 0) { throw "$($brokenCase[0]) --json over a program that does not check wrote to stderr" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $brokenActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($brokenCase[3]).expected.jsonl")).Hash) { throw "$($brokenCase[0]) --json over a program that does not check differs from the conformance corpus" }
+}
 # `uses-file --json` (D362): every resolved use of one function, target-independent.
 $usesActual = Join-Path $testBuild 'conformance-tools-uses.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file explain.e `"$repo`" x64 windows --json --symbol explain.same > `"$usesActual`""

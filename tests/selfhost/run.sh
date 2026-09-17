@@ -2617,6 +2617,17 @@ done
 impact_refused=0
 (cd "$conformance_root/tools" && $test_build/neper-self test-impact-file test_project/src/nested/deep.e "$repo" x64 linux --json --changed nowhere > "$test_build/conformance-tools-impact-refused.jsonl") || impact_refused=$?
 [ "$impact_refused" -eq 2 ]
+# A query over a program that does not check (D520, H08, H18): the stream, exit 1.
+for broken_case in "context-file context_broken" "uses-file uses_broken" "plan-rename-file plan_rename_broken"; do
+    set -- $broken_case
+    broken_tail=""
+    if [ "$1" = "plan-rename-file" ]; then broken_tail="--to aide"; fi
+    broken_status=0
+    (cd "$conformance_root/tools" && "$test_build/neper-self" "$1" query_broken.e "$repo" x64 linux --json --symbol query_broken.helper $broken_tail > "$test_build/conformance-tools-$2.jsonl" 2> "$test_build/conformance-tools-$2.stderr") || broken_status=$?
+    [ "$broken_status" -eq 1 ]
+    [ ! -s "$test_build/conformance-tools-$2.stderr" ]
+    cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { echo "$1 --json over a program that does not check differs from the conformance corpus" >&2; exit 1; }
+done
 # `uses-file --json` (D362): every resolved use of one function.
 uses_actual="$test_build/conformance-tools-uses.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self uses-file explain.e "$repo" x64 linux --json --symbol explain.same > "$uses_actual")

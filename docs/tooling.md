@@ -441,6 +441,11 @@ edit, with the whole set the answer when the edges overflowed
 
 ### Uses
 
+Every query over a program that does not check -- `context-file`, `uses-file`,
+the plans, `test-impact-file` -- answers as a stream (D520, H08, H18): its header,
+the diagnostic, and a result of exit 1, nothing on stderr; `explain-file` answers
+with what the checker decided before it stopped as well (D430).
+
 `neper uses-file PATH ROOT ARCH OS --json --symbol module.name` (D362, H17) checks
 the program and lists every use of one declared function the checker resolved,
 anywhere in the program, by module then byte offset: a `use` record with

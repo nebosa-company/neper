@@ -8772,6 +8772,18 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
 // `plan-add-parameter-file` (D406), 7 for `query-batch` (D409), 8 for
 // `plan-replace-expression-file` (D414), 9 for `plan-change-signature-file` (D415), 10
 // for `test-impact-file` (D423).
+// The stream's `command` per query kind (D520), as each query's header names it.
+fn query_command_name(kind: usize) -> str {
+    if kind == 2usize || kind == 5usize { ret "context" }
+    if kind == 3usize { ret "uses" }
+    if kind == 4usize { ret "plan-rename" }
+    if kind == 6usize { ret "plan-add-parameter" }
+    if kind == 8usize { ret "plan-replace-expression" }
+    if kind == 9usize { ret "plan-change-signature" }
+    if kind == 10usize { ret "test-impact" }
+    ret "explain"
+}
+
 fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
@@ -8810,6 +8822,18 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
             var stream = json_sink()
             try print_check_diagnostic(&stream, &loaded, &checker, check_error)
             try finish_report(&stream)
+            os.exit(1i32)
+            ret ok
+        }
+        // Every other query over a program that does not check (D520, H08, H18): the
+        // stream still -- its header, the diagnostic, a result of exit 1 -- where a
+        // harness reading JSON had found the diagnostic as text on stderr and nothing
+        // on stdout. The batch answers each line its own way.
+        if kind != 7usize {
+            try tool.stream_header(a, query_command_name(kind))
+            var failed_stream = json_sink()
+            try print_check_diagnostic(&failed_stream, &loaded, &checker, check_error)
+            try finish_report(&failed_stream)
             os.exit(1i32)
             ret ok
         }
