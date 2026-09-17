@@ -7082,6 +7082,23 @@ fn check_file_bodies(report: *Sink, checker: *check.Checker, resolver: *resolve.
     ret ok
 }
 
+// The failure's diagnostics, then the failure put down (D553): the queued ones when
+// the declarations left several -- neper-0 prints them all -- else the one recorded.
+fn print_queued_check_diagnostics(report: *Sink, loaded: *graph.Graph, checker: *check.Checker, check_error: err) -> err {
+    if checker.diagnostic_count == 0usize {
+        try print_check_diagnostic(report, loaded, checker, check_error)
+    } else {
+        var diagnostic_at = 0usize
+        while diagnostic_at < checker.diagnostic_count {
+            select_check_diagnostic(checker, checker.diagnostics[diagnostic_at])
+            try print_check_diagnostic(report, loaded, checker, check_error)
+            diagnostic_at += 1usize
+        }
+    }
+    check.clear_failure(checker)
+    ret ok
+}
+
 fn check_bodies_each(report: *Sink, checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph, failures: *usize) -> err {
     var order_at = 0usize
     while order_at < loaded.order_count {
@@ -7097,8 +7114,7 @@ fn check_bodies_each(report: *Sink, checker: *check.Checker, resolver: *resolve.
                 let body_error = check.check_function(checker, resolver, loaded, &tree, module_index, node, node_index)
                 if body_error != ok {
                     if !checker.failure_has_token { ret body_error }
-                    try print_check_diagnostic(report, loaded, checker, body_error)
-                    check.clear_failure(checker)
+                    try print_queued_check_diagnostics(report, loaded, checker, body_error)
                     *failures += 1usize
                     // The plain output keeps to the first (D553): neper-0's parity.
                     if !report.json { ret ok }
@@ -7114,8 +7130,7 @@ fn check_bodies_each(report: *Sink, checker: *check.Checker, resolver: *resolve.
             let instance_error = check.check_instance(checker, resolver, loaded, instance_index)
             if instance_error != ok {
                 if !checker.failure_has_token { ret instance_error }
-                try print_check_diagnostic(report, loaded, checker, instance_error)
-                check.clear_failure(checker)
+                try print_queued_check_diagnostics(report, loaded, checker, instance_error)
                 *failures += 1usize
                 if !report.json { ret ok }
             }
