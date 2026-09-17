@@ -776,7 +776,8 @@ generated file with a map of its own beside it (`<original>.map.json`, whose
 the primary span is the root original's, and `related` carries the intermediate
 first ("in the generated input, itself regenerated from the original") and the
 generated source second, with the edit rule as before. The chain is bounded at
-one level -- a root that is itself generated is shown as the root. A nested map
+three levels (D499) -- a root that is itself generated past them is shown as the
+root, and every intermediate is related, the one nearest the root first. A nested map
 that is present but stale or malformed is not followed, and the related message
 says so ("the original is generated too, and its own map is stale"), so a
 harness knows the span shown is not the root. Paths in a nested map are

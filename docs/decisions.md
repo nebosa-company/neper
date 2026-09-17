@@ -10669,3 +10669,18 @@ decisions, counted against the page as they are. A harness that cached an
 answer compares the interfaces it names; an edit that changes none of them,
 inside another module's bodies, leaves the answer standing. Every context
 golden gains its subjects' imports, re-pinned on both hosts.
+
+## D499 -- The chain of maps, three levels
+
+D465 followed a nested map one level: the operand's original, when generated
+itself, had its own map read into a second block of eight slots. A generator
+that runs over a generator's output makes longer chains, and the tables now
+hold three nested levels of eight mappings each, loaded level by level -- each
+level's generated file is the first original the map above it names, an
+absent map ends the chain, a stale one ends it as stale -- and a diagnostic
+is mapped along the chain until no level's mapping contains it: the last span
+is primary, every intermediate is related, the one nearest the root first,
+then the generated span with its `edit` note as before. `nested_deep.e` is
+three maps deep and pins the shape; the one-level and stale fixtures are
+unchanged byte for byte. Not yet: a chain past three levels, which stops at
+the third and shows it as the root.

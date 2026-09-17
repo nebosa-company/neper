@@ -3446,23 +3446,28 @@ type Sink = struct {
     // `nest_base`, the nested map's (D465); the bootstrap mistypes a slice of a
     // struct's array field, so the two are one table indexed by a base.
     map_count: usize,
-    map_generated_start: [16]usize,
-    map_generated_end: [16]usize,
-    map_generated_line: [16]usize,
-    map_original_path: [16]str,
-    map_original_start: [16]usize,
-    map_original_line: [16]usize,
+    map_generated_start: [32]usize,
+    map_generated_end: [32]usize,
+    map_generated_line: [32]usize,
+    map_original_path: [32]str,
+    map_original_start: [32]usize,
+    map_original_line: [32]usize,
     // What may be edited (D373, H19): 0 unknown, 1 the generated output directly,
     // 2 the generator's input only -- the mapping's `edit`, absent in a version 1 map.
-    map_edit: [16]u8,
-    // A nested map (D465, H19): the original the mappings name may itself be
-    // generated, with a map of its own beside it; its mappings are followed one
-    // level further, to the root original. `nest_source` is that original's path as
-    // the outer map spells it; `nest_stale` says its map was there and not usable.
-    nest_source: str,
-    nest_stale: bool,
-    nest_count: usize,
+    map_edit: [32]u8,
+    // Nested maps (D465, D499, H19): the original the mappings name may itself be
+    // generated, with a map of its own beside it, and its original too; the chain
+    // is followed to the root original, three levels at most, each level's eight
+    // mappings from `nest_base(level)`. `nest_sources[k]` is level k's generated
+    // file as the map above it spells it; `nest_stale[k]` says its map was there
+    // and not usable, where the chain stops.
+    nest_sources: [3]str,
+    nest_stale: [3]bool,
+    nest_counts: [3]usize,
 }
+
+// How many nested levels the tables hold (D499).
+fn nest_levels() -> usize { ret 3usize }
 
 // One diagnostic, as the human line `path:line:col: error[CODE]: message` or as the
 // record of docs/tooling.md section 3 -- the span from the token, the source as an
@@ -3516,35 +3521,56 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
         original.end = at.end - report.map_generated_start[mapping] + report.map_original_start[mapping]
         original.line = at.line - report.map_generated_line[mapping] + report.map_original_line[mapping]
         original.end_line = at.end_line - report.map_generated_line[mapping] + report.map_original_line[mapping]
-        // The original's own map (D465, H19): when the original is generated too,
-        // the root original is primary and the intermediate is related first.
-        let nest_end = nest_base() + report.nest_count
-        var nested = nest_end
-        if same(report.map_original_path[mapping], report.nest_source) {
-            var scan = nest_base()
-            while scan < nest_end {
-                if original.start >= report.map_generated_start[scan] && original.end <= report.map_generated_end[scan] {
+        // The original's own map (D465, D499, H19): when the original is generated
+        // too, the chain is followed level by level to the root original, which is
+        // primary; every intermediate is related, the one nearest the root first.
+        var chain_spans: [4]lex.Span = zero
+        var chain_paths: [4]str = zero
+        var chain_count = 0usize
+        var shown = original
+        var shown_path = report.map_original_path[mapping]
+        var level = 0usize
+        var stopped_stale = false
+        while level < nest_levels() {
+            if !same(shown_path, report.nest_sources[level]) { break }
+            if report.nest_stale[level] {
+                stopped_stale = true
+                break
+            }
+            let level_end = nest_base(level) + report.nest_counts[level]
+            var scan = nest_base(level)
+            var nested = level_end
+            while scan < level_end {
+                if shown.start >= report.map_generated_start[scan] && shown.end <= report.map_generated_end[scan] {
                     nested = scan
-                    scan = nest_end
+                    scan = level_end
                 } else {
                     scan += 1usize
                 }
             }
+            if nested == level_end { break }
+            chain_spans[chain_count] = shown
+            chain_paths[chain_count] = shown_path
+            chain_count += 1usize
+            var deeper = shown
+            deeper.start = shown.start - report.map_generated_start[nested] + report.map_original_start[nested]
+            deeper.end = shown.end - report.map_generated_start[nested] + report.map_original_start[nested]
+            deeper.line = shown.line - report.map_generated_line[nested] + report.map_original_line[nested]
+            deeper.end_line = shown.end_line - report.map_generated_line[nested] + report.map_original_line[nested]
+            shown = deeper
+            shown_path = report.map_original_path[nested]
+            level += 1usize
         }
-        if nested < nest_end {
-            var root_span = original
-            root_span.start = original.start - report.map_generated_start[nested] + report.map_original_start[nested]
-            root_span.end = original.end - report.map_generated_start[nested] + report.map_original_start[nested]
-            root_span.line = original.line - report.map_generated_line[nested] + report.map_original_line[nested]
-            root_span.end_line = original.end_line - report.map_generated_line[nested] + report.map_original_line[nested]
-            try write_span(report, report.map_original_path[nested], root_span, false)
-            try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated input, itself regenerated from the original\",\"span\":")
-            try write_span(report, report.map_original_path[mapping], original, false)
-            try write_all(report, "},{\"message\":")
-        } else {
-            try write_span(report, report.map_original_path[mapping], original, false)
-            try write_all(report, ",\"parent\":null,\"related\":[{\"message\":")
+        try write_span(report, shown_path, shown, false)
+        try write_all(report, ",\"parent\":null,\"related\":[")
+        var chain_at = chain_count
+        while chain_at > 0usize {
+            chain_at = chain_at - 1usize
+            try write_all(report, "{\"message\":\"in the generated input, itself regenerated from the original\",\"span\":")
+            try write_span(report, chain_paths[chain_at], chain_spans[chain_at], false)
+            try write_all(report, "},")
         }
+        try write_all(report, "{\"message\":")
         // Which of the two spans an edit may target (D373, H19), from the mapping.
         if report.map_edit[mapping] == 1u8 {
             try write_all(report, "\"in the generated source, which may be edited directly")
@@ -3557,7 +3583,7 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
         }
         // The omission stated (D465): the original has a map of its own that could
         // not be followed, so the original shown is not the root.
-        if report.nest_stale && same(report.map_original_path[mapping], report.nest_source) {
+        if stopped_stale {
             try write_all(report, "; the original is generated too, and its own map is stale")
         }
         try write_all(report, "\",\"span\":")
@@ -3992,13 +4018,19 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
 // map's; a map of it beside it that names the original's bytes is read into the
 // nested tables, one that does not is stated and not followed.
 fn load_nested_map(a: *mem.Arena, report: *Sink, operand: str) -> err {
-    report.nest_source = report.map_original_path[0usize]
-    let (nest_file, nest_file_error) = with_suffix(a, dirname(operand), report.nest_source)
-    if nest_file_error != ok { ret nest_file_error }
-    let (nest_map_path, nest_map_path_error) = with_suffix(a, nest_file, ".map.json")
-    if nest_map_path_error != ok { ret nest_map_path_error }
-    let (nest_document, nest_load_error) = source.load(a, nest_map_path)
-    if nest_load_error == ok {
+    // Level by level (D499): each level's generated file is the first original the
+    // map above it names; a level whose map is absent ends the chain, one whose map
+    // is there and not usable ends it as stale.
+    var level = 0usize
+    var above = 0usize
+    while level < nest_levels() {
+        report.nest_sources[level] = report.map_original_path[above]
+        let (nest_file, nest_file_error) = with_suffix(a, dirname(operand), report.nest_sources[level])
+        if nest_file_error != ok { ret nest_file_error }
+        let (nest_map_path, nest_map_path_error) = with_suffix(a, nest_file, ".map.json")
+        if nest_map_path_error != ok { ret nest_map_path_error }
+        let (nest_document, nest_load_error) = source.load(a, nest_map_path)
+        if nest_load_error != ok { ret ok }
         let (nest_text, nest_text_error) = source.load(a, nest_file)
         var nest_usable = nest_text_error == ok && same(json_str_after(nest_document, "\"schema\":\""), "neper-source-map")
         if nest_usable {
@@ -4006,17 +4038,21 @@ fn load_nested_map(a: *mem.Arena, report: *Sink, operand: str) -> err {
             if nest_digest_error != ok { ret nest_digest_error }
             nest_usable = same(json_str_after(nest_document, "\"generated_sha256\":\""), nest_digest)
         }
-        if nest_usable {
-            report.nest_count = read_mappings(report, nest_document, nest_base())
-        } else {
-            report.nest_stale = true
+        if !nest_usable {
+            report.nest_stale[level] = true
+            ret ok
         }
+        report.nest_counts[level] = read_mappings(report, nest_document, nest_base(level))
+        if report.nest_counts[level] == 0usize { ret ok }
+        above = nest_base(level)
+        level += 1usize
     }
     ret ok
 }
 
-// Where the nested map's mappings begin in the tables (D465): after the operand's eight.
-fn nest_base() -> usize { ret 8usize }
+// Where a nested level's mappings begin in the tables (D465, D499): after the
+// operand's eight, eight per level.
+fn nest_base(level: usize) -> usize { ret 8usize + level * 8usize }
 
 // A map's mappings into the tables from `base` (D264, D465): each `generated_span`'s
 // start, end and line, the `original_span`'s path, start and line, and the
@@ -4025,7 +4061,7 @@ fn read_mappings(report: *Sink, document: str, base: usize) -> usize {
     var count = 0usize
     var at = 0usize
     let generated_key = "\"generated_span\":{"
-    while at + generated_key.len <= document.len && count < nest_base() {
+    while at + generated_key.len <= document.len && count < 8usize {
         if same(document[at..at + generated_key.len], generated_key) {
             let rest = document[at..document.len]
             let index = base + count

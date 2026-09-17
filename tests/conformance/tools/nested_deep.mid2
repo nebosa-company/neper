@@ -1,0 +1,2 @@
+// generated from nested_deep.input by conformance-gen-root
+let n: i32 = true

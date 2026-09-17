@@ -1,0 +1,3 @@
+// generated from nested_deep.mid2 by conformance-gen-inner
+// generated from nested_deep.input by conformance-gen-root
+let n: i32 = true
