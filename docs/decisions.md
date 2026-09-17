@@ -11299,3 +11299,21 @@ requested here" at its own site: `widen[bool]` requested in `lift`'s body,
 then `lift[bool]` requested in `main`, the second call and not the first.
 `reject/instance_chain.e` pins it in both suites; `instance_site`'s record
 is unchanged, its chain being empty.
+
+## D544 -- The project index over the compiler
+
+`index-project` over the compiler's own tree, src and lib, a hundred and
+forty-three modules: a hundred and eighteen seconds, and `ok: false`. The
+seconds were syscalls -- the children's two hundred thousand records were
+forwarded a write per renumbered piece through an unbuffered sink, where
+the children themselves take ten seconds in all; the stream goes through a
+megabyte of the sink's capture now, drained before a line that would not
+fit, seven seconds. The failure was `os.linux.e`: the walk took every source
+under lib, and the other target's variant, indexed alone on windows, fails
+on the names it has no source for; a source spelled `stem.suffix.e` whose
+suffix is neither the arch nor the operating system is left out of the
+project walk -- `check-project` and `test-project` share the walk and the
+fault, `fmt-project` keeps every source since layout has no target -- and
+the result's `modules` counts what was taken. The corpus project gains
+`util.arm64.e`, which would fail alone, and its index stream is unchanged on
+both hosts.

@@ -2441,7 +2441,7 @@ cp "$conformance_root/format/layout.e" "$test_build/fmt-in-place.e"
 "$repo/build/linux/short/neper-self-short" fmt "$test_build/fmt-in-place.e"
 cmp -s "$test_build/fmt-in-place.e" "$conformance_root/format/layout.expected.e" || { printf '%s
 ' "fmt FILE did not format the file in place" >&2; exit 1; }
-# `index-project --json` (D298): every module under a project's src and lib, each
+# `index-project --json` (D298, D544 leaves another target's variant out): every module under a project's src and lib, each
 # indexed under its path from the root, one stream; and `neper index` with no operand
 # from inside the project is the same stream.
 $test_build/neper-self index-project "$conformance_root/tools/index_project" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-index-project.jsonl"

@@ -1976,6 +1976,7 @@ fn test_project_command(a: *mem.Arena, args: []str) -> err {
     if source_dir_error != ok { ret source_dir_error }
     var count = 0usize
     let walk_error = walk_sources(a, source_dir, "", paths, rels, &count)
+    drop_other_variants(paths, rels, &count, args[4usize], args[5usize])
     if walk_error != ok {
         try emit_command_diagnostic(&report, "E-CLI-9999", "the project has no readable src directory")
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"tests\":0,\"modules\":0}}\n")
@@ -2506,6 +2507,14 @@ fn index_project_command(a: *mem.Arena, args: []str) -> err {
     }
     let (child_base, child_base_error) = nptest_join(a, args[6usize], "npindex-child")
     if child_base_error != ok { ret child_base_error }
+    // The stream through a buffer (D544): two hundred thousand records over the
+    // compiler and its library went out a write per renumbered piece, a hundred
+    // seconds of syscalls for ten of work.
+    let (capture, capture_error) = mem.alloc[u8](a, 1048576usize)
+    if capture_error != ok { ret capture_error }
+    report.capture = capture
+    report.capturing = true
+    drop_other_variants(paths, rels, &count, args[4usize], args[5usize])
     var symbols = 0usize
     var references = 0usize
     var failed = false
@@ -2530,6 +2539,8 @@ fn index_project_command(a: *mem.Arena, args: []str) -> err {
         references += child_references
         at += 1usize
     }
+    try drain_capture(&report, 0usize)
+    report.capturing = false
     if failed {
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"symbols\":")
     } else {
@@ -2542,6 +2553,50 @@ fn index_project_command(a: *mem.Arena, args: []str) -> err {
     try write_usize(&report, count)
     try write_all(&report, "}}\n")
     if failed { os.exit(1i32) }
+    ret ok
+}
+
+// The other target's variants out of a project walk (D544): `os.linux.e` on windows
+// is not this program's `os`, and checked, indexed or tested alone it fails on the
+// names it has no source for. `fmt-project` keeps them: layout has no target.
+fn drop_other_variants(paths: []str, rels: []str, count: *usize, arch: str, target_os: str) {
+    var kept = 0usize
+    var at = 0usize
+    while at < *count {
+        if !variant_of_other_target(rels[at], arch, target_os) {
+            paths[kept] = paths[at]
+            rels[kept] = rels[at]
+            kept += 1usize
+        }
+        at += 1usize
+    }
+    *count = kept
+}
+
+// A source spelled `stem.suffix.e` is a variant (project.e), for the arch or the
+// operating system it names; one for another target is not in this program.
+fn variant_of_other_target(rel: str, arch: str, target_os: str) -> bool {
+    var name_start = 0usize
+    var at = 0usize
+    while at < rel.len {
+        if rel[at] == 47u8 || rel[at] == 92u8 { name_start = at + 1usize }
+        at += 1usize
+    }
+    let name = rel[name_start..rel.len]
+    if name.len < 5usize { ret false }
+    let stem_end = name.len - 2usize
+    var dot = stem_end
+    while dot > 0usize && name[dot - 1usize] != 46u8 { dot = dot - 1usize }
+    if dot == 0usize { ret false }
+    let suffix = name[dot..stem_end]
+    ret !same(suffix, arch) && !same(suffix, target_os)
+}
+
+// The captured stream out to the file when less than `room` is left (D544).
+fn drain_capture(report: *Sink, room: usize) -> err {
+    if report.count + room < report.capture.len && room != 0usize { ret ok }
+    try write_bytes(report.file, report.capture[0usize..report.count])
+    report.count = 0usize
     ret ok
 }
 
@@ -2588,6 +2643,10 @@ fn forward_index(report: *Sink, stream: str, base: usize) -> (usize, usize, err)
         if is_symbol || is_reference || is_diagnostic {
             // Section 5: `id` is the record number among the stream's symbols, so a
             // child's ids, and what points at them, move up by the symbols before it.
+            if report.capturing {
+                let drain_error = drain_capture(report, line.len + 64usize)
+                if drain_error != ok { ret (0usize, 0usize, drain_error) }
+            }
             let write_error = forward_renumbered(report, line, base)
             if write_error != ok { ret (0usize, 0usize, write_error) }
             let newline_error = write_all(report, "\n")
@@ -2613,6 +2672,7 @@ fn check_project_command(a: *mem.Arena, args: []str) -> err {
     if source_dir_error != ok { ret source_dir_error }
     var count = 0usize
     let walk_error = walk_sources(a, source_dir, "", paths, rels, &count)
+    drop_other_variants(paths, rels, &count, args[4usize], args[5usize])
     if walk_error != ok {
         try emit_command_diagnostic(&report, "E-CLI-9999", "the project has no readable src directory")
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1,\"modules\":0}}\n")

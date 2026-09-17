@@ -2337,7 +2337,8 @@ cmd /c "`"$shortCompiler`" fmt `"$(Join-Path $testBuild 'fmt-in-place.e')`""
 if ($LASTEXITCODE -ne 0) { throw "fmt FILE exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'fmt-in-place.e')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'format\layout.expected.e')).Hash) { throw 'fmt FILE did not format the file in place' }
 # `index-project --json` (D298): every module under a project's src and lib, each
-# indexed under its path from the root, one stream; and `neper index` with no operand
+# indexed under its path from the root, one stream -- another target's variant left
+# out (D544, `util.arm64.e`); and `neper index` with no operand
 # from inside the project is the same stream.
 $indexProjectActual = Join-Path $testBuild 'conformance-tools-index-project.jsonl'
 cmd /c "`"$compiler`" index-project `"$(Join-Path $conformanceRoot 'tools\index_project')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$indexProjectActual`""
