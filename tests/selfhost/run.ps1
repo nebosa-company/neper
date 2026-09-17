@@ -2116,6 +2116,21 @@ if ($overlayInput -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $o
 $overlayPlain = & $compiler emit-executable (Join-Path $overlayScratch 'src\main.e') $repo 'x64' 'windows' $overlayExe 2>&1
 & $overlayExe
 if ($LASTEXITCODE -ne 8) { throw "the build without the overlay did not read the file (exit $LASTEXITCODE)" }
+# An overlay on a check and on a query (D524, H15): the root's buffer with a second
+# call of `dep.answer` -- `uses-file` counts two, the file untouched -- and a buffer
+# that does not check, refused by `check-file` while the file still checks.
+$overlayMore = Join-Path $overlayScratch 'main_more.e'
+[IO.File]::WriteAllText($overlayMore, ([IO.File]::ReadAllText((Join-Path $overlayScratch 'src\main.e')) + "`nfn again() -> i32 {`n    ret dep.answer()`n}`n"))
+$overlayUses = & $compiler uses-file (Join-Path $overlayScratch 'src\main.e') $repo 'x64' 'windows' --json --symbol dep.answer --overlay "main.e=$overlayMore"
+if ($LASTEXITCODE -ne 0 -or ($overlayUses | Where-Object { $_ -match '"record":"use"' }).Count -ne 3) { throw 'uses-file over an overlay of the root did not count the buffer''s calls' }
+$overlayUsesPlain = & $compiler uses-file (Join-Path $overlayScratch 'src\main.e') $repo 'x64' 'windows' --json --symbol dep.answer
+if ($LASTEXITCODE -ne 0 -or ($overlayUsesPlain | Where-Object { $_ -match '"record":"use"' }).Count -ne 2) { throw 'uses-file without the overlay did not read the file' }
+$overlayBad = Join-Path $overlayScratch 'dep_bad.e'
+[IO.File]::WriteAllText($overlayBad, "const LIMIT: usize = 3usize`n`nfn answer() -> i32 {`n    ret true`n}`n")
+$overlayCheck = & $compiler check-file (Join-Path $overlayScratch 'src\main.e') $repo 'x64' 'windows' --json --overlay "dep.e=$overlayBad"
+if ($LASTEXITCODE -ne 1 -or ($overlayCheck -join "`n") -notmatch 'E-TYPE-0002') { throw "check-file over an overlay that does not check did not report it (exit $LASTEXITCODE)" }
+$overlayCheckPlain = & $compiler check-file (Join-Path $overlayScratch 'src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $overlayCheckPlain -ne 'module check ok') { throw 'check-file without the overlay did not read the file' }
 # A trap inside a dependency (D503): the run record names the module's source and line.
 $trapModuleActual = Join-Path $testBuild 'conformance-tools-run-trap-module.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" run `"$(Join-Path $conformanceRoot 'tools\run_trap_module\src\main.e')`" `"$repo`" x64 windows conformance-tools-run-trap-module.out --json > `"$trapModuleActual`""

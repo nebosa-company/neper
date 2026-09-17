@@ -716,7 +716,11 @@ the module at PATH -- spelled as the loader spells it, or a suffix of that on a
 separator, `dep.e` or `src/dep.e` -- from FILE instead of its own file: an
 editor's unsaved buffer. The overlay's bytes are the module's for the build, its
 hash the input's in the manifest and the artifact's identity, and the file on
-disk is not touched; a build without the flag reads the file again.
+disk is not touched; a build without the flag reads the file again. The same
+pairs after a `check-file`'s flags and after a query's own arguments (D524) --
+`context-file`, `uses-file`, `explain-file`, the plans, `test-impact-file`,
+`query-batch` -- answer over the buffers: a plan's preconditions then hash the
+overlay's bytes, so it applies to the buffer saved and to nothing else.
 
 `--deadline MS` (D399, H16) on a build command (`emit-executable`, `emit-em-all`,
 `run`, with or without `--json`) is a wall-clock deadline: at every checkpoint

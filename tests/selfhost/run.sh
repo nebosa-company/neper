@@ -2217,6 +2217,16 @@ python3 -c "import json,sys,hashlib; m=json.load(open(sys.argv[1])); want=hashli
 overlay_status=0
 "$test_build/overlay" || overlay_status=$?
 [ "$overlay_status" -eq 8 ]
+# An overlay on a check and on a query (D524, H15).
+{ cat "$overlay_scratch/src/main.e"; printf '\nfn again() -> i32 {\n    ret dep.answer()\n}\n'; } > "$overlay_scratch/main_more.e"
+[ "$("$test_build/neper-self" uses-file "$overlay_scratch/src/main.e" "$repo" x64 linux --json --symbol dep.answer --overlay "main.e=$overlay_scratch/main_more.e" | grep -c '"record":"use"')" -eq 3 ]
+[ "$("$test_build/neper-self" uses-file "$overlay_scratch/src/main.e" "$repo" x64 linux --json --symbol dep.answer | grep -c '"record":"use"')" -eq 2 ]
+printf 'const LIMIT: usize = 3usize\n\nfn answer() -> i32 {\n    ret true\n}\n' > "$overlay_scratch/dep_bad.e"
+overlay_check_status=0
+"$test_build/neper-self" check-file "$overlay_scratch/src/main.e" "$repo" x64 linux --json --overlay "dep.e=$overlay_scratch/dep_bad.e" > "$test_build/overlay-check.jsonl" || overlay_check_status=$?
+[ "$overlay_check_status" -eq 1 ]
+grep -q 'E-TYPE-0002' "$test_build/overlay-check.jsonl"
+[ "$("$test_build/neper-self" check-file "$overlay_scratch/src/main.e" "$repo" x64 linux)" = 'module check ok' ]
 # A trap inside a dependency (D503): the run record names the module's source and line.
 (cd "$test_build" && ./neper-self run "$conformance_root/tools/run_trap_module/src/main.e" "$repo" x64 linux conformance-tools-run-trap-module.out --json > "conformance-tools-run-trap-module.jsonl") || true
 grep -q '"trap":{"kind":"bounds","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":[0-9]*,"byte_end":[0-9]*,"line":3' "$test_build/conformance-tools-run-trap-module.jsonl"

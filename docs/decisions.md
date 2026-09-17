@@ -11016,3 +11016,15 @@ which the probe found to be text on stderr, and D521's held header named it
 check or load has no line it can answer: it is one stream now, under a
 `query-batch` header the header enum gains, the diagnostic and a result of
 exit 1. `batch_broken` pins it on both hosts.
+
+## D524 -- Overlays for a check and the queries
+
+D502 gave the build commands `--overlay PATH=FILE`; a probe found `check-file`
+and every query refusing the flag with the usage line -- and an editor's
+unsaved buffer is what a check and a query are most often asked about. The
+pairs are accepted after `check-file`'s flags and after a query's own
+arguments, and nothing else may follow them; the loader takes the buffers as
+D502 has it. A plan over overlays writes its preconditions from the buffers'
+bytes, so it applies once they are saved and to nothing else. Both suites
+check a root buffer with a second call and a dependency buffer that does not
+check, the files untouched and read again without the flag.

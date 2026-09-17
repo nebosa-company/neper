@@ -778,7 +778,8 @@ fn takes_value(flag: str) -> bool {
 // instead, an editor's buffer for a file not yet saved. The texts are read here,
 // before the load; a FILE that cannot be read is the operand's own failure.
 fn load_overlays(a: *mem.Arena, args: []str, loaded: *graph.Graph) -> err {
-    var at = 7usize
+    // From the first flag position (D524): `check-file`'s flags begin at six.
+    var at = 6usize
     while at + 1usize < args.len {
         if same(args[at], "--") { ret ok }
         if same(args[at], "--overlay") {
@@ -2723,12 +2724,28 @@ fn check_flags(a: *mem.Arena, report: *Sink, args: []str) -> bool {
                 report.operand_path = args[at + 1usize]
                 at += 1usize
             } else {
-                if !same(args[at], "--absolute-paths") { ret false }
-                report.operand_source = args[2usize]
-                report.absolute_path = absolute_operand(a, args[2usize])
+                if same(args[at], "--overlay") && at + 1usize < args.len {
+                    // Loaded by the command (D524): the flag is only allowed here.
+                    at += 1usize
+                } else {
+                    if !same(args[at], "--absolute-paths") { ret false }
+                    report.operand_source = args[2usize]
+                    report.absolute_path = absolute_operand(a, args[2usize])
+                }
             }
         }
         at += 1usize
+    }
+    ret true
+}
+
+// Whether everything from `from` on is `--overlay PATH=FILE` pairs (D524): a query's
+// fixed arguments may be followed by overlays and nothing else.
+fn overlays_only_after(args: []str, from: usize) -> bool {
+    var at = from
+    while at < args.len {
+        if !same(args[at], "--overlay") || at + 1usize >= args.len { ret false }
+        at += 2usize
     }
     ret true
 }
@@ -8830,6 +8847,9 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     report.json = true
     report.file = os.stdout()
     try hold_query_header(a, report, kind)
+    // An editor's buffers in place of files (D524, H15): `--overlay PATH=FILE` after
+    // the query's own arguments, as a build takes them (D502).
+    try load_overlays(a, args, &loaded)
     let load_error = load_graph(a, report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
     if load_error != ok {
         try emit_command_diagnostic(report, "E-CLI-9999", "the operand cannot be read as a module")
@@ -9304,23 +9324,23 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `uses-file`, each `PATH ROOT ARCH OS --json` with its own flags after, share
     // one pipeline -- load, resolve, check with the explain table open -- in
     // `query_file`, which keeps `main`'s own locals few.
-    if args.len == 7usize && same(args[1usize], "explain-file") && same(args[6usize], "--json") { ret query_file(a, &report, args, 1usize) }
+    if args.len >= 7usize && same(args[1usize], "explain-file") && same(args[6usize], "--json") && overlays_only_after(args, 7usize) { ret query_file(a, &report, args, 1usize) }
     if args.len >= 9usize && same(args[1usize], "context-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") { ret query_file(a, &report, args, 2usize) }
     if args.len >= 9usize && same(args[1usize], "context-file") && same(args[6usize], "--json") && same(args[7usize], "--module") { ret query_file(a, &report, args, 5usize) }
-    if args.len == 9usize && same(args[1usize], "uses-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") { ret query_file(a, &report, args, 3usize) }
+    if args.len >= 9usize && same(args[1usize], "uses-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && overlays_only_after(args, 9usize) { ret query_file(a, &report, args, 3usize) }
     // `plan-rename-file PATH ROOT ARCH OS --json --symbol module.name --to NEW` (D376, H29).
-    if args.len == 11usize && same(args[1usize], "plan-rename-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--to") && identifier_ok(args[10usize]) { ret query_file(a, &report, args, 4usize) }
+    if args.len >= 11usize && same(args[1usize], "plan-rename-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--to") && identifier_ok(args[10usize]) && overlays_only_after(args, 11usize) { ret query_file(a, &report, args, 4usize) }
     // `plan-change-signature-file PATH ROOT ARCH OS --json --symbol module.name --order I,J,...` (D415, H29).
-    if args.len == 11usize && same(args[1usize], "plan-change-signature-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--order") { ret query_file(a, &report, args, 9usize) }
+    if args.len >= 11usize && same(args[1usize], "plan-change-signature-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--order") && overlays_only_after(args, 11usize) { ret query_file(a, &report, args, 9usize) }
     // `plan-replace-expression-file PATH ROOT ARCH OS --json --span START:END --with EXPR` (D414, H29).
-    if args.len == 11usize && same(args[1usize], "plan-replace-expression-file") && same(args[6usize], "--json") && same(args[7usize], "--span") && same(args[9usize], "--with") && args[10usize].len != 0usize { ret query_file(a, &report, args, 8usize) }
+    if args.len >= 11usize && same(args[1usize], "plan-replace-expression-file") && same(args[6usize], "--json") && same(args[7usize], "--span") && same(args[9usize], "--with") && args[10usize].len != 0usize && overlays_only_after(args, 11usize) { ret query_file(a, &report, args, 8usize) }
     // `test-impact-file PATH ROOT ARCH OS --json --changed m1,m2` (D423, H10): the tests an edit reaches.
-    if args.len == 9usize && same(args[1usize], "test-impact-file") && same(args[6usize], "--json") && same(args[7usize], "--changed") { ret query_file(a, &report, args, 10usize) }
+    if args.len >= 9usize && same(args[1usize], "test-impact-file") && same(args[6usize], "--json") && same(args[7usize], "--changed") && overlays_only_after(args, 9usize) { ret query_file(a, &report, args, 10usize) }
     // `query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16): many queries, one check.
-    if args.len == 9usize && same(args[1usize], "query-batch") && same(args[6usize], "--json") && same(args[7usize], "--batch") { ret query_file(a, &report, args, 7usize) }
+    if args.len >= 9usize && same(args[1usize], "query-batch") && same(args[6usize], "--json") && same(args[7usize], "--batch") && overlays_only_after(args, 9usize) { ret query_file(a, &report, args, 7usize) }
     // `plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name --parameter "name: T" --argument EXPR` (D406, H17).
     // `--argument EXPR` for every call, or `--arguments FILE` per call (D455, H29).
-    if args.len == 13usize && same(args[1usize], "plan-add-parameter-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--parameter") && (same(args[11usize], "--argument") || same(args[11usize], "--arguments")) && args[10usize].len != 0usize && args[12usize].len != 0usize { ret query_file(a, &report, args, 6usize) }
+    if args.len >= 13usize && same(args[1usize], "plan-add-parameter-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--parameter") && (same(args[11usize], "--argument") || same(args[11usize], "--arguments")) && args[10usize].len != 0usize && args[12usize].len != 0usize && overlays_only_after(args, 13usize) { ret query_file(a, &report, args, 6usize) }
     // `check-file PATH ROOT ARCH OS [--json]`: with `--json`, the stream of docs/tooling.md
     // -- header, a diagnostic record each, the result -- on stdout (D228).
     if args.len >= 6usize && same(args[1usize], "check-file") && check_flags(a, &report, args) {
@@ -9346,6 +9366,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             operand = report.operand_path
             report.operand_source = operand
         }
+        // The overlays (D524): an editor's buffers, for a check as for a build.
+        try load_overlays(a, args, &loaded)
         let load_error = load_graph(a, &report, &loaded, operand, args[3usize], args[4usize], args[5usize])
         if load_error == ok && loaded.count != 0usize && !loaded.root_text_given { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
         // The ranges the generator owns (D512), for the plans' edit records.
