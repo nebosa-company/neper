@@ -10996,3 +10996,14 @@ parse and a `use` that names no module are the loader's records under the
 query's header, exit 1; an operand that cannot be read is the command's,
 exit 2, as `check-file` has it. `query_syntax` pins three queries and the
 index on both hosts; the batch keeps its own way.
+
+## D522 -- The two commands left on stderr
+
+The probe of D521 over the other `--json` commands found two still writing a
+dependency's syntax error as text: `dis-file`, whose stream began only at the
+disassembly, and `build-manifest-file`, whose answer is the manifest object
+and had no stream at all. Both hold a header now, as the queries do: `dis`,
+dropped once the disassembly writes its own; and `manifest`, a command name
+the header carries for this case alone, since the object itself is not a
+stream -- section 1's envelope in place of it, the loader's record and a
+result of exit 1. `query_syntax` pins both on both hosts.

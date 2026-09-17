@@ -364,7 +364,8 @@
             "explain",
             "context",
             "uses",
-            "plan-rename"
+            "plan-rename",
+            "manifest"
           ]
         },
         "tool_version": {

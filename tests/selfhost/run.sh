@@ -2639,6 +2639,14 @@ for syntax_case in "context-file context_syntax" "uses-file uses_syntax" "explai
     [ ! -s "$test_build/conformance-tools-$2.stderr" ]
     cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { echo "$1 --json over a dependency that does not parse differs from the conformance corpus" >&2; exit 1; }
 done
+for syntax_command in "dis-file dis_syntax" "build-manifest-file manifest_syntax"; do
+    set -- $syntax_command
+    syntax_command_status=0
+    (cd "$conformance_root/tools/query_syntax" && "$test_build/neper-self" "$1" src/main.e "$repo" x64 linux --json > "$test_build/conformance-tools-$2.jsonl" 2> "$test_build/conformance-tools-$2.stderr") || syntax_command_status=$?
+    [ "$syntax_command_status" -eq 1 ]
+    [ ! -s "$test_build/conformance-tools-$2.stderr" ]
+    cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { echo "$1 --json over a dependency that does not parse differs from the conformance corpus" >&2; exit 1; }
+done
 index_syntax_status=0
 (cd "$conformance_root/tools/query_syntax" && "$test_build/neper-self" index-file src/dep.e "$repo" x64 linux --json > "$test_build/conformance-tools-index-syntax.jsonl") || index_syntax_status=$?
 [ "$index_syntax_status" -eq 1 ]

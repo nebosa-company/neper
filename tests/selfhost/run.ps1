@@ -2818,6 +2818,15 @@ foreach ($syntaxCase in @(@('context-file', 'context_syntax'), @('uses-file', 'u
     if ((Get-Item -LiteralPath $syntaxStderr).Length -ne 0) { throw "$($syntaxCase[0]) --json over a dependency that does not parse wrote to stderr" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $syntaxActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($syntaxCase[1]).expected.jsonl")).Hash) { throw "$($syntaxCase[0]) --json over a dependency that does not parse differs from the conformance corpus" }
 }
+# `dis-file --json` and `build-manifest-file --json` over the same (D522): the envelope.
+foreach ($syntaxCommand in @(@('dis-file', 'dis_syntax'), @('build-manifest-file', 'manifest_syntax'))) {
+    $syntaxCommandActual = Join-Path $testBuild "conformance-tools-$($syntaxCommand[1]).jsonl"
+    $syntaxCommandStderr = Join-Path $testBuild "conformance-tools-$($syntaxCommand[1]).stderr"
+    cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\query_syntax')`" && `"$compiler`" $($syntaxCommand[0]) src/main.e `"$repo`" x64 windows --json > `"$syntaxCommandActual`" 2> `"$syntaxCommandStderr`""
+    if ($LASTEXITCODE -ne 1) { throw "$($syntaxCommand[0]) --json over a dependency that does not parse exited $LASTEXITCODE, not 1" }
+    if ((Get-Item -LiteralPath $syntaxCommandStderr).Length -ne 0) { throw "$($syntaxCommand[0]) --json over a dependency that does not parse wrote to stderr" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $syntaxCommandActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($syntaxCommand[1]).expected.jsonl")).Hash) { throw "$($syntaxCommand[0]) --json over a dependency that does not parse differs from the conformance corpus" }
+}
 $indexSyntaxActual = Join-Path $testBuild 'conformance-tools-index-syntax.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\query_syntax')`" && `"$compiler`" index-file src/dep.e `"$repo`" x64 windows --json > `"$indexSyntaxActual`""
 if ($LASTEXITCODE -ne 1) { throw "index-file --json over a file that does not parse exited $LASTEXITCODE, not 1" }

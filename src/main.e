@@ -2362,7 +2362,20 @@ fn manifest_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
-    try load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+    // A program that does not load (D522, H18): section 1's envelope -- a `manifest`
+    // header held until the loader's record, then a result -- where the diagnostic
+    // had been text on stderr beside the object a harness expected.
+    report.json = true
+    report.file = os.stdout()
+    report.pending_header = "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"manifest\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n"
+    let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+    if load_error != ok {
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
+        os.exit(2i32)
+        ret ok
+    }
+    report.pending_header = ""
     let (exit, manifest_error) = tool.manifest_json(a, args[4usize], args[5usize], &loaded)
     if manifest_error != ok { ret manifest_error }
     if exit != 0usize { os.exit(i32(exit)) }
@@ -9458,6 +9471,12 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em || writes_all_em || disassemble
         // `emit-executable ... --json` (D230): section 7's build stream, diagnostics as
         // records and the result naming the executable.
+        // `dis-file --json` (D522): the stream from the load on, its header held.
+        if disassemble {
+            report.json = true
+            report.file = os.stdout()
+            report.pending_header = "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"dis\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n"
+        }
         if writes_executable && has_flag(args, "--json") {
             report.json = true
             report.file = os.stdout()
@@ -9506,6 +9525,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if load_error == ok && loaded.count != 0usize { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
         if load_error != ok {
             if disassemble {
+                report.pending_header = ""
                 var envelope = json_sink()
                 ret unreadable_operand(&envelope, "dis", "{\"functions\":0}")
             }
@@ -9941,6 +9961,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                     try finish_report(&report)
                     os.exit(1i32)
                 }
+                report.pending_header = ""
                 try tool.disassembly_json(a, args[4usize], args[5usize], &builder, code.function_offsets, code.machine.bytes, code.machine.count, code.relocations, code.relocation_count)
                 ret ok
             }
