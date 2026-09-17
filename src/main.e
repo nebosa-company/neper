@@ -858,7 +858,7 @@ fn flags_known(args: []str) -> bool {
                     if !same(args[at], "-j") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
-                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") { ret false }
+                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") { ret false }
                 }
             }
         }
@@ -4969,7 +4969,9 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
             let (old_hash, old_hash_error) = em.artifact_source_hash(old)
             let (new_hash, new_hash_error) = em.source_text_hash(g.modules[module_at].text)
             let (old_mode, old_mode_error) = em.artifact_mode(old)
-            if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
+            let (sha_now, sha_error) = artifact_hash.sha256_hex(a, g.modules[module_at].text)
+            if sha_error != ok { ret sha_error }
+            if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id && artifact_source_verified(a, old, g.modules[module_at].text, sha_now) {
                 let (holds, edges_error) = settle_edges(a, &s, fresh, c, g, old)
                 if edges_error != ok { ret edges_error }
                 keep[module_at] = holds
@@ -5818,6 +5820,11 @@ type HotLoad = struct {
     recorded: []usize,
     recorded_known: []bool,
     hash_now: []usize,
+    // The bytes' SHA-256 per module as the hot load read them (D507), for the
+    // verification of a key hit and for the manifest's input line; and the
+    // injected collision, `--fault-collision`, under which every key is a hit.
+    sha_now: []str,
+    fault_collision: bool,
     // The previous manifest's records, indexed by module name once (D473): the
     // value is a slot of `manifest_values`.
     manifest_read: bool,
@@ -5849,13 +5856,18 @@ type ArtifactWorker = struct {
     recorded: []usize,
     recorded_known: []bool,
     hash_now: []usize,
+    sha_now: []str,
+    fault_collision: bool,
 }
 
 fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     let module_index = w.modules[at]
     let (old, old_error) = load_artifact(&w.arena, w.paths[at])
     if old_error == mem.Exhausted { ret old_error }
-    var (reason, unchanged) = artifact_identity(old, old_error, w.texts[at], w.mode_id, w.compiler_identity)
+    let (sha, sha_error) = artifact_hash.sha256_hex(&w.arena, w.texts[at])
+    if sha_error != ok { ret sha_error }
+    w.sha_now[module_index] = sha
+    var (reason, unchanged) = artifact_identity(&w.arena, old, old_error, w.texts[at], sha, w.mode_id, w.compiler_identity, w.fault_collision)
     if unchanged {
         let (hash, verified) = artifact_content_verified(old, w.recorded[module_index], w.recorded_known[module_index])
         w.hash_now[module_index] = hash
@@ -5883,11 +5895,26 @@ fn artifact_content_verified(old: []const u8, recorded: usize, recorded_known: b
     ret (checksum, true)
 }
 
+// A key hit proved (D507, H15): the 64-bit key is a candidate fingerprint, not an
+// equality. The bytes are the artifact's when their SHA-256 is the one it carries;
+// when they are not -- a comment edited, D504, or a collision -- the canonical
+// text's SHA-256 must be, and an artifact without that digest is rebuilt.
+fn artifact_source_verified(a: *mem.Arena, old: []const u8, text_now: str, sha_now: str) -> bool {
+    let (old_sha, old_interface, digests_error) = em.artifact_manifest_digests(old)
+    if digests_error != ok { ret false }
+    if same(old_sha, sha_now) { ret true }
+    let (canonical_old, canonical_error) = em.artifact_canonical_sha256(old)
+    if canonical_error != ok || canonical_old.len != 64usize { ret false }
+    let (canonical_now, now_error) = em.canonical_sha256_hex(a, text_now)
+    if now_error != ok { ret false }
+    ret same(canonical_old, canonical_now)
+}
+
 // Whether an artifact on disk is the module as it stands (D205, D211, D368, D398):
 // the reason code the manifest names, and whether the artifact is kept. A file that
 // is there and is not an artifact -- a failed checksum, a bad layout -- is rebuilt
 // like a missing one; a source, mode or compiler that differs is its own reason.
-fn artifact_identity(old: []const u8, old_error: err, text_now: str, mode_id: usize, compiler_identity: usize) -> (u8, bool) {
+fn artifact_identity(a: *mem.Arena, old: []const u8, old_error: err, text_now: str, sha_now: str, mode_id: usize, compiler_identity: usize, fault_collision: bool) -> (u8, bool) {
     if old_error == em.InvalidArtifact { ret (6u8, false) }
     if old_error != ok { ret (0u8, false) }
     let (old_hash, old_hash_error) = em.artifact_source_hash(old)
@@ -5896,7 +5923,10 @@ fn artifact_identity(old: []const u8, old_error: err, text_now: str, mode_id: us
     let (old_compiler, old_compiler_error) = em.artifact_compiler_hash(old)
     if old_hash_error != ok || old_mode_error != ok || old_compiler_error != ok || new_hash_error != ok { ret (6u8, false) }
     if old_mode != mode_id { ret (2u8, false) }
-    if old_hash != new_hash { ret (1u8, false) }
+    if old_hash != new_hash && !fault_collision { ret (1u8, false) }
+    // The key is a candidate (D507, H15): the hit is proved by the bytes, or it is a
+    // source change like any other.
+    if !artifact_source_verified(a, old, text_now, sha_now) { ret (1u8, false) }
     // The compiler that wrote it is not this one (D398, H15): its code generation may
     // differ, so the artifact is rebuilt, whatever its source says.
     if compiler_identity != 0usize && old_compiler != compiler_identity {
@@ -5987,6 +6017,8 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
         workers[worker_at].recorded = hot.recorded
         workers[worker_at].recorded_known = hot.recorded_known
         workers[worker_at].hash_now = hot.hash_now
+        workers[worker_at].sha_now = hot.sha_now
+        workers[worker_at].fault_collision = hot.fault_collision
         workers[worker_at].mode_id = mode_id
         workers[worker_at].compiler_identity = loaded.compiler_identity
         worker_at += 1usize
@@ -6023,7 +6055,10 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
                 let module_index = workers[worker_at].modules[remaining]
                 let (old, old_error) = load_artifact(a, workers[worker_at].paths[remaining])
                 if old_error == mem.Exhausted { ret old_error }
-                var (reason, unchanged) = artifact_identity(old, old_error, loaded.modules[module_index].text, mode_id, loaded.compiler_identity)
+                let (sha, sha_error) = artifact_hash.sha256_hex(a, loaded.modules[module_index].text)
+                if sha_error != ok { ret sha_error }
+                hot.sha_now[module_index] = sha
+                var (reason, unchanged) = artifact_identity(a, old, old_error, loaded.modules[module_index].text, sha, mode_id, loaded.compiler_identity, hot.fault_collision)
                 if unchanged {
                     let (hash, verified) = artifact_content_verified(old, hot.recorded[module_index], hot.recorded_known[module_index])
                     hot.hash_now[module_index] = hash
@@ -6259,6 +6294,8 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     if recorded_known_error != ok { ret recorded_known_error }
     let (hash_now, hash_now_error) = mem.alloc[usize](a, loaded.modules.len)
     if hash_now_error != ok { ret hash_now_error }
+    let (sha_now, sha_now_error) = mem.alloc[str](a, loaded.modules.len)
+    if sha_now_error != ok { ret sha_now_error }
     var at = 0usize
     while at < loaded.modules.len {
         unchanged[at] = false
@@ -6268,8 +6305,11 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
         recorded[at] = 0usize
         recorded_known[at] = false
         hash_now[at] = 0usize
+        sha_now[at] = ""
         at += 1usize
     }
+    hot.sha_now = sha_now
+    hot.fault_collision = has_flag(args, "--fault-collision")
     hot.unchanged = unchanged
     hot.stable = stable
     hot.reason = reason
@@ -6294,24 +6334,31 @@ fn clear_held(held: [][]const u8) {
 // Every module's manifest digests (D323), before the manifest is written: a parsed
 // module's from its text and tokens, an unparsed one's from its artifact, which
 // carries them since format 7; a module with neither is scanned for them.
-fn fill_manifest_digests(a: *mem.Arena, loaded: *graph.Graph, held: [][]const u8) -> err {
+fn fill_manifest_digests(a: *mem.Arena, loaded: *graph.Graph, held: [][]const u8, sha_now: []str) -> err {
     var module_at = 0usize
     while module_at < loaded.count {
         if loaded.modules[module_at].sha256.len == 0usize {
+            // The input's digest is the bytes' own (D507, H15): the one the hot load
+            // took, or taken now -- never the artifact's, which is of the bytes it
+            // was built from, and a kept module's may differ by a comment (D504).
+            var sha = ""
+            if module_at < sha_now.len { sha = sha_now[module_at] }
+            if sha.len != 64usize {
+                let (computed, sha_error) = artifact_hash.sha256_hex(a, loaded.modules[module_at].text)
+                if sha_error != ok { ret sha_error }
+                sha = computed
+            }
+            loaded.modules[module_at].sha256 = sha
             var carried = false
             if !loaded.modules[module_at].has_tree && module_at < held.len && held[module_at].len != 0usize {
-                let (sha, interface_sha, digests_error) = em.artifact_manifest_digests(held[module_at])
+                let (artifact_sha, interface_sha, digests_error) = em.artifact_manifest_digests(held[module_at])
                 if digests_error != ok { ret digests_error }
-                if sha.len == 64usize && interface_sha.len == 64usize {
-                    loaded.modules[module_at].sha256 = sha
+                if interface_sha.len == 64usize {
                     loaded.modules[module_at].interface_sha256 = interface_sha
                     carried = true
                 }
             }
             if !carried {
-                let (sha, sha_error) = artifact_hash.sha256_hex(a, loaded.modules[module_at].text)
-                if sha_error != ok { ret sha_error }
-                loaded.modules[module_at].sha256 = sha
                 let (interface_sha, interface_error) = tool.manifest_interface_sha256(a, loaded, module_at)
                 if interface_error != ok { ret interface_error }
                 loaded.modules[module_at].interface_sha256 = interface_sha
@@ -9806,7 +9853,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 try report_phase(&report, "write executable")
                 // Every build writes `.neper/<mode>/build-manifest.json` under the project root
                 // (section 7, D254), with the executable it just wrote as the one artifact.
-                try fill_manifest_digests(a, &loaded, held)
+                try fill_manifest_digests(a, &loaded, held, hot_load.sha_now)
                 // A kept module's unsafe inventory from its artifact (D457): the manifest
                 // copies it and scans only the modules the build parsed.
                 var inventory_at = 0usize

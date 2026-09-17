@@ -10786,3 +10786,19 @@ within its budget of five percent, the arena not above. Both suites run it
 with the stable stage after the fixed point, and a breach fails the suite:
 re-pinning the baseline is the decision row that names the cause. The timed
 half stays a measurement, outside the suites.
+
+## D507 -- The key is a candidate
+
+H15 says xxHash64 is a fast candidate fingerprint, not an unexplained equality
+proof, and asks for a specified collision-verification strategy with injected
+collisions as its test. The artifact's Debug section now carries, after the
+bytes' SHA-256 and the interface's, the canonical text's -- the bytes with
+every comment's body left out, which the key of D504 is over -- and a key hit
+is proved before the module is kept: by the bytes' SHA-256 when they are the
+artifact's, the common case and free, since the hot load takes it for the
+manifest anyway; by the canonical text's when they are not; and an artifact
+without that digest, or one that differs, is rebuilt as `source-changed`.
+`--fault-collision` makes every key a hit, and both suites see a body edit
+under it rebuilt and run with the edited body. Found on the way: D504 had left
+a kept comment-edited module's manifest input digest as the artifact's; it is
+the bytes' own now, and both suites check it.

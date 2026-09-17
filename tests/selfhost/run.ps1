@@ -1695,7 +1695,23 @@ foreach ($hotMode in @('--release', '--time')) {
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable'
     if ($LASTEXITCODE -ne 0) { throw "a comment edit did not keep the module stable ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm build after a comment edit is not the clean build ($hotMode)" }
+    # The kept module's input digest is the edited bytes' own (D507, H15), not the artifact's.
+    $hotCommentInput = ((Get-Content -Raw -LiteralPath $hotManifest | ConvertFrom-Json).inputs | Where-Object { $_.source.path -eq 'dep.e' }).sha256
+    if ($hotCommentInput -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $hotFixture 'edits\dep_comment.e')).Hash.ToLower()) { throw "the manifest's input digest of a kept comment-edited module is not the file's ($hotMode)" }
     Copy-Item (Join-Path $hotFixture 'src\dep.e') (Join-Path $hotSource 'dep.e')
+    # An injected key collision (D507, H15): under `--fault-collision` every key is a
+    # hit, and a body edit still rebuilds `dep`, proved by the bytes beyond the key.
+    Copy-Item (Join-Path $hotFixture 'edits\dep_body.e') (Join-Path $hotSource 'dep.e')
+    $hotCollision = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --fault-collision 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotCollision -ne 'executable written') { throw "the warm build under an injected key collision failed ($hotMode)" }
+    & $hotExe
+    if ($LASTEXITCODE -ne 8) { throw "an injected key collision kept a stale artifact: exit $LASTEXITCODE ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:edges-hold' 'dep=rebuilt:source-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest under an injected key collision does not record the rebuild ($hotMode)" }
+    Copy-Item (Join-Path $hotFixture 'src\dep.e') (Join-Path $hotSource 'dep.e')
+    $hotRestored = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotRestored -ne 'executable written') { throw "the warm build after the collision case failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm build after the collision case is not the clean build ($hotMode)" }
     # `--stats` on a warm build (D412): the kept modules are parsed for the counts, and
     # the work rows say nothing was done.
     $hotStats = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --stats 2>&1

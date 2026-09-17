@@ -596,7 +596,9 @@ function -- a `*` before a name or a `(`, not after `:`, `[` or `->`; `increment
 `rebuilt` and `reason`: `stable` (source and every dependency unchanged),
 `edges-hold` (source unchanged, every imported interface still as recorded --
 "unchanged" leaving every comment's body out, D504, so an edit inside a comment
-that moves no line is no change),
+that moves no line is no change; the 64-bit key is a candidate, D507, and a hit
+is proved by the bytes' SHA-256 when they are the artifact's and by the canonical
+text's otherwise, the artifact carrying both, so a collision is a source change),
 `edge-changed` (an imported interface differs), `source-changed`, `mode-changed`,
 `no-artifact`, `invalid-artifact` (a file that failed its checksum or layout
 validation, rebuilt like a missing one), `compiler-changed` (written by another
@@ -726,6 +728,11 @@ The manifest's `unsafe` inventory of a kept module comes from its artifact
 lowered the module, and a warm build copies them -- the manifest phase of the
 compiler's own warm build fell from 20 ms to 4 -- scanning only the modules it
 parsed, so the inventory is whole either way.
+
+`--fault-collision` (D507, H15) on a hot build makes every artifact's key a hit
+whatever the text, so a suite can see that a hit is verified beyond the key: a
+body edit under it is still rebuilt as `source-changed`. The manifest's input
+digests are always the bytes' own, a kept module's included.
 
 `--fault-write N` (D435, H24) on a hot build makes the artifact write of module
 `N` (by load order, the root 0) die after its `.tmp` is staged and before the

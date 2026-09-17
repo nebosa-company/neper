@@ -1865,7 +1865,19 @@ for hot_mode in --release --time; do
     [ "$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = 'executable written' ]
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable
     cmp "$hot_exe" "$hot_clean"
+    # The kept module's input digest is the edited bytes' own (D507, H15).
+    python3 -c "import json,sys,hashlib; m=json.load(open(sys.argv[1])); want=hashlib.sha256(open(sys.argv[2],'rb').read()).hexdigest(); sys.exit(0 if any(i['source']['path']=='dep.e' and i['sha256']==want for i in m['inputs']) else 1)" "$hot_manifest" "$hot_fixture/edits/dep_comment.e"
     cp "$hot_fixture/src/dep.e" "$hot_source/dep.e"
+    # An injected key collision (D507, H15): a body edit under --fault-collision still rebuilds dep.
+    cp "$hot_fixture/edits/dep_body.e" "$hot_source/dep.e"
+    [ "$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --fault-collision 2>/dev/null)" = 'executable written' ]
+    hot_collision_status=0
+    "$hot_exe" || hot_collision_status=$?
+    [ "$hot_collision_status" -eq 8 ]
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:edges-hold dep=rebuilt:source-changed
+    cp "$hot_fixture/src/dep.e" "$hot_source/dep.e"
+    [ "$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = 'executable written' ]
+    cmp "$hot_exe" "$hot_clean"
     # `--stats` on a warm build (D412): the kept modules are parsed for the counts.
     $test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --stats 2>&1 | grep -q 'bodies checked | 0'
     # The compiler is an identity (D398, H15): a warm build by another compiler

@@ -2466,11 +2466,29 @@ fn write_globals(builder: *nir.Builder, c: *check.Checker, module_index: usize, 
 // segments, so an edit inside a comment that moves no line keeps the artifact, and
 // one that adds or removes a line does not, since the line tables the artifact
 // carries would be wrong. A `//` inside a string, a raw string or a character
-// literal is text, not a comment. The bytes' own hash stays the manifest's.
+// literal is text, not a comment. The bytes' own hash stays the manifest's. The
+// key is a candidate (D507, H15): the artifact also carries the canonical text's
+// SHA-256, which a hit is verified by when the bytes are not the artifact's.
 fn source_text_hash(text: str) -> (usize, err) {
     var combined = 0usize
     var segment_start = 0usize
-    var at = 0usize
+    while segment_start < text.len {
+        let (comment_at, comment_end) = next_comment(text, segment_start)
+        if comment_at == text.len { break }
+        let (segment_hash, segment_error) = artifact_hash.xxhash64(text[segment_start..comment_at])
+        if segment_error != ok { ret (0usize, segment_error) }
+        combined = (combined *% 11400714819323198485usize) ^ segment_hash
+        segment_start = comment_end
+    }
+    let (last_hash, last_error) = artifact_hash.xxhash64(text[segment_start..text.len])
+    if last_error != ok { ret (0usize, last_error) }
+    ret ((combined *% 11400714819323198485usize) ^ last_hash, ok)
+}
+
+// The next comment at or after `from`: where it starts and where its body ends --
+// the line break, or the text's end -- or the text's end twice when there is none.
+fn next_comment(text: str, from: usize) -> (usize, usize) {
+    var at = from
     while at < text.len {
         let byte_here = text[at]
         if byte_here == 34u8 {
@@ -2521,18 +2539,51 @@ fn source_text_hash(text: str) -> (usize, err) {
             }
         }
         if byte_here == 47u8 && at + 1usize < text.len && text[at + 1usize] == 47u8 {
-            let (segment_hash, segment_error) = artifact_hash.xxhash64(text[segment_start..at])
-            if segment_error != ok { ret (0usize, segment_error) }
-            combined = (combined *% artifact_hash.prime1()) ^ segment_hash
-            while at < text.len && text[at] != 10u8 { at += 1usize }
-            segment_start = at
-            continue
+            var comment_end = at
+            while comment_end < text.len && text[comment_end] != 10u8 { comment_end += 1usize }
+            ret (at, comment_end)
         }
         at += 1usize
     }
-    let (last_hash, last_error) = artifact_hash.xxhash64(text[segment_start..text.len])
-    if last_error != ok { ret (0usize, last_error) }
-    ret ((combined *% artifact_hash.prime1()) ^ last_hash, ok)
+    ret (text.len, text.len)
+}
+
+// The canonical text (D507, H15): the bytes the key is over, every comment's body
+// left out, and its SHA-256 as hex -- what an artifact carries and a key hit is
+// verified by when the bytes changed.
+fn comment_blind_text(a: *mem.Arena, text: str) -> (str, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, text.len)
+    if storage_error != ok { ret ("", storage_error) }
+    var count = 0usize
+    var segment_start = 0usize
+    while segment_start < text.len {
+        let (comment_at, comment_end) = next_comment(text, segment_start)
+        var copy_at = segment_start
+        while copy_at < comment_at {
+            storage[count] = text[copy_at]
+            count += 1usize
+            copy_at += 1usize
+        }
+        segment_start = comment_end
+    }
+    ret (storage[0usize..count], ok)
+}
+
+fn canonical_sha256_hex(a: *mem.Arena, text: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (stripped, strip_error) = comment_blind_text(a, text)
+    if strip_error != ok { ret ("", strip_error) }
+    var hex: [64]u8 = zero
+    artifact_hash.sha256_hex_into(stripped, hex[..])
+    mem.reset(a, checkpoint)
+    let (kept, kept_error) = mem.alloc[u8](a, 64usize)
+    if kept_error != ok { ret ("", kept_error) }
+    var at = 0usize
+    while at < 64usize {
+        kept[at] = hex[at]
+        at += 1usize
+    }
+    ret (kept[0usize..64usize], ok)
 }
 
 fn identifier_byte(byte_here: u8) -> bool {
@@ -2569,7 +2620,24 @@ fn write_debug(c: *check.Checker, g: *graph.Graph, module_index: usize, table: *
         g.modules[module_index].interface_sha256 = interface_sha
     }
     try binary.text(output, sha)
-    ret binary.text(output, interface_sha)
+    try binary.text(output, interface_sha)
+    // The canonical text's digest (D507, H15), after them: a hit on the 64-bit key
+    // whose bytes are not the artifact's is verified by it.
+    let (canonical, canonical_error) = canonical_sha256_hex(c.arena, g.modules[module_index].text)
+    if canonical_error != ok { ret canonical_error }
+    ret binary.text(output, canonical)
+}
+
+// The canonical text's digest an artifact carries (D507): empty for one written
+// before it, which a key hit over changed bytes cannot verify.
+fn artifact_canonical_sha256(bytes: []const u8) -> (str, err) {
+    let validation_error = check_layout(bytes)
+    if validation_error != ok { ret ("", validation_error) }
+    let (debug, found_debug, section_error) = find_section_unchecked(bytes, debug_kind())
+    if section_error != ok || !found_debug { ret ("", InvalidArtifact) }
+    if debug.length < 212usize { ret ("", ok) }
+    let start = debug.offset + 148usize
+    ret (bytes[start..start + 64usize], ok)
 }
 
 // The manifest's digests an artifact carries (D323), as views; empty when it has none.
