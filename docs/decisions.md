@@ -10802,3 +10802,15 @@ without that digest, or one that differs, is rebuilt as `source-changed`.
 under it rebuilt and run with the edited body. Found on the way: D504 had left
 a kept comment-edited module's manifest input digest as the artifact's; it is
 the bytes' own now, and both suites check it.
+
+## D508 -- Extracted constants as a metamorphic transformation
+
+H10 named extracted constants among the transformations the metamorphic
+harness (D438) should hold the compiler to. The harness now replaces every
+typed integer literal in a fixture's root module -- outside a `const` and a
+`case` label, whose rules differ -- with a module-scope `const` of the same
+type and value, one per distinct literal, named to the literal's length so
+every column holds, the declarations appended at the end of the module. A
+constant folds into its uses, so the image must be byte-identical in both
+modes and the program must behave the same; the four fixtures hold under it
+in both suites, 6 to 39 constants each.

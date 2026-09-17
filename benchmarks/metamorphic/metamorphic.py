@@ -2,7 +2,7 @@
 
     python benchmarks/metamorphic/metamorphic.py COMPILER ROOT ARCH OS OUTDIR FIXTURE_MAIN...
 
-Five transformations that must not change what a program does, applied to each
+Six transformations that must not change what a program does, applied to each
 fixture's root module and checked against the untouched build:
 
 - `comments`: every comment is removed through the lossless token stream, the
@@ -22,10 +22,14 @@ fixture's root module and checked against the untouched build:
   (a protocol pair such as `Rec`/`rec_cmp` kept); the names reach the image in
   its trap messages and backtraces, so with them put back it must be
   byte-identical, and the program must behave the same.
+- `constants` (D508): every typed integer literal outside a `const` or a `case`
+  label is replaced by a module-scope `const` of the same type and value, named
+  to the literal's length so the columns hold, the declarations appended at the
+  end; a constant folds into its uses, so the image must be byte-identical.
 
 Exit 1 on the first fixture whose transformed build differs, with what differed.
 """
-import json, os, shutil, subprocess, sys
+import json, os, re, shutil, subprocess, sys
 
 compiler, root, arch, host_os, outdir = sys.argv[1:6]
 fixtures = sys.argv[6:]
@@ -265,6 +269,38 @@ def symbols_renamed(main, index_json_lines, keywords, spelled):
     return bytes(out), renames
 
 
+LITERAL = re.compile(rb'^([0-9]+)(u8|u16|u32|u64|usize|i8|i16|i32|i64|isize)$')
+
+
+def constants_extracted(main, tokens_json_lines):
+    text = open(main, 'rb').read()
+    records = [json.loads(line) for line in tokens_json_lines]
+    records = [r for r in records if r.get('record') == 'token']
+    names = {}
+    edits = []
+    line_kinds = {}
+    for r in records:
+        line_kinds.setdefault(r['span']['line'], []).append(r['kind'])
+    for r in records:
+        kind = r['kind']
+        if kind == 'INTEGER':
+            lexeme = text[r['span']['byte_start']:r['span']['byte_end']]
+            first = line_kinds[r['span']['line']][0]
+            if LITERAL.match(lexeme) and len(lexeme) >= 3 and first not in ('KW_CONST', 'KW_CASE'):
+                if lexeme not in names:
+                    names[lexeme] = b'K' + str(len(names) + 1).encode().rjust(len(lexeme) - 1, b'0')
+                edits.append((r['span']['byte_start'], r['span']['byte_end'], names[lexeme]))
+    out = bytearray(text)
+    for start, end, name in reversed(edits):
+        out[start:end] = name
+    if out and not out.endswith(b'\n'):
+        out += b'\n'
+    for lexeme, name in names.items():
+        suffix = LITERAL.match(lexeme).group(2)
+        out += b'const ' + name + b': ' + suffix + b' = ' + lexeme + b'\n'
+    return bytes(out)
+
+
 def variant_dir(fixture_dir, name):
     d = os.path.join(outdir, name)
     if os.path.exists(d):
@@ -343,4 +379,17 @@ for main in fixtures:
         ran_a, ran_b = run([a], cwd=outdir), run([b], cwd=outdir)
         if (ran_a.returncode, ran_a.stdout) != (ran_b.returncode, ran_b.stdout):
             sys.exit('metamorphic: %s with renamed symbols behaves differently (%d vs %d)' % (name, ran_a.returncode, ran_b.returncode))
-    print('metamorphic: %s holds under comments, reorder, renamed, fields and symbols' % name)
+    # constants: byte-identical images, the same behaviour.
+    hoisted = variant_dir(fixture_dir, name + '-constants')
+    hoisted_main = os.path.join(hoisted, 'src', 'main.e')
+    open(hoisted_main, 'wb').write(constants_extracted(original_main, tokens))
+    for release in (False, True):
+        a = os.path.join(outdir, '%s-original-%d%s' % (name, release, exe))
+        b = os.path.join(outdir, '%s-constants-%d%s' % (name, release, exe))
+        image = build(hoisted_main, b, release)
+        if image != images[release]:
+            sys.exit('metamorphic: %s with extracted constants builds a different %s image' % (name, 'release' if release else 'debug'))
+        ran_a, ran_b = run([a], cwd=outdir), run([b], cwd=outdir)
+        if (ran_a.returncode, ran_a.stdout) != (ran_b.returncode, ran_b.stdout):
+            sys.exit('metamorphic: %s with extracted constants behaves differently (%d vs %d)' % (name, ran_a.returncode, ran_b.returncode))
+    print('metamorphic: %s holds under comments, reorder, renamed, fields, symbols and constants' % name)
