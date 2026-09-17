@@ -609,6 +609,7 @@
         "selection_span",
         "container_id",
         "attributes",
+        "unsafe",
         "documentation"
       ],
       "properties": {
@@ -683,6 +684,20 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "unsafe": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "unsafe",
+              "nocheck",
+              "deref",
+              "extern",
+              "union",
+              "bitcast",
+              "cast"
+            ]
           }
         },
         "documentation": {

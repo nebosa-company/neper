@@ -228,7 +228,10 @@ error, extern and intrinsic. Its closed `kind` values are `module`, `fn`, `kerne
 `error`, `extern`, and `intrinsic`.
 
 Each symbol contains `id`, `kind`, `name`, `qualified_name`, `module`, `signature`,
-`span`, `selection_span`, `container_id`, `attributes`, and nullable `documentation`
+`span`, `selection_span`, `container_id`, `attributes`, `unsafe` (D513, H27: the
+kinds of the manifest's unsafe inventory that name the declaration -- `unsafe`,
+`nocheck`, `deref`, `extern`, `union`, `bitcast`, `cast` -- each once, empty for a
+symbol that holds none), and nullable `documentation`
 from spec §3's attached `///` lines. `id` is the zero-based
 record number among symbol records and is stable for identical source. Nullable
 fields are present as JSON null; no field is omitted. `neper index-file - ROOT

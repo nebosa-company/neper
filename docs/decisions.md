@@ -10874,3 +10874,16 @@ pins the plan per host and the refusal on both. A query reads the map
 quietly -- a stale one is left unread, its diagnostics being the check's to
 report -- and only the operand's, as before: a generated dependency is not
 yet marked.
+
+## D513 -- The index marks the boundaries
+
+H27 asked that the index mark the unsafe boundaries the manifest enumerates.
+Every `symbol` record now carries `unsafe`: the kinds of the module's
+inventory records -- the same scan the manifest makes (D355, D371, D457) --
+that name the declaration, each once, for a function, an extern or a type,
+and empty otherwise, so a harness reading the index knows which declarations
+hold an `@unsafe`, a `@nocheck` and its unchecked derefs, an extern, a bare
+union, a `bitcast` or a `cast` without the manifest. The inventory is scanned
+once per indexed module and read as the manifest writes it. `index_unsafe`
+pins the fixture's symbols on both hosts, and the index goldens carry the
+field.

@@ -38,6 +38,9 @@ type Out = struct {
     // `--absolute-paths` (section 2, D290): the operand's absolute spelling, written as
     // `absolute_path` beside every source identity when it is not empty.
     absolute: str,
+    // The module's unsafe inventory (D513, H27), the manifest's records as bytes,
+    // while its index is written: each symbol names the boundaries it holds.
+    inventory: str,
 }
 
 fn byte(out: *Out, value: u8) -> err {
@@ -653,6 +656,10 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
     out.lines = out_lines
     out.bytes = storage
     out.absolute = absolute
+    // The boundaries each declaration holds (D513): the manifest's scan of the module.
+    let (inventory, inventory_count, inventory_error) = module_inventory(a, module_name, source, out_lines)
+    if inventory_error != ok { ret (2usize, inventory_error) }
+    out.inventory = inventory
     let header_error = header(&out, "index")
     if header_error != ok { ret (2usize, header_error) }
     // The module itself is the first symbol, so every declaration's container is id 0.
@@ -743,8 +750,57 @@ fn index_module_record(out: *Out, module_name: str) -> err {
     try quoted(out, module_name)
     try text(out, ",\"module\":")
     try quoted(out, module_name)
-    try text(out, ",\"signature\":null,\"span\":null,\"selection_span\":null,\"container_id\":null,\"attributes\":[],\"documentation\":null}")
+    try text(out, ",\"signature\":null,\"span\":null,\"selection_span\":null,\"container_id\":null,\"attributes\":[],\"unsafe\":[],\"documentation\":null}")
     ret flush(out)
+}
+
+// The unsafe boundaries a declaration holds (D513, H27): the kinds of the manifest's
+// inventory records that name it -- `unsafe`, `nocheck`, `deref`, `extern`, `union`,
+// `bitcast`, `cast` -- each once, for a function, an extern or a type; every other
+// symbol's list is empty. The inventory is read as the manifest writes it.
+fn index_unsafe_kinds(out: *Out, kind: str, name: str) -> err {
+    try byte(out, 91u8)
+    if graph.same(kind, "fn") || graph.same(kind, "extern") || graph.same(kind, "type") || graph.same(kind, "kernel") || graph.same(kind, "test") {
+        let inventory = out.inventory
+        var seen: [8]str = zero
+        var seen_count = 0usize
+        var at = 0usize
+        while at < inventory.len {
+            let (record_kind, kind_end, has_kind) = inventory_value(inventory, at, "\"kind\":\"")
+            if !has_kind { break }
+            let (function, function_end, has_function) = inventory_value(inventory, kind_end, "\"function\":\"")
+            if !has_function { break }
+            at = function_end
+            if !graph.same(function, name) { continue }
+            var repeated = false
+            var seen_at = 0usize
+            while seen_at < seen_count {
+                if graph.same(seen[seen_at], record_kind) { repeated = true }
+                seen_at += 1usize
+            }
+            if repeated || seen_count == seen.len { continue }
+            if seen_count != 0usize { try byte(out, 44u8) }
+            try quoted(out, record_kind)
+            seen[seen_count] = record_kind
+            seen_count += 1usize
+        }
+    }
+    ret byte(out, 93u8)
+}
+
+// The value of a string key at or after `from` in the inventory's bytes: the value,
+// where it ends, and whether the key was there.
+fn inventory_value(inventory: str, from: usize, key: str) -> (str, usize, bool) {
+    var at = from
+    while at + key.len <= inventory.len {
+        if graph.same(inventory[at..at + key.len], key) {
+            var end = at + key.len
+            while end < inventory.len && inventory[end] != 34u8 { end += 1usize }
+            ret (inventory[at + key.len..end], end, true)
+        }
+        at += 1usize
+    }
+    ret ("", inventory.len, false)
 }
 
 fn index_symbol_record(out: *Out, root: str, path: str, source: str, module_name: str, id: usize, symbol: resolve.Symbol, tokens: []const lex.Token, first: usize, last: usize, name_index: usize) -> err {
@@ -778,6 +834,8 @@ fn index_record(out: *Out, root: str, path: str, source: str, module_name: str, 
     try decimal(out, container_id)
     try text(out, ",\"attributes\":")
     try index_attributes(out, source, tokens, attribute_start, first)
+    try text(out, ",\"unsafe\":")
+    try index_unsafe_kinds(out, kind, name)
     try text(out, ",\"documentation\":")
     try index_documentation(out, source, tokens, attribute_start)
     try byte(out, 125u8)

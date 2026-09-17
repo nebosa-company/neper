@@ -2123,6 +2123,12 @@ if ((Select-String -LiteralPath $trapModuleActual -Pattern '"trap":\{"kind":"bou
 if ((Select-String -LiteralPath $trapModuleActual -Pattern '\{"function":"deep.pick","source":\{"root":"project-src","path":"deep.e"\},"line":3\}' -Quiet) -ne $true) { throw 'a frame inside a dependency does not name its source' }
 & python (Join-Path $repo 'scripts/validate_stream.py') $trapModuleActual
 if ($LASTEXITCODE -ne 0) { throw 'the run record over a trap in a dependency does not validate' }
+# The index marks the boundaries a declaration holds (D513, H27): the unsafe fixture's
+# symbols carry the kinds of the manifest's inventory that name them.
+$indexUnsafeActual = Join-Path $testBuild 'conformance-tools-index-unsafe.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\manifest_unsafe')`" && `"$compiler`" index-file src/main.e `"$repo`" x64 windows --json > `"$indexUnsafeActual`""
+if ($LASTEXITCODE -ne 0) { throw 'index-file --json over the unsafe fixture failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexUnsafeActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index_unsafe.expected.jsonl')).Hash) { throw 'index-file --json over the unsafe fixture differs from the conformance corpus' }
 # `-` on `check-file` (D490) and `index` (D488): the module from stdin under its `--path` identity is the file's golden.
 $stdinActual = Join-Path $testBuild 'conformance-stdin-check.jsonl'
 cmd /c "`"$compiler`" check-file - `"$repo`" x64 windows --json --path scope.e < `"$(Join-Path $conformanceRoot 'reject\scope.e')`" > `"$stdinActual`""
