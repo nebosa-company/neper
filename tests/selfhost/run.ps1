@@ -3657,6 +3657,27 @@ Copy-Item (Join-Path $renamedSrc 'src\check.e') (Join-Path $warmRelease 'src\che
 & python (Join-Path $repo 'scripts/check_incremental.py') $warmReleaseManifest 'check=rebuilt:source-changed' 'lex=kept:stable'
 if ($LASTEXITCODE -ne 0) { throw 'the warm release build after renaming one module''s locals did not rebuild it' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $warmReleaseExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $warmReleaseCold).Hash) { throw 'the warm release build after renaming one module''s locals is not the cold build' }
+# The plans over the compiler (D537, H17, H29): `check.same`, called at five hundred
+# and forty sites in thirteen modules, and the type `check.Type`, referenced at
+# nearly four hundred, each renamed by its plan applied to a project of the sources,
+# and the compiler built from the result builds the stable stage byte for byte.
+foreach ($planTurn in @(@('check.same', 'alike', 'plan-fn'), @('check.Type', 'Kind2', 'plan-type'))) {
+    $planProject = Join-Path $testBuild $planTurn[2]
+    if (Test-Path -LiteralPath $planProject) { Remove-Item -LiteralPath $planProject -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $planProject | Out-Null
+    Copy-Item -Recurse (Join-Path $repo 'src') (Join-Path $planProject 'src')
+    $planTurnFile = Join-Path $testBuild "$($planTurn[2]).jsonl"
+    cmd /c "cd /d `"$planProject`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol $($planTurn[0]) --to $($planTurn[1]) > `"$planTurnFile`""
+    if ($LASTEXITCODE -ne 0) { throw "the rename plan of $($planTurn[0]) over the compiler failed" }
+    & $compiler apply-plan $planTurnFile --root (Join-Path $planProject 'src') | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "the rename plan of $($planTurn[0]) over the compiler did not apply" }
+    $planCompiler = Join-Path $testBuild "neper-$($planTurn[2]).exe"
+    & $ownCompilerPath emit-executable (Join-Path $planProject 'src\main.e') $repo 'x64' 'windows' $planCompiler | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $planCompiler)) { throw "the compiler did not build after the rename plan of $($planTurn[0])" }
+    $byPlan = Join-Path $testBuild "neper-by-$($planTurn[2]).exe"
+    & $planCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byPlan | Out-Null
+    if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $byPlan).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler renamed by the plan of $($planTurn[0]) does not build the stable stage" }
+}
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

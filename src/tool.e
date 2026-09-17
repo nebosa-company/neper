@@ -4527,6 +4527,11 @@ fn type_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, 
     ret flush(out)
 }
 
+// One of section 12's protocol operations, as a function's suffix (D517, D537).
+fn protocol_op_name(op: str) -> bool {
+    ret graph.same(op, "eq") || graph.same(op, "cmp") || graph.same(op, "hash") || graph.same(op, "format") || graph.same(op, "next") || graph.same(op, "next_err")
+}
+
 // Whether a function is a protocol's by its spelling (D518): `<snake>_<op>` for a
 // type declared in its module, `op` one of section 12's -- `eq`, `cmp`, `hash`,
 // `format`, `next`, `next_err`; the type's name and the op when it is.
@@ -4540,7 +4545,7 @@ fn protocol_spelling(c: *check.Checker, g: *graph.Graph, function_index: usize) 
             let prefix_len = em.snake_protocol_name(symbol.name, "", prefix[..])
             if prefix_len != 0usize && function.name.len > prefix_len && graph.same(function.name[0usize..prefix_len], prefix[0usize..prefix_len]) {
                 let op = function.name[prefix_len..function.name.len]
-                if graph.same(op, "eq") || graph.same(op, "cmp") || graph.same(op, "hash") || graph.same(op, "format") || graph.same(op, "next") || graph.same(op, "next_err") { ret (symbol.name, op, true) }
+                if protocol_op_name(op) { ret (symbol.name, op, true) }
             }
         }
         symbol_index += 1usize
@@ -4691,7 +4696,9 @@ fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.
     var function_at = 0usize
     while function_at < c.signature_function_count && old_prefix_len != 0usize && new_prefix_len != 0usize {
         let candidate = c.functions[function_at]
-        if candidate.module_index == symbol.module_index && !c.function_generics[function_at].instance && candidate.name.len > old_prefix_len && graph.same(candidate.name[0usize..old_prefix_len], old_prefix[0usize..old_prefix_len]) && follower_count < followers.len {
+        // Only the protocol's spellings follow (D537): `type_has_undef_value` beside
+        // `Type` is a helper named for the type, not a lookup by the spelling.
+        if candidate.module_index == symbol.module_index && !c.function_generics[function_at].instance && candidate.name.len > old_prefix_len && graph.same(candidate.name[0usize..old_prefix_len], old_prefix[0usize..old_prefix_len]) && protocol_op_name(candidate.name[old_prefix_len..candidate.name.len]) && follower_count < followers.len {
             followers[follower_count] = function_at
             follower_count += 1usize
         }

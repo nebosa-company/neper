@@ -11193,3 +11193,17 @@ blanked keeps all thirty-five `stable`; `lex` hoisted rebuilds `lex`, and
 by their body edges the two modules that inline from it, `edge-changed`,
 the rest kept; `check` renamed the same; the image the cold release build's
 each time. The release warm path held at the first attempt.
+
+## D537 -- The plans over the compiler
+
+The turns over the compiler reach the plans: `check.same` renamed by
+`plan-rename-file`, five hundred and forty-one edits over thirteen modules,
+and the type `check.Type`, applied to a project of the sources, and the
+compiler built from each builds the stable stage byte for byte, which both
+suites hold. The type's plan had four hundred and ninety-three edits for
+three hundred and eighty-eight references: D517 took every function of the
+module spelled `type_` -- `type_has_undef_value`, `type_still_generic`, a
+hundred helpers named for the type -- for a protocol's, and renamed them
+with it. Only section 12's spellings follow now: `<snake>_eq`, `_cmp`,
+`_hash`, `_format`, `_next`, `_next_err`, the ones a lookup finds by the
+name; a helper merely named for the type keeps its own.

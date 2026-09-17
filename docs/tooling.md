@@ -486,10 +486,11 @@ that names a type (D515) plans the type's rename: the index of every module of
 the program is taken in memory, and each reference whose target is the type --
 an annotation, a literal, spelled through a `use` qualifier or bare -- and the
 declaration are the sites, the same records as a function's; and every function
-of the type's module spelled with the type's name by section 12's convention --
-`rec_cmp`, `rec_eq`, `rec_hash`, `rec_format`, `rec_next` for `Rec` -- is renamed
-with it (D517), `pair_cmp`, at its declaration and every use, since the lookup
-that finds it is by the spelling. For the same reason a subject that is such a
+of the type's module spelled `<snake>_<op>` for it, `op` one of section 12's --
+`rec_cmp`, `rec_eq`, `rec_hash`, `rec_format`, `rec_next`, `rec_next_err` for
+`Rec` -- is renamed with it (D517, D537), `pair_cmp`, at its declaration and every
+use, since the lookup that finds it is by the spelling; a helper merely named for
+the type, `rec_count`, is not. For the same reason a subject that is such a
 function -- `deep.rec_cmp` -- is refused a name of its own (D518): the plan says
 whose `cmp` it is by its spelling and exits 2, and the type's rename is the way. It checks
 the program and emits one `precondition` record per file the rename touches --
