@@ -11575,3 +11575,17 @@ source-origin `protocol` reference from that identifier to the module's closer,
 interleaved at its source position. `index_resource.e` pins the relation on both
 hosts; the full turn renames 4,731 functions and types across both roots on Windows
 and must build and reproduce the stable stage on both hosts.
+
+## D561 -- Live progress has an explicit order
+
+`--json --time` already separated timely phase progress from the canonical build
+result, but a consumer could detect neither a missed progress event nor a reordered
+delivery without interpreting phase names. Every `progress` record now carries a
+contiguous one-based `sequence` in emission order. The sequence covers the live
+progress subsequence; diagnostics, explanations and statistics remain canonical
+records, and the `result` record still terminates the stream and owns final status.
+
+Both self-host suites parse a real timed build, require more than one progress event,
+require the exact sequence `1..N`, require the result to be the final record, and
+validate the stream against the schema. This closes H18's sequence-order slice while
+backpressure and disconnect behavior remain separate transport work.

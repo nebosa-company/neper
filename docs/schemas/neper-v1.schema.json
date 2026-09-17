@@ -1458,6 +1458,7 @@
       "required": [
         "record",
         "phase",
+        "sequence",
         "ms",
         "arena_mb",
         "elapsed_ms"
@@ -1468,6 +1469,10 @@
         },
         "phase": {
           "type": "string"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
         },
         "ms": {
           "type": "integer",

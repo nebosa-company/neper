@@ -745,11 +745,13 @@ against each other, where a decision can differ). The records are gathered per
 worker and written after the phase in worker order, so they never interleave and
 a given worker count gives the same order run to run; `-j 1` is module order.
 
-`--json --time` on a build (D454, H18) makes every phase a `progress` record of
-the stream -- `phase`, `ms` (the phase's own), `arena_mb` and `elapsed_ms`
-(since the build began) -- written as the phase ends, so a harness watching
-the stream sees the build move and can read where a deadline would land;
-without `--json` the same is the text `time` line on stderr.
+`--json --time` on a build (D454, D561, H18) makes every phase a `progress`
+record of the stream -- `phase`, a contiguous one-based `sequence` within the
+live progress subsequence, `ms` (the phase's own), `arena_mb` and `elapsed_ms`
+(since the build began) -- written as the phase ends. A harness can reject a
+missing or reordered live event; the ordinary `result` remains the final record
+and owns canonical status. Without `--json` the same is the text `time` line on
+stderr.
 
 `--json --stats` on a build (D476, H18) makes the `--stats` table one `stats`
 record of the stream, before the `result`: flat, one key per row, the row's name

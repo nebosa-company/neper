@@ -1794,13 +1794,16 @@ fn report_phase(report: *Sink, name: str) -> err {
         ret ok
     }
     report.phase_started = now
-    // Under `--json --time` (D454, H18) the phase is a `progress` record of the
-    // stream -- the phase, its milliseconds, the arena's megabytes, the milliseconds
-    // since the build began -- so a harness watching the stream sees the build move
-    // and knows where a deadline would land; otherwise the text line on stderr.
+    // Under `--json --time` (D454, D561, H18) the phase is a `progress` record of
+    // the stream. Its one-based sequence orders the live progress subsequence; the
+    // canonical result remains the final record. Otherwise this is a text line on
+    // stderr.
     if report.json {
+        report.progress_sequence += 1usize
         try write_all(report, "{\"record\":\"progress\",\"phase\":")
         try write_json_string(report, name)
+        try write_all(report, ",\"sequence\":")
+        try write_usize(report, report.progress_sequence)
         try write_all(report, ",\"ms\":")
         try write_usize(report, (now - started) / 1000000usize)
         try write_all(report, ",\"arena_mb\":")
@@ -3589,6 +3592,9 @@ type Sink = struct {
     // `--time` (D303): a line per phase on stderr, and when the last one ended.
     timing: bool,
     phase_started: usize,
+    // The one-based order of live JSON progress events (D561, H18). Other stream
+    // records are canonical data and the result still terminates the stream.
+    progress_sequence: usize,
     // `--deadline MS` (D399): nanoseconds after the build's start at which the next
     // checkpoint cancels it; set only when the flag was given.
     deadline_set: bool,

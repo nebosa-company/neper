@@ -2426,12 +2426,14 @@ $explainInlineActual = Join-Path $testBuild 'conformance-tools-explain-inline.js
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/contract.e `"$repo`" x64 windows conformance-tools-explain-inline.out --release --explain --json -j 1 > `"$explainInlineActual`""
 if ($LASTEXITCODE -ne 0) { throw "emit-executable --explain --json failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainInlineActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_inline.x64-windows.expected.jsonl')).Hash) { throw "emit-executable --explain --json differs from the conformance corpus" }
-# Progress records (D454, H18): under `--json --time` every phase is a record of the
-# stream, valid against the schema, and the result still ends it.
+# Progress records (D454, D561, H18): under `--json --time` every phase is a record
+# of the stream, with a contiguous one-based sequence, and the result still ends it.
 $progressActual = Join-Path $testBuild 'conformance-tools-progress.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/contract.e `"$repo`" x64 windows conformance-tools-progress.out --json --time > `"$progressActual`""
 if ($LASTEXITCODE -ne 0) { throw "emit-executable --json --time failed" }
 if ((Select-String -LiteralPath $progressActual -Pattern '"record":"progress","phase":"lower and codegen"' -Quiet) -ne $true) { throw 'the build stream under --time carries no progress record for the lowering' }
+& python -c "import json,sys; rows=[json.loads(x) for x in open(sys.argv[1])]; progress=[r for r in rows if r.get('record')=='progress']; assert len(progress)>1 and [r['sequence'] for r in progress]==list(range(1,len(progress)+1)) and rows[-1].get('record')=='result'" $progressActual
+if ($LASTEXITCODE -ne 0) { throw 'the progress sequence is not contiguous or the result is not final' }
 & python (Join-Path $repo 'scripts/validate_stream.py') $progressActual
 if ($LASTEXITCODE -ne 0) { throw 'the progress records do not validate against the schema' }
 # `--stats` as a record (D476, H18): under `--json` the table is one flat `stats`

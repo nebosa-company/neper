@@ -2541,9 +2541,10 @@ cmp -s "$test_build/conformance-tools-run-flood.jsonl" "$conformance_root/tools/
 # `--explain --json` (D408, H20): every inlining decision a record of the build stream.
 (cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/contract.e "$repo" x64 linux conformance-tools-explain-inline.out --release --explain --json -j 1 > "conformance-tools-explain-inline.jsonl")
 cmp -s "$test_build/conformance-tools-explain-inline.jsonl" "$conformance_root/tools/explain_inline.x64-linux.expected.jsonl" || { echo "emit-executable --explain --json differs from the conformance corpus"; exit 1; }
-# Progress records (D454, H18): every phase a record of the stream under `--json --time`.
+# Progress records (D454, D561, H18): every phase has a contiguous one-based sequence.
 (cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/contract.e "$repo" x64 linux conformance-tools-progress.out --json --time > "conformance-tools-progress.jsonl")
 grep -q '"record":"progress","phase":"lower and codegen"' "$test_build/conformance-tools-progress.jsonl"
+python3 -c "import json,sys; rows=[json.loads(x) for x in open(sys.argv[1])]; progress=[r for r in rows if r.get('record')=='progress']; assert len(progress)>1 and [r['sequence'] for r in progress]==list(range(1,len(progress)+1)) and rows[-1].get('record')=='result'" "$test_build/conformance-tools-progress.jsonl"
 python3 "$repo/scripts/validate_stream.py" "$test_build/conformance-tools-progress.jsonl"
 # `--stats` as a record (D476, H18): one flat `stats` record before the result.
 (cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/contract.e "$repo" x64 linux conformance-tools-stats.out --json --stats-full > "conformance-tools-stats.jsonl")
