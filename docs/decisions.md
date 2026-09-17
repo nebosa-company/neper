@@ -11261,9 +11261,11 @@ function's content hash over a copy of its whole machine code in a scratch
 of four megabytes, and a function of twenty-seven thousand statements --
 four megabytes of checked code -- failed as `cannot lower` with no cause
 named, the error being `binary.Capacity`, which no branch of the diagnostic
-knew. The scratch is sized by the largest module as the artifact buffer has
-been since D325, at every writer (the workers', the settle path's and
-`emit-em`'s, whose artifact buffer grows the same way), and the diagnostic
-names the staging buffer. A function of sixty thousand statements builds in
-a second, in both modes, and answers its arithmetic; both suites build one
-of thirty thousand and seven and read the seven.
+knew. The writer starts over with a scratch twice the size, from the
+worker's arena, as often as it fills; sizing it by the largest module as the
+artifact buffer is (D325) was tried first and breached the static gate, three
+megabytes on each of eight workers that sc500k never used. `emit-em`'s
+artifact buffer grows with the largest module too, and the diagnostic names
+the staging buffer. A function of sixty thousand statements builds in a
+second, in both modes, and answers its arithmetic; both suites build one of
+thirty thousand and seven and read the seven.

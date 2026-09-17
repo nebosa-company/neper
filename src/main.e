@@ -6378,7 +6378,7 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
     if triple_error != ok { ret triple_error }
     hot.triple = triple
-    let (scratch_storage, scratch_error) = mem.alloc[u8](a, loaded.largest_bytes * 8usize + 4194304usize)
+    let (scratch_storage, scratch_error) = mem.alloc[u8](a, 4194304usize)
     if scratch_error != ok { ret scratch_error }
     try binary.init(scratch, scratch_storage)
     let (unchanged, unchanged_error) = mem.alloc[bool](a, loaded.modules.len)
@@ -7384,10 +7384,7 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild, largest_bytes: usize) -> err {
     let (sections, sections_error) = mem.alloc[em.Section](a, 9usize)
     if sections_error != ok { ret sections_error }
     hot.sections = sections
-    // The scratch by the largest module too (D541): a function's content hash is
-    // taken over a copy of its whole code, and one of twenty-seven thousand
-    // statements filled the four megabytes, "cannot lower" with no cause named.
-    let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, largest_bytes * 8usize + 4194304usize)
+    let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
     if scratch_storage_error != ok { ret scratch_storage_error }
     try binary.init(&hot.scratch, scratch_storage)
     // Sized by the largest module (D325): its artifact is some bytes per byte of text.
@@ -7411,7 +7408,23 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     loaded.modules[module_index].inventory = inventory
     loaded.modules[module_index].inventory_count = inventory_count
     loaded.modules[module_index].inventory_known = true
-    try em.write_module(checker, loaded, builder, module_index, hot.triple, mode, context.output, stage_offsets, context.relocations, *context.relocation_count, context.lines, *context.line_count, &hot.strings, hot.sections, &hot.scratch, &hot.artifact)
+    var write_error = em.write_module(checker, loaded, builder, module_index, hot.triple, mode, context.output, stage_offsets, context.relocations, *context.relocation_count, context.lines, *context.line_count, &hot.strings, hot.sections, &hot.scratch, &hot.artifact)
+    // The scratch grows to the function (D541): a function's content hash is taken
+    // over a copy of its whole code, and one of twenty-seven thousand statements
+    // filled the four megabytes, "cannot lower" with no cause named. The writer
+    // starts over with a scratch twice the size, from the worker's arena, as often
+    // as it fills; sized to every module up front, it cost every worker of the
+    // static gate's workload three megabytes it never used.
+    var grown = 0usize
+    while write_error == binary.Capacity && grown < 8usize {
+        let (bigger, bigger_error) = mem.alloc[u8](a, hot.scratch.bytes.len * 2usize)
+        if bigger_error != ok { ret bigger_error }
+        try binary.init(&hot.scratch, bigger)
+        hot.artifact.count = 0usize
+        write_error = em.write_module(checker, loaded, builder, module_index, hot.triple, mode, context.output, stage_offsets, context.relocations, *context.relocation_count, context.lines, *context.line_count, &hot.strings, hot.sections, &hot.scratch, &hot.artifact)
+        grown += 1usize
+    }
+    if write_error != ok { ret write_error }
     let (held, held_error) = mem.alloc[u8](a, hot.artifact.count)
     if held_error != ok { ret held_error }
     try binary.pack(&hot.artifact, held)
@@ -9936,6 +9949,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 if artifact_storage_error != ok { ret artifact_storage_error }
                 var artifact: binary.Buffer = zero
                 try binary.init(&artifact, artifact_storage)
+                // And the scratch (D541): a function's whole code goes through it.
                 let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, loaded.largest_bytes * 8usize + 4194304usize)
                 if scratch_storage_error != ok { ret scratch_storage_error }
                 var scratch: binary.Buffer = zero
