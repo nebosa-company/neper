@@ -10899,3 +10899,21 @@ failed; `owner`, the module or type it was looked up in, for a member; and
 name without a candidate carries `symbol` alone. The near fixtures and the
 goldens that hold an unknown name carry the fields; the messages are as they
 were.
+
+## D515 -- A type's rename is a plan
+
+`plan-rename-file` planned the rename of a function, a field or an error, and
+refused a type: the checker's records name the sites of calls, dispatches,
+values and field accesses, not of type annotations and literals. The index
+does (D271): every `reference` record carries the qualified name of what it
+resolves to, an annotation, a literal, a spelling through a `use` qualifier
+or a bare one alike. A subject naming a type now takes every module's index
+in memory -- `Out` captures a flush instead of writing it -- and reads back
+each reference whose target is the type, the name being the last bytes of
+the reference's span, and the type's own symbol for the declaration; the plan
+is the same records as a function's, D512's owner marks included. The
+metamorphic harness had renamed types this way from outside (D478); the
+compiler does it from inside now. `plan_rename_type` pins six edits over two
+modules per host, applied to a copy that builds and exits the same. Found on
+the way: `index-file` over `e.mem` and `e.os` failed, since a seeded symbol
+has no tokens; the index leaves those out now.

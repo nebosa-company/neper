@@ -1,0 +1,11 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"plan-rename","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"precondition","source":{"root":"project-src","path":"main.e"},"sha256":"8d23fe6088cf8e2a3c877fd9495b98341abe87dbb7494fddcba4185434bcc24a"}
+{"record":"precondition","source":{"root":"project-src","path":"deep.e"},"sha256":"7f452b1d00b57c78accd5d2e12ec5ac1168331464b3ecc724c94cb3f6f154cf6"}
+{"record":"edit","op":"rename-symbol","symbol":"deep.Rec","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":353,"byte_end":356,"line":8,"column":15,"end_line":8,"end_column":18,"column_utf16":15,"end_column_utf16":18},"replacement":"Pair"}
+{"record":"edit","op":"rename-symbol","symbol":"deep.Rec","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":430,"byte_end":433,"line":13,"column":15,"end_line":13,"end_column":18,"column_utf16":15,"end_column_utf16":18},"replacement":"Pair"}
+{"record":"edit","op":"rename-symbol","symbol":"deep.Rec","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":479,"byte_end":482,"line":14,"column":14,"end_line":14,"end_column":17,"column_utf16":14,"end_column_utf16":17},"replacement":"Pair"}
+{"record":"edit","op":"rename-symbol","symbol":"deep.Rec","site":"declaration","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":5,"byte_end":8,"line":1,"column":6,"end_line":1,"end_column":9,"column_utf16":6,"end_column_utf16":9},"replacement":"Pair"}
+{"record":"edit","op":"rename-symbol","symbol":"deep.Rec","site":"use","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":70,"byte_end":73,"line":3,"column":22,"end_line":3,"end_column":25,"column_utf16":22,"end_column_utf16":25},"replacement":"Pair"}
+{"record":"edit","op":"rename-symbol","symbol":"deep.Rec","site":"use","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":84,"byte_end":87,"line":4,"column":9,"end_line":4,"end_column":12,"column_utf16":9,"end_column_utf16":12},"replacement":"Pair"}
+{"record":"postcondition","check":"check-file passes; index-file reports 5 references to deep.Pair and deep.Rec names no type"}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":6,"files":2,"complete":true,"snapshot":"47d5d88a96d8d67d"}}

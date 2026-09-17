@@ -2476,6 +2476,24 @@ Copy-Item -Recurse $generatedFixture $generatedScratch
 $generatedApply = & $compiler apply-plan $generatedPlanActual --root (Join-Path $generatedScratch 'src') 2>&1 | Out-String
 if ($LASTEXITCODE -ne 2 -or $generatedApply -notmatch 'a generator owns') { throw "apply-plan did not refuse an edit a generator owns (exit $LASTEXITCODE): $generatedApply" }
 if ((Get-Content -Raw -LiteralPath (Join-Path $generatedScratch 'src\deep.e')) -ne (Get-Content -Raw -LiteralPath (Join-Path $generatedFixture 'src\deep.e'))) { throw 'a refused plan applied its plain edit' }
+# A type's rename (D515, H17, H29): every reference through the alias and bare, and the
+# declaration; applied to a copy, the program builds and exits the same.
+$typeFixture = Join-Path $conformanceRoot 'tools\plan_rename_type'
+$typePlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-type.jsonl'
+cmd /c "cd /d `"$typeFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol deep.Rec --to Pair > `"$typePlanActual`""
+if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json over a type failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $typePlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename_type.x64-windows.expected.jsonl')).Hash) { throw 'plan-rename-file --json over a type differs from the conformance corpus' }
+$typeScratch = Join-Path $testBuild 'type-scratch'
+if (Test-Path -LiteralPath $typeScratch) { Remove-Item -LiteralPath $typeScratch -Recurse -Force }
+Copy-Item -Recurse $typeFixture $typeScratch
+& $compiler apply-plan $typePlanActual --root (Join-Path $typeScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the rename plan over a type did not apply' }
+if ((Select-String -LiteralPath (Join-Path $typeScratch 'src\main.e'), (Join-Path $typeScratch 'src\deep.e') -Pattern 'Rec\b' -Quiet) -eq $true) { throw 'the rename plan over a type left a reference behind' }
+$typeExe = Join-Path $testBuild 'type-renamed.exe'
+$typeBuilt = & $compiler emit-executable (Join-Path $typeScratch 'src\main.e') $repo 'x64' 'windows' $typeExe 2>&1
+if ($LASTEXITCODE -ne 0 -or $typeBuilt -ne 'executable written') { throw "the program with a renamed type does not build: $typeBuilt" }
+& $typeExe
+if ($LASTEXITCODE -ne 8) { throw "the program with a renamed type behaves differently (exit $LASTEXITCODE)" }
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan byte for byte,
 # applied to a copy it checks; a span that is not one expression is refused with exit 2.
 $replaceActual = Join-Path $testBuild 'conformance-tools-plan-replace.jsonl'

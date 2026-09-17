@@ -467,7 +467,11 @@ comments, strings or generated registrations, which this command does not see.
 ### Rename plans
 
 `neper plan-rename-file PATH ROOT ARCH OS --json --symbol module.name --to NEW`
-(D376, H29) is the first structured edit: a plan, not an application. It checks
+(D376, H29) is the first structured edit: a plan, not an application. A subject
+that names a type (D515) plans the type's rename: the index of every module of
+the program is taken in memory, and each reference whose target is the type --
+an annotation, a literal, spelled through a `use` qualifier or bare -- and the
+declaration are the sites, the same records as a function's. It checks
 the program and emits one `precondition` record per file the rename touches --
 `source` and the file's SHA-256 as read -- then one `edit` record per site: `op`
 `rename-symbol`, `symbol`, `site` (`declaration` or `use`), the `span` of the name

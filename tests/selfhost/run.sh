@@ -2773,6 +2773,18 @@ generated_status=0
 [ "$generated_status" -eq 2 ]
 grep -q 'a generator owns' "$test_build/generated-apply.txt"
 cmp -s "$test_build/generated-scratch/src/deep.e" "$generated_fixture/src/deep.e"
+# A type's rename (D515, H17, H29): every reference and the declaration, applied and run.
+type_fixture="$conformance_root/tools/plan_rename_type"
+(cd "$type_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol deep.Rec --to Pair > "$test_build/conformance-tools-plan-rename-type.jsonl")
+cmp -s "$test_build/conformance-tools-plan-rename-type.jsonl" "$conformance_root/tools/plan_rename_type.x64-linux.expected.jsonl" || { echo "plan-rename-file --json over a type differs from the conformance corpus" >&2; exit 1; }
+rm -rf "$test_build/type-scratch"
+cp -r "$type_fixture" "$test_build/type-scratch"
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename-type.jsonl" --root "$test_build/type-scratch/src" > /dev/null
+! grep -q 'Rec\b' "$test_build/type-scratch/src/main.e" "$test_build/type-scratch/src/deep.e"
+[ "$("$test_build/neper-self" emit-executable "$test_build/type-scratch/src/main.e" "$repo" x64 linux "$test_build/type-renamed" 2>/dev/null)" = 'executable written' ]
+type_status=0
+"$test_build/type-renamed" || type_status=$?
+[ "$type_status" -eq 8 ]
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan, applied and
 # checked; a span that is not one expression is refused with exit 2.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-replace-expression-file contract.e "$repo" x64 linux --json --span 693:703 --with 131072usize > "$test_build/conformance-tools-plan-replace.jsonl")

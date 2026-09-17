@@ -41,6 +41,9 @@ type Out = struct {
     // The module's unsafe inventory (D513, H27), the manifest's records as bytes,
     // while its index is written: each symbol names the boundaries it holds.
     inventory: str,
+    // Captured (D515): a flush keeps the records in `bytes` instead of writing
+    // them, for a command that reads another command's records.
+    capture: bool,
 }
 
 fn byte(out: *Out, value: u8) -> err {
@@ -65,6 +68,7 @@ fn decimal(out: *Out, value: usize) -> err {
 
 fn flush(out: *Out) -> err {
     try byte(out, 10u8)
+    if out.capture { ret ok }
     let stdout = os.stdout()
     var at = 0usize
     while at < out.count {
@@ -637,6 +641,17 @@ fn index_signature(out: *Out, source: str, tokens: []const lex.Token, opener: us
 // (D251), and under a function or type its parameters, fields and members from the parse
 // tree (D258). Locals and every reference are the gap.
 fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize, absolute: str) -> (usize, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 8192usize)
+    if storage_error != ok { ret (2usize, storage_error) }
+    var out: Out = zero
+    out.bytes = storage
+    let (exit_code, index_error) = index_json_into(a, &out, root, path, source, module_name, module_index, symbols, count, absolute)
+    ret (exit_code, index_error)
+}
+
+// The index of one module into `out` (D515): the query writes it, a plan over a type
+// captures it (`out.capture`) and reads the references back.
+fn index_json_into(a: *mem.Arena, out: *Out, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize, absolute: str) -> (usize, err) {
     let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
     if scan_error != ok { ret (2usize, scan_error) }
     let (nodes, nodes_error) = mem.alloc[syntax.Node](a, source.len + 1024usize)
@@ -648,22 +663,18 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
     if init_error != ok { ret (2usize, init_error) }
     let parse_error = parse.parse(&tree, source)
     if parse_error != ok { ret (2usize, parse_error) }
-    let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 8192usize)
-    if storage_error != ok { ret (2usize, storage_error) }
-    var out: Out = zero
     let (out_lines, out_lines_error) = lex.line_starts(a, source)
     if out_lines_error != ok { ret (0usize, out_lines_error) }
     out.lines = out_lines
-    out.bytes = storage
     out.absolute = absolute
     // The boundaries each declaration holds (D513): the manifest's scan of the module.
     let (inventory, inventory_count, inventory_error) = module_inventory(a, module_name, source, out_lines)
     if inventory_error != ok { ret (2usize, inventory_error) }
     out.inventory = inventory
-    let header_error = header(&out, "index")
+    let header_error = header(out, "index")
     if header_error != ok { ret (2usize, header_error) }
     // The module itself is the first symbol, so every declaration's container is id 0.
-    let module_error = index_module_record(&out, module_name)
+    let module_error = index_module_record(out, module_name)
     if module_error != ok { ret (2usize, module_error) }
     // Every module-scope name and its id, for the references (D271).
     let (known_names, known_names_error) = mem.alloc[str](a, count + 1usize)
@@ -679,7 +690,9 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
     var running = 1usize
     while known_pass < count {
         let known_symbol = symbols[known_pass]
-        if known_symbol.module_index == module_index && known_symbol.kind != .Qualifier && known_symbol.kind != .Intrinsic {
+        // A seeded symbol has no tokens (D515): `e.mem`'s intrinsics stand in the
+        // table as functions and types with no source, and are not indexed.
+        if known_symbol.module_index == module_index && known_symbol.kind != .Qualifier && known_symbol.kind != .Intrinsic && usize(known_symbol.token_end) != 0usize {
             known_names[known] = known_symbol.name
             known_ids[known] = running
             known_types[known] = known_symbol.kind == .Type
@@ -702,15 +715,15 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
     var at = 0usize
     while at < count {
         let symbol = symbols[at]
-        if symbol.module_index == module_index && symbol.kind != .Qualifier && symbol.kind != .Intrinsic {
-            let interleave_error = index_emit_references(&refs, &out, root, path, source, module_name, &tree, tokens[0usize..token_count], tokens[usize(symbol.token_start)].start)
+        if symbol.module_index == module_index && symbol.kind != .Qualifier && symbol.kind != .Intrinsic && usize(symbol.token_end) != 0usize {
+            let interleave_error = index_emit_references(&refs, out, root, path, source, module_name, &tree, tokens[0usize..token_count], tokens[usize(symbol.token_start)].start)
             if interleave_error != ok { ret (2usize, interleave_error) }
             if known_ids[known] != emitted { ret (2usize, parse.InvalidSyntax) }
             known += 1usize
             var name_index = usize(symbol.token_start) + 1usize
             if symbol.kind == .Extern { name_index += 1usize }
             if usize(symbol.token_end) == 0usize || usize(symbol.token_end) > token_count || name_index >= token_count { ret (2usize, parse.InvalidSyntax) }
-            let record_error = index_symbol_record(&out, root, path, source, module_name, emitted, symbol, tokens[0usize..token_count], usize(symbol.token_start), usize(symbol.token_end) - 1usize, name_index)
+            let record_error = index_symbol_record(out, root, path, source, module_name, emitted, symbol, tokens[0usize..token_count], usize(symbol.token_start), usize(symbol.token_end) - 1usize, name_index)
             if record_error != ok { ret (2usize, record_error) }
             emitted += 1usize
             if symbol.kind == .Function || symbol.kind == .Type || symbol.kind == .Extern {
@@ -729,16 +742,16 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
                     owner_at += 1usize
                     name_at += 1usize
                 }
-                let (nested, nested_error) = index_nested(a, &out, root, path, source, module_name, owner_storage[0usize..owner_at], &tree, tokens[0usize..token_count], usize(symbol.token_start), usize(symbol.token_end) - 1usize, emitted - 1usize, emitted, &refs)
+                let (nested, nested_error) = index_nested(a, out, root, path, source, module_name, owner_storage[0usize..owner_at], &tree, tokens[0usize..token_count], usize(symbol.token_start), usize(symbol.token_end) - 1usize, emitted - 1usize, emitted, &refs)
                 if nested_error != ok { ret (2usize, nested_error) }
                 emitted += nested
             }
         }
         at += 1usize
     }
-    let drain_error = index_emit_references(&refs, &out, root, path, source, module_name, &tree, tokens[0usize..token_count], source.len + 1usize)
+    let drain_error = index_emit_references(&refs, out, root, path, source, module_name, &tree, tokens[0usize..token_count], source.len + 1usize)
     if drain_error != ok { ret (2usize, drain_error) }
-    let result_error = index_result(&out, emitted, refs.written)
+    let result_error = index_result(out, emitted, refs.written)
     if result_error != ok { ret (2usize, result_error) }
     ret (0usize, ok)
 }
@@ -4427,6 +4440,171 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
     ret flush(&out)
 }
 
+// The type a subject `module.Name` names (D515): its symbol, when it is one.
+fn uses_type_subject(c: *check.Checker, g: *graph.Graph, subject: str) -> (usize, bool) {
+    var dot = subject.len
+    var at = 0usize
+    while at < subject.len {
+        if subject[at] == 46u8 { dot = at }
+        at += 1usize
+    }
+    if dot == subject.len { ret (0usize, false) }
+    let module_name = subject[0usize..dot]
+    let name = subject[dot + 1usize..subject.len]
+    var symbol_index = 0usize
+    while symbol_index < c.resolver.count {
+        let symbol = c.resolver.symbols[symbol_index]
+        if symbol.kind == .Type && symbol.module_index < g.count && graph.same(g.modules[symbol.module_index].name, module_name) && graph.same(symbol.name, name) { ret (symbol_index, true) }
+        symbol_index += 1usize
+    }
+    ret (0usize, false)
+}
+
+// A number after a key in one captured record, at or after `from`.
+fn captured_number(line: str, key: str, from: usize) -> (usize, usize, bool) {
+    var at = from
+    while at + key.len <= line.len {
+        if graph.same(line[at..at + key.len], key) {
+            var end = at + key.len
+            var value = 0usize
+            while end < line.len && line[end] >= 48u8 && line[end] <= 57u8 {
+                value = value * 10usize + usize(line[end] - 48u8)
+                end += 1usize
+            }
+            ret (value, end, true)
+        }
+        at += 1usize
+    }
+    ret (0usize, line.len, false)
+}
+
+// The rename of a type (D515, H17, H29): every module's index is taken in memory,
+// and each `reference` record whose `target_qualified_name` is the type -- an
+// annotation, a literal, a qualified or a bare spelling -- gives a site, its name
+// the last bytes of the reference's span; the type's own `symbol` record gives the
+// declaration's. The plan is the same shape as a function's.
+fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, subject: str, type_symbol: usize, to: str) -> err {
+    let symbol = c.resolver.symbols[type_symbol]
+    let name = symbol.name
+    var sites: PlanSites = zero
+    let (site_modules, modules_error) = mem.alloc[usize](a, 4096usize)
+    if modules_error != ok { ret modules_error }
+    let (site_offsets, offsets_error) = mem.alloc[usize](a, 4096usize)
+    if offsets_error != ok { ret offsets_error }
+    let (site_kinds, kinds_error) = mem.alloc[u8](a, 4096usize)
+    if kinds_error != ok { ret kinds_error }
+    var site_count = 0usize
+    var module_at = 0usize
+    while module_at < g.count {
+        let module = g.modules[module_at]
+        let checkpoint = mem.mark(a)
+        // The whole index at once, where the command flushes it record by record:
+        // a module of many short declarations runs to thirty bytes per source byte.
+        let (storage, storage_error) = mem.alloc[u8](a, module.text.len * 40usize + 65536usize)
+        if storage_error != ok { ret storage_error }
+        var taken: Out = zero
+        taken.bytes = storage
+        taken.capture = true
+        let (root, relative) = source_identity_of(g, module.path)
+        let (index_exit, index_error) = index_json_into(a, &taken, root, relative, module.text, module.name, module_at, c.resolver.symbols[0usize..c.resolver.count], c.resolver.count, "")
+        if index_error != ok { ret index_error }
+        let records = taken.bytes[0usize..taken.count]
+        var line_start = 0usize
+        while line_start < records.len {
+            var line_end = line_start
+            while line_end < records.len && records[line_end] != 10u8 { line_end += 1usize }
+            let line = records[line_start..line_end]
+            line_start = line_end + 1usize
+            let (kind, kind_end, has_kind) = inventory_value(line, 0usize, "\"record\":\"")
+            if !has_kind { continue }
+            var offset = 0usize
+            var is_site = false
+            var declaration = false
+            if graph.same(kind, "reference") {
+                let (referenced, referenced_end, has_referenced) = inventory_value(line, kind_end, "\"target_qualified_name\":\"")
+                if has_referenced && graph.same(referenced, subject) {
+                    let (span_end, end_at, has_end) = captured_number(line, "\"byte_end\":", kind_end)
+                    if has_end && span_end >= name.len {
+                        offset = span_end - name.len
+                        is_site = true
+                    }
+                }
+            }
+            if graph.same(kind, "symbol") && module_at == symbol.module_index {
+                let (symbol_kind, symbol_kind_end, has_symbol_kind) = inventory_value(line, kind_end, "\"kind\":\"")
+                let (qualified, qualified_end, has_qualified) = inventory_value(line, symbol_kind_end, "\"qualified_name\":\"")
+                if has_symbol_kind && graph.same(symbol_kind, "type") && has_qualified && graph.same(qualified, subject) {
+                    let selection_key = "\"selection_span\":"
+                    var selection_at = qualified_end
+                    while selection_at + selection_key.len <= line.len && !graph.same(line[selection_at..selection_at + selection_key.len], selection_key) { selection_at += 1usize }
+                    let (span_start, start_at, has_start) = captured_number(line, "\"byte_start\":", selection_at)
+                    if has_start {
+                        offset = span_start
+                        is_site = true
+                        declaration = true
+                    }
+                }
+            }
+            if is_site {
+                if site_count == site_modules.len { ret Capacity }
+                site_modules[site_count] = module_at
+                site_offsets[site_count] = offset
+                site_kinds[site_count] = 1u8
+                if declaration { site_kinds[site_count] = 0u8 }
+                site_count += 1usize
+            }
+        }
+        mem.reset(a, checkpoint)
+        module_at += 1usize
+    }
+    sites.modules = site_modules
+    sites.offsets = site_offsets
+    sites.kinds = site_kinds
+    sites.count = site_count
+    let (files, preconditions_error) = plan_preconditions(a, out, g, sites)
+    if preconditions_error != ok { ret preconditions_error }
+    var site = 0usize
+    while site < site_count {
+        let module = g.modules[site_modules[site]]
+        let (root, relative) = source_identity_of(g, module.path)
+        let (path, path_error) = manifest_slashes(a, relative)
+        if path_error != ok { ret path_error }
+        out.lines = module.lines
+        var name_token: lex.Token = zero
+        name_token.start = site_offsets[site]
+        name_token.end = site_offsets[site] + name.len
+        try text(out, "{\"record\":\"edit\",\"op\":\"rename-symbol\",\"symbol\":")
+        try quoted(out, subject)
+        try text(out, ",\"site\":")
+        if site_kinds[site] == 0u8 { try text(out, "\"declaration\"") } else { try text(out, "\"use\"") }
+        try text(out, ",\"span\":")
+        try token_span(out, root, path, module.text, name_token, name_token)
+        try text(out, ",\"replacement\":")
+        try quoted(out, to)
+        try owned_note(out, g, site_modules[site], site_offsets[site])
+        try byte(out, 125u8)
+        try flush(out)
+        site += 1usize
+    }
+    try text(out, "{\"record\":\"postcondition\",\"check\":\"check-file passes; index-file reports ")
+    if site_count > 0usize { try decimal(out, site_count - 1usize) } else { try decimal(out, 0usize) }
+    try text(out, " references to ")
+    try text(out, subject[0usize..rename_qualifier_len(subject)])
+    try text(out, to)
+    try text(out, " and ")
+    try text(out, subject)
+    try text(out, " names no type\"}")
+    try flush(out)
+    try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":")
+    try decimal(out, site_count)
+    try text(out, ",\"files\":")
+    try decimal(out, files)
+    try text(out, ",\"complete\":true,\"snapshot\":")
+    try program_snapshot(out, g)
+    try text(out, "}}")
+    ret flush(out)
+}
+
 fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, to: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
     if storage_error != ok { ret storage_error }
@@ -4464,9 +4642,13 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
         }
         ret plan_rename_sites_json(a, &out, c, g, subject, 7u8, error_symbol, symbol.name, symbol.module_index, declared_at, has_declaration, "error", to)
     }
+    // A type's rename (D515, H17, H29): the index of every module names each
+    // reference to the type, qualified or bare; the plan is those and the declaration.
+    let (type_symbol, is_type) = uses_type_subject(c, g, subject)
+    if is_type { ret plan_rename_type_json(a, &out, c, g, subject, type_symbol, to) }
     let (function_index, has_function) = uses_subject(c, g, subject)
     if !has_function {
-        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function, field or error of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function, type, field or error of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
         try flush(&out)
