@@ -11627,3 +11627,21 @@ operand's mapped call and a mapped call inside `deep.e`, plus the plain declarat
 Both host goldens require both edits to name their distinct originals, and
 `apply-plan` refuses the plan whole without changing the dependency. Stale and
 malformed dependency maps remain untrusted and contribute no ownership ranges.
+
+## D564 -- Source-map chains pass three nested generators
+
+The provenance walker stopped after three nested source maps, even though generator
+pipelines routinely compose more stages. Its existing fixed table now holds eight
+nested maps, still eight mappings per level: the same bounded loop and diagnostic
+ordering, with no recursive allocator or new map representation. A chain beyond the
+bound remains explicit by ending at the deepest retained original.
+
+`nested_deep.e` now passes through four generated intermediates before its root input.
+Both suites require the type error on the root span, four related intermediates in
+root-nearest order, and the final generated span carrying the editability note. This
+closes the concrete past-three-level gap while keeping the documented eight-level
+ceiling.
+
+This is the fifth feature since D559, so the progress artifact is regenerated. It
+now credits D562's parameter turn, D563's dependency-owned generated edits and this
+longer provenance chain: compiler 86.35, modules 76.64, tooling 83.12.

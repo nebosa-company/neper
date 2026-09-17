@@ -919,13 +919,14 @@ generated file with a map of its own beside it (`<original>.map.json`, whose
 the primary span is the root original's, and `related` carries the intermediate
 first ("in the generated input, itself regenerated from the original") and the
 generated source second, with the edit rule as before. The chain is bounded at
-three levels (D499) -- a root that is itself generated past them is shown as the
+eight levels (D499, D564) -- a root that is itself generated past them is shown as the
 root, and every intermediate is related, the one nearest the root first. A nested map
 that is present but stale or malformed is not followed, and the related message
 says so ("the original is generated too, and its own map is stale"), so a
 harness knows the span shown is not the root. Paths in a nested map are
 resolved as the outer map's are, relative to the operand's directory; the
-corpus's `nested_map.e` and `nested_stale.e` are the two shapes.
+corpus's `nested_map.e` and `nested_stale.e` are the two shapes; `nested_deep.e`
+pins four nested maps through five generated sources.
 
 Provenance through specialisation (D466, H19): a diagnostic inside a generic
 function's body belongs to one instance, and when the checker fails there the

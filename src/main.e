@@ -3667,29 +3667,29 @@ type Sink = struct {
     // `nest_base`, the nested map's (D465); the bootstrap mistypes a slice of a
     // struct's array field, so the two are one table indexed by a base.
     map_count: usize,
-    map_generated_start: [32]usize,
-    map_generated_end: [32]usize,
-    map_generated_line: [32]usize,
-    map_original_root: [32]str,
-    map_original_path: [32]str,
-    map_original_start: [32]usize,
-    map_original_line: [32]usize,
+    map_generated_start: [72]usize,
+    map_generated_end: [72]usize,
+    map_generated_line: [72]usize,
+    map_original_root: [72]str,
+    map_original_path: [72]str,
+    map_original_start: [72]usize,
+    map_original_line: [72]usize,
     // What may be edited (D373, H19): 0 unknown, 1 the generated output directly,
     // 2 the generator's input only -- the mapping's `edit`, absent in a version 1 map.
-    map_edit: [32]u8,
-    // Nested maps (D465, D499, H19): the original the mappings name may itself be
+    map_edit: [72]u8,
+    // Nested maps (D465, D499, D564, H19): the original the mappings name may itself be
     // generated, with a map of its own beside it, and its original too; the chain
-    // is followed to the root original, three levels at most, each level's eight
+    // is followed to the root original, eight levels at most, each level's eight
     // mappings from `nest_base(level)`. `nest_sources[k]` is level k's generated
     // file as the map above it spells it; `nest_stale[k]` says its map was there
     // and not usable, where the chain stops.
-    nest_sources: [3]str,
-    nest_stale: [3]bool,
-    nest_counts: [3]usize,
+    nest_sources: [8]str,
+    nest_stale: [8]bool,
+    nest_counts: [8]usize,
 }
 
-// How many nested levels the tables hold (D499).
-fn nest_levels() -> usize { ret 3usize }
+// How many nested levels the tables hold (D499, D564).
+fn nest_levels() -> usize { ret 8usize }
 
 // One diagnostic, as the human line `path:line:col: error[CODE]: message` or as the
 // record of docs/tooling.md section 3 -- the span from the token, the source as an
@@ -4286,7 +4286,7 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
     ret ok
 }
 
-// The original's own map (D465, H19): the first mapping's original stands for the
+// The original's own map (D465, D564, H19): the first mapping's original stands for the
 // map's; a map of it beside it that names the original's bytes is read into the
 // nested tables, one that does not is stated and not followed.
 fn load_nested_map(a: *mem.Arena, report: *Sink, operand: str) -> err {
