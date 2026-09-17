@@ -11329,3 +11329,20 @@ that reads the subject as a field no longer parses the sentence. The one
 branch whose detail may be empty, an array's missing undefined value, is
 left without. The thirty-four safety and region fixtures of the corpus are
 regenerated, each gaining the field and nothing else.
+
+## D546 -- The arena dry, named
+
+A compiler built with an arena too small for its program -- `--arena 96m`,
+the compiler over its own sources -- said "the operand cannot be read as a
+module" from the loader, "name resolution failed" at line 1 from the
+resolver on one worker, and the bare runtime line `error: e.mem.Exhausted`
+after main's own message on eight: the exhaustion travelled as an error
+through printers that knew only their phase's failures. `mem.Exhausted` is
+recognised before every such printer -- the loader's five sites, the
+resolve, check and lowering diagnostics -- and reported through the report
+as the limit it is, `E-TYPE-9999`, "resource limit: the compiler's arena is
+exhausted", so a held header goes first and the stream ends with its
+result, exit 1; main's human path exits once a limit is named rather than
+returning the error for the runtime to name again, an internal failure
+keeping that line. Both suites build the small compiler and read the limit
+from `check-file` over the compiler's sources.

@@ -3434,6 +3434,15 @@ if ($LASTEXITCODE -ne 0 -or $hostOutput -ne 'host memory clock ok') { throw 'Win
 $ownCompilerPath = Join-Path $testBuild 'neper-own.exe'
 & $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $ownCompilerPath | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownCompilerPath)) { throw 'compiler-owned PE linker did not emit the compiler' }
+# The arena dry (D546, H07): a compiler built with an arena of 96 MB cannot hold its own
+# sources, and says so as the limit it is, under the query's header, exit 1 -- where it
+# had said the operand cannot be read, or that name resolution failed.
+$smallCompiler = Join-Path $testBuild 'neper-small.exe'
+& $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $smallCompiler --arena 96m | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $smallCompiler)) { throw 'the compiler with a 96 MB arena did not build' }
+$smallOut = & $smallCompiler check-file (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' --json 2>$null
+if ($LASTEXITCODE -ne 1) { throw "the compiler with a 96 MB arena did not exit 1 over its own sources (got $LASTEXITCODE)" }
+if ($smallOut.Count -ne 3 -or $smallOut[0] -notmatch '"record":"header","command":"check"' -or $smallOut[1] -notmatch '"code":"E-TYPE-9999","message":"resource limit: the compiler''s arena is exhausted' -or $smallOut[2] -notmatch '"exit_code":1') { throw "the compiler with a 96 MB arena did not name the limit under the header: $smallOut" }
 $ownSelfTest = & $ownCompilerPath self-test
 if ($LASTEXITCODE -ne 0 -or $ownSelfTest -ne 'selfhost lexer ok') { throw 'compiler-owned PE compiler self-test failed' }
 $ownAdvancedPath = Join-Path $testBuild 'advanced-own.exe'

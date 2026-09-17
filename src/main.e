@@ -2383,6 +2383,7 @@ fn manifest_command(a: *mem.Arena, args: []str) -> err {
     report.pending_header = "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"manifest\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n"
     let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
     if load_error != ok {
+        if load_error == mem.Exhausted { ret exhausted_diagnostic(&report) }
         try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
         os.exit(2i32)
@@ -2398,6 +2399,16 @@ fn manifest_command(a: *mem.Arena, args: []str) -> err {
 // Section 1's envelope for an operand that cannot be read, on every `--json` command
 // (D260): the header, one location-free E-CLI-9999, and the result exiting 2 with the
 // command's own zero counts -- so a harness sees a stream, never a bare `error:` line.
+// The arena dry (D546, H07): named as the limit it is, through the report -- so a
+// held header goes first -- where the loader had said the operand cannot be read
+// and the resolver that name resolution failed. Exit 1, as main reports it.
+fn exhausted_diagnostic(report: *Sink) -> err {
+    try emit_command_diagnostic(report, "E-TYPE-9999", "resource limit: the compiler's arena is exhausted; the program is larger than this compiler was built to hold")
+    if report.json { try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"diagnostics\":1}}\n") }
+    os.exit(1i32)
+    ret ok
+}
+
 fn unreadable_operand(report: *Sink, command: str, data: str) -> err {
     try write_all(report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"")
     try write_all(report, command)
@@ -3029,6 +3040,7 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     }
     let load_error = load_graph(a, &report, &loaded, operand, args[3usize], args[4usize], args[5usize])
     if load_error != ok {
+        if load_error == mem.Exhausted { ret exhausted_diagnostic(&report) }
         try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"symbols\":0,\"references\":0}}\n")
         os.exit(2i32)
@@ -5802,6 +5814,7 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
 }
 
 fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checker, check_error: err) -> err {
+    if check_error == mem.Exhausted { ret exhausted_diagnostic(report) }
     var path = "<unknown>"
     if checker.failure_module < g.count { path = g.modules[checker.failure_module].path }
     var message_storage: [4096]u8 = zero
@@ -6669,6 +6682,7 @@ fn print_resolve_name_diagnostic(report: *Sink, g: *graph.Graph, resolver: *reso
 }
 
 fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
+    if resolve_error == mem.Exhausted { ret exhausted_diagnostic(report) }
     if resolve_error == resolve.UnknownName && resolver.failure_has_token {
         if resolver.failure_has_context {
             try print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_context_token, "E-TYPE-0002", "initializer type does not match binding")
@@ -6812,6 +6826,7 @@ fn write_capacity_diagnostic(message: *Sink, builder: *nir.Builder, name: str) -
 }
 
 fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, lower_error: err) -> err {
+    if lower_error == mem.Exhausted { ret exhausted_diagnostic(report) }
     var path = "<unknown>"
     if checker.failure_module < g.count { path = g.modules[checker.failure_module].path }
     var message_storage: [1024]u8 = zero
@@ -8998,6 +9013,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     try load_overlays(a, args, &loaded)
     let load_error = load_graph(a, report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
     if load_error != ok {
+        if load_error == mem.Exhausted { ret exhausted_diagnostic(report) }
         try emit_command_diagnostic(report, "E-CLI-9999", "the operand cannot be read as a module")
         try finish_report(report)
         os.exit(2i32)
@@ -9221,6 +9237,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !json {
         var human = stderr_sink()
         try emit_command_diagnostic(&human, code, message)
+        // A named limit is reported once (D546); an internal failure keeps the
+        // runtime's line with the error's name, for whoever debugs the compiler.
+        if status == 1i32 { os.exit(1i32) }
         ret result
     }
     var report = json_sink()
@@ -9521,7 +9540,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if load_error != ok {
             // Not a diagnostic of the source but of the command: the operand itself.
             if !report.json { ret load_error }
-            try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
+            if load_error == mem.Exhausted { ret exhausted_diagnostic(&report) }
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
             try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
             os.exit(2i32)
             ret ok
@@ -9693,7 +9713,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 ret unreadable_operand(&envelope, "dis", "{\"functions\":0}")
             }
             if !report.json { ret load_error }
-            try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
+            if load_error == mem.Exhausted { ret exhausted_diagnostic(&report) }
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
             try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
             os.exit(2i32)
             ret ok

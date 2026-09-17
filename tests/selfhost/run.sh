@@ -3500,6 +3500,15 @@ own_compiler_path="$test_build/neper-own"
 own_compiler_written=$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$own_compiler_path")
 [ "$own_compiler_written" = 'executable written' ]
 chmod +x "$own_compiler_path"
+# The arena dry (D546, H07): a compiler with a 96 MB arena names the limit under the header, exit 1.
+[ "$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-small" --arena 96m)" = 'executable written' ]
+chmod +x "$test_build/neper-small"
+small_status=0
+"$test_build/neper-small" check-file "$repo/src/main.e" "$repo" x64 linux --json > "$test_build/neper-small.jsonl" 2>/dev/null || small_status=$?
+[ "$small_status" -eq 1 ]
+[ "$(wc -l < "$test_build/neper-small.jsonl")" -eq 3 ]
+grep -q '"record":"header","command":"check"' "$test_build/neper-small.jsonl"
+grep -q '"code":"E-TYPE-9999","message":"resource limit: the compiler'"'"'s arena is exhausted' "$test_build/neper-small.jsonl"
 own_self_test=$("$own_compiler_path" self-test)
 [ "$own_self_test" = 'selfhost lexer ok' ]
 own_advanced_path="$test_build/advanced-own"

@@ -81,4 +81,7 @@ the source it is sized from, five times what the compiler's own largest module l
 to. A program that fills a pool is rejected under `E-TYPE-9999` with a message naming
 the pool, its size and the program's counts so far; the function named is where the
 pool filled, not the cause. Machine-code selection and register allocation size their
-per-function tables from the pools and have no separate ceiling.
+per-function tables from the pools and have no separate ceiling. The compiler's own
+arena running dry is `E-TYPE-9999` too, "resource limit: the compiler's arena is
+exhausted", from whichever phase it happened in and under the command's header
+(D546), exit 1; it is never reported as an unreadable operand or a failed name.
