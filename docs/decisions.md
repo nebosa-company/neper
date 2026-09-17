@@ -11043,3 +11043,14 @@ sources must be the stable stage byte for byte -- the formatter's contract
 over sixty-five thousand lines, the compiler's own sources not being
 formatted, which is what makes the check bite. Found on the way: `fmt FILE`
 formats in place, so a probe formats `-` from stdin.
+
+## D526 -- The compiler without its comments
+
+D438 showed the comments of three fixtures to be trivia; D525 turned the
+harness on the compiler for the formatter, and the same turn holds for the
+comments: `benchmarks/metamorphic/strip_comments.py` blanks every comment of
+`src/` to spaces through the token stream's trivia, so every line and column
+holds, and both suites build a compiler from the result and require it to be
+the stable stage byte for byte -- the line tables and trap records carrying
+lines and columns the blanks keep, the six thousand comments of the compiler
+reaching nothing. Five seconds a suite, the token streams being the cost.

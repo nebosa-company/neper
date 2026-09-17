@@ -3488,6 +3488,16 @@ $formattedBuilt = Join-Path $testBuild 'neper-by-formatted.exe'
 & $formattedCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $formattedBuilt | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $formattedBuilt)) { throw 'the compiler built from formatted sources did not build the compiler' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $formattedBuilt).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built from formatted sources does not build the stable stage' }
+# The compiler without its comments (D526, H10): every comment of `src/` blanked to
+# spaces through the token stream, and the compiler built from the result is the
+# stable stage byte for byte -- comments are trivia over sixty-five thousand lines.
+$blankedSrc = Join-Path $testBuild 'blanked-src'
+& python (Join-Path $repo 'benchmarks/metamorphic/strip_comments.py') $compiler (Join-Path $repo 'src') (Join-Path $blankedSrc 'src')
+if ($LASTEXITCODE -ne 0) { throw 'the comments of the compiler could not be blanked' }
+$blankedCompiler = Join-Path $testBuild 'neper-blanked.exe'
+& $ownCompilerPath emit-executable (Join-Path $blankedSrc 'src\main.e') $repo 'x64' 'windows' $blankedCompiler | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $blankedCompiler)) { throw 'the compiler did not build from its sources without comments' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $blankedCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built without its comments is not the stable stage' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
