@@ -11284,3 +11284,18 @@ and a line entry with no code before the next -- a `ret` folded away -- is no
 run. A copy through a copy names the innermost callee; the chain is not yet
 kept. The fixture inlines `add` twice into `main`, once through `twice`, and
 both suites pin the record per host; the debug records gain an empty list.
+
+## D543 -- The instantiation chain
+
+D466 related the site that asked for a failing instance, and stopped
+there; when that site is inside another instance's body, the reader still
+has to find which instance of that template asked. The checker records,
+beside an instance's first site, the instance whose body was being checked
+when it was asked for -- `site_function`, a `u32` in the padding after
+`has_site`, so the record keeps its size and the static gate its numbers --
+and the diagnostic's `related` follows the chain from there, innermost
+first, up to three links, each "in the instance `module.name[args]`,
+requested here" at its own site: `widen[bool]` requested in `lift`'s body,
+then `lift[bool]` requested in `main`, the second call and not the first.
+`reject/instance_chain.e` pins it in both suites; `instance_site`'s record
+is unchanged, its chain being empty.

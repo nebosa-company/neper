@@ -273,6 +273,10 @@ type FunctionGeneric = struct {
     site_module: usize,
     site_offset: usize,
     has_site: bool,
+    // The instance whose body asked (D543, H09), or `function_count`'s worth of
+    // `u32` when a plain body did: the chain of requests up to the program's own
+    // code. A `u32` in the bool's padding, so the record keeps its size.
+    site_function: u32,
 }
 
 type ProtocolBuiltin = enum u8 {
@@ -684,6 +688,8 @@ type Checker = struct {
     active_arguments: bool,
     active_owner_module: usize,
     active_owner_set: bool,
+    // The instance whose body is being checked (D543), for the request chain.
+    active_instance: usize,
     generic_declaration: bool,
     loop_depth: usize,
     break_depth: usize,
@@ -9078,6 +9084,8 @@ fn note_instance_site(c: *Checker, instance_index: usize, module_index: usize, n
     if usize(node.token_start) >= c.token_count { ret }
     c.function_generics[instance_index].site_module = module_index
     c.function_generics[instance_index].site_offset = c.tokens[usize(node.token_start)].start
+    c.function_generics[instance_index].site_function = 4294967295u32
+    if c.active_owner_set && c.active_instance < c.function_count { c.function_generics[instance_index].site_function = u32(c.active_instance) }
     c.function_generics[instance_index].has_site = true
 }
 
@@ -12461,6 +12469,7 @@ fn check_instance(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_i
     // instantiates is code in the module that asked for this instance.
     c.active_owner_module = instance.owner_module_index
     c.active_owner_set = true
+    c.active_instance = instance_index
     var result = UnknownCallable
     var node_index = 1usize
     while node_index < tree.count {

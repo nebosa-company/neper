@@ -871,6 +871,11 @@ record's `related` carries the site that first asked for that instance --
 that module. The template body's span stays primary: it is where the text
 that failed is. A diagnostic that already carries a related location (a
 resource's other site, D364) keeps it. `reject/instance_site.e` is the shape.
+When the instance was asked for by another instance's body (D543, H09), the
+chain follows in `related`, innermost first: the site that asked for the failing
+instance, then the site that asked for the instance whose body that is, up to
+three links, ending at the program's own code. `reject/instance_chain.e` is the
+shape: `widen[bool]` requested in `lift`'s body, `lift[bool]` requested in `main`.
 
 The map in the build's identity (D467, H19): the operand's `<file>.e.map.json`,
 when it is there, is an entry of the manifest's `inputs` with its `sha256` and

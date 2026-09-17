@@ -3495,6 +3495,15 @@ type Sink = struct {
     related_path: str,
     related_text: str,
     related_lines: []usize,
+    // The chain of requests above the related instance (D543, H09): the instance
+    // whose body asked for it, and the one whose body asked for that, up to three,
+    // each a related site of its own after the first.
+    chain_count: usize,
+    chain_notes: [3]str,
+    chain_tokens: [3]lex.Token,
+    chain_paths: [3]str,
+    chain_texts: [3]str,
+    chain_lines: [3][]usize,
     // A fix to insert (D381): text at a byte offset, or empty; kind 3 (D444) replaces
     // the bytes up to `fix_end` instead.
     fix_text: str,
@@ -3703,13 +3712,7 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             try write_json_string(report, report.related_note)
             try write_all(report, ",\"span\":")
             if report.related_foreign {
-                let foreign_at = lex.span_of(report.related_text, report.related_lines, report.related_token)
-                let foreign_operand = same_path(report.related_path, report.operand_source)
-                if report.operand_path.len != 0usize && foreign_operand {
-                    try write_span(report, report.operand_path, foreign_at, true)
-                } else {
-                    try write_module_span(report, report.related_path, foreign_at, foreign_operand)
-                }
+                try write_related_span(report, report.related_path, report.related_text, report.related_lines, report.related_token)
             } else {
                 let related_at = lex.span_of(text, lines, report.related_token)
                 if report.operand_path.len != 0usize && is_operand {
@@ -3717,6 +3720,15 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
                 } else {
                     try write_module_span(report, path, related_at, is_operand)
                 }
+            }
+            // The chain above it (D543): each request site, innermost first.
+            var chain_at = 0usize
+            while chain_at < report.chain_count {
+                try write_all(report, "},{\"message\":")
+                try write_json_string(report, report.chain_notes[chain_at])
+                try write_all(report, ",\"span\":")
+                try write_related_span(report, report.chain_paths[chain_at], report.chain_texts[chain_at], report.chain_lines[chain_at], report.chain_tokens[chain_at])
+                chain_at += 1usize
             }
             try write_all(report, "}],\"fixes\":")
         } else {
@@ -5791,6 +5803,7 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     }
     let emitted = emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, check.diagnostic_code(checker.failure_kind), message_storage[..message.count])
     report.has_related = false
+    report.chain_count = 0usize
     report.fix_text = ""
     report.expected_text = ""
     report.actual_text = ""
@@ -6836,24 +6849,26 @@ fn print_error_table_diagnostic(report: *Sink, g: *graph.Graph, conflict: *error
 
 // The instance a template-body failure belongs to, and its request site as the
 // diagnostic's related location (D466): "in the instance `module.name[T]`, requested here".
-fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker) -> err {
-    var found = checker.function_count
-    var at = checker.function_count
-    while at > checker.signature_function_count && found == checker.function_count {
-        at = at - 1usize
-        let generic = checker.function_generics[at]
-        if generic.instance && generic.checked && generic.has_site && checker.functions[at].module_index == checker.failure_module && same(checker.functions[at].name, checker.failure_name) { found = at }
-    }
-    if found == checker.function_count { ret ok }
-    let generic = checker.function_generics[found]
-    if generic.site_module >= g.count { ret ok }
+// A related span in a named module (D466, D543): under the operand's identity when
+// it is the operand, under the module's own otherwise.
+fn write_related_span(report: *Sink, path: str, text: str, lines: []usize, token: lex.Token) -> err {
+    let at = lex.span_of(text, lines, token)
+    let is_operand = same_path(path, report.operand_source)
+    if report.operand_path.len != 0usize && is_operand { ret write_span(report, report.operand_path, at, true) }
+    ret write_module_span(report, path, at, is_operand)
+}
+
+// The note of an instance's request (D466): `in the instance module.name[args]`,
+// requested here`, kept in the checker's arena.
+fn instance_request_note(g: *graph.Graph, checker: *check.Checker, instance: usize, note_out: *str) -> err {
+    let generic = checker.function_generics[instance]
     var note_storage: [512]u8 = zero
     var note: tool.Out = zero
     note.bytes = note_storage[..]
     try tool.text(&note, "in the instance `")
-    try tool.text(&note, g.modules[checker.failure_module].name)
+    try tool.text(&note, g.modules[checker.functions[instance].module_index].name)
     try tool.byte(&note, 46u8)
-    try tool.text(&note, checker.failure_name)
+    try tool.text(&note, checker.functions[instance].name)
     try tool.byte(&note, 91u8)
     var argument_at = 0usize
     while argument_at < generic.comptime_count {
@@ -6870,7 +6885,43 @@ fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker)
     let (kept, kept_error) = mem.alloc[u8](checker.arena, note.count)
     if kept_error != ok { ret kept_error }
     os.copy_bytes(kept, note_storage[..note.count])
+    *note_out = kept
+    ret ok
+}
+
+fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker) -> err {
+    report.chain_count = 0usize
+    var found = checker.function_count
+    var at = checker.function_count
+    while at > checker.signature_function_count && found == checker.function_count {
+        at = at - 1usize
+        let generic = checker.function_generics[at]
+        if generic.instance && generic.checked && generic.has_site && checker.functions[at].module_index == checker.failure_module && same(checker.functions[at].name, checker.failure_name) { found = at }
+    }
+    if found == checker.function_count { ret ok }
+    let generic = checker.function_generics[found]
+    if generic.site_module >= g.count { ret ok }
+    var kept = ""
+    try instance_request_note(g, checker, found, &kept)
     report.related_note = kept
+    // The chain (D543, H09): the instance whose body asked, and so on up, three at most.
+    var above = usize(generic.site_function)
+    while above < checker.function_count && report.chain_count < 3usize {
+        let link = checker.function_generics[above]
+        if !link.instance || !link.has_site || link.site_module >= g.count { break }
+        var link_note = ""
+        try instance_request_note(g, checker, above, &link_note)
+        var link_site: lex.Token = zero
+        link_site.start = link.site_offset
+        link_site.end = link.site_offset
+        report.chain_notes[report.chain_count] = link_note
+        report.chain_tokens[report.chain_count] = link_site
+        report.chain_paths[report.chain_count] = g.modules[link.site_module].path
+        report.chain_texts[report.chain_count] = g.modules[link.site_module].text
+        report.chain_lines[report.chain_count] = g.modules[link.site_module].lines
+        report.chain_count += 1usize
+        above = usize(link.site_function)
+    }
     var site: lex.Token = zero
     site.start = generic.site_offset
     site.end = generic.site_offset
