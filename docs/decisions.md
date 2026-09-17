@@ -11217,3 +11217,17 @@ the argument lists of its five hundred and forty calls, and a parameter
 `plan-add-parameter-file`; each applied to a project of the sources, and the
 compiler built from each builds the stable stage byte for byte, which both
 suites hold. Both held at the first attempt.
+
+## D539 -- The explain table sorted once
+
+`explain-file` over the compiler's own sources took fifty-three seconds for
+seventeen records, where the check takes a third of one: the writer of
+D359, and `uses-file`'s and the field and error uses' after it, found each
+record by scanning the whole table for the least record after the last
+written -- quadratic in the sites, two hundred thousand of them here. The
+table's indices are merge-sorted once in `explain_before`'s order, the
+fields compared in place since a record is large, and each writer walks the
+order, skipping a record that is not after the one it wrote, which is how a
+site decided twice was written once before. The streams are byte for byte
+what they were; `explain-file` over the compiler is six tenths of a second,
+`uses-file` over `check.same` four where it was nine.

@@ -2370,19 +2370,15 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
     var written = 0usize
     var last = c.explains[0usize]
     var first = true
-    while true {
-        // The least record after the last written, in the order `explain_before`
-        // gives; two records that order equal are one site decided twice.
-        var best = c.explain_count
-        var at = 0usize
-        while at < c.explain_count {
-            let e = c.explains[at]
-            let after = first || explain_before(last, e)
-            if after && (best == c.explain_count || explain_before(e, c.explains[best])) { best = at }
-            at += 1usize
-        }
-        if best == c.explain_count { break }
-        let e = c.explains[best]
+    let (order, order_error) = explain_order(a, c)
+    if order_error != ok { ret order_error }
+    var ordered_at = 0usize
+    while ordered_at < order.len {
+        // In `explain_before`'s order (D539); two records that order equal are one
+        // site decided twice, and the second is not after the first.
+        let e = c.explains[order[ordered_at]]
+        ordered_at += 1usize
+        if !first && !explain_before(last, e) { continue }
         first = false
         last = e
         // Calls, values and field accesses (D420) are `uses-file`'s and `context-file`'s.
@@ -3832,23 +3828,18 @@ fn uses_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str) ->
     var indirect_calls = 0usize
     var last = c.explains[0usize]
     var first = true
-    while true {
-        var best = c.explain_count
-        var at = 0usize
-        while at < c.explain_count {
-            let e = c.explains[at]
-            // A call of an instance is a call of its template.
-            var called = e.function_index == function_index
-            if !called && e.function_index < c.function_count && c.function_generics[e.function_index].instance && c.function_generics[e.function_index].template_index == function_index { called = true }
-            let targets = (e.kind == 4u8 && !e.found && called) || (e.kind == 1u8 && e.found && e.function_index == function_index) || (e.kind == 2u8 && e.template_index == function_index) || (e.kind == 5u8 && e.function_index == function_index)
-            if targets {
-                let after = first || explain_before(last, e)
-                if after && (best == c.explain_count || explain_before(e, c.explains[best])) { best = at }
-            }
-            at += 1usize
-        }
-        if best == c.explain_count { break }
-        let e = c.explains[best]
+    let (order, order_error) = explain_order(a, c)
+    if order_error != ok { ret order_error }
+    var ordered_at = 0usize
+    while ordered_at < order.len {
+        let e = c.explains[order[ordered_at]]
+        ordered_at += 1usize
+        // A call of an instance is a call of its template.
+        var called = e.function_index == function_index
+        if !called && e.function_index < c.function_count && c.function_generics[e.function_index].instance && c.function_generics[e.function_index].template_index == function_index { called = true }
+        let targets = (e.kind == 4u8 && !e.found && called) || (e.kind == 1u8 && e.found && e.function_index == function_index) || (e.kind == 2u8 && e.template_index == function_index) || (e.kind == 5u8 && e.function_index == function_index)
+        if !targets { continue }
+        if !first && !explain_before(last, e) { continue }
         first = false
         last = e
         if e.module_index >= g.count { continue }
@@ -5138,19 +5129,14 @@ fn sites_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph,
     var written = 0usize
     var last = c.explains[0usize]
     var first = true
-    while true {
-        var best = c.explain_count
-        var at = 0usize
-        while at < c.explain_count {
-            let e = c.explains[at]
-            if e.kind == explain_kind && e.function_index == index {
-                let after = first || explain_before(last, e)
-                if after && (best == c.explain_count || explain_before(e, c.explains[best])) { best = at }
-            }
-            at += 1usize
-        }
-        if best == c.explain_count { break }
-        let e = c.explains[best]
+    let (order, order_error) = explain_order(a, c)
+    if order_error != ok { ret order_error }
+    var ordered_at = 0usize
+    while ordered_at < order.len {
+        let e = c.explains[order[ordered_at]]
+        ordered_at += 1usize
+        if e.kind != explain_kind || e.function_index != index { continue }
+        if !first && !explain_before(last, e) { continue }
         first = false
         last = e
         if e.module_index >= g.count { continue }
@@ -5224,6 +5210,73 @@ fn manifest_has_attribute(text_bytes: str, offset: usize, name: str) -> bool {
     if at >= previous_end || text_bytes[at] != 64u8 { ret false }
     let word_end = manifest_word_end(text_bytes, at + 1usize)
     ret graph.same(text_bytes[at + 1usize..word_end], name)
+}
+
+// The explain table's records in `explain_before`'s order (D539, H16): the indices,
+// merge-sorted once, where every writer had scanned the whole table for the record
+// after the last written -- quadratic in the sites, fifty-three seconds for the
+// compiler's own `explain-file` where the check takes a third of one. Records that
+// order equal -- one site decided twice -- are neighbours, and a writer skips a
+// record that is not after the one it wrote.
+fn explain_order(a: *mem.Arena, c: *check.Checker) -> ([]usize, err) {
+    let count = c.explain_count
+    let (order, order_error) = mem.alloc[usize](a, count + 1usize)
+    if order_error != ok { ret (order, order_error) }
+    let (scratch, scratch_error) = mem.alloc[usize](a, count + 1usize)
+    if scratch_error != ok { ret (order, scratch_error) }
+    var at = 0usize
+    while at < count {
+        order[at] = at
+        at += 1usize
+    }
+    var width = 1usize
+    while width < count {
+        var run = 0usize
+        while run < count {
+            let middle = min_usize(run + width, count)
+            let end = min_usize(run + width * 2usize, count)
+            var left = run
+            var right = middle
+            var into = run
+            while into < end {
+                if left < middle && (right >= end || !explain_index_before(c, order[right], order[left])) {
+                    scratch[into] = order[left]
+                    left += 1usize
+                } else {
+                    scratch[into] = order[right]
+                    right += 1usize
+                }
+                into += 1usize
+            }
+            run = end
+        }
+        at = 0usize
+        while at < count {
+            order[at] = scratch[at]
+            at += 1usize
+        }
+        width = width * 2usize
+    }
+    ret (order[0usize..count], ok)
+}
+
+fn min_usize(a: usize, b: usize) -> usize {
+    if a < b { ret a }
+    ret b
+}
+
+// `explain_before` over two records of the table by index, the fields read in
+// place: the records are large, and a sort compares millions of pairs.
+fn explain_index_before(c: *check.Checker, i: usize, j: usize) -> bool {
+    if c.explains[i].module_index != c.explains[j].module_index { ret c.explains[i].module_index < c.explains[j].module_index }
+    if c.explains[i].offset != c.explains[j].offset { ret c.explains[i].offset < c.explains[j].offset }
+    if c.explains[i].kind != c.explains[j].kind { ret c.explains[i].kind < c.explains[j].kind }
+    if c.explains[i].first_argument != c.explains[j].first_argument { ret c.explains[i].first_argument < c.explains[j].first_argument }
+    if c.explains[i].template_index != c.explains[j].template_index { ret c.explains[i].template_index < c.explains[j].template_index }
+    if c.explains[i].function_index != c.explains[j].function_index { ret c.explains[i].function_index < c.explains[j].function_index }
+    if c.explains[i].found != c.explains[j].found { ret !c.explains[i].found }
+    if c.explains[i].receiver.module_index != c.explains[j].receiver.module_index { ret c.explains[i].receiver.module_index < c.explains[j].receiver.module_index }
+    ret text_before(c.explains[i].receiver.name, c.explains[j].receiver.name)
 }
 
 fn explain_before(a: check.Explain, b: check.Explain) -> bool {
