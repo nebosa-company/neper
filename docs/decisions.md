@@ -11116,3 +11116,15 @@ its layout -- no `bitcast` between records, no foreign struct, artifacts
 written field by field -- and the compiler built from the reversed sources
 builds the original sources to the stable stage byte for byte, which both
 suites hold. Six seconds a suite, the token streams being the cost.
+
+## D531 -- The compiler with its declarations reversed
+
+The sixth turn over the compiler is D438's `reorder`: `benchmarks/metamorphic/
+reorder_declarations.py` reverses the declarations of every module of `src/`
+after its `use` lines, two thousand three hundred and fifty-one blocks, an
+attribute line staying with the declaration under it. The compiler built from
+the result lays its functions out in the opposite order and is another image,
+and it builds the original sources to the stable stage byte for byte, which
+both suites hold. With it every transformation of the harness that can be
+turned on the compiler has been: the formatter, the comments, the literals,
+the locals, the symbols, the fields, the order.
