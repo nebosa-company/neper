@@ -979,7 +979,8 @@
             "copy",
             "phase",
             "move",
-            "dependency"
+            "dependency",
+            "verification"
           ]
         },
         "provenance": {

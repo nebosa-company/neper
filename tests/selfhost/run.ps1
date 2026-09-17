@@ -2821,6 +2821,12 @@ $catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file contract.e `"$repo`" x64 windows --json --module contract --budget 64 --bytes 3000 > `"$catalogActual`""
 if ($LASTEXITCODE -ne 0) { throw "context-file --module failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $catalogActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/catalog.x64-windows.expected.jsonl')).Hash) { throw "context-file --module differs from the conformance corpus" }
+# API verification (D570, H11): a non-test function reached by an executable @test
+# is verified and names one witness; test functions do not verify themselves.
+$verifiedCatalogActual = Join-Path $testBuild 'conformance-tools-catalog-verified.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file test_project/src/nested/deep.e `"$repo`" x64 windows --json --module helper --budget 64 > `"$verifiedCatalogActual`""
+if ($LASTEXITCODE -ne 0) { throw "the verified API catalogue failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $verifiedCatalogActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/catalog_verified.x64-windows.expected.jsonl')).Hash) { throw "the verified API catalogue differs from the conformance corpus" }
 # `--unchecked` as context (D555, H27): every subject kind says the image's checks
 # are off and carries exactly one whole-image boundary. The standalone flag works
 # on either side of a paging pair; the catalogue repeats the boundary per subject.

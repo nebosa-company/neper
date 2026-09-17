@@ -11721,3 +11721,19 @@ This is the fifth feature since D564, so the progress artifact is regenerated. I
 now credits D565's nested inline origin chain, D566's command standing, D567's rule
 standing, D568's target-supported API catalogue and this versioned card: compiler
 86.74, modules 76.64, tooling 83.12.
+
+## D570 -- Verified APIs name an executable test witness
+
+The checked call graph that powers `test-impact-file` is now shared with the module
+catalogue. For each non-test function, the compiler walks from every `@test` and
+retains the first test in declaration order that reaches it. A covered function's
+subject standing is `verified` and an adjacent `verification` fact names that test;
+an uncovered function remains `supported-on-target`. Test functions do not verify
+themselves.
+
+This standing means compiler-proved executable test coverage, not an inferred match
+from names or documentation. The existing multi-module test project pins both sides:
+`helper.twice` is verified by the passing `nested.deep.holds`, while the two `@test`
+functions remain merely target-supported (including the deliberately failing one).
+Both host suites also keep the refactored `test-impact-file` output byte-for-byte
+unchanged and execute the project tests, so the named witness is not a dead fixture.

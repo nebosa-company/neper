@@ -3533,6 +3533,99 @@ fn expression_at(tokens: []const lex.Token, tree: *parse.Tree, byte_start: usize
     ret (0usize, false)
 }
 
+// The checked call graph used by test impact and API verification. Instances point
+// at their templates, exactly as the public queries name them.
+fn function_edges(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> ([]usize, []usize, usize, err) {
+    let (edge_from, from_error) = mem.alloc[usize](a, c.explain_count + 1usize)
+    let (edge_to, to_error) = mem.alloc[usize](a, c.explain_count + 1usize)
+    if from_error != ok { ret (edge_from, edge_to, 0usize, from_error) }
+    if to_error != ok { ret (edge_from, edge_to, 0usize, to_error) }
+    var edge_count = 0usize
+    var scan = 0usize
+    while scan < c.explain_count {
+        let e = c.explains[scan]
+        var callee = c.function_count
+        if e.kind == 4u8 && !e.found { callee = e.function_index }
+        if e.kind == 1u8 && e.found { callee = e.function_index }
+        if e.kind == 2u8 { callee = e.template_index }
+        if e.kind == 5u8 { callee = e.function_index }
+        if callee < c.function_count && e.module_index < g.count {
+            if c.function_generics[callee].instance && c.function_generics[callee].template_index < c.function_count { callee = c.function_generics[callee].template_index }
+            let caller = enclosing_function(c, e.module_index, e.offset)
+            if caller < c.function_count {
+                edge_from[edge_count] = caller
+                edge_to[edge_count] = callee
+                edge_count += 1usize
+            }
+        }
+        scan += 1usize
+    }
+    ret (edge_from, edge_to, edge_count, ok)
+}
+
+fn reachable_functions(c: *check.Checker, edge_from: []const usize, edge_to: []const usize, edge_count: usize, start: usize, reached: []bool, stack: []usize) {
+    var clear = 0usize
+    while clear < c.function_count {
+        reached[clear] = false
+        clear += 1usize
+    }
+    if start >= c.function_count { ret }
+    var depth = 0usize
+    stack[depth] = start
+    depth += 1usize
+    reached[start] = true
+    while depth > 0usize {
+        depth = depth - 1usize
+        let here = stack[depth]
+        var edge_at = 0usize
+        while edge_at < edge_count {
+            if edge_from[edge_at] == here {
+                let next = edge_to[edge_at]
+                if !reached[next] {
+                    reached[next] = true
+                    stack[depth] = next
+                    depth += 1usize
+                }
+            }
+            edge_at += 1usize
+        }
+    }
+}
+
+// The first executable test, in declaration order, that reaches each non-test API.
+// This is coverage evidence; test functions do not verify themselves.
+fn verification_tests(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> ([]usize, err) {
+    let (verified_by, verified_error) = mem.alloc[usize](a, c.function_count + 1usize)
+    if verified_error != ok { ret (verified_by, verified_error) }
+    var at = 0usize
+    while at < c.function_count {
+        verified_by[at] = c.function_count
+        at += 1usize
+    }
+    let (edge_from, edge_to, edge_count, edge_error) = function_edges(a, c, g)
+    if edge_error != ok { ret (verified_by, edge_error) }
+    let (reached, reached_error) = mem.alloc[bool](a, c.function_count + 1usize)
+    if reached_error != ok { ret (verified_by, reached_error) }
+    let (stack, stack_error) = mem.alloc[usize](a, c.function_count + 1usize)
+    if stack_error != ok { ret (verified_by, stack_error) }
+    var test_at = 0usize
+    while test_at < c.signature_function_count {
+        let test_function = c.functions[test_at]
+        if test_function.module_index < g.count && manifest_has_attribute(g.modules[test_function.module_index].text, test_function.source_start, "test") {
+            reachable_functions(c, edge_from, edge_to, edge_count, test_at, reached, stack)
+            var candidate_at = 0usize
+            while candidate_at < c.signature_function_count {
+                let target_function = c.functions[candidate_at]
+                let target_is_test = target_function.module_index < g.count && manifest_has_attribute(g.modules[target_function.module_index].text, target_function.source_start, "test")
+                if reached[candidate_at] && !target_is_test && verified_by[candidate_at] == c.function_count { verified_by[candidate_at] = test_at }
+                candidate_at += 1usize
+            }
+        }
+        test_at += 1usize
+    }
+    ret (verified_by, ok)
+}
+
 // `test-impact-file PATH ROOT ARCH OS --json --changed m1,m2,...` (D423, H10): which
 // `@test` functions of the program an edit to the named modules can reach. The
 // program is checked with the explain table open; the calls, dispatches,
@@ -3584,31 +3677,8 @@ fn impact_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, changed_text: 
         }
         at += 1usize
     }
-    // The edges, from the explain table: (caller, callee) per record, callee by template.
-    let (edge_from, from_error) = mem.alloc[usize](a, c.explain_count + 1usize)
-    if from_error != ok { ret from_error }
-    let (edge_to, to_error) = mem.alloc[usize](a, c.explain_count + 1usize)
-    if to_error != ok { ret to_error }
-    var edge_count = 0usize
-    var scan = 0usize
-    while scan < c.explain_count {
-        let e = c.explains[scan]
-        var callee = c.function_count
-        if e.kind == 4u8 && !e.found { callee = e.function_index }
-        if e.kind == 1u8 && e.found { callee = e.function_index }
-        if e.kind == 2u8 { callee = e.template_index }
-        if e.kind == 5u8 { callee = e.function_index }
-        if callee < c.function_count && e.module_index < g.count {
-            if callee < c.function_count && c.function_generics[callee].instance && c.function_generics[callee].template_index < c.function_count { callee = c.function_generics[callee].template_index }
-            let caller = enclosing_function(c, e.module_index, e.offset)
-            if caller < c.function_count {
-                edge_from[edge_count] = caller
-                edge_to[edge_count] = callee
-                edge_count += 1usize
-            }
-        }
-        scan += 1usize
-    }
+    let (edge_from, edge_to, edge_count, edge_error) = function_edges(a, c, g)
+    if edge_error != ok { ret edge_error }
     let (reached, reached_error) = mem.alloc[bool](a, c.function_count + 1usize)
     if reached_error != ok { ret reached_error }
     let (stack, stack_error) = mem.alloc[usize](a, c.function_count + 1usize)
@@ -3619,35 +3689,12 @@ fn impact_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, changed_text: 
     while function_at < c.signature_function_count {
         let function = c.functions[function_at]
         if function.module_index < g.count && manifest_has_attribute(g.modules[function.module_index].text, function.source_start, "test") {
-            var affected = changed[function.module_index]
-            // The walk from this test.
-            var clear = 0usize
-            while clear < c.function_count {
-                reached[clear] = false
-                clear += 1usize
-            }
-            var depth = 0usize
-            stack[depth] = function_at
-            depth += 1usize
-            reached[function_at] = true
-            while depth > 0usize && !affected {
-                depth = depth - 1usize
-                let here = stack[depth]
-                var edge_at = 0usize
-                while edge_at < edge_count {
-                    if edge_from[edge_at] == here {
-                        let next = edge_to[edge_at]
-                        if !reached[next] {
-                            reached[next] = true
-                            if c.functions[next].module_index < g.count && changed[c.functions[next].module_index] { affected = true }
-                            if depth < stack.len {
-                                stack[depth] = next
-                                depth += 1usize
-                            }
-                        }
-                    }
-                    edge_at += 1usize
-                }
+            reachable_functions(c, edge_from, edge_to, edge_count, function_at, reached, stack)
+            var affected = false
+            var reached_at = 0usize
+            while reached_at < c.function_count && !affected {
+                if reached[reached_at] && c.functions[reached_at].module_index < g.count && changed[c.functions[reached_at].module_index] { affected = true }
+                reached_at += 1usize
             }
             let module = g.modules[function.module_index]
             let (root, relative) = source_identity_of(g, module.path)
@@ -3735,6 +3782,8 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
     if path_error != ok { ret path_error }
     let (digest, digest_error) = manifest_sha256(a, module.text)
     if digest_error != ok { ret digest_error }
+    let (verified_by, verified_error) = verification_tests(a, c, g)
+    if verified_error != ok { ret verified_error }
     out.lines = module.lines
     var page: Page = zero
     page.cursor = cursor
@@ -3751,10 +3800,24 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
                 var subject_at = nptest_copy(subject_storage, 0usize, module_name)
                 if subject_at < subject_storage.len { subject_storage[subject_at] = 46u8 }
                 subject_at = nptest_copy(subject_storage, subject_at + 1usize, function.name)
-                try subject_record(&out, g, subject_storage[0usize..subject_at], root, relative, path, module.text, digest, target_name, checks, "supported-on-target", function.source_start)
+                var standing = "supported-on-target"
+                if verified_by[candidate] < c.function_count { standing = "verified" }
+                try subject_record(&out, g, subject_storage[0usize..subject_at], root, relative, path, module.text, digest, target_name, checks, standing, function.source_start)
                 page.written += 1usize
             } else {
                 if page.total > page.cursor { page.omitted += 1usize }
+            }
+            if verified_by[candidate] < c.function_count {
+                page.total += 1usize
+                if page.total > page.cursor && page_open(&page, &out) {
+                    try text(&out, "{\"record\":\"fact\",\"kind\":\"verification\",\"provenance\":\"compiler-proved\",\"value\":")
+                    try quoted_function(&out, c, g, verified_by[candidate])
+                    try byte(&out, 125u8)
+                    try flush(&out)
+                    page.written += 1usize
+                } else {
+                    if page.total > page.cursor { page.omitted += 1usize }
+                }
             }
             try contract_facts(&out, c, g, candidate, &page, checks)
         }

@@ -2666,6 +2666,12 @@ catalog_actual="$test_build/conformance-tools-catalog.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self context-file contract.e "$repo" x64 linux --json --module contract --budget 64 --bytes 3000 > "$catalog_actual")
 cmp -s "$catalog_actual" "$conformance_root/tools/catalog.x64-linux.expected.jsonl" || { printf '%s
 ' "context-file --module differs from the conformance corpus" >&2; exit 1; }
+# API verification (D570, H11): a non-test function reached by an executable @test
+# is verified and names one witness; test functions do not verify themselves.
+verified_catalog_actual="$test_build/conformance-tools-catalog-verified.jsonl"
+(cd "$conformance_root/tools" && $test_build/neper-self context-file test_project/src/nested/deep.e "$repo" x64 linux --json --module helper --budget 64 > "$verified_catalog_actual")
+cmp -s "$verified_catalog_actual" "$conformance_root/tools/catalog_verified.x64-linux.expected.jsonl" || { printf '%s
+' "the verified API catalogue differs from the conformance corpus" >&2; exit 1; }
 # `--unchecked` as context (D555, H27): every subject kind says the image's checks
 # are off and carries exactly one whole-image boundary. The standalone flag works
 # on either side of a paging pair; the catalogue repeats the boundary per subject.
