@@ -2560,6 +2560,9 @@ index_actual="$test_build/conformance-tools-index.jsonl"
 $test_build/neper-self index-file "$conformance_root/tools/index.e" "$repo" x64 linux --json > "$index_actual"
 cmp -s "$index_actual" "$conformance_root/tools/index.expected.jsonl" || { printf '%s
 ' "index --json differs from the conformance corpus" >&2; exit 1; }
+# A resource closer is a semantic reference (D560, H17), though its contextual
+# `resource(close)` spelling is neither an expression nor an ordinary type use.
+$test_build/neper-self index-file "$conformance_root/tools/index_resource.e" "$repo" x64 linux --json | python3 -c "import json,sys; refs=[r for r in map(json.loads,sys.stdin) if r.get('record')=='reference' and r.get('role')=='protocol' and r.get('target_qualified_name')=='index_resource.close']; assert len(refs)==1 and refs[0]['spelling']=='close'"
 # `dis --json` (D233): one record of hex bytes per emitted function, byte for byte per host.
 dis_actual="$test_build/conformance-tools-dis.jsonl"
 $test_build/neper-self dis-file "$conformance_root/tools/dis.e" "$repo" x64 linux --json > "$dis_actual"
@@ -3674,9 +3677,10 @@ python3 "$repo/benchmarks/metamorphic/rename_locals.py" "$test_build/neper-self"
 renamed_written=$("$own_compiler_path" emit-executable "$test_build/renamed-src/src/main.e" "$repo" x64 linux "$test_build/neper-renamed")
 [ "$renamed_written" = 'executable written' ]
 cmp "$test_build/neper-renamed" "$stable_compiler_path"
-# The compiler with its functions and types renamed (D529, H10, H17): built from `src/` renamed through the index, it builds the stable stage.
-python3 "$repo/benchmarks/metamorphic/rename_symbols.py" "$test_build/neper-self" "$repo" "$repo/src" "$test_build/resymbolled-src/src" linux
-resymbolled_written=$("$own_compiler_path" emit-executable "$test_build/resymbolled-src/src/main.e" "$repo" x64 linux "$test_build/neper-resymbolled")
+# The compiler with its functions and types renamed (D529, D560, H10, H17): built
+# from `src/` and `lib/` renamed through one cross-root index, it builds the stable stage.
+python3 "$repo/benchmarks/metamorphic/rename_symbols.py" "$test_build/neper-self" "$repo" "$repo/src" "$test_build/resymbolled-src/src" linux "$repo/lib" "$test_build/resymbolled-src/lib"
+resymbolled_written=$("$own_compiler_path" emit-executable "$test_build/resymbolled-src/src/main.e" "$test_build/resymbolled-src" x64 linux "$test_build/neper-resymbolled")
 [ "$resymbolled_written" = 'executable written' ]
 chmod +x "$test_build/neper-resymbolled"
 by_resymbolled_written=$("$test_build/neper-resymbolled" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-resymbolled")

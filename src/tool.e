@@ -1045,6 +1045,7 @@ type IndexRefs = struct {
     qualifiers: []str,
     paths: []str,
     imports: usize,
+    starts: []usize,
     nodes: []usize,
     roles: []usize,
     picked: usize,
@@ -1093,6 +1094,7 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
     while node_index < tree.count {
         let node = tree.nodes[node_index]
         var role = 99usize
+        var candidate_start = usize(node.token_start)
         if node.kind == .UseDecl {
             role = 0usize
             if imports < 256usize {
@@ -1111,15 +1113,30 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
             }
         }
         if node.kind == .NameExpr || node.kind == .NamedType { role = 1usize }
+        // `resource(cleanup)` is a resolved reference to the consuming function
+        // even though it is contextual syntax rather than an expression (D560).
+        if node.kind == .TypeDecl {
+            var token_at = usize(node.token_start)
+            while token_at + 3usize < usize(node.token_end) && token_at + 3usize < tokens.len {
+                if tokens[token_at].kind == .Identifier && graph.same(source[tokens[token_at].start..tokens[token_at].end], "resource") && tokens[token_at + 1usize].kind == .PunctLParen && tokens[token_at + 2usize].kind == .Identifier && tokens[token_at + 3usize].kind == .PunctRParen {
+                    role = 2usize
+                    candidate_start = token_at + 2usize
+                    token_at = usize(node.token_end)
+                }
+                token_at += 1usize
+            }
+        }
         var wanted = role == 0usize
-        if role == 1usize && usize(node.token_end) > usize(node.token_start) && tokens[usize(node.token_start)].kind == .Identifier { wanted = true }
+        if (role == 1usize && usize(node.token_end) > usize(node.token_start) && tokens[usize(node.token_start)].kind == .Identifier) || role == 2usize { wanted = true }
         if wanted && picked < nodes.len {
             var slot = picked
-            while slot > 0usize && usize(tree.nodes[nodes[slot - 1usize]].token_start) > usize(node.token_start) {
+            while slot > 0usize && starts[slot - 1usize] > candidate_start {
+                starts[slot] = starts[slot - 1usize]
                 nodes[slot] = nodes[slot - 1usize]
                 roles[slot] = roles[slot - 1usize]
                 slot = slot - 1usize
             }
+            starts[slot] = candidate_start
             nodes[slot] = node_index
             roles[slot] = role
             picked += 1usize
@@ -1129,6 +1146,7 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
     state.qualifiers = qualifiers
     state.paths = paths
     state.imports = imports
+    state.starts = starts
     state.nodes = nodes
     state.roles = roles
     state.picked = picked
@@ -1146,9 +1164,10 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
     let paths = state.paths
     let imports = state.imports
     let nodes = state.nodes
+    let starts = state.starts
     let roles = state.roles
     var at = state.next
-    while at < state.picked && tokens[usize(tree.nodes[nodes[at]].token_start)].start < before {
+    while at < state.picked && tokens[starts[at]].start < before {
         let node = tree.nodes[nodes[at]]
         if roles[at] == 0usize {
             // The import: spelled as the path, its found the module.
@@ -1160,7 +1179,8 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
             if import_error != ok { ret import_error }
             state.written += 1usize
         } else {
-            let first = usize(node.token_start)
+            var first = usize(node.token_start)
+            if roles[at] == 2usize { first = starts[at] }
             let name_token = tokens[first]
             let name = source[name_token.start..name_token.end]
             var qualified_import = 256usize
@@ -1188,6 +1208,16 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
                     known_at += 1usize
                 }
             }
+            if roles[at] == 2usize && found < known_ids.len {
+                var cleanup_scratch: [512]u8 = zero
+                var cleanup_at = nptest_copy(cleanup_scratch[..], 0usize, module_name)
+                cleanup_scratch[cleanup_at] = 46u8
+                cleanup_at += 1usize
+                cleanup_at = nptest_copy(cleanup_scratch[..], cleanup_at, name)
+                let cleanup_error = reference_record(out, root, path, source, name_token, name_token, "protocol", name, known_ids[found], true, cleanup_scratch[0usize..cleanup_at])
+                if cleanup_error != ok { ret cleanup_error }
+                state.written += 1usize
+            }
             // A local of the current declaration (D483): the latest of its name
             // declared before this use, inside the declaration; spec section 5 lets
             // no local shadow a module-scope name, so a known name is never one.
@@ -1199,7 +1229,7 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
                     local_at += 1usize
                 }
             }
-            if local_found < state.local_count {
+            if roles[at] != 2usize && local_found < state.local_count {
                 var local_role = "read"
                 let after = first + 1usize
                 if after < tokens.len {
@@ -1216,7 +1246,7 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
                 if local_error != ok { ret local_error }
                 state.written += 1usize
             }
-            if qualified_import < 256usize || found < known_ids.len {
+            if roles[at] != 2usize && (qualified_import < 256usize || found < known_ids.len) {
                 var role_name = "read"
                 if node.kind == .NamedType { role_name = "type" }
                 // A type's name in a value position -- `Colour.Red` -- names the type.

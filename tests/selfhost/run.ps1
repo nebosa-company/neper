@@ -2454,6 +2454,12 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainInstancesActual).Hash -
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index.expected.jsonl')).Hash) { throw "index --json differs from the conformance corpus" }
+# A resource closer is a semantic reference (D560, H17), though its contextual
+# `resource(close)` spelling is neither an expression nor an ordinary type use.
+$indexResource = & $compiler index-file (Join-Path $conformanceRoot 'tools/index_resource.e') $repo 'x64' 'windows' --json
+if ($LASTEXITCODE -ne 0) { throw 'index-file over a resource closer failed' }
+$indexResourceRefs = @($indexResource | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.record -eq 'reference' -and $_.role -eq 'protocol' -and $_.target_qualified_name -eq 'index_resource.close' })
+if ($indexResourceRefs.Count -ne 1 -or $indexResourceRefs[0].spelling -ne 'close') { throw 'the index did not resolve resource(close) to its closer' }
 # `plan-rename-file --json` (D376, H29): the plan byte for byte; applied to a copy it
 # re-checks, the new name has uses at the old sites, and a second apply is refused.
 $planActual = Join-Path $testBuild 'conformance-tools-plan-rename.jsonl'
@@ -3629,15 +3635,15 @@ $renamedCompiler = Join-Path $testBuild 'neper-renamed.exe'
 & $ownCompilerPath emit-executable (Join-Path $renamedSrc 'src\main.e') $repo 'x64' 'windows' $renamedCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $renamedCompiler)) { throw 'the compiler did not build from its sources with the locals renamed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $renamedCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built with its locals renamed is not the stable stage' }
-# The compiler with its functions and types renamed (D529, H10, H17): every function
-# but `main` and every type of `src/` renamed through the index of every module, and
+# The compiler with its functions and types renamed (D529, D560, H10, H17): every function
+# but `main` and every type of `src/` and `lib/` renamed through one cross-root index, and
 # the compiler built from the result builds the original sources to the stable stage
 # byte for byte -- its own names reach its own image and nothing else.
 $resymbolledSrc = Join-Path $testBuild 'resymbolled-src'
-& python (Join-Path $repo 'benchmarks/metamorphic/rename_symbols.py') $compiler $repo (Join-Path $repo 'src') (Join-Path $resymbolledSrc 'src') windows
+& python (Join-Path $repo 'benchmarks/metamorphic/rename_symbols.py') $compiler $repo (Join-Path $repo 'src') (Join-Path $resymbolledSrc 'src') windows (Join-Path $repo 'lib') (Join-Path $resymbolledSrc 'lib')
 if ($LASTEXITCODE -ne 0) { throw 'the symbols of the compiler could not be renamed' }
 $resymbolledCompiler = Join-Path $testBuild 'neper-resymbolled.exe'
-& $ownCompilerPath emit-executable (Join-Path $resymbolledSrc 'src\main.e') $repo 'x64' 'windows' $resymbolledCompiler | Out-Null
+& $ownCompilerPath emit-executable (Join-Path $resymbolledSrc 'src\main.e') $resymbolledSrc 'x64' 'windows' $resymbolledCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $resymbolledCompiler)) { throw 'the compiler did not build from its sources with the symbols renamed' }
 $byResymbolled = Join-Path $testBuild 'neper-by-resymbolled.exe'
 & $resymbolledCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byResymbolled | Out-Null

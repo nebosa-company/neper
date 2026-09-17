@@ -264,6 +264,9 @@ A `reference` record contains `source_span`, `role`, `spelling`, `target_id`,
 Compiler-origin protocol, iterator and formatting calls use the smallest source span
 that caused the call and name the concrete target. This makes call graphs and
 protocol resolution inspectable without duplicating compiler logic.
+The contextual closer in `type T = resource(close) struct { ... }` is a source-origin
+`protocol` reference to `module.close` (D560, H17), so a rename plan or index-driven
+transformation cannot detach a resource from the function that consumes it.
 If source errors prevent resolution, both target fields are JSON null; the reference
 is still emitted so an editor can retain the occurrence.
 

@@ -11554,3 +11554,24 @@ request allocation has a nonzero peak, and live allocation after the last reques
 exactly the original session baseline. This satisfies H16's ten-thousand-query and
 retained-memory-after-warmup slice without introducing a persistent server; edit and
 revert cycles, snapshot pinning/eviction and backpressure remain open.
+
+## D560 -- The library's symbols renamed with the compiler
+
+The compiler-wide symbol turn renamed only the flat `src/` directory. Library
+declarations and cross-root references were untouched, so the test could not expose
+a stale compiler reference into `lib/`; recursive packages and target variants were
+outside its view. The transformer now accepts multiple input/output tree pairs,
+walks them recursively, shares one collision-free rename map, copies other-target
+variants unchanged, and preserves names that belong to the compiler-seeded runtime
+and ownership surface. Both suites transform `src/` and `lib/` together, build the
+compiler against that transformed project root, then require it to reproduce the
+ordinary stable compiler byte for byte.
+
+The first expanded run found a genuine H17 omission: `resource(close)` is contextual
+type syntax, not an expression node, so the index did not report `close` as a
+reference. The transformation renamed the declaration but not the annotation and
+ownership checking correctly rejected the resulting program. The index now emits a
+source-origin `protocol` reference from that identifier to the module's closer,
+interleaved at its source position. `index_resource.e` pins the relation on both
+hosts; the full turn renames 4,731 functions and types across both roots on Windows
+and must build and reproduce the stable stage on both hosts.
