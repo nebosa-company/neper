@@ -2391,7 +2391,8 @@ fn read_code_lines(bytes: []const u8, function_index: usize, out: []LineRow) -> 
         cursor += 4usize
         if row_count > (end - cursor) / 12usize { ret (0usize, InvalidArtifact) }
         if at == function_index {
-            if row_count > out.len { ret (0usize, Capacity) }
+            // Too many rows for the caller's buffer (D541): the count, so it can grow.
+            if row_count > out.len { ret (row_count, Capacity) }
             var row_at = 0usize
             while row_at < row_count {
                 let (offset, offset_error) = binary.read_u32(bytes, cursor + row_at * 12usize)

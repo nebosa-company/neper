@@ -11249,3 +11249,21 @@ and the dispatcher's locals sit at the bootstrap's cap of two hundred and
 fifty-six, so the flag is read in a function of its own. Found beside it: a
 function of twenty thousand statements fills an artifact table and one of
 sixty thousand fails to lower, both as named limits, not yet raised.
+
+## D541 -- The buffers grow to the function
+
+D540's two limits, found and now raised. The link read a function's line
+rows into a scratch of sixteen thousand, and a function of twenty thousand
+statements failed the build as a table full: `read_code_lines` answers the
+count it needed with its refusal, and the link worker allocates a scratch of
+that size from its arena and reads again. The artifact writer takes a
+function's content hash over a copy of its whole machine code in a scratch
+of four megabytes, and a function of twenty-seven thousand statements --
+four megabytes of checked code -- failed as `cannot lower` with no cause
+named, the error being `binary.Capacity`, which no branch of the diagnostic
+knew. The scratch is sized by the largest module as the artifact buffer has
+been since D325, at every writer (the workers', the settle path's and
+`emit-em`'s, whose artifact buffer grows the same way), and the diagnostic
+names the staging buffer. A function of sixty thousand statements builds in
+a second, in both modes, and answers its arithmetic; both suites build one
+of thirty thousand and seven and read the seven.

@@ -297,7 +297,18 @@ fn link_copy_artifact(w: *LinkWorker, artifact_at: usize) -> err {
         let code_offset = w.code_offset[position]
         if code_offset + function.code_length > program.machine.count || function.code_start + function.code_length > artifact.bytes.len { ret InvalidInput }
         os.copy_bytes(program.machine.bytes[code_offset..code_offset + function.code_length], artifact.bytes[function.code_start..function.code_start + function.code_length])
-        let (row_count, rows_error) = em.read_code_lines(artifact.bytes, position - table.base[artifact_at], w.row_scratch)
+        var (row_count, rows_error) = em.read_code_lines(artifact.bytes, position - table.base[artifact_at], w.row_scratch)
+        // A function of more rows than the scratch holds (D541): sixteen thousand
+        // rows was a function of sixteen thousand lines with code, and the build
+        // failed as a table full; the scratch grows to the function, from the worker's arena.
+        if rows_error == em.Capacity {
+            let (bigger, bigger_error) = mem.alloc[em.LineRow](&w.arena, row_count + 1024usize)
+            if bigger_error != ok { ret bigger_error }
+            w.row_scratch = bigger
+            let (again_count, again_error) = em.read_code_lines(artifact.bytes, position - table.base[artifact_at], w.row_scratch)
+            row_count = again_count
+            rows_error = again_error
+        }
         if rows_error != ok { ret rows_error }
         if row_count > row_end - row_cursor { ret InvalidInput }
         w.row_start[position] = row_cursor

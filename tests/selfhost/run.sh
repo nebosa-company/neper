@@ -3676,6 +3676,13 @@ for cancel_case in "4096 the body sweep, inside a function" "12288 lowering, ins
     grep -q "\"cancelled_after\":\"$cancel_place\"" "$test_build/long-function-cancel.jsonl"
     [ ! -e "$test_build/long-function" ]
 done
+# The buffers grow to the function (D541, H14): thirty thousand and seven statements in one function build and answer 7.
+python3 -c "lines=['use e.os','','fn main() -> err {','    var x = 0usize']+['    x = x + 1usize']*30007+['    os.exit(i32(x % 200usize))','    ret ok','}']; open('$test_build/longer-function.e','w').write('\n'.join(lines)+'\n')"
+[ "$("$test_build/neper-self" emit-executable "$test_build/longer-function.e" "$repo" x64 linux "$test_build/longer-function" 2>/dev/null)" = 'executable written' ]
+chmod +x "$test_build/longer-function"
+longer_status=0
+"$test_build/longer-function" || longer_status=$?
+[ "$longer_status" -eq 7 ]
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

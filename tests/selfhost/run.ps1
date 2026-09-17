@@ -3695,6 +3695,16 @@ foreach ($cancelCase in @(@(4096, 'the body sweep, inside a function'), @(12288,
     if (($cancelOut -join "`n") -notmatch [regex]::Escape("`"cancelled_after`":`"$($cancelCase[1])`"")) { throw "a deadline at statement $($cancelCase[0]) was not reported as $($cancelCase[1])" }
     if (Test-Path -LiteralPath $longExe) { throw 'a build cancelled inside a function wrote an image' }
 }
+# The buffers grow to the function (D541, H14): thirty thousand and seven statements
+# in one function -- past the link's row scratch and the writer's code scratch --
+# build, and the image answers the arithmetic.
+$longerFunction = Join-Path $testBuild 'longer-function.e'
+& python -c "lines=['use e.os','','fn main() -> err {','    var x = 0usize']+['    x = x + 1usize']*30007+['    os.exit(i32(x % 200usize))','    ret ok','}']; open(r'$longerFunction','w',newline='\n').write('\n'.join(lines)+'\n')"
+$longerExe = Join-Path $testBuild 'longer-function.exe'
+$longerBuilt = & $compiler emit-executable $longerFunction $repo 'x64' 'windows' $longerExe 2>&1
+if ($LASTEXITCODE -ne 0 -or $longerBuilt -ne 'executable written') { throw "the function of thirty thousand statements did not build: $longerBuilt" }
+& $longerExe
+if ($LASTEXITCODE -ne 7) { throw "the function of thirty thousand statements answered $LASTEXITCODE, not 7" }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

@@ -6378,7 +6378,7 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
     if triple_error != ok { ret triple_error }
     hot.triple = triple
-    let (scratch_storage, scratch_error) = mem.alloc[u8](a, 4194304usize)
+    let (scratch_storage, scratch_error) = mem.alloc[u8](a, loaded.largest_bytes * 8usize + 4194304usize)
     if scratch_error != ok { ret scratch_error }
     try binary.init(scratch, scratch_storage)
     let (unchanged, unchanged_error) = mem.alloc[bool](a, loaded.modules.len)
@@ -6773,6 +6773,7 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
                             try write_all(&message, "lowering failed: invalid NIR value")
                         } else {
                             try write_all(&message, "lowering failed")
+                            if lower_error == binary.Capacity { try write_all(&message, ": the artifact's staging buffer is full") }
                             if lower_error == nir.TooLong { try write_all(&message, ": a body over the oracle's cap") }
                             if lower_error == check.Capacity { try write_all(&message, ": the checker's tables are full") }
                             if lower_error == regalloc.Capacity { try write_all(&message, ": the allocator's tables are full") }
@@ -7383,7 +7384,10 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild, largest_bytes: usize) -> err {
     let (sections, sections_error) = mem.alloc[em.Section](a, 9usize)
     if sections_error != ok { ret sections_error }
     hot.sections = sections
-    let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
+    // The scratch by the largest module too (D541): a function's content hash is
+    // taken over a copy of its whole code, and one of twenty-seven thousand
+    // statements filled the four megabytes, "cannot lower" with no cause named.
+    let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, largest_bytes * 8usize + 4194304usize)
     if scratch_storage_error != ok { ret scratch_storage_error }
     try binary.init(&hot.scratch, scratch_storage)
     // Sized by the largest module (D325): its artifact is some bytes per byte of text.
@@ -9928,11 +9932,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 // One entry per byte of the artifact, and `e.str` alone compiles to
                 // more than 256 KiB, so the old quarter-megabyte stopped every
                 // `emit-em-all` over a module that uses it.
-                let (artifact_storage, artifact_storage_error) = mem.alloc[u8](a, 8388608usize)
+                let (artifact_storage, artifact_storage_error) = mem.alloc[u8](a, loaded.largest_bytes * 8usize + 8388608usize)
                 if artifact_storage_error != ok { ret artifact_storage_error }
                 var artifact: binary.Buffer = zero
                 try binary.init(&artifact, artifact_storage)
-                let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
+                let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, loaded.largest_bytes * 8usize + 4194304usize)
                 if scratch_storage_error != ok { ret scratch_storage_error }
                 var scratch: binary.Buffer = zero
                 try binary.init(&scratch, scratch_storage)
