@@ -2397,6 +2397,26 @@ fn manifest_command(a: *mem.Arena, args: []str) -> err {
     ret ok
 }
 
+// `manifest-em ARTIFACT... --json` (D557, H27): the build-manifest view of
+// modules for which no source is present. Their Inventory sections are the
+// authority; the first artifact is the root, as it is for `link-em`.
+fn artifact_manifest_command(a: *mem.Arena, args: []str) -> err {
+    let count = args.len - 3usize
+    let (paths, paths_error) = mem.alloc[str](a, count)
+    if paths_error != ok { ret paths_error }
+    let (artifacts, artifacts_error) = mem.alloc[[]const u8](a, count)
+    if artifacts_error != ok { ret artifacts_error }
+    var at = 0usize
+    while at < count {
+        paths[at] = args[at + 2usize]
+        let (bytes, load_error) = load_artifact(a, paths[at])
+        if load_error != ok { ret load_error }
+        artifacts[at] = bytes
+        at += 1usize
+    }
+    ret tool.artifact_manifest_json(a, paths, artifacts)
+}
+
 // Section 1's envelope for an operand that cannot be read, on every `--json` command
 // (D260): the header, one location-free E-CLI-9999, and the result exiting 2 with the
 // command's own zero counts -- so a harness sees a stream, never a bare `error:` line.
@@ -9782,6 +9802,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // DIR/src, one stream.
     if args.len == 8usize && same(args[1usize], "check-project") && same(args[7usize], "--json") { ret check_project_command(a, args) }
     if args.len == 7usize && same(args[1usize], "build-manifest-file") && same(args[6usize], "--json") { ret manifest_command(a, args) }
+    if args.len >= 4usize && same(args[1usize], "manifest-em") && same(args[args.len - 1usize], "--json") { ret artifact_manifest_command(a, args) }
     // `test-file ... --json [--path REL] --only n1,n2` (D424, H10): the named tests alone.
     if args.len >= 10usize && same(args[1usize], "test-file") && same(args[args.len - 2usize], "--only") && (same(args[7usize], "--json") || same(args[8usize], "--json")) { ret test_command(a, args) }
     if args.len == 8usize && same(args[1usize], "test-file") && same(args[7usize], "--json") { ret test_command(a, args) }
@@ -10476,7 +10497,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--instances N] [--fault-write N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | manifest-em ARTIFACT... --json | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--instances N] [--fault-write N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

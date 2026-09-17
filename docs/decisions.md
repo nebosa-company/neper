@@ -11504,3 +11504,21 @@ suites require six subjects, six `checks: "off"` policies and six whole-image bo
 facts. The existing checked batch golden remains byte-for-byte unchanged. The flag
 may stand before, after or between overlay pairs, and anything else after the batch
 file is still rejected. Artifact-only modules remain H27's open context case.
+
+## D557 -- The artifact's unsafe manifest
+
+An `.em` file already carried its module's exact unsafe inventory, but a harness with
+artifacts and no source had no command that exposed it. `manifest-em ARTIFACT...
+--json` now produces the ordinary `neper-build-manifest` object directly from those
+artifacts, without loading source or invoking the parser, resolver or checker. The
+first artifact names the root, matching `link-em`; all artifacts must have a valid
+Inventory section and agree on target and mode. The artifact list records each input
+path and SHA-256, while source-derived collections are empty.
+
+The command concatenates the stored inventories in argument order and derives both
+the manifest mode and checks policy from the artifacts, including
+`options.checks: "off"` for unchecked release artifacts. Both suites compare its
+unsafe array exactly with the source build's cold manifest in debug and release,
+verify every artifact digest, and require the unchecked policy to survive an
+artifact-only read. H27's one-command boundary enumeration now covers source
+contexts, batches and modules available only as artifacts.

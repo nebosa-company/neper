@@ -1918,6 +1918,21 @@ foreach ($hotMode in @('--release', '--time')) {
     $inventoryColdSites = ($inventoryColdManifest | ConvertFrom-Json).unsafe | ConvertTo-Json -Compress
     $inventoryWarmSites = ($inventoryWarmManifest | ConvertFrom-Json).unsafe | ConvertTo-Json -Compress
     if ($inventoryColdSites -ne $inventoryWarmSites -or $inventoryColdSites -notmatch '"nocheck"') { throw "the warm build's unsafe inventory differs from the cold build's ($hotMode)" }
+    # Artifact-only enumeration (D557, H27): no source, parser or checker is needed.
+    # The first artifact names the root; the command hashes every artifact and copies
+    # the exact unsafe inventory that the source build wrote into their Inventory sections.
+    $inventoryArtifactDir = Join-Path $inventoryScratch ".neper\$hotManifestMode\em"
+    $inventoryMainArtifact = Join-Path $inventoryArtifactDir 'main.x64-windows.em'
+    $inventoryArtifacts = @($inventoryMainArtifact) + @(Get-ChildItem -LiteralPath $inventoryArtifactDir -Filter '*.em' | Where-Object { $_.FullName -ne $inventoryMainArtifact } | Sort-Object Name | ForEach-Object FullName)
+    $inventoryArtifactManifestText = (& $compiler manifest-em @inventoryArtifacts --json) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "the artifact-only manifest failed ($hotMode)" }
+    $inventoryArtifactManifest = $inventoryArtifactManifestText | ConvertFrom-Json
+    $inventoryArtifactSites = $inventoryArtifactManifest.unsafe | ConvertTo-Json -Compress
+    if ($inventoryArtifactSites -ne $inventoryColdSites) { throw "the artifact-only unsafe inventory differs from the source build's ($hotMode)" }
+    if ($inventoryArtifactManifest.mode -ne $hotManifestMode -or $inventoryArtifactManifest.root_module -ne 'main' -or @($inventoryArtifactManifest.inputs).Count -ne 0 -or @($inventoryArtifactManifest.artifacts).Count -ne $inventoryArtifacts.Count -or $inventoryArtifactManifest.options.checks -ne 'retained') { throw "the artifact-only manifest has the wrong identity ($hotMode)" }
+    for ($artifactAt = 0; $artifactAt -lt $inventoryArtifacts.Count; $artifactAt++) {
+        if ($inventoryArtifactManifest.artifacts[$artifactAt].path -ne $inventoryArtifacts[$artifactAt] -or $inventoryArtifactManifest.artifacts[$artifactAt].sha256 -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $inventoryArtifacts[$artifactAt]).Hash.ToLowerInvariant()) { throw "the artifact-only manifest has the wrong artifact digest ($hotMode)" }
+    }
     # A write that dies (D435, H24): `--fault-write 1` makes the second module's artifact
     # write die after staging, so the build fails with its `.tmp` left; the warm build
     # after it finds every published artifact whole, rebuilds that module alone as
@@ -1955,6 +1970,13 @@ foreach ($hotMode in @('--release', '--time')) {
         $hotUncheckedClean = Join-Path $testBuild 'hot-unchecked-clean.exe'
         $hotUncheckedWarm = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotUnchecked --release --unchecked --incremental 2>$null
         if ($LASTEXITCODE -ne 0 -or $hotUncheckedWarm -ne 'executable written') { throw 'the warm unchecked hot build failed' }
+        $hotUncheckedArtifactDir = Join-Path $hotScratch '.neper\release\em'
+        $hotUncheckedMainArtifact = Join-Path $hotUncheckedArtifactDir 'main.x64-windows.em'
+        $hotUncheckedArtifacts = @($hotUncheckedMainArtifact) + @(Get-ChildItem -LiteralPath $hotUncheckedArtifactDir -Filter '*.em' | Where-Object { $_.FullName -ne $hotUncheckedMainArtifact } | Sort-Object Name | ForEach-Object FullName)
+        $hotUncheckedArtifactManifestText = (& $compiler manifest-em @hotUncheckedArtifacts --json) -join "`n"
+        if ($LASTEXITCODE -ne 0) { throw 'the unchecked artifact-only manifest failed' }
+        $hotUncheckedArtifactManifest = $hotUncheckedArtifactManifestText | ConvertFrom-Json
+        if ($hotUncheckedArtifactManifest.mode -ne 'release' -or $hotUncheckedArtifactManifest.options.checks -ne 'off') { throw 'the unchecked artifact-only manifest did not preserve the checks policy' }
         & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:mode-changed' 'dep=rebuilt:mode-changed'
         if ($LASTEXITCODE -ne 0) { throw 'an unchecked build over checked artifacts did not rebuild them as mode-changed' }
         $hotUncheckedCleanWritten = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotUncheckedClean --release --unchecked 2>$null

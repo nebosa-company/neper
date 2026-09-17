@@ -664,7 +664,18 @@ checker trusts the program there and checks nothing), with `kind`, `provenance`,
 bytes so a warm build lists them too, in module then line order; every
 dereference inside a `@nocheck` block is a `deref` site of its own (D497), the
 read whose null check the block left out, at its line under the block's
-function -- a `*` before a name or a `(`, not after `:`, `[` or `->`; `incremental` (D363, H14) is what an
+function -- a `*` before a name or a `(`, not after `:`, `[` or `->`.
+
+`manifest-em ARTIFACT... --json` returns that same `neper-build-manifest`
+schema from `.em` files alone (D557, H27), without source, parsing or checking.
+The first artifact names `root_module`, as it does for `link-em`; every artifact
+must carry an Inventory section and have the same target and build mode. The
+manifest has empty `inputs`, `dependencies`, `libraries` and `assets`, hashes
+each named artifact into `artifacts`, concatenates their stored unsafe records,
+and derives `mode` and `options.checks` from the artifacts (`off` for an
+unchecked image, `retained` otherwise).
+
+`incremental` (D363, H14) is what an
 `--incremental` build decided per module, in graph order -- `decision` `kept` or
 `rebuilt` and `reason`: `stable` (source and every dependency unchanged),
 `edges-hold` (source unchanged, every imported interface still as recorded --

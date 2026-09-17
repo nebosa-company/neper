@@ -5554,6 +5554,87 @@ fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (us
     ret (0usize, ok)
 }
 
+fn artifact_text(bytes: []const u8, index: usize) -> (str, err) {
+    let (start, length, bounds_error) = em.string_bounds(bytes, index)
+    if bounds_error != ok { ret ("", bounds_error) }
+    ret (bytes[start..start + length], ok)
+}
+
+// A canonical build manifest over artifacts alone (D557, H27). An artifact's
+// required Inventory section already contains the exact unsafe records a source
+// build writes, so this view copies them without source, parsing or checking.
+fn artifact_manifest_json(a: *mem.Arena, paths: []str, artifacts: [][]const u8) -> err {
+    if artifacts.len == 0usize || paths.len != artifacts.len { ret em.InvalidArtifact }
+    let (target_index, target_index_error) = em.artifact_target_index(artifacts[0usize])
+    if target_index_error != ok { ret target_index_error }
+    let (target_name, target_name_error) = artifact_text(artifacts[0usize], target_index)
+    if target_name_error != ok { ret target_name_error }
+    let (root_index, root_index_error) = em.interface_module_index(artifacts[0usize])
+    if root_index_error != ok { ret root_index_error }
+    let (root_name, root_name_error) = artifact_text(artifacts[0usize], root_index)
+    if root_name_error != ok { ret root_name_error }
+    let (mode, mode_error) = em.artifact_mode(artifacts[0usize])
+    if mode_error != ok || mode > 2usize { ret em.InvalidArtifact }
+    var capacity = 65536usize + paths.len * 512usize
+    var scan = 0usize
+    while scan < artifacts.len {
+        let (each_target_index, each_target_index_error) = em.artifact_target_index(artifacts[scan])
+        if each_target_index_error != ok { ret each_target_index_error }
+        let (each_target, each_target_error) = artifact_text(artifacts[scan], each_target_index)
+        if each_target_error != ok || !graph.same(each_target, target_name) { ret em.InvalidArtifact }
+        let (each_mode, each_mode_error) = em.artifact_mode(artifacts[scan])
+        if each_mode_error != ok || each_mode != mode { ret em.InvalidArtifact }
+        let (inventory, inventory_count, inventory_found, inventory_error) = em.artifact_inventory(artifacts[scan])
+        if inventory_error != ok || !inventory_found { ret em.InvalidArtifact }
+        capacity += inventory.len + paths[scan].len * 2usize + inventory_count * 8usize
+        scan += 1usize
+    }
+    let (storage, storage_error) = mem.alloc[u8](a, capacity)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try text(&out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3,\"target\":")
+    try quoted(&out, target_name)
+    try text(&out, ",\"mode\":\"")
+    if mode == 0usize { try text(&out, "debug") } else { try text(&out, "release") }
+    try text(&out, "\",\"root_module\":")
+    try quoted(&out, root_name)
+    try text(&out, ",\"inputs\":[],\"dependencies\":[],\"libraries\":[],\"assets\":[],\"artifacts\":[")
+    var at = 0usize
+    while at < artifacts.len {
+        if at != 0usize { try byte(&out, 44u8) }
+        try text(&out, "{\"path\":")
+        try quoted(&out, paths[at])
+        try text(&out, ",\"kind\":\"module\",\"target\":")
+        try quoted(&out, target_name)
+        try text(&out, ",\"sha256\":")
+        let checkpoint = mem.mark(a)
+        let (digest, digest_error) = artifact_hash.sha256_hex(a, artifacts[at])
+        if digest_error != ok { ret digest_error }
+        try quoted(&out, digest)
+        mem.reset(a, checkpoint)
+        try byte(&out, 125u8)
+        at += 1usize
+    }
+    try text(&out, "],\"unsafe\":[")
+    var written = 0usize
+    at = 0usize
+    while at < artifacts.len {
+        let (inventory, inventory_count, inventory_found, inventory_error) = em.artifact_inventory(artifacts[at])
+        if inventory_error != ok || !inventory_found { ret em.InvalidArtifact }
+        if inventory_count != 0usize {
+            if written != 0usize { try byte(&out, 44u8) }
+            try text(&out, inventory)
+            written += inventory_count
+        }
+        at += 1usize
+    }
+    try text(&out, "],\"incremental\":[],\"options\":{\"checks\":\"")
+    if mode == 2usize { try text(&out, "off") } else { try text(&out, "retained") }
+    try text(&out, "\"},\"work\":{\"bodies_checked\":0,\"modules_lowered\":0,\"functions_lowered\":0,\"declarations_checked\":0}}")
+    ret flush(&out)
+}
+
 // The object, into `out`, without a newline: the command flushes it as a record and a
 // build saves it as a file. An empty `artifact_path` is no artifact.
 // The unsafe sites of one module (D355, D371, D457): the module's bytes scanned for

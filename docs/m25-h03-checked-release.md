@@ -77,6 +77,14 @@ describes the runtime policy of the image whose context the caller is requesting
 The same standalone flag on `query-batch` applies that policy to every `context` and
 `catalog` line while preserving the batch's single load and check (D556).
 
+When source is absent, `manifest-em ARTIFACT... --json` enumerates the same
+boundaries directly from the required Inventory sections of the `.em` files
+(D557). The first artifact is the root; all named artifacts must agree on target
+and mode. The result uses the ordinary build-manifest schema, hashes the artifacts,
+and preserves `options.checks: "off"` for an unchecked image. Together with the
+source context paths, H27's one-command enumeration therefore covers modules that
+exist only as artifacts.
+
 ## 4. Obligations not yet met
 
 - Check elimination with proofs, and the codegen tests for eliminated checks.
