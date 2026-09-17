@@ -11430,3 +11430,23 @@ expected layout in the message. The corpus gains `reject/arena_layout`, a
 project whose own `e.mem` reverses the fields, and both suites pin the
 build stream. `check-file` does not refuse it: the contract is the
 runtime's, and the check belongs to the build that links one.
+
+## D553 -- Every function's first error
+
+A check ended at the program's first failing function: the checker's
+failure is one record, and what follows a failure inside a body is a
+reading of it. Between functions nothing is: a body's check begins with
+its locals, pins and depths put down, so `check-file` now checks the
+bodies one function at a time -- `begin_module_bodies` parses the module,
+`check_function` checks each top-level function, `clear_failure` puts the
+failure down after it is printed -- and goes on to the next, the instances
+the bodies made after them the same way; a failure with no site, a limit
+or the deadline, ends the check as before, and the declaration and name
+phases still stop at their first. `reject/each_function.e` has three
+failing functions and three diagnostics. Two fixtures gained diagnostics
+their first had hidden: `safety_borrowed`'s `main` leaves its file owned
+at the `try`, and `safety_pushed_twice`'s list over a resource fails
+inside `push[File]` and `reserve[File]`, the container over an obligated
+resource being H02's open gap, each chained to the request in `main`
+(D543). The build's crew stops at its first failure as it did: a worker's
+failure is the build's.

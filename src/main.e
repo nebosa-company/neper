@@ -7064,6 +7064,63 @@ fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker)
     ret ok
 }
 
+// The bodies checked one function at a time (D553, H09): where `check.run` stopped
+// at the program's first failing function, `check-file` prints that function's
+// diagnostic, clears it and goes on to the next, so a harness reads every
+// function's first error from one run; the instances the bodies made follow, each
+// the same way. A failure with no token -- a limit, the deadline, an internal one --
+// is answered as the error for the caller to print, as before.
+fn check_file_bodies(report: *Sink, checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
+    var failures = 0usize
+    let body_failure = check_bodies_each(report, checker, resolver, loaded, &failures)
+    if body_failure != ok { try print_check_diagnostic(report, loaded, checker, body_failure) }
+    if body_failure != ok || failures != 0usize {
+        try finish_report(report)
+        os.exit(1i32)
+    }
+    ret ok
+}
+
+fn check_bodies_each(report: *Sink, checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph, failures: *usize) -> err {
+    var order_at = 0usize
+    while order_at < loaded.order_count {
+        let module_index = loaded.order[order_at]
+        order_at += 1usize
+        if !loaded.modules[module_index].has_tree { continue }
+        var tree: parse.Tree = zero
+        try check.begin_module_bodies(checker, resolver, loaded, module_index, &tree)
+        var node_index = 1usize
+        while node_index < tree.count {
+            let node = tree.nodes[node_index]
+            if node.top_level && node.kind == .FnDecl {
+                let body_error = check.check_function(checker, resolver, loaded, &tree, module_index, node, node_index)
+                if body_error != ok {
+                    if !checker.failure_has_token { ret body_error }
+                    try print_check_diagnostic(report, loaded, checker, body_error)
+                    check.clear_failure(checker)
+                    *failures += 1usize
+                }
+            }
+            node_index += 1usize
+        }
+    }
+    var instance_index = checker.signature_function_count
+    while instance_index < checker.function_count {
+        if checker.function_generics[instance_index].instance && !checker.function_generics[instance_index].checked && !checker.functions[instance_index].generic {
+            checker.function_generics[instance_index].checked = true
+            let instance_error = check.check_instance(checker, resolver, loaded, instance_index)
+            if instance_error != ok {
+                if !checker.failure_has_token { ret instance_error }
+                try print_check_diagnostic(report, loaded, checker, instance_error)
+                check.clear_failure(checker)
+                *failures += 1usize
+            }
+        }
+        instance_index += 1usize
+    }
+    ret ok
+}
+
 fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic) {
     checker.failure_module = diagnostic.module_index
     checker.failure_kind = diagnostic.kind
@@ -9609,7 +9666,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         var checker: check.Checker = zero
         try init_cli_checker(a, &checker, &loaded, &report)
         checker.arena = a
-        let check_error = check.run(&checker, &resolver, &loaded)
+        let check_error = check.run_declarations(&checker, &resolver, &loaded)
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
                 try print_check_diagnostic(&report, &loaded, &checker, check_error)
@@ -9625,6 +9682,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             os.exit(1i32)
             ret ok
         }
+        // Every function's first error (D553, H09): the bodies one function at a
+        // time, each failure printed and put down, the check going on to the next.
+        try check_file_bodies(&report, &checker, &resolver, &loaded)
         var error_conflict: error_table.Conflict = zero
         let error_declaration_error = error_table.validate_declarations(&resolver, &loaded, &error_conflict)
         if error_declaration_error != ok {

@@ -113,7 +113,14 @@ A diagnostic record is:
 ```
 
 `severity` is `error` or `note`. A note has no independent exit effect and carries
-`parent`, the zero-based diagnostic-record index of its error. `applicability` is
+`parent`, the zero-based diagnostic-record index of its error. A check stops at the
+first failure inside a function, since what follows it in that body is a reading
+of the failure, and goes on to the next function (D553, H09): `check --json` over a
+program whose bodies fail in several functions carries each function's first
+diagnostic, in source order, the instances the bodies made after them, and the
+result's `diagnostics` counts them; a failure with no site -- a limit, the
+deadline -- ends the stream as before, and a name or declaration failure still
+comes alone, the bodies not being checked past it. `applicability` is
 `machine` only when applying all edits cannot change a valid program's behavior;
 otherwise it is `maybe`. Edits within one fix are non-overlapping and sorted by
 source then descending `byte_start`, so they can be applied without offset repair.

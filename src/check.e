@@ -12711,6 +12711,31 @@ fn past_deadline(c: *Checker) -> bool {
     ret usize(ticks) - c.started_ns >= c.deadline_ns
 }
 
+// A module's bodies one function at a time (D553, H09): `begin_module_bodies` parses
+// and tokenizes the module into the caller's tree, the caller checks each top-level
+// function with `check_function` and goes on past a failure once it has read it
+// and called `clear_failure`; `bodies_module` below stops at the first.
+fn begin_module_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_index: usize, tree: *parse.Tree) -> err {
+    try graph.parse_module(g, module_index, tree)
+    try tokenize_module(c, g, module_index)
+    ret memo_module(c, module_index, tree.count)
+}
+
+// The failure read and put down (D553): the next function's is recorded afresh.
+fn clear_failure(c: *Checker) {
+    c.failure_has_token = false
+    c.failure_kind = .None
+    c.failure_name = ""
+    c.failure_detail = ""
+    c.failure_detail2 = ""
+    c.failure_expected = invalid_type()
+    c.failure_mismatch_end = 0usize
+    c.failure_has_related = false
+    c.failure_fix_text = ""
+    c.failure_fix_kind = 0u8
+    c.diagnostic_count = 0usize
+}
+
 fn bodies_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_index: usize) -> err {
     var tree: parse.Tree = zero
     try graph.parse_module(g, module_index, &tree)
