@@ -2631,6 +2631,24 @@ catalog_actual="$test_build/conformance-tools-catalog.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self context-file contract.e "$repo" x64 linux --json --module contract --budget 64 --bytes 3000 > "$catalog_actual")
 cmp -s "$catalog_actual" "$conformance_root/tools/catalog.x64-linux.expected.jsonl" || { printf '%s
 ' "context-file --module differs from the conformance corpus" >&2; exit 1; }
+# `--unchecked` as context (D555, H27): every subject kind says the image's checks
+# are off and carries exactly one whole-image boundary. The standalone flag works
+# on either side of a paging pair; the catalogue repeats the boundary per subject.
+for unchecked_case in "contract.e contract.main before" "contract.e contract.Counter after" "subjects.e subjects.LIMIT before" "subjects.e subjects.counter after"; do
+    set -- $unchecked_case
+    if [ "$3" = before ]; then
+        unchecked_context=$("$test_build/neper-self" context-file "$conformance_root/tools/$1" "$repo" x64 linux --json --symbol "$2" --unchecked --budget 64)
+    else
+        unchecked_context=$("$test_build/neper-self" context-file "$conformance_root/tools/$1" "$repo" x64 linux --json --symbol "$2" --budget 64 --unchecked)
+    fi
+    [ "$(printf '%s\n' "$unchecked_context" | grep -c '"checks":"off"')" -eq 1 ] || { echo "context-file --unchecked did not mark $2 checks off" >&2; exit 1; }
+    [ "$(printf '%s\n' "$unchecked_context" | grep -c '"value":"--unchecked: runtime safety checks are omitted from the whole image; values produced by it cross a trusted boundary"')" -eq 1 ] || { echo "context-file --unchecked did not emit exactly one whole-image boundary for $2" >&2; exit 1; }
+done
+unchecked_catalog=$("$test_build/neper-self" context-file "$conformance_root/tools/contract.e" "$repo" x64 linux --json --module contract --unchecked --budget 64)
+unchecked_catalog_subjects=$(printf '%s\n' "$unchecked_catalog" | grep -c '"record":"subject"')
+[ "$unchecked_catalog_subjects" -eq 4 ] || { echo "context-file --module --unchecked returned $unchecked_catalog_subjects subjects, not 4" >&2; exit 1; }
+[ "$(printf '%s\n' "$unchecked_catalog" | grep -c '"checks":"off"')" -eq "$unchecked_catalog_subjects" ] || { echo "context-file --module --unchecked did not mark every subject checks off" >&2; exit 1; }
+[ "$(printf '%s\n' "$unchecked_catalog" | grep -c '"value":"--unchecked: runtime safety checks are omitted from the whole image; values produced by it cross a trusted boundary"')" -eq "$unchecked_catalog_subjects" ] || { echo "context-file --module --unchecked did not emit one whole-image boundary per subject" >&2; exit 1; }
 # `--deadline MS` (D399, H16): a deadline already passed cancels the build at the first
 # checkpoint -- one diagnostic, a result of exit code 3, no image written.
 deadline_actual="$test_build/conformance-tools-deadline.jsonl"

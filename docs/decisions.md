@@ -11470,3 +11470,20 @@ one-byte-array inputs: validation now reads the representation the bitcast produ
 not only an integer input's bits. This closes the direct-bitcast part of H03's
 tagged-union representation gap. Bytes introduced through `mem.cast` or a foreign
 write remain outside this check and remain stated as open.
+
+## D555 -- The whole-image boundary in context
+
+`context-file` described every subject as `checks: "retained"`, even when a harness
+was asking about an image it intended to build with `--unchecked`. The manifest knew
+the policy, but context copied away from it lost the fact that every value produced
+by the image crosses an unsafe boundary. Both direct context forms now accept a
+standalone `--unchecked` among their paging and overlay flags. The subject says
+`checks: "off"`, and its paginated facts gain one whole-image `boundary`: runtime
+safety checks are omitted from the whole image and values it produces are trusted.
+
+The flag describes an intended runtime policy; the context query still statically
+checks the source. Function, type, constant and global subjects all carry the fact,
+and a module catalogue emits it once for each subject. Without the flag the existing
+streams remain byte-for-byte unchanged. Both suites exercise the four subject paths,
+the catalogue multiplicity, and both placements of the standalone flag. This closes
+the whole-image half of H27's context gap; artifact-only modules remain open.

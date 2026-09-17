@@ -68,6 +68,13 @@ bytes so a warm build that checks no body lists them too; `options.checks` says
 that array (H27's one-command enumeration); the artifact format is 9, so a cache
 made under the old policy is rebuilt rather than linked.
 
+A context query can describe the same intended policy without building the image
+(D555): standalone `--unchecked` makes every subject record say `checks: "off"`
+and adds one whole-image `boundary` fact for that subject. A catalogue repeats the
+fact once per subject, so stored context cannot lose the whole-image trust boundary
+when it is separated from the manifest. The query still checks the source; the flag
+describes the runtime policy of the image whose context the caller is requesting.
+
 ## 4. Obligations not yet met
 
 - Check elimination with proofs, and the codegen tests for eliminated checks.

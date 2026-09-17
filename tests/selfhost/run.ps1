@@ -2778,6 +2778,28 @@ $catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file contract.e `"$repo`" x64 windows --json --module contract --budget 64 --bytes 3000 > `"$catalogActual`""
 if ($LASTEXITCODE -ne 0) { throw "context-file --module failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $catalogActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/catalog.x64-windows.expected.jsonl')).Hash) { throw "context-file --module differs from the conformance corpus" }
+# `--unchecked` as context (D555, H27): every subject kind says the image's checks
+# are off and carries exactly one whole-image boundary. The standalone flag works
+# on either side of a paging pair; the catalogue repeats the boundary per subject.
+$uncheckedCases = @(
+    @('contract.e', 'contract.main', $true),
+    @('contract.e', 'contract.Counter', $false),
+    @('subjects.e', 'subjects.LIMIT', $true),
+    @('subjects.e', 'subjects.counter', $false)
+)
+foreach ($uncheckedCase in $uncheckedCases) {
+    $uncheckedTail = if ($uncheckedCase[2]) { @('--unchecked', '--budget', '64') } else { @('--budget', '64', '--unchecked') }
+    $uncheckedContext = & $compiler context-file (Join-Path $conformanceRoot "tools/$($uncheckedCase[0])") $repo 'x64' 'windows' --json --symbol $uncheckedCase[1] @uncheckedTail
+    if ($LASTEXITCODE -ne 0) { throw "context-file --unchecked failed on $($uncheckedCase[1])" }
+    if (@($uncheckedContext | Select-String -SimpleMatch '"checks":"off"').Count -ne 1) { throw "context-file --unchecked did not mark $($uncheckedCase[1]) checks off" }
+    if (@($uncheckedContext | Select-String -SimpleMatch '"value":"--unchecked: runtime safety checks are omitted from the whole image; values produced by it cross a trusted boundary"').Count -ne 1) { throw "context-file --unchecked did not emit exactly one whole-image boundary for $($uncheckedCase[1])" }
+}
+$uncheckedCatalog = & $compiler context-file (Join-Path $conformanceRoot 'tools/contract.e') $repo 'x64' 'windows' --json --module contract --unchecked --budget 64
+if ($LASTEXITCODE -ne 0) { throw 'context-file --module --unchecked failed' }
+$uncheckedCatalogSubjects = @($uncheckedCatalog | Select-String -SimpleMatch '"record":"subject"').Count
+if ($uncheckedCatalogSubjects -ne 4) { throw "context-file --module --unchecked returned $uncheckedCatalogSubjects subjects, not 4" }
+if (@($uncheckedCatalog | Select-String -SimpleMatch '"checks":"off"').Count -ne $uncheckedCatalogSubjects) { throw 'context-file --module --unchecked did not mark every subject checks off' }
+if (@($uncheckedCatalog | Select-String -SimpleMatch '"value":"--unchecked: runtime safety checks are omitted from the whole image; values produced by it cross a trusted boundary"').Count -ne $uncheckedCatalogSubjects) { throw 'context-file --module --unchecked did not emit one whole-image boundary per subject' }
 # `--deadline MS` (D399, H16): a deadline already passed cancels the build at the first
 # checkpoint -- one diagnostic, a result of exit code 3, no image written.
 $deadlineActual = Join-Path $testBuild 'conformance-tools-deadline.jsonl'

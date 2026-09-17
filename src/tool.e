@@ -2760,9 +2760,10 @@ fn dependency_facts(a: *mem.Arena, out: *Out, g: *graph.Graph, module_index: usi
 // One function's contract facts (D361, D396), in their fixed order, counted
 // against the page: the signature, an ownership fact per `own` parameter, the
 // caller's contract per pointer parameter, the errors, the thread start, then the
-// body's resource verdict or its `@unsafe` boundary. `context-file --symbol`
-// follows them with the body's decisions; `--module` writes them per function.
-fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index: usize, page: *Page) -> err {
+// body's resource verdict or its `@unsafe` boundary, then the whole-image boundary
+// when its checks are off. `context-file --symbol` follows them with the body's
+// decisions; `--module` writes them per function.
+fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index: usize, page: *Page, checks: str) -> err {
     let function = c.functions[function_index]
     // Signature.
     page.total += 1usize
@@ -2930,6 +2931,23 @@ fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index:
     } else {
         if page.total > page.cursor { page.omitted += 1usize }
     }
+    ret unchecked_boundary(out, page, checks)
+}
+
+// `--unchecked` is one whole-image unsafe boundary (D555, H27), independent of
+// the declaration a context query names. It is a fact of every subject so a
+// consumer cannot retain the subject and lose the policy that made its values
+// trusted. Like every other fact it participates in record and byte pagination.
+fn unchecked_boundary(out: *Out, page: *Page, checks: str) -> err {
+    if !graph.same(checks, "off") { ret ok }
+    page.total += 1usize
+    if page.total > page.cursor && page_open(page, out) {
+        try text(out, "{\"record\":\"fact\",\"kind\":\"boundary\",\"provenance\":\"declared-and-checked\",\"value\":\"--unchecked: runtime safety checks are omitted from the whole image; values produced by it cross a trusted boundary\"}")
+        try flush(out)
+        page.written += 1usize
+    } else {
+        if page.total > page.cursor { page.omitted += 1usize }
+    }
     ret ok
 }
 
@@ -3076,6 +3094,7 @@ fn value_context_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Gra
             if page.total > page.cursor { page.omitted += 1usize }
         }
     }
+    try unchecked_boundary(out, &page, checks)
     try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
     try decimal(out, page.written)
     try text(out, ",\"omitted\":")
@@ -3215,6 +3234,7 @@ fn type_context_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Grap
     } else {
         if page.total > page.cursor { page.omitted += 1usize }
     }
+    try unchecked_boundary(out, &page, checks)
     try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
     try decimal(out, page.written)
     try text(out, ",\"omitted\":")
@@ -3624,7 +3644,7 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
             } else {
                 if page.total > page.cursor { page.omitted += 1usize }
             }
-            try contract_facts(&out, c, g, candidate, &page)
+            try contract_facts(&out, c, g, candidate, &page, checks)
         }
         candidate += 1usize
     }
@@ -3716,7 +3736,7 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
     page.cursor = cursor
     page.budget = budget
     page.byte_budget = byte_budget
-    try contract_facts(&out, c, g, function_index, &page)
+    try contract_facts(&out, c, g, function_index, &page, checks)
     try dependency_facts(a, &out, g, function.module_index, &page)
     var written = page.written
     var omitted = page.omitted

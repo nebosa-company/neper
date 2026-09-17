@@ -326,7 +326,7 @@ E-NAME-9999 for a missing protocol names the foreign candidate too.
 ### Context
 
 `neper context-file PATH ROOT ARCH OS --json --symbol module.name [--budget N]
-[--cursor N]` (D361, H08) checks the program and answers what the compiler knows
+[--cursor N] [--unchecked]` (D361, H08) checks the program and answers what the compiler knows
 about one declared function, under a record budget (64 by default):
 
 - `subject` — always first: `subject`, `kind` (`fn`), the module's `source`
@@ -379,13 +379,21 @@ of the program shares it and no rule tracks it. A subject that names none of
 these is `E-CLI-9999` and exit 2.
 
 `neper context-file PATH ROOT ARCH OS --json --module module.name [--budget N]
-[--cursor N]` (D397, H11) is the catalogue: every declared, non-generic function
+[--cursor N] [--unchecked]` (D397, H11) is the catalogue: every declared, non-generic function
 of the module in declaration order, each a `subject` record followed by its
 contract facts (the signature through `resources`/`boundary`; the body's
 decisions are `--symbol`'s), under one budget that counts subjects and facts
 alike. A page may end inside a function's facts; the next page continues them,
 and they belong to the last subject written. A name no module of the program
 has is an `E-CLI-9999` diagnostic and exit 2.
+
+Both direct forms take standalone `--unchecked` among their paging and overlay
+flags (D555, H27). It describes the intended whole-image check policy rather than
+changing the static query: every subject then carries `checks: "off"` and one
+additional paginated `boundary` fact stating that runtime safety checks are omitted
+from the whole image and values it produces are trusted. Without the flag the subject
+carries `checks: "retained"` and no whole-image boundary fact. A module catalogue
+emits that whole-image boundary once for each of its subjects.
 
 `neper query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16) answers many
 queries from one check: the batch file (`-` for standard input) holds one query
