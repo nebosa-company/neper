@@ -11231,3 +11231,21 @@ order, skipping a record that is not after the one it wrote, which is how a
 site decided twice was written once before. The streams are byte for byte
 what they were; `explain-file` over the compiler is six tenths of a second,
 `uses-file` over `check.same` four where it was nine.
+
+## D540 -- The deadline inside a function
+
+The body sweep and the lowering read the clock between functions (D441,
+D442), so a function of many thousand statements held a cancellation until
+it was done. Every statement checked or lowered is a tick now, and the clock
+is read every four thousand and ninety-six of them, in the program checker
+and every worker's fork; the cancellation is reported as inside a function,
+in the body sweep or in the lowering. A clock makes no test, so
+`--fault-cancel N` passes the deadline at the Nth tick: both suites build a
+function of eight thousand statements and cancel it at the 4096th, inside
+its check, and at the 12288th, inside its lowering, exit 3, the place named,
+no image. The three words on the checker crossed the bootstrap's cap of a
+hundred and twenty-eight members on a type, raised to a hundred and sixty;
+and the dispatcher's locals sit at the bootstrap's cap of two hundred and
+fifty-six, so the flag is read in a function of its own. Found beside it: a
+function of twenty thousand statements fills an artifact table and one of
+sixty thousand fails to lower, both as named limits, not yet raised.

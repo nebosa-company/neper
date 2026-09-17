@@ -3663,6 +3663,19 @@ for plan_turn in plan-fn plan-type plan-order plan-add; do
     [ "$("$test_build/neper-$3" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-$3")" = 'executable written' ]
     cmp "$test_build/neper-by-$3" "$stable_compiler_path"
 done
+# The deadline inside a function (D540, H16): --fault-cancel at the 4096th statement is inside the check, at the 12288th inside the lowering.
+python3 -c "lines=['use e.os','','fn main() -> err {','    var x = 0usize']+['    x = x + 1usize']*8000+['    os.exit(i32(x % 200usize))','    ret ok','}']; open('$test_build/long-function.e','w').write('\n'.join(lines)+'\n')"
+[ "$("$test_build/neper-self" emit-executable "$test_build/long-function.e" "$repo" x64 linux "$test_build/long-function" 2>/dev/null)" = 'executable written' ]
+for cancel_case in "4096 the body sweep, inside a function" "12288 lowering, inside a function"; do
+    cancel_ticks="${cancel_case%% *}"
+    cancel_place="${cancel_case#* }"
+    rm -f "$test_build/long-function"
+    cancel_status=0
+    "$test_build/neper-self" emit-executable "$test_build/long-function.e" "$repo" x64 linux "$test_build/long-function" --fault-cancel "$cancel_ticks" --json > "$test_build/long-function-cancel.jsonl" 2>/dev/null || cancel_status=$?
+    [ "$cancel_status" -eq 3 ]
+    grep -q "\"cancelled_after\":\"$cancel_place\"" "$test_build/long-function-cancel.jsonl"
+    [ ! -e "$test_build/long-function" ]
+done
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

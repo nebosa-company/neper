@@ -519,6 +519,14 @@ type Checker = struct {
     // and answers `Cancelled` past it, so a cancellation waits for one function and
     // not for a module. Copied into every worker's fork.
     deadline_ns: usize,
+    // The deadline inside a function (D540, H16): every statement checked or lowered
+    // is a tick, and the clock is read every four thousand and ninety-six of them,
+    // so a cancellation waits for a few thousand statements, not for a function;
+    // `cancelled_in_function` says the deadline passed there. `fault_cancel_ticks`
+    // (`--fault-cancel N`) makes the deadline pass at the Nth tick, for a suite.
+    statement_ticks: usize,
+    cancelled_in_function: bool,
+    fault_cancel_ticks: usize,
     started_ns: usize,
     // Where each module's rows lie in the program-wide tables (D320), for the artifact
     // writer: em's nine tables, a first and an end per module, and how far each table
@@ -12034,7 +12042,18 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     ret ok
 }
 
+// A statement's tick against the deadline (D540): the clock every 4096 statements.
+fn statement_tick(c: *Checker) -> err {
+    c.statement_ticks += 1usize
+    if (c.statement_ticks & 4095usize) == 0usize && past_deadline(c) {
+        c.cancelled_in_function = true
+        ret Cancelled
+    }
+    ret ok
+}
+
 fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, function: Function) -> err {
+    try statement_tick(c)
     let node = tree.nodes[node_index]
     if node.kind == .Block { ret check_block(c, r, g, tree, module_index, node, function) }
     // The resources a statement reads (D345), before anything it moves.
@@ -12676,6 +12695,7 @@ fn finish_declarations(c: *Checker) -> err {
 
 // Whether the build's deadline has passed (D441): the clock read once per function.
 fn past_deadline(c: *Checker) -> bool {
+    if c.fault_cancel_ticks != 0usize && c.statement_ticks >= c.fault_cancel_ticks { ret true }
     if c.deadline_ns == 0usize { ret false }
     let (ticks, clock_error) = os.clock(.Monotonic)
     if clock_error != ok || ticks < 0i64 { ret false }

@@ -770,7 +770,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--overlay")
+    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--overlay")
 }
 
 // `--overlay PATH=FILE` (D502, H15), any number of times: the module at PATH -- as
@@ -1894,6 +1894,13 @@ fn check_comptime_budget(report: *Sink, args: []str, checker: *check.Checker, cr
     ret ok
 }
 
+// `--fault-cancel N` onto the checker (D540), its own function since the
+// dispatcher's locals are at the bootstrap's cap.
+fn note_fault_cancel(args: []str, checker: *check.Checker) {
+    let (fault_cancel_ticks, fault_cancel_on) = decimal_flag(args, "--fault-cancel")
+    if fault_cancel_on { checker.fault_cancel_ticks = fault_cancel_ticks }
+}
+
 fn cancel_build(report: *Sink, phase: str) -> err {
     var message_storage: [256]u8 = zero
     var message = capture_sink(message_storage[..])
@@ -1901,7 +1908,11 @@ fn cancel_build(report: *Sink, phase: str) -> err {
     try write_usize(&message, report.deadline_ns / 1000000usize)
     try write_all(&message, " ms passed after ")
     try write_all(&message, phase)
-    try write_all(&message, ": the build was cancelled between phases; no image and no manifest were written")
+    if phase.len > 17usize && same(phase[phase.len - 17usize..phase.len], "inside a function") {
+        try write_all(&message, ": the build was cancelled there, a few thousand statements on; no image and no manifest were written")
+    } else {
+        try write_all(&message, ": the build was cancelled between phases; no image and no manifest were written")
+    }
     if report.json {
         try write_all(report, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-0001\",\"message\":\"")
         try write_all(report, message_storage[..message.count])
@@ -8371,8 +8382,11 @@ fn crew_replace(a: *mem.Arena, crew: *Crew, worker_at: usize, in_sweep: bool, lo
 fn crew_failure(report: *Sink, loaded: *graph.Graph, w: *LowerWorker) -> err {
     // A worker that stopped at the deadline (D422): the build is cancelled, not failed.
     if w.failure == Cancelled {
+        // Inside a function (D540): the statement's tick found the deadline passed.
+        if w.failed_lowering && w.checker.cancelled_in_function { ret cancel_build(report, "lowering, inside a function") }
         if w.failed_lowering && w.cancelled_inside { ret cancel_build(report, "lowering, between functions") }
         if w.failed_lowering { ret cancel_build(report, "lowering, between modules") }
+        if w.checker.cancelled_in_function { ret cancel_build(report, "the body sweep, inside a function") }
         if w.cancelled_inside { ret cancel_build(report, "the body sweep, between functions") }
         ret cancel_build(report, "the body sweep, between modules")
     }
@@ -9579,6 +9593,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             checker.deadline_ns = report.deadline_ns
             checker.started_ns = report.build.started
         }
+        // `--fault-cancel N` (D540): the deadline passes at the Nth statement tick.
+        if trailing_flags { note_fault_cancel(args, &checker) }
         // The declarations first; then, incrementally, the edge rule decides the kept
         // modules from the Interfaces they give, and only the other bodies are checked
         // (D224). `keep` is what lowering skips below.

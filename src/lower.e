@@ -5778,6 +5778,8 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
 }
 
 fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
+    // The deadline inside a function's lowering (D540, H16), as inside its check.
+    try check.statement_tick(c)
     c.failure_module = module_index
     c.failure_token = c.tokens[usize(node.token_start)]
     c.failure_has_token = true

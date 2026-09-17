@@ -3680,6 +3680,21 @@ foreach ($planTurn in @(@('plan-rename-file', '--symbol check.same --to alike', 
     & $planCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byPlan | Out-Null
     if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $byPlan).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler changed by the plan $($planTurn[2]) does not build the stable stage" }
 }
+# The deadline inside a function (D540, H16): a function of eight thousand statements,
+# and `--fault-cancel N` passing the deadline at the Nth statement -- inside its check
+# at 4096, inside its lowering at 12288 -- each exit 3 with the place named, no image.
+$longFunction = Join-Path $testBuild 'long-function.e'
+& python -c "lines=['use e.os','','fn main() -> err {','    var x = 0usize']+['    x = x + 1usize']*8000+['    os.exit(i32(x % 200usize))','    ret ok','}']; open(r'$longFunction','w',newline='\n').write('\n'.join(lines)+'\n')"
+$longExe = Join-Path $testBuild 'long-function.exe'
+$longBuilt = & $compiler emit-executable $longFunction $repo 'x64' 'windows' $longExe 2>&1
+if ($LASTEXITCODE -ne 0 -or $longBuilt -ne 'executable written') { throw "the function of eight thousand statements did not build: $longBuilt" }
+foreach ($cancelCase in @(@(4096, 'the body sweep, inside a function'), @(12288, 'lowering, inside a function'))) {
+    if (Test-Path -LiteralPath $longExe) { Remove-Item -LiteralPath $longExe -Force }
+    $cancelOut = & $compiler emit-executable $longFunction $repo 'x64' 'windows' $longExe --fault-cancel $cancelCase[0] --json 2>$null
+    if ($LASTEXITCODE -ne 3) { throw "a deadline at statement $($cancelCase[0]) did not cancel the build with exit 3 (got $LASTEXITCODE)" }
+    if (($cancelOut -join "`n") -notmatch [regex]::Escape("`"cancelled_after`":`"$($cancelCase[1])`"")) { throw "a deadline at statement $($cancelCase[0]) was not reported as $($cancelCase[1])" }
+    if (Test-Path -LiteralPath $longExe) { throw 'a build cancelled inside a function wrote an image' }
+}
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

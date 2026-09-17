@@ -779,6 +779,12 @@ lowered the module, and a warm build copies them -- the manifest phase of the
 compiler's own warm build fell from 20 ms to 4 -- scanning only the modules it
 parsed, so the inventory is whole either way.
 
+`--fault-cancel N` (D540, H16) on a build makes the deadline pass at the Nth
+statement checked or lowered, so a suite can see a cancellation inside a function
+without a clock: the body sweep and the lowering read the deadline every four
+thousand and ninety-six statements, and the result's `cancelled_after` names `the
+body sweep, inside a function` or `lowering, inside a function`.
+
 `--fault-collision` (D507, H15) on a hot build makes every artifact's key a hit
 whatever the text, so a suite can see that a hit is verified beyond the key: a
 body edit under it is still rebuilt as `source-changed`. The manifest's input
