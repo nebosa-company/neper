@@ -1927,6 +1927,12 @@
               "from": {
                 "type": "string"
               },
+              "through": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "start": {
                 "type": "integer",
                 "minimum": 0

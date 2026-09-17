@@ -138,6 +138,9 @@ type Instruction = struct {
     site: Site,
     // Emitted inside `@nocheck { ... }`: the debug-only checks are left out of it (D203).
     nocheck: bool,
+    // The one-based head of this copied instruction's inline chain in `inlined`;
+    // zero for source instructions. A u32 occupies the padding before `path` (D565).
+    inline_origin: u32,
     // The source file the instruction came from: its function's, unless it was inlined
     // from another module's function (D207), which a trap record has to name.
     path: str,
@@ -347,6 +350,9 @@ type Builder = struct {
     inline_entry_count: usize,
     inlined: []InlinedRef,
     inlined_count: usize,
+    // Inline-origin nodes share the unused tail of `inlined`, growing backwards so
+    // provenance adds no second allocation (D565).
+    inline_origin_count: usize,
     // An oracle's cap on one body's instructions, measured from `limit_base`; zero is
     // no cap (D310).
     instruction_limit: usize,
@@ -1052,6 +1058,7 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         target2: 0usize,
         site: site_of(builder, token),
         nocheck: builder.nocheck,
+        inline_origin: 0u32,
         path: builder.current_path,
     }
     builder.instruction_count += 1usize
@@ -1371,10 +1378,11 @@ type Mark = struct {
     instruction_count: usize,
     operand_count: usize,
     inlined_count: usize,
+    inline_origin_count: usize,
 }
 
 fn mark(builder: *Builder) -> Mark {
-    ret Mark { function_count: builder.function_count, block_count: builder.block_count, instruction_count: builder.instruction_count, operand_count: builder.operand_count, inlined_count: builder.inlined_count }
+    ret Mark { function_count: builder.function_count, block_count: builder.block_count, instruction_count: builder.instruction_count, operand_count: builder.operand_count, inlined_count: builder.inlined_count, inline_origin_count: builder.inline_origin_count }
 }
 
 fn reset(builder: *Builder, at: Mark) {
@@ -1383,6 +1391,7 @@ fn reset(builder: *Builder, at: Mark) {
     builder.instruction_count = at.instruction_count
     builder.operand_count = at.operand_count
     builder.inlined_count = at.inlined_count
+    builder.inline_origin_count = at.inline_origin_count
     builder.function_active = false
     builder.block_active = false
 }

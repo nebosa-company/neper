@@ -666,8 +666,10 @@ channel. `dis --json` emits one `disassembly` record per function with `symbol`,
 image is listed, and `inlined` names each run of the function's code that is the
 copy of another function's body -- `from` as `module.function`, `start` and `end`
 as function-relative byte offsets, `end` exclusive, and the callee's `line` the
-run begins at; the innermost callee for a copy through a copy, and empty in a
-debug build. These records precede the final command `result`.
+run begins at. A copy through another copy retains the intermediate functions in
+the optional `through` array, innermost-first (D565); direct copies omit it, and a
+debug build has an empty `inlined` list. These records precede the final command
+`result`.
 
 Every build writes `.neper/<mode>/build-manifest.json`. It is one canonical JSON
 object with `schema:"neper-build-manifest"`, `version:1`, `tool_version`,

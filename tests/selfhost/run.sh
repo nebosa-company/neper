@@ -2567,7 +2567,7 @@ $test_build/neper-self index-file "$conformance_root/tools/index_resource.e" "$r
 # `dis --json` (D233): one record of hex bytes per emitted function, byte for byte per host.
 dis_actual="$test_build/conformance-tools-dis.jsonl"
 $test_build/neper-self dis-file "$conformance_root/tools/dis.e" "$repo" x64 linux --json > "$dis_actual"
-# `dis-file --json --release` (D542, H19): the release image, each function's inlined runs named.
+# `dis-file --json --release` (D542, D565, H19): inlined runs retain a nested copy's chain.
 $test_build/neper-self dis-file "$conformance_root/tools/dis_inlined.e" "$repo" x64 linux --json --release > "$test_build/conformance-tools-dis-inlined.jsonl"
 cmp "$test_build/conformance-tools-dis-inlined.jsonl" "$conformance_root/tools/dis_inlined.x64-linux.expected.jsonl"
 cmp -s "$dis_actual" "$conformance_root/tools/dis.x64-linux.expected.jsonl" || { printf '%s

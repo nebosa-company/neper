@@ -28,7 +28,10 @@ type Fixup = struct {
 // the instructions came from `line` of `path`, until the next row.
 type LineEntry = struct {
     offset: usize,
-    line: usize,
+    // Source lines and one-based inline-origin indexes share the word they occupied
+    // before D565, keeping the large line table's element size unchanged.
+    line: u32,
+    origin: u32,
     path: str,
 }
 
@@ -1193,7 +1196,7 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
                 let (path_index, found) = path_position(paths[..path_count], entry.path, &last_path, path_heads[..], path_next[..])
                 if !found { ret Unsupported }
                 try emit_x64.little_u32(machine, entry.offset - start)
-                try emit_x64.little_u32(machine, entry.line)
+                try emit_x64.little_u32(machine, usize(entry.line))
                 try emit_x64.little_u32(machine, path_offsets[path_index])
                 try emit_x64.little_u32(machine, entry.path.len)
                 row_at += 1usize
@@ -1955,17 +1958,18 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
         context.failure_instruction = at
         // The line table: a row wherever the line or the file changes (D209).
         if instruction.site.line != 0usize {
+            if instruction.site.line > 4294967295usize { ret Unsupported }
             var line_path = instruction.path
             if line_path.len == 0usize { line_path = current.path }
             let line_count = *context.line_count
             var changed = true
             if line_count != 0usize {
                 let last = context.lines[line_count - 1usize]
-                if last.line == instruction.site.line && check.same(last.path, line_path) && last.offset >= function_code_start { changed = false }
+                if last.line == u32(instruction.site.line) && last.origin == instruction.inline_origin && check.same(last.path, line_path) && last.offset >= function_code_start { changed = false }
             }
             if changed {
                 if line_count == context.lines.len { ret Unsupported }
-                context.lines[line_count] = LineEntry { offset: output.count, line: instruction.site.line, path: line_path }
+                context.lines[line_count] = LineEntry { offset: output.count, line: u32(instruction.site.line), origin: instruction.inline_origin, path: line_path }
                 *context.line_count = line_count + 1usize
             }
         }

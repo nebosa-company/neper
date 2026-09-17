@@ -2360,7 +2360,7 @@ fn write_lines(builder: *nir.Builder, c: *check.Checker, module_index: usize, ta
                 let (path_index, path_error) = string_index(table, entry.path)
                 if path_error != ok { ret path_error }
                 try binary.little_u32(output, entry.offset - start)
-                try binary.little_u32(output, entry.line)
+                try binary.little_u32(output, usize(entry.line))
                 try binary.little_u32(output, path_index)
                 row_at += 1usize
             }

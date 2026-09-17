@@ -1465,7 +1465,7 @@ fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builde
         // (D278): the displacements were resolved before this, so the target is known.
         try quoted_listing(&out, listing[0usize..listed], start, builder, offsets, relocations, relocation_count)
         mem.reset(a, checkpoint)
-        try inlined_ranges(&out, function, start, stop, functions, g, lines, line_count)
+        try inlined_ranges(&out, builder, function, start, stop, functions, g, lines, line_count)
         try byte(&out, 125u8)
         try flush(&out)
         at += 1usize
@@ -1485,8 +1485,8 @@ fn line_function(functions: []const check.Function, g: *graph.Graph, entry: code
         if graph.same(g.modules[module_at].spelling, entry.path) || graph.same(g.modules[module_at].path, entry.path) { break }
         module_at += 1usize
     }
-    if module_at >= g.count || entry.line == 0usize || entry.line > g.modules[module_at].lines.len { ret (0usize, false) }
-    let offset = g.modules[module_at].lines[entry.line - 1usize]
+    if module_at >= g.count || entry.line == 0u32 || usize(entry.line) > g.modules[module_at].lines.len { ret (0usize, false) }
+    let offset = g.modules[module_at].lines[usize(entry.line) - 1usize]
     var at = 0usize
     while at < functions.len {
         if functions[at].module_index == module_at && offset >= functions[at].source_start && offset < functions[at].source_end { ret (at, true) }
@@ -1495,10 +1495,64 @@ fn line_function(functions: []const check.Function, g: *graph.Graph, entry: code
     ret (0usize, false)
 }
 
-fn inlined_ranges(out: *Out, function: nir.Function, start: usize, stop: usize, functions: []const check.Function, g: *graph.Graph, lines: []const codegen_x64.LineEntry, line_count: usize) -> err {
+fn inline_chain(builder: *nir.Builder, origin: u32, chain: []usize) -> (usize, bool) {
+    var count = 0usize
+    var cursor = origin
+    let first = builder.inlined.len - builder.inline_origin_count
+    while cursor != 0u32 {
+        let index = usize(cursor) - 1usize
+        if index < first || index >= builder.inlined.len || count == chain.len { ret (0usize, false) }
+        chain[count] = index
+        count += 1usize
+        cursor = u32(builder.inlined[index].caller_function)
+    }
+    ret (count, count != 0usize)
+}
+
+fn inline_origin_range(out: *Out, builder: *nir.Builder, g: *graph.Graph, origin: u32, range_start: usize, range_end: usize, line: usize, written: *usize) -> err {
+    if range_start == range_end { ret ok }
+    var chain: [8]usize = zero
+    let (count, found) = inline_chain(builder, origin, chain[..])
+    if !found { ret ok }
+    if *written != 0usize { try byte(out, 44u8) }
+    *written += 1usize
+    let inner = builder.inlined[chain[count - 1usize]]
+    try text(out, "{\"from\":\"")
+    if inner.callee_module < g.count { try quoted_body(out, g.modules[inner.callee_module].name) }
+    try byte(out, 46u8)
+    try quoted_body(out, inner.name)
+    try byte(out, 34u8)
+    if count > 1usize {
+        try text(out, ",\"through\":[")
+        var through = count - 1usize
+        var separated = false
+        while through != 0usize {
+            through = through - 1usize
+            let middle = builder.inlined[chain[through]]
+            if separated { try byte(out, 44u8) }
+            try byte(out, 34u8)
+            if middle.callee_module < g.count { try quoted_body(out, g.modules[middle.callee_module].name) }
+            try byte(out, 46u8)
+            try quoted_body(out, middle.name)
+            try byte(out, 34u8)
+            separated = true
+        }
+        try byte(out, 93u8)
+    }
+    try text(out, ",\"start\":")
+    try decimal(out, range_start)
+    try text(out, ",\"end\":")
+    try decimal(out, range_end)
+    try text(out, ",\"line\":")
+    try decimal(out, line)
+    ret byte(out, 125u8)
+}
+
+fn inlined_ranges(out: *Out, builder: *nir.Builder, function: nir.Function, start: usize, stop: usize, functions: []const check.Function, g: *graph.Graph, lines: []const codegen_x64.LineEntry, line_count: usize) -> err {
     try text(out, ",\"inlined\":[")
     var written = 0usize
     var run_function = functions.len
+    var run_origin = 0u32
     var run_start = 0usize
     var run_line = 0usize
     var at = 0usize
@@ -1506,22 +1560,35 @@ fn inlined_ranges(out: *Out, function: nir.Function, start: usize, stop: usize, 
         let entry = lines[at]
         at += 1usize
         if entry.offset < start || entry.offset >= stop { continue }
-        let (owner, found) = line_function(functions, g, entry)
-        // The function's own lines, or a line of no function, end a run.
-        var own = !found
-        if found && functions[owner].module_index < g.count && graph.same(g.modules[functions[owner].module_index].name, function.module_name) && graph.same(functions[owner].name, function.name) { own = true }
+        var next_origin = entry.origin
         var next_function = functions.len
-        if !own { next_function = owner }
-        if next_function == run_function { continue }
+        if next_origin == 0u32 {
+            let (owner, found) = line_function(functions, g, entry)
+            // Artifact-linked rows predate the transient origin chain, so retain the
+            // D542 source lookup as their single-level fallback.
+            var own = !found
+            if found && functions[owner].module_index < g.count && graph.same(g.modules[functions[owner].module_index].name, function.module_name) && graph.same(functions[owner].name, function.name) { own = true }
+            if !own { next_function = owner }
+        }
+        if next_origin == run_origin && next_function == run_function { continue }
+        if run_origin != 0u32 {
+            try inline_origin_range(out, builder, g, run_origin, run_start - start, entry.offset - start, run_line, &written)
+        } else {
         if run_function != functions.len {
             try inlined_range(out, g, functions[run_function], run_start - start, entry.offset - start, run_line, &written)
         }
+        }
+        run_origin = next_origin
         run_function = next_function
         run_start = entry.offset
-        run_line = entry.line
+        run_line = usize(entry.line)
     }
+    if run_origin != 0u32 {
+        try inline_origin_range(out, builder, g, run_origin, run_start - start, stop - start, run_line, &written)
+    } else {
     if run_function != functions.len {
         try inlined_range(out, g, functions[run_function], run_start - start, stop - start, run_line, &written)
+    }
     }
     ret byte(out, 93u8)
 }

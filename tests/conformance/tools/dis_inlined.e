@@ -1,6 +1,6 @@
 // `dis-file --json --release` (D542): the release image, and each function's
-// `inlined` runs -- here two copies of `add`'s body in `main`, one of them through
-// `twice`, named for the innermost callee.
+// `inlined` runs -- here two copies of `add`'s body in `main`, with the second's
+// `through` chain retaining its intermediate copy in `twice` (D565).
 use e.os
 fn add(x: i32, y: i32) -> i32 {
     ret x + y

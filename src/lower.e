@@ -2428,7 +2428,7 @@ fn record_inlined(builder: *nir.Builder, callee_module: usize, name: str, instan
         if prior.caller_module == caller_module && prior.caller_function == builder.current_function && prior.callee_module == callee_module && prior.instance == instance && check.same(prior.name, name) { ret ok }
         recorded_at += 1usize
     }
-    if builder.inlined_count == builder.inlined.len { ret check.Capacity }
+    if builder.inlined_count + builder.inline_origin_count == builder.inlined.len { ret check.Capacity }
     var record: nir.InlinedRef = zero
     record.caller_module = caller_module
     record.caller_function = builder.current_function
@@ -2438,6 +2438,50 @@ fn record_inlined(builder: *nir.Builder, callee_module: usize, name: str, instan
     builder.inlined[builder.inlined_count] = record
     builder.inlined_count += 1usize
     ret ok
+}
+
+// A copied instruction's exact nested origin (D565). Nodes are interned in the
+// already-allocated tail of the body-edge table; `caller_function` is the one-based
+// parent node for these tail records, not a function index.
+fn add_inline_origin(builder: *nir.Builder, module_index: usize, name: str, parent: u32) -> (u32, err) {
+    var at = builder.inlined.len - builder.inline_origin_count
+    while at < builder.inlined.len {
+        let prior = builder.inlined[at]
+        if prior.callee_module == module_index && prior.caller_function == usize(parent) && check.same(prior.name, name) { ret (u32(at + 1usize), ok) }
+        at += 1usize
+    }
+    if builder.inlined_count + builder.inline_origin_count == builder.inlined.len { ret (0u32, check.Capacity) }
+    let index = builder.inlined.len - builder.inline_origin_count - 1usize
+    var record: nir.InlinedRef = zero
+    record.callee_module = module_index
+    record.name = name
+    record.caller_function = usize(parent)
+    builder.inlined[index] = record
+    builder.inline_origin_count += 1usize
+    ret (u32(index + 1usize), ok)
+}
+
+fn import_inline_origin(builder: *nir.Builder, source: *nir.Builder, origin: u32) -> (u32, err) {
+    var chain: [8]usize = zero
+    var count = 0usize
+    var cursor = origin
+    let first = source.inlined.len - source.inline_origin_count
+    while cursor != 0u32 {
+        let index = usize(cursor) - 1usize
+        if index < first || index >= source.inlined.len || count == chain.len { ret (0u32, check.Capacity) }
+        chain[count] = index
+        count += 1usize
+        cursor = u32(source.inlined[index].caller_function)
+    }
+    var imported = 0u32
+    while count != 0usize {
+        count = count - 1usize
+        let record = source.inlined[chain[count]]
+        let (next, next_error) = add_inline_origin(builder, record.callee_module, record.name, imported)
+        if next_error != ok { ret (0u32, next_error) }
+        imported = next
+    }
+    ret (imported, ok)
 }
 
 fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
@@ -2504,6 +2548,10 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
         instruction_at = block.first_instruction
         while instruction_at < block.first_instruction + block.instruction_count {
             let instruction = oracle.instructions[instruction_at]
+            let (imported_origin, imported_origin_error) = import_inline_origin(builder, oracle, instruction.inline_origin)
+            if imported_origin_error != ok { ret imported_origin_error }
+            let (copied_origin, copied_origin_error) = add_inline_origin(builder, entry.module_index, entry.name, imported_origin)
+            if copied_origin_error != ok { ret copied_origin_error }
             if instruction.opcode == .Parameter {
                 if instruction.immediate >= argument_count { ret check.ArgumentCount }
                 value_map[instruction.result] = arguments[instruction.immediate]
@@ -2516,12 +2564,14 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                         } else {
                             let (store_instruction, store_ignored, store_error) = nir.emit_at(builder, .Store, result_type, false, slot_size, instruction.site)
                             if store_error != ok { ret store_error }
+                            builder.instructions[store_instruction].inline_origin = copied_origin
                             try nir.add_operand(builder, store_instruction, slot)
                             try nir.add_operand(builder, store_instruction, returned)
                         }
                     }
                     let (leave, leave_error) = emit_branch_at(builder, instruction.site)
                     if leave_error != ok { ret leave_error }
+                    builder.instructions[leave].inline_origin = copied_origin
                     try nir.set_branch_targets(builder, leave, continuation, 0usize)
                 } else {
                     var immediate = instruction.immediate
@@ -2563,6 +2613,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                     let (copied, result, copy_error) = nir.emit_at(builder, instruction.opcode, copied_type, instruction.has_result, immediate, instruction.site)
                     builder.nocheck = was_nocheck
                     if copy_error != ok { ret copy_error }
+                    builder.instructions[copied].inline_origin = copied_origin
                     if instruction.path.len != 0usize { builder.instructions[copied].path = instruction.path }
                     var operand_at = 0usize
                     while operand_at < instruction.operand_count {

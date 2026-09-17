@@ -319,7 +319,7 @@ fn link_copy_artifact(w: *LinkWorker, artifact_at: usize) -> err {
             if row_path_error != ok { ret row_path_error }
             var entry: codegen_x64.LineEntry = zero
             entry.offset = code_offset + w.row_scratch[row_at].offset
-            entry.line = w.row_scratch[row_at].line
+            entry.line = u32(w.row_scratch[row_at].line)
             entry.path = row_path
             w.lines_tmp[row_cursor] = entry
             row_cursor += 1usize

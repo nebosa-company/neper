@@ -2969,7 +2969,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $usesActual).Hash -ne (Get-File
 $disActual = Join-Path $testBuild 'conformance-tools-dis.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis.e')`" `"$repo`" x64 windows --json > `"$disActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis.x64-windows.expected.jsonl')).Hash) { throw "dis --json differs from the conformance corpus" }
-# `dis-file --json --release` (D542, H19): the release image, each function's inlined runs named.
+# `dis-file --json --release` (D542, D565, H19): inlined runs retain a nested copy's chain.
 $disInlinedActual = Join-Path $testBuild 'conformance-tools-dis-inlined.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis_inlined.e')`" `"$repo`" x64 windows --json --release > `"$disInlinedActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disInlinedActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis_inlined.x64-windows.expected.jsonl')).Hash) { throw "dis --json --release differs from the conformance corpus" }

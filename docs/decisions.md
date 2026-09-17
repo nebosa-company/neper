@@ -11645,3 +11645,19 @@ ceiling.
 This is the fifth feature since D559, so the progress artifact is regenerated. It
 now credits D562's parameter turn, D563's dependency-owned generated edits and this
 longer provenance chain: compiler 86.35, modules 76.64, tooling 83.12.
+
+## D565 -- Disassembly retains nested inline provenance
+
+An instruction copied through another copied body kept only its innermost source
+path. `dis-file --json --release` therefore named both copies of `add` in its
+fixture identically even though one reached `main` through `twice`. Each copied NIR
+instruction now carries a bounded, interned origin chain. The origin index occupies
+existing instruction padding; the nodes share the unused tail of the existing body
+edge table; and the line number plus origin still occupy the line table's former one
+word. The large compiler and sc500k tables therefore gain no larger element or new
+allocation.
+
+An `inlined` run still names the innermost function in `from`; when the copy passed
+through another body it adds `through`, ordered from the innermost intermediate
+outward. Direct copies remain byte-for-byte unchanged. Both host goldens now
+distinguish the direct `add` run from the `add` run copied through `twice`.
