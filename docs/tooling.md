@@ -553,8 +553,8 @@ plain, it prints `applied N edits to PATH` per file and the `postcondition`; wit
 edit table is sized from the plan (D562), rather than imposing a 4,096-edit ceiling,
 and rendering allocates one output per file rather than one per edit, so one
 transactional compiler-wide change fits the ordinary arena and stays all-or-nothing.
-An `edit` inside a range the operand's source map marks `"edit": "generator"`
-(D512, H19) carries `"owner": "generator"` and `original` -- the generator's input
+An `edit` inside a range any loaded module's source map marks `"edit": "generator"`
+(D512, D563, H17/H19) carries `"owner": "generator"` and `original` -- the generator's input
 and the byte where the edited text begins in it -- since the generated file is
 regenerated from that input and an edit made in it would be undone; `apply-plan`
 refuses such a plan with `E-TOOL-0003`, nothing applied. The other edits of the

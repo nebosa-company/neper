@@ -11612,3 +11612,18 @@ function values and protocol choices. On both hosts the resulting turn reverses
 overlapping plan sets, builds, and then builds the original compiler to the stable
 stage byte for byte. The debug and release paths are both held by the self-host
 suites.
+
+## D563 -- Generator ownership follows edits into dependencies
+
+Plans marked a regeneration-owned edit only when it fell inside the operand's
+source map. A resolved reference in a dependency was still emitted as a plain edit,
+so applying a rename could modify generated output that the next generator run would
+overwrite. Ownership now belongs to each graph module. Edit-planning queries quietly
+load every dependency's map, retain its generator-owned ranges beside that module,
+and attach the map's original root, path and byte to any edit inside one.
+
+The existing generated-plan fixture now has both shapes in one transaction: the
+operand's mapped call and a mapped call inside `deep.e`, plus the plain declaration.
+Both host goldens require both edits to name their distinct originals, and
+`apply-plan` refuses the plan whole without changing the dependency. Stale and
+malformed dependency maps remain untrusted and contribute no ownership ranges.

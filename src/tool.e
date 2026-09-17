@@ -3340,14 +3340,17 @@ fn batch_memory(a: *mem.Arena, snapshot_used: usize, session_used: usize, reques
 // range is the generator's, so the edit record names the owner and where in the
 // generator's input its bytes begin; `apply-plan` refuses such an edit.
 fn owned_note(out: *Out, g: *graph.Graph, module_index: usize, offset: usize) -> err {
-    if module_index != 0usize { ret ok }
+    if module_index >= g.count { ret ok }
+    let module = g.modules[module_index]
     var at = 0usize
-    while at < g.owned_count {
-        if offset >= g.owned_starts[at] && offset < g.owned_ends[at] {
-            try text(out, ",\"owner\":\"generator\",\"original\":{\"source\":{\"root\":\"operand\",\"path\":")
-            try quoted(out, g.owned_original_paths[at])
+    while at < module.owned_count {
+        if offset >= module.owned_starts[at] && offset < module.owned_ends[at] {
+            try text(out, ",\"owner\":\"generator\",\"original\":{\"source\":{\"root\":")
+            try quoted(out, module.owned_original_roots[at])
+            try text(out, ",\"path\":")
+            try quoted(out, module.owned_original_paths[at])
             try text(out, "},\"byte_start\":")
-            try decimal(out, g.owned_original_starts[at] + (offset - g.owned_starts[at]))
+            try decimal(out, module.owned_original_starts[at] + (offset - module.owned_starts[at]))
             ret byte(out, 125u8)
         }
         at += 1usize

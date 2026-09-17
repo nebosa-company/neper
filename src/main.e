@@ -3670,6 +3670,7 @@ type Sink = struct {
     map_generated_start: [32]usize,
     map_generated_end: [32]usize,
     map_generated_line: [32]usize,
+    map_original_root: [32]str,
     map_original_path: [32]str,
     map_original_start: [32]usize,
     map_original_line: [32]usize,
@@ -4011,21 +4012,38 @@ fn write_rooted_span(report: *Sink, root: str, identity: str, at: lex.Span, oper
     ret write_all(report, "}")
 }
 
-// The operand's regeneration-owned ranges (D512, H19): from its own map's first
-// slots, the mappings whose `edit` is `generator`, onto the graph for the plans.
-fn note_owned_ranges(report: *Sink, loaded: *graph.Graph) {
+// One module's regeneration-owned ranges (D512, D563, H17/H19): from its map's
+// first slots onto the module for plans that edit any file in the graph.
+fn note_owned_ranges(report: *Sink, loaded: *graph.Graph, module_index: usize) {
+    if module_index >= loaded.count { ret }
+    var module = &loaded.modules[module_index]
     var mapping = 0usize
     while mapping < report.map_count && mapping < 8usize {
-        if report.map_edit[mapping] == 2u8 && loaded.owned_count < 8usize {
-            let slot = loaded.owned_count
-            loaded.owned_starts[slot] = report.map_generated_start[mapping]
-            loaded.owned_ends[slot] = report.map_generated_end[mapping]
-            loaded.owned_original_paths[slot] = report.map_original_path[mapping]
-            loaded.owned_original_starts[slot] = report.map_original_start[mapping]
-            loaded.owned_count += 1usize
+        if report.map_edit[mapping] == 2u8 && module.owned_count < 8usize {
+            let slot = module.owned_count
+            module.owned_starts[slot] = report.map_generated_start[mapping]
+            module.owned_ends[slot] = report.map_generated_end[mapping]
+            module.owned_original_roots[slot] = report.map_original_root[mapping]
+            module.owned_original_paths[slot] = report.map_original_path[mapping]
+            module.owned_original_starts[slot] = report.map_original_start[mapping]
+            module.owned_count += 1usize
         }
         mapping += 1usize
     }
+}
+
+// Dependency maps needed only by edit plans (D563): diagnostics keep the operand's
+// map in their sink, while plans quietly retain generator ownership per module.
+fn note_dependency_owned_ranges(a: *mem.Arena, loaded: *graph.Graph) -> err {
+    var module_index = 1usize
+    while module_index < loaded.count {
+        var mapped: Sink = zero
+        mapped.map_quiet = true
+        try load_source_map(a, &mapped, loaded.modules[module_index].path, loaded.modules[module_index].text)
+        note_owned_ranges(&mapped, loaded, module_index)
+        module_index += 1usize
+    }
+    ret ok
 }
 
 // The mapping a token of `path` falls inside, or `map_count` for none.
@@ -4326,6 +4344,7 @@ fn read_mappings(report: *Sink, document: str, base: usize) -> usize {
             let original_key = "\"original_span\":{"
             while original_at + original_key.len <= rest.len && !same(rest[original_at..original_at + original_key.len], original_key) { original_at += 1usize }
             let original = rest[original_at..rest.len]
+            report.map_original_root[index] = json_str_after(original, "\"root\":\"")
             report.map_original_path[index] = json_str_after(original, "\"path\":\"")
             report.map_original_start[index] = json_usize_after(original, "\"byte_start\":")
             report.map_original_line[index] = json_usize_after(original, "\"line\":")
@@ -9227,7 +9246,8 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     if loaded.count != 0usize {
         report.map_quiet = true
         try load_source_map(a, report, args[2usize], loaded.modules[0usize].text)
-        note_owned_ranges(report, &loaded)
+        note_owned_ranges(report, &loaded, 0usize)
+        if kind == 4usize || kind == 6usize || kind == 7usize || kind == 8usize || kind == 9usize { try note_dependency_owned_ranges(a, &loaded) }
     }
     var resolver: resolve.Resolver = zero
     try init_cli_resolver(a, &resolver, &loaded, report)
@@ -9773,7 +9793,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         let load_error = load_graph(a, &report, &loaded, operand, args[3usize], args[4usize], args[5usize])
         if load_error == ok && loaded.count != 0usize && !loaded.root_text_given { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
         // The ranges the generator owns (D512), for the plans' edit records.
-        note_owned_ranges(&report, &loaded)
+        note_owned_ranges(&report, &loaded, 0usize)
         if load_error != ok {
             // Not a diagnostic of the source but of the command: the operand itself.
             if !report.json { ret load_error }

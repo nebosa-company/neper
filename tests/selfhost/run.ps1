@@ -2550,13 +2550,13 @@ $callbackBuilt = & $compiler emit-executable (Join-Path $callbackScratch 'src\ma
 if ($LASTEXITCODE -ne 0 -or $callbackBuilt -ne 'executable written') { throw "the renamed program of a callback does not build: $callbackBuilt" }
 & $callbackExe
 if ($LASTEXITCODE -ne 8) { throw "the renamed program of a callback behaves differently (exit $LASTEXITCODE)" }
-# A plan into generated text (D512, H19): the edit at the mapped call site names its
-# owner and the original, the declaration's edit does not, and apply-plan refuses.
+# A plan into generated text (D512, D563, H17/H19): mapped call sites in the
+# operand and a dependency name their owners and originals; apply-plan refuses all.
 $generatedFixture = Join-Path $conformanceRoot 'tools\plan_generated'
 $generatedPlanActual = Join-Path $testBuild 'conformance-tools-plan-generated.jsonl'
 cmd /c "cd /d `"$generatedFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol deep.pick --to choose > `"$generatedPlanActual`""
-if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json over a generated root failed' }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $generatedPlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_generated.x64-windows.expected.jsonl')).Hash) { throw 'plan-rename-file --json over a generated root differs from the conformance corpus' }
+if ($LASTEXITCODE -ne 0) { throw 'plan-rename-file --json over generated modules failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $generatedPlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_generated.x64-windows.expected.jsonl')).Hash) { throw 'plan-rename-file --json over generated modules differs from the conformance corpus' }
 $generatedScratch = Join-Path $testBuild 'generated-scratch'
 if (Test-Path -LiteralPath $generatedScratch) { Remove-Item -LiteralPath $generatedScratch -Recurse -Force }
 Copy-Item -Recurse $generatedFixture $generatedScratch

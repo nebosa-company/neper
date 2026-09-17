@@ -1,7 +1,8 @@
 {"schema":"neper-stream","version":1,"record":"header","command":"plan-rename","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"precondition","source":{"root":"project-src","path":"main.e"},"sha256":"9aa9d04248def9fa11e6fdc9347917674350b7d140bd18ea129940d83016b28e"}
-{"record":"precondition","source":{"root":"project-src","path":"deep.e"},"sha256":"219ff6632d06e7720bf053f995b16476732a3f47cb87a9a427c2807447aa7e64"}
+{"record":"precondition","source":{"root":"project-src","path":"deep.e"},"sha256":"1c60924d55b5db8e3763aa5b50e445a7ecab06cdd1addd307c09be31244b1814"}
 {"record":"edit","op":"rename-symbol","symbol":"deep.pick","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":386,"byte_end":390,"line":9,"column":22,"end_line":9,"end_column":26,"column_utf16":22,"end_column_utf16":26},"replacement":"choose","owner":"generator","original":{"source":{"root":"operand","path":"main.input"},"byte_start":5}}
 {"record":"edit","op":"rename-symbol","symbol":"deep.pick","site":"declaration","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":3,"byte_end":7,"line":1,"column":4,"end_line":1,"end_column":8,"column_utf16":4,"end_column_utf16":8},"replacement":"choose"}
-{"record":"postcondition","check":"check-file passes; uses-file --symbol deep.choose reports uses at 1 sites and deep.pick names no function"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":2,"files":2,"complete":true,"snapshot":"976a3c4571eb41fe"}}
+{"record":"edit","op":"rename-symbol","symbol":"deep.pick","site":"use","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":82,"byte_end":86,"line":6,"column":9,"end_line":6,"end_column":13,"column_utf16":9,"end_column_utf16":13},"replacement":"choose","owner":"generator","original":{"source":{"root":"project-src","path":"deep.input"},"byte_start":5}}
+{"record":"postcondition","check":"check-file passes; uses-file --symbol deep.choose reports uses at 2 sites and deep.pick names no function"}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":2,"complete":true,"snapshot":"bcead2a1ad2b1e08"}}

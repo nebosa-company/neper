@@ -2936,10 +2936,11 @@ cp -r "$callback_fixture" "$test_build/callback-scratch"
 callback_status=0
 "$test_build/callback" || callback_status=$?
 [ "$callback_status" -eq 8 ]
-# A plan into generated text (D512, H19): the owned edit named, apply-plan refusing.
+# A plan into generated text (D512, D563, H17/H19): owned edits in the operand
+# and a dependency are named, and apply-plan refuses the whole plan.
 generated_fixture="$conformance_root/tools/plan_generated"
 (cd "$generated_fixture" && "$test_build/neper-self" plan-rename-file src/main.e "$repo" x64 linux --json --symbol deep.pick --to choose > "$test_build/conformance-tools-plan-generated.jsonl")
-cmp -s "$test_build/conformance-tools-plan-generated.jsonl" "$conformance_root/tools/plan_generated.x64-linux.expected.jsonl" || { echo "plan-rename-file --json over a generated root differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-plan-generated.jsonl" "$conformance_root/tools/plan_generated.x64-linux.expected.jsonl" || { echo "plan-rename-file --json over generated modules differs from the conformance corpus" >&2; exit 1; }
 rm -rf "$test_build/generated-scratch"
 cp -r "$generated_fixture" "$test_build/generated-scratch"
 generated_status=0

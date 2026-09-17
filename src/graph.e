@@ -23,6 +23,14 @@ type Module = struct {
     name: str,
     path: str,
     text: str,
+    // Regeneration-owned ranges from this module's source map (D512, D563): a
+    // plan may touch any loaded module, so ownership belongs with the module.
+    owned_count: usize,
+    owned_starts: [8]usize,
+    owned_ends: [8]usize,
+    owned_original_roots: [8]str,
+    owned_original_paths: [8]str,
+    owned_original_starts: [8]usize,
     // The unsafe inventory the module's artifact carries (D457): the manifest's
     // records for it, copied on a warm build instead of scanning the text.
     inventory: []const u8,
@@ -156,15 +164,6 @@ type Graph = struct {
     overlay_paths: []str,
     overlay_texts: []str,
     overlay_count: usize,
-    // The operand's regeneration-owned ranges (D512, H19): the mappings of its
-    // source map whose `edit` is `generator`, as byte ranges of module 0's text, and
-    // where in the generator's input each begins; a plan's edit inside one is the
-    // generator's to make, not a harness's.
-    owned_count: usize,
-    owned_starts: [8]usize,
-    owned_ends: [8]usize,
-    owned_original_paths: [8]str,
-    owned_original_starts: [8]usize,
     token_scratch: []lex.Token,
     nodes: []syntax.Node,
     children: []u32,
@@ -587,7 +586,7 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     let (spelling, spelling_error) = spelling_of(a, g, path)
     if spelling_error != ok { ret (0usize, spelling_error) }
     var no_inventory: []const u8 = zero
-    g.modules[index] = Module { name: name, path: path, text: "", inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
+    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }
