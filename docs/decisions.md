@@ -11090,3 +11090,18 @@ token scans for a write to a local took a field spelled like it -- `w.modules
 = ...` beside a parameter `modules`, `wave_count` its length -- for a write to
 the local and kept the check; a name after a `.` is a field, and the scans
 say so now, one more check elided in the compiler's own build.
+
+## D529 -- The compiler with its symbols renamed
+
+The fourth turn of the harness over the compiler (D525-D528) is D478's:
+`benchmarks/metamorphic/rename_symbols.py` renames every function but `main`
+and every type of `src/` -- two thousand one hundred and eighty-three --
+through the index of every module, at the declaration and at every reference
+any module resolves to it, qualified or bare, leaving externs, `@import`ed
+and `@export`ed functions, whose names are foreign, and a type with functions
+spelled `<snake>_<op>` for it together with them (D517). The compiler's own
+names reach its own image, in its symbol table and its trap texts, so the
+check is one turn on: the compiler built from the renamed sources must build
+the original sources to the stable stage byte for byte, which both suites
+hold. It did at the first attempt; the index of D528 names the references it
+needs.

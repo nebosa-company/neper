@@ -3550,6 +3550,14 @@ python3 "$repo/benchmarks/metamorphic/rename_locals.py" "$test_build/neper-self"
 renamed_written=$("$own_compiler_path" emit-executable "$test_build/renamed-src/src/main.e" "$repo" x64 linux "$test_build/neper-renamed")
 [ "$renamed_written" = 'executable written' ]
 cmp "$test_build/neper-renamed" "$stable_compiler_path"
+# The compiler with its functions and types renamed (D529, H10, H17): built from `src/` renamed through the index, it builds the stable stage.
+python3 "$repo/benchmarks/metamorphic/rename_symbols.py" "$test_build/neper-self" "$repo" "$repo/src" "$test_build/resymbolled-src/src" linux
+resymbolled_written=$("$own_compiler_path" emit-executable "$test_build/resymbolled-src/src/main.e" "$repo" x64 linux "$test_build/neper-resymbolled")
+[ "$resymbolled_written" = 'executable written' ]
+chmod +x "$test_build/neper-resymbolled"
+by_resymbolled_written=$("$test_build/neper-resymbolled" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-by-resymbolled")
+[ "$by_resymbolled_written" = 'executable written' ]
+cmp "$test_build/neper-by-resymbolled" "$stable_compiler_path"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

@@ -3518,6 +3518,20 @@ $renamedCompiler = Join-Path $testBuild 'neper-renamed.exe'
 & $ownCompilerPath emit-executable (Join-Path $renamedSrc 'src\main.e') $repo 'x64' 'windows' $renamedCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $renamedCompiler)) { throw 'the compiler did not build from its sources with the locals renamed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $renamedCompiler).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built with its locals renamed is not the stable stage' }
+# The compiler with its functions and types renamed (D529, H10, H17): every function
+# but `main` and every type of `src/` renamed through the index of every module, and
+# the compiler built from the result builds the original sources to the stable stage
+# byte for byte -- its own names reach its own image and nothing else.
+$resymbolledSrc = Join-Path $testBuild 'resymbolled-src'
+& python (Join-Path $repo 'benchmarks/metamorphic/rename_symbols.py') $compiler $repo (Join-Path $repo 'src') (Join-Path $resymbolledSrc 'src') windows
+if ($LASTEXITCODE -ne 0) { throw 'the symbols of the compiler could not be renamed' }
+$resymbolledCompiler = Join-Path $testBuild 'neper-resymbolled.exe'
+& $ownCompilerPath emit-executable (Join-Path $resymbolledSrc 'src\main.e') $repo 'x64' 'windows' $resymbolledCompiler | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $resymbolledCompiler)) { throw 'the compiler did not build from its sources with the symbols renamed' }
+$byResymbolled = Join-Path $testBuild 'neper-by-resymbolled.exe'
+& $resymbolledCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byResymbolled | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byResymbolled)) { throw 'the compiler with renamed symbols did not build the compiler' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byResymbolled).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with renamed symbols does not build the stable stage' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
