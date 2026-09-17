@@ -2481,8 +2481,9 @@ $typeUsesActual = Join-Path $testBuild 'conformance-tools-uses-type.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\plan_rename_type')`" && `"$compiler`" uses-file src/main.e `"$repo`" x64 windows --json --symbol deep.Rec > `"$typeUsesActual`""
 if ($LASTEXITCODE -ne 0) { throw 'uses-file --json over a type failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $typeUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_type.expected.jsonl')).Hash) { throw 'uses-file --json over a type differs from the conformance corpus' }
-# A type's rename (D515, H17, H29): every reference through the alias and bare, and the
-# declaration; applied to a copy, the program builds and exits the same.
+# A type's rename (D515, D517, H17, H29): every reference through the alias and bare,
+# the declaration, and the `cmp` function spelled with the type's name; applied to
+# a copy, the program builds and exits the same.
 $typeFixture = Join-Path $conformanceRoot 'tools\plan_rename_type'
 $typePlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-type.jsonl'
 cmd /c "cd /d `"$typeFixture`" && `"$compiler`" plan-rename-file src/main.e `"$repo`" x64 windows --json --symbol deep.Rec --to Pair > `"$typePlanActual`""
@@ -2498,7 +2499,8 @@ $typeExe = Join-Path $testBuild 'type-renamed.exe'
 $typeBuilt = & $compiler emit-executable (Join-Path $typeScratch 'src\main.e') $repo 'x64' 'windows' $typeExe 2>&1
 if ($LASTEXITCODE -ne 0 -or $typeBuilt -ne 'executable written') { throw "the program with a renamed type does not build: $typeBuilt" }
 & $typeExe
-if ($LASTEXITCODE -ne 8) { throw "the program with a renamed type behaves differently (exit $LASTEXITCODE)" }
+if ($LASTEXITCODE -ne 12) { throw "the program with a renamed type behaves differently (exit $LASTEXITCODE)" }
+if ((Select-String -LiteralPath (Join-Path $typeScratch 'src\deep.e') -Pattern 'fn pair_cmp' -Quiet) -ne $true) { throw 'the rename plan over a type did not carry its cmp function' }
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan byte for byte,
 # applied to a copy it checks; a span that is not one expression is refused with exit 2.
 $replaceActual = Join-Path $testBuild 'conformance-tools-plan-replace.jsonl'

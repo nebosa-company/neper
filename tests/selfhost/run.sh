@@ -2787,7 +2787,8 @@ cp -r "$type_fixture" "$test_build/type-scratch"
 [ "$("$test_build/neper-self" emit-executable "$test_build/type-scratch/src/main.e" "$repo" x64 linux "$test_build/type-renamed" 2>/dev/null)" = 'executable written' ]
 type_status=0
 "$test_build/type-renamed" || type_status=$?
-[ "$type_status" -eq 8 ]
+[ "$type_status" -eq 12 ]
+grep -q 'fn pair_cmp' "$test_build/type-scratch/src/deep.e"
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan, applied and
 # checked; a span that is not one expression is refused with exit 2.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-replace-expression-file contract.e "$repo" x64 linux --json --span 693:703 --with 131072usize > "$test_build/conformance-tools-plan-replace.jsonl")

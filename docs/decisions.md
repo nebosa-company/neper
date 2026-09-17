@@ -10925,3 +10925,17 @@ for the rename are the uses: a subject naming a type now reports one `use`
 per annotation or literal that resolves to it, relation `type`, in the
 function the site lies in, from the index of every module; the declaration
 is not a use. `uses_type` pins five sites over two modules on both hosts.
+
+## D517 -- The functions spelled with the type follow its rename
+
+A probe applied D515's plan to a type with a `cmp`: the renamed program no
+longer checked, `sort.in_place` finding no `cmp` for `Pair`, since the lookup
+is by the spelling `pair_cmp` and the plan had left `rec_cmp` behind -- the
+protocol-sensitive case H17's acceptance names. The plan now renames, with
+the type, every function of the type's module spelled with the type's name
+by section 12's convention `<t>_<op>` -- `rec_cmp`, `rec_eq`, `rec_hash`,
+`rec_format`, `rec_next` -- at its declaration and every use the checker
+recorded, to the new spelling, `pair_cmp`; the sites of the type and of its
+followers go out in one order, and the postcondition counts the followers.
+`plan_rename_type` gains a `cmp` and a sort over the type, and the renamed
+program sorts and exits as before on both hosts.

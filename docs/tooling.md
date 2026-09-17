@@ -473,7 +473,11 @@ comments, strings or generated registrations, which this command does not see.
 that names a type (D515) plans the type's rename: the index of every module of
 the program is taken in memory, and each reference whose target is the type --
 an annotation, a literal, spelled through a `use` qualifier or bare -- and the
-declaration are the sites, the same records as a function's. It checks
+declaration are the sites, the same records as a function's; and every function
+of the type's module spelled with the type's name by section 12's convention --
+`rec_cmp`, `rec_eq`, `rec_hash`, `rec_format`, `rec_next` for `Rec` -- is renamed
+with it (D517), `pair_cmp`, at its declaration and every use, since the lookup
+that finds it is by the spelling. It checks
 the program and emits one `precondition` record per file the rename touches --
 `source` and the file's SHA-256 as read -- then one `edit` record per site: `op`
 `rename-symbol`, `symbol`, `site` (`declaration` or `use`), the `span` of the name

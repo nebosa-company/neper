@@ -14,6 +14,7 @@ use project
 use codegen_x64
 use artifact_hash
 use disasm_x64
+use em
 use check
 use layout
 
@@ -4605,12 +4606,89 @@ fn type_sites(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, t
 fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, subject: str, type_symbol: usize, to: str) -> err {
     let symbol = c.resolver.symbols[type_symbol]
     let name = symbol.name
-    let (sites, sites_error) = type_sites(a, c, g, subject, type_symbol)
+    let (type_only, sites_error) = type_sites(a, c, g, subject, type_symbol)
     if sites_error != ok { ret sites_error }
-    let site_modules = sites.modules
-    let site_offsets = sites.offsets
-    let site_kinds = sites.kinds
-    let site_count = sites.count
+    // The functions spelled with the type's name (D517, H17): `rec_cmp` for `Rec`,
+    // by spec section 12's convention `<t>_<op>`, declared in the type's module;
+    // each is renamed with the type, `pair_cmp`, at its declaration and every use,
+    // since the lookup that finds it is by the spelling.
+    var old_prefix: [128]u8 = zero
+    let old_prefix_len = em.snake_protocol_name(name, "", old_prefix[..])
+    var new_prefix: [128]u8 = zero
+    let new_prefix_len = em.snake_protocol_name(to, "", new_prefix[..])
+    var followers: [64]usize = zero
+    var follower_count = 0usize
+    var function_at = 0usize
+    while function_at < c.signature_function_count && old_prefix_len != 0usize && new_prefix_len != 0usize {
+        let candidate = c.functions[function_at]
+        if candidate.module_index == symbol.module_index && !c.function_generics[function_at].instance && candidate.name.len > old_prefix_len && graph.same(candidate.name[0usize..old_prefix_len], old_prefix[0usize..old_prefix_len]) && follower_count < followers.len {
+            followers[follower_count] = function_at
+            follower_count += 1usize
+        }
+        function_at += 1usize
+    }
+    // Every site, the type's and the followers', in (module, offset) order: `who`
+    // is 0 for the type and the follower's number plus one otherwise.
+    let (site_modules, modules_error) = mem.alloc[usize](a, type_only.count + follower_count * 256usize + 1usize)
+    if modules_error != ok { ret modules_error }
+    let (site_offsets, offsets_error) = mem.alloc[usize](a, site_modules.len)
+    if offsets_error != ok { ret offsets_error }
+    let (site_kinds, kinds_error) = mem.alloc[u8](a, site_modules.len)
+    if kinds_error != ok { ret kinds_error }
+    let (site_who, who_error) = mem.alloc[usize](a, site_modules.len)
+    if who_error != ok { ret who_error }
+    var site_count = 0usize
+    var copy_at = 0usize
+    while copy_at < type_only.count {
+        site_modules[site_count] = type_only.modules[copy_at]
+        site_offsets[site_count] = type_only.offsets[copy_at]
+        site_kinds[site_count] = type_only.kinds[copy_at]
+        site_who[site_count] = 0usize
+        site_count += 1usize
+        copy_at += 1usize
+    }
+    var follower_at = 0usize
+    while follower_at < follower_count {
+        let (follower_sites, follower_error) = plan_sites(a, c, g, followers[follower_at], true)
+        if follower_error != ok { ret follower_error }
+        var follower_site = 0usize
+        while follower_site < follower_sites.count {
+            if site_count == site_modules.len { ret Capacity }
+            site_modules[site_count] = follower_sites.modules[follower_site]
+            site_offsets[site_count] = follower_sites.offsets[follower_site]
+            site_kinds[site_count] = follower_sites.kinds[follower_site]
+            site_who[site_count] = follower_at + 1usize
+            site_count += 1usize
+            follower_site += 1usize
+        }
+        follower_at += 1usize
+    }
+    // Insertion sort by (module, offset): a plan has tens of sites.
+    var sorted = 1usize
+    while sorted < site_count {
+        var back = sorted
+        while back > 0usize && (site_modules[back - 1usize] > site_modules[back] || (site_modules[back - 1usize] == site_modules[back] && site_offsets[back - 1usize] > site_offsets[back])) {
+            let swap_module = site_modules[back - 1usize]
+            site_modules[back - 1usize] = site_modules[back]
+            site_modules[back] = swap_module
+            let swap_offset = site_offsets[back - 1usize]
+            site_offsets[back - 1usize] = site_offsets[back]
+            site_offsets[back] = swap_offset
+            let swap_kind = site_kinds[back - 1usize]
+            site_kinds[back - 1usize] = site_kinds[back]
+            site_kinds[back] = swap_kind
+            let swap_who = site_who[back - 1usize]
+            site_who[back - 1usize] = site_who[back]
+            site_who[back] = swap_who
+            back = back - 1usize
+        }
+        sorted += 1usize
+    }
+    var sites: PlanSites = zero
+    sites.modules = site_modules
+    sites.offsets = site_offsets
+    sites.kinds = site_kinds
+    sites.count = site_count
     let (files, preconditions_error) = plan_preconditions(a, out, g, sites)
     if preconditions_error != ok { ret preconditions_error }
     var site = 0usize
@@ -4620,30 +4698,46 @@ fn plan_rename_type_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.
         let (path, path_error) = manifest_slashes(a, relative)
         if path_error != ok { ret path_error }
         out.lines = module.lines
+        var site_name = name
+        if site_who[site] != 0usize { site_name = c.functions[followers[site_who[site] - 1usize]].name }
         var name_token: lex.Token = zero
         name_token.start = site_offsets[site]
-        name_token.end = site_offsets[site] + name.len
+        name_token.end = site_offsets[site] + site_name.len
         try text(out, "{\"record\":\"edit\",\"op\":\"rename-symbol\",\"symbol\":")
-        try quoted(out, subject)
+        if site_who[site] == 0usize { try quoted(out, subject) } else { try quoted_function(out, c, g, followers[site_who[site] - 1usize]) }
         try text(out, ",\"site\":")
         if site_kinds[site] == 0u8 { try text(out, "\"declaration\"") } else { try text(out, "\"use\"") }
         try text(out, ",\"span\":")
         try token_span(out, root, path, module.text, name_token, name_token)
         try text(out, ",\"replacement\":")
-        try quoted(out, to)
+        if site_who[site] == 0usize {
+            try quoted(out, to)
+        } else {
+            // The follower's new spelling: the new prefix, then what followed the old.
+            var renamed: [256]u8 = zero
+            var renamed_at = nptest_copy(renamed[..], 0usize, new_prefix[0usize..new_prefix_len])
+            renamed_at = nptest_copy(renamed[..], renamed_at, site_name[old_prefix_len..site_name.len])
+            try quoted(out, renamed[0usize..renamed_at])
+        }
         try owned_note(out, g, site_modules[site], site_offsets[site])
         try byte(out, 125u8)
         try flush(out)
         site += 1usize
     }
     try text(out, "{\"record\":\"postcondition\",\"check\":\"check-file passes; index-file reports ")
-    if site_count > 0usize { try decimal(out, site_count - 1usize) } else { try decimal(out, 0usize) }
+    if type_only.count > 0usize { try decimal(out, type_only.count - 1usize) } else { try decimal(out, 0usize) }
     try text(out, " references to ")
     try text(out, subject[0usize..rename_qualifier_len(subject)])
     try text(out, to)
     try text(out, " and ")
     try text(out, subject)
-    try text(out, " names no type\"}")
+    try text(out, " names no type")
+    if follower_count != 0usize {
+        try text(out, "; the ")
+        try decimal(out, follower_count)
+        try text(out, " functions spelled with the type's name are spelled with the new one")
+    }
+    try text(out, "\"}")
     try flush(out)
     try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":")
     try decimal(out, site_count)
