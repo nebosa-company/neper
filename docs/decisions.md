@@ -11750,3 +11750,17 @@ Both host suites query `e.gpu`, a planned module with no installed source, and r
 the same three-record golden. Thus a planned-only name has a machine-readable negative
 answer and cannot be confused with the `supported-on-target` or `verified` subjects
 that only checked source can produce. Batch catalogues share this refusal path.
+
+## D572 -- An absent API subject is explicitly unavailable
+
+The symbol form of `context-file` now gives its refused result the same checked-program
+boundary as D571's module catalogue: the requested `subject` and
+`standing: "unavailable"`, with the existing diagnostic and exit 2. A missing
+function, type, constant or global therefore has a precise machine-readable negative
+answer rather than an unqualified empty result.
+
+The existing query-batch refusal case now asks for `e.gpu.open`, an API of a
+planned-only module, and both per-target batch goldens pin that exact subject and
+standing. The compiler still reads no design registry; only checked declarations can
+produce callable subject records, while the batch's unrelated invalid-line refusal
+remains unchanged.

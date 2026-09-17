@@ -379,7 +379,9 @@ NAME: T` or `var NAME: T`), the `value` -- a constant's as the interpreter
 settled it, `compiler-proved`; a global's `zero-initialised` or `initialised by
 its expression before main runs` -- and, for a global, `threads`: every thread
 of the program shares it and no rule tracks it. A subject that names none of
-these is `E-CLI-9999` and exit 2.
+these is `E-CLI-9999` and exit 2; its result data repeats the requested `subject`
+with `standing: "unavailable"` (D572, H11/SL11), by the same checked-program
+boundary as an unavailable module catalogue.
 
 `neper context-file PATH ROOT ARCH OS --json --module module.name [--budget N]
 [--cursor N] [--unchecked]` (D397, H11) is the catalogue: every declared, non-generic function

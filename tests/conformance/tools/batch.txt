@@ -2,6 +2,6 @@ context contract.main 4
 catalog contract 6
 uses contract.total
 
-context contract.nothing
+context e.gpu.open
 frobnicate x
 context contract.Counter 8

@@ -18,7 +18,7 @@
 {"record":"result","ok":true,"exit_code":0,"data":{"uses":1,"roots":0,"indirect_calls":0,"complete":true}}
 {"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the subject names no function, type, constant or global of the program","span":null,"parent":null,"related":[],"fixes":[]}
-{"record":"result","ok":false,"exit_code":2,"data":{"records":0,"omitted":0,"complete":true}}
+{"record":"result","ok":false,"exit_code":2,"data":{"subject":"e.gpu.open","standing":"unavailable","records":0,"omitted":0,"complete":true}}
 {"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the batch line is not a query: frobnicate x","span":null,"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":2,"data":{"records":0,"omitted":0,"complete":true}}
