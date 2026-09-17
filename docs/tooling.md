@@ -395,7 +395,8 @@ from the whole image and values it produces are trusted. Without the flag the su
 carries `checks: "retained"` and no whole-image boundary fact. A module catalogue
 emits that whole-image boundary once for each of its subjects.
 
-`neper query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16) answers many
+`neper query-batch PATH ROOT ARCH OS --json --batch FILE [--unchecked]` (D409, H16)
+answers many
 queries from one check: the batch file (`-` for standard input) holds one query
 per line -- `context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [BUDGET
 [BYTES [CURSOR]]]`, `uses SYMBOL`, `memory` (the arena's `arena_used` and
@@ -409,6 +410,12 @@ before and after a run of queries reports the same `arena_used`, which both
 suites assert. Measured on the compiler's own source: twenty `context` queries
 in one batch 447 ms, as twenty processes 6.6 s; five hundred and fifty lines 3.2
 s with the arena where it started.
+
+Standalone `--unchecked` applies one intended image policy to the whole batch
+(D556, H27). Every `context` and `catalog` answer then has the same `checks: "off"`
+subjects and whole-image boundary facts as the direct forms; `uses` and `memory`
+answers are unchanged. The program is still loaded, resolved and statically checked
+once. Without the flag, existing batch streams remain `retained` and byte-identical.
 
 Both forms take `--bytes N` beside `--budget` (D400, H08): a budget in serialized
 bytes, measured on what has been flushed; the record that crosses it is the last

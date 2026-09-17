@@ -11487,3 +11487,20 @@ and a module catalogue emits it once for each subject. Without the flag the exis
 streams remain byte-for-byte unchanged. Both suites exercise the four subject paths,
 the catalogue multiplicity, and both placements of the standalone flag. This closes
 the whole-image half of H27's context gap; artifact-only modules remain open.
+
+## D556 -- One boundary policy for a query batch
+
+`query-batch` reused one checked snapshot for hundreds of context answers, but it
+hardcoded every `context` and `catalog` subject to `checks: "retained"`. A harness
+that uses the batch path could not ask for the intended `--unchecked` image policy
+D555 made visible through the direct path. The command now accepts one standalone
+`--unchecked` beside its overlays and passes `checks: "off"` to every context and
+catalogue line. Each subject consequently gains the same paginated whole-image
+boundary fact; `uses` and `memory` lines do not change, and the source is still
+loaded, resolved and statically checked once.
+
+The corpus batch asks for a function, a four-function catalogue and a type, and both
+suites require six subjects, six `checks: "off"` policies and six whole-image boundary
+facts. The existing checked batch golden remains byte-for-byte unchanged. The flag
+may stand before, after or between overlay pairs, and anything else after the batch
+file is still rejected. Artifact-only modules remain H27's open context case.

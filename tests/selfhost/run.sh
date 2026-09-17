@@ -2649,6 +2649,13 @@ unchecked_catalog_subjects=$(printf '%s\n' "$unchecked_catalog" | grep -c '"reco
 [ "$unchecked_catalog_subjects" -eq 4 ] || { echo "context-file --module --unchecked returned $unchecked_catalog_subjects subjects, not 4" >&2; exit 1; }
 [ "$(printf '%s\n' "$unchecked_catalog" | grep -c '"checks":"off"')" -eq "$unchecked_catalog_subjects" ] || { echo "context-file --module --unchecked did not mark every subject checks off" >&2; exit 1; }
 [ "$(printf '%s\n' "$unchecked_catalog" | grep -c '"value":"--unchecked: runtime safety checks are omitted from the whole image; values produced by it cross a trusted boundary"')" -eq "$unchecked_catalog_subjects" ] || { echo "context-file --module --unchecked did not emit one whole-image boundary per subject" >&2; exit 1; }
+# The batch path carries one intended image policy across every context/catalog
+# line without giving up its one load and check (D556, H27).
+unchecked_batch=$("$test_build/neper-self" query-batch "$conformance_root/tools/contract.e" "$repo" x64 linux --json --batch "$conformance_root/tools/batch_unchecked.txt" --unchecked)
+unchecked_batch_subjects=$(printf '%s\n' "$unchecked_batch" | grep -c '"record":"subject"')
+[ "$unchecked_batch_subjects" -eq 6 ] || { echo "query-batch --unchecked returned $unchecked_batch_subjects subjects, not 6" >&2; exit 1; }
+[ "$(printf '%s\n' "$unchecked_batch" | grep -c '"checks":"off"')" -eq "$unchecked_batch_subjects" ] || { echo "query-batch --unchecked did not mark every subject checks off" >&2; exit 1; }
+[ "$(printf '%s\n' "$unchecked_batch" | grep -c '"value":"--unchecked: runtime safety checks are omitted from the whole image; values produced by it cross a trusted boundary"')" -eq "$unchecked_batch_subjects" ] || { echo "query-batch --unchecked did not emit one whole-image boundary per subject" >&2; exit 1; }
 # `--deadline MS` (D399, H16): a deadline already passed cancels the build at the first
 # checkpoint -- one diagnostic, a result of exit code 3, no image written.
 deadline_actual="$test_build/conformance-tools-deadline.jsonl"

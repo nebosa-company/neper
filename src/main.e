@@ -2833,6 +2833,31 @@ fn overlays_only_after(args: []str, from: usize) -> bool {
     ret true
 }
 
+// A query batch may describe an unchecked whole image as well as overlaying its
+// sources (D556, H27). The policy flag stands alone; overlays remain pairs.
+fn policy_overlays_only_after(args: []str, from: usize) -> bool {
+    var at = from
+    while at < args.len {
+        if same(args[at], "--unchecked") {
+            at += 1usize
+        } else {
+            if !same(args[at], "--overlay") || at + 1usize >= args.len { ret false }
+            at += 2usize
+        }
+    }
+    ret true
+}
+
+fn image_checks_after(args: []str, from: usize) -> str {
+    var at = from
+    while at < args.len {
+        if same(args[at], "--unchecked") { ret "off" }
+        if same(args[at], "--overlay") { at += 1usize }
+        at += 1usize
+    }
+    ret "retained"
+}
+
 // The operand's absolute spelling for `--absolute-paths` (section 2, D290): as given
 // when it is already absolute, else under the current directory, its `.` and `..`
 // segments collapsed (D489) so two spellings of one file compare equal. Empty for
@@ -9245,7 +9270,10 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     }
     // The batch (D409, H16): one program loaded, resolved and checked, and every
     // line of the batch file answered from it as its own stream, in order.
-    if kind == 7usize { query_error = query_batch(a, &checker, &loaded, args[8usize], target_text) }
+    if kind == 7usize {
+        let batch_checks = image_checks_after(args, 9usize)
+        query_error = query_batch(a, &checker, &loaded, args[8usize], target_text, batch_checks)
+    }
     if kind == 8usize { query_error = tool.plan_replace_json(a, &checker, &loaded, args[8usize], args[10usize]) }
     if kind == 9usize { query_error = tool.plan_signature_json(a, &checker, &loaded, args[8usize], args[10usize]) }
     if kind == 10usize { query_error = tool.impact_json(a, &checker, &loaded, args[8usize]) }
@@ -9259,7 +9287,8 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     ret ok
 }
 
-// `query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16): the batch file --
+// `query-batch PATH ROOT ARCH OS --json --batch FILE [--unchecked]` (D409, D556,
+// H16/H27): the batch file --
 // `-` for standard input -- holds one query per line, words separated by spaces:
 // `context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [BUDGET [BYTES [CURSOR]]]`,
 // `uses SYMBOL`, `memory` (D410: the arena's use and capacity, for a harness
@@ -9267,7 +9296,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
 // the line's order, so a harness splits the output at the headers; a blank line is
 // passed over, a line no query reads gets a diagnostic stream of its own. A refused
 // query or an unreadable line makes the process exit 2 once every line is answered.
-fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, batch_path: str, target_text: str) -> err {
+fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, batch_path: str, target_text: str, checks: str) -> err {
     var batch = ""
     if same(batch_path, "-") {
         let (from_stdin, stdin_error) = source.load_stdin(a)
@@ -9320,11 +9349,11 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
         }
         if word_count >= 2usize && same(words[0usize], "context") {
             known = true
-            line_error = tool.context_json(a, checker, loaded, words[1usize], budget, byte_budget, cursor, target_text, "retained")
+            line_error = tool.context_json(a, checker, loaded, words[1usize], budget, byte_budget, cursor, target_text, checks)
         }
         if word_count >= 2usize && same(words[0usize], "catalog") {
             known = true
-            line_error = tool.catalog_json(a, checker, loaded, words[1usize], budget, byte_budget, cursor, target_text, "retained")
+            line_error = tool.catalog_json(a, checker, loaded, words[1usize], budget, byte_budget, cursor, target_text, checks)
         }
         if word_count >= 2usize && same(words[0usize], "uses") {
             known = true
@@ -9637,8 +9666,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len >= 11usize && same(args[1usize], "plan-replace-expression-file") && same(args[6usize], "--json") && same(args[7usize], "--span") && same(args[9usize], "--with") && args[10usize].len != 0usize && overlays_only_after(args, 11usize) { ret query_file(a, &report, args, 8usize) }
     // `test-impact-file PATH ROOT ARCH OS --json --changed m1,m2` (D423, H10): the tests an edit reaches.
     if args.len >= 9usize && same(args[1usize], "test-impact-file") && same(args[6usize], "--json") && same(args[7usize], "--changed") && overlays_only_after(args, 9usize) { ret query_file(a, &report, args, 10usize) }
-    // `query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16): many queries, one check.
-    if args.len >= 9usize && same(args[1usize], "query-batch") && same(args[6usize], "--json") && same(args[7usize], "--batch") && overlays_only_after(args, 9usize) { ret query_file(a, &report, args, 7usize) }
+    // `query-batch PATH ROOT ARCH OS --json --batch FILE [--unchecked]` (D409,
+    // D556, H16/H27): many queries, one check and one intended image policy.
+    if args.len >= 9usize && same(args[1usize], "query-batch") && same(args[6usize], "--json") && same(args[7usize], "--batch") && policy_overlays_only_after(args, 9usize) { ret query_file(a, &report, args, 7usize) }
     // `plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name --parameter "name: T" --argument EXPR` (D406, H17).
     // `--argument EXPR` for every call, or `--arguments FILE` per call (D455, H29).
     if args.len >= 13usize && same(args[1usize], "plan-add-parameter-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--parameter") && (same(args[11usize], "--argument") || same(args[11usize], "--arguments")) && args[10usize].len != 0usize && args[12usize].len != 0usize && overlays_only_after(args, 13usize) { ret query_file(a, &report, args, 6usize) }

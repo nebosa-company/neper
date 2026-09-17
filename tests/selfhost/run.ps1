@@ -2800,6 +2800,14 @@ $uncheckedCatalogSubjects = @($uncheckedCatalog | Select-String -SimpleMatch '"r
 if ($uncheckedCatalogSubjects -ne 4) { throw "context-file --module --unchecked returned $uncheckedCatalogSubjects subjects, not 4" }
 if (@($uncheckedCatalog | Select-String -SimpleMatch '"checks":"off"').Count -ne $uncheckedCatalogSubjects) { throw 'context-file --module --unchecked did not mark every subject checks off' }
 if (@($uncheckedCatalog | Select-String -SimpleMatch '"value":"--unchecked: runtime safety checks are omitted from the whole image; values produced by it cross a trusted boundary"').Count -ne $uncheckedCatalogSubjects) { throw 'context-file --module --unchecked did not emit one whole-image boundary per subject' }
+# The batch path carries one intended image policy across every context/catalog
+# line without giving up its one load and check (D556, H27).
+$uncheckedBatch = & $compiler query-batch (Join-Path $conformanceRoot 'tools/contract.e') $repo 'x64' 'windows' --json --batch (Join-Path $conformanceRoot 'tools/batch_unchecked.txt') --unchecked
+if ($LASTEXITCODE -ne 0) { throw 'query-batch --unchecked failed' }
+$uncheckedBatchSubjects = @($uncheckedBatch | Select-String -SimpleMatch '"record":"subject"').Count
+if ($uncheckedBatchSubjects -ne 6) { throw "query-batch --unchecked returned $uncheckedBatchSubjects subjects, not 6" }
+if (@($uncheckedBatch | Select-String -SimpleMatch '"checks":"off"').Count -ne $uncheckedBatchSubjects) { throw 'query-batch --unchecked did not mark every subject checks off' }
+if (@($uncheckedBatch | Select-String -SimpleMatch '"value":"--unchecked: runtime safety checks are omitted from the whole image; values produced by it cross a trusted boundary"').Count -ne $uncheckedBatchSubjects) { throw 'query-batch --unchecked did not emit one whole-image boundary per subject' }
 # `--deadline MS` (D399, H16): a deadline already passed cancels the build at the first
 # checkpoint -- one diagnostic, a result of exit code 3, no image written.
 $deadlineActual = Join-Path $testBuild 'conformance-tools-deadline.jsonl'

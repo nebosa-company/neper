@@ -74,6 +74,8 @@ and adds one whole-image `boundary` fact for that subject. A catalogue repeats t
 fact once per subject, so stored context cannot lose the whole-image trust boundary
 when it is separated from the manifest. The query still checks the source; the flag
 describes the runtime policy of the image whose context the caller is requesting.
+The same standalone flag on `query-batch` applies that policy to every `context` and
+`catalog` line while preserving the batch's single load and check (D556).
 
 ## 4. Obligations not yet met
 
