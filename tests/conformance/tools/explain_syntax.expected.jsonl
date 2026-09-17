@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"explain","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-SYNTAX-9999","message":"unexpected end of line","span":{"source":{"root":"project-src","path":"dep.e"},"byte_start":34,"byte_end":35,"line":2,"column":17,"end_line":3,"end_column":1,"column_utf16":17,"end_column_utf16":1},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

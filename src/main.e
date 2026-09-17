@@ -2905,6 +2905,9 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     if args.len == 8usize { absolute_path = absolute_operand(a, args[2usize]) }
     report.json = true
     report.file = os.stdout()
+    // The header, held until the first record (D521): a module that does not parse
+    // is reported by the loader, before the command has written anything.
+    report.pending_header = "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n"
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
     // `-` is stdin under the `--path` identity (D488), as `tokens` and `parse` have
@@ -2914,7 +2917,6 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
         if args.len != 9usize { ret tool_usage() }
         let (piped, piped_error) = operand_text(a, "-")
         if piped_error != ok {
-            try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
             try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read")
             try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"symbols\":0,\"references\":0}}\n")
             os.exit(2i32)
@@ -2926,7 +2928,6 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     }
     let load_error = load_graph(a, &report, &loaded, operand, args[3usize], args[4usize], args[5usize])
     if load_error != ok {
-        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
         try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"symbols\":0,\"references\":0}}\n")
         os.exit(2i32)
@@ -2936,7 +2937,6 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     try init_cli_resolver(a, &resolver, &loaded, &report)
     let resolve_error = resolve.collect(&resolver, &loaded)
     if resolve_error != ok {
-        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
         try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"symbols\":0,\"references\":0}}\n")
         os.exit(1i32)
@@ -2944,6 +2944,8 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     }
     var identity = basename(args[2usize])
     if args.len == 9usize { identity = args[8usize] }
+    // The index writes its own header: the held one is dropped.
+    report.pending_header = ""
     let (index_exit, index_error) = tool.index_json(a, "operand", identity, loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count, absolute_path)
     if index_error != ok { ret index_error }
     if index_exit != 0usize { os.exit(i32(index_exit)) }
@@ -3417,6 +3419,10 @@ type Sink = struct {
     capture: []u8,
     count: usize,
     capturing: bool,
+    // A header held back (D521, H18): written before the first record, whichever
+    // path writes it -- the loader's parse failure as much as the command's own
+    // records -- so a stream that fails while loading still begins with its header.
+    pending_header: str,
     // `--json` (D228): a diagnostic is a record on stdout, not a line on stderr.
     json: bool,
     // `--stats` (D308): the build's measurements, printed after the image is written.
@@ -4249,6 +4255,11 @@ fn write_all(sink: *Sink, text: str) -> err {
             copy_at += 1usize
         }
         ret ok
+    }
+    if sink.pending_header.len != 0usize {
+        let held = sink.pending_header
+        sink.pending_header = ""
+        try write_all(sink, held)
     }
     var at = 0usize
     while at < text.len {
@@ -8773,6 +8784,19 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
 // `plan-replace-expression-file` (D414), 9 for `plan-change-signature-file` (D415), 10
 // for `test-impact-file` (D423).
 // The stream's `command` per query kind (D520), as each query's header names it.
+// The query's header, held until a record needs it (D521): the query's own writer
+// puts its header out itself, so the held one is dropped before it runs.
+fn hold_query_header(a: *mem.Arena, report: *Sink, kind: usize) -> err {
+    let name = query_command_name(kind)
+    let (storage, storage_error) = mem.alloc[u8](a, 256usize)
+    if storage_error != ok { ret storage_error }
+    var at = tool.nptest_copy(storage[..], 0usize, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"")
+    at = tool.nptest_copy(storage[..], at, name)
+    at = tool.nptest_copy(storage[..], at, "\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
+    report.pending_header = storage[0usize..at]
+    ret ok
+}
+
 fn query_command_name(kind: usize) -> str {
     if kind == 2usize || kind == 5usize { ret "context" }
     if kind == 3usize { ret "uses" }
@@ -8787,8 +8811,18 @@ fn query_command_name(kind: usize) -> str {
 fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
+    // The stream from the load on (D521, H18): a module that does not parse, or a
+    // name that does not resolve, is a record under the query's header, exit 1.
+    report.json = true
+    report.file = os.stdout()
+    try hold_query_header(a, report, kind)
     let load_error = load_graph(a, report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
-    if load_error != ok { ret load_error }
+    if load_error != ok {
+        try emit_command_diagnostic(report, "E-CLI-9999", "the operand cannot be read as a module")
+        try finish_report(report)
+        os.exit(2i32)
+        ret ok
+    }
     // The operand's map, for what a generator owns (D512): read quietly, since a
     // query's stream begins with its own header.
     if loaded.count != 0usize {
@@ -8801,6 +8835,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     let resolve_error = resolve.collect(&resolver, &loaded)
     if resolve_error != ok {
         try print_resolve_diagnostic(report, &loaded, &resolver, resolve_error)
+        try finish_report(report)
         os.exit(1i32)
         ret ok
     }
@@ -8830,17 +8865,22 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
         // harness reading JSON had found the diagnostic as text on stderr and nothing
         // on stdout. The batch answers each line its own way.
         if kind != 7usize {
-            try tool.stream_header(a, query_command_name(kind))
-            var failed_stream = json_sink()
-            try print_check_diagnostic(&failed_stream, &loaded, &checker, check_error)
-            try finish_report(&failed_stream)
+            try print_check_diagnostic(report, &loaded, &checker, check_error)
+            try finish_report(report)
             os.exit(1i32)
             ret ok
         }
+        report.pending_header = ""
+        report.json = false
+        report.file = os.stderr()
         try print_check_diagnostic(report, &loaded, &checker, check_error)
         os.exit(1i32)
         ret ok
     }
+    // Checked: the query writes its own header, and the held one is dropped.
+    report.pending_header = ""
+    report.json = false
+    report.file = os.stderr()
     var target_storage: [64]u8 = zero
     var target_at = tool.nptest_copy(target_storage[..], 0usize, args[4usize])
     target_storage[target_at] = 45u8

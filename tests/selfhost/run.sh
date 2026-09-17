@@ -2628,6 +2628,21 @@ for broken_case in "context-file context_broken" "uses-file uses_broken" "plan-r
     [ ! -s "$test_build/conformance-tools-$2.stderr" ]
     cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { echo "$1 --json over a program that does not check differs from the conformance corpus" >&2; exit 1; }
 done
+# A dependency that does not parse (D521, H18): the stream under the query's header, exit 1.
+for syntax_case in "context-file context_syntax" "uses-file uses_syntax" "explain-file explain_syntax"; do
+    set -- $syntax_case
+    syntax_tail="--symbol main.main"
+    if [ "$1" = "explain-file" ]; then syntax_tail=""; fi
+    syntax_status=0
+    (cd "$conformance_root/tools/query_syntax" && "$test_build/neper-self" "$1" src/main.e "$repo" x64 linux --json $syntax_tail > "$test_build/conformance-tools-$2.jsonl" 2> "$test_build/conformance-tools-$2.stderr") || syntax_status=$?
+    [ "$syntax_status" -eq 1 ]
+    [ ! -s "$test_build/conformance-tools-$2.stderr" ]
+    cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { echo "$1 --json over a dependency that does not parse differs from the conformance corpus" >&2; exit 1; }
+done
+index_syntax_status=0
+(cd "$conformance_root/tools/query_syntax" && "$test_build/neper-self" index-file src/dep.e "$repo" x64 linux --json > "$test_build/conformance-tools-index-syntax.jsonl") || index_syntax_status=$?
+[ "$index_syntax_status" -eq 1 ]
+cmp -s "$test_build/conformance-tools-index-syntax.jsonl" "$conformance_root/tools/index_syntax.expected.jsonl" || { echo "index-file --json over a file that does not parse differs from the conformance corpus" >&2; exit 1; }
 # `uses-file --json` (D362): every resolved use of one function.
 uses_actual="$test_build/conformance-tools-uses.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self uses-file explain.e "$repo" x64 linux --json --symbol explain.same > "$uses_actual")

@@ -444,7 +444,10 @@ edit, with the whole set the answer when the edges overflowed
 Every query over a program that does not check -- `context-file`, `uses-file`,
 the plans, `test-impact-file` -- answers as a stream (D520, H08, H18): its header,
 the diagnostic, and a result of exit 1, nothing on stderr; `explain-file` answers
-with what the checker decided before it stopped as well (D430).
+with what the checker decided before it stopped as well (D430). A program that
+does not load -- a module that does not parse, a `use` naming no module -- is a
+stream too (D521): the query's header, the loader's diagnostic, a result of exit
+1; and `index-file` over a file that does not parse begins with its header.
 
 `neper uses-file PATH ROOT ARCH OS --json --symbol module.name` (D362, H17) checks
 the program and lists every use of one declared function the checker resolved,

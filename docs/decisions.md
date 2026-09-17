@@ -10980,3 +10980,19 @@ as a record, a result of exit 1, and stderr empty. The batch keeps answering
 each line its own way. `query_broken` pins three of them on both hosts. The
 answer stops at the diagnostic: what the checker decided about the functions
 that do check is not yet offered, as `explain-file` offers its records.
+
+## D521 -- The header held until the first record
+
+D520 gave every query the stream shape over a program that does not check;
+the probe turned to one that does not load, and found the loader writing a
+dependency's syntax error as text on stderr for every query, and `index-file`
+over the file itself writing the diagnostic and the result with no header
+before them, since the loader reports before the command has written a word.
+The report now holds a header until the first record needs it, whichever path
+writes that record: a query sets the stream up before loading, with its own
+header held, and drops the held header once the program checked, since its
+writer puts one out itself; the index does the same. A module that does not
+parse and a `use` that names no module are the loader's records under the
+query's header, exit 1; an operand that cannot be read is the command's,
+exit 2, as `check-file` has it. `query_syntax` pins three queries and the
+index on both hosts; the batch keeps its own way.

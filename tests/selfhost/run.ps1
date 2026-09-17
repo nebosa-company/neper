@@ -2806,6 +2806,22 @@ foreach ($brokenCase in @(@('context-file', '--symbol', 'query_broken.helper', '
     if ((Get-Item -LiteralPath $brokenStderr).Length -ne 0) { throw "$($brokenCase[0]) --json over a program that does not check wrote to stderr" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $brokenActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($brokenCase[3]).expected.jsonl")).Hash) { throw "$($brokenCase[0]) --json over a program that does not check differs from the conformance corpus" }
 }
+# A dependency that does not parse (D521, H18): the stream under the query's header, exit 1;
+# and `index-file` over the file itself begins with its header.
+foreach ($syntaxCase in @(@('context-file', 'context_syntax'), @('uses-file', 'uses_syntax'), @('explain-file', 'explain_syntax'))) {
+    $syntaxActual = Join-Path $testBuild "conformance-tools-$($syntaxCase[1]).jsonl"
+    $syntaxStderr = Join-Path $testBuild "conformance-tools-$($syntaxCase[1]).stderr"
+    $syntaxTail = ' --symbol main.main'
+    if ($syntaxCase[0] -eq 'explain-file') { $syntaxTail = '' }
+    cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\query_syntax')`" && `"$compiler`" $($syntaxCase[0]) src/main.e `"$repo`" x64 windows --json$syntaxTail > `"$syntaxActual`" 2> `"$syntaxStderr`""
+    if ($LASTEXITCODE -ne 1) { throw "$($syntaxCase[0]) --json over a dependency that does not parse exited $LASTEXITCODE, not 1" }
+    if ((Get-Item -LiteralPath $syntaxStderr).Length -ne 0) { throw "$($syntaxCase[0]) --json over a dependency that does not parse wrote to stderr" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $syntaxActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($syntaxCase[1]).expected.jsonl")).Hash) { throw "$($syntaxCase[0]) --json over a dependency that does not parse differs from the conformance corpus" }
+}
+$indexSyntaxActual = Join-Path $testBuild 'conformance-tools-index-syntax.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\query_syntax')`" && `"$compiler`" index-file src/dep.e `"$repo`" x64 windows --json > `"$indexSyntaxActual`""
+if ($LASTEXITCODE -ne 1) { throw "index-file --json over a file that does not parse exited $LASTEXITCODE, not 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexSyntaxActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index_syntax.expected.jsonl')).Hash) { throw 'index-file --json over a file that does not parse differs from the conformance corpus' }
 # `uses-file --json` (D362): every resolved use of one function, target-independent.
 $usesActual = Join-Path $testBuild 'conformance-tools-uses.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file explain.e `"$repo`" x64 windows --json --symbol explain.same > `"$usesActual`""
