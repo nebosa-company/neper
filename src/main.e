@@ -4308,6 +4308,11 @@ fn emit_command_diagnostic(report: *Sink, code: str, message: str) -> err {
     try write_json_string(report, code)
     try write_all(report, ",\"message\":")
     try write_json_string(report, message)
+    // A command diagnostic's subject as a fact (D547), as a span diagnostic's (D514).
+    if report.symbol_text.len != 0usize {
+        try write_all(report, ",\"symbol\":")
+        try write_json_string(report, report.symbol_text)
+    }
     try write_all(report, ",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}\n")
     report.count += 1usize
     ret ok
@@ -4491,10 +4496,10 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
             let (path, path_error) = plan_source_path(a, line, root, project_src)
             if path_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "a precondition names a source root apply-plan has no directory for") }
             let (text, read_error) = graph.load_file(a, path)
-            if read_error != ok { ret apply_plan_refused(sink, "E-TOOL-0003", "a precondition's file cannot be read; nothing applied") }
+            if read_error != ok { ret apply_plan_refused_file(sink, "E-TOOL-0003", json_str_after(line, "\"path\":\""), " cannot be read; nothing applied") }
             let (digest, digest_error) = artifact_hash.sha256_hex(a, text)
             if digest_error != ok { ret digest_error }
-            if !same(digest, json_str_after(line, "\"sha256\":\"")) { ret apply_plan_refused(sink, "E-TOOL-0003", "a file changed since the plan was made; nothing applied") }
+            if !same(digest, json_str_after(line, "\"sha256\":\"")) { ret apply_plan_refused_file(sink, "E-TOOL-0003", json_str_after(line, "\"path\":\""), " changed since the plan was made; nothing applied") }
             file_paths[file_count] = path
             file_texts[file_count] = text
             file_count += 1usize
@@ -4581,6 +4586,21 @@ fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
 
 // An edit's start once it is spliced in: no span reaches this.
 const PLAN_APPLIED: usize = 4294967295usize
+
+// The file the refusal is about (D547, H29), named in the message as the plan's
+// precondition spells it and carried as `symbol`, so a harness re-plans from it.
+fn apply_plan_refused_file(report: *Sink, code: str, path: str, tail: str) -> err {
+    var message_storage: [1024]u8 = zero
+    var message = capture_sink(message_storage[..])
+    try write_all(&message, "`")
+    try write_all(&message, path)
+    try write_all(&message, "`")
+    try write_all(&message, tail)
+    report.symbol_text = path
+    let refused = apply_plan_refused(report, code, message_storage[..message.count])
+    report.symbol_text = ""
+    ret refused
+}
 
 fn apply_plan_refused(report: *Sink, code: str, message: str) -> err {
     try emit_command_diagnostic(report, code, message)

@@ -11346,3 +11346,14 @@ result, exit 1; main's human path exits once a limit is named rather than
 returning the error for the runtime to name again, an internal failure
 keeping that line. Both suites build the small compiler and read the limit
 from `check-file` over the compiler's sources.
+
+## D547 -- The stale plan's file
+
+`apply-plan` over a plan whose precondition no longer holds said "a file
+changed since the plan was made; nothing applied" -- true, and no use to
+the harness that has to decide which of thirteen files to re-plan from.
+The refusal names the file as the precondition spells it, in backticks in
+the message and as the record's `symbol`, the command diagnostic gaining
+the fact a span diagnostic has (D514); a precondition's file that cannot
+be read is named the same way. Both suites read the name from the
+refusal of the stale rename plan they already make.

@@ -2777,7 +2777,9 @@ plan_checked=$($test_build/neper-self check-file "$plan_scratch/src/explain.e" "
 plan_sites=$($test_build/neper-self uses-file "$plan_scratch/src/explain.e" "$repo" x64 linux --json --symbol explain.alike | grep '"record":"use"' | sed 's/.*"byte_start":\([0-9]*\).*/\1/' | sort -u | wc -l)
 [ "$plan_sites" -eq 2 ]
 plan_again=0
-"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null 2>&1 || plan_again=$?
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" --json > "$test_build/plan-stale.jsonl" 2>/dev/null || plan_again=$?
+# The file named (D547, H29).
+grep -q '"code":"E-TOOL-0003","message":"`explain.e` changed since the plan was made; nothing applied","symbol":"explain.e"' "$test_build/plan-stale.jsonl"
 [ "$plan_again" -ne 0 ]
 # Uses and a rename through an alias, past a same-spelled function and local (D509, H17).
 alias_fixture="$conformance_root/tools/uses_alias"

@@ -502,8 +502,9 @@ result with `edits`, `files` and `complete`. A harness applies the edits to file
 whose hashes still match -- all of them or none -- from the highest offset down, and
 re-checks; `neper apply-plan PLAN.jsonl --root DIR [--project-src DIR] [--json]`
 (D481) is the applier: every precondition's file must hash as recorded or nothing is
-written (`E-TOOL-0003`, exit 2, and the same for an edit with no precondition or
-outside its file, or a plan whose result was not `ok`), each file's edits go on from
+written (`E-TOOL-0003`, exit 2, the file named in the message as the precondition
+spells it and carried as `symbol` (D547); and the same code for an edit with no
+precondition or outside its file, or a plan whose result was not `ok`), each file's edits go on from
 the highest offset down and the file is published through `.tmp` and one replace;
 plain, it prints `applied N edits to PATH` per file and the `postcondition`; with
 `--json`, a stream whose result carries `edits`, `files` and `postcondition`.

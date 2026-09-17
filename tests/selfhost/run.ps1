@@ -2418,8 +2418,10 @@ $planChecked = & $compiler check-file (Join-Path $planScratch 'src/explain.e') $
 if ($LASTEXITCODE -ne 0 -or $planChecked -ne 'module check ok') { throw "the renamed program does not check: $planChecked" }
 $planUses = & $compiler uses-file (Join-Path $planScratch 'src/explain.e') $repo 'x64' 'windows' --json --symbol explain.alike
 if ($LASTEXITCODE -ne 0 -or (($planUses | Where-Object { $_ -match '"record":"use"' }) | ForEach-Object { ($_ -replace '.*"byte_start":(\d+).*', '$1') } | Sort-Object -Unique).Count -ne 2) { throw 'the renamed function is not used at the two sites' }
-& $compiler apply-plan $planActual --root (Join-Path $planScratch 'src') 2>&1 | Out-Null
+$planStale = & $compiler apply-plan $planActual --root (Join-Path $planScratch 'src') --json 2>$null
 if ($LASTEXITCODE -eq 0) { throw 'a plan over changed files was applied' }
+# The file named (D547, H29): the refusal says which precondition no longer holds.
+if (($planStale -join "`n") -notmatch '"code":"E-TOOL-0003","message":"`explain.e` changed since the plan was made; nothing applied","symbol":"explain.e"') { throw "the stale plan's refusal did not name the file: $planStale" }
 # Uses and a rename through an alias, past a same-spelled function and local (D509,
 # H17): from inside the project with the operand as `src/main.e`, every module under
 # `project-src`; the plan applied to a copy checks and runs the same.
