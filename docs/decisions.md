@@ -12242,3 +12242,13 @@ The frozen `Index { root, trigrams }` cannot own postings, storage or even a sta
 `search_index` deliberately performs a fresh search instead of inventing a hidden global
 cache or sidecar file. The focused fixture pins two files, three positions, line text,
 metadata and cleanup on both hosts.
+
+## D604 -- Audio frames use one host-independent signed full scale
+
+`e.audio` delivers interleaved frame views, sample access, format conversion and silence
+over little-endian bytes on every host. The canonical `i32` sample keeps I32 exact, places
+I16 in its high sixteen bits and maps F32 through [-1, 1] with saturation; NaN input is
+unsupported rather than converted unpredictably. Views reject zero-rate/channel formats
+and partial frames, while conversion allocates exactly the destination frame storage in
+the caller arena. The focused fixture pins stereo indexing, both integer extremes,
+float conversion, mutation, bounds and silence.

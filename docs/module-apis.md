@@ -3931,6 +3931,11 @@ fn convert(a: *mem.Arena, src: Frames, to: SampleFormat) -> (Frames, err)
 fn silence(fr: *Frames) -> err
 ```
 
+The delivered base uses interleaved little-endian samples on every target. `sample_i32`
+is the canonical signed full-scale representation: I16 occupies its high sixteen bits,
+I32 is exact and F32 maps [-1, 1] with saturation. Views reject partial frames; convert
+allocates exactly the target frame bytes in the caller arena and reads no device state.
+
 ### `e.audio.mixer`
 
 ```neper

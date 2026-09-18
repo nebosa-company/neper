@@ -1334,6 +1334,12 @@ Push-Location $fsScratch
 $grepExit = $LASTEXITCODE
 Pop-Location
 if ($grepExit -ne 0) { throw "an e.grep index or search answered wrongly: exit $grepExit" }
+# `e.audio` pins interleaved PCM views and host-independent sample conversion.
+$audioPath = Join-Path $testBuild 'audio-selfhost.exe'
+$audioWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audio\src\main.e') $repo 'x64' 'windows' $audioPath
+if ($LASTEXITCODE -ne 0 -or $audioWritten -ne 'executable written') { throw 'e.audio emission failed' }
+& $audioPath
+if ($LASTEXITCODE -ne 0) { throw "an e.audio view or conversion answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
