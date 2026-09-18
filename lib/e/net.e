@@ -1,7 +1,9 @@
-// Portable network values. This first slice is deliberately pure: parse and format IP
-// literals without consulting host DNS, interfaces or socket state. Socket operations
-// build on the already-delivered e.os fence in the next slice.
+// Portable network values and blocking socket transport over the reviewed e.os fence.
+// Address parsing/formatting stays pure; resolution and transfer map host details into
+// the smaller portable error set. Deadline-aware operations are the remaining slice.
 
+use e.io
+use e.mem
 use e.os
 
 type Socket = os.Socket
@@ -313,4 +315,232 @@ fn format_ip(address: Address, dst: []u8) -> (str, err) {
     default:
         ret ("", Failed)
     }
+}
+
+fn map_error(source_error: err) -> err {
+    if source_error == ok { ret ok }
+    if source_error == os.NotFound { ret NotFound }
+    if source_error == os.Timeout { ret Timeout }
+    if source_error == os.Exists { ret AddressInUse }
+    let detail = os.last_error_detail("network", "")
+    let code = detail.native_code
+    if code == 111i32 || code == 10061i32 { ret Refused }
+    if code == 104i32 || code == 10054i32 { ret Reset }
+    if code == 101i32 || code == 113i32 || code == 10051i32 || code == 10065i32 { ret Unreachable }
+    if code == 110i32 || code == 10060i32 { ret Timeout }
+    if code == 98i32 || code == 10048i32 { ret AddressInUse }
+    ret Failed
+}
+
+fn to_os_address(endpoint: Endpoint) -> os.SocketAddress {
+    var out: os.SocketAddress = zero
+    out.port = endpoint.port
+    switch endpoint.address {
+    case .Ip4 as four:
+        out.family = .Ip4
+        var at = 0usize
+        while at < 4usize {
+            out.bytes[at] = four.bytes[at]
+            at += 1usize
+        }
+    case .Ip6 as six:
+        out.family = .Ip6
+        var at = 0usize
+        while at < 16usize {
+            out.bytes[at] = six.bytes[at]
+            at += 1usize
+        }
+        out.scope = six.scope
+    }
+    ret out
+}
+
+fn from_os_address(source: os.SocketAddress) -> Endpoint {
+    var out: Endpoint = zero
+    out.port = source.port
+    if source.family == .Ip4 {
+        var four: Ip4 = zero
+        var at = 0usize
+        while at < 4usize {
+            four.bytes[at] = source.bytes[at]
+            at += 1usize
+        }
+        out.address = Address{ Ip4: four }
+    } else {
+        var six: Ip6 = zero
+        var at = 0usize
+        while at < 16usize {
+            six.bytes[at] = source.bytes[at]
+            at += 1usize
+        }
+        six.scope = source.scope
+        out.address = Address{ Ip6: six }
+    }
+    ret out
+}
+
+fn socket_family(address: Address) -> os.SocketFamily {
+    switch address {
+    case .Ip6 as six:
+        ret .Ip6
+    default:
+        ret .Ip4
+    }
+}
+
+fn append_resolved(out: []Endpoint, used: usize, addresses: []const os.SocketAddress) -> usize {
+    var count = used
+    var at = 0usize
+    while at < addresses.len && count < out.len {
+        out[count] = from_os_address(addresses[at])
+        count += 1usize
+        at += 1usize
+    }
+    ret count
+}
+
+fn resolve(a: *mem.Arena, host: str, port: u16, family: Family) -> ([]Endpoint, err) {
+    var empty: []Endpoint = zero
+    let mark = mem.mark(a)
+    let (out, allocation_error) = mem.alloc[Endpoint](a, 32usize)
+    if allocation_error != ok { ret (empty, allocation_error) }
+    var used = 0usize
+    var first_error: err = ok
+    if family == .Any || family == .Ip4 {
+        let (addresses, resolve_error) = os.socket_resolve(a, host, port, .Ip4)
+        if resolve_error == ok {
+            used = append_resolved(out, used, addresses)
+        } else {
+            first_error = map_error(resolve_error)
+        }
+    }
+    if family == .Any || family == .Ip6 {
+        let (addresses, resolve_error) = os.socket_resolve(a, host, port, .Ip6)
+        if resolve_error == ok {
+            used = append_resolved(out, used, addresses)
+        } else {
+            if first_error == ok { first_error = map_error(resolve_error) }
+        }
+    }
+    if used == 0usize {
+        mem.reset(a, mark)
+        if first_error != ok { ret (empty, first_error) }
+        ret (empty, NotFound)
+    }
+    ret (out[..used], ok)
+}
+
+fn tcp_connect(endpoint: Endpoint) -> (Socket, err) {
+    var empty: Socket = zero
+    let (socket, open_error) = os.socket_open(socket_family(endpoint.address), .Stream)
+    if open_error != ok { ret (empty, map_error(open_error)) }
+    let connect_error = os.socket_connect(socket, to_os_address(endpoint))
+    if connect_error != ok {
+        let mapped = map_error(connect_error)
+        let unused = os.socket_close(socket)
+        ret (empty, mapped)
+    }
+    ret (socket, ok)
+}
+
+fn tcp_listen(endpoint: Endpoint, backlog: u32) -> (Socket, err) {
+    var empty: Socket = zero
+    let (socket, open_error) = os.socket_open(socket_family(endpoint.address), .Stream)
+    if open_error != ok { ret (empty, map_error(open_error)) }
+    let bind_error = os.socket_bind(socket, to_os_address(endpoint))
+    if bind_error != ok {
+        let mapped = map_error(bind_error)
+        let unused = os.socket_close(socket)
+        ret (empty, mapped)
+    }
+    let listen_error = os.socket_listen(socket, backlog)
+    if listen_error != ok {
+        let mapped = map_error(listen_error)
+        let unused = os.socket_close(socket)
+        ret (empty, mapped)
+    }
+    ret (socket, ok)
+}
+
+fn tcp_accept(listener: Socket) -> (Socket, Endpoint, err) {
+    var empty: Socket = zero
+    var endpoint: Endpoint = zero
+    let (accepted, peer, accept_error) = os.socket_accept(listener)
+    if accept_error != ok { ret (empty, endpoint, map_error(accept_error)) }
+    ret (accepted, from_os_address(peer), ok)
+}
+
+fn udp_bind(endpoint: Endpoint) -> (Socket, err) {
+    var empty: Socket = zero
+    let (socket, open_error) = os.socket_open(socket_family(endpoint.address), .Datagram)
+    if open_error != ok { ret (empty, map_error(open_error)) }
+    let bind_error = os.socket_bind(socket, to_os_address(endpoint))
+    if bind_error != ok {
+        let mapped = map_error(bind_error)
+        let unused = os.socket_close(socket)
+        ret (empty, mapped)
+    }
+    ret (socket, ok)
+}
+
+fn receive(socket: Socket, dst: []u8) -> (usize, err) {
+    let (count, receive_error) = os.socket_receive(socket, dst)
+    if receive_error != ok { ret (count, map_error(receive_error)) }
+    ret (count, ok)
+}
+
+fn send(socket: Socket, src: []const u8) -> (usize, err) {
+    let (count, send_error) = os.socket_send(socket, src)
+    if send_error != ok { ret (count, map_error(send_error)) }
+    ret (count, ok)
+}
+
+fn receive_from(socket: Socket, dst: []u8) -> (usize, Endpoint, err) {
+    var endpoint: Endpoint = zero
+    let (count, source, receive_error) = os.socket_receive_from(socket, dst)
+    if receive_error != ok { ret (count, endpoint, map_error(receive_error)) }
+    ret (count, from_os_address(source), ok)
+}
+
+fn send_to(socket: Socket, dst: Endpoint, src: []const u8) -> (usize, err) {
+    let (count, send_error) = os.socket_send_to(socket, to_os_address(dst), src)
+    if send_error != ok { ret (count, map_error(send_error)) }
+    ret (count, ok)
+}
+
+fn shutdown(socket: Socket, how: Shutdown) -> err {
+    var os_how: os.SocketShutdown = .Read
+    if how == .Write { os_how = .Write }
+    if how == .Both { os_how = .Both }
+    ret map_error(os.socket_shutdown(socket, os_how))
+}
+
+fn close(socket: own Socket) -> err {
+    ret map_error(os.socket_close(socket))
+}
+
+fn socket_read(ctx: *void, dst: []u8) -> (usize, err) {
+    let socket = mem.cast[*Socket](ctx)
+    let (count, read_error) = receive(*socket, dst)
+    if read_error != ok { ret (count, read_error) }
+    if count == 0usize { ret (0usize, io.End) }
+    ret (count, ok)
+}
+
+fn socket_write(ctx: *void, src: []const u8) -> (usize, err) {
+    let socket = mem.cast[*Socket](ctx)
+    let (count, write_error) = send(*socket, src)
+    ret (count, write_error)
+}
+
+fn socket_flush(ctx: *void) -> err {
+    ret ok
+}
+
+fn reader(socket: *Socket) -> io.Reader {
+    ret io.Reader { ctx: mem.cast[*void](socket), read: socket_read }
+}
+
+fn writer(socket: *Socket) -> io.Writer {
+    ret io.Writer { ctx: mem.cast[*void](socket), write: socket_write, flush: socket_flush }
 }

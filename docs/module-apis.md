@@ -2757,6 +2757,14 @@ interface-name scopes and trailing text are rejected. `format_ip` uses lowercase
 of at least two zero groups. A nonzero scope is emitted as decimal. The returned string
 borrows `dst`; insufficient destination space fails without allocation.
 
+The blocking transport functions are thin portable ownership and error-mapping wrappers
+over `e.os` sockets. `tcp_listen` and `udp_bind` open and bind the requested address;
+failure closes the new socket. `tcp_accept` reports the peer endpoint. `reader` maps an
+orderly zero-byte stream receive to `io.End`; `writer` retries nothing and leaves partial
+write handling to `io.write_all`. `resolve(Family.Any)` returns IPv4 answers followed by
+IPv6 answers, with the caller's port attached, and keeps at most the platform fence's
+bounded result set. No function silently enables nonblocking mode.
+
 
 Controlled operations use e.cancel and preserve byte counts on failure. DNS may
 require bounded worker isolation; completion is not acknowledged while caller-owned

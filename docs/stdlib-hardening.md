@@ -269,6 +269,14 @@ storage and applies lowercase, first-longest RFC 5952 zero compression. Cross-ho
 pin canonical ties, mapped input, maximum scope, arithmetic-overflow inputs and a short
 destination. DNS, sockets and controlled I/O remain for the following slices.
 
+D592 maps those values onto the delivered `e.os` socket fence. Resolution, TCP
+connect/listen/accept, UDP bind/send/receive, connected transfers, shutdown, affine close
+and `e.io` adapters now share one portable error mapper; a failed constructor closes its
+socket before returning. The loopback fixture uses host-selected ports for real TCP traffic
+in both directions and a real UDP datagram, observes stream EOF through the reader adapter,
+checks peer endpoints and forces an `AddressInUse` conflict. Controlled deadline and
+cancellation variants remain the final four `e.net` declarations.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

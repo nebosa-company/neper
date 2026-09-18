@@ -12083,3 +12083,20 @@ pins zero-run ties, all-zero and loopback forms, mapped input, the largest u32 s
 overlong decimal/hex/scope inputs and malformed compression. Keeping this slice pure makes
 its representation stable before D592 maps it to the already-delivered `e.os` socket
 address and transfer fence.
+
+## D592 -- `e.net` is the portable owner of blocking sockets
+
+The uncontrolled transport surface now delegates to `e.os` without exposing its larger
+error vocabulary or raw address layout. Resolution attaches the caller's port and, for
+`Family.Any`, appends IPv4 answers before IPv6 answers. TCP connect/listen/accept, UDP bind,
+connected and datagram transfers, shutdown and affine close translate between `Endpoint`
+and `os.SocketAddress`. Every constructor closes its new socket if bind, listen or connect
+fails; no wrapper retries partial I/O or changes blocking mode.
+
+The `e.io` adapters borrow a socket pointer. Their writer reports the exact host count so
+`io.write_all` owns retry policy, while the reader translates an orderly zero-byte stream
+receive to `io.End`. The fixture uses only host-selected loopback ports, exchanges real TCP
+bytes through those adapters, observes half-close EOF, sends a real UDP datagram with its
+source endpoint and binds the live TCP endpoint again to pin portable `AddressInUse` error
+mapping. The four controlled operations stay for D593, rather than claiming cancellation
+around a blocking call.

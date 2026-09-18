@@ -1204,8 +1204,8 @@ csv_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$csv_written" = 'executable written' ]
 chmod +x "$test_build/fmt-csv-selfhost"
 (cd "$fs_scratch" && "$test_build/fmt-csv-selfhost")
-# `e.net` address values are host-independent: strict IPv4/IPv6 parsing, canonical
-# formatting, numeric scopes, overflow refusal and caller-buffer bounds.
+# `e.net` covers strict/canonical IP values plus real loopback TCP/UDP transport,
+# portable conflict mapping, stream adapters and affine cleanup.
 net_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net/src/main.e" "$repo" x64 linux "$test_build/net-selfhost")
 [ "$net_written" = 'executable written' ]
 chmod +x "$test_build/net-selfhost"
