@@ -12748,3 +12748,11 @@ Full-suite validation found that D641's structured `tls` object was not yet admi
 by the closed `info` record schema. The v1 schema now requires and types every emitted
 TLS profile field, including its arrays, limits and entropy minimum, so consumers can
 validate the release contract instead of treating it as unstructured metadata.
+
+## D643 -- TLS integration workers name their scratch-stack requirement
+
+The Linux full suite exposed the TLS fixture's X.509 and record scratch frames
+exceeding `e.thread`'s generic 1 MiB default during the server handshake. Its three
+integration workers now request 8 MiB explicitly. This changes only the test harness:
+application stacks remain caller policy, while the TLS protocol's heap state and
+16 KiB record bounds are unchanged.

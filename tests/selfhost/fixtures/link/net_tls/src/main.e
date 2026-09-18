@@ -56,7 +56,7 @@ fn serve(job: *ServerJob) {
 
 fn live_handshake(a: *mem.Arena, server_read: *os.File, client_write: *os.File, client_read: *os.File, server_write: *os.File, server_config: tls.ServerConfig, client_config: tls.ClientConfig, client_selected: *str, server_selected: *str) -> err {
     var server_job = ServerJob { reading: server_read, writing: server_write, config: server_config, selected: "", failure: ok }
-    let (server_thread, thread_error) = os.thread_create[ServerJob](serve, &server_job, 1048576usize)
+    let (server_thread, thread_error) = os.thread_create[ServerJob](serve, &server_job, 8388608usize)
     if thread_error != ok { ret thread_error }
     let client_source = io.file_reader(client_read)
     let client_sink = io.file_writer(client_write)
@@ -286,7 +286,7 @@ fn main(a: *mem.Arena) -> err {
     let (bound, bound_error) = os.socket_local_address(https_server.listener)
     if bound_error != ok { os.exit(33i32) }
     endpoint.port = bound.port
-    let (https_thread, https_thread_error) = thread.spawn[HttpServerJob](serve_https, &https_server, 0usize)
+    let (https_thread, https_thread_error) = thread.spawn[HttpServerJob](serve_https, &https_server, 8388608usize)
     if https_thread_error != ok { os.exit(34i32) }
     var request: http.Request = zero
     request.method = .Get
@@ -307,7 +307,7 @@ fn main(a: *mem.Arena) -> err {
     }
     https_server.config = tls.ServerConfig { certificate_chain: leaf_der, private_key: leaf_pkcs8, alpn: client_protocols[0..], entropy: stream_server_entropy[0..] }
     https_server.failed = false
-    let (stream_thread, stream_thread_error) = thread.spawn[HttpServerJob](serve_https, &https_server, 0usize)
+    let (stream_thread, stream_thread_error) = thread.spawn[HttpServerJob](serve_https, &https_server, 8388608usize)
     if stream_thread_error != ok { os.exit(37i32) }
     let stream_client_config = tls.ClientConfig { server_name: "example.com", trust_roots: mid_der, alpn: client_protocols[0..], entropy: stream_client_entropy[0..], now: time.Timestamp { nanos: 1780272000000000000i64 } }
     var no_control: cancel.Control = zero
