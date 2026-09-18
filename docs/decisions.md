@@ -12568,3 +12568,16 @@ Like `meta.get`, it reports E-SAFETY-0005 with the compile-time field name.
 The focused fixture binds a zero `File` slot only to make the attempted generic
 store well typed; the error is attached to `Box.file` before argument checking and
 is identical on both hosts.
+
+## D628 -- Typed codecs inherit the reflective resource boundary
+
+Typed format encoders and decoders use a shared `meta.fields` shape. Every delivered
+`e.fmt.*` field walk now rejects an affine field before its body is instantiated:
+an encode instance cannot copy a resource out, and a decode instance cannot evade
+the rule by taking an unsupported-kind branch before `meta.set`. Both stop with
+E-SAFETY-0005 naming the aggregate field before runtime serialization code exists.
+
+Focused JSON encode and decode fixtures exercise the two directions through a real
+codec on both hosts. Because every delivered typed codec uses the same reflection
+sequence, one shared gate closes the format-codec part of H01 without duplicating
+the check across each wire format.

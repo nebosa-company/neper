@@ -3677,7 +3677,11 @@ representation is not a reflective serialization surface. Format-codec rejection
 of an affine field in an otherwise plain aggregate begins at `meta.get`: returning
 that field by value would copy it, so the instantiated access is E-SAFETY-0005 and
 names the field. `meta.set` rejects the same field type because its ordinary value
-parameter would copy the supplied identity into the aggregate.
+parameter would copy the supplied identity into the aggregate. Typed format codecs
+are built on `meta.fields`; every delivered `e.fmt.*` field walk rejects an affine
+field before its body is instantiated, so both encode and decode report the same
+E-SAFETY-0005 rather than serializing handle bits or silently treating the field as
+an unsupported scalar.
 
 ### Debug fills
 

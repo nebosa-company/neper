@@ -384,8 +384,7 @@ follow-up. Cold wall, warm wall and image size are within their budgets
 (warm p50 96 ms against 82 ms is +17% at eight workers, +0% single-worker).
 
 **Remaining limitations** (each an obligation, none closed by this record):
-format codecs are not yet stopped at an affine field of an otherwise plain
-aggregate (E-SAFETY-0005's last case); D616-D617 track comptime-indexed slots of fixed arrays, but
+D616-D617 track comptime-indexed slots of fixed arrays, but
 dynamic indices and slices of resources are not tracked as wholes; the generic containers take their element by `own` (D353), but none can hold an
 obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
@@ -453,3 +452,9 @@ the instance reports E-SAFETY-0005 with the field binding's name.
 **D627 follow-up.** `meta.set[FIELD, T]` applies the same affine-field gate. Its
 ordinary value parameter cannot transfer ownership, so storing that value would
 copy the resource identity; the instance reports E-SAFETY-0005 with the field name.
+
+**D628 follow-up.** Every delivered `e.fmt.*` loop over `meta.fields` refuses an
+affine field before instantiating its body. Encode and decode therefore fail at the
+same boundary with E-SAFETY-0005 naming the field, including a decoder whose
+unsupported-kind branch would otherwise return at runtime without calling
+`meta.set`.

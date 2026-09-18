@@ -11261,6 +11261,10 @@ fn check_unrolled_for(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: 
     while field_at < aggregate.field_count {
         let (argument, present) = meta_sequence_binding(c, sequence, field_at)
         if present {
+            if c.resources_on && module_is_format_codec(c, module_index) && affine_kind(c, argument.ty, 0usize) != 0u8 {
+                record_failure(c, module_index, node, .ResourceCopy, argument.text, "a format codec")
+                ret ResourceViolation
+            }
             let depth = c.comptime_binding_count
             if name.len != 0usize { try push_comptime_binding(c, name, argument) }
             let checkpoint = c.local_count
@@ -12991,6 +12995,12 @@ fn module_is_mem(c: *Checker, module_index: usize) -> bool {
 fn module_is_thread(c: *Checker, module_index: usize) -> bool {
     if !c.has_graph || module_index >= c.graph.count { ret false }
     ret same(c.graph.modules[module_index].name, "e.thread")
+}
+
+fn module_is_format_codec(c: *Checker, module_index: usize) -> bool {
+    if !c.has_graph || module_index >= c.graph.count { ret false }
+    let name = c.graph.modules[module_index].name
+    ret name.len > 6usize && same(name[0usize..6usize], "e.fmt.")
 }
 
 // Why a moved value cannot be used: it was moved, its region was reset, or the
