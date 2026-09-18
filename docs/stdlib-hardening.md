@@ -355,9 +355,11 @@ missing algorithms by disabling verification. Native trust/time/entropy remain
 explicit inputs. Cryptographic implementation/review stays a later release gate.
 
 D600 starts `e.net.tls` with arena-owned client/server stream state over explicit caller
-I/O and configuration. The constructors perform no I/O, `protocol` reports only TLS 1.3
-and ALPN remains empty before negotiation. The slice deliberately exposes no plaintext
-reader/writer fallback while the handshake and record layers remain undelivered.
+I/O and configuration. D631-D641 complete the narrow TLS 1.3 profile: AES-128-GCM with
+SHA-256, X25519, Ed25519 X.509/PKCS#8 DER, authenticated stream/close adapters,
+controlled handshakes and full/streaming HTTP clients. The exact limits and algorithms
+are emitted by `neper info`; RSA, ECDSA, SHA-384, resumption, 0-RTT and client
+authentication remain unsupported rather than weakening verification.
 
 ## SL09 — fallible iteration, patterns and test support
 

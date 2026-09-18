@@ -12722,3 +12722,22 @@ semantics as the plain helper; redirects, replay and pooling remain absent.
 
 The focused fixture runs an HTTP/1.1 server over the delivered TLS server stack on a
 real loopback socket and requires a verified `secure` response body.
+
+## D641 -- Streaming HTTP over TLS keeps one controlled owner
+
+`request_tls_stream` connects with the caller's `cancel.Control`, performs the TLS
+handshake through the same control, writes the request over authenticated records and
+returns the existing incremental `ResponseStream`. Its decoder borrows the TLS reader;
+the stream state retains both TLS and socket ownership, so `response_close` sends one
+close alert and then closes the network connection on every early or complete path.
+Body limits, HEAD, CONNECT, chunking and close-delimited responses keep the plain
+stream contract.
+
+The loopback fixture opens a second connection with fresh entropy, reads the chunked
+`secure` body in two-byte pieces, and checks idempotent stream closure.
+
+The same delivery adds a structured `tls` capability to `neper info`, naming the
+version, cipher suite, X25519, Ed25519, concatenated-DER certificate profile, 16 KiB
+certificate-message limit, depth-eight validation, HKDF-SHA256 schedule and 64-byte
+fresh-entropy minimum. Unsupported profiles remain absent instead of being inferred
+from lower-level crypto primitives.

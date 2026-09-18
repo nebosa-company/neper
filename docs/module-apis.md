@@ -2831,10 +2831,15 @@ Do not silently weaken certificate/hostname verification to improve connectivity
 Entropy seeds require sufficient fresh caller entropy per independent handshake;
 copied/reused config bytes are not permission to repeat ephemeral randomness.
 
-The delivered constructor slice retains caller-owned I/O and configuration in the
-supplied arena, reports the pinned TLS 1.3 protocol and leaves ALPN empty until a
-successful handshake. It does not pass plaintext through the not-yet-delivered record
-path.
+The delivered profile is TLS 1.3 with `TLS_AES_128_GCM_SHA256`, X25519 key exchange,
+Ed25519 signatures and Ed25519 X.509 chains supplied as concatenated DER (leaf first
+for a server, roots for a client). PKCS#8 private keys use RFC 8410. The SHA-256 key
+schedule composes `e.crypto.kdf`/`e.crypto.mac`; each independent handshake requires
+at least 64 fresh caller bytes, split into its random and ephemeral secret. Certificate
+messages are capped at 16 KiB and verified to depth eight. RSA, ECDSA, SHA-384 suites,
+client certificates, PSK, resumption, 0-RTT and post-handshake authentication are
+unsupported. Constructors remain inert; `reader` and `writer` expose no plaintext
+until `handshake` succeeds, and `close` exchanges an authenticated close notification.
 
 ### `e.net.http`
 
@@ -2887,8 +2892,8 @@ The delivered plain `request` opens one TCP connection, writes one request, read
 bounded full response and closes the connection on every path. HEAD retains response
 headers but consumes no body; CONNECT returns Unsupported because its successful result
 is a tunnel rather than a full HTTP response. `request_stream` provides the controlled
-incremental form over plain TCP. `request_tls` and `request_tls_stream` remain planned
-until their transport is delivered.
+incremental form over plain TCP. `request_tls` and `request_tls_stream` provide the
+matching verified TLS forms with caller-supplied trust, time, entropy and control.
 
 ResponseStream owns the connection; headers borrow its arena and response_read
 incrementally decodes framing without buffering a complete body. Limits.body_bytes

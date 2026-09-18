@@ -296,6 +296,37 @@ fn main(a: *mem.Arena) -> err {
     let (response, request_error) = http.request_tls(a, endpoint, https_client_config, &request, http_limits())
     let https_join_error = thread.join(https_thread)
     if https_join_error != ok || https_server.failed || request_error != ok || response.status != 200u16 || !same_bytes(response.body, "secure") { os.exit(35i32) }
+
+    var stream_server_entropy: [64]u8 = zero
+    var stream_client_entropy: [64]u8 = zero
+    entropy_at = 0usize
+    while entropy_at < 64usize {
+        stream_server_entropy[entropy_at] = u8(16usize + entropy_at)
+        stream_client_entropy[entropy_at] = u8(128usize + entropy_at)
+        entropy_at += 1usize
+    }
+    https_server.config = tls.ServerConfig { certificate_chain: leaf_der, private_key: leaf_pkcs8, alpn: client_protocols[0..], entropy: stream_server_entropy[0..] }
+    https_server.failed = false
+    let (stream_thread, stream_thread_error) = thread.spawn[HttpServerJob](serve_https, &https_server, 0usize)
+    if stream_thread_error != ok { os.exit(37i32) }
+    let stream_client_config = tls.ClientConfig { server_name: "example.com", trust_roots: mid_der, alpn: client_protocols[0..], entropy: stream_client_entropy[0..], now: time.Timestamp { nanos: 1780272000000000000i64 } }
+    var no_control: cancel.Control = zero
+    let (response_stream0, response_stream_error) = http.request_tls_stream(a, endpoint, stream_client_config, &request, http_limits(), no_control)
+    if response_stream_error != ok { os.exit(38i32) }
+    var response_stream = response_stream0
+    if http.response_head(&response_stream).status != 200u16 { os.exit(39i32) }
+    var streamed_body: [6]u8 = zero
+    var streamed_at = 0usize
+    while streamed_at < streamed_body.len {
+        var end = streamed_at + 2usize
+        if end > streamed_body.len { end = streamed_body.len }
+        let (count, stream_read_error) = http.response_read(&response_stream, streamed_body[streamed_at..end])
+        if stream_read_error != ok || count == 0usize { os.exit(40i32) }
+        streamed_at += count
+    }
+    if !same_bytes(streamed_body[0..], "secure") || http.response_close(&response_stream) != ok || http.response_close(&response_stream) != ok { os.exit(41i32) }
+    let stream_join_error = thread.join(stream_thread)
+    if stream_join_error != ok || https_server.failed { os.exit(42i32) }
     if net.close(https_server.listener) != ok { os.exit(36i32) }
     ret ok
 }

@@ -233,7 +233,7 @@ fn info_json(a: *mem.Arena, host: str) -> err {
     try quoted(&out, host)
     // ponytail: the emitter selects nothing above SSE2 and SIMD lowers as lane loops (D148),
     // so x64-v1 is the one level this build honours; list the others when `--cpu` exists.
-    try text(&out, ",\"build_targets\":[\"x64-linux\",\"x64-windows\"],\"cpu_levels\":[\"x64-v1\"],\"features\":[]}")
+    try text(&out, ",\"build_targets\":[\"x64-linux\",\"x64-windows\"],\"cpu_levels\":[\"x64-v1\"],\"features\":[\"tls\"],\"tls\":{\"versions\":[\"1.3\"],\"cipher_suites\":[\"TLS_AES_128_GCM_SHA256\"],\"key_exchange\":[\"X25519\"],\"signature_algorithms\":[\"Ed25519\"],\"certificate_format\":\"X.509 concatenated DER\",\"certificate_message_limit\":16384,\"chain_depth\":8,\"key_schedule\":\"HKDF-SHA256\",\"entropy_minimum_bytes_per_handshake\":64}}")
     try flush(&out)
     try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{}}")
     ret flush(&out)

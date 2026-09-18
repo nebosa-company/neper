@@ -1,6 +1,6 @@
 // Bounded HTTP/1.0 and HTTP/1.1 message parsing/writing plus the event-stream body
-// format. Plain full-body and controlled streaming clients each own one connection;
-// TLS remains planned.
+// format. Plain and TLS full-body/controlled streaming clients each own one
+// connection.
 
 use e.io
 use e.cancel
@@ -67,6 +67,8 @@ type ResponseMeta = struct {
 
 type ResponseStreamState = struct {
     network: NetworkIo,
+    secure: tls.Stream,
+    tls_active: bool,
     decoder: Reader,
     head: ResponseHead,
     limits: Limits,
@@ -632,6 +634,7 @@ fn request_stream(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, li
     state.close_delimited = false
     state.ended = false
     state.closed = false
+    state.tls_active = false
 
     var sink = io.Writer { ctx: mem.cast[*void](&state.network), write: network_write, flush: network_flush }
     var encoder = writer(sink)
@@ -663,6 +666,92 @@ fn request_stream(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, li
     } else if meta.has_length {
         if meta.length > limits.body_bytes {
             let unused = net.close(state.network.socket)
+            mem.reset(a, mark)
+            ret (out, TooLarge)
+        }
+        state.remaining = meta.length
+        state.ended = meta.length == 0usize
+    } else {
+        state.close_delimited = true
+    }
+    out.state = mem.cast[*void](state)
+    ret (out, ok)
+}
+
+fn request_tls_stream(a: *mem.Arena, endpoint: net.Endpoint, config: tls.ClientConfig, req: *const Request, limits: Limits, control: cancel.Control) -> (ResponseStream, err) {
+    var out: ResponseStream = zero
+    if req.method == .Connect { ret (out, Unsupported) }
+    let (opened, connect_error) = net.tcp_connect_with_control(endpoint, control)
+    if connect_error != ok { ret (out, connect_error) }
+    let mark = mem.mark(a)
+    let (storage, storage_error) = mem.alloc[ResponseStreamState](a, 1usize)
+    if storage_error != ok {
+        let unused = net.close(opened)
+        ret (out, storage_error)
+    }
+    let state = &storage[0usize]
+    state.network.socket = opened
+    state.network.control = control
+    state.limits = limits
+    state.remaining = 0usize
+    state.total = 0usize
+    state.chunk_remaining = 0usize
+    state.chunked = false
+    state.chunk_needs_crlf = false
+    state.close_delimited = false
+    state.ended = false
+    state.closed = false
+    state.tls_active = true
+    let raw_source = io.Reader { ctx: mem.cast[*void](&state.network), read: network_read }
+    let raw_sink = io.Writer { ctx: mem.cast[*void](&state.network), write: network_write, flush: network_flush }
+    let (secure0, create_error) = tls.client(a, raw_source, raw_sink, config)
+    if create_error != ok {
+        let unused = net.close(state.network.socket)
+        mem.reset(a, mark)
+        ret (out, create_error)
+    }
+    state.secure = secure0
+    let handshake_error = tls.handshake_with_control(&state.secure, control)
+    if handshake_error != ok {
+        let unused_tls = tls.close(&state.secure)
+        let unused_net = net.close(state.network.socket)
+        mem.reset(a, mark)
+        ret (out, handshake_error)
+    }
+    var sink = tls.writer(&state.secure)
+    var encoder = writer(sink)
+    let write_error = write_request(&encoder, req)
+    if write_error != ok {
+        let unused_tls = tls.close(&state.secure)
+        let unused_net = net.close(state.network.socket)
+        mem.reset(a, mark)
+        ret (out, write_error)
+    }
+    let source = tls.reader(&state.secure)
+    let (created, reader_error) = reader(a, source, limits)
+    if reader_error != ok {
+        let unused_tls = tls.close(&state.secure)
+        let unused_net = net.close(state.network.socket)
+        mem.reset(a, mark)
+        ret (out, reader_error)
+    }
+    state.decoder = created
+    let (meta, meta_error) = read_response_meta(a, &state.decoder)
+    if meta_error != ok {
+        let unused_tls = tls.close(&state.secure)
+        let unused_net = net.close(state.network.socket)
+        mem.reset(a, mark)
+        ret (out, meta_error)
+    }
+    state.head = meta.head
+    if req.method == .Head || no_response_body(meta.head.status) {
+        state.ended = true
+    } else if meta.chunked {
+        state.chunked = true
+    } else if meta.has_length {
+        if meta.length > limits.body_bytes {
+            let unused_tls = tls.close(&state.secure)
+            let unused_net = net.close(state.network.socket)
             mem.reset(a, mark)
             ret (out, TooLarge)
         }
@@ -776,7 +865,11 @@ fn response_close(stream: *ResponseStream) -> err {
     if state.closed { ret ok }
     state.closed = true
     state.ended = true
-    ret net.close(state.network.socket)
+    var tls_error: err = ok
+    if state.tls_active { tls_error = tls.close(&state.secure) }
+    let network_error = net.close(state.network.socket)
+    if tls_error != ok { ret tls_error }
+    ret network_error
 }
 
 fn has_header(headers: []const Header, name: str) -> bool {
