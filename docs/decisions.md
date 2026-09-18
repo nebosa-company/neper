@@ -12276,3 +12276,15 @@ without a gap.
 
 The focused fixture pins two-voice half-gain mixing, terminal voice state, a three-frame
 loop over a two-frame source and positive saturation on both hosts.
+
+## D607 -- Resampling is an explicit deterministic nearest-neighbor step
+
+`resample` preserves channel count and sample encoding while changing rate through an
+integer phase accumulator. Each output frame copies the source frame covering that point
+in time, so there is no floating-point phase drift and no hidden filter state. Output
+length is the floor of the exact duration ratio; overflow and zero rates are rejected
+before allocation, and a late sample failure restores the caller arena checkpoint.
+
+The focused fixture pins 2 Hz to 4 Hz duplication, 2 Hz to 1 Hz selection and zero-rate
+rejection on both hosts. Higher-quality filtering can be layered later without changing
+the frozen caller-owned API.

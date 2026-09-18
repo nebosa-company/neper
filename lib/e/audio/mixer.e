@@ -118,3 +118,47 @@ fn mix_into(m: *Mixer, out: *audio.Frames) -> (usize, err) {
     }
     ret (out.count, ok)
 }
+
+fn resample(a: *mem.Arena, src: audio.Frames, rate: u32) -> (audio.Frames, err) {
+    if rate == 0u32 || src.format.rate == 0u32 || src.format.channels == 0u8 || src.count > audio.frames_in(src.format, src.bytes.len) { ret (zero, Unsupported) }
+    let quotient = src.count / usize(src.format.rate)
+    let remainder = src.count % usize(src.format.rate)
+    if quotient != 0usize && usize(rate) > 18446744073709551615usize / quotient { ret (zero, mem.Exhausted) }
+    var count = quotient * usize(rate)
+    let tail = (remainder * usize(rate)) / usize(src.format.rate)
+    if count > 18446744073709551615usize - tail { ret (zero, mem.Exhausted) }
+    count += tail
+    let format = audio.Format { rate: rate, channels: src.format.channels, sample: src.format.sample }
+    let width = audio.frame_bytes(format)
+    if count != 0usize && width > 18446744073709551615usize / count { ret (zero, mem.Exhausted) }
+    let checkpoint = a.off
+    let (bytes, allocation_error) = mem.alloc[u8](a, count * width)
+    if allocation_error != ok { ret (zero, allocation_error) }
+    var out = audio.Frames { bytes: bytes, format: format, count: count }
+    var source_frame = 0usize
+    var phase = 0u64
+    var frame = 0usize
+    while frame < count {
+        var channel = 0u8
+        while channel < format.channels {
+            let (sample, sample_error) = audio.sample_i32(src, source_frame, channel)
+            if sample_error != ok {
+                a.off = checkpoint
+                ret (zero, sample_error)
+            }
+            let write_error = audio.set_sample_i32(&out, frame, channel, sample)
+            if write_error != ok {
+                a.off = checkpoint
+                ret (zero, write_error)
+            }
+            channel += 1u8
+        }
+        phase += u64(src.format.rate)
+        while phase >= u64(rate) {
+            phase -= u64(rate)
+            source_frame += 1usize
+        }
+        frame += 1usize
+    }
+    ret (out, ok)
+}

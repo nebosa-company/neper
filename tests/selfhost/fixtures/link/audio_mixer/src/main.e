@@ -68,5 +68,21 @@ fn main(a: *mem.Arena) -> err {
     let (_, clipped_mix_error) = mixer.mix_into(&loud, &clipped)
     let (clipped_sample, clipped_sample_error) = audio.sample_i32(clipped, 0usize, 0u8)
     if loud_source_error != ok || loud_one_error != ok || loud_two_error != ok || clipped_view_error != ok || clipped_mix_error != ok || clipped_sample_error != ok || clipped_sample != 2147418112i32 { os.exit(14i32) }
+
+    let slow_format = audio.Format { rate: 2u32, channels: 1u8, sample: .I16 }
+    var slow_bytes: [4]u8 = [4]u8{ 232, 3, 24, 252 }
+    let (slow, slow_error) = audio.view(slow_bytes[0..], slow_format)
+    let (fast, fast_error) = mixer.resample(a, slow, 4u32)
+    if slow_error != ok || fast_error != ok || fast.count != 4usize || fast.format.rate != 4u32 { os.exit(15i32) }
+    let (fast_zero, fast_zero_error) = audio.sample_i32(fast, 0usize, 0u8)
+    let (fast_one, fast_one_error) = audio.sample_i32(fast, 1usize, 0u8)
+    let (fast_two, fast_two_error) = audio.sample_i32(fast, 2usize, 0u8)
+    let (fast_three, fast_three_error) = audio.sample_i32(fast, 3usize, 0u8)
+    if fast_zero_error != ok || fast_one_error != ok || fast_two_error != ok || fast_three_error != ok || fast_zero != 65536000i32 || fast_one != 65536000i32 || fast_two != -65536000i32 || fast_three != -65536000i32 { os.exit(16i32) }
+    let (down, down_error) = mixer.resample(a, slow, 1u32)
+    let (down_zero, down_zero_error) = audio.sample_i32(down, 0usize, 0u8)
+    if down_error != ok || down.count != 1usize || down_zero_error != ok || down_zero != 65536000i32 { os.exit(17i32) }
+    let (_, zero_rate_error) = mixer.resample(a, slow, 0u32)
+    if zero_rate_error != mixer.Unsupported { os.exit(18i32) }
     ret ok
 }
