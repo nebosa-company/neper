@@ -12868,3 +12868,17 @@ the caller observes the write made through the companion pointer.
 This pins one semantic result across inlining on and off rather than treating the
 optimizer as a separate ABI. It also verifies that the imported declaration and its
 artifact body agree on the snapshot contract.
+
+## D654 -- Format 11 closes the by-value snapshot ABI
+
+H05 is closed. Its ordinary shallow-snapshot semantics are executable across direct
+and cross-module calls, generic aggregates, hidden multiple returns, imported writes,
+large returns and debug/release inlining. `m25-h05-value-semantics.md` records the
+selected design, alternatives, normative rule, implementation, measurements and
+remaining optimization opportunity.
+
+The compatibility identity is `.em` format 11. A format-10 artifact belongs to the
+period in which the hidden-reference no-write contract could still be assumed, so the
+compiler rejects it before reading sections or verifying its checksum. Both self-host
+suites mutate a current artifact's version back to 10 and require
+`UnsupportedVersion`.

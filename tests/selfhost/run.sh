@@ -4054,7 +4054,7 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '10' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '11' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '9' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
@@ -4097,6 +4097,14 @@ all_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost
 cmp "$module_artifact_path" "$test_build/main.x64-linux.em"
 validated_artifact=$($test_build/neper-self validate-em "$test_build/main.x64-linux.em")
 [ "$validated_artifact" = 'compiled module valid' ]
+legacy_value_abi_artifact="$test_build/main.value-abi-v0.x64-linux.em"
+cp "$test_build/main.x64-linux.em" "$legacy_value_abi_artifact"
+printf '\012\000' | dd of="$legacy_value_abi_artifact" bs=1 seek=4 conv=notrunc status=none
+if legacy_value_abi_output=$($test_build/neper-self validate-em "$legacy_value_abi_artifact" 2>&1); then
+    printf '%s\n' 'pre-snapshot value ABI artifact unexpectedly validated' >&2
+    exit 1
+fi
+case "$legacy_value_abi_output" in *'UnsupportedVersion'*) ;; *) printf '%s\n' 'pre-snapshot value ABI artifact returned the wrong error' >&2; exit 1 ;; esac
 artifact_executable_path="$test_build/modules-from-artifacts"
 artifact_executable_written=$($test_build/neper-self link-em "$artifact_executable_path" "$test_build/main.x64-linux.em" "$test_build/dep.x64-linux.em")
 [ "$artifact_executable_written" = 'artifact executable written' ]

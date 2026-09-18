@@ -4095,7 +4095,7 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 10 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 11 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 9) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'
@@ -4141,6 +4141,14 @@ if (-not (Test-Path -LiteralPath $rootModuleArtifactPath) -or -not (Test-Path -L
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $rootModuleArtifactPath).Hash -ne $moduleArtifactHash) { throw 'root artifact changed when emitted with its dependency set' }
 $validatedArtifact = & $compiler validate-em $rootModuleArtifactPath
 if ($LASTEXITCODE -ne 0 -or $validatedArtifact -ne 'compiled module valid') { throw 'packed compiled-module validation failed' }
+$legacyValueAbiArtifact = Join-Path $testBuild 'main.value-abi-v0.x64-windows.em'
+Copy-Item -LiteralPath $rootModuleArtifactPath -Destination $legacyValueAbiArtifact -Force
+$legacyValueAbiBytes = [IO.File]::ReadAllBytes($legacyValueAbiArtifact)
+$legacyValueAbiBytes[4] = 10
+$legacyValueAbiBytes[5] = 0
+[IO.File]::WriteAllBytes($legacyValueAbiArtifact, $legacyValueAbiBytes)
+$legacyValueAbiOutput = & $compiler validate-em $legacyValueAbiArtifact 2>&1
+if ($LASTEXITCODE -ne 1 -or ($legacyValueAbiOutput -join "`n") -notmatch 'UnsupportedVersion') { throw 'the pre-snapshot value ABI artifact was not rejected' }
 $artifactExecutablePath = Join-Path $testBuild 'modules-from-artifacts.exe'
 $artifactExecutableWritten = & $compiler link-em $artifactExecutablePath $rootModuleArtifactPath $dependencyModuleArtifactPath
 if ($LASTEXITCODE -ne 0 -or $artifactExecutableWritten -ne 'artifact executable written') { throw 'PE executable link from compiled modules failed' }

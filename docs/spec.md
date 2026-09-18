@@ -3844,6 +3844,11 @@ module rather than being misparsed. The compiler validates all counts, offsets,
 lengths and UTF-8 before allocating from them. A version mismatch is a cache miss,
 never a source diagnostic; the module is rebuilt.
 
+Format **11** is the compatibility identity for H05's ordinary by-value snapshot ABI
+(D654). A compiler that implements the former hidden-reference no-write contract must
+not link its format-10 artifacts with snapshot-semantics code; format mismatch rejects
+the artifact before its sections or checksum are consumed.
+
 Carrying **both** NIR and machine code is deliberate: NIR enables cross-module
 inlining and re-emission for a different CPU feature level within the same target
 triple and data layout; it does not retarget a target-dependent `.em` to another OS,
