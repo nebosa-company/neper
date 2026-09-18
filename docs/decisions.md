@@ -12210,3 +12210,12 @@ perform no I/O, read no ambient trust, time or entropy and expose no plaintext f
 `protocol` reports the only frozen version, TLS 1.3; `negotiated_alpn` is empty until a
 later handshake slice selects a protocol. The cross-host fixture proves construction is
 silent and both roles expose the same pre-handshake metadata.
+
+## D601 -- Natural collation compares digit magnitude without parsing integers
+
+`e.text.collate` delivers its exact three-declaration surface. `codepoint_cmp` follows
+the shared lossy UTF-8 iterator, so malformed bytes make deterministic forward progress
+as U+FFFD. `natural_cmp` recognizes ASCII digit runs, strips leading zeroes for magnitude,
+compares significant length and digits, then uses the shorter original run as the stable
+tie-break. It therefore has no numeric overflow ceiling. Case-insensitive natural order
+folds ASCII only; locale and multi-scalar Unicode folding remain in `e.text.locale`.

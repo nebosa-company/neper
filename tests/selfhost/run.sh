@@ -1227,6 +1227,11 @@ tls_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$tls_written" = 'executable written' ]
 chmod +x "$test_build/net-tls-selfhost"
 "$test_build/net-tls-selfhost"
+# `e.text.collate` pins code-point and overflow-free natural ordering.
+collate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_collate/src/main.e" "$repo" x64 linux "$test_build/text-collate-selfhost")
+[ "$collate_written" = 'executable written' ]
+chmod +x "$test_build/text-collate-selfhost"
+"$test_build/text-collate-selfhost"
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

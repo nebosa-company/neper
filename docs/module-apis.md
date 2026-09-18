@@ -1089,7 +1089,10 @@ fn natural_cmp(a: str, b: str, options: Options) -> i32
 ```
 
 Locale-aware collation is exposed by `e.text.locale`; this module remains the
-locale-independent Unicode collation mechanism beneath it.
+locale-independent Unicode collation mechanism beneath it. The delivered natural
+comparison recognizes ASCII decimal runs, compares their magnitude without fixed-width
+conversion, and applies ASCII case folding when case sensitivity is disabled. Full
+locale and multi-scalar case folding remain owned by `e.text.locale`.
 
 ### `e.text.locale`
 

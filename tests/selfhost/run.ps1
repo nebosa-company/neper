@@ -1313,6 +1313,12 @@ $tlsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\lin
 if ($LASTEXITCODE -ne 0 -or $tlsWritten -ne 'executable written') { throw 'e.net.tls emission failed' }
 & $tlsPath
 if ($LASTEXITCODE -ne 0) { throw "an e.net.tls constructor or metadata query answered wrongly: exit $LASTEXITCODE" }
+# `e.text.collate` pins code-point and overflow-free natural ordering.
+$collatePath = Join-Path $testBuild 'text-collate-selfhost.exe'
+$collateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_collate\src\main.e') $repo 'x64' 'windows' $collatePath
+if ($LASTEXITCODE -ne 0 -or $collateWritten -ne 'executable written') { throw 'e.text.collate emission failed' }
+& $collatePath
+if ($LASTEXITCODE -ne 0) { throw "an e.text.collate comparison answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
