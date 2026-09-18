@@ -2829,19 +2829,20 @@ and tested against published protocol and malformed-peer vectors.
 The release contract must name its cipher suites, signature/certificate algorithms,
 key schedule and entropy requirements; reporting merely TLS 1.3 is insufficient.
 HKDF/HMAC come from reviewed e.crypto.kdf/e.crypto.mac surfaces. SHA-384-based suites
-cannot be advertised until SHA-384/HKDF-SHA384 exists. The current Ed25519-only public
-signature surface does not establish compatibility with typical RSA/ECDSA certificate
-chains; those profiles require explicit reviewed additions or remain unsupported.
+cannot be advertised until SHA-384/HKDF-SHA384 exists. Ed25519 and P-256/SHA-256 do
+not establish compatibility with RSA, P-384 or other public-Web certificate chains;
+those profiles require explicit reviewed additions or remain unsupported.
 Do not silently weaken certificate/hostname verification to improve connectivity.
 Entropy seeds require sufficient fresh caller entropy per independent handshake;
 copied/reused config bytes are not permission to repeat ephemeral randomness.
 
 The delivered profile is TLS 1.3 with `TLS_AES_128_GCM_SHA256`, X25519 key exchange,
-Ed25519 signatures and Ed25519 X.509 chains supplied as concatenated DER (leaf first
-for a server, roots for a client). PKCS#8 private keys use RFC 8410. The SHA-256 key
+Ed25519 plus ECDSA P-256/SHA-256 verification, and X.509 chains supplied as concatenated
+DER (leaf first for a server, roots for a client). Server private keys remain Ed25519
+PKCS#8 under RFC 8410. The SHA-256 key
 schedule composes `e.crypto.kdf`/`e.crypto.mac`; each independent handshake requires
 at least 64 fresh caller bytes, split into its random and ephemeral secret. Certificate
-messages are capped at 16 KiB and verified to depth eight. RSA, ECDSA, SHA-384 suites,
+messages are capped at 16 KiB and verified to depth eight. RSA, P-384, SHA-384 suites,
 client certificates, PSK, resumption, 0-RTT and post-handshake authentication are
 unsupported. Constructors remain inert; `reader` and `writer` expose no plaintext
 until `handshake` succeeds, and `close` exchanges an authenticated close notification.

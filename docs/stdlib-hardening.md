@@ -348,17 +348,17 @@ limitations and alias rules. Authentication failure must not publish unauthentic
 plaintext as a successful result. Test malformed tags and output bounds.
 
 TLS delivery names exact cipher suites, certificate/signature algorithms, entropy
-requirements and supported chains, not just a TLS version. Unsupported RSA/ECDSA or
+requirements and supported chains, not just a TLS version. Unsupported RSA/P-384 or
 SHA-384 profiles remain explicit until reviewed surfaces exist. Do not claim broad
-public-Web certificate interoperability from Ed25519 alone, and never work around
+public-Web certificate interoperability from the narrow set alone, and never work around
 missing algorithms by disabling verification. Native trust/time/entropy remain
 explicit inputs. Cryptographic implementation/review stays a later release gate.
 
 D600 starts `e.net.tls` with arena-owned client/server stream state over explicit caller
 I/O and configuration. D631-D641 complete the narrow TLS 1.3 profile: AES-128-GCM with
-SHA-256, X25519, Ed25519 X.509/PKCS#8 DER, authenticated stream/close adapters,
+SHA-256, X25519, Ed25519 plus P-256/SHA-256 verification, X.509/PKCS#8 DER, authenticated stream/close adapters,
 controlled handshakes and full/streaming HTTP clients. The exact limits and algorithms
-are emitted by `neper info`; RSA, ECDSA, SHA-384, resumption, 0-RTT and client
+are emitted by `neper info`; RSA, P-384, SHA-384, resumption, 0-RTT and client
 authentication remain unsupported rather than weakening verification.
 
 ## SL09 — fallible iteration, patterns and test support

@@ -12791,3 +12791,14 @@ unused SHA-384 or RSA suffix as a malformed certificate.
 
 A deterministic P-256 root and server leaf generated beside the existing Ed25519
 fixture pin parsing, self/leaf signatures, DNS/ServerAuth policy and chain building.
+
+## D647 -- TLS clients offer and verify ECDSA P-256/SHA-256
+
+ClientHello now offers `ecdsa_secp256r1_sha256` (0x0403) beside Ed25519, while the
+Ed25519-only server path still requires that clients offer its usable scheme.
+CertificateVerify parsing is length-driven and dispatches 0x0403 to D645 for a P-256
+leaf; algorithm/key mismatches remain protocol or authentication failures.
+
+The TLS fixture pins the emitted signature-scheme list and an independently generated
+P-256 CertificateVerify. `neper info` reports `ECDSA_P256_SHA256`; P-384/SHA-384,
+RSA and P-256 server private keys remain outside this profile.

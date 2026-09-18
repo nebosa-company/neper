@@ -11,6 +11,8 @@ use e.time
 use e.crypto.kdf as kdf
 use e.crypto.kx as kx
 use e.crypto.aead as aead
+use e.crypto.sign as sign
+use e.crypto.x509 as x509
 use e.cancel
 use e.thread
 
@@ -212,6 +214,14 @@ fn main(a: *mem.Arena) -> err {
     if client_hello_error != ok { os.exit(9i32) }
     let (hello_info, parse_client_error) = tls.parse_client_hello(client_hello[..client_hello_len], server_protocols[0..])
     if parse_client_error != ok || !same_bytes(hello_info.selected_alpn, "h2") { os.exit(10i32) }
+    let p256_offer = "\x00\x0d\x00\x06\x00\x04\x08\x07\x04\x03"
+    var offer_at = 0usize
+    var has_p256_offer = false
+    while offer_at + p256_offer.len <= client_hello_len {
+        if same_bytes(client_hello[offer_at..offer_at + p256_offer.len], p256_offer) { has_p256_offer = true }
+        offer_at += 1usize
+    }
+    if !has_p256_offer { os.exit(45i32) }
     var server_hello: [128]u8 = zero
     let (server_hello_len, server_secret, server_hello_error) = tls.build_server_hello(hello_server_config, server_hello[0..])
     if server_hello_error != ok || server_hello_len != 90usize { os.exit(11i32) }
@@ -257,6 +267,17 @@ fn main(a: *mem.Arena) -> err {
     if certificate_verify_error != ok || certificate_verify_len != 72usize || tls.verify_certificate_verify(certificate_set.leaf, transcript_hash, certificate_verify[0..]) != ok { os.exit(18i32) }
     certificate_verify[20] = certificate_verify[20] ^ 1u8
     if tls.verify_certificate_verify(certificate_set.leaf, transcript_hash, certificate_verify[0..]) != tls.InvalidCertificate { os.exit(19i32) }
+    let p256_public_bytes = "\x04\x60\xfe\xd4\xba\x25\x5a\x9d\x31\xc9\x61\xeb\x74\xc6\x35\x6d\x68\xc0\x49\xb8\x92\x3b\x61\xfa\x6c\xe6\x69\x62\x2e\x60\xf2\x9f\xb6\x79\x03\xfe\x10\x08\xb8\xbc\x99\xa4\x1a\xe9\xe9\x56\x28\xbc\x64\xf2\xf1\xb2\x0c\x2d\x7e\x9f\x51\x77\xa3\xc2\x94\xd4\x46\x22\x99"
+    var p256_public: sign.P256PublicKey = zero
+    var p256_at = 0usize
+    while p256_at < 65usize {
+        p256_public.bytes[p256_at] = p256_public_bytes[p256_at]
+        p256_at += 1usize
+    }
+    var p256_certificate: x509.Certificate = zero
+    p256_certificate.public_key = x509.PublicKey { P256: p256_public }
+    let p256_certificate_verify = "\x0f\x00\x00\x4a\x04\x03\x00\x46\x30\x44\x02\x20\x39\x5c\xd2\x8b\x80\x4c\x7d\x0e\x96\xba\x11\x0a\x21\x77\xcc\x10\x06\x68\xf9\x7d\x72\x0f\x16\x9b\x39\x51\xea\xbb\xac\xc5\xb4\x94\x02\x20\x1c\x70\x56\x28\x9e\x8e\xb1\x8d\xeb\xf4\x13\x03\x96\xdd\xef\x52\x16\x5e\x2f\x17\xb2\x4d\xd2\xa6\xb4\x00\xaf\x6b\xb3\x02\x1f\x75"
+    if tls.verify_certificate_verify(p256_certificate, transcript_hash, p256_certificate_verify) != ok { os.exit(46i32) }
 
     // A real duplex exchange drives both synchronous state machines through
     // every encrypted authentication message and both Finished checks.

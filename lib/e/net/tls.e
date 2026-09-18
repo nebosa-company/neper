@@ -289,7 +289,7 @@ fn fill_client_hello(config: ClientConfig, out: []u8, secret: *kx.X25519SecretKe
     try put_extension(out, &at, 43usize, versions[0..])
     let groups: [4]u8 = [4]u8{ 0, 2, 0, 29 }
     try put_extension(out, &at, 10usize, groups[0..])
-    let signatures: [4]u8 = [4]u8{ 0, 2, 8, 7 }
+    let signatures: [6]u8 = [6]u8{ 0, 4, 8, 7, 4, 3 }
     try put_extension(out, &at, 13usize, signatures[0..])
     var share: [38]u8 = zero
     share[1] = 36u8
@@ -345,6 +345,18 @@ fn select_alpn(encoded: []const u8, supported: []const str) -> (str, err) {
     ret ("", Unsupported)
 }
 
+fn signature_offered(encoded: []const u8, high: u8, low: u8) -> bool {
+    if encoded.len < 4usize { ret false }
+    let listed = (usize(encoded[0]) << 8usize) | usize(encoded[1])
+    if listed != encoded.len - 2usize || listed % 2usize != 0usize { ret false }
+    var at = 2usize
+    while at < encoded.len {
+        if encoded[at] == high && encoded[at + 1usize] == low { ret true }
+        at += 2usize
+    }
+    ret false
+}
+
 fn parse_client_hello(message: []const u8, supported_alpn: []const str) -> (ClientHelloInfo, err) {
     var out: ClientHelloInfo = zero
     var c = Cursor { data: message, off: 0usize }
@@ -390,7 +402,7 @@ fn parse_client_hello(message: []const u8, supported_alpn: []const str) -> (Clie
         if has_extension(extensions[..extension_at], extension_kind) { ret (out, Protocol) }
         if extension_kind == 43usize { has_version = value.len == 3usize && value[0] == 2u8 && value[1] == 3u8 && value[2] == 4u8 }
         if extension_kind == 10usize { has_group = value.len == 4usize && value[0] == 0u8 && value[1] == 2u8 && value[2] == 0u8 && value[3] == 29u8 }
-        if extension_kind == 13usize { has_signature = value.len == 4usize && value[0] == 0u8 && value[1] == 2u8 && value[2] == 8u8 && value[3] == 7u8 }
+        if extension_kind == 13usize { has_signature = signature_offered(value, 8u8, 7u8) }
         if extension_kind == 51usize {
             if value.len == 38usize && value[0] == 0u8 && value[1] == 36u8 && value[2] == 0u8 && value[3] == 29u8 && value[4] == 0u8 && value[5] == 32u8 {
                 mem.copy[u8](out.peer_key.bytes[0..], value[6..])
@@ -662,13 +674,21 @@ fn build_certificate_verify(secret: sign.Ed25519SecretKey, transcript_hash: [32]
 }
 
 fn verify_certificate_verify(leaf: x509.Certificate, transcript_hash: [32]u8, message: []const u8) -> err {
-    if message.len != 72usize || message[0] != 15u8 || message[1] != 0u8 || message[2] != 0u8 || message[3] != 68u8 || message[4] != 8u8 || message[5] != 7u8 || message[6] != 0u8 || message[7] != 64u8 { ret Protocol }
-    var signature: sign.Ed25519Signature = zero
-    mem.copy[u8](signature.bytes[0..], message[8..])
+    if message.len < 8usize || message[0] != 15u8 { ret Protocol }
+    let body_len = (usize(message[1]) << 16usize) | (usize(message[2]) << 8usize) | usize(message[3])
+    let signature_len = (usize(message[6]) << 8usize) | usize(message[7])
+    if body_len != message.len - 4usize || signature_len != message.len - 8usize { ret Protocol }
     let input = certificate_verify_input(true, transcript_hash)
     switch leaf.public_key {
     case .Ed25519 as public:
+        if message[4] != 8u8 || message[5] != 7u8 || signature_len != 64usize { ret Protocol }
+        var signature: sign.Ed25519Signature = zero
+        mem.copy[u8](signature.bytes[0..], message[8..])
         if sign.ed25519_verify(public, input[0..], signature) { ret ok }
+        ret InvalidCertificate
+    case .P256 as public:
+        if message[4] != 4u8 || message[5] != 3u8 { ret Protocol }
+        if sign.p256_verify(public, input[0..], message[8usize..]) { ret ok }
         ret InvalidCertificate
     default:
         ret Unsupported
