@@ -11807,3 +11807,18 @@ and reader construction take `storage` and `source`. These are positional parame
 renames only. `scripts/check_module_plan.py` and its regression suite now pass; this
 is static catalogue closure, not the real-resolver or runtime evidence still required
 by `stdlib-hardening.md`.
+
+## D576 -- Source API surfaces are checked by the real resolver
+
+Both self-host suites now run every one of the twenty-eight `surface:"source"`
+modules through the compiler's `index-file` path. That path builds the module graph,
+parses and resolves the source, and returns the checked module-scope signatures. The
+surface checker compares those signatures, including complete aggregate declarations,
+with the declarations extracted from `module-apis.md`; a rename, kind change, parameter
+change, field change or constant spelling drift now fails the platform suite.
+
+Compiler-seeded intrinsics still expose only names to the index, so the gate checks
+their names in both directions and does not invent signature evidence. The first run
+also reconciled `e.thread.DEFAULT_STACK`'s catalogue spelling with its checked source.
+This is real-resolver evidence for delivered source surfaces, not executable semantic
+coverage or validation of the still-planned catalogue.

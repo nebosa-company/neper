@@ -2079,7 +2079,7 @@ does not promise descendant cleanup. See SL05 for platform limits and test cases
 ```neper
 type Thread = os.Thread
 type Group = resource(join_all) struct { threads: []Thread, count: usize }
-const DEFAULT_STACK: usize = 1048576
+const DEFAULT_STACK: usize = 1048576usize
 
 fn spawn[Ctx: type](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)
 fn join(thread: own Thread) -> err

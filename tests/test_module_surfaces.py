@@ -13,7 +13,19 @@ SPEC.loader.exec_module(checker)
 class ModuleSurfaceTests(unittest.TestCase):
     def test_repository_surfaces_match(self):
         # Every module the plan calls implemented declares exactly its surface.
-        self.assertEqual(checker.main(), 0)
+        self.assertEqual(checker.main([]), 0)
+
+    def test_checked_signature_drift_is_reported(self):
+        problems = checker.compare_compiler_declarations(
+            "e.demo", {("fn", "read"): "fn read(dst: []u8) -> err"},
+            {("fn", "read"): "fn read(dst: []u8) -> (usize, err)"}, set())
+        self.assertEqual(len(problems), 1)
+        self.assertIn("differs from checked source", problems[0])
+
+    def test_trailing_aggregate_comma_is_not_surface_drift(self):
+        self.assertEqual(
+            checker.normalize_declaration("type Pair = struct { a: u8, b: u8, }"),
+            "type Pair = struct { a: u8, b: u8 }")
 
     def test_source_matching_fence_is_clean(self):
         self.assertEqual(
@@ -49,6 +61,11 @@ class ModuleSurfaceTests(unittest.TestCase):
         problems = checker.compare("e.demo", {"a"}, {"a", "extra"}, {"extra"})
         self.assertEqual(len(problems), 1)
         self.assertIn("`extra` is declared in source", problems[0])
+
+    def test_an_unlisted_seeded_intrinsic_is_reported(self):
+        problems = checker.compare("e.demo", {"a"}, {"a"}, {"hidden"})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("`hidden` is seeded as an intrinsic", problems[0])
 
     def test_every_fenced_module_name_is_in_the_plan(self):
         # A fence for a module the plan does not list would never be checked.

@@ -15,6 +15,8 @@ $compilerAsm = Join-Path $testBuild 'neper-self.asm'
 # commit limit will bear.
 & $neper build (Join-Path $repo 'src\main.e') --arena 1g --output $compiler --emit-asm $compilerAsm
 if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
+& python (Join-Path $repo 'scripts\check_module_surfaces.py') --compiler $compiler --arch x64 --os windows
+if ($LASTEXITCODE -ne 0) { throw 'compiler-resolved module surface validation failed' }
 # Every bootstrap frame has to cover the temporaries its statements allocate. A
 # frame sized by guess rather than by measurement lets a deep statement address
 # below rsp, into the outgoing argument area and past the stack pointer.
