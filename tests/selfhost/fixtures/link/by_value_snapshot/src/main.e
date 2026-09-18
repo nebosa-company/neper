@@ -6,13 +6,23 @@
 // inliner's view is the same.
 use e.mem
 
+error GenericSnapshot
+error GenericMutation
+
 type Big = struct { a: usize, b: usize, c: usize }
 type Holder = struct { big: Big, target: *usize }
+type Envelope[T: type] = struct { value: T, left: usize, right: usize }
 
 fn overwrite(v: Big, p: *Big) -> usize {
     p.a = 99usize
     p.b = 99usize
     ret v.a + v.b
+}
+
+fn overwrite_envelope[T: type](v: Envelope[T], p: *Envelope[T]) -> usize {
+    p.left = 0usize
+    p.right = 0usize
+    ret v.left * 10usize + v.right
 }
 
 fn overwrite_element(v: Big, items: []Big) -> usize {
@@ -38,6 +48,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var x = Big { a: 1usize, b: 2usize, c: 3usize }
     if overwrite(x, &x) != 3usize { ret mem.Exhausted }
     if x.a != 99usize { ret mem.Exhausted }
+    var generic = Envelope[u8] { value: 8u8, left: 9usize, right: 10usize }
+    let generic_before = overwrite_envelope[u8](generic, &generic)
+    if generic_before != 100usize { ret GenericSnapshot }
+    if generic.left != 0usize || generic.right != 0usize { ret GenericMutation }
     let (items, items_error) = mem.alloc[Big](a, 1usize)
     if items_error != ok { ret items_error }
     items[0usize] = Big { a: 4usize, b: 0usize, c: 0usize }

@@ -12822,3 +12822,15 @@ the unsupported shape at the tail of OpenRouter's served chain. Parsing preserve
 97-byte public point as `Unsupported`, while signature verification refuses it. This
 pins D646's distinction between accepting an unused syntactically valid suffix and
 allowing that suffix to authenticate a chain.
+
+## D650 -- Generic by-value arguments keep snapshot semantics
+
+H05's snapshot rule applies after generic substitution, not only to concrete source
+declarations. A generic called with a large aggregate now has focused executable
+evidence that its by-value parameter retains the value at argument evaluation while
+a second pointer parameter overwrites the caller's storage.
+
+The same fixture observes the returned snapshot and the zeroed original in debug and
+release builds. This closes the generic-instance item in H05's acceptance list without
+adding a generic-specific lowering path: the instantiated call uses D358's ordinary
+aggregate snapshot lowering.
