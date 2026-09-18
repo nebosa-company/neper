@@ -5,7 +5,7 @@
 {"record":"fact","kind":"errors","provenance":"declared-and-checked","value":"fallible: returns err; the caller tests it or propagates it with try"}
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.mem interface fc22268ed7f2b391476285a22569307bf55cd8716dab909008b43dc38838de4e"}
-{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface bdcf792c61e011a602e1d0872c04a5bf88f8293d755073ade8d0b2b18e7ecae7"}
+{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface a82a20fb62a2512e8e557f7348c325f3ef73ac13dead4c72bbd385ba2106b1a3"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.data.list interface f7f061a149bff28b0600f1ea58dee7c47dd66a600971b498d96a54a99812e29c"}
 {"record":"fact","kind":"instance","provenance":"compiler-proved","value":"explain.same","span":{"source":{"root":"operand","path":"explain.e"},"byte_start":717,"byte_end":717,"line":23,"column":22,"end_line":23,"end_column":22,"column_utf16":22,"end_column_utf16":22}}
 {"record":"result","ok":true,"exit_code":0,"data":{"records":8,"omitted":20,"complete":false,"cursor":8,"bytes":1965}}

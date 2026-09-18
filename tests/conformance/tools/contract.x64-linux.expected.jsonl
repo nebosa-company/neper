@@ -6,7 +6,7 @@
 {"record":"fact","kind":"threads","provenance":"compiler-proved","value":"starts a thread: what the start is given by address is that thread's until the join (E-SAFETY-0016 at any other use); the handle is joined or detached on every exit"}
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.mem interface fc22268ed7f2b391476285a22569307bf55cd8716dab909008b43dc38838de4e"}
-{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface 6ce0659c0845c494288042ccb1ea83d3bfce44d7330490ffabb061f4a4f4f162"}
+{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface 08b49b2a258884687be6759f6a09e6499930047147ce1ccf3bc100a1a7daf98a"}
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"e.os.thread_create","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":651,"byte_end":651,"line":24,"column":29,"end_line":24,"end_column":29,"column_utf16":29,"end_column_utf16":29}}
 {"record":"fact","kind":"value","provenance":"compiler-proved","value":"contract.bump","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":677,"byte_end":677,"line":24,"column":55,"end_line":24,"end_column":55,"column_utf16":55,"end_column_utf16":55}}
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"e.os.thread_join","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":750,"byte_end":750,"line":26,"column":9,"end_line":26,"end_column":9,"column_utf16":9,"end_column_utf16":9}}
@@ -20,7 +20,7 @@
 {"record":"fact","kind":"mutation","provenance":"declared-and-checked","value":"mutates c: the caller's views of the argument dangle after this call (E-SAFETY-0014 at their next use)"}
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.mem interface fc22268ed7f2b391476285a22569307bf55cd8716dab909008b43dc38838de4e"}
-{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface 6ce0659c0845c494288042ccb1ea83d3bfce44d7330490ffabb061f4a4f4f162"}
+{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface 08b49b2a258884687be6759f6a09e6499930047147ce1ccf3bc100a1a7daf98a"}
 {"record":"result","ok":true,"exit_code":0,"data":{"records":5,"omitted":0,"complete":true,"cursor":5,"bytes":1414}}
 {"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"subject","subject":"contract.first","kind":"fn","source":{"root":"operand","path":"contract.e"},"source_sha256":"d286ec4151e4d2430c9c7e0ca38618124954f413719988572da6993a70a79edd","snapshot":"6a181077dc551a8a","target":"x64-linux","checks":"retained","grammar_revision":3,"span":{"source":{"root":"operand","path":"contract.e"},"byte_start":407,"byte_end":407,"line":14,"column":1,"end_line":14,"end_column":1,"column_utf16":1,"end_column_utf16":1}}
@@ -28,7 +28,7 @@
 {"record":"fact","kind":"borrow","provenance":"declared-and-checked","value":"borrows c: what it returns that can hold a pointer is a view of the argument, dangling when the argument is next mutated"}
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.mem interface fc22268ed7f2b391476285a22569307bf55cd8716dab909008b43dc38838de4e"}
-{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface 6ce0659c0845c494288042ccb1ea83d3bfce44d7330490ffabb061f4a4f4f162"}
+{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface 08b49b2a258884687be6759f6a09e6499930047147ce1ccf3bc100a1a7daf98a"}
 {"record":"result","ok":true,"exit_code":0,"data":{"records":5,"omitted":0,"complete":true,"cursor":5,"bytes":1440}}
 {"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"subject","subject":"contract.total","kind":"fn","source":{"root":"operand","path":"contract.e"},"source_sha256":"d286ec4151e4d2430c9c7e0ca38618124954f413719988572da6993a70a79edd","snapshot":"6a181077dc551a8a","target":"x64-linux","checks":"retained","grammar_revision":3,"span":{"source":{"root":"operand","path":"contract.e"},"byte_start":466,"byte_end":466,"line":18,"column":1,"end_line":18,"end_column":1,"column_utf16":1,"end_column_utf16":1}}
@@ -36,5 +36,5 @@
 {"record":"fact","kind":"borrow","provenance":"declared-and-checked","value":"reads c: a const pointer; the argument is not written and the caller's views of it stand"}
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.mem interface fc22268ed7f2b391476285a22569307bf55cd8716dab909008b43dc38838de4e"}
-{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface 6ce0659c0845c494288042ccb1ea83d3bfce44d7330490ffabb061f4a4f4f162"}
+{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface 08b49b2a258884687be6759f6a09e6499930047147ce1ccf3bc100a1a7daf98a"}
 {"record":"result","ok":true,"exit_code":0,"data":{"records":5,"omitted":0,"complete":true,"cursor":5,"bytes":1413}}

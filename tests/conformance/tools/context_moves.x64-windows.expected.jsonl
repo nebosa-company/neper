@@ -6,7 +6,7 @@
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.mem interface fc22268ed7f2b391476285a22569307bf55cd8716dab909008b43dc38838de4e"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.meta interface 2cc41309c5b5c8b75e11e005d293d2cf192aec8f59ed35233bc41496179c0768"}
-{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface bdcf792c61e011a602e1d0872c04a5bf88f8293d755073ade8d0b2b18e7ecae7"}
+{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface a82a20fb62a2512e8e557f7348c325f3ef73ac13dead4c72bbd385ba2106b1a3"}
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"e.os.open","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":599,"byte_end":599,"line":16,"column":30,"end_line":16,"end_column":30,"column_utf16":30,"end_column_utf16":30}}
 {"record":"fact","kind":"move","provenance":"compiler-proved","value":"file is consumed here: closed, returned, rebound or handed to an own parameter","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":694,"byte_end":694,"line":18,"column":16,"end_line":18,"end_column":16,"column_utf16":16,"end_column_utf16":16}}
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"e.os.close","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":707,"byte_end":707,"line":19,"column":9,"end_line":19,"end_column":9,"column_utf16":9,"end_column_utf16":9}}
@@ -18,7 +18,7 @@
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.mem interface fc22268ed7f2b391476285a22569307bf55cd8716dab909008b43dc38838de4e"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.meta interface 2cc41309c5b5c8b75e11e005d293d2cf192aec8f59ed35233bc41496179c0768"}
-{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface bdcf792c61e011a602e1d0872c04a5bf88f8293d755073ade8d0b2b18e7ecae7"}
+{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface a82a20fb62a2512e8e557f7348c325f3ef73ac13dead4c72bbd385ba2106b1a3"}
 {"record":"fact","kind":"phase","provenance":"compiler-proved","value":"an if settled at compile time: the true arm is taken","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":407,"byte_end":407,"line":10,"column":5,"end_line":10,"end_column":5,"column_utf16":5,"end_column_utf16":5}}
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"context_moves.width","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":410,"byte_end":410,"line":10,"column":8,"end_line":10,"end_column":8,"column_utf16":8,"end_column_utf16":8}}
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"e.meta.kind","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":410,"byte_end":410,"line":10,"column":8,"end_line":10,"end_column":8,"column_utf16":8,"end_column_utf16":8}}
@@ -29,7 +29,7 @@
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.mem interface fc22268ed7f2b391476285a22569307bf55cd8716dab909008b43dc38838de4e"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.meta interface 2cc41309c5b5c8b75e11e005d293d2cf192aec8f59ed35233bc41496179c0768"}
-{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface bdcf792c61e011a602e1d0872c04a5bf88f8293d755073ade8d0b2b18e7ecae7"}
+{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface a82a20fb62a2512e8e557f7348c325f3ef73ac13dead4c72bbd385ba2106b1a3"}
 {"record":"fact","kind":"borrow","provenance":"compiler-proved","value":"first views items from here: a write to or a reset of what it views ends the view","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":1048,"byte_end":1048,"line":34,"column":17,"end_line":34,"end_column":17,"column_utf16":17,"end_column_utf16":17}}
 {"record":"fact","kind":"borrow","provenance":"compiler-proved","value":"part views items from here: a write to or a reset of what it views ends the view","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":1078,"byte_end":1078,"line":35,"column":16,"end_line":35,"end_column":16,"column_utf16":16,"end_column_utf16":16}}
 {"record":"result","ok":true,"exit_code":0,"data":{"records":7,"omitted":0,"complete":true,"cursor":7,"bytes":2087}}
@@ -40,7 +40,7 @@
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.mem interface fc22268ed7f2b391476285a22569307bf55cd8716dab909008b43dc38838de4e"}
 {"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.meta interface 2cc41309c5b5c8b75e11e005d293d2cf192aec8f59ed35233bc41496179c0768"}
-{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface bdcf792c61e011a602e1d0872c04a5bf88f8293d755073ade8d0b2b18e7ecae7"}
+{"record":"fact","kind":"dependency","provenance":"compiler-proved","value":"e.os interface a82a20fb62a2512e8e557f7348c325f3ef73ac13dead4c72bbd385ba2106b1a3"}
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"e.mem.mark","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":774,"byte_end":774,"line":23,"column":16,"end_line":23,"end_column":16,"column_utf16":16,"end_column_utf16":16}}
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"context_moves.width","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":817,"byte_end":817,"line":24,"column":32,"end_line":24,"end_column":32,"column_utf16":32,"end_column_utf16":32}}
 {"record":"fact","kind":"borrow","provenance":"compiler-proved","value":"part views bytes from here: a write to or a reset of what it views ends the view","span":{"source":{"root":"operand","path":"context_moves.e"},"byte_start":897,"byte_end":897,"line":26,"column":16,"end_line":26,"end_column":16,"column_utf16":16,"end_column_utf16":16}}
