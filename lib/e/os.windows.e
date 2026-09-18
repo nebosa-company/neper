@@ -1183,6 +1183,15 @@ fn error_kind_of(code: i32) -> ErrorKind {
     if code == 258i32 { ret .Timeout }
     if code == 10035i32 { ret .WouldBlock }
     if code == 10060i32 { ret .Timeout }
+    // The native filesystem path records `NTSTATUS` values, represented as signed bits.
+    if code == -1073741772i32 { ret .NotFound }
+    if code == -1073741766i32 { ret .NotFound }
+    if code == -1073741738i32 { ret .NotFound }
+    if code == -1073741790i32 { ret .Denied }
+    if code == -1073741757i32 { ret .Denied }
+    if code == -1073740533i32 { ret .Denied }
+    if code == -1073741771i32 { ret .Exists }
+    if code == 1073741824i32 { ret .Exists }
     ret .Other
 }
 
@@ -1505,8 +1514,15 @@ fn relative_path_ok(path: str) -> bool {
 // and sets nothing afterwards, so the two error vocabularies do not meet.
 fn from_nt_status(status: u32) -> err {
     if status == 0u32 { ret ok }
+    // Native calls return their status directly and do not set `GetLastError`; record it
+    // here before classifying it, just as `from_last_error` records Win32 failures.
+    var signed_status = i64(status)
+    if status >= 2147483648u32 { signed_status -= 4294967296i64 }
+    record_error_detail(i32(signed_status))
     if status == 3221225524u32 { ret NotFound }
     if status == 3221225530u32 { ret NotFound }
+    // STATUS_DELETE_PENDING: a concurrent unlink/rename made the name temporarily absent.
+    if status == 3221225558u32 { ret NotFound }
     if status == 3221225506u32 { ret Denied }
     if status == 3221225539u32 { ret Denied }
     if status == 3221225525u32 { ret Exists }

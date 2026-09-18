@@ -7,6 +7,8 @@ use e.mem
 use e.fs
 use e.os
 use e.path
+use e.atomic
+use e.thread
 
 // 2020-01-01 and 2100-01-01 in Unix nanoseconds. A timestamp is checked against both:
 // against zero it would pass while still carrying the wrong epoch or the wrong scale.
@@ -68,8 +70,69 @@ fn rooted(text: str) -> bool {
     ret false
 }
 
+type RootRace = struct {
+    stop: Atomic[u32],
+    rounds: Atomic[u32],
+    failed: Atomic[u32],
+}
+
+fn remove_link(a: *mem.Arena, path_text: str) -> err {
+    let file_error = fs.remove_file(a, path_text)
+    if file_error == ok { ret ok }
+    ret fs.remove_dir(a, path_text)
+}
+
+fn clear_root_race(a: *mem.Arena) {
+    // `slot` can be either the real directory or the attacker's directory link.
+    let slot_link = remove_link(a, "np-fs-race-root/slot")
+    let probe_link = remove_link(a, "np-fs-race-root/probe")
+    let slot_value = fs.remove_file(a, "np-fs-race-root/slot/value.txt")
+    let parked_value = fs.remove_file(a, "np-fs-race-root/parked/value.txt")
+    let slot_dir = fs.remove_dir(a, "np-fs-race-root/slot")
+    let parked_dir = fs.remove_dir(a, "np-fs-race-root/parked")
+    let root_dir = fs.remove_dir(a, "np-fs-race-root")
+    let outside_value = fs.remove_file(a, "np-fs-race-outside/value.txt")
+    let outside_dir = fs.remove_dir(a, "np-fs-race-outside")
+}
+
+fn attack_root(race: *RootRace) {
+    var scratch: [8192]u8 = zero
+    var a = mem.arena_from(scratch[..])
+    while atomic.load(&race.stop, .Acquire) == 0u32 {
+        let moved = fs.move(&a, "np-fs-race-root/slot", "np-fs-race-root/parked")
+        if moved == fs.Denied { continue }
+        if moved != ok {
+            atomic.store(&race.failed, 1u32, .Release)
+            break
+        }
+
+        let linked = fs.symlink(&a, "../np-fs-race-outside", "np-fs-race-root/slot")
+        if linked != ok {
+            let restored = fs.move(&a, "np-fs-race-root/parked", "np-fs-race-root/slot")
+            atomic.store(&race.failed, 2u32, .Release)
+            break
+        }
+
+        let previous = atomic.add(&race.rounds, 1u32, .Release)
+        let paused = os.wait_u32(&race.stop, 0u32, 1000000i64)
+        if paused != ok && paused != os.Timeout {
+            atomic.store(&race.failed, 3u32, .Release)
+        }
+        if remove_link(&a, "np-fs-race-root/slot") != ok {
+            atomic.store(&race.failed, 4u32, .Release)
+            break
+        }
+        if fs.move(&a, "np-fs-race-root/parked", "np-fs-race-root/slot") != ok {
+            atomic.store(&race.failed, 5u32, .Release)
+            break
+        }
+    }
+    atomic.store(&race.stop, 1u32, .Release)
+}
+
 fn main(a: *mem.Arena) -> err {
     clear(a)
+    clear_root_race(a)
 
     // `exists` answers rather than failing: a missing path is `false` with no error,
     // which is the whole reason it is not just `stat`.
@@ -381,6 +444,73 @@ fn main(a: *mem.Arena) -> err {
     } else {
         if cross_dir_error != os.NotFound { os.exit(149i32) }
     }
+
+    // Race a real directory against a link that points outside the held root. The host
+    // enforces `NoSymlinks` during its walk: successful opens may read only the safe file,
+    // while the link and the short missing-name windows may be refused.
+    if fs.make_dirs(a, "np-fs-race-root/slot") != ok { os.exit(165i32) }
+    if fs.make_dir(a, "np-fs-race-outside") != ok { os.exit(166i32) }
+    var safe_byte: [1]u8 = zero
+    safe_byte[0usize] = 115u8
+    var outside_byte: [1]u8 = zero
+    outside_byte[0usize] = 120u8
+    if fs.write_file(a, "np-fs-race-root/slot/value.txt", safe_byte[..]) != ok { os.exit(167i32) }
+    if fs.write_file(a, "np-fs-race-outside/value.txt", outside_byte[..]) != ok { os.exit(168i32) }
+    let race_link_error = fs.symlink(a, "../np-fs-race-outside", "np-fs-race-root/probe")
+    if race_link_error == ok {
+        if remove_link(a, "np-fs-race-root/probe") != ok { os.exit(169i32) }
+        let (race_root, race_root_error) = fs.root(a, "np-fs-race-root")
+        if race_root_error != ok { os.exit(233i32) }
+        var race_root_holder = race_root
+        var race: RootRace = zero
+        var race_flags: os.OpenFlags = zero
+        race_flags.read = true
+        let (attacker, attacker_error) = thread.spawn[RootRace](attack_root, &race, 0usize)
+        if attacker_error != ok { os.exit(234i32) }
+        let (race_started, race_clock_error) = os.clock(.Monotonic)
+        if race_clock_error != ok { os.exit(235i32) }
+        var attempts = 0usize
+        while atomic.load(&race.rounds, .Acquire) < 200u32 && atomic.load(&race.failed, .Acquire) == 0u32 {
+            let (candidate, candidate_error) = fs.open_at(a, &race_root_holder, "slot/value.txt", race_flags, .NoSymlinks)
+            if candidate_error == ok {
+                var observed: [1]u8 = zero
+                let (observed_count, observed_error) = os.read(candidate, observed[..])
+                let candidate_close_error = os.close(candidate)
+                if observed_error != ok || observed_count != 1usize || observed[0usize] != 115u8 || candidate_close_error != ok {
+                    atomic.store(&race.failed, 6u32, .Release)
+                }
+            } else {
+                if candidate_error != fs.Denied && candidate_error != fs.NotFound {
+                    var unexpected = 7u32
+                    if candidate_error == fs.Io { unexpected = 9u32 }
+                    if candidate_error == fs.Invalid { unexpected = 10u32 }
+                    if candidate_error == fs.Exists { unexpected = 11u32 }
+                    atomic.store(&race.failed, unexpected, .Release)
+                } else {
+                    let candidate_detail = fs.last_error_detail("open_at", "slot/value.txt")
+                    if candidate_detail.native_code == 0i32 { atomic.store(&race.failed, 12u32, .Release) }
+                    if candidate_error == fs.NotFound && candidate_detail.kind != .NotFound { atomic.store(&race.failed, 12u32, .Release) }
+                    if candidate_error == fs.Denied && candidate_detail.kind != .Denied { atomic.store(&race.failed, 12u32, .Release) }
+                }
+            }
+            attempts += 1usize
+            if attempts % 256usize == 0usize {
+                let (now, now_error) = os.clock(.Monotonic)
+                if now_error != ok || now - race_started > 5000000000i64 {
+                    atomic.store(&race.failed, 8u32, .Release)
+                }
+            }
+        }
+        atomic.store(&race.stop, 1u32, .Release)
+        if thread.join(attacker) != ok { os.exit(236i32) }
+        let race_failure = atomic.load(&race.failed, .Acquire)
+        if race_failure != 0u32 { os.exit(216i32 + i32(race_failure)) }
+        if atomic.load(&race.rounds, .Acquire) < 200u32 { os.exit(238i32) }
+        if fs.root_close(&race_root_holder) != ok { os.exit(239i32) }
+    } else {
+        if race_link_error != fs.Denied { os.exit(198i32) }
+    }
+    clear_root_race(a)
 
     // A `Root` is a directory held open, and every name used through it resolves against
     // that handle. The refusals are the reason it exists, so they are what is checked.

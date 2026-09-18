@@ -195,6 +195,16 @@ returns `Invalid`, leaves the source intact and creates no destination, proving 
 API does not disguise a copy as an atomic replace. A single-volume host skips only this
 environment-dependent branch rather than emulating the guarantee.
 
+D585 adds the malicious replacement race. A worker repeatedly swaps a real subdirectory
+for a link to a sibling outside the held root while the main thread opens through
+`NoSymlinks`. Missing-name and policy refusals are valid race outcomes; every successful
+read must return the safe in-root byte. Link creation may still be unavailable on a Windows
+host without the required privilege, in which case that target skips only this branch.
+Windows now classifies `STATUS_DELETE_PENDING` from the swap window as `NotFound`, and
+native-call failures record the same per-thread detail as Win32 failures. Linux records
+policy-refused `EXDEV` as `Denied` without losing native code 18, and reports `ELOOP` detail
+as `Denied`, matching the portable result returned by the `NoSymlinks` walk.
+
 ## SL07 — streaming HTTP and event streams
 
 ResponseStream separates headers from bounded incremental body reads. It owns the

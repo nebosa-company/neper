@@ -11960,3 +11960,33 @@ native temporary directory and the repository build directory. A machine with on
 filesystem skips this environment-dependent case instead of weakening the assertion. The
 underlying implementation already returned the specified error, so D584 adds acceptance
 evidence rather than a fallback or new API.
+
+## D585 -- A concurrent link swap never escapes a held root
+
+The public filesystem fixture now holds a `Root` while a worker repeatedly renames its real
+`slot` directory aside, installs a link from `slot` to a sibling outside the root, then
+restores the directory. The main thread continuously opens `slot/value.txt` with
+`NoSymlinks`. `Denied` while the link is present and `NotFound` during the rename windows are
+valid; a successful read must always be the in-root byte and never the outside byte.
+
+The worker leaves each link installed for a bounded millisecond and completes 200 swaps, so
+the assertion is a real concurrent replacement rather than a before/after link check. A
+five-second bound prevents a stalled host from hanging the suite. Windows may deny symbolic
+link creation without the required privilege and skips only this race in that case; Linux
+and capable Windows hosts exercise the native `openat2`/object-manager walk.
+
+The race found one Windows classification hole. `NtCreateFile` can return
+`STATUS_DELETE_PENDING` while the attacker exchanges the directory entry; that is the same
+temporary missing-name outcome as `STATUS_OBJECT_NAME_NOT_FOUND`, not a generic I/O failure.
+It now maps to `NotFound`. The same path also now records every failing `NTSTATUS` before it
+is classified, preserving the native code and portable kind in the per-thread error detail
+just as the Win32 path already did. The fixture reads that detail immediately for every
+race refusal, so the new transport is part of the acceptance evidence rather than dead
+diagnostic plumbing.
+
+The same assertion found two Linux detail gaps. `openat2` uses `EXDEV` for a
+`RESOLVE_BENEATH` escape attempt, but the context-specific `Denied` return previously skipped
+detail recording; `ELOOP` from `RESOLVE_NO_SYMLINKS` returned `Denied` while its detail kind
+remained `Other`. The existing slot-state byte now carries the single contextual `Denied`
+override, so the `EXDEV` policy branch preserves code 18 without another global array, and
+`ELOOP` is classified as `Denied` consistently.

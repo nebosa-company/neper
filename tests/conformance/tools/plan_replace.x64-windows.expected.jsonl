@@ -2,4 +2,4 @@
 {"record":"precondition","source":{"root":"operand","path":"contract.e"},"sha256":"d286ec4151e4d2430c9c7e0ca38618124954f413719988572da6993a70a79edd"}
 {"record":"edit","op":"replace-expression","symbol":"65536usize","site":"use","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":693,"byte_end":703,"line":24,"column":71,"end_line":24,"end_column":81,"column_utf16":71,"end_column_utf16":81},"replacement":"131072usize"}
 {"record":"postcondition","check":"check-file passes; the expression at the span has the type the replaced one had"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":1,"files":1,"complete":true,"snapshot":"af4c483643e3e2b2"}}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":1,"files":1,"complete":true,"snapshot":"6a4db4e7990c8eb1"}}

@@ -322,6 +322,7 @@ fn error_kind_of(code: i32) -> ErrorKind {
     if code == 17i32 { ret .Exists }
     if code == 22i32 { ret .Invalid }
     if code == 38i32 { ret .Unsupported }
+    if code == 40i32 { ret .Denied }
     if code == 110i32 { ret .Timeout }
     ret .Other
 }
@@ -344,6 +345,8 @@ const ERROR_SLOTS: usize = 64usize
 
 var error_slot_thread: [64]usize
 var error_slot_code: [64]i32
+// 0 is unused, 1 derives the kind from the native code and 2 is the one contextual
+// override: openat2's EXDEV means a denied beneath-root walk, not unsupported I/O.
 var error_slot_used: [64]u8
 // Set when a failure was recorded and not yet read (D360, H07): a failing cleanup
 // then leaves the slot alone, so the primary failure's detail is what
@@ -366,7 +369,7 @@ fn record_error_detail(code: i32) {
 fn record_cleanup_error_detail(code: i32) {
     let thread = current_thread_id()
     let slot = thread % ERROR_SLOTS
-    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] == 1u8 && error_slot_thread[slot] == thread { ret }
+    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] != 0u8 && error_slot_thread[slot] == thread { ret }
     record_error_detail(code)
 }
 
@@ -474,12 +477,14 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     let thread = current_thread_id()
     let slot = thread % ERROR_SLOTS
     // Another thread's slot, or one nothing has written, is no detail at all.
-    if error_slot_used[slot] == 0u8 { ret detail }
+    let used = error_slot_used[slot]
+    if used == 0u8 { ret detail }
     if error_slot_thread[slot] != thread { ret detail }
     let code = error_slot_code[slot]
     error_slot_fresh[slot] = 0u8
     detail.native_code = code
     detail.kind = error_kind_of(code)
+    if used == 2u8 { detail.kind = .Denied }
     ret detail
 }
 
@@ -2526,7 +2531,12 @@ fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy
         // EXDEV here is the resolve policy refusing a step that would leave the directory,
         // not a device boundary -- a different thing from what `rename` means by it, which
         // is why it is read here rather than in `from_errno`.
-        if descriptor == -18isize { ret (file, Denied) }
+        if descriptor == -18isize {
+            record_error_detail(18i32)
+            let thread = current_thread_id()
+            error_slot_used[thread % ERROR_SLOTS] = 2u8
+            ret (file, Denied)
+        }
         ret (file, from_errno(descriptor))
     }
     file.raw = usize(descriptor)
