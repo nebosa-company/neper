@@ -12173,3 +12173,17 @@ The accept computation reuses the existing legacy SHA-1 primitive in `e.crypto.h
 the reviewed Base64 codec; no new cryptographic implementation is introduced. The
 fixture pins RFC 6455's full sample exchange and exact emitted request, accepts mixed-case
 and comma-separated response tokens, and rejects a forged accept value.
+
+## D598 -- Outbound WebSocket frames mask without retaining payloads
+
+`send` validates control-frame finality/125-byte bounds and fragmentation state, emits
+the shortest RFC length form, and masks client payloads with the four caller-supplied
+bytes. A fixed 1024-byte stack block carries arbitrarily long masked payloads without
+arena allocation or mutation of caller storage. Server connections will use the same
+path without the mask bit once server upgrade is delivered.
+
+`ping` is the final control-frame wrapper. `close` validates the registered/application
+code ranges and the 123-byte reason bound, emits one masked close frame, and makes all
+later sends answer `Closed`. The fixture pins the 126-byte extended header and every
+masked byte, rejects an oversized ping before output, checks ping and normal-close wire
+bytes, and proves a second close cannot write.

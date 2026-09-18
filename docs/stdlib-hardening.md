@@ -320,6 +320,14 @@ Handshake reads are intentionally one byte, preventing an eager source from over
 the first WebSocket frame into a discarded HTTP buffer. The fixture pins the complete RFC
 sample request/response and rejects a forged accept. Server upgrade and frames remain.
 
+D598 delivers outbound framing. `send` enforces fragmentation/control rules, chooses the
+shortest RFC length field and masks client payloads in a fixed 1024-byte stack block, so
+caller storage is neither retained nor modified. `ping` pins the final control wrapper;
+`close` validates code/reason bounds, writes the terminal frame and makes later output
+return `Closed`. The cross-host fixture checks every byte of a masked 126-byte frame,
+oversized-ping refusal, ping and normal-close wire bytes, and the terminal state. Server
+upgrade and inbound framing remain for D599.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

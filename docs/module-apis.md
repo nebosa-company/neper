@@ -2919,8 +2919,9 @@ reads OS randomness implicitly.
 
 The delivered `client_key` is allocation-free standard padded Base64 over exactly the
 sixteen supplied entropy bytes. `client_upgrade` emits and validates the bounded RFC 6455
-HTTP exchange and preserves the first frame boundary. Server upgrade and framed transport
-remain planned.
+HTTP exchange and preserves the first frame boundary. `send`, `ping` and `close` provide
+bounded caller-masked client output, including extended lengths and fragmentation state.
+Server upgrade and inbound frames remain planned.
 
 ### `e.db`
 

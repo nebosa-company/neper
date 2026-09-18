@@ -1,5 +1,5 @@
-// WebSocket handshake and framing. The allocation-free client nonce and bounded client
-// upgrade are delivered; server upgrade and frame transport follow as separate slices.
+// WebSocket handshake and framing. The client handshake and outbound frame path are
+// delivered; server upgrade and inbound frame transport follow as separate slices.
 
 use e.bytes
 use e.crypto.hash
@@ -25,6 +25,7 @@ type ConnectionState = struct {
     sink: io.Writer,
     client: bool,
     closed: bool,
+    fragmented: bool,
 }
 
 fn client_key(entropy: [16]u8, dst: []u8) -> (str, err) {
@@ -111,6 +112,7 @@ fn client_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, host: str, 
     state.sink = sink
     state.client = true
     state.closed = false
+    state.fragmented = false
 
     var key_storage: [24]u8 = zero
     let (key, key_error) = client_key(entropy, key_storage[0..])
@@ -156,4 +158,109 @@ fn client_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, host: str, 
     }
     out.state = mem.cast[*void](state)
     ret (out, ok)
+}
+
+fn opcode_byte(opcode: Opcode) -> u8 {
+    if opcode == .Continuation { ret 0u8 }
+    if opcode == .Text { ret 1u8 }
+    if opcode == .Binary { ret 2u8 }
+    if opcode == .Close { ret 8u8 }
+    if opcode == .Ping { ret 9u8 }
+    ret 10u8
+}
+
+fn control_opcode(opcode: Opcode) -> bool {
+    ret opcode == .Close || opcode == .Ping || opcode == .Pong
+}
+
+fn send(connection: *Connection, frame: Frame, mask: [4]u8) -> err {
+    let state = mem.cast[*ConnectionState](connection.state)
+    if state.closed { ret Closed }
+    let control = control_opcode(frame.opcode)
+    if control && (!frame.final || frame.payload.len > 125usize) { ret InvalidFrame }
+    var next_fragmented = state.fragmented
+    if frame.opcode == .Continuation {
+        if !state.fragmented { ret InvalidFrame }
+        if frame.final { next_fragmented = false }
+    } else if !control {
+        if state.fragmented { ret InvalidFrame }
+        if !frame.final { next_fragmented = true }
+    }
+
+    var header: [14]u8 = zero
+    header[0usize] = opcode_byte(frame.opcode)
+    if frame.final { header[0usize] |= 128u8 }
+    var used = 2usize
+    if frame.payload.len < 126usize {
+        header[1usize] = u8(frame.payload.len)
+    } else if frame.payload.len <= 65535usize {
+        header[1usize] = 126u8
+        header[2usize] = u8((frame.payload.len >> 8usize) & 255usize)
+        header[3usize] = u8(frame.payload.len & 255usize)
+        used = 4usize
+    } else {
+        header[1usize] = 127u8
+        let length = u64(frame.payload.len)
+        var at = 0usize
+        while at < 8usize {
+            header[2usize + at] = u8((length >> u32((7usize - at) * 8usize)) & 255u64)
+            at += 1usize
+        }
+        used = 10usize
+    }
+    if state.client {
+        header[1usize] |= 128u8
+        var at = 0usize
+        while at < mask.len {
+            header[used + at] = mask[at]
+            at += 1usize
+        }
+        used += mask.len
+    }
+    try io.write_all(&state.sink, header[0usize..used])
+    if state.client {
+        var block: [1024]u8 = zero
+        var offset = 0usize
+        while offset < frame.payload.len {
+            var count = frame.payload.len - offset
+            if count > block.len { count = block.len }
+            var at = 0usize
+            while at < count {
+                block[at] = frame.payload[offset + at] ^ mask[(offset + at) % 4usize]
+                at += 1usize
+            }
+            try io.write_all(&state.sink, block[0usize..count])
+            offset += count
+        }
+    } else {
+        try io.write_all(&state.sink, frame.payload)
+    }
+    state.fragmented = next_fragmented
+    if frame.opcode == .Close { state.closed = true }
+    ret ok
+}
+
+fn ping(connection: *Connection, payload: []const u8, mask: [4]u8) -> err {
+    let frame = Frame { final: true, opcode: .Ping, payload: payload }
+    ret send(connection, frame, mask)
+}
+
+fn valid_close_code(code: u16) -> bool {
+    if code >= 3000u16 && code <= 4999u16 { ret true }
+    if code < 1000u16 || code > 1014u16 { ret false }
+    ret code != 1004u16 && code != 1005u16 && code != 1006u16
+}
+
+fn close(connection: *Connection, code: u16, reason: str, mask: [4]u8) -> err {
+    if !valid_close_code(code) || reason.len > 123usize { ret InvalidFrame }
+    var payload: [125]u8 = zero
+    payload[0usize] = u8((code >> 8u16) & 255u16)
+    payload[1usize] = u8(code & 255u16)
+    var at = 0usize
+    while at < reason.len {
+        payload[2usize + at] = reason[at]
+        at += 1usize
+    }
+    let frame = Frame { final: true, opcode: .Close, payload: payload[0usize..reason.len + 2usize] }
+    ret send(connection, frame, mask)
 }

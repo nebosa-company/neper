@@ -1301,12 +1301,12 @@ $httpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $httpWritten -ne 'executable written') { throw 'e.net.http emission failed' }
 & $httpPath
 if ($LASTEXITCODE -ne 0) { throw "an e.net.http message, request or SSE read answered wrongly: exit $LASTEXITCODE" }
-# `e.net.ws` pins the RFC 6455 client nonce and bounded client upgrade/accept validation.
+# `e.net.ws` pins the RFC client handshake plus bounded masked send/ping/close frames.
 $wsPath = Join-Path $testBuild 'net-ws-selfhost.exe'
 $wsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_ws\src\main.e') $repo 'x64' 'windows' $wsPath
 if ($LASTEXITCODE -ne 0 -or $wsWritten -ne 'executable written') { throw 'e.net.ws emission failed' }
 & $wsPath
-if ($LASTEXITCODE -ne 0) { throw "an e.net.ws client key or upgrade answered wrongly: exit $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) { throw "an e.net.ws handshake or outbound frame answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -1217,7 +1217,7 @@ http_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$http_written" = 'executable written' ]
 chmod +x "$test_build/net-http-selfhost"
 "$test_build/net-http-selfhost"
-# `e.net.ws` pins the RFC 6455 client nonce and bounded client upgrade/accept validation.
+# `e.net.ws` pins the RFC client handshake plus bounded masked send/ping/close frames.
 ws_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_ws/src/main.e" "$repo" x64 linux "$test_build/net-ws-selfhost")
 [ "$ws_written" = 'executable written' ]
 chmod +x "$test_build/net-ws-selfhost"
