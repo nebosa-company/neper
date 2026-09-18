@@ -47,6 +47,7 @@ fn serve(job: *ServerJob) {
     if job.failure != ok || !same_bytes(request[0..], "ping") { ret }
     var secure_sink = tls.writer(&stream)
     job.failure = io.write_all(&secure_sink, "pong")
+    if job.failure == ok { job.failure = tls.close(&stream) }
 }
 
 fn live_handshake(a: *mem.Arena, server_read: *os.File, client_write: *os.File, client_read: *os.File, server_write: *os.File, server_config: tls.ServerConfig, client_config: tls.ClientConfig, client_selected: *str, server_selected: *str) -> err {
@@ -64,6 +65,12 @@ fn live_handshake(a: *mem.Arena, server_read: *os.File, client_write: *os.File, 
     var live_source = tls.reader(&live_stream)
     var reply: [4]u8 = zero
     if io.read_exact(&live_source, reply[0..]) != ok || !same_bytes(reply[0..], "pong") { os.exit(27i32) }
+    var after_close: [1]u8 = zero
+    let (_, end_error) = io.read(&live_source, after_close[0..])
+    if end_error != io.End { os.exit(28i32) }
+    if tls.close(&live_stream) != ok || tls.close(&live_stream) != ok { os.exit(29i32) }
+    let (_, closed_write_error) = io.write(&live_sink, "x")
+    if closed_write_error != tls.Closed { os.exit(30i32) }
     let join_error = os.thread_join(server_thread)
     if join_error != ok { os.exit(22i32) }
     if server_job.failure != ok { os.exit(22i32) }

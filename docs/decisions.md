@@ -12687,3 +12687,15 @@ every record direction keeps its own application sequence.
 The duplex fixture now sends `ping` and `pong` through the adapters after the live
 handshake. Calling either adapter before authentication or after terminal failure
 returns `Closed`; there is still no plaintext compatibility path.
+
+## D638 -- TLS close is an authenticated, idempotent half-close
+
+`close` sends exactly one protected `close_notify` after a completed handshake,
+flushes the retained sink and then makes both local adapters terminal. Receiving a
+valid peer `close_notify` produces `io.End`, never application bytes; other alerts
+are protocol failures. A caller can still answer a received close with its own alert,
+and repeated local closes are harmless. Because TLS does not own the supplied
+transport, it does not close that transport behind the caller's back.
+
+The live fixture now observes the server alert as EOF, sends the reciprocal client
+alert, checks idempotence and proves a post-close write returns `Closed`.

@@ -44,6 +44,7 @@ type State = struct {
     failed: bool,
     closed: bool,
     peer_closed: bool,
+    sent_close: bool,
     read_buffer: [16384]u8,
     read_at: usize,
     read_len: usize,
@@ -973,6 +974,7 @@ fn client(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ClientConfi
     state.failed = false
     state.closed = false
     state.peer_closed = false
+    state.sent_close = false
     state.read_at = 0usize
     state.read_len = 0usize
     ret (Stream { state: mem.cast[*void](state) }, ok)
@@ -993,6 +995,7 @@ fn server(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ServerConfi
     state.failed = false
     state.closed = false
     state.peer_closed = false
+    state.sent_close = false
     state.read_at = 0usize
     state.read_len = 0usize
     ret (Stream { state: mem.cast[*void](state) }, ok)
@@ -1083,4 +1086,28 @@ fn reader(stream: *Stream) -> io.Reader {
 
 fn writer(stream: *Stream) -> io.Writer {
     ret io.Writer { ctx: stream.state, write: stream_write, flush: stream_flush }
+}
+
+fn close(stream: *Stream) -> err {
+    if stream.state == nil { ret ok }
+    let state = mem.cast[*State](stream.state)
+    if state.closed { ret ok }
+    if state.complete && !state.failed && !state.sent_close {
+        let alert: [2]u8 = [2]u8{ 1, 0 }
+        let close_error = send_protected(state, &state.write_keys, 21u8, alert[0..])
+        if close_error != ok {
+            state.failed = true
+            state.closed = true
+            ret close_error
+        }
+        state.sent_close = true
+        let flush_error = io.flush(&state.sink)
+        if flush_error != ok {
+            state.failed = true
+            state.closed = true
+            ret flush_error
+        }
+    }
+    state.closed = true
+    ret ok
 }
