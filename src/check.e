@@ -345,6 +345,9 @@ type Resource = struct {
     bound_err: usize,
     has_bound_err: bool,
     fields: []u8,
+    // Fixed-array slots use `fields` for their states and keep their individual
+    // acquisition/move sites here. Struct fields retain the aggregate's site.
+    elements_acquired: []usize,
     borrowed: bool,
     pinned: usize,
     pin_at: usize,
@@ -5794,8 +5797,9 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     var state = 0u8
     if affine_kind(c, ty, 0usize) != 0u8 { state = 1u8 }
     var no_fields: []u8 = zero
+    var no_elements_acquired: []usize = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "" }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "" }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -13345,19 +13349,25 @@ fn resource_init_fields(c: *Checker, local_index: usize, state: u8) -> err {
         if kind != 0u8 {
             let (elements, elements_error) = mem.alloc[u8](c.arena, local_type.array_length + 1usize)
             if elements_error != ok { ret elements_error }
+            let (acquired, acquired_error) = mem.alloc[usize](c.arena, local_type.array_length + 1usize)
+            if acquired_error != ok { ret acquired_error }
             var element_at = 0usize
             while element_at < local_type.array_length {
                 elements[element_at] = field_with(state, kind == 2u8 && state != resource_null)
+                acquired[element_at] = c.resources[local_index].acquired
                 element_at += 1usize
             }
             c.resources[local_index].fields = elements[0usize..local_type.array_length]
+            c.resources[local_index].elements_acquired = acquired[0usize..local_type.array_length]
             ret ok
         }
     }
     let (aggregate_index, tracked) = resource_tracked_struct(c, c.locals[local_index].ty)
     if !tracked {
         var none: []u8 = zero
+        var no_elements_acquired: []usize = zero
         c.resources[local_index].fields = none
+        c.resources[local_index].elements_acquired = no_elements_acquired
         ret ok
     }
     var aggregate = c.aggregates[aggregate_index]
@@ -13412,13 +13422,30 @@ fn resource_field_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 }
 
 fn resource_field_name(c: *Checker, local_index: usize, at: usize) -> str {
-    if c.locals[local_index].ty.kind == .Array { ret c.locals[local_index].name }
+    if c.locals[local_index].ty.kind == .Array {
+        let base = c.locals[local_index].name
+        let index = decimal_text(c, at)
+        let (name, name_error) = mem.alloc[u8](c.arena, base.len + index.len + 3usize)
+        if name_error != ok { ret base }
+        var out = fix_append(name, 0usize, base)
+        name[out] = 91u8
+        out += 1usize
+        out = fix_append(name, out, index)
+        name[out] = 93u8
+        out += 1usize
+        ret name[0usize..out]
+    }
     let (aggregate_index, tracked) = resource_tracked_struct(c, c.locals[local_index].ty)
     if !tracked { ret c.locals[local_index].name }
     var aggregate = c.aggregates[aggregate_index]
     if aggregate.generic && aggregate.instance && aggregate.template_index < c.aggregate_count { aggregate = c.aggregates[aggregate.template_index] }
     if aggregate.first_field + at < c.aggregate_field_count { ret c.aggregate_fields[aggregate.first_field + at].name }
     ret c.locals[local_index].name
+}
+
+fn resource_part_acquired(c: *Checker, local_index: usize, at: usize) -> usize {
+    if at < c.resources[local_index].elements_acquired.len { ret c.resources[local_index].elements_acquired[at] }
+    ret c.resources[local_index].acquired
 }
 
 // A comptime-indexed slot of a fixed affine array. Dynamic indices retain the
@@ -13727,11 +13754,13 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if is_element {
             let state = field_state(c.resources[local_index].fields[at])
             if state == resource_moved || state == resource_maybe {
-                record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+                let acquired = resource_part_acquired(c, local_index, at)
+                record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
                 ret ResourceViolation
             }
             if state == resource_unchecked {
-                record_failure_related(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+                let acquired = resource_part_acquired(c, local_index, at)
+                record_failure_related(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
                 ret ResourceViolation
             }
             ret ok
@@ -13742,7 +13771,8 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if is_field {
             let state = field_state(c.resources[local_index].fields[at])
             if state == resource_moved || state == resource_maybe {
-                record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+                let acquired = resource_part_acquired(c, local_index, at)
+                record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
                 ret ResourceViolation
             }
         }
@@ -13821,7 +13851,8 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         let field_byte = c.resources[local_index].fields[field_at]
         let one = field_state(field_byte)
         if field_byte != 0u8 && (one == resource_moved || one == resource_maybe || one == resource_reserved) {
-            record_failure_related(c, module_index, node, .ResourcePartialMove, resource_field_name(c, local_index, field_at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+            let acquired = resource_part_acquired(c, local_index, field_at)
+            record_failure_related(c, module_index, node, .ResourcePartialMove, resource_field_name(c, local_index, field_at), line_detail(c, g, module_index, acquired), acquired)
             ret ResourceViolation
         }
         field_at += 1usize
@@ -14152,7 +14183,8 @@ fn resource_audit(c: *Checker, g: *graph.Graph, module_index: usize, node: synta
                     let b = local.fields[field_at]
                     let one = field_state(b)
                     if field_owed(b) && (one == resource_owned || one == resource_maybe || one == resource_unchecked) {
-                        record_failure_related(c, module_index, node, exit_kind, resource_field_name(c, at, field_at), line_detail(c, g, module_index, local.acquired), local.acquired)
+                        let acquired = resource_part_acquired(c, at, field_at)
+                        record_failure_related(c, module_index, node, exit_kind, resource_field_name(c, at, field_at), line_detail(c, g, module_index, acquired), acquired)
                         ret ResourceViolation
                     }
                     field_at += 1usize
@@ -14398,7 +14430,8 @@ fn resource_loop_check(c: *Checker, g: *graph.Graph, module_index: usize, node: 
         var field_at = 0usize
         while field_at < c.resources[at].fields.len && cursor < before.len {
             if c.resources[at].fields[field_at] != before[cursor] && field_state(before[cursor]) == resource_owned {
-                record_failure_related(c, module_index, node, .ResourceMovedInLoop, resource_field_name(c, at, field_at), line_detail(c, g, module_index, c.resources[at].acquired), c.resources[at].acquired)
+                let acquired = resource_part_acquired(c, at, field_at)
+                record_failure_related(c, module_index, node, .ResourceMovedInLoop, resource_field_name(c, at, field_at), line_detail(c, g, module_index, acquired), acquired)
                 ret ResourceViolation
             }
             cursor += 1usize
@@ -14572,7 +14605,8 @@ fn resource_assign_inner(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         let old = c.resources[element_local].fields[element_at]
         let old_state = field_state(old)
         if old_state == resource_reserved || ((old_state == resource_owned || old_state == resource_maybe || old_state == resource_unchecked) && field_owed(old)) {
-            record_failure_related(c, module_index, statement, .ResourceOverwrite, resource_field_name(c, element_local, element_at), line_detail(c, g, module_index, c.resources[element_local].acquired), c.resources[element_local].acquired)
+            let acquired = resource_part_acquired(c, element_local, element_at)
+            record_failure_related(c, module_index, statement, .ResourceOverwrite, resource_field_name(c, element_local, element_at), line_detail(c, g, module_index, acquired), acquired)
             ret ResourceViolation
         }
         if contains_token(c, usize(statement.token_start), usize(statement.token_end), .KwZero) && tree.nodes[initializer_index].kind != .CallExpr {
@@ -14609,6 +14643,7 @@ fn resource_assign_inner(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         c.resources[element_local].fields[element_at] = field_with(resource_owned, owed)
         c.resources[element_local].state = resource_owned
         c.resources[element_local].acquired = usize(statement.token_start)
+        c.resources[element_local].elements_acquired[element_at] = usize(statement.token_start)
         ret ok
     }
     let (field_local, field_at, is_field) = resource_field_of(c, g, tree, module_index, place_index)
@@ -14816,21 +14851,22 @@ fn resource_consume_element(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mod
     let node = tree.nodes[node_index]
     let byte = c.resources[local_index].fields[at]
     let state = field_state(byte)
+    let acquired = resource_part_acquired(c, local_index, at)
     if state == resource_reserved {
-        record_failure_related(c, module_index, node, .ResourceDeferredConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+        record_failure_related(c, module_index, node, .ResourceDeferredConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
         ret ResourceViolation
     }
     if state == resource_null { ret ok }
     if state == resource_unchecked {
-        record_failure_related(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+        record_failure_related(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
         ret ResourceViolation
     }
     if state != resource_owned {
-        record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+        record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
         ret ResourceViolation
     }
     if c.resource_transfer && c.resources[local_index].borrowed {
-        record_failure_related(c, module_index, node, .ResourceBorrowConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+        record_failure_related(c, module_index, node, .ResourceBorrowConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
         ret ResourceViolation
     }
     if !field_owed(byte) { ret ok }
@@ -14844,6 +14880,7 @@ fn resource_consume_element(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mod
     }
     c.resources[local_index].fields[at] = field_with(resource_moved, true)
     c.resources[local_index].acquired = usize(node.token_start)
+    c.resources[local_index].elements_acquired[at] = usize(node.token_start)
     ret ok
 }
 
@@ -14882,7 +14919,9 @@ fn resource_copy_fields(c: *Checker, local_index: usize, source_index: usize) ->
     let count = c.resources[source_index].fields.len
     if count == 0usize {
         var none: []u8 = zero
+        var no_elements_acquired: []usize = zero
         c.resources[local_index].fields = none
+        c.resources[local_index].elements_acquired = no_elements_acquired
         ret ok
     }
     let (fields, fields_error) = mem.alloc[u8](c.arena, count)
@@ -14893,6 +14932,16 @@ fn resource_copy_fields(c: *Checker, local_index: usize, source_index: usize) ->
         at += 1usize
     }
     c.resources[local_index].fields = fields[0usize..count]
+    if c.resources[source_index].elements_acquired.len == count {
+        let (acquired, acquired_error) = mem.alloc[usize](c.arena, count + 1usize)
+        if acquired_error != ok { ret acquired_error }
+        at = 0usize
+        while at < count {
+            acquired[at] = c.resources[source_index].elements_acquired[at]
+            at += 1usize
+        }
+        c.resources[local_index].elements_acquired = acquired[0usize..count]
+    }
     ret ok
 }
 

@@ -12436,3 +12436,17 @@ speculative fold into the program's real diagnostic.
 The accept fixture stores through a constant expression and closes through its name.
 The reject fixture closes through that name and then through different arithmetic
 for the same slot, pinning one E-SAFETY-0001 on both host compilers.
+
+## D618 -- Array ownership diagnostics identify the exact slot
+
+Each comptime-tracked fixed-array slot now retains its own acquisition or last-move
+token beside its state. E-SAFETY messages and their structured `symbol` field render
+that ownership identity as `name[index]`; the related span comes from the same slot,
+not from the most recent assignment to some other element. Whole-array moves copy
+the site table with the slot states.
+
+This is diagnostic evidence, not a second ownership analysis: it extends D616's
+existing state table by one parallel token table and reuses the same audit, branch
+and loop paths. A two-slot fixture acquires both, consumes the second and proves the
+first slot's earlier site is the one reported at the fallible exit. The earlier leak
+and double-close goldens now pin their exact slot subjects on both hosts.

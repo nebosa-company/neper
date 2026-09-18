@@ -3665,7 +3665,8 @@ Fixed arrays inherit the affine and cleanup classification of their element. A
 comptime-indexed slot is tracked independently: a store moves ownership into it, a
 consuming read moves ownership out, and a live obligated slot is audited at every
 exit (D616, D617). Dynamic indices remain views until a conservative set-of-elements rule
-is specified, and slices of resources are not tracked as wholes. Reflection and the
+is specified. Each diagnostic names the indexed slot and preserves that slot's own
+acquisition or move site (D618). Slices of resources are not tracked as wholes. Reflection and the
 format codecs are not yet told a resource has no fields outside its module.
 
 ### Debug fills

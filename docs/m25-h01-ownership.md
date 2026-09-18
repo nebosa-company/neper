@@ -421,3 +421,8 @@ view until the set-of-elements rule is specified.
 only a literal. Constant names and arithmetic that evaluate to the same index reach
 the same state, and a failed attempt to fold a dynamic expression leaves the normal
 checker diagnostic state untouched.
+
+**D618 follow-up.** A tracked array slot retains its own acquisition or last-move
+token. Diagnostics render the semantic subject as `name[index]` and use that slot's
+token for the related span, rather than blaming the array generally or whichever
+slot happened to be assigned last.
