@@ -136,6 +136,14 @@ containment capability and no surviving contained descendants. Limits include a
 bounded post-termination drain; closing remaining capture pipes records truncation.
 Test the exact platform contract, including unsupported outcomes.
 
+D578 delivers `RunOptions` and `run` over the two hosts' process-group/job support:
+independent bounded prefixes, observed byte counts, explicit exit/cancel/timeout/limit
+outcomes, pre-start control checks, live deadline termination and negative-grace
+rejection are exercised by `link/proc_output`. The module remains partial: a child-only
+descendant retaining an inherited pipe still needs the bounded post-termination drain
+above, and the fixture does not yet exercise a descendant that ignores gentle group
+termination through the whole grace interval.
+
 ## SL06 — handle-anchored filesystem operations
 
 `e.fs.Root` owns an `os.Dir`; relative opens/removes/replaces operate through that

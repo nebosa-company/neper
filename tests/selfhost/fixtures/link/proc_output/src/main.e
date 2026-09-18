@@ -3,10 +3,12 @@
 // output on both streams, a status, an echo of what it was sent, more output than allowed --
 // and the parent checks each through the module rather than through `e.os`.
 
+use e.cancel
 use e.mem
 use e.os
 use e.str
 use e.proc
+use e.time
 
 // The child's `speak` mode writes its stderr in one piece large enough to fill a pipe, so
 // that a parent reading stdout first, and only then stderr, would wait forever: it is what
@@ -69,6 +71,9 @@ fn child(a: *mem.Arena, what: str) {
             let (_, flood_error) = os.write(os.stdout(), page[..])
             if flood_error != ok { os.exit(0i32) }
         }
+    }
+    if str.eq(what, "np-hang") {
+        while true {}
     }
     os.exit(96i32)
 }
@@ -199,7 +204,85 @@ fn main(a: *mem.Arena) -> err {
     var detail: os.ErrorDetail = zero
     let (missing_again, missing_again_error) = proc.output_detail(a, command, 0usize, &detail)
     if missing_again_error != missing_error { os.exit(82i32) }
-    if missing_again_error != ok && (detail.kind != .NotFound || detail.native_code == 0i32 || !mem.eq[u8](detail.operation, "spawn") || !mem.eq[u8](detail.subject, "np-no-such-program-anywhere")) { os.exit(83i32) }
-    if missing_again_error == ok && (detail.native_code != 0i32 || missing_again.status != 127i32) { os.exit(84i32) }
+    if missing_again_error != ok && (detail.kind != .NotFound || detail.native_code == 0i32 || !mem.eq[u8](
+        detail.operation,
+        "spawn",
+    ) || !mem.eq[u8](detail.subject, "np-no-such-program-anywhere")) { os.exit(83i32) }
+    if missing_again_error == ok && (detail.native_code != 0i32 || missing_again.status != 127i32) { os.exit(
+        84i32,
+    ) }
+
+    // --- `run`: a nonzero child status is an ordinary exited outcome, with the
+    // status explicitly known rather than turned into an infrastructure error.
+    command.program = image
+    args[0usize] = "np-status"
+    command.args = args[..]
+    var run_options: proc.RunOptions = zero
+    let (exited, exited_error) = proc.run(a, command, run_options)
+    if exited_error != ok { os.exit(90i32) }
+    if exited.outcome != .Exited || !exited.status_known || exited.status != 42i32 { os.exit(91i32) }
+    if exited.stdout_bytes != 0u64 || exited.stderr_bytes != 0u64 || exited.truncated { os.exit(
+        92i32,
+    ) }
+
+    // Independent limits admit exactly the bounded output on each stream.
+    args[0usize] = "np-speak"
+    command.args = args[..]
+    run_options.stdout_limit = 8usize
+    run_options.stderr_limit = LOUD
+    let (bounded, bounded_error) = proc.run(a, command, run_options)
+    if bounded_error != ok || bounded.outcome != .Exited { os.exit(93i32) }
+    if !str.eq(bounded.stdout, "out-line") || bounded.stderr.len != LOUD { os.exit(94i32) }
+    if bounded.stdout_bytes != 8u64 || bounded.stderr_bytes != u64(LOUD) || bounded.truncated { os.exit(
+        95i32,
+    ) }
+
+    // One byte beyond a stream's limit retains the prefix, records observed bytes,
+    // ends the child and reports an outcome rather than the legacy `TooLarge` error.
+    args[0usize] = "np-flood"
+    command.args = args[..]
+    run_options.stdout_limit = 8192usize
+    run_options.stderr_limit = 16usize
+    let (limited, limited_error) = proc.run(a, command, run_options)
+    if limited_error != ok || limited.outcome != .OutputLimit { os.exit(96i32) }
+    if !limited.status_known || !limited.truncated || limited.stdout.len != 8192usize { os.exit(
+        97i32,
+    ) }
+    if limited.stdout_bytes != 8193u64 || limited.stderr_bytes != 0u64 { os.exit(98i32) }
+
+    // Already-stopped controls do not start a child. Cancellation wins when both
+    // cancellation and an expired deadline are visible at the same observation.
+    var token = cancel.token()
+    cancel.request(&token)
+    let (now, now_error) = time.monotonic()
+    if now_error != ok { os.exit(99i32) }
+    var cancel_options: proc.RunOptions = zero
+    cancel_options.control.token = &token
+    cancel_options.control.deadline = now
+    cancel_options.control.has_deadline = true
+    let (cancelled, cancelled_error) = proc.run(a, command, cancel_options)
+    if cancelled_error != ok || cancelled.outcome != .Cancelled || cancelled.status_known { os.exit(
+        100i32,
+    ) }
+
+    // A live deadline interrupts a silent child. The contained form establishes the
+    // host process group/job before the child runs and closes it after reaping.
+    args[0usize] = "np-hang"
+    command.args = args[..]
+    let (started, started_error) = time.monotonic()
+    if started_error != ok { os.exit(101i32) }
+    var timeout_options: proc.RunOptions = zero
+    timeout_options.control.deadline = time.instant_add(started, time.millis(10i64))
+    timeout_options.control.has_deadline = true
+    timeout_options.contain_tree = true
+    let (timed, timed_error) = proc.run(a, command, timeout_options)
+    if timed_error != ok || timed.outcome != .TimedOut || !timed.status_known { os.exit(102i32) }
+    if timed.truncated || timed.stdout_bytes != 0u64 || timed.stderr_bytes != 0u64 { os.exit(103i32) }
+
+    // Invalid grace is rejected before any child is started.
+    var invalid_options: proc.RunOptions = zero
+    invalid_options.terminate_grace = time.Duration { nanos: -1i64 }
+    let (_, grace_error) = proc.run(a, command, invalid_options)
+    if grace_error != time.Invalid { os.exit(104i32) }
     ret ok
 }

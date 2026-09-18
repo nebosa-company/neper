@@ -598,9 +598,9 @@ Push-Location $fsScratch
 $fsBasicsExit = $LASTEXITCODE
 Pop-Location
 if ($fsBasicsExit -ne 0) { throw "e.fs answered wrongly: exit $fsBasicsExit" }
-# `e.proc` against a real child, which is the fixture's own image. The child fills its stderr
-# pipe before its stdout is drained, so `output` returning at all is what proves the two
-# streams are read at once; a child that never stops is what proves the limit ends it.
+# `e.proc` against a real child, which is the fixture's own image. Besides the legacy output
+# path, `run` checks independent limits, pre-start cancellation, a live contained deadline,
+# explicit outcomes and invalid grace. A child that never stops proves each limit ends it.
 $procPath = Join-Path $testBuild 'proc-output-selfhost.exe'
 $procWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\proc_output\src\main.e') $repo 'x64' 'windows' $procPath
 if ($LASTEXITCODE -ne 0 -or $procWritten -ne 'executable written') { throw 'e.proc emission failed' }

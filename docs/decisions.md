@@ -11836,3 +11836,20 @@ sixteen declarations exactly. A missing record or a change to a parameter, compt
 pack, return type or ordering type now fails both self-host suites. This does not claim
 source locations for generated declarations or cover compiler seeds outside the
 twenty-eight source-delivered module surfaces.
+
+## D578 -- Controlled process runs report bounded partial outcomes
+
+`e.proc` now implements the adopted `RunOptions` and `run` declarations. Standard
+output and error are drained concurrently into independent bounded prefixes; the
+result distinguishes ordinary exit, cancellation, deadline and output-limit
+termination, carries a known-status bit, observed byte counts and truncation, and
+remains valid beside an infrastructure error. An already-stopped control returns
+without spawning, and a negative shutdown grace is rejected before any host effect.
+
+Contained runs establish an `e.os` process group or Windows job before child code
+runs, ask it to terminate, wait the requested non-negative grace and then force the
+group. The existing real-child fixture now pins nonzero exit, exact two-stream limits,
+one-byte overflow, cancellation precedence, a live contained timeout and invalid
+grace on both hosts. `e.proc` remains `surface:"partial"`: the bounded drain needed
+when an uncontained descendant retains a capture pipe, and an ignore-gentle descendant
+through the complete grace interval, remain explicit SL05 acceptance gaps.
