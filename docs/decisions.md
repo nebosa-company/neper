@@ -12545,3 +12545,15 @@ The rule hides representation without hiding the fields of a plain aggregate tha
 contains a resource; those fields remain visible so D626-D627 can diagnose the
 attempted reflective copy by name. A focused executable asserts that `os.File` has
 zero reflectable fields on both hosts.
+
+## D626 -- Reflective reads do not copy affine fields
+
+An instantiated `meta.get[FIELD, T]` now rejects an affine `FIELD.ty` in checked
+code. `meta.get` returns its field by value, so allowing a resource or containing
+aggregate through that path would create an identity without moving it from the
+source owner. The diagnostic is E-SAFETY-0005 and uses the compile-time field name
+as its subject.
+
+The template pass still defers the question while `FIELD` is unset; every concrete
+unrolled copy checks the bound field type. A focused `Box.file` fixture pins that
+instance-time verdict on both hosts.

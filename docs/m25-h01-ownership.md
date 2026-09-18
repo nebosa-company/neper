@@ -445,3 +445,7 @@ now receives the same E-SAFETY-0010 as a declared resource's private field.
 **D625 follow-up.** `meta.fields[T]()` produces an empty compile-time sequence when
 `T` is a resource declared by another module, including the seeded OS handles. This
 is an opaque boundary, not generic deferral: the unrolled loop has zero copies.
+
+**D626 follow-up.** `meta.get[FIELD, T]` refuses an affine `FIELD.ty` in checked
+code. Returning such a field by value would copy it out of its aggregate owner, so
+the instance reports E-SAFETY-0005 with the field binding's name.

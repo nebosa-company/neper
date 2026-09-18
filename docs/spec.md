@@ -3674,7 +3674,9 @@ acquisition or move site (D618). Dynamic slice offsets and slices without a trac
 fixed-array owner are not tracked as wholes. Reflection and the
 `meta.fields[T]()` is empty when `T` is a resource named by another module; its
 representation is not a reflective serialization surface. Format-codec rejection
-of an affine field in an otherwise plain aggregate remains staged below.
+of an affine field in an otherwise plain aggregate begins at `meta.get`: returning
+that field by value would copy it, so the instantiated access is E-SAFETY-0005 and
+names the field. The matching `meta.set` rule remains staged below.
 
 ### Debug fills
 
