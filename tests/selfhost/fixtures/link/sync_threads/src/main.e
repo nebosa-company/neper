@@ -176,13 +176,15 @@ fn main(a: *mem.Arena) -> err {
     }
     let (scribe, scribe_error) = os.thread_create[Shared](writer, &s, 1048576usize)
     if scribe_error != ok { ret scribe_error }
-    workers[6usize] = scribe
     released = 0usize
     while released < 7usize {
         sync.semaphore_wait(&s.done)
         released += 1usize
     }
-    try join_all(workers[..], 7usize)
+    let scribe_join_error = os.thread_join(scribe)
+    let readers_join_error = join_all(workers[..], 6usize)
+    if scribe_join_error != ok { ret scribe_join_error }
+    if readers_join_error != ok { ret readers_join_error }
     if atomic.load(&s.overlap, .Acquire) != 0u32 { ret Failed }
 
     // Exactly one participant is told it was last, once per generation.

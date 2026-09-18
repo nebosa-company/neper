@@ -12478,3 +12478,18 @@ does not create ownership: the runtime bounds check still decides whether an acc
 is valid. The accept fixture transfers slot one through a shifted slice and a second
 alias; the reject fixture closes through the slice and then through `files[1]`,
 pinning the shared identity and move site on both host compilers.
+
+## D621 -- The sync fixture keeps its statically named thread as a local owner
+
+D616's first full-suite run found one mixed ownership shape in `sync_threads`: six
+readers entered an array through a dynamic index, while the writer was stored in the
+literal slot `workers[6]`; a helper then joined seven elements through a dynamic
+slice. The checker correctly retained the writer's statically known slot obligation,
+because dynamic element consumption and cross-function borrow summaries remain
+outside the delivered subset.
+
+The fixture now keeps the writer thread in its local owner, joins it directly, then
+joins the six array-held readers, recording both errors before returning either so a
+failed first join cannot skip the second cleanup. This is a migration exposed by the
+new audit, not a claim that dynamic resource arrays are closed. The focused program
+builds and runs on both hosts before the full suites resume.
