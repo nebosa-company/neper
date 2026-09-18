@@ -11909,3 +11909,25 @@ job objects expose no cooperative signal, so its variant is a no-op and the same
 the completed contained result under `TerminateJobObject`. The supervisor itself needed no
 change. Together with D580's retained-writer case, this closes the remaining SL05 acceptance
 gap without widening `e.os` again.
+
+## D582 -- A root handle survives movement of its directory
+
+The public `e.fs` fixture now renames a directory while its `Root` remains open, then
+opens, replaces and removes entries through the held root before restoring the directory's
+path. This is the observable distinction between directory-relative authority and a path
+string saved when `root` was called: the latter would search below a name that no longer
+exists. The same source exercises the native Linux and Windows handle paths.
+
+When the host permits unprivileged link creation, the moved-root path also removes a final
+symbolic link through `remove_at` and proves its target remains openable. Link creation may
+honestly answer `Denied` on Windows, so that branch is conditional there; movement and all
+three root-relative operations remain mandatory on both hosts. The nested replace/remove
+assertions also exercise the parent resolver rather than only single-component names.
+
+Linux runs this public `e.fs` fixture on its native temporary filesystem. The repository's
+DrvFS/9p mount makes a renamed directory invisible until an already-open handle closes:
+neither an `*at` call through that handle nor the new path can reach it, so no implementation
+can preserve the handle contract there. The lower-level `e.os` fixture still runs on the
+mounted filesystem. This separates a host-filesystem limitation from the Linux target's
+native handle semantics without adding a race-prone path fallback. No production code
+changed; D582 closes the missing acceptance evidence.

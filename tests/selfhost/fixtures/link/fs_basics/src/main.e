@@ -41,8 +41,20 @@ fn clear(a: *mem.Arena) {
     let landed_file = fs.remove_file(a, "np-fs/landed.txt")
     let scratch = fs.remove_file(a, "np-fs/scratch.txt")
     let moved_deep = fs.remove_file(a, "np-fs/deep/moved.txt")
+    let root_probe = fs.remove_file(a, "np-fs/deep/root-probe.txt")
+    let root_landed = fs.remove_file(a, "np-fs/deep/root-landed.txt")
     let deep = fs.remove_dir(a, "np-fs/deep")
     let outer = fs.remove_dir(a, "np-fs")
+    // A failure in the moved-root assertions below can leave the whole fixture tree
+    // under its temporary name. Clear exactly the entries that block the next run.
+    let moved_leaf = fs.remove_file(a, "np-fs-moved/deep/leaf.txt")
+    let moved_one = fs.remove_file(a, "np-fs-moved/one.txt")
+    let moved_link = fs.remove_file(a, "np-fs-moved/link.txt")
+    let moved_probe = fs.remove_file(a, "np-fs-moved/deep/root-probe.txt")
+    let moved_landed = fs.remove_file(a, "np-fs-moved/deep/root-landed.txt")
+    let moved_nested = fs.remove_file(a, "np-fs-moved/deep/moved.txt")
+    let moved_deep_dir = fs.remove_dir(a, "np-fs-moved/deep")
+    let moved_outer = fs.remove_dir(a, "np-fs-moved")
 }
 
 // A leading separator, or a drive letter and a colon: the two ways a path on either host
@@ -395,6 +407,35 @@ fn main(a: *mem.Arena) -> err {
     let (moved_gone, moved_gone_error) = fs.exists(a, "np-fs/deep/moved.txt")
     if moved_gone_error != ok { os.exit(260i32) }
     if moved_gone { os.exit(261i32) }
+
+    // The handle, not the path that first named it, is the authority. Move the directory
+    // while `Root` is live, then exercise every relative operation through that same
+    // handle. A path-joined implementation would look under the now-missing old name.
+    if fs.write_file(a, "np-fs/deep/root-probe.txt", under[..]) != ok { os.exit(181i32) }
+    let root_link_error = fs.symlink(a, "one.txt", "np-fs/link.txt")
+    if root_link_error != ok && root_link_error != fs.Denied { os.exit(182i32) }
+    if fs.move(a, "np-fs", "np-fs-moved") != ok { os.exit(183i32) }
+
+    let (held_file, held_file_error) = fs.open_at(a, &root_holder, "one.txt", root_flags, .NoSymlinks)
+    if held_file_error != ok { os.exit(184i32) }
+    if os.close(held_file) != ok { os.exit(185i32) }
+
+    if fs.replace_at(a, &root_holder, "deep/root-probe.txt", &root_holder, "deep/root-landed.txt", keep_existing) != ok { os.exit(186i32) }
+    if fs.remove_at(a, &root_holder, "deep/root-landed.txt", false) != ok { os.exit(187i32) }
+
+    // The walk to the parent refuses links, but the final link is removed as an entry.
+    // Its target remains readable through the root. Hosts that cannot create a link
+    // without privilege still have the moved-root coverage above.
+    if root_link_error == ok {
+        if fs.remove_at(a, &root_holder, "link.txt", false) != ok { os.exit(188i32) }
+        let (removed_link, removed_link_error) = fs.metadata(a, "np-fs-moved/link.txt", false)
+        if removed_link_error != fs.NotFound { os.exit(189i32) }
+        let (kept_target, kept_target_error) = fs.open_at(a, &root_holder, "one.txt", root_flags, .NoSymlinks)
+        if kept_target_error != ok { os.exit(195i32) }
+        if os.close(kept_target) != ok { os.exit(196i32) }
+    }
+
+    if fs.move(a, "np-fs-moved", "np-fs") != ok { os.exit(197i32) }
 
     if fs.root_close(&root_holder) != ok { os.exit(249i32) }
 

@@ -178,6 +178,13 @@ symlink removal, cross-volume replacement, lock contention, early walk exit and
 partial durability failure. Reject unsupported guarantees rather than emulate them
 with race-prone string checks. No recursive-delete convenience is added implicitly.
 
+D582 pins root movement and final-link behavior at the public `e.fs` boundary. The
+real-host fixture opens a `Root`, renames the directory that originally named it, and
+then opens, replaces and removes entries through the still-live handle on both targets.
+When link creation is available, `remove_at` removes the final link itself and the target
+remains reachable through that moved root. This distinguishes handle authority from a
+path string remembered at `root` time.
+
 ## SL07 — streaming HTTP and event streams
 
 ResponseStream separates headers from bounded incremental body reads. It owns the

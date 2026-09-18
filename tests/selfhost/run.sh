@@ -620,8 +620,8 @@ chmod +x "$test_build/mem-address-selfhost"
 # `e.os`'s filesystem primitives and `e.fs` over them, on a real filesystem. The
 # primitives are the per-target half -- `os.syscall` on Linux, `kernel32` through
 # `@import` on Windows -- so the same two fixtures run on both hosts and what they
-# assert is that the two spellings answer alike. Both use relative paths, so they run
-# with the build directory as the working directory and write nothing outside it.
+# assert is that the two spellings answer alike. Both use relative paths, so their
+# scratch working directories decide where entries land and nothing escapes them.
 fs_scratch="$test_build/fs-scratch"
 mkdir -p "$fs_scratch"
 os_fs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_fs/src/main.e" "$repo" x64 linux "$test_build/os-fs-selfhost")
@@ -631,7 +631,15 @@ chmod +x "$test_build/os-fs-selfhost"
 fs_basics_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fs_basics/src/main.e" "$repo" x64 linux "$test_build/fs-basics-selfhost")
 [ "$fs_basics_written" = 'executable written' ]
 chmod +x "$test_build/fs-basics-selfhost"
-(cd "$fs_scratch" && "$test_build/fs-basics-selfhost")
+# The moved-root contract needs native directory-handle semantics. DrvFS/9p keeps a
+# renamed directory invisible until its old handle closes, so neither the old handle nor
+# the new name can reach it. Run the public e.fs contract on the target's native filesystem;
+# os_fs above still exercises the mounted repository filesystem separately.
+fs_native_scratch=$(mktemp -d "${TMPDIR:-/tmp}/neper-fs.XXXXXX")
+trap 'rm -rf "$fs_native_scratch"' EXIT HUP INT TERM
+(cd "$fs_native_scratch" && "$test_build/fs-basics-selfhost")
+rm -rf "$fs_native_scratch"
+trap - EXIT HUP INT TERM
 # `e.proc` against a real child, which is the fixture's own image. Besides the legacy output
 # path, `run` checks independent limits, pre-start cancellation, a live contained deadline,
 # explicit outcomes, invalid grace, retained writers and the complete forced-shutdown grace.
