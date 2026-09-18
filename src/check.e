@@ -13727,7 +13727,17 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if !any_affine_local(c) { ret ok }
     let node = tree.nodes[node_index]
     if node.kind == .FieldExpr { ret resource_consume_field(c, g, tree, module_index, node_index) }
-    let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+    var (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+    // `*p` where `p` was bound from `&f` is a move of `f`, not an unrelated
+    // value (D610). The kept pointer pins `f`, so the ordinary rule below rejects
+    // closing or transferring it until the block ends.
+    if !is_resource && node.kind == .UnaryExpr && c.tokens[usize(node.token_start)].kind == .PunctStar {
+        let (pointed, through_pointer) = alias_target(c, g, tree, module_index, node_index)
+        if through_pointer && c.resources[pointed].state != resource_plain {
+            local_index = pointed
+            is_resource = true
+        }
+    }
     if !is_resource { ret ok }
     let state = c.resources[local_index].state
     // A struct moved whole must be whole: a field moved out of it stays out.

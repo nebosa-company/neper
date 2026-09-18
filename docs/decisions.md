@@ -12315,3 +12315,18 @@ The focused cross-host fixture requires byte-for-byte reproduction of the canoni
 two-frame WAV, reopens the encoded result and rejects a public `Frames` value whose count
 exceeds its backing storage. This completes the D605-D609 batch; progress is regenerated
 only now, before the deferred full Windows and Linux suites.
+
+## D610 -- A resource moved through a pointer is still pinned
+
+H01's lexical pin rule refused `os.close(f)` after `let p = &f`, but the same
+consuming call written `os.close(*p)` did not resolve the dereference to `f` and
+could close the resource under a live pointer. A consumed dereference now follows
+the checker's existing local pointer alias to its resource before applying the
+ordinary move rule. The kept pointer pins that resource until the block ends, so
+the indirect close is E-SAFETY-0004 with the pointer-taking site related, exactly
+like the direct spelling. `reject/safety_pointer_move` pins the case on both hosts.
+
+This does not infer where an arbitrary pointer came from: only the lexical aliases
+H02 already records (`let p = &f`, including assignment) participate. Raw, imported
+and integer-derived pointers remain outside the checked subset and belong behind an
+unsafe boundary.

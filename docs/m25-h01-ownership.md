@@ -391,6 +391,10 @@ obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
 is H02's; the seeded handles' `raw` stays readable until the fixed
 surface gains `file_handle`; the `@unsafe` inventory in the manifest and `index`
-(section 8, H27) is not written; pointer-mediated moves (`os.close(*p)`) are not
-seen; the pin rule is lexical, and infers nothing about what a callee keeps
+(section 8, H27) is not written; the pin rule is lexical, and infers nothing about what a callee keeps
 (H02); the debug-mode check-bodies budget above.
+
+**D610 follow-up.** A consuming call through a pointer alias (`os.close(*p)` where
+`p` was bound from `&f`) resolves to the resource it points at before applying the
+ordinary move rule. The kept pointer therefore pins `f` and the call is
+E-SAFETY-0004 rather than an untracked close.

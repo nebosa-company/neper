@@ -2431,6 +2431,13 @@ for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_valu
     cmp -s "$conformance_actual" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
 ' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
 done
+# A consuming dereference follows its lexical pointer alias to the pinned resource
+# (D610, H01).
+pointer_move_status=0
+$test_build/neper-self check-file "$conformance_root/reject/safety_pointer_move.e" "$repo" x64 linux --json > "$test_build/conformance-reject-safety_pointer_move.jsonl" || pointer_move_status=$?
+[ "$pointer_move_status" -eq 1 ]
+cmp -s "$test_build/conformance-reject-safety_pointer_move.jsonl" "$conformance_root/reject/safety_pointer_move.expected.jsonl" || { printf '%s
+' "check-file --json on reject/safety_pointer_move.e differs from the conformance corpus" >&2; exit 1; }
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
 for reject_project in module_cycle module_variants safety_opaque; do

@@ -3630,10 +3630,12 @@ none becomes a trap:
 - A pointer taken to a resource -- `&f`, `&s.f` -- and kept, by a binding whose type
   can hold a pointer, a store of the pointer or of a literal holding it, or a `ret`,
   pins the resource until the block the pointer was taken in ends: it cannot be
-  moved or closed under the pointer (`E-SAFETY-0004`). A pointer that is an argument
+  moved or closed under the pointer (`E-SAFETY-0004`), including a consuming call
+  through the pointer such as `os.close(*p)`. A pointer that is an argument
   alone, or bound beside a result that can hold no pointer, is the call's and pins
   nothing; a `defer` may still consume a pinned value, since it runs when the block
-  ends. This is lexical: a pointer's last use does not free what it pinned (D351).
+  ends. This is lexical: a pointer's last use does not free what it pinned (D351,
+  D610).
 - Copying the bits of a resource is not duplicating it, and nothing else becomes
   one: `mem.bitcast` into or out of a resource type, `mem.cast` to a pointer to a
   resource from anything but a pointer to that type or the `*void` it was erased

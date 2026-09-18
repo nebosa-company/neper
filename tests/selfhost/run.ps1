@@ -2337,6 +2337,12 @@ foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('re
     if ((Get-Item -LiteralPath $conformanceStderr).Length -ne 0) { throw "check-file --json on $($case[0])/$($case[1]).e wrote to stderr" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
 }
+# A consuming dereference follows its lexical pointer alias to the pinned resource
+# (D610, H01).
+$pointerMoveActual = Join-Path $testBuild 'conformance-reject-safety_pointer_move.jsonl'
+cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot 'reject\safety_pointer_move.e')`" `"$repo`" x64 windows --json > `"$pointerMoveActual`""
+if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/safety_pointer_move.e exited $LASTEXITCODE, not 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $pointerMoveActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'reject\safety_pointer_move.expected.jsonl')).Hash) { throw 'check-file --json on reject/safety_pointer_move.e differs from the conformance corpus' }
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
 foreach ($rejectProject in @('module_cycle', 'module_variants', 'safety_opaque')) {
