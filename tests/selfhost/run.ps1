@@ -593,10 +593,29 @@ if ($osFsExit -ne 0) { throw "an e.os filesystem primitive answered wrongly: exi
 $fsBasicsPath = Join-Path $testBuild 'fs-basics-selfhost.exe'
 $fsBasicsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/fs_basics/src/main.e') $repo 'x64' 'windows' $fsBasicsPath
 if ($LASTEXITCODE -ne 0 -or $fsBasicsWritten -ne 'executable written') { throw 'e.fs executable emission failed' }
+$crossVolumeDir = $null
+$crossVolumeCandidates = @([IO.Path]::GetTempPath(), (Join-Path $env:LOCALAPPDATA 'Temp'))
+foreach ($candidate in $crossVolumeCandidates) {
+    if ((Test-Path $candidate) -and ([IO.Path]::GetPathRoot($candidate) -ne [IO.Path]::GetPathRoot($fsScratch))) {
+        $crossVolumeDir = $candidate
+        break
+    }
+}
+$previousCrossVolumeDir = $env:NEPER_CROSS_VOLUME_DIR
+if ($null -ne $crossVolumeDir) {
+    $env:NEPER_CROSS_VOLUME_DIR = $crossVolumeDir
+} else {
+    Remove-Item Env:NEPER_CROSS_VOLUME_DIR -ErrorAction SilentlyContinue
+}
 Push-Location $fsScratch
 & $fsBasicsPath
 $fsBasicsExit = $LASTEXITCODE
 Pop-Location
+if ($null -eq $previousCrossVolumeDir) {
+    Remove-Item Env:NEPER_CROSS_VOLUME_DIR -ErrorAction SilentlyContinue
+} else {
+    $env:NEPER_CROSS_VOLUME_DIR = $previousCrossVolumeDir
+}
 if ($fsBasicsExit -ne 0) { throw "e.fs answered wrongly: exit $fsBasicsExit" }
 # `e.proc` against a real child, which is the fixture's own image. Besides the legacy output
 # path, `run` checks independent limits, pre-start cancellation, a live contained deadline,

@@ -11945,3 +11945,18 @@ the public lifetime boundary, so an implementation may buffer a directory or str
 long as close releases whatever remains and no later entry escapes. The existing
 implementation already met that rule; D583 adds the missing acceptance evidence without a
 production change.
+
+## D584 -- Cross-volume replacement refuses rather than copying
+
+The public `e.fs` fixture now accepts a runner-supplied directory on another filesystem.
+It attempts `replace` into that directory and requires `Invalid`, then proves the source is
+unchanged and the destination was never created. That is the portable consequence of the
+native `EXDEV`/`ERROR_NOT_SAME_DEVICE` classification and distinguishes an atomic rename
+from a convenience move that silently falls back to copy-and-delete.
+
+The runners enable the branch only after establishing distinct roots: Windows compares the
+scratch and system-temporary volume roots, while Linux compares device numbers for its
+native temporary directory and the repository build directory. A machine with one available
+filesystem skips this environment-dependent case instead of weakening the assertion. The
+underlying implementation already returned the specified error, so D584 adds acceptance
+evidence rather than a fallback or new API.

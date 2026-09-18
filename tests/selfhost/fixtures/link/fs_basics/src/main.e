@@ -6,6 +6,7 @@
 use e.mem
 use e.fs
 use e.os
+use e.path
 
 // 2020-01-01 and 2100-01-01 in Unix nanoseconds. A timestamp is checked against both:
 // against zero it would pass while still carrying the wrong epoch or the wrong scale.
@@ -39,6 +40,7 @@ fn clear(a: *mem.Arena) {
     let link = fs.remove_file(a, "np-fs/link.txt")
     let from_file = fs.remove_file(a, "np-fs/from.txt")
     let landed_file = fs.remove_file(a, "np-fs/landed.txt")
+    let cross_source = fs.remove_file(a, "np-fs/cross-source.txt")
     let scratch = fs.remove_file(a, "np-fs/scratch.txt")
     let moved_deep = fs.remove_file(a, "np-fs/deep/moved.txt")
     let root_probe = fs.remove_file(a, "np-fs/deep/root-probe.txt")
@@ -353,6 +355,32 @@ fn main(a: *mem.Arena) -> err {
 
     // Put `one.txt` back to what the rest of this fixture expects of it.
     if fs.write_file(a, "np-fs/one.txt", payload[..]) != ok { os.exit(232i32) }
+
+    // A runner with two filesystems supplies the second directory. Replacement is an
+    // atomic rename, never an implicit copy: the request is Invalid, the source remains,
+    // and no destination appears. Hosts with only one available volume skip this branch.
+    let (cross_dir, cross_dir_error) = os.env(a, "NEPER_CROSS_VOLUME_DIR")
+    if cross_dir_error == ok {
+        var cross_parts: [2]str = zero
+        cross_parts[0usize] = cross_dir
+        cross_parts[1usize] = "np-fs-cross-destination.txt"
+        var cross_style: path.Style = .Posix
+        if os.NATIVE_SEPARATOR == 92u8 { cross_style = .Windows }
+        let (cross_destination, cross_path_error) = path.join(a, cross_parts[..], cross_style)
+        if cross_path_error != ok { os.exit(141i32) }
+        let stale_cross_destination = fs.remove_file(a, cross_destination)
+        if fs.write_file(a, "np-fs/cross-source.txt", stamp[..]) != ok { os.exit(142i32) }
+        if fs.replace(a, "np-fs/cross-source.txt", cross_destination, overwriting) != fs.Invalid { os.exit(143i32) }
+        let (cross_source_after, cross_source_error) = fs.stat(a, "np-fs/cross-source.txt")
+        if cross_source_error != ok { os.exit(144i32) }
+        if cross_source_after.size != 3u64 { os.exit(145i32) }
+        let (cross_destination_exists, cross_exists_error) = fs.exists(a, cross_destination)
+        if cross_exists_error != ok { os.exit(146i32) }
+        if cross_destination_exists { os.exit(147i32) }
+        if fs.remove_file(a, "np-fs/cross-source.txt") != ok { os.exit(148i32) }
+    } else {
+        if cross_dir_error != os.NotFound { os.exit(149i32) }
+    }
 
     // A `Root` is a directory held open, and every name used through it resolves against
     // that handle. The refusals are the reason it exists, so they are what is checked.

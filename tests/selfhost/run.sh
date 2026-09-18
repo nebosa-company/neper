@@ -637,7 +637,11 @@ chmod +x "$test_build/fs-basics-selfhost"
 # os_fs above still exercises the mounted repository filesystem separately.
 fs_native_scratch=$(mktemp -d "${TMPDIR:-/tmp}/neper-fs.XXXXXX")
 trap 'rm -rf "$fs_native_scratch"' EXIT HUP INT TERM
-(cd "$fs_native_scratch" && "$test_build/fs-basics-selfhost")
+if [ "$(stat -c %d "$fs_native_scratch")" != "$(stat -c %d "$test_build")" ]; then
+    (cd "$fs_native_scratch" && NEPER_CROSS_VOLUME_DIR="$test_build" "$test_build/fs-basics-selfhost")
+else
+    (cd "$fs_native_scratch" && env -u NEPER_CROSS_VOLUME_DIR "$test_build/fs-basics-selfhost")
+fi
 rm -rf "$fs_native_scratch"
 trap - EXIT HUP INT TERM
 # `e.proc` against a real child, which is the fixture's own image. Besides the legacy output

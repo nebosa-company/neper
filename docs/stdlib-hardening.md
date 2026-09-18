@@ -190,6 +190,11 @@ one entry and closed before exhaustion. Further iteration is terminal, and a sec
 is harmless. The same public fixture pins that behavior on both hosts without exposing
 whether a particular implementation buffers directory entries or holds native handles.
 
+D584 pins cross-volume replacement when the runner exposes two filesystems. The operation
+returns `Invalid`, leaves the source intact and creates no destination, proving the portable
+API does not disguise a copy as an atomic replace. A single-volume host skips only this
+environment-dependent branch rather than emulating the guarantee.
+
 ## SL07 — streaming HTTP and event streams
 
 ResponseStream separates headers from bounded incremental body reads. It owns the
