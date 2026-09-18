@@ -10,6 +10,7 @@ use e.os
 use e.time
 use e.crypto.kdf as kdf
 use e.crypto.kx as kx
+use e.crypto.aead as aead
 use e.cancel
 use e.thread
 
@@ -179,6 +180,18 @@ fn main(a: *mem.Arena) -> err {
     var bad_keys = record_keys0
     let (_, _, bad_error) = tls.open_record(&bad_keys, record[0..], opened[0..])
     if bad_error != tls.Protocol || bad_keys.sequence != 0u64 { os.exit(8i32) }
+    var padded_record: [27]u8 = zero
+    padded_record[0] = 23u8
+    padded_record[1] = 3u8
+    padded_record[2] = 3u8
+    padded_record[4] = 22u8
+    let padded_inner: [6]u8 = [6]u8{ 111, 107, 23, 0, 0, 0 }
+    var padded_seal_keys = record_keys0
+    let padded_nonce = tls.record_nonce(&padded_seal_keys)
+    let (padded_written, padded_seal_error) = aead.aes128_gcm_seal(padded_record[5usize..], padded_seal_keys.key, padded_nonce, padded_record[..5usize], padded_inner[0..])
+    var padded_open_keys = record_keys0
+    let (padded_len, padded_type, padded_open_error) = tls.open_record(&padded_open_keys, padded_record[..5usize + padded_written], opened[0..])
+    if padded_seal_error != ok || padded_written != 22usize || padded_open_error != ok || padded_len != 2usize || padded_type != 23u8 || !same_bytes(opened[..2usize], "ok") { os.exit(43i32) }
 
     // The narrow hello profile negotiates only TLS 1.3, AES-128-GCM/SHA-256,
     // X25519 and Ed25519, with server-preference ALPN.
@@ -204,6 +217,10 @@ fn main(a: *mem.Arena) -> err {
     if server_hello_error != ok || server_hello_len != 90usize { os.exit(11i32) }
     let (server_key, parse_server_error) = tls.parse_server_hello(server_hello[..server_hello_len])
     if parse_server_error != ok { os.exit(12i32) }
+    server_hello[45] = 43u8
+    let (_, duplicate_extension_error) = tls.parse_server_hello(server_hello[..server_hello_len])
+    if duplicate_extension_error != tls.Protocol { os.exit(44i32) }
+    server_hello[45] = 51u8
     let (client_shared, client_shared_error) = kx.x25519_exchange(client_secret, server_key)
     let (server_shared, server_shared_error) = kx.x25519_exchange(server_secret, hello_info.peer_key)
     if client_shared_error != ok || server_shared_error != ok || !same_bytes(client_shared.bytes[0..], server_shared.bytes[0..]) { os.exit(13i32) }

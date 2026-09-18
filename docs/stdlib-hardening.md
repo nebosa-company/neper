@@ -261,8 +261,8 @@ framing; and keeps method tokens case-sensitive while header lookup is ASCII-ins
 The writer validates header syntax and framing, supplies a deterministic Content-Length
 when absent, and emits a single bounded chunk for a full-body message. The one-byte fixture
 pins request pipelining, chunk boundaries, trailers, close framing, every limit, framing
-conflicts and deterministic request/response output. Connection ownership, cancellation,
-socket and TLS request functions remain planned.
+conflicts and deterministic request/response output. At D590, connection ownership,
+cancellation, socket and TLS request functions remained planned; D594-D641 deliver them.
 
 D591 begins the real transport prerequisite with `e.net`'s pure address values. Strict
 IPv4 and IPv6 parsing accepts compressed and embedded-IPv4 forms plus numeric scopes,
@@ -298,8 +298,8 @@ the existing independent limits and closes on every path; response parse failure
 the request's arena allocations. HEAD parses and retains its response head without reading
 the advertised representation bytes, while CONNECT is explicitly unsupported because a
 full-body return cannot represent its tunnel. A real cross-host loopback server checks the
-exact GET and HEAD wire messages, a bounded response body and retained Content-Length.
-Controlled `ResponseStream` and TLS requests remain planned.
+exact GET and HEAD wire messages, a bounded response body and retained Content-Length. At D594,
+controlled `ResponseStream` and TLS requests remained for the following slices.
 
 D595 delivers that plain `ResponseStream`. Its controlled connection returns after the
 bounded head; `response_read` incrementally decodes fixed-length, chunked (with bounded
@@ -307,8 +307,8 @@ trailers) and close-delimited bodies into caller storage while enforcing the tot
 limit. Every network refill retains the original cancellation/deadline control. Closing
 is idempotent and never drains an unbounded peer; HEAD and body-forbidden statuses begin
 at EOF. The real loopback fixture reads a chunked body across three-byte destinations,
-pins its terminal trailer/EOF and cancels a second stream between head and body. TLS full
-and streaming requests remain planned with `e.net.tls`.
+pins its terminal trailer/EOF and cancels a second stream between head and body. At D595, TLS
+full and streaming requests remained for D640-D641 with `e.net.tls`.
 
 D596 begins `e.net.ws` with the pure client handshake nonce. `client_key` Base64-encodes
 exactly sixteen caller-supplied entropy bytes into caller storage, uses the standard

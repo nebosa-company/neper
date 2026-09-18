@@ -1,6 +1,6 @@
-// TLS 1.3 stream state. Constructors retain the caller's I/O and configuration
-// slices in arena-owned state; the handshake and record paths are delivered in
-// later slices rather than reporting plaintext transport as TLS.
+// Narrow TLS 1.3 stream profile over explicit caller I/O and configuration.
+// Constructors are inert; authenticated handshake, record and close paths never
+// expose plaintext transport as TLS.
 
 use e.io
 use e.cancel
@@ -139,7 +139,7 @@ fn open_record(keys: *TrafficKeys, record: []const u8, out: []u8) -> (usize, u8,
     if record.len < 22usize || record[0] != 23u8 || record[1] != 3u8 || record[2] != 3u8 { ret (0usize, 0u8, Protocol) }
     let sealed_len = (usize(record[3]) << 8usize) | usize(record[4])
     if sealed_len > 16640usize || sealed_len + 5usize != record.len || keys.sequence == 18446744073709551615u64 { ret (0usize, 0u8, Protocol) }
-    var inner: [16385]u8 = zero
+    var inner: [16624]u8 = zero
     let nonce = record_nonce(keys)
     let (plain_len, open_error) = aead.aes128_gcm_open(inner[0..], keys.key, nonce, record[..5usize], record[5usize..])
     if open_error != ok { ret (0usize, 0u8, Protocol) }
@@ -149,6 +149,7 @@ fn open_record(keys: *TrafficKeys, record: []const u8, out: []u8) -> (usize, u8,
     let content_type = inner[end - 1usize]
     if content_type != 21u8 && content_type != 22u8 && content_type != 23u8 { ret (0usize, 0u8, Protocol) }
     let content_len = end - 1usize
+    if content_len > 16384usize { ret (0usize, 0u8, Protocol) }
     if content_len == 0usize && content_type != 23u8 { ret (0usize, 0u8, Protocol) }
     if out.len < content_len { ret (0usize, 0u8, Protocol) }
     mem.copy[u8](out[..content_len], inner[..content_len])
@@ -213,6 +214,18 @@ fn take_bytes(c: *Cursor, count: usize) -> ([]const u8, err) {
     let value = c.data[c.off..c.off + count]
     c.off += count
     ret (value, ok)
+}
+
+fn has_extension(encoded: []const u8, kind: usize) -> bool {
+    var at = 0usize
+    while at + 4usize <= encoded.len {
+        let current = (usize(encoded[at]) << 8usize) | usize(encoded[at + 1usize])
+        let length = (usize(encoded[at + 2usize]) << 8usize) | usize(encoded[at + 3usize])
+        if current == kind { ret true }
+        if length > encoded.len - at - 4usize { ret false }
+        at += 4usize + length
+    }
+    ret false
 }
 
 fn bytes_same(left: []const u8, right: []const u8) -> bool {
@@ -355,9 +368,10 @@ fn parse_client_hello(message: []const u8, supported_alpn: []const str) -> (Clie
         cipher_at += 2usize
     }
     let (compression_len, compression_error) = take_u8(&c)
-    if compression_error != ok || compression_len == 0u8 { ret (out, Protocol) }
+    if compression_error != ok || compression_len != 1u8 { ret (out, Protocol) }
     let (compression, compression_bytes_error) = take_bytes(&c, usize(compression_len))
-    if compression_bytes_error != ok || compression[0] != 0u8 || !has_cipher { ret (out, Unsupported) }
+    if compression_bytes_error != ok || compression[0] != 0u8 { ret (out, Protocol) }
+    if !has_cipher { ret (out, Unsupported) }
     let (extensions_len, extensions_error) = take_u16(&c)
     let (extensions, extension_bytes_error) = take_bytes(&c, extensions_len)
     if extensions_error != ok || extension_bytes_error != ok || c.off != c.data.len { ret (out, Protocol) }
@@ -368,10 +382,12 @@ fn parse_client_hello(message: []const u8, supported_alpn: []const str) -> (Clie
     var has_share = false
     var offered_alpn: []const u8 = zero
     while e.off < e.data.len {
+        let extension_at = e.off
         let (extension_kind, extension_kind_error) = take_u16(&e)
         let (extension_len, extension_len_error) = take_u16(&e)
         let (value, value_error) = take_bytes(&e, extension_len)
         if extension_kind_error != ok || extension_len_error != ok || value_error != ok { ret (out, Protocol) }
+        if has_extension(extensions[..extension_at], extension_kind) { ret (out, Protocol) }
         if extension_kind == 43usize { has_version = value.len == 3usize && value[0] == 2u8 && value[1] == 3u8 && value[2] == 4u8 }
         if extension_kind == 10usize { has_group = value.len == 4usize && value[0] == 0u8 && value[1] == 2u8 && value[2] == 0u8 && value[3] == 29u8 }
         if extension_kind == 13usize { has_signature = value.len == 4usize && value[0] == 0u8 && value[1] == 2u8 && value[2] == 8u8 && value[3] == 7u8 }
@@ -438,7 +454,7 @@ fn parse_server_hello(message: []const u8) -> (kx.X25519PublicKey, err) {
     let (legacy, legacy_error) = take_u16(&c)
     let (_, random_error) = take_bytes(&c, 32usize)
     let (session_len, session_error) = take_u8(&c)
-    if legacy_error != ok || random_error != ok || session_error != ok || legacy != 771usize || session_len > 32u8 { ret (key, Protocol) }
+    if legacy_error != ok || random_error != ok || session_error != ok || legacy != 771usize || session_len != 0u8 { ret (key, Protocol) }
     let (_, session_bytes_error) = take_bytes(&c, usize(session_len))
     let (cipher, cipher_error) = take_u16(&c)
     let (compression, compression_error) = take_u8(&c)
@@ -450,10 +466,13 @@ fn parse_server_hello(message: []const u8) -> (kx.X25519PublicKey, err) {
     var has_version = false
     var has_share = false
     while e.off < e.data.len {
+        let extension_at = e.off
         let (extension_kind, extension_kind_error) = take_u16(&e)
         let (extension_len, extension_len_error) = take_u16(&e)
         let (value, value_error) = take_bytes(&e, extension_len)
         if extension_kind_error != ok || extension_len_error != ok || value_error != ok { ret (key, Protocol) }
+        if has_extension(extensions[..extension_at], extension_kind) { ret (key, Protocol) }
+        if extension_kind != 43usize && extension_kind != 51usize { ret (key, Unsupported) }
         if extension_kind == 43usize { has_version = value.len == 2usize && value[0] == 3u8 && value[1] == 4u8 }
         if extension_kind == 51usize && value.len == 36usize && value[0] == 0u8 && value[1] == 29u8 && value[2] == 0u8 && value[3] == 32u8 {
             mem.copy[u8](key.bytes[0..], value[4..])
@@ -770,10 +789,13 @@ fn parse_encrypted_extensions(message: []const u8, offered: []const str) -> (str
     var selected = ""
     var e = Cursor { data: extensions, off: 0usize }
     while e.off < e.data.len {
+        let extension_at = e.off
         let (extension_kind, extension_kind_error) = take_u16(&e)
         let (extension_len, extension_len_error) = take_u16(&e)
         let (value, value_error) = take_bytes(&e, extension_len)
         if extension_kind_error != ok || extension_len_error != ok || value_error != ok { ret ("", Protocol) }
+        if has_extension(extensions[..extension_at], extension_kind) { ret ("", Protocol) }
+        if extension_kind != 16usize { ret ("", Unsupported) }
         if extension_kind == 16usize {
             if selected.len != 0usize || value.len < 3usize { ret ("", Protocol) }
             let list_len = (usize(value[0]) << 8usize) | usize(value[1])

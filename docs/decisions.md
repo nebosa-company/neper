@@ -12756,3 +12756,15 @@ exceeding `e.thread`'s generic 1 MiB default during the server handshake. Its th
 integration workers now request 8 MiB explicitly. This changes only the test harness:
 application stacks remain caller policy, while the TLS protocol's heap state and
 16 KiB record bounds are unchanged.
+
+## D644 -- TLS peer parsing closes the narrow-profile edges
+
+The TLS record reader now accepts the bounded zero padding TLS 1.3 permits while
+still refusing application content above 16 KiB. Hello and encrypted-extension
+parsers reject duplicate extensions, the legacy compression vector is exactly the
+single null method, the server-hello session echo matches the client's empty value,
+and server messages reject extensions outside the advertised narrow profile.
+
+The focused fixture pins padded authenticated application data and duplicate
+ServerHello rejection. Historical hardening notes now identify the slice at which
+TLS remained planned instead of contradicting D631-D641's delivered profile.
