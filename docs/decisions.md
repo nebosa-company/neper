@@ -12229,3 +12229,16 @@ when both day-of-month and day-of-week are restricted. `next` searches calendar 
 only enumerates times on a matching day, so impossible dates terminate after one
 400-year Gregorian cycle or the representable timestamp range. The focused fixture pins
 weekday steps, strict-after behavior, DOM/DOW OR and a positive offset.
+
+## D603 -- Grep stays stateless because its frozen Index has no state
+
+`e.grep.search` recursively walks regular files without following symlinks and returns
+every overlapping literal byte match with one-based line/column and the full matching
+line retained in the caller arena. It counts first, allocates the exact result slice and
+rolls back the whole call on traversal or read failure. Empty patterns are invalid.
+
+The frozen `Index { root, trigrams }` cannot own postings, storage or even a state handle.
+`build_index` therefore validates the tree and records a bounded total trigram count;
+`search_index` deliberately performs a fresh search instead of inventing a hidden global
+cache or sidecar file. The focused fixture pins two files, three positions, line text,
+metadata and cleanup on both hosts.

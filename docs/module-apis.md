@@ -3905,6 +3905,12 @@ fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err)
 fn search_index(a: *mem.Arena, ix: Index, pattern: str) -> ([]Match, err)
 ```
 
+Search is recursive literal byte matching with one-based line and byte-column positions;
+each result retains its full matching line in the caller arena. Empty patterns are
+invalid. The frozen `Index` value contains no state handle or postings, so `build_index`
+records the root and bounded trigram count while `search_index` performs a fresh walk;
+it is a compatibility entry point, not a hidden process-global cache.
+
 ### `e.audio`
 
 ```neper

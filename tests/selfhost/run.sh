@@ -1237,6 +1237,11 @@ cron_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$cron_written" = 'executable written' ]
 chmod +x "$test_build/time-cron-selfhost"
 "$test_build/time-cron-selfhost"
+# `e.grep` pins recursive literal matches and its stateless index contract.
+grep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/grep/src/main.e" "$repo" x64 linux "$test_build/grep-selfhost")
+[ "$grep_written" = 'executable written' ]
+chmod +x "$test_build/grep-selfhost"
+(cd "$fs_scratch" && "$test_build/grep-selfhost")
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

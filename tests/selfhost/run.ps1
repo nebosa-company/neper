@@ -1325,6 +1325,15 @@ $cronWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $cronWritten -ne 'executable written') { throw 'e.time.cron emission failed' }
 & $cronPath
 if ($LASTEXITCODE -ne 0) { throw "an e.time.cron parse or match answered wrongly: exit $LASTEXITCODE" }
+# `e.grep` pins recursive literal matches and its stateless index contract.
+$grepPath = Join-Path $testBuild 'grep-selfhost.exe'
+$grepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\grep\src\main.e') $repo 'x64' 'windows' $grepPath
+if ($LASTEXITCODE -ne 0 -or $grepWritten -ne 'executable written') { throw 'e.grep emission failed' }
+Push-Location $fsScratch
+& $grepPath
+$grepExit = $LASTEXITCODE
+Pop-Location
+if ($grepExit -ne 0) { throw "an e.grep index or search answered wrongly: exit $grepExit" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
