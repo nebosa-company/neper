@@ -1307,6 +1307,12 @@ $wsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link
 if ($LASTEXITCODE -ne 0 -or $wsWritten -ne 'executable written') { throw 'e.net.ws emission failed' }
 & $wsPath
 if ($LASTEXITCODE -ne 0) { throw "an e.net.ws handshake or frame answered wrongly: exit $LASTEXITCODE" }
+# `e.net.tls` constructors are inert until handshake and expose pinned metadata.
+$tlsPath = Join-Path $testBuild 'net-tls-selfhost.exe'
+$tlsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_tls\src\main.e') $repo 'x64' 'windows' $tlsPath
+if ($LASTEXITCODE -ne 0 -or $tlsWritten -ne 'executable written') { throw 'e.net.tls emission failed' }
+& $tlsPath
+if ($LASTEXITCODE -ne 0) { throw "an e.net.tls constructor or metadata query answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

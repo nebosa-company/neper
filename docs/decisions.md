@@ -12201,3 +12201,12 @@ fragment sequencing. Its caller limit is checked before mask or payload bytes ar
 so an oversized declared payload cannot allocate or be mistaken for a partial success.
 The cross-host fixture pins the RFC server handshake, a masked text frame, an unmasked
 server pong and a bounded oversized receive.
+
+## D600 -- TLS streams begin as inert caller-owned state
+
+`e.net.tls` moves from planned to partial with client/server constructors that retain
+the supplied reader, writer and role-specific configuration in the caller arena. They
+perform no I/O, read no ambient trust, time or entropy and expose no plaintext fallback.
+`protocol` reports the only frozen version, TLS 1.3; `negotiated_alpn` is empty until a
+later handshake slice selects a protocol. The cross-host fixture proves construction is
+silent and both roles expose the same pre-handshake metadata.

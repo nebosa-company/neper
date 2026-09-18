@@ -351,6 +351,11 @@ public-Web certificate interoperability from Ed25519 alone, and never work aroun
 missing algorithms by disabling verification. Native trust/time/entropy remain
 explicit inputs. Cryptographic implementation/review stays a later release gate.
 
+D600 starts `e.net.tls` with arena-owned client/server stream state over explicit caller
+I/O and configuration. The constructors perform no I/O, `protocol` reports only TLS 1.3
+and ALPN remains empty before negotiation. The slice deliberately exposes no plaintext
+reader/writer fallback while the handshake and record layers remain undelivered.
+
 ## SL09 — fallible iteration, patterns and test support
 
 TryMap/TryFilter and fallible consumers preserve `next_err` failures and borrow the

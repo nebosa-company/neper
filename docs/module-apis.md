@@ -2820,6 +2820,11 @@ Do not silently weaken certificate/hostname verification to improve connectivity
 Entropy seeds require sufficient fresh caller entropy per independent handshake;
 copied/reused config bytes are not permission to repeat ephemeral randomness.
 
+The delivered constructor slice retains caller-owned I/O and configuration in the
+supplied arena, reports the pinned TLS 1.3 protocol and leaves ALPN empty until a
+successful handshake. It does not pass plaintext through the not-yet-delivered record
+path.
+
 ### `e.net.http`
 
 ```neper

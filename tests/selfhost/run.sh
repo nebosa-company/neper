@@ -1222,6 +1222,11 @@ ws_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtur
 [ "$ws_written" = 'executable written' ]
 chmod +x "$test_build/net-ws-selfhost"
 "$test_build/net-ws-selfhost"
+# `e.net.tls` constructors are inert until handshake and expose pinned metadata.
+tls_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_tls/src/main.e" "$repo" x64 linux "$test_build/net-tls-selfhost")
+[ "$tls_written" = 'executable written' ]
+chmod +x "$test_build/net-tls-selfhost"
+"$test_build/net-tls-selfhost"
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

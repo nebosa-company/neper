@@ -1,0 +1,27 @@
+// TLS stream construction retains explicit caller I/O/configuration and reports
+// only the pinned TLS 1.3 version before a handshake has selected ALPN.
+
+use e.io
+use e.mem
+use e.net.tls
+use e.os
+use e.time
+
+fn main(a: *mem.Arena) -> err {
+    let none: [0]u8 = zero
+    var source_state = io.SliceReader { data: none[0..], off: 0usize }
+    let source = io.slice_reader(&source_state)
+    var sink_bytes: [1]u8 = zero
+    var sink_state = io.SliceWriter { data: sink_bytes[0..], off: 0usize }
+    let sink = io.slice_writer(&sink_state)
+    let protocols: [1]str = [1]str{ "h2" }
+    var entropy: [32]u8 = zero
+    let client_config = tls.ClientConfig { server_name: "example.com", trust_roots: none[0..], alpn: protocols[0..], entropy: entropy[0..], now: time.Timestamp { nanos: 0i64 } }
+    let (client_stream, client_error) = tls.client(a, source, sink, client_config)
+    if client_error != ok || client_stream.state == nil || tls.protocol(&client_stream) != .Tls13 || tls.negotiated_alpn(&client_stream).len != 0usize { os.exit(1i32) }
+    let server_config = tls.ServerConfig { certificate_chain: none[0..], private_key: none[0..], alpn: protocols[0..], entropy: entropy[0..] }
+    let (server_stream, server_error) = tls.server(a, source, sink, server_config)
+    if server_error != ok || server_stream.state == nil || tls.protocol(&server_stream) != .Tls13 || tls.negotiated_alpn(&server_stream).len != 0usize { os.exit(2i32) }
+    if source_state.off != 0usize || sink_state.off != 0usize { os.exit(3i32) }
+    ret ok
+}
