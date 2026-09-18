@@ -10269,7 +10269,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if c.resources_on {
             var opaque_subject = base
             while opaque_subject.kind == .Pointer && opaque_subject.has_element && opaque_subject.element < c.type_count { opaque_subject = c.types[opaque_subject.element] }
-            if resource_type(c, opaque_subject) && !seeded_handle(c, opaque_subject) && opaque_subject.module_index != module_index {
+            if resource_type(c, opaque_subject) && !seeded_arena(c, opaque_subject) && opaque_subject.module_index != module_index {
                 record_failure(c, module_index, node, .ResourceOpaque, opaque_subject.name, "")
                 ret (invalid_type(), ResourceViolation)
             }

@@ -389,8 +389,7 @@ reflection and the format codecs are not stopped at a resource's fields
 dynamic indices and slices of resources are not tracked as wholes; the generic containers take their element by `own` (D353), but none can hold an
 obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
-is H02's; the seeded handles' `raw` stays readable until the fixed
-surface gains `file_handle`; the `@unsafe` inventory in the manifest and `index`
+is H02's; the `@unsafe` inventory in the manifest and `index`
 (section 8, H27) is not written; the pin rule is lexical, and infers nothing about what a callee keeps
 (H02); the debug-mode check-bodies budget above.
 
@@ -437,3 +436,8 @@ indices remain outside this increment.
 into the fixed array's slot table, including through direct slice aliases. Thus
 `files[1..][0]` and `files[1]` name one ownership identity. Dynamic lower bounds and
 slices without a tracked fixed-array owner remain outside the rule.
+
+**D624 follow-up.** The seeded handles no longer expose their representation fields
+to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
+returns a plain `Handle` view when callers need the platform value, so `File.raw`
+now receives the same E-SAFETY-0010 as a declared resource's private field.

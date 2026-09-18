@@ -12522,3 +12522,14 @@ Under D506's zero-growth rule, the two Linux arena cells are explicitly re-pinne
 the image cells are unchanged. This is the Linux counterpart of D622 and carries the
 same rationale: retain exact per-slot ownership evidence and slice-owner offsets
 without accepting any generated-code growth.
+
+## D624 -- Seeded resource representations use explicit handle views
+
+`os.File`, `os.Proc` and `os.Thread` now follow the same representation-privacy
+rule as declared resources: checked code outside `e.os` cannot read their fields.
+The earlier compatibility exception is no longer needed because the fixed OS
+surface supplies `file_handle` and the corresponding explicit representation
+accessors, which return plain view values without exposing an affine value's bits.
+
+The focused accept fixture reads a standard stream through `os.file_handle`; the
+reject fixture reads `File.raw` directly and pins E-SAFETY-0010 on both hosts.

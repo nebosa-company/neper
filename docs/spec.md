@@ -3556,8 +3556,9 @@ owes nothing by containment -- what it holds is the callee's business unless its
   type names a cleanup -- and a field read, a dynamically indexed element read, or a
   borrowed producer's handle is a **view**: read as often as wanted, owed by nobody. A declared resource's
 fields are read only in the module that declares it, or in an `@unsafe` function
-(`E-SAFETY-0010`); the seeded handles' `raw` stays readable until the fixed surface
-gains `file_handle`. These rules are checked statically, in every build mode, and
+(`E-SAFETY-0010`). The seeded handles follow the same rule; checked code obtains a
+plain representation view through `os.file_handle`, `os.socket_handle` or the
+corresponding explicit accessor. These rules are checked statically, in every build mode, and
 none becomes a trap:
 
 A concrete generic aggregate is classified after its type arguments are
