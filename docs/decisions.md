@@ -12508,3 +12508,17 @@ D506's zero-growth rule makes that deterministic cost an explicit decision. The
 Windows static baseline is re-pinned only for the two arena cells; the image cells
 are unchanged. The richer state is retained because it is what lets H01 identify a
 specific array slot and preserve its acquisition/move evidence through slice aliases.
+
+## D623 -- The Linux static gate records per-slot ownership evidence
+
+The Linux full-suite measurement of D616-D622 shows the same bounded checker-state
+cost as Windows, with host-alignment-specific rounding: the sc500k debug worker arena
+increases from 2275 to 2283 MB (0.4%), and release increases from 2981 to 2988 MB
+(0.2%). The emitted images remain byte-for-byte at 2,979,824 and 2,079,280 bytes.
+Every functional, diagnostic, schema, metamorphic, bootstrap and differential check
+completed before the static gate reported these exact cells.
+
+Under D506's zero-growth rule, the two Linux arena cells are explicitly re-pinned;
+the image cells are unchanged. This is the Linux counterpart of D622 and carries the
+same rationale: retain exact per-slot ownership evidence and slice-owner offsets
+without accepting any generated-code growth.
