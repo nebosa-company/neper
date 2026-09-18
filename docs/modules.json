@@ -1581,7 +1581,7 @@
   {
    "name": "e.net",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [

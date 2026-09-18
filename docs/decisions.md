@@ -12066,3 +12066,20 @@ pipelined requests, split chunk delimiters, trailers, a close-delimited response
 independent limit, a smuggling-style framing conflict and deterministic writes. Network
 connection ownership and cancellation remain the next SL07 layer rather than being faked
 on top of the still-planned `e.net` and `e.net.tls` modules.
+
+## D591 -- Network transport starts with host-independent address values
+
+`e.net` moves from planned to partial with the part that needs neither DNS nor a socket:
+`Ip4`, `Ip6`, `Address`, `Endpoint`, `Family`, `Shutdown`, the socket alias and the planned
+portable errors, plus `parse_ip` and `format_ip`. IPv4 is exactly four decimal components;
+leading zeroes are rejected because historical APIs interpret them inconsistently. IPv6
+accepts one `::`, embedded dotted decimal and an optional numeric scope, but not an
+interface name that would require a host lookup.
+
+Formatting uses lowercase hexadecimal, removes leading group zeroes and compresses the
+first longest run of at least two zero groups. A nonzero scope is decimal. It writes only
+to the caller buffer and fails cleanly when that buffer is short. The cross-host fixture
+pins zero-run ties, all-zero and loopback forms, mapped input, the largest u32 scope,
+overlong decimal/hex/scope inputs and malformed compression. Keeping this slice pure makes
+its representation stable before D592 maps it to the already-delivered `e.os` socket
+address and transfer fence.

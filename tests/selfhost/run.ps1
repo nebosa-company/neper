@@ -1286,6 +1286,13 @@ Push-Location $fsScratch
 $csvExit = $LASTEXITCODE
 Pop-Location
 if ($csvExit -ne 0) { throw "an e.fmt.csv read or write answered wrongly: exit $csvExit" }
+# `e.net` address values are host-independent: strict IPv4/IPv6 parsing, canonical
+# formatting, numeric scopes, overflow refusal and caller-buffer bounds.
+$netPath = Join-Path $testBuild 'net-selfhost.exe'
+$netWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net\src\main.e') $repo 'x64' 'windows' $netPath
+if ($LASTEXITCODE -ne 0 -or $netWritten -ne 'executable written') { throw 'e.net emission failed' }
+& $netPath
+if ($LASTEXITCODE -ne 0) { throw "an e.net address codec answered wrongly: exit $LASTEXITCODE" }
 # The delivered `e.net.http` codecs run over a one-byte source: HTTP pins pipelining,
 # fixed/chunked/close framing and independent limits; SSE pins split UTF-8/CRLF,
 # retained state, the EOF rule and flat memory over ten thousand events.

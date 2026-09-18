@@ -261,6 +261,14 @@ pins request pipelining, chunk boundaries, trailers, close framing, every limit,
 conflicts and deterministic request/response output. Connection ownership, cancellation,
 socket and TLS request functions remain planned.
 
+D591 begins the real transport prerequisite with `e.net`'s pure address values. Strict
+IPv4 and IPv6 parsing accepts compressed and embedded-IPv4 forms plus numeric scopes,
+rejects leading-zero ambiguity, duplicate compression, oversized groups/scopes and
+trailing text, and performs no host lookup. Formatting is allocation-free in caller
+storage and applies lowercase, first-longest RFC 5952 zero compression. Cross-host tests
+pin canonical ties, mapped input, maximum scope, arithmetic-overflow inputs and a short
+destination. DNS, sockets and controlled I/O remain for the following slices.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

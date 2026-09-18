@@ -2750,6 +2750,13 @@ fn send_with_control(socket: Socket, src: []const u8, control: cancel.Control) -
 
 ```
 
+`parse_ip` accepts strict dotted-decimal IPv4 and RFC 4291 IPv6 literals, including
+embedded IPv4 and an optional numeric `%scope` suffix. Ambiguous IPv4 leading zeroes,
+interface-name scopes and trailing text are rejected. `format_ip` uses lowercase RFC
+5952-style hexadecimal, suppresses leading zeroes and compresses the first longest run
+of at least two zero groups. A nonzero scope is emitted as decimal. The returned string
+borrows `dst`; insufficient destination space fails without allocation.
+
 
 Controlled operations use e.cancel and preserve byte counts on failure. DNS may
 require bounded worker isolation; completion is not acknowledged while caller-owned
