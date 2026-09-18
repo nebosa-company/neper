@@ -31,6 +31,37 @@ class ModuleSurfaceTests(unittest.TestCase):
         self.assertEqual(
             checker.compare("e.demo", {"a", "b"}, {"a", "b"}, set()), [])
 
+    def test_partial_surface_allows_an_extra_helper(self):
+        self.assertEqual(
+            checker.compare_delivered(
+                "e.demo", {"public"}, {"public", "helper"}, set()), [])
+
+    def test_partial_surface_requires_every_catalogue_name(self):
+        problems = checker.compare_delivered(
+            "e.demo", {"public", "missing"}, {"public"}, set())
+        self.assertEqual(len(problems), 1)
+        self.assertIn("delivered M1/M2 surface", problems[0])
+
+    def test_partial_compiler_allows_an_unindexed_seed(self):
+        self.assertEqual(
+            checker.compare_delivered_compiler_declarations(
+                "e.demo", {("fn", "seeded"): "fn seeded()"}, {}, {"seeded"}),
+            [])
+
+    def test_partial_compiler_requires_an_indexed_source_declaration(self):
+        problems = checker.compare_delivered_compiler_declarations(
+            "e.demo", {("fn", "written"): "fn written()"}, {}, set())
+        self.assertEqual(len(problems), 1)
+        self.assertIn("compiler index has no fn declaration", problems[0])
+
+    def test_dependent_intrinsic_can_skip_spelling_comparison(self):
+        self.assertEqual(
+            checker.compare_delivered_compiler_declarations(
+                "e.demo", {("fn", "splat"): "fn splat[V: type](x: T) -> V"},
+                {("fn", "splat"): "fn splat[V: type](x: meta.element_type[V]()) -> V"},
+                set(), False),
+            [])
+
     def test_seeded_intrinsic_satisfies_a_declaration(self):
         # `e.mem` and `e.os` are almost entirely compiler-provided, so a fenced name
         # with no source is satisfied by a seed.

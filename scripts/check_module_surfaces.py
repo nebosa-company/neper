@@ -1,5 +1,4 @@
-"""Verify that each implemented module's public declarations are exactly its frozen
-surface.
+"""Verify delivered module declarations against the frozen catalogue.
 
 The language has no visibility mechanism (spec section 12): every module-scope
 declaration is exported. So a module at `surface:"source"` must declare precisely
@@ -11,7 +10,9 @@ compiler as an intrinsic in `src/resolve.e`. `e.mem` and `e.os` are almost entir
 the second kind.
 
 With ``--compiler``, the checker also asks the compiler to parse, resolve and index
-each source module, then compares its checked declarations with the catalogue.
+each source module, then compares its checked declarations with the catalogue. M1/M2
+partial modules must deliver every catalogue name, but may retain helper or legacy
+declarations until their migration makes the whole source surface exact.
 
 Usage:  python scripts/check_module_surfaces.py [--compiler PATH --os TARGET]
 """
@@ -89,6 +90,16 @@ def compare(module, fenced, written, seeded):
     return problems
 
 
+def compare_delivered(module, fenced, written, seeded):
+    """A partial module must deliver the catalogue but may still export extras."""
+    problems = []
+    for name in sorted(fenced - (written | seeded)):
+        problems.append('%s: `%s` is in its delivered M1/M2 surface but neither '
+                        'written in source nor seeded as an intrinsic' %
+                        (module, name))
+    return problems
+
+
 def normalize_declaration(text):
     return re.sub(r', }', ' }', ' '.join(text.split()))
 
@@ -155,6 +166,26 @@ def compare_compiler_declarations(module, fenced, compiled):
     return problems
 
 
+def compare_delivered_compiler_declarations(module, fenced, compiled, seeded,
+                                            exact_signatures=True):
+    """Compare declarations delivered by a partial module's checked source."""
+    problems = []
+    for key, expected in fenced.items():
+        kind, name = key
+        actual = compiled.get(key)
+        if actual is None:
+            # Most compiler seeds still expose only their names. Source declarations
+            # must always be present in the semantic index.
+            if name not in seeded:
+                problems.append('%s.%s: compiler index has no %s declaration' %
+                                (module, name, kind))
+        elif exact_signatures and actual != normalize_declaration(expected):
+            problems.append('%s.%s: catalogue declaration `%s` differs from checked '
+                            'source `%s`' %
+                            (module, name, normalize_declaration(expected), actual))
+    return problems
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler', type=Path)
@@ -171,39 +202,60 @@ def main(argv=None):
     seeded = seeded_intrinsics()
 
     failures = []
-    checked = 0
+    exact_checked = 0
+    partial_checked = 0
     for entry in modules:
-        if entry.get('surface') != 'source':
+        exact = entry.get('surface') == 'source'
+        partial = (entry.get('surface') == 'partial'
+                   and entry.get('milestone') in {'M1', 'M2'})
+        if not exact and not partial:
             continue
         module = entry['name']
         fenced = surfaces.get(module)
         if fenced is None:
-            failures.append('%s: at surface "source" but has no fence in '
+            failures.append('%s: delivered but has no fence in '
                             'docs/module-apis.md' % module)
             continue
         written = source_declarations(module)
         if written is None:
-            failures.append('%s: at surface "source" but has no lib/e source' % module)
+            failures.append('%s: delivered but has no lib/e source' % module)
             continue
-        failures.extend(compare(module, fenced, written, seeded.get(module, set())))
+        module_seeds = seeded.get(module, set())
+        if exact:
+            failures.extend(compare(module, fenced, written, module_seeds))
+        else:
+            failures.extend(compare_delivered(module, fenced, written, module_seeds))
         if args.compiler:
             compiled, failure = compiler_declarations(
                 args.compiler, module, args.arch, args.target_os)
             if failure:
                 failures.append(failure)
             else:
-                failures.extend(compare_compiler_declarations(
-                    module, declarations.get(module, {}), compiled))
-        checked += 1
+                if exact:
+                    failures.extend(compare_compiler_declarations(
+                        module, declarations.get(module, {}), compiled))
+                else:
+                    # e.simd's catalogue intentionally uses the dependent T/N/M
+                    # metavariables that SL01 exempts; its checked source spells the
+                    # same types through meta.element_type/array_len.
+                    failures.extend(compare_delivered_compiler_declarations(
+                        module, declarations.get(module, {}), compiled,
+                        module_seeds, module != 'e.simd'))
+        if exact:
+            exact_checked += 1
+        else:
+            partial_checked += 1
 
     for failure in failures:
         print('FAIL: %s' % failure)
     if failures:
-        print('%d module(s) checked, %d problem(s)' % (checked, len(failures)))
+        print('%d exact and %d partial module(s) checked, %d problem(s)' %
+              (exact_checked, partial_checked, len(failures)))
         return 1
     evidence = ' and compiler-resolved declarations' if args.compiler else ''
-    print('PASS: %d implemented module surfaces match their source%s exactly' %
-          (checked, evidence))
+    print('PASS: %d exact source surfaces and %d delivered M1/M2 partial '
+          'catalogues match their source%s' %
+          (exact_checked, partial_checked, evidence))
     return 0
 
 

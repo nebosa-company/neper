@@ -11853,3 +11853,23 @@ one-byte overflow, cancellation precedence, a live contained timeout and invalid
 grace on both hosts. `e.proc` remains `surface:"partial"`: the bounded drain needed
 when an uncontained descendant retains a capture pipe, and an ignore-gentle descendant
 through the complete grace interval, remain explicit SL05 acceptance gaps.
+
+## D579 -- Delivered M1/M2 partial catalogues join the semantic gate
+
+The module-surface gate now covers the thirteen `surface:"partial"` modules assigned
+to M1 or M2 as well as the twenty-eight exact source surfaces. A partial module must
+deliver every declaration in its adopted catalogue, while its helpers and legacy
+exports remain allowed until migration makes the whole source surface exact. Both
+self-host suites parse and resolve all forty-one modules on their concrete target.
+
+Twelve partial catalogues compare exact compiler-indexed declaration signatures.
+`e.simd` is the one explicit exception: SL01 lets its catalogue retain dependent
+T/N/M metavariables while checked source spells the same relationships through
+`meta.element_type` and `meta.array_len`; every name must still resolve. Compiler
+seeds without D577-style canonical signatures remain name evidence only, and the
+variant-composed `surface:"spec"` modules are not misrepresented as one source file.
+
+This completes the D575-D579 batch. The generated progress page is refreshed to
+compiler 86.92, modules 76.71 and tooling 83.12, crediting the wider semantic gate
+and D578's controlled process path without claiming the remaining SL05 drain edge,
+variant-composed spec surfaces or deferred-library fixture manifest.

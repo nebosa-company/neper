@@ -181,7 +181,13 @@ Global constraints:
   then compares its indexed declaration signatures with the catalogue. Both
   self-host suites run this gate. The sixteen compiler-origin functions delivered
   through `e.atomic`, `e.io` and `e.str` carry canonical indexed signatures and are
-  compared exactly too; other compiler seeds remain outside this source-surface gate.
+  compared exactly too. The same gate requires all thirteen `surface:"partial"`
+  M1/M2 modules to contain every catalogue declaration and checks the compiler's
+  exact signature for twelve; `e.simd` keeps SL01's documented dependent T/N/M
+  metavariable spelling exception. Partial modules may still export helpers or
+  legacy declarations, which is why this does not promote them to `surface:"source"`.
+  Other compiler seeds and the variant-composed `surface:"spec"` modules remain
+  outside this source-file signature gate.
 
 ---
 

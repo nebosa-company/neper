@@ -260,8 +260,12 @@ The two self-host suites additionally run `check_module_surfaces.py --compiler` 
 all source-delivered modules and require their compiler-resolved declarations to
 match the extracted catalogue. The sixteen compiler-origin functions in the
 source-delivered `e.atomic`, `e.io` and `e.str` surfaces expose canonical signatures
-through the index and are compared exactly as well. Other compiler seeds remain
-outside this source-surface gate. Executable CPU fixtures above remain required;
+through the index and are compared exactly as well. All thirteen partial M1/M2
+source modules must also deliver every catalogue declaration; twelve have exact
+checked signatures, while `e.simd` retains SL01's documented dependent-metavariable
+spelling exception. Partial modules may still expose helpers or legacy declarations;
+variant-composed `surface:"spec"` modules and other compiler seeds remain outside
+this source-file signature gate. Executable CPU fixtures above remain required;
 later libraries need their own independent runtime evidence, never a static-check
 substitute.
 
