@@ -6,6 +6,7 @@ use e.io
 use e.cancel
 use e.mem
 use e.net
+use e.net.tls as tls
 use e.text.utf8
 
 type Method = enum u8 { Get, Head, Post, Put, Patch, Delete, Options, Connect, Trace }
@@ -552,6 +553,58 @@ fn request(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: L
     if response_error != ok {
         mem.reset(a, mark)
         ret (out, response_error)
+    }
+    ret (response, ok)
+}
+
+fn request_tls(a: *mem.Arena, endpoint: net.Endpoint, config: tls.ClientConfig, req: *const Request, limits: Limits) -> (Response, err) {
+    var out: Response = zero
+    if req.method == .Connect { ret (out, Unsupported) }
+    let (opened, connect_error) = net.tcp_connect(endpoint)
+    if connect_error != ok { ret (out, connect_error) }
+    var connection = opened
+    defer let _ = net.close(connection)
+    let mark = mem.mark(a)
+    let source = net.reader(&connection)
+    let sink = net.writer(&connection)
+    let (secure0, create_error) = tls.client(a, source, sink, config)
+    if create_error != ok {
+        mem.reset(a, mark)
+        ret (out, create_error)
+    }
+    var secure = secure0
+    let handshake_error = tls.handshake(&secure)
+    if handshake_error != ok {
+        let _ = tls.close(&secure)
+        mem.reset(a, mark)
+        ret (out, handshake_error)
+    }
+    var secure_sink = tls.writer(&secure)
+    var encoder = writer(secure_sink)
+    let write_error = write_request(&encoder, req)
+    if write_error != ok {
+        let _ = tls.close(&secure)
+        mem.reset(a, mark)
+        ret (out, write_error)
+    }
+    let secure_source = tls.reader(&secure)
+    let (created, reader_error) = reader(a, secure_source, limits)
+    if reader_error != ok {
+        let _ = tls.close(&secure)
+        mem.reset(a, mark)
+        ret (out, reader_error)
+    }
+    var decoder = created
+    let (response, response_error) = read_response_for(a, &decoder, req.method == .Head)
+    if response_error != ok {
+        let _ = tls.close(&secure)
+        mem.reset(a, mark)
+        ret (out, response_error)
+    }
+    let close_error = tls.close(&secure)
+    if close_error != ok {
+        mem.reset(a, mark)
+        ret (out, close_error)
     }
     ret (response, ok)
 }

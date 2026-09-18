@@ -12711,3 +12711,14 @@ bound by supplying the existing controlled `e.net` adapters.
 
 The focused fixture presents an already-requested token and proves the handshake
 returns `cancel.Cancelled` before consuming or producing one byte.
+
+## D640 -- Full HTTP requests reuse the authenticated TLS stream
+
+`e.net.http.request_tls` now owns one TCP connection, constructs and authenticates a
+TLS client with the caller's explicit configuration, writes one HTTP request through
+the TLS writer, reads one bounded response through the TLS reader, sends
+`close_notify`, and closes the socket on every path. HEAD and CONNECT retain the same
+semantics as the plain helper; redirects, replay and pooling remain absent.
+
+The focused fixture runs an HTTP/1.1 server over the delivered TLS server stack on a
+real loopback socket and requires a verified `secure` response body.

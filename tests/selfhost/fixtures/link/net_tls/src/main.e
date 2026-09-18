@@ -4,11 +4,14 @@
 use e.io
 use e.mem
 use e.net.tls
+use e.net
+use e.net.http as http
 use e.os
 use e.time
 use e.crypto.kdf as kdf
 use e.crypto.kx as kx
 use e.cancel
+use e.thread
 
 fn same_bytes(left: []const u8, right: []const u8) -> bool {
     if left.len != right.len { ret false }
@@ -78,6 +81,56 @@ fn live_handshake(a: *mem.Arena, server_read: *os.File, client_write: *os.File, 
     *client_selected = tls.negotiated_alpn(&live_stream)
     *server_selected = server_job.selected
     ret ok
+}
+
+type HttpServerJob = struct { listener: net.Socket, config: tls.ServerConfig, failed: bool }
+
+fn http_limits() -> http.Limits {
+    ret http.Limits { start_line: 128usize, header_bytes: 512usize, header_count: 16usize, body_bytes: 64usize }
+}
+
+fn serve_https(job: *HttpServerJob) {
+    var storage: [524288]u8 = zero
+    var arena = mem.arena_from(storage[0..])
+    let (accepted, peer, accept_error) = net.tcp_accept(job.listener)
+    if accept_error != ok {
+        job.failed = true
+        ret
+    }
+    var connection = accepted
+    defer let _ = net.close(connection)
+    let source = net.reader(&connection)
+    let sink = net.writer(&connection)
+    let (secure0, create_error) = tls.server(&arena, source, sink, job.config)
+    if create_error != ok {
+        job.failed = true
+        ret
+    }
+    var secure = secure0
+    if tls.handshake(&secure) != ok {
+        job.failed = true
+        ret
+    }
+    let secure_source = tls.reader(&secure)
+    let (decoder0, decoder_error) = http.reader(&arena, secure_source, http_limits())
+    if decoder_error != ok {
+        job.failed = true
+        ret
+    }
+    var decoder = decoder0
+    let (request, request_error) = http.read_request(&arena, &decoder)
+    if request_error != ok || request.method != .Get || !same_bytes(request.target, "/secure") {
+        job.failed = true
+        ret
+    }
+    var response: http.Response = zero
+    response.version = .Http11
+    response.status = 200u16
+    response.reason = "OK"
+    response.body = "secure"
+    var secure_sink = tls.writer(&secure)
+    var encoder = http.writer(secure_sink)
+    if http.write_response(&encoder, &response) != ok || tls.close(&secure) != ok { job.failed = true }
 }
 
 fn main(a: *mem.Arena) -> err {
@@ -213,5 +266,36 @@ fn main(a: *mem.Arena) -> err {
     if live_error != ok { os.exit(25i32) }
     if !same_bytes(client_selected, "h2") || !same_bytes(server_selected, "h2") { os.exit(23i32) }
     if os.close(server_read) != ok || os.close(client_write) != ok || os.close(client_read) != ok || os.close(server_write) != ok { os.exit(24i32) }
+
+    // The full HTTP helper owns one authenticated connection end to end.
+    let (loopback, loopback_error) = net.parse_ip("127.0.0.1")
+    if loopback_error != ok { ret loopback_error }
+    var endpoint = net.Endpoint { address: loopback, port: 0u16 }
+    let (listener, listen_error) = net.tcp_listen(endpoint, 1u32)
+    if listen_error != ok { ret listen_error }
+    var https_server_entropy: [64]u8 = zero
+    var https_client_entropy: [64]u8 = zero
+    entropy_at = 0usize
+    while entropy_at < 64usize {
+        https_server_entropy[entropy_at] = u8(64usize + entropy_at)
+        https_client_entropy[entropy_at] = u8(192usize + entropy_at)
+        entropy_at += 1usize
+    }
+    let https_server_config = tls.ServerConfig { certificate_chain: leaf_der, private_key: leaf_pkcs8, alpn: client_protocols[0..], entropy: https_server_entropy[0..] }
+    var https_server = HttpServerJob { listener: listener, config: https_server_config, failed: false }
+    let (bound, bound_error) = os.socket_local_address(https_server.listener)
+    if bound_error != ok { os.exit(33i32) }
+    endpoint.port = bound.port
+    let (https_thread, https_thread_error) = thread.spawn[HttpServerJob](serve_https, &https_server, 0usize)
+    if https_thread_error != ok { os.exit(34i32) }
+    var request: http.Request = zero
+    request.method = .Get
+    request.target = "/secure"
+    request.version = .Http11
+    let https_client_config = tls.ClientConfig { server_name: "example.com", trust_roots: mid_der, alpn: client_protocols[0..], entropy: https_client_entropy[0..], now: time.Timestamp { nanos: 1780272000000000000i64 } }
+    let (response, request_error) = http.request_tls(a, endpoint, https_client_config, &request, http_limits())
+    let https_join_error = thread.join(https_thread)
+    if https_join_error != ok || https_server.failed || request_error != ok || response.status != 200u16 || !same_bytes(response.body, "secure") { os.exit(35i32) }
+    if net.close(https_server.listener) != ok { os.exit(36i32) }
     ret ok
 }
