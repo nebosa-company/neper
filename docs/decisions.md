@@ -12046,3 +12046,23 @@ the mark to remain identical after every `sse_next_err`, including the final EOF
 No production change is needed: D588 already allocated all state once and reused it. D589
 adds the missing long-lived acceptance evidence and regenerates the five-feature progress
 batch rather than inventing a second memory accounting mechanism.
+
+## D590 -- HTTP framing is a bounded stream codec before it is a client
+
+The next `e.net.http` slice is deliberately transport-independent. `reader` retains a
+fixed input window so a source may return bytes from the next pipelined message without
+losing them; parsed strings, headers and bodies belong to the caller arena. Start-line,
+aggregate header bytes, header count and decoded body bytes are separate limits. Requests
+use explicit Content-Length or chunked framing, while responses additionally support the
+HTTP/1.0/connection-close body form. Chunk extensions are ignored, trailers are consumed
+under the header bounds and decoded chunks count against the body limit.
+
+The parser rejects bare-LF lines, invalid header tokens, unsupported transfer codings,
+conflicting length/chunk framing and case-folded method names. Header lookup alone is
+ASCII-insensitive. The writer validates the same syntax and framing, supplies
+Content-Length when the caller omitted framing, and serializes a full body as one chunk
+when requested. The cross-host fixture drives every path one byte at a time, including two
+pipelined requests, split chunk delimiters, trailers, a close-delimited response, each
+independent limit, a smuggling-style framing conflict and deterministic writes. Network
+connection ownership and cancellation remain the next SL07 layer rather than being faked
+on top of the still-planned `e.net` and `e.net.tls` modules.

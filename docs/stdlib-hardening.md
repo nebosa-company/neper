@@ -250,6 +250,17 @@ the fixture requires every decoded event to leave the caller arena at exactly th
 mark. This distinguishes a truly reusable bounded reader from one that merely hides
 per-event growth behind an arena. The D585-D589 progress batch is regenerated here.
 
+D590 delivers the transport-independent HTTP message codec. Its reusable reader preserves
+over-read bytes across pipelined messages and applies independent start-line, header-byte,
+header-count and body limits. It decodes fixed-length, chunked (including trailers) and
+close-delimited response bodies; rejects ambiguous Content-Length/Transfer-Encoding
+framing; and keeps method tokens case-sensitive while header lookup is ASCII-insensitive.
+The writer validates header syntax and framing, supplies a deterministic Content-Length
+when absent, and emits a single bounded chunk for a full-body message. The one-byte fixture
+pins request pipelining, chunk boundaries, trailers, close framing, every limit, framing
+conflicts and deterministic request/response output. Connection ownership, cancellation,
+socket and TLS request functions remain planned.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

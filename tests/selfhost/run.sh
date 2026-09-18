@@ -1204,9 +1204,9 @@ csv_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$csv_written" = 'executable written' ]
 chmod +x "$test_build/fmt-csv-selfhost"
 (cd "$fs_scratch" && "$test_build/fmt-csv-selfhost")
-# The first delivered `e.net.http` slice is its bounded SSE reader. A one-byte source
-# splits every multibyte scalar and CRLF pair while the fixture covers the event-stream
-# state machine, retained state, EOF rule and both limits.
+# The delivered `e.net.http` codecs run over a one-byte source: HTTP pins pipelining,
+# fixed/chunked/close framing and independent limits; SSE pins split UTF-8/CRLF,
+# retained state, the EOF rule and flat memory over ten thousand events.
 http_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http/src/main.e" "$repo" x64 linux "$test_build/net-http-selfhost")
 [ "$http_written" = 'executable written' ]
 chmod +x "$test_build/net-http-selfhost"

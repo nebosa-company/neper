@@ -1,5 +1,5 @@
-// The delivered e.net.http slice: bounded SSE parsing over a one-byte source, so every
-// UTF-8 sequence and CRLF boundary is split across reads rather than accidentally relying
+// Bounded HTTP message codecs and SSE parsing over one-byte sources, so framing, UTF-8
+// sequences and CRLF boundaries are split across reads rather than accidentally relying
 // on a whole input buffer.
 
 use e.io
@@ -52,7 +52,110 @@ fn limits(line: usize, event: usize) -> http.SseLimits {
     ret http.SseLimits { line_bytes: line, event_bytes: event }
 }
 
+fn message_limits(start: usize, headers: usize, count: usize, body: usize) -> http.Limits {
+    ret http.Limits { start_line: start, header_bytes: headers, header_count: count, body_bytes: body }
+}
+
 fn main(a: *mem.Arena) -> err {
+    // Pipelined requests prove the reader preserves bytes fetched past the first body.
+    var request_source: OneByte = zero
+    let request_input = "POST /one HTTP/1.1\r\nHost: example.test\r\nContent-Length: 3\r\nX-Mode: one\r\n\r\nabcGET /two HTTP/1.0\r\n\r\n"
+    let (request_handle, request_reader_error) = http.reader(a, one_reader(&request_source, request_input), message_limits(64usize, 128usize, 8usize, 16usize))
+    if request_reader_error != ok { ret request_reader_error }
+    var requests = request_handle
+    let (first_request, first_request_error) = http.read_request(a, &requests)
+    if first_request_error != ok { ret first_request_error }
+    if first_request.method != .Post || first_request.version != .Http11 || !str.eq(first_request.target, "/one") || !str.eq(first_request.body, "abc") { ret Failed }
+    let (host, host_found) = http.header(first_request.headers, "host")
+    if !host_found || !str.eq(host, "example.test") { ret Failed }
+    let (second_request, second_request_error) = http.read_request(a, &requests)
+    if second_request_error != ok { ret second_request_error }
+    if second_request.method != .Get || second_request.version != .Http10 || !str.eq(second_request.target, "/two") || second_request.body.len != 0usize { ret Failed }
+    // Chunk sizes and their CRLFs are all split. Trailers are bounded and consumed.
+    var chunk_source: OneByte = zero
+    let chunk_input = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nX-Test: yes\r\n\r\n4\r\nWiki\r\n5;note=x\r\npedia\r\n0\r\nX-End: yes\r\n\r\n"
+    let (chunk_handle, chunk_reader_error) = http.reader(a, one_reader(&chunk_source, chunk_input), message_limits(64usize, 128usize, 8usize, 16usize))
+    if chunk_reader_error != ok { ret chunk_reader_error }
+    var chunks = chunk_handle
+    let (chunk_response, chunk_response_error) = http.read_response(a, &chunks)
+    if chunk_response_error != ok { ret chunk_response_error }
+    if chunk_response.version != .Http11 || chunk_response.status != 200u16 || !str.eq(chunk_response.reason, "OK") || !str.eq(chunk_response.body, "Wikipedia") { ret Failed }
+    // A close-delimited HTTP/1.0 response remains bounded by body_bytes.
+    var close_source: OneByte = zero
+    let (close_handle, close_reader_error) = http.reader(a, one_reader(&close_source, "HTTP/1.0 404 Missing\r\n\r\nnope"), message_limits(64usize, 64usize, 4usize, 4usize))
+    if close_reader_error != ok { ret close_reader_error }
+    var close_reader = close_handle
+    let (close_response, close_response_error) = http.read_response(a, &close_reader)
+    if close_response_error != ok || close_response.status != 404u16 || !str.eq(close_response.body, "nope") { ret Failed }
+    // Independent line, header-count and body bounds fail at their own limits.
+    var start_source: OneByte = zero
+    let (start_handle, start_reader_error) = http.reader(a, one_reader(&start_source, "GET /long HTTP/1.1\r\n\r\n"), message_limits(8usize, 64usize, 4usize, 0usize))
+    if start_reader_error != ok { ret start_reader_error }
+    var short_start = start_handle
+    let (start_request, start_error) = http.read_request(a, &short_start)
+    if start_error != http.TooLarge { ret Failed }
+
+    var count_source: OneByte = zero
+    let (count_handle, count_reader_error) = http.reader(a, one_reader(&count_source, "GET / HTTP/1.1\r\nA: 1\r\nB: 2\r\n\r\n"), message_limits(64usize, 64usize, 1usize, 0usize))
+    if count_reader_error != ok { ret count_reader_error }
+    var short_count = count_handle
+    let (count_request, count_error) = http.read_request(a, &short_count)
+    if count_error != http.TooLarge { ret Failed }
+
+    var header_source: OneByte = zero
+    let (header_handle, header_reader_error) = http.reader(a, one_reader(&header_source, "GET / HTTP/1.1\r\nLong: value\r\n\r\n"), message_limits(64usize, 8usize, 4usize, 0usize))
+    if header_reader_error != ok { ret header_reader_error }
+    var short_headers = header_handle
+    let (header_request, header_error) = http.read_request(a, &short_headers)
+    if header_error != http.TooLarge { ret Failed }
+
+    var body_source: OneByte = zero
+    let (body_handle, body_reader_error) = http.reader(a, one_reader(&body_source, "POST / HTTP/1.1\r\nContent-Length: 2\r\n\r\nxx"), message_limits(64usize, 64usize, 4usize, 1usize))
+    if body_reader_error != ok { ret body_reader_error }
+    var short_body = body_handle
+    let (body_request, body_error) = http.read_request(a, &short_body)
+    if body_error != http.TooLarge { ret Failed }
+
+    // Conflicting length/chunk framing is rejected instead of becoming a smuggling
+    // ambiguity, and methods remain case-sensitive tokens.
+    var conflict_source: OneByte = zero
+    let conflict_input = "POST / HTTP/1.1\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"
+    let (conflict_handle, conflict_reader_error) = http.reader(a, one_reader(&conflict_source, conflict_input), message_limits(64usize, 128usize, 4usize, 8usize))
+    if conflict_reader_error != ok { ret conflict_reader_error }
+    var conflict_reader = conflict_handle
+    let (conflict_request, conflict_error) = http.read_request(a, &conflict_reader)
+    if conflict_error != http.Invalid { ret Failed }
+
+    var method_source: OneByte = zero
+    let (method_handle, method_reader_error) = http.reader(a, one_reader(&method_source, "get / HTTP/1.1\r\n\r\n"), message_limits(64usize, 64usize, 4usize, 0usize))
+    if method_reader_error != ok { ret method_reader_error }
+    var method_reader = method_handle
+    let (method_request, method_error) = http.read_request(a, &method_reader)
+    if method_error != http.Unsupported { ret Failed }
+    // Writers validate framing and emit deterministic Content-Length/chunk syntax.
+    var request_headers: [1]http.Header = zero
+    request_headers[0usize] = http.Header { name: "Content-Length", value: "3" }
+    var outgoing_request = http.Request { method: .Put, target: "/item", version: .Http11, headers: request_headers[0..], body: "new" }
+    let (request_memory, unused_request_sink, request_memory_error) = io.memory_writer(a, 256usize)
+    if request_memory_error != ok { ret request_memory_error }
+    var request_capture = request_memory
+    let request_sink = io.writer(mem.cast[*void](&request_capture), io.memory_write)
+    var request_writer = http.writer(request_sink)
+    let request_write_error = http.write_request(&request_writer, &outgoing_request)
+    if request_write_error != ok || !str.eq(io.memory_bytes(&request_capture), "PUT /item HTTP/1.1\r\nContent-Length: 3\r\n\r\nnew") { ret Failed }
+
+    var response_headers: [1]http.Header = zero
+    response_headers[0usize] = http.Header { name: "Transfer-Encoding", value: "chunked" }
+    var outgoing_response = http.Response { version: .Http11, status: 200u16, reason: "", headers: response_headers[0..], body: "hello" }
+    let (response_memory, unused_response_sink, response_memory_error) = io.memory_writer(a, 256usize)
+    if response_memory_error != ok { ret response_memory_error }
+    var response_capture = response_memory
+    let response_sink = io.writer(mem.cast[*void](&response_capture), io.memory_write)
+    var response_writer = http.writer(response_sink)
+    let response_write_error = http.write_response(&response_writer, &outgoing_response)
+    if response_write_error != ok || !str.eq(io.memory_bytes(&response_capture), "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n") { ret Failed }
+    if !str.eq(http.reason(503u16), "Service Unavailable") || http.reason(799u16).len != 0usize { ret Failed }
+
     // BOM, comment, all three line endings, repeated data and retained id/retry state.
     var first_source: OneByte = zero
     let first_input = "\xEF\xBB\xBF: ignored\rdata: first\r\ndata: second\nevent: update\rid: 7\nretry: 1500\n\n"

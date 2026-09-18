@@ -2808,7 +2808,7 @@ type Request = struct { method: Method, target: str, version: Version, headers: 
 type Response = struct { version: Version, status: u16, reason: str, headers: []const Header, body: []const u8 }
 type Limits = struct { start_line: usize, header_bytes: usize, header_count: usize, body_bytes: usize }
 type Reader = struct { state: *void }
-type Writer = struct { state: *void }
+type Writer = struct { sink: io.Writer }
 error Invalid
 error TooLarge
 error Unsupported
