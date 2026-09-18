@@ -3888,6 +3888,11 @@ fn matches(s: Schedule, t: time.Timestamp) -> bool
 fn next(s: Schedule, after: time.Timestamp) -> (time.Timestamp, err)
 ```
 
+The delivered parser accepts six numeric fields with lists, inclusive ranges and steps;
+Sunday is 0 or 7. Day-of-month and day-of-week use Vixie cron's OR rule when both are
+restricted. `next` is strictly after its input and searches no more than one complete
+400-year Gregorian cycle or the representable timestamp range.
+
 ### `e.grep`
 
 ```neper

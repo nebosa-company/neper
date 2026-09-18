@@ -1232,6 +1232,11 @@ collate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$collate_written" = 'executable written' ]
 chmod +x "$test_build/text-collate-selfhost"
 "$test_build/text-collate-selfhost"
+# `e.time.cron` pins six-field parsing, day rules, offsets and next-time search.
+cron_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_cron/src/main.e" "$repo" x64 linux "$test_build/time-cron-selfhost")
+[ "$cron_written" = 'executable written' ]
+chmod +x "$test_build/time-cron-selfhost"
+"$test_build/time-cron-selfhost"
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

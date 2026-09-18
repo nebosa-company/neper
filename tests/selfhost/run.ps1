@@ -1319,6 +1319,12 @@ $collateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $collateWritten -ne 'executable written') { throw 'e.text.collate emission failed' }
 & $collatePath
 if ($LASTEXITCODE -ne 0) { throw "an e.text.collate comparison answered wrongly: exit $LASTEXITCODE" }
+# `e.time.cron` pins six-field parsing, day rules, offsets and next-time search.
+$cronPath = Join-Path $testBuild 'time-cron-selfhost.exe'
+$cronWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_cron\src\main.e') $repo 'x64' 'windows' $cronPath
+if ($LASTEXITCODE -ne 0 -or $cronWritten -ne 'executable written') { throw 'e.time.cron emission failed' }
+& $cronPath
+if ($LASTEXITCODE -ne 0) { throw "an e.time.cron parse or match answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -12219,3 +12219,13 @@ as U+FFFD. `natural_cmp` recognizes ASCII digit runs, strips leading zeroes for 
 compares significant length and digits, then uses the shorter original run as the stable
 tie-break. It therefore has no numeric overflow ceiling. Case-insensitive natural order
 folds ASCII only; locale and multi-scalar Unicode folding remain in `e.text.locale`.
+
+## D602 -- Cron searches calendar days under an explicit fixed offset
+
+`e.time.cron` parses six numeric fields with wildcards, lists, inclusive ranges and
+steps into fixed bitsets; it accepts Sunday as 0 or 7 and rejects malformed or out-of-
+range values. Matching applies the supplied fixed minute offset and Vixie cron's OR rule
+when both day-of-month and day-of-week are restricted. `next` searches calendar days and
+only enumerates times on a matching day, so impossible dates terminate after one
+400-year Gregorian cycle or the representable timestamp range. The focused fixture pins
+weekday steps, strict-after behavior, DOM/DOW OR and a positive offset.
