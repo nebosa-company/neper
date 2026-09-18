@@ -11792,3 +11792,18 @@ verified through `nested.deep.holds`, while unused `helper.untouched` remains pr
 This completes the D570-D574 batch, so the generated progress page now credits the
 checked API-to-test relation, explicit unavailable subjects, exact generic signatures,
 and generic catalogue coverage without claiming the pending SL01-SL11 migrations.
+
+## D575 -- The adopted module plan validates again
+
+The static closure check is green over all 150 planned modules. The twenty audio,
+fixed-point, snapshot and headless-game additions from D248-D249 are specialized,
+independently deliverable APIs, so they enter the extended tier rather than the core
+release gate or the no-compatibility experimental tier. `e.thread` now declares its
+signature dependency on `e.mem`.
+
+SL01's no-shadow rule also reaches the four signatures that used `bytes` while
+importing `e.bytes`: the audio decoders now take `source_bytes`, and snapshot writer
+and reader construction take `storage` and `source`. These are positional parameter
+renames only. `scripts/check_module_plan.py` and its regression suite now pass; this
+is static catalogue closure, not the real-resolver or runtime evidence still required
+by `stdlib-hardening.md`.

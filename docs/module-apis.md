@@ -3898,7 +3898,7 @@ type Decoder = struct { bytes: []const u8, data_start: usize, at: usize, format:
 error Invalid
 error Unsupported
 
-fn open(a: *mem.Arena, bytes: []const u8) -> (Decoder, err)
+fn open(a: *mem.Arena, source_bytes: []const u8) -> (Decoder, err)
 fn format(d: Decoder) -> audio.Format
 fn frame_count(d: Decoder) -> usize
 fn decode_into(d: *Decoder, out: *audio.Frames) -> (usize, err)
@@ -3913,7 +3913,7 @@ type Decoder = struct { bytes: []const u8, at: usize, format: audio.Format, fram
 error Invalid
 error Unsupported
 
-fn open(a: *mem.Arena, bytes: []const u8) -> (Decoder, err)
+fn open(a: *mem.Arena, source_bytes: []const u8) -> (Decoder, err)
 fn format(d: Decoder) -> audio.Format
 fn frame_count(d: Decoder) -> usize
 fn decode_into(d: *Decoder, out: *audio.Frames) -> (usize, err)
@@ -3971,8 +3971,8 @@ type Reader = struct { bytes: []const u8, bit: usize }
 error Invalid
 error Full
 
-fn writer(bytes: []u8) -> Writer
-fn reader(bytes: []const u8) -> Reader
+fn writer(storage: []u8) -> Writer
+fn reader(source: []const u8) -> Reader
 fn bits_written(w: Writer) -> usize
 fn bytes_written(w: Writer) -> usize
 fn put_bits(w: *Writer, value: u32, count: u8) -> err

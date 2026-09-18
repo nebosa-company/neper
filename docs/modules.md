@@ -9,7 +9,7 @@ surface of every toolchain module. All three views change together.
 The adopted [standard-library hardening](stdlib-hardening.md) (D84) defines
 composition, migration and executable acceptance. Delivered CPU surfaces migrate
 in M2.5; later modules remain proposals until their own tests and implementation
-exist. The catalogue currently has 128 modules: 33 core, 77 extended, 18 experimental.
+exist. The catalogue currently has 150 modules: 33 core, 97 extended, 20 experimental.
 
 ---
 
@@ -44,8 +44,8 @@ The toolchain's domains are branches of `e.*` rather than roots of their own:
 | `e.ui.*` | Declarative, GPU-rendered application framework |
 
 **Ownership is the root; stability is the tier (§2).** `e.` says the toolchain owns
-the module, not that the module is stable or delivered: the 128 catalogued modules are
-all `e.*`, and they divide into 33 core, 77 extended and 18 experimental.
+the module, not that the module is stable or delivered: the 150 catalogued modules are
+all `e.*`, and they divide into 33 core, 97 extended and 20 experimental.
 
 Namespaces describe ownership and domain, not whether code is implemented with an
 intrinsic. `e.*` availability begins at the module's delivery milestone; it does not
