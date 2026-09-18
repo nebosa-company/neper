@@ -12493,3 +12493,18 @@ joins the six array-held readers, recording both errors before returning either 
 failed first join cannot skip the second cleanup. This is a migration exposed by the
 new audit, not a claim that dynamic resource arrays are closed. The focused program
 builds and runs on both hosts before the full suites resume.
+
+## D622 -- The Windows static gate records per-slot ownership evidence
+
+D616-D620 add two bounded pieces of checker state to each local record: a parallel
+site table for fixed-array ownership slots, and a comptime offset for a slice alias
+that retains such an array owner. The fixed sc500k build consequently reaches eight
+more mebibytes of worker arena in both modes: debug 2276 to 2284 MB (0.4%) and
+release 2982 to 2990 MB (0.3%). The full-suite measurement produced exact integer
+cells. The emitted images remain byte-for-byte at 2,982,400 and 2,081,792
+bytes, so this is checker working storage rather than generated-code growth.
+
+D506's zero-growth rule makes that deterministic cost an explicit decision. The
+Windows static baseline is re-pinned only for the two arena cells; the image cells
+are unchanged. The richer state is retained because it is what lets H01 identify a
+specific array slot and preserve its acquisition/move evidence through slice aliases.
