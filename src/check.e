@@ -3894,6 +3894,34 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
     ret ok
 }
 
+// The compiler-origin declarations whose owning modules otherwise have a complete
+// source surface. They have no source token range for `index-file` to quote, so this
+// is the canonical template spelling beside the checker paths that implement them.
+// The surface gate compares these strings with module-apis.md on both targets.
+fn intrinsic_signature(module: str, name: str) -> str {
+    if same(module, "e.atomic") {
+        if same(name, "init") { ret "fn init[T: type](v: T) -> Atomic[T]" }
+        if same(name, "load") { ret "fn load[T: type](p: *Atomic[T], o: Ordering) -> T" }
+        if same(name, "store") { ret "fn store[T: type](p: *Atomic[T], v: T, o: Ordering)" }
+        if same(name, "xchg") { ret "fn xchg[T: type](p: *Atomic[T], v: T, o: Ordering) -> T" }
+        if same(name, "cas") { ret "fn cas[T: type](p: *Atomic[T], expected: T, desired: T, success: Ordering, failure: Ordering) -> (bool, T)" }
+        if same(name, "add") { ret "fn add[T: type](p: *Atomic[T], v: T, o: Ordering) -> T" }
+        if same(name, "sub") { ret "fn sub[T: type](p: *Atomic[T], v: T, o: Ordering) -> T" }
+        if same(name, "and") { ret "fn and[T: type](p: *Atomic[T], v: T, o: Ordering) -> T" }
+        if same(name, "or") { ret "fn or[T: type](p: *Atomic[T], v: T, o: Ordering) -> T" }
+        if same(name, "xor") { ret "fn xor[T: type](p: *Atomic[T], v: T, o: Ordering) -> T" }
+        if same(name, "min") { ret "fn min[T: type](p: *Atomic[T], v: T, o: Ordering) -> T" }
+        if same(name, "max") { ret "fn max[T: type](p: *Atomic[T], v: T, o: Ordering) -> T" }
+        if same(name, "fence") { ret "fn fence(o: Ordering)" }
+    }
+    if same(module, "e.io") && same(name, "printf") { ret "fn printf[FMT: str](args: ...) -> err" }
+    if same(module, "e.str") {
+        if same(name, "format") { ret "fn format[FMT: str](a: *mem.Arena, args: ...) -> (str, err)" }
+        if same(name, "push_err") { ret "fn push_err(b: *Builder, v: err) -> err" }
+    }
+    ret ""
+}
+
 fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     c.function_count = 0usize
     c.parameter_count = 0usize

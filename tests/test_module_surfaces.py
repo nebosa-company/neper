@@ -18,7 +18,7 @@ class ModuleSurfaceTests(unittest.TestCase):
     def test_checked_signature_drift_is_reported(self):
         problems = checker.compare_compiler_declarations(
             "e.demo", {("fn", "read"): "fn read(dst: []u8) -> err"},
-            {("fn", "read"): "fn read(dst: []u8) -> (usize, err)"}, set())
+            {("fn", "read"): "fn read(dst: []u8) -> (usize, err)"})
         self.assertEqual(len(problems), 1)
         self.assertIn("differs from checked source", problems[0])
 

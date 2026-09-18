@@ -179,8 +179,9 @@ Global constraints:
 - `python scripts/check_module_surfaces.py --compiler COMPILER --arch ARCH --os OS`
   runs every `surface:"source"` module through that compiler's parser and resolver,
   then compares its indexed declaration signatures with the catalogue. Both
-  self-host suites run this gate; compiler-seeded intrinsics are checked by name
-  until their signatures enter the compiler-derived inventory.
+  self-host suites run this gate. The sixteen compiler-origin functions delivered
+  through `e.atomic`, `e.io` and `e.str` carry canonical indexed signatures and are
+  compared exactly too; other compiler seeds remain outside this source-surface gate.
 
 ---
 

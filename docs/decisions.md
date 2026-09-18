@@ -11822,3 +11822,17 @@ their names in both directions and does not invent signature evidence. The first
 also reconciled `e.thread.DEFAULT_STACK`'s catalogue spelling with its checked source.
 This is real-resolver evidence for delivered source surfaces, not executable semantic
 coverage or validation of the still-planned catalogue.
+
+## D577 -- Compiler-origin source APIs have exact indexed signatures
+
+`index-file` now emits the compiler-origin functions that complete the source-delivered
+`e.atomic`, `e.io` and `e.str` modules as `intrinsic` symbols. Their source and selection
+spans are null, their container is the module, and their signature is the canonical
+template spelling owned beside the checker paths that implement them. Source symbols
+keep their existing IDs; the intrinsic records follow them in qualified-name order.
+
+The D576 surface gate maps `intrinsic` to the catalogue's `fn` kind and compares all
+sixteen declarations exactly. A missing record or a change to a parameter, comptime
+pack, return type or ordering type now fails both self-host suites. This does not claim
+source locations for generated declarations or cover compiler seeds outside the
+twenty-eight source-delivered module surfaces.

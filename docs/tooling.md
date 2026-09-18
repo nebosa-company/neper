@@ -272,6 +272,11 @@ is still emitted so an editor can retain the occurrence.
 
 Records sort by source identifier, span start, record kind, then qualified name.
 Null-span intrinsics sort first by qualified name.
+For the source-delivered `e.atomic`, `e.io` and `e.str` surfaces, the compiler also
+emits its sixteen canonical template declarations as `intrinsic` symbols (D577).
+They have null source spans, the module as their container and the exact signature
+owned beside the checker implementation. This makes compiler-origin APIs available
+to the same exact catalogue comparison as declarations written in source.
 The stream ends with
 `{"record":"result","ok":true,"exit_code":0,"data":{"symbols":N,"references":N}}`.
 

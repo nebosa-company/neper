@@ -250,9 +250,12 @@ They validate graph, tier closure, catalogue coverage, signature naming/qualifie
 and extraction structure; they do not prove compiler acceptance or API semantics.
 The two self-host suites additionally run `check_module_surfaces.py --compiler` over
 all source-delivered modules and require their compiler-resolved declarations to
-match the extracted catalogue. Seeded intrinsics remain name-checked pending H18's
-compiler-derived signatures. Executable CPU fixtures above remain required; later
-libraries need their own independent runtime evidence, never a static-check substitute.
+match the extracted catalogue. The sixteen compiler-origin functions in the
+source-delivered `e.atomic`, `e.io` and `e.str` surfaces expose canonical signatures
+through the index and are compared exactly as well. Other compiler seeds remain
+outside this source-surface gate. Executable CPU fixtures above remain required;
+later libraries need their own independent runtime evidence, never a static-check
+substitute.
 
 H11 closure links SL01–SL11 to chosen versions, migrated CPU source, conformance
 results and deferred-library fixture manifests. H12/H25 exercise end-to-end file

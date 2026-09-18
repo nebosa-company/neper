@@ -687,7 +687,9 @@ fn index_signature(out: *Out, source: str, tokens: []const lex.Token, opener: us
 // `index --json` (D232): a `symbol` record for the module and each of its module-scope
 // declarations, each carrying its signature, its attributes and its `///` documentation
 // (D251), and under a function or type its parameters, fields and members from the parse
-// tree (D258). Locals and every reference are the gap.
+// tree (D258). Locals and references are added by the later index passes (D271, D483).
+// Compiler-origin functions with a canonical checker signature are emitted after the
+// source records (D577).
 fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize, absolute: str) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
@@ -751,6 +753,23 @@ fn index_json_into(a: *mem.Arena, out: *Out, root: str, path: str, source: str, 
         }
         known_pass += 1usize
     }
+    // Compiler-origin declarations have no span to interleave. Their ids follow all
+    // source and nested symbols, but references may still target those ids.
+    known_pass = 0usize
+    while known_pass < count {
+        let known_symbol = symbols[known_pass]
+        if known_symbol.module_index == module_index && known_symbol.kind == .Intrinsic {
+            let signature = check.intrinsic_signature(module_name, known_symbol.name)
+            if signature.len != 0usize {
+                known_names[known] = known_symbol.name
+                known_ids[known] = running
+                known_types[known] = false
+                known += 1usize
+                running += 1usize
+            }
+        }
+        known_pass += 1usize
+    }
     let known_total = known
     let (collected, collect_error) = index_collect_references(a, source, &tree, tokens[0usize..token_count])
     if collect_error != ok { ret (2usize, collect_error) }
@@ -799,6 +818,21 @@ fn index_json_into(a: *mem.Arena, out: *Out, root: str, path: str, source: str, 
     }
     let drain_error = index_emit_references(&refs, out, root, path, source, module_name, &tree, tokens[0usize..token_count], source.len + 1usize)
     if drain_error != ok { ret (2usize, drain_error) }
+    at = 0usize
+    while at < count {
+        let symbol = symbols[at]
+        if symbol.module_index == module_index && symbol.kind == .Intrinsic {
+            let signature = check.intrinsic_signature(module_name, symbol.name)
+            if signature.len != 0usize {
+                if known >= known_total || known_ids[known] != emitted { ret (2usize, parse.InvalidSyntax) }
+                let intrinsic_error = index_intrinsic_record(out, module_name, emitted, symbol.name, signature)
+                if intrinsic_error != ok { ret (2usize, intrinsic_error) }
+                known += 1usize
+                emitted += 1usize
+            }
+        }
+        at += 1usize
+    }
     let result_error = index_result(out, emitted, refs.written)
     if result_error != ok { ret (2usize, result_error) }
     ret (0usize, ok)
@@ -812,6 +846,21 @@ fn index_module_record(out: *Out, module_name: str) -> err {
     try text(out, ",\"module\":")
     try quoted(out, module_name)
     try text(out, ",\"signature\":null,\"span\":null,\"selection_span\":null,\"container_id\":null,\"attributes\":[],\"unsafe\":[],\"documentation\":null}")
+    ret flush(out)
+}
+
+fn index_intrinsic_record(out: *Out, module_name: str, id: usize, name: str, signature: str) -> err {
+    try text(out, "{\"record\":\"symbol\",\"id\":")
+    try decimal(out, id)
+    try text(out, ",\"kind\":\"intrinsic\",\"name\":")
+    try quoted(out, name)
+    try text(out, ",\"qualified_name\":")
+    try index_qualified(out, module_name, name)
+    try text(out, ",\"module\":")
+    try quoted(out, module_name)
+    try text(out, ",\"signature\":")
+    try quoted(out, signature)
+    try text(out, ",\"span\":null,\"selection_span\":null,\"container_id\":0,\"attributes\":[],\"unsafe\":[],\"documentation\":null}")
     ret flush(out)
 }
 

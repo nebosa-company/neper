@@ -119,7 +119,7 @@ def compiler_declarations(compiler, module, arch, target_os):
     module_id = module_records[0]['id']
     source = path.read_bytes()
     declarations = {}
-    kind_names = {'module_var': 'var'}
+    kind_names = {'module_var': 'var', 'intrinsic': 'fn'}
     for record in records:
         if (record.get('record') != 'symbol'
                 or record.get('container_id') != module_id):
@@ -139,13 +139,11 @@ def compiler_declarations(compiler, module, arch, target_os):
     return declarations, None
 
 
-def compare_compiler_declarations(module, fenced, compiled, seeded):
-    """Compare exact checked source declarations; seeds currently prove names only."""
+def compare_compiler_declarations(module, fenced, compiled):
+    """Compare exact source and compiler-origin declarations."""
     problems = []
     for key, expected in fenced.items():
         kind, name = key
-        if name in seeded:
-            continue
         actual = compiled.get(key)
         if actual is None:
             problems.append('%s.%s: compiler index has no %s declaration' %
@@ -195,8 +193,7 @@ def main(argv=None):
                 failures.append(failure)
             else:
                 failures.extend(compare_compiler_declarations(
-                    module, declarations.get(module, {}), compiled,
-                    seeded.get(module, set())))
+                    module, declarations.get(module, {}), compiled))
         checked += 1
 
     for failure in failures:
