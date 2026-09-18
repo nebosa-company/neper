@@ -5,6 +5,7 @@
 // value still reaches the storage it points at. Built in both modes, so the
 // inliner's view is the same.
 use e.mem
+use dep
 use plat
 
 error GenericSnapshot
@@ -13,6 +14,8 @@ error MultipleSnapshot
 error MultipleMutation
 error ExternalSnapshot
 error ExternalMutation
+error ModuleSnapshot
+error ModuleMutation
 
 type Big = struct { a: usize, b: usize, c: usize }
 type Holder = struct { big: Big, target: *usize }
@@ -76,6 +79,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var external = Big { a: 14usize, b: 15usize, c: 16usize }
     if overwrite_external(external, &external) != 1566usize { ret ExternalSnapshot }
     if read(external) != 0usize { ret ExternalMutation }
+    var module_value = dep.Value { a: 17usize, b: 18usize, c: 19usize }
+    if dep.overwrite(module_value, &module_value) != 1899usize { ret ModuleSnapshot }
+    if dep.read(module_value) != 0usize { ret ModuleMutation }
     let (items, items_error) = mem.alloc[Big](a, 1usize)
     if items_error != ok { ret items_error }
     items[0usize] = Big { a: 4usize, b: 0usize, c: 0usize }

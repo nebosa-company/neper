@@ -12857,3 +12857,14 @@ while the caller observes the write on return.
 The cross-host fixture uses the platform C runtime's `memset` through the declared C
 ABI and checks the same behavior in debug and release. This closes H05's external-ABI
 wrapper acceptance item without granting foreign code a special alias exception.
+
+## D653 -- Cross-module inlining preserves value snapshots
+
+The H05 fixture now calls a snapshot-taking function declared in another module. Its
+debug build exercises the ordinary module call; its release build admits the same
+small body to the cross-module inliner. Both must return the pre-write aggregate while
+the caller observes the write made through the companion pointer.
+
+This pins one semantic result across inlining on and off rather than treating the
+optimizer as a separate ABI. It also verifies that the imported declaration and its
+artifact body agree on the snapshot contract.
