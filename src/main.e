@@ -5691,11 +5691,9 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail)
         try write_all(file, "` names its cleanup `")
         try write_all(file, checker.failure_detail2)
-        try write_all(file, "`, which must be `fn ")
-        try write_all(file, checker.failure_detail2)
-        try write_all(file, "(x: own ")
+        try write_all(file, "`, whose final parameter must be `x: own ")
         try write_all(file, checker.failure_detail)
-        ret write_all(file, ")` in the same module")
+        ret write_all(file, "` in the same module")
     }
     if checker.failure_kind == .ResourceBorrowConsumed {
         try write_all(file, "`")

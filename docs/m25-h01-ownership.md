@@ -406,3 +406,8 @@ audits its `File` field like an equivalent nongeneric struct.
 **D612 follow-up.** A tagged union whose possible payloads include an affine type
 is affine as a whole. Its live arm is not statically tracked, so only whole-value
 moves participate; no partial payload move is claimed.
+
+**D613 follow-up.** A declared resource's cleanup may take context parameters when
+its final parameter is `own T`. Calls consume that last argument through the
+ordinary signature rule, enabling the frozen `gpu.release(q, b)` contract without
+a GPU-specific ownership path.

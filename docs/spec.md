@@ -3530,8 +3530,10 @@ type Token = resource(release) struct { slot: usize }    // affine, owed to `rel
 type Cursor = resource struct { at: usize }              // affine, owed nothing
 ```
 
-`resource(name)` names the cleanup, which must be `fn name(x: own T)` in the same
-module (`E-SAFETY-9999` otherwise); the cleanup owes nothing for the value it takes.
+`resource(name)` names the cleanup, which must be a function in the same module
+whose final parameter is `x: own T` (`E-SAFETY-9999` otherwise); earlier parameters
+may carry cleanup context such as a queue. The cleanup owes nothing for the value
+it takes (D613).
 `e.os`'s other handles are declared so (D350): `Dir`, `Lib`, `ProcGroup`, `Watch`,
 `Mapping`, `Poller`, `Socket` and `FileLock`, each owed to its closer, its fields the
 module's alone; `Handle` is a view of a file or a socket and stays plain. `mem.Arena`

@@ -2452,6 +2452,16 @@ $test_build/neper-self check-file "$conformance_root/reject/safety_tagged_resour
 [ "$tagged_resource_status" -eq 1 ]
 cmp -s "$test_build/conformance-reject-safety_tagged_resource.jsonl" "$conformance_root/reject/safety_tagged_resource.expected.jsonl" || { printf '%s
 ' "check-file --json on reject/safety_tagged_resource.e differs from the conformance corpus" >&2; exit 1; }
+# A resource closer may take context before its final owned parameter, but the
+# owned resource must be last (D613, H01/H13).
+for closer_case in 'accept safety_resource_closer 0' 'reject safety_cleanup_position 1'; do
+    set -- $closer_case
+    closer_status=0
+    $test_build/neper-self check-file "$conformance_root/$1/$2.e" "$repo" x64 linux --json > "$test_build/conformance-$1-$2.jsonl" || closer_status=$?
+    [ "$closer_status" -eq "$3" ]
+    cmp -s "$test_build/conformance-$1-$2.jsonl" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
+' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
+done
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
 for reject_project in module_cycle module_variants safety_opaque; do

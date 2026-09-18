@@ -12360,3 +12360,19 @@ is runtime state, this row does not add a partial move out of one variant.
 the union and rejects a later tag read on both hosts. A bare untagged union remains
 outside resource containment because checked code has no live-member identity to
 carry the obligation.
+
+## D613 -- A resource cleanup owns its final parameter
+
+The frozen GPU contract needs `gpu.release(q, b)`: the queue selects where release
+is ordered and the buffer is the value consumed. `resource(cleanup)` therefore no
+longer requires the owned resource to be the cleanup's first parameter. It requires
+the cleanup to be in the declaring module and its **last** parameter to be `own T`;
+any earlier parameters are ordinary borrowed context. Call checking already consumes
+every `own` parameter, and the cleanup body already recognizes its named resource,
+so no GPU-specific ownership mechanism or hidden capture is added.
+
+`accept/safety_resource_closer` exercises a context pointer followed by the owned
+resource and a deferred cleanup. `reject/safety_cleanup_position` keeps the boundary
+exact by refusing an owned resource followed by another parameter. Both fixtures run
+on Windows and Linux; this delivers the additive H01 extension that D367's H13
+contract had left for M3.

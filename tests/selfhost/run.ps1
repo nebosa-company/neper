@@ -2355,6 +2355,14 @@ $taggedResourceActual = Join-Path $testBuild 'conformance-reject-safety_tagged_r
 cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot 'reject\safety_tagged_resource.e')`" `"$repo`" x64 windows --json > `"$taggedResourceActual`""
 if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/safety_tagged_resource.e exited $LASTEXITCODE, not 1" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $taggedResourceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'reject\safety_tagged_resource.expected.jsonl')).Hash) { throw 'check-file --json on reject/safety_tagged_resource.e differs from the conformance corpus' }
+# A resource closer may take context before its final owned parameter, but the
+# owned resource must be last (D613, H01/H13).
+foreach ($closerCase in @(@('accept', 'safety_resource_closer', 0), @('reject', 'safety_cleanup_position', 1))) {
+    $closerActual = Join-Path $testBuild "conformance-$($closerCase[0])-$($closerCase[1]).jsonl"
+    cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot "$($closerCase[0])\$($closerCase[1]).e")`" `"$repo`" x64 windows --json > `"$closerActual`""
+    if ($LASTEXITCODE -ne $closerCase[2]) { throw "check-file --json on $($closerCase[0])/$($closerCase[1]).e exited $LASTEXITCODE, not $($closerCase[2])" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $closerActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "$($closerCase[0])\$($closerCase[1]).expected.jsonl")).Hash) { throw "check-file --json on $($closerCase[0])/$($closerCase[1]).e differs from the conformance corpus" }
+}
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
 foreach ($rejectProject in @('module_cycle', 'module_variants', 'safety_opaque')) {

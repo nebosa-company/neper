@@ -33,8 +33,8 @@ separate delivery with its own obligation.
 | a launch, a write, a release | a submission (§2); not a value | none on the host: the queue orders it | completion | -- |
 
 `Buf[T]` is the one resource whose closer takes a second argument. H01's
-`resource(closer)` binds a closer of one `own` parameter (D345); M3 extends the
-declaration to a closer whose **last** parameter is the `own` one, and the checker
+`resource(closer)` accepts a closer whose **last** parameter is the `own` one
+(D613), and the checker
 consumes on the call regardless of the queue argument -- the queue is a view of the
 same device or the call is `WrongDevice` at runtime, which the checker does not
 model. The `defer let _ = gpu.release(q, dx)` idiom of §10 is the ordinary shape;
@@ -510,8 +510,7 @@ the timeline schema, cache-key matrix and staging model, and the list of what M3
 implements of them (§3); the two spec corrections and the matrix with its oracles
 (§4). No question here changes the CPU ownership or tooling contracts of D345-D365:
 the boundary is synchronous where the checker needs it to be, and the one
-extension H01 needs -- a closer whose last parameter is the `own` one -- is
-additive.
+additive extension is delivered by D613 before M3.
 
 Not closed, and not claimed: any runtime evidence. The fixtures exist as names;
 the `gpu.Fault` error, the fault buffer, tokens, the staging pool, the timeline,

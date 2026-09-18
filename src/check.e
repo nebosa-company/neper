@@ -13433,10 +13433,14 @@ fn validate_resource_cleanups(c: *Checker, g: *graph.Graph) -> err {
             var valid = found
             if found {
                 let function = c.functions[function_index]
-                if function.parameter_count == 0usize || !c.parameters[function.first_parameter].own { valid = false }
+                if function.parameter_count == 0usize { valid = false }
                 if valid {
-                    let first = c.parameters[function.first_parameter].ty
-                    if first.kind != .Named || !same(first.name, aggregate.name) || first.module_index != aggregate.module_index { valid = false }
+                    let owned_at = function.first_parameter + function.parameter_count - 1usize
+                    if owned_at >= c.parameter_count || !c.parameters[owned_at].own { valid = false }
+                    if valid {
+                        let owned = c.parameters[owned_at].ty
+                        if owned.kind != .Named || !same(owned.name, aggregate.name) || owned.module_index != aggregate.module_index { valid = false }
+                    }
                 }
             }
             if !valid {
