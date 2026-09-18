@@ -10,6 +10,7 @@ use e.os
 use e.str
 use e.proc
 use e.time
+use plat
 
 // The child's `speak` mode writes its stderr in one piece large enough to fill a pipe, so
 // that a parent reading stdout first, and only then stderr, would wait forever: it is what
@@ -82,6 +83,14 @@ fn child(a: *mem.Arena, what: str) {
         let paused = os.wait_u32(&sleeper, 0u32, 750000000i64)
         os.exit(0i32)
     }
+    if str.eq(what, "np-ignore-pipe-writer") {
+        if !plat.ignore_gentle_termination() { os.exit(93i32) }
+        let (_, ready_error) = os.write(os.stdout(), "r")
+        if ready_error != ok { os.exit(92i32) }
+        var sleeper: Atomic[u32] = zero
+        let paused = os.wait_u32(&sleeper, 0u32, 750000000i64)
+        os.exit(0i32)
+    }
     if str.eq(what, "np-orphan") {
         let (image, image_error) = os.executable_path(a)
         if image_error != ok { os.exit(95i32) }
@@ -97,6 +106,30 @@ fn child(a: *mem.Arena, what: str) {
         let (descendant, spawn_error) = os.spawn_with_options(a, descendant_options)
         if spawn_error != ok { os.exit(94i32) }
         // Deliberately do not wait: the descendant inherited both capture writers.
+        os.exit(0i32)
+    }
+    if str.eq(what, "np-ignore-orphan") {
+        let (image, image_error) = os.executable_path(a)
+        if image_error != ok { os.exit(91i32) }
+        let (ready_read, ready_write, pipe_error) = os.pipe()
+        if pipe_error != ok { os.exit(90i32) }
+        var descendant_args: [2]str = zero
+        descendant_args[0usize] = image
+        descendant_args[1usize] = "np-ignore-pipe-writer"
+        var descendant_options: os.SpawnOptions = zero
+        descendant_options.argv = descendant_args[..]
+        descendant_options.inherit_env = true
+        descendant_options.stdio.stdin = os.stdin()
+        descendant_options.stdio.stdout = ready_write
+        descendant_options.stdio.stderr = os.stderr()
+        let (descendant, spawn_error) = os.spawn_with_options(a, descendant_options)
+        if spawn_error != ok { os.exit(89i32) }
+        let closed_write = os.close(descendant_options.stdio.stdout)
+        var ready: [1]u8 = zero
+        let (count, read_error) = os.read(ready_read, ready[..])
+        let closed_read = os.close(ready_read)
+        if read_error != ok || count != 1usize || ready[0usize] != 114u8 { os.exit(88i32) }
+        // The direct child exits only after the descendant has installed SIG_IGN.
         os.exit(0i32)
     }
     os.exit(96i32)
@@ -340,6 +373,28 @@ fn main(a: *mem.Arena) -> err {
     }
     if contained.truncated || time.instant_diff(contained_finished, contained_started).nanos >= 500000000i64 {
         os.exit(112i32)
+    }
+
+    // On Linux the descendant has installed SIG_IGN before its parent exits, so strict
+    // cleanup must wait the complete grace and then force the process group. Windows jobs
+    // have no gentle signal, but the same contained run must still close its inherited pipe.
+    args[0usize] = "np-ignore-orphan"
+    command.args = args[..]
+    let (ignore_started, ignore_clock_error) = time.monotonic()
+    if ignore_clock_error != ok { os.exit(114i32) }
+    var ignore_options: proc.RunOptions = zero
+    ignore_options.contain_tree = true
+    ignore_options.terminate_grace = time.millis(80i64)
+    let (ignored, ignore_error) = proc.run(a, command, ignore_options)
+    let (ignore_finished, ignore_finish_error) = time.monotonic()
+    if ignore_finish_error != ok { os.exit(115i32) }
+    if ignore_error != ok || ignored.outcome != .Exited || !ignored.status_known || ignored.status != 0i32 {
+        os.exit(116i32)
+    }
+    let ignore_elapsed = time.instant_diff(ignore_finished, ignore_started).nanos
+    if ignored.truncated || ignore_elapsed >= 500000000i64 { os.exit(117i32) }
+    when target.os == .Linux {
+        if ignore_elapsed < 60000000i64 { os.exit(118i32) }
     }
     ret ok
 }

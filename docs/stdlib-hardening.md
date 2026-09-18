@@ -150,6 +150,13 @@ while process-group/job mode ends the descendant and reaches ordinary EOF. The r
 SL05 acceptance gap is a descendant that ignores gentle group termination through the
 complete grace interval.
 
+D581 closes that final gap with a synchronized real descendant. Its Linux variant installs
+`SIG_IGN` for `SIGTERM` before the direct child exits; the fixture proves the contained run
+does not return before its requested grace and then forces the group, closing the retained
+capture writer without truncation. The Windows variant pins the same completed contained
+result under job objects, where cooperative and forced termination are the same host action.
+SL05's adopted subprocess contract is now covered on both target-specific paths.
+
 ## SL06 — handle-anchored filesystem operations
 
 `e.fs.Root` owns an `os.Dir`; relative opens/removes/replaces operate through that

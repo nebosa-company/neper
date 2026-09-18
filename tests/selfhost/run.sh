@@ -634,7 +634,7 @@ chmod +x "$test_build/fs-basics-selfhost"
 (cd "$fs_scratch" && "$test_build/fs-basics-selfhost")
 # `e.proc` against a real child, which is the fixture's own image. Besides the legacy output
 # path, `run` checks independent limits, pre-start cancellation, a live contained deadline,
-# explicit outcomes, invalid grace and a descendant retaining both capture writers.
+# explicit outcomes, invalid grace, retained writers and the complete forced-shutdown grace.
 proc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/proc_output/src/main.e" "$repo" x64 linux "$test_build/proc-output-selfhost")
 [ "$proc_written" = 'executable written' ]
 chmod +x "$test_build/proc-output-selfhost"

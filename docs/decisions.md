@@ -11894,3 +11894,18 @@ The Linux static gate is re-pinned for the delivered interface and supervisor bo
 the sc500k debug arena high-water moves from 2273 to 2274 MB (under 0.05%), while its
 2,979,824-byte image and both release measurements remain unchanged. The zero-growth
 gate makes that one-megabyte allocator boundary an explicit D580 cost rather than noise.
+
+## D581 -- The complete termination grace is exercised
+
+The real-child process fixture now synchronizes with a descendant before its direct child
+exits. On Linux that descendant installs `SIG_IGN` for `SIGTERM`, retains the captured
+standard-error writer, and acknowledges readiness over a separate pipe. A strict `run`
+therefore has to spend the requested grace before `SIGKILL` closes the capture stream; the
+fixture measures that lower bound as well as the existing upper bound and requires an
+ordinary, untruncated exited result.
+
+The helper is a two-file target variant local to the fixture. Windows needs no new host API:
+job objects expose no cooperative signal, so its variant is a no-op and the same test pins
+the completed contained result under `TerminateJobObject`. The supervisor itself needed no
+change. Together with D580's retained-writer case, this closes the remaining SL05 acceptance
+gap without widening `e.os` again.
