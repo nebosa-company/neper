@@ -12592,3 +12592,13 @@ supervisor retains a borrowed process view so it can issue a concurrent kill.
 Those two spellings now share `wait_shared`, one `@unsafe` function that documents
 and audits the representation bridge. Checked `e.proc` code no longer reads
 `Proc.raw`, and the exception appears in the existing unsafe-boundary inventory.
+
+## D630 -- Safety conformance observes files through the public handle view
+
+D624's full conformance pass found the positive ownership fixture comparing the
+raw fields of two borrowed `File` values. The comparison is still valid, but its
+representation access now goes through `os.file_handle`, the fixed checked surface
+for a plain, non-owning handle view.
+
+This is a fixture migration only: the borrowed aggregate and field-view behavior it
+tests is unchanged, and Neper checks the same source on both targets.

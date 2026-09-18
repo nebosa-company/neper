@@ -69,7 +69,7 @@ fn close_if_open(a: *mem.Arena, path: str) -> err {
 
 fn peek(p: Pair) -> usize {
     let first = p.first
-    if first.raw == p.second.raw { ret 0usize }
+    if os.file_handle(first).raw == os.file_handle(p.second).raw { ret 0usize }
     ret 1usize
 }
 
