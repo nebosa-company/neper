@@ -12405,3 +12405,20 @@ measurement. Its 2,979,824-byte image is unchanged, and the release cell remains
 2981 MB and 2,079,280 bytes. D506's zero-growth rule makes this deterministic source-
 surface cost an explicit decision rather than measurement noise, so the Linux static
 baseline is re-pinned only for that debug arena cell.
+
+## D616 -- Literal-indexed fixed-array slots carry ownership
+
+A fixed array inherits the affine and cleanup classification of its element, but
+its literal-indexed slots are the ownership units. Storing a resource in one moves
+it into that slot; binding or passing that slot to an `own` parameter moves it out;
+overwrite, second consumption and an obligated live slot at an exit use the same
+E-SAFETY rules as a tracked struct field. Slot states participate in branch and loop
+snapshots, so the checker does not lose the ownership fact at control-flow joins.
+
+This is deliberately narrower than treating an array as one indivisible resource.
+The compiler and concurrency fixtures fill and join thread arrays through dynamic
+indices; a blanket whole-array obligation would reject those programs without
+identifying which element is live. Dynamic indices retain the existing view rule
+until a conservative set-of-elements state is specified, and slices remain the next
+containment step. The new accept fixture transfers and closes one literal slot; the
+reject fixtures pin forgotten cleanup and a second close on both host compilers.

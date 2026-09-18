@@ -3553,8 +3553,8 @@ followed one by one: a field moved out of a local struct leaves the rest; the st
 cannot then move whole (`E-SAFETY-0003`); its owed fields are audited at every exit
 as the struct's are. A struct that came back from a call, or a field assigned one,
 owes nothing by containment -- what it holds is the callee's business unless its
-type names a cleanup -- and a field read, an element read, or a borrowed producer's
-handle is a **view**: read as often as wanted, owed by nobody. A declared resource's
+  type names a cleanup -- and a field read, a dynamically indexed element read, or a
+  borrowed producer's handle is a **view**: read as often as wanted, owed by nobody. A declared resource's
 fields are read only in the module that declares it, or in an `@unsafe` function
 (`E-SAFETY-0010`); the seeded handles' `raw` stays readable until the fixed surface
 gains `file_handle`. These rules are checked statically, in every build mode, and
@@ -3661,9 +3661,12 @@ not add partial moves from a variant payload.
   `mem.copy[T]` over a resource type writes out) are refused (`E-SAFETY-0005`). An
   instance of a template is checked under these rules as any body is.
 
-Arrays and slices of resources are not tracked as wholes: a store into an element
-moves the value in, and an element read is a view. Reflection and the format
-codecs are not yet told a resource has no fields outside its module.
+Fixed arrays inherit the affine and cleanup classification of their element. A
+literal-indexed slot is tracked independently: a store moves ownership into it, a
+consuming read moves ownership out, and a live obligated slot is audited at every
+exit (D616). Dynamic indices remain views until a conservative set-of-elements rule
+is specified, and slices of resources are not tracked as wholes. Reflection and the
+format codecs are not yet told a resource has no fields outside its module.
 
 ### Debug fills
 

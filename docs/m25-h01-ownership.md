@@ -385,8 +385,8 @@ follow-up. Cold wall, warm wall and image size are within their budgets
 
 **Remaining limitations** (each an obligation, none closed by this record):
 reflection and the format codecs are not stopped at a resource's fields
-(E-SAFETY-0005's last case); arrays and slices of resources are not tracked as
-wholes; the generic containers take their element by `own` (D353), but none can hold an
+(E-SAFETY-0005's last case); D616 tracks literal-indexed slots of fixed arrays, but
+dynamic indices and slices of resources are not tracked as wholes; the generic containers take their element by `own` (D353), but none can hold an
 obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
 is H02's; the seeded handles' `raw` stays readable until the fixed
@@ -411,3 +411,8 @@ moves participate; no partial payload move is claimed.
 its final parameter is `own T`. Calls consume that last argument through the
 ordinary signature rule, enabling the frozen `gpu.release(q, b)` contract without
 a GPU-specific ownership path.
+
+**D616 follow-up.** A fixed array inherits the affine/obligated classification of
+its element. Literal-indexed slots carry independent states through stores, moves,
+branches, loops and exit audits; the existing dynamic worker-array idiom remains a
+view until the set-of-elements rule is specified.
