@@ -2917,6 +2917,9 @@ fn close(connection: *Connection, code: u16, reason: str, mask: [4]u8) -> err
 Client masking material and handshake entropy are caller-supplied. The module never
 reads OS randomness implicitly.
 
+The delivered `client_key` is allocation-free standard padded Base64 over exactly the
+sixteen supplied entropy bytes. Upgrade validation and framed transport remain planned.
+
 ### `e.db`
 
 ```neper

@@ -307,6 +307,12 @@ at EOF. The real loopback fixture reads a chunked body across three-byte destina
 pins its terminal trailer/EOF and cancels a second stream between head and body. TLS full
 and streaming requests remain planned with `e.net.tls`.
 
+D596 begins `e.net.ws` with the pure client handshake nonce. `client_key` Base64-encodes
+exactly sixteen caller-supplied entropy bytes into caller storage, uses the standard
+padded alphabet and reports the module's `TooLarge` before exposing short output. The
+fixture pins RFC 6455's sample nonce and exact key on both hosts. Upgrade validation and
+frame transport remain separate bounded slices; no host randomness is introduced.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

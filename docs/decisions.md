@@ -12147,3 +12147,15 @@ HEAD and body-forbidden status codes begin at EOF. The loopback fixture reads a 
 `Wikipedia` response through three-byte caller slices, consumes a trailer and terminal
 EOF, then opens another stream, cancels its token after the head, and requires the first
 body read to return `cancel.Cancelled`. TLS streaming remains planned with `e.net.tls`.
+
+## D596 -- WebSocket client keys are caller-entropy Base64
+
+`e.net.ws` moves from planned to partial with its allocation-free `client_key`. The
+function accepts exactly the RFC surface's sixteen caller-supplied entropy bytes, writes
+standard padded Base64 into caller storage and maps the existing codec's size failure to
+the module's `TooLarge`; it never reads host randomness or allocates hidden state.
+
+The cross-host fixture uses RFC 6455's `the sample nonce` and requires the exact
+`dGhlIHNhbXBsZSBub25jZQ==` key. A twenty-three-byte destination fails before output is
+reported. Upgrade validation and framed transport stay for the following slices rather
+than coupling a simple entropy transform to socket policy.
