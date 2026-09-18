@@ -1247,7 +1247,7 @@ audio_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$audio_written" = 'executable written' ]
 chmod +x "$test_build/audio-selfhost"
 "$test_build/audio-selfhost"
-# `e.audio.mixer` pins caller-owned voice lifecycle before mixing is added.
+# `e.audio.mixer` pins caller-owned voice lifecycle and deterministic clipped mixing.
 audio_mixer_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audio_mixer/src/main.e" "$repo" x64 linux "$test_build/audio-mixer-selfhost")
 [ "$audio_mixer_written" = 'executable written' ]
 chmod +x "$test_build/audio-mixer-selfhost"

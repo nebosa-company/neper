@@ -63,3 +63,58 @@ fn set_gain(m: *Mixer, voice: usize, gain: i32) -> err {
 fn active(m: Mixer) -> usize {
     ret m.count
 }
+
+fn clip_i32(value: i64) -> i32 {
+    if value < -2147483648i64 { ret (-2147483647i32 - 1i32) }
+    if value > 2147483647i64 { ret 2147483647i32 }
+    ret i32(value)
+}
+
+fn output_supported(m: Mixer, out: audio.Frames) -> bool {
+    if out.format.rate != m.format.rate || out.format.channels != m.format.channels || out.format.sample != m.format.sample { ret false }
+    ret out.count <= audio.frames_in(out.format, out.bytes.len)
+}
+
+fn mix_into(m: *Mixer, out: *audio.Frames) -> (usize, err) {
+    if !output_supported(*m, *out) { ret (0usize, Unsupported) }
+    let clear_error = audio.silence(out)
+    if clear_error != ok { ret (0usize, clear_error) }
+    var frame = 0usize
+    while frame < out.count {
+        var channel = 0u8
+        while channel < out.format.channels {
+            var sum = 0i64
+            var voice = 0usize
+            while voice < m.voices.len {
+                if m.voices[voice].playing {
+                    let (sample, sample_error) = audio.sample_i32(m.voices[voice].source, m.voices[voice].position, channel)
+                    if sample_error != ok { ret (frame, sample_error) }
+                    let scaled = clip_i32((i64(sample) * i64(m.voices[voice].gain)) / 65536i64)
+                    sum = i64(clip_i32(sum + i64(scaled)))
+                }
+                voice += 1usize
+            }
+            let mastered = clip_i32((sum * i64(m.master)) / 65536i64)
+            let write_error = audio.set_sample_i32(out, frame, channel, mastered)
+            if write_error != ok { ret (frame, write_error) }
+            channel += 1u8
+        }
+        var voice = 0usize
+        while voice < m.voices.len {
+            if m.voices[voice].playing {
+                m.voices[voice].position += 1usize
+                if m.voices[voice].position == m.voices[voice].source.count {
+                    if m.voices[voice].loops {
+                        m.voices[voice].position = 0usize
+                    } else {
+                        m.voices[voice].playing = false
+                        m.count -= 1usize
+                    }
+                }
+            }
+            voice += 1usize
+        }
+        frame += 1usize
+    }
+    ret (out.count, ok)
+}

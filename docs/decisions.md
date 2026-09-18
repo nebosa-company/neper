@@ -12264,3 +12264,15 @@ operation rather than an accidental cost inside `play`.
 No allocation, clock or device is involved. The focused cross-host fixture fills two
 slots, observes `Full`, changes gain, stops twice, reuses the first slot and rejects a
 mismatched-rate source.
+
+## D606 -- Mixing clips at every deterministic Q16 boundary
+
+`mix_into` clears the complete caller output, sums every live voice through the canonical
+signed-i32 sample representation and advances each voice exactly once per output frame.
+Voice gain and master gain are Q16 integer operations; each product and addition clips
+before the next operation, so neither voice count nor host floating-point behavior can
+change the answer. A finished non-looping voice becomes idle, while a looping voice wraps
+without a gap.
+
+The focused fixture pins two-voice half-gain mixing, terminal voice state, a three-frame
+loop over a two-frame source and positive saturation on both hosts.
