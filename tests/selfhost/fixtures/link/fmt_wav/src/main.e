@@ -34,8 +34,24 @@ fn main(a: *mem.Arena) -> err {
     let (again_count, again_error) = wav.decode_into(&decoder, &second)
     let (again_second, again_second_error) = audio.sample_i32(second, 1usize, 0u8)
     if again_error != ok || again_count != 2usize || again_second_error != ok || again_second != -65536000i32 { os.exit(6i32) }
+    var source_bytes: [4]u8 = [4]u8{ 232, 3, 24, 252 }
+    let source_format = audio.Format { rate: 2u32, channels: 1u8, sample: .I16 }
+    let (source, source_error) = audio.view(source_bytes[0..], source_format)
+    let (encoded, encode_error) = wav.encode(a, source)
+    if source_error != ok || encode_error != ok || encoded.len != file.len { os.exit(7i32) }
+    var byte = 0usize
+    while byte < file.len {
+        if encoded[byte] != file[byte] { os.exit(8i32) }
+        byte += 1usize
+    }
+    let (roundtrip, roundtrip_error) = wav.open(a, encoded)
+    if roundtrip_error != ok || wav.frame_count(roundtrip) != 2usize || wav.format(roundtrip).sample != .I16 { os.exit(9i32) }
+    var invalid_source = source
+    invalid_source.count = 3usize
+    let (_, invalid_source_error) = wav.encode(a, invalid_source)
+    if invalid_source_error != wav.Unsupported { os.exit(10i32) }
     file[0] = 0u8
     let (_, invalid_error) = wav.open(a, file[0..])
-    if invalid_error != wav.Invalid { os.exit(7i32) }
+    if invalid_error != wav.Invalid { os.exit(11i32) }
     ret ok
 }

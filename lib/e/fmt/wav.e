@@ -132,3 +132,53 @@ fn seek(d: *Decoder, frame: usize) -> err {
     d.at = frame
     ret ok
 }
+
+fn put_u16(bytes: []u8, at: usize, value: u16) {
+    bytes[at] = u8(value & 255u16)
+    bytes[at + 1usize] = u8(value >> 8u16)
+}
+
+fn put_u32(bytes: []u8, at: usize, value: u32) {
+    bytes[at] = u8(value & 255u32)
+    bytes[at + 1usize] = u8((value >> 8u32) & 255u32)
+    bytes[at + 2usize] = u8((value >> 16u32) & 255u32)
+    bytes[at + 3usize] = u8(value >> 24u32)
+}
+
+fn put_tag(bytes: []u8, at: usize, a: u8, b: u8, c: u8, d: u8) {
+    bytes[at] = a
+    bytes[at + 1usize] = b
+    bytes[at + 2usize] = c
+    bytes[at + 3usize] = d
+}
+
+fn encode(a: *mem.Arena, src: audio.Frames) -> ([]u8, err) {
+    if src.format.rate == 0u32 || src.format.channels == 0u8 || src.count > audio.frames_in(src.format, src.bytes.len) { ret (zero, Unsupported) }
+    let frame_width = audio.frame_bytes(src.format)
+    if src.count != 0usize && frame_width > 18446744073709551615usize / src.count { ret (zero, mem.Exhausted) }
+    let data_size = src.count * frame_width
+    if data_size > 4294967259usize { ret (zero, Unsupported) }
+    let byte_rate = u64(src.format.rate) * u64(frame_width)
+    if byte_rate > 4294967295u64 || frame_width > 65535usize { ret (zero, Unsupported) }
+    let (out, allocation_error) = mem.alloc[u8](a, 44usize + data_size)
+    if allocation_error != ok { ret (zero, allocation_error) }
+    put_tag(out, 0usize, 82u8, 73u8, 70u8, 70u8)
+    put_u32(out, 4usize, u32(36usize + data_size))
+    put_tag(out, 8usize, 87u8, 65u8, 86u8, 69u8)
+    put_tag(out, 12usize, 102u8, 109u8, 116u8, 32u8)
+    put_u32(out, 16usize, 16u32)
+    var encoding = 1u16
+    if src.format.sample == .F32 { encoding = 3u16 }
+    put_u16(out, 20usize, encoding)
+    put_u16(out, 22usize, u16(src.format.channels))
+    put_u32(out, 24usize, src.format.rate)
+    put_u32(out, 28usize, u32(byte_rate))
+    put_u16(out, 32usize, u16(frame_width))
+    put_u16(out, 34usize, u16(audio.sample_bytes(src.format.sample) * 8usize))
+    put_tag(out, 36usize, 100u8, 97u8, 116u8, 97u8)
+    put_u32(out, 40usize, u32(data_size))
+    if data_size != 0usize {
+        mem.copy[u8](out[44usize..44usize + data_size], src.bytes[0..data_size])
+    }
+    ret (out, ok)
+}

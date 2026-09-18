@@ -12302,3 +12302,16 @@ chosen sample encoding, advances only by frames actually written and returns zer
 `seek` accepts the EOF position but nothing beyond it. The focused cross-host fixture
 pins a two-frame PCM16 file, one-frame streaming, I32 conversion, EOF, rewind and a bad
 RIFF signature.
+
+## D609 -- WAV encoding is a single exact RIFF allocation
+
+`e.fmt.wav.encode` validates the source view and classic RIFF's 32-bit size fields before
+allocating exactly 44 header bytes plus the used interleaved PCM bytes. I16 and I32 emit
+format tag 1; F32 emits tag 3. Because `e.audio` already defines every sample as little-
+endian, encoding copies only the declared frames and performs no sample conversion or
+temporary allocation.
+
+The focused cross-host fixture requires byte-for-byte reproduction of the canonical
+two-frame WAV, reopens the encoded result and rejects a public `Frames` value whose count
+exceeds its backing storage. This completes the D605-D609 batch; progress is regenerated
+only now, before the deferred full Windows and Linux suites.
