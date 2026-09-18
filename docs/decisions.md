@@ -12665,3 +12665,12 @@ including the certificate chain. It does not implement retry, PSK, resumption, 0
 client certificates or post-handshake authentication. The focused fixture runs both
 roles concurrently over two OS pipes and requires the authenticated ALPN result on
 both sides.
+
+## D636 -- The bootstrap OS oracle uses public file views
+
+The first full-suite integration after the authenticated TLS batch found the legacy
+OS-intrinsics oracle reading `File.raw` and constructing a raw zero file outside
+`e.os`. It now obtains the inherited handle through `os.file_handle` and uses the
+public `os.stdin` value for the child's standard input. The process behavior under
+test is unchanged; the oracle now obeys the same representation boundary as user
+code.
