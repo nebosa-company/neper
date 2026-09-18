@@ -2349,6 +2349,12 @@ $genericAggregateActual = Join-Path $testBuild 'conformance-reject-safety_generi
 cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot 'reject\safety_generic_aggregate.e')`" `"$repo`" x64 windows --json > `"$genericAggregateActual`""
 if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/safety_generic_aggregate.e exited $LASTEXITCODE, not 1" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericAggregateActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'reject\safety_generic_aggregate.expected.jsonl')).Hash) { throw 'check-file --json on reject/safety_generic_aggregate.e differs from the conformance corpus' }
+# A tagged union is affine as a whole when one of its payloads is affine
+# (D612, H01).
+$taggedResourceActual = Join-Path $testBuild 'conformance-reject-safety_tagged_resource.jsonl'
+cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot 'reject\safety_tagged_resource.e')`" `"$repo`" x64 windows --json > `"$taggedResourceActual`""
+if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/safety_tagged_resource.e exited $LASTEXITCODE, not 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $taggedResourceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'reject\safety_tagged_resource.expected.jsonl')).Hash) { throw 'check-file --json on reject/safety_tagged_resource.e differs from the conformance corpus' }
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
 foreach ($rejectProject in @('module_cycle', 'module_variants', 'safety_opaque')) {

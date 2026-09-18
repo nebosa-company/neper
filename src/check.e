@@ -13274,7 +13274,10 @@ fn affine_kind(c: *Checker, ty: Type, depth: usize) -> u8 {
     if aggregate.affine_memo != 0u8 { ret aggregate.affine_memo - 1u8 }
     var worst = 0u8
     var fields = aggregate.field_count
-    if aggregate.kind != .Struct { fields = 0usize }
+    // Struct fields are tracked separately; a tagged union is affine as a whole
+    // when any possible payload is affine (D612). The live arm is runtime state,
+    // so the checker deliberately does not invent partial-variant moves.
+    if aggregate.kind != .Struct && aggregate.kind != .TaggedUnion { fields = 0usize }
     if aggregate.resource {
         worst = 1u8
         fields = 0usize

@@ -3552,6 +3552,9 @@ none becomes a trap:
 A concrete generic aggregate is classified after its type arguments are
 substituted. Thus `Box[File]` contains and tracks a resource even though the
 unresolved `Box[T]` has no ownership classification (D611).
+A tagged union is affine as a whole when any payload is affine (D612). Its live
+arm is runtime state, so this initial rule permits only whole-value moves; it does
+not add partial moves from a variant payload.
 
 - A parameter borrows unless it is declared `own`: `fn close(f: own File) -> err`.
   Passing a resource to an `own` parameter moves it; the callee owns it and its

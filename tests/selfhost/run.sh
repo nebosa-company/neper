@@ -2445,6 +2445,13 @@ $test_build/neper-self check-file "$conformance_root/reject/safety_generic_aggre
 [ "$generic_aggregate_status" -eq 1 ]
 cmp -s "$test_build/conformance-reject-safety_generic_aggregate.jsonl" "$conformance_root/reject/safety_generic_aggregate.expected.jsonl" || { printf '%s
 ' "check-file --json on reject/safety_generic_aggregate.e differs from the conformance corpus" >&2; exit 1; }
+# A tagged union is affine as a whole when one of its payloads is affine
+# (D612, H01).
+tagged_resource_status=0
+$test_build/neper-self check-file "$conformance_root/reject/safety_tagged_resource.e" "$repo" x64 linux --json > "$test_build/conformance-reject-safety_tagged_resource.jsonl" || tagged_resource_status=$?
+[ "$tagged_resource_status" -eq 1 ]
+cmp -s "$test_build/conformance-reject-safety_tagged_resource.jsonl" "$conformance_root/reject/safety_tagged_resource.expected.jsonl" || { printf '%s
+' "check-file --json on reject/safety_tagged_resource.e differs from the conformance corpus" >&2; exit 1; }
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
 for reject_project in module_cycle module_variants safety_opaque; do

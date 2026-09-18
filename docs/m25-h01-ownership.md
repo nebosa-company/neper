@@ -402,3 +402,7 @@ E-SAFETY-0004 rather than an untracked close.
 **D611 follow-up.** A concrete generic aggregate clears the unresolved template's
 affine memo and classifies its substituted fields. `Box[File]` therefore moves and
 audits its `File` field like an equivalent nongeneric struct.
+
+**D612 follow-up.** A tagged union whose possible payloads include an affine type
+is affine as a whole. Its live arm is not statically tracked, so only whole-value
+moves participate; no partial payload move is claimed.

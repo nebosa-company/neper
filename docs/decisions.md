@@ -12346,3 +12346,17 @@ file through the destination and rejects a close through the moved source on bot
 hosts. Dynamic containers that relocate storage or can fail after taking an
 element remain H02 work; this row closes the generic aggregate classification bug,
 not that separate failure story.
+
+## D612 -- A tagged union carries the ownership of any payload
+
+H01 requires resource containment through tagged unions, but `affine_kind`
+previously inspected struct fields only. It now classifies a tagged union as
+affine when any possible payload is affine, and obligated when any possible
+payload is obligated. The union is tracked as one value: moving it transfers the
+live arm, and any later tag or payload use is E-SAFETY-0001. Because the live arm
+is runtime state, this row does not add a partial move out of one variant.
+
+`reject/safety_tagged_resource` puts an affine `Token` in a tagged union, moves
+the union and rejects a later tag read on both hosts. A bare untagged union remains
+outside resource containment because checked code has no live-member identity to
+carry the obligation.
