@@ -2917,11 +2917,12 @@ fn close(connection: *Connection, code: u16, reason: str, mask: [4]u8) -> err
 Client masking material and handshake entropy are caller-supplied. The module never
 reads OS randomness implicitly.
 
-The delivered `client_key` is allocation-free standard padded Base64 over exactly the
-sixteen supplied entropy bytes. `client_upgrade` emits and validates the bounded RFC 6455
-HTTP exchange and preserves the first frame boundary. `send`, `ping` and `close` provide
-bounded caller-masked client output, including extended lengths and fragmentation state.
-Server upgrade and inbound frames remain planned.
+The delivered surface uses allocation-free standard padded Base64 over exactly the
+sixteen supplied entropy bytes. Both upgrade directions validate the bounded RFC 6455
+HTTP exchange and preserve the first frame boundary. `receive` enforces role masking,
+minimal lengths, control bounds and fragmentation state while allocating only the
+accepted payload in the caller arena. `send`, `ping` and `close` provide bounded output,
+including extended lengths and fragmentation state.
 
 ### `e.db`
 

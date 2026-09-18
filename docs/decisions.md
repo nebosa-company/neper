@@ -12187,3 +12187,17 @@ code ranges and the 123-byte reason bound, emits one masked close frame, and mak
 later sends answer `Closed`. The fixture pins the 126-byte extended header and every
 masked byte, rejects an oversized ping before output, checks ping and normal-close wire
 bytes, and proves a second close cannot write.
+
+## D599 -- Inbound WebSocket frames are role-masked and caller-bounded
+
+`server_upgrade` accepts only an empty-body HTTP/1.1 GET carrying the required Upgrade,
+Connection, version 13 and a standard-Base64 key that decodes to exactly sixteen bytes.
+It reuses the client accept calculation and existing HTTP writer, then retains the
+caller's stream and sink as a server-role connection whose output is unmasked.
+
+`receive` reads exactly one frame into caller-arena storage after validating reserved
+bits, opcodes, shortest length encoding, direction-specific masking, control bounds and
+fragment sequencing. Its caller limit is checked before mask or payload bytes are read,
+so an oversized declared payload cannot allocate or be mistaken for a partial success.
+The cross-host fixture pins the RFC server handshake, a masked text frame, an unmasked
+server pong and a bounded oversized receive.

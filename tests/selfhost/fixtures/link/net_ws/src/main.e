@@ -3,6 +3,7 @@
 
 use e.io
 use e.mem
+use e.net.http
 use e.net.ws
 use e.os
 use e.str
@@ -82,5 +83,50 @@ fn main(a: *mem.Arena) -> err {
     let invalid_sink = io.slice_writer(&invalid_capture)
     let (invalid_connection, invalid_error) = ws.client_upgrade(a, invalid_reader, invalid_sink, "server.example.com", "/chat", entropy)
     if invalid_error != ws.InvalidHandshake { os.exit(14i32) }
+
+    // A server validates the reciprocal upgrade, unmasks client input and emits
+    // unmasked output. The following oversized frame stops at its declared bound.
+    var server_headers: [5]http.Header = zero
+    server_headers[0usize] = http.Header { name: "Host", value: "server.example.com" }
+    server_headers[1usize] = http.Header { name: "Upgrade", value: "WebSocket" }
+    server_headers[2usize] = http.Header { name: "Connection", value: "keep-alive, Upgrade" }
+    server_headers[3usize] = http.Header { name: "Sec-WebSocket-Key", value: "dGhlIHNhbXBsZSBub25jZQ==" }
+    server_headers[4usize] = http.Header { name: "Sec-WebSocket-Version", value: "13" }
+    var server_request = http.Request { method: .Get, target: "/chat", version: .Http11, headers: server_headers[0..], body: "" }
+    var inbound: [16]u8 = zero
+    inbound[0usize] = 129u8
+    inbound[1usize] = 130u8
+    inbound[2usize] = 1u8
+    inbound[3usize] = 2u8
+    inbound[4usize] = 3u8
+    inbound[5usize] = 4u8
+    inbound[6usize] = 121u8 ^ 1u8
+    inbound[7usize] = 111u8 ^ 2u8
+    inbound[8usize] = 130u8
+    inbound[9usize] = 130u8
+    inbound[10usize] = 5u8
+    inbound[11usize] = 6u8
+    inbound[12usize] = 7u8
+    inbound[13usize] = 8u8
+    inbound[14usize] = 120u8 ^ 5u8
+    inbound[15usize] = 121u8 ^ 6u8
+    var server_source = io.SliceReader { data: inbound[0..], off: 0usize }
+    let server_reader = io.slice_reader(&server_source)
+    var server_bytes: [512]u8 = zero
+    var server_capture = io.SliceWriter { data: server_bytes[0..], off: 0usize }
+    let server_sink = io.slice_writer(&server_capture)
+    let (server_connection, server_error) = ws.server_upgrade(a, server_reader, server_sink, &server_request)
+    if server_error != ok || server_connection.state == nil { os.exit(26i32) }
+    var server = server_connection
+    let expected_response = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n"
+    if !str.eq(server_bytes[0usize..server_capture.off], expected_response) { os.exit(27i32) }
+    let (text_frame, receive_error) = ws.receive(a, &server, 16usize)
+    if receive_error != ok || !text_frame.final || text_frame.opcode != .Text || !str.eq(text_frame.payload, "yo") { os.exit(28i32) }
+    server_capture.off = 0usize
+    let pong = ws.Frame { final: true, opcode: .Pong, payload: "ok" }
+    if ws.send(&server, pong, mask) != ok { os.exit(29i32) }
+    if server_capture.off != 4usize || server_bytes[0usize] != 138u8 || server_bytes[1usize] != 2u8 || server_bytes[2usize] != 111u8 || server_bytes[3usize] != 107u8 { os.exit(30i32) }
+    let (large_frame, large_error) = ws.receive(a, &server, 1usize)
+    if large_error != ws.TooLarge { os.exit(31i32) }
     ret ok
 }

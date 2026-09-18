@@ -1,5 +1,4 @@
-// WebSocket handshake and framing. The client handshake and outbound frame path are
-// delivered; server upgrade and inbound frame transport follow as separate slices.
+// Bounded WebSocket client/server handshakes and frame transport.
 
 use e.bytes
 use e.crypto.hash
@@ -26,6 +25,7 @@ type ConnectionState = struct {
     client: bool,
     closed: bool,
     fragmented: bool,
+    receiving_fragmented: bool,
 }
 
 fn client_key(entropy: [16]u8, dst: []u8) -> (str, err) {
@@ -113,6 +113,7 @@ fn client_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, host: str, 
     state.client = true
     state.closed = false
     state.fragmented = false
+    state.receiving_fragmented = false
 
     var key_storage: [24]u8 = zero
     let (key, key_error) = client_key(entropy, key_storage[0..])
@@ -157,6 +158,139 @@ fn client_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, host: str, 
         ret (out, InvalidHandshake)
     }
     out.state = mem.cast[*void](state)
+    ret (out, ok)
+}
+
+fn server_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, request: *const http.Request) -> (Connection, err) {
+    var out: Connection = zero
+    if request.method != .Get || request.version != .Http11 || request.body.len != 0usize { ret (out, InvalidHandshake) }
+    let (upgrade, has_upgrade) = http.header(request.headers, "Upgrade")
+    let (connection, has_connection) = http.header(request.headers, "Connection")
+    let (key, has_key) = http.header(request.headers, "Sec-WebSocket-Key")
+    let (version, has_version) = http.header(request.headers, "Sec-WebSocket-Version")
+    if !has_upgrade || !has_connection || !has_key || !has_version || !same_ascii(upgrade, "websocket") || !header_has_token(connection, "Upgrade") || !same(version, "13") {
+        ret (out, InvalidHandshake)
+    }
+    var decoded_key: [16]u8 = zero
+    let (decoded, decode_error) = bytes.base64_decode(decoded_key[0..], key, .Standard)
+    if decode_error != ok || decoded.len != 16usize { ret (out, InvalidHandshake) }
+    var accept_storage: [28]u8 = zero
+    let (accepted, accept_error) = accept_key(key, accept_storage[0..])
+    if accept_error != ok { ret (out, InvalidHandshake) }
+
+    let mark = mem.mark(a)
+    let (storage, storage_error) = mem.alloc[ConnectionState](a, 1usize)
+    if storage_error != ok { ret (out, storage_error) }
+    let state = &storage[0usize]
+    state.source = stream
+    state.sink = sink
+    state.client = false
+    state.closed = false
+    state.fragmented = false
+    state.receiving_fragmented = false
+    var headers: [3]http.Header = zero
+    headers[0usize] = http.Header { name: "Upgrade", value: "websocket" }
+    headers[1usize] = http.Header { name: "Connection", value: "Upgrade" }
+    headers[2usize] = http.Header { name: "Sec-WebSocket-Accept", value: accepted }
+    var response = http.Response { version: .Http11, status: 101u16, reason: "Switching Protocols", headers: headers[0..], body: "" }
+    var encoder = http.writer(state.sink)
+    let write_error = http.write_response(&encoder, &response)
+    if write_error != ok {
+        mem.reset(a, mark)
+        ret (out, write_error)
+    }
+    out.state = mem.cast[*void](state)
+    ret (out, ok)
+}
+
+fn read_exact(state: *ConnectionState, dst: []u8) -> err {
+    let read_error = io.read_exact(&state.source, dst)
+    if read_error == io.End { ret InvalidFrame }
+    ret read_error
+}
+
+fn decode_opcode(value: u8) -> (Opcode, err) {
+    if value == 0u8 { ret (.Continuation, ok) }
+    if value == 1u8 { ret (.Text, ok) }
+    if value == 2u8 { ret (.Binary, ok) }
+    if value == 8u8 { ret (.Close, ok) }
+    if value == 9u8 { ret (.Ping, ok) }
+    if value == 10u8 { ret (.Pong, ok) }
+    ret (.Continuation, InvalidFrame)
+}
+
+fn receive(a: *mem.Arena, connection: *Connection, limit: usize) -> (Frame, err) {
+    var out: Frame = zero
+    let state = mem.cast[*ConnectionState](connection.state)
+    if state.closed { ret (out, Closed) }
+    var prefix: [2]u8 = zero
+    let prefix_error = read_exact(state, prefix[0..])
+    if prefix_error != ok { ret (out, prefix_error) }
+    if (prefix[0usize] & 112u8) != 0u8 { ret (out, InvalidFrame) }
+    let final = (prefix[0usize] & 128u8) != 0u8
+    let (opcode, opcode_error) = decode_opcode(prefix[0usize] & 15u8)
+    if opcode_error != ok { ret (out, opcode_error) }
+    let control = control_opcode(opcode)
+    let masked = (prefix[1usize] & 128u8) != 0u8
+    if masked == state.client { ret (out, InvalidFrame) }
+    var length = u64(prefix[1usize] & 127u8)
+    if length == 126u64 {
+        var extended: [2]u8 = zero
+        let length_error = read_exact(state, extended[0..])
+        if length_error != ok { ret (out, length_error) }
+        length = (u64(extended[0usize]) << 8u32) | u64(extended[1usize])
+        if length < 126u64 { ret (out, InvalidFrame) }
+    } else if length == 127u64 {
+        var extended: [8]u8 = zero
+        let length_error = read_exact(state, extended[0..])
+        if length_error != ok { ret (out, length_error) }
+        if (extended[0usize] & 128u8) != 0u8 { ret (out, InvalidFrame) }
+        length = 0u64
+        var at = 0usize
+        while at < extended.len {
+            length = (length << 8u32) | u64(extended[at])
+            at += 1usize
+        }
+        if length < 65536u64 { ret (out, InvalidFrame) }
+    }
+    if control && (!final || length > 125u64) { ret (out, InvalidFrame) }
+    if length > u64(limit) { ret (out, TooLarge) }
+
+    var next_fragmented = state.receiving_fragmented
+    if opcode == .Continuation {
+        if !state.receiving_fragmented { ret (out, InvalidFrame) }
+        if final { next_fragmented = false }
+    } else if !control {
+        if state.receiving_fragmented { ret (out, InvalidFrame) }
+        if !final { next_fragmented = true }
+    }
+    var mask: [4]u8 = zero
+    if masked {
+        let mask_error = read_exact(state, mask[0..])
+        if mask_error != ok { ret (out, mask_error) }
+    }
+    var payload: []u8 = zero
+    let mark = mem.mark(a)
+    if length != 0u64 {
+        let (allocated, allocation_error) = mem.alloc[u8](a, usize(length))
+        if allocation_error != ok { ret (out, allocation_error) }
+        payload = allocated
+        let payload_error = read_exact(state, payload)
+        if payload_error != ok {
+            mem.reset(a, mark)
+            ret (out, payload_error)
+        }
+        if masked {
+            var at = 0usize
+            while at < payload.len {
+                payload[at] ^= mask[at % 4usize]
+                at += 1usize
+            }
+        }
+    }
+    state.receiving_fragmented = next_fragmented
+    if opcode == .Close { state.closed = true }
+    out = Frame { final: final, opcode: opcode, payload: payload }
     ret (out, ok)
 }
 

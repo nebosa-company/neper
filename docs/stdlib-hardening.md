@@ -328,6 +328,13 @@ return `Closed`. The cross-host fixture checks every byte of a masked 126-byte f
 oversized-ping refusal, ping and normal-close wire bytes, and the terminal state. Server
 upgrade and inbound framing remain for D599.
 
+D599 completes the frozen WebSocket surface. `server_upgrade` validates the reciprocal
+GET, version, token and sixteen-byte decoded nonce requirements before emitting the exact
+101 accept. `receive` rejects reserved bits, unknown opcodes, wrong-direction masking,
+non-minimal lengths, invalid control frames and illegal fragmentation transitions before
+allocating a payload bounded by the caller's limit. The cross-host fixture pins the RFC
+server response, masked client input, unmasked server output and an oversized receive.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with
