@@ -1549,6 +1549,8 @@ fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err)
 fn create_new(a: *mem.Arena, path: str) -> (File, err)
 fn read(f: File, buf: []u8) -> (usize, err)
 fn write(f: File, buf: []const u8) -> (usize, err)
+fn read_detail(f: File, buf: []u8, detail: *ErrorDetail) -> (usize, err)
+fn write_detail(f: File, buf: []const u8, detail: *ErrorDetail) -> (usize, err)
 fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err)
 fn copy_bytes(dst: []u8, src: []const u8)
 fn touch(p: *const u8, n: usize)
@@ -1756,6 +1758,12 @@ take the caller's `*ErrorDetail` and write the failure into it at the failing
 call, before any cleanup or later failure on the thread, and leave it untouched on
 success; the caller then holds the detail as ordinary data. Higher-level APIs may
 expose a detail snapshot while ordinary callers retain cheap `err`/`try`.
+`read_detail` and `write_detail` are the checked byte-I/O path (D614). They copy
+the host failure directly into the caller's value rather than recovering it from
+the compatibility slot, so overlapping calls do not compete for diagnostic state.
+Their count has the same exact partial-progress meaning as `read` and `write`;
+success leaves `detail` unchanged. A file handle retains no path label, so these
+two operations use an empty `subject`.
 `operation` and `subject` are borrowed caller strings, never inferred global state;
 `error_message` is the only locale-dependent rendering operation in `e.os`. A `Watch` carries a
 pointer for the same reason a `Poller` does: the host reports a change by a name relative to

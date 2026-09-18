@@ -63,6 +63,9 @@ Preserve exact partial progress on write failure, including buffered suffixes.
 Specify EOF, zero-length requests, `(0, ok)` no-progress protection and positive
 bytes with an error. Never retry already accepted bytes after failed flush. Closing
 or resetting a borrowed wrapper/source requires completion of outstanding uses.
+At the host boundary, `os.read_detail` and `os.write_detail` preserve the same count
+while copying native provenance directly into caller-owned data (D614); generic
+`e.io` callback propagation remains a separate adapter design problem.
 
 Acceptance: file -> buffer -> decompressor -> JSON stream using only public APIs;
 nested buffered sinks; short writes; data plus error; flush failure after a prefix;

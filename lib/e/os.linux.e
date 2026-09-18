@@ -469,6 +469,42 @@ fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err
     ret (resolved, ok)
 }
 
+// The intrinsic `read` and `write` keep the bootstrap ABI compact and return only
+// portable `err`. These checked forms make the host code ordinary caller-owned data
+// at the same call. An unnamed handle has no stable path, so `subject` is empty.
+// The count is still the exact progress result: zero on this host when the syscall
+// fails, and the short count when it succeeds.
+fn read_detail(f: File, buffer: []u8, detail: *ErrorDetail) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    let taken = syscall(SYS_READ, f.raw, mem.address_of(&buffer[0usize]), buffer.len, 0usize, 0usize, 0usize)
+    if taken < 0isize {
+        let code = i32(0isize - taken)
+        *detail = detail_from_code(code, "read", "")
+        ret (0usize, error_of_result(taken))
+    }
+    ret (usize(taken), ok)
+}
+
+fn write_detail(f: File, buffer: []const u8, detail: *ErrorDetail) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    let written = syscall(SYS_WRITE, f.raw, mem.address_of(&buffer[0usize]), buffer.len, 0usize, 0usize, 0usize)
+    if written < 0isize {
+        let code = i32(0isize - written)
+        *detail = detail_from_code(code, "write", "")
+        ret (0usize, error_of_result(written))
+    }
+    ret (usize(written), ok)
+}
+
+fn detail_from_code(code: i32, operation: str, subject: str) -> ErrorDetail {
+    var detail: ErrorDetail = zero
+    detail.kind = error_kind_of(code)
+    detail.native_code = code
+    detail.operation = operation
+    detail.subject = subject
+    ret detail
+}
+
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     var detail: ErrorDetail = zero
     detail.kind = .Other
@@ -482,8 +518,7 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     if error_slot_thread[slot] != thread { ret detail }
     let code = error_slot_code[slot]
     error_slot_fresh[slot] = 0u8
-    detail.native_code = code
-    detail.kind = error_kind_of(code)
+    detail = detail_from_code(code, operation, subject)
     if used == 2u8 { detail.kind = .Denied }
     if used == 3u8 { detail.kind = .Timeout }
     ret detail

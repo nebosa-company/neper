@@ -1326,6 +1326,8 @@ error Unsupported
 | `fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err)` | `a` holds the null-terminated (UTF-16 on Windows) path for the call, under `mark`/`reset` |
 | `fn read(f: File, buf: []u8) -> (usize, err)` | short reads are ordinary; `0` at end of file |
 | `fn write(f: File, buf: []const u8) -> (usize, err)` | short writes are ordinary |
+| `fn read_detail(f: File, buf: []u8, detail: *ErrorDetail) -> (usize, err)` | the checked read path; on failure writes native provenance directly into `detail`, with an empty subject |
+| `fn write_detail(f: File, buf: []const u8, detail: *ErrorDetail) -> (usize, err)` | the checked write path; on failure writes native provenance directly into `detail`, with an empty subject |
 | `fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err)` | sets and returns the absolute byte offset; `SeekWhence` is `.Start`, `.Current` or `.End` |
 | `fn close(f: File) -> err` | |
 | `fn stdin() -> File`, `fn stdout() -> File`, `fn stderr() -> File` | |
@@ -1449,6 +1451,13 @@ on the thread, and a wrapper that acquires, fails and closes still hands the cal
 the acquisition's detail. `operation` and `subject` are explicit borrowed labels,
 so neither exceptions nor a process-global message payload are introduced.
 `error_message` is the only locale-dependent rendering step.
+
+The checked `read_detail` and `write_detail` forms do not recover provenance from
+that compatibility state: each obtains the native failure code at its own host call
+and writes the caller's `ErrorDetail` directly. Concurrent checked byte operations
+therefore retain independent values. Both return the same exact progress count as
+the plain operation, and a successful call leaves `detail` unchanged. Because a
+`File` does not retain its opening path, their `subject` is the empty string.
 
 **Outputs on failure.** Every `(T, err)` of the fixed surface says what `T` holds
 when `err` is not `ok`: a handle -- `open`, `create_new`, `pipe`, `spawn`,

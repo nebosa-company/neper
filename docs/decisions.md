@@ -12376,3 +12376,22 @@ resource and a deferred cleanup. `reject/safety_cleanup_position` keeps the boun
 exact by refusing an owned resource followed by another parameter. Both fixtures run
 on Windows and Linux; this delivers the additive H01 extension that D367's H13
 contract had left for M3.
+
+## D614 -- Checked byte I/O owns its failure detail
+
+H07's path-taking calls had caller-owned detail, but the two operations whose result
+already carries partial progress -- `read` and `write` -- still offered only the
+bootstrap intrinsic and ambient diagnostic state. Both host modules now expose
+`read_detail` and `write_detail`. They perform the host call directly, return the
+ordinary exact byte count and portable `err`, and on failure construct the caller's
+`ErrorDetail` from that call's native code. Success leaves the value unchanged. A
+handle keeps no opening path, so the subject is deliberately empty rather than a
+guessed or stale name.
+
+The direct construction matters under concurrency: it does not round-trip through
+the fixed compatibility slot, so overlapping checked reads and writes cannot steal
+one another's provenance even if their thread identifiers collide there. The shared
+fixture pins failed read/write counts and labels, successful one-byte transfer with
+unchanged prior details, and concurrent failures where host threads are available,
+on both host builds. Generic propagation through arbitrary `e.io` callbacks and the
+allocation-failure rows remain H07 work.

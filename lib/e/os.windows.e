@@ -850,6 +850,9 @@ extern fn raw_peek_pipe(handle: usize, buffer: usize, size: u32, bytes_read: usi
 @import("kernel32.dll", "ReadFile")
 extern fn raw_pipe_read(handle: usize, buffer: *u8, size: u32, bytes_read: *u32, overlapped: usize) -> i32
 
+@import("kernel32.dll", "WriteFile")
+extern fn raw_file_write(handle: usize, buffer: *const u8, size: u32, bytes_written: *u32, overlapped: usize) -> i32
+
 @import("kernel32.dll", "DuplicateHandle")
 extern fn raw_duplicate_handle(source_process: usize, source: usize, target_process: usize, duplicate: *usize, access: u32, inherit: i32, options: u32) -> i32
 
@@ -1337,6 +1340,45 @@ fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err
     ret (resolved, ok)
 }
 
+// Checked byte I/O bypasses the bootstrap intrinsic only so the native failure code
+// can be copied straight into the caller's value. `subject` is empty because a handle
+// does not retain the path that opened it. Successful short counts remain ordinary,
+// and success leaves `detail` untouched.
+fn read_detail(f: File, buffer: []u8, detail: *ErrorDetail) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    var wanted = buffer.len
+    if wanted > 4294967295usize { wanted = 4294967295usize }
+    var taken = 0u32
+    if raw_pipe_read(f.raw, &buffer[0usize], u32(wanted), &taken, 0usize) == 0i32 {
+        let code = i32(raw_last_error())
+        *detail = detail_from_code(code, "read", "")
+        ret (usize(taken), error_of_code(u32(code)))
+    }
+    ret (usize(taken), ok)
+}
+
+fn write_detail(f: File, buffer: []const u8, detail: *ErrorDetail) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    var wanted = buffer.len
+    if wanted > 4294967295usize { wanted = 4294967295usize }
+    var written = 0u32
+    if raw_file_write(f.raw, &buffer[0usize], u32(wanted), &written, 0usize) == 0i32 {
+        let code = i32(raw_last_error())
+        *detail = detail_from_code(code, "write", "")
+        ret (usize(written), error_of_code(u32(code)))
+    }
+    ret (usize(written), ok)
+}
+
+fn detail_from_code(code: i32, operation: str, subject: str) -> ErrorDetail {
+    var detail: ErrorDetail = zero
+    detail.kind = error_kind_of(code)
+    detail.native_code = code
+    detail.operation = operation
+    detail.subject = subject
+    ret detail
+}
+
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     var detail: ErrorDetail = zero
     detail.kind = .Other
@@ -1350,8 +1392,7 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     if error_slot_thread[slot] != thread { ret detail }
     let code = error_slot_code[slot]
     error_slot_fresh[slot] = 0u8
-    detail.native_code = code
-    detail.kind = error_kind_of(code)
+    detail = detail_from_code(code, operation, subject)
     if used == 2u8 { detail.kind = .Timeout }
     ret detail
 }
