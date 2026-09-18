@@ -11990,3 +11990,18 @@ detail recording; `ELOOP` from `RESOLVE_NO_SYMLINKS` returned `Denied` while its
 remained `Other`. The existing slot-state byte now carries the single contextual `Denied`
 override, so the `EXDEV` policy branch preserves code 18 without another global array, and
 `ELOOP` is classified as `Denied` consistently.
+
+## D586 -- Lock contention retains native detail and its portable outcome
+
+The file-lock fixture already uses two independently opened handles to one file, so its
+exclusive/shared conflicts are real on both hosts. It proves an immediate attempt returns
+`WouldBlock`, a bounded attempt waits and returns `Timeout`, release permits acquisition,
+shared readers coexist and an exclusive writer conflicts with them.
+
+Those two expected failures previously bypassed the per-thread error recorder. The lock
+loops now record Linux `EAGAIN` or Windows `ERROR_LOCK_VIOLATION` only when they finally
+return, not on retries that may later succeed. An immediate refusal derives `WouldBlock`
+from that native code. A deadline expiration preserves the same code and marks the
+contextual `Timeout` in the existing slot-state byte; no new global storage or allocation
+is added. The fixture reads each detail immediately and requires a nonzero code and the
+matching kind.

@@ -205,6 +205,12 @@ native-call failures record the same per-thread detail as Win32 failures. Linux 
 policy-refused `EXDEV` as `Denied` without losing native code 18, and reports `ELOOP` detail
 as `Denied`, matching the portable result returned by the `NoSymlinks` walk.
 
+D586 closes lock-contention detail. The existing real contention fixture already proves
+exclusive/shared exclusion, zero-time refusal, bounded waiting and acquisition after release.
+It now also requires nonzero native detail whose kind matches `WouldBlock` or `Timeout`.
+Both hosts retain the native contention code; the existing slot-state byte marks only the
+deadline-expired result as the contextual `Timeout`, without another runtime allocation.
+
 ## SL07 — streaming HTTP and event streams
 
 ResponseStream separates headers from bounded incremental body reads. It owns the

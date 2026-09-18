@@ -345,8 +345,8 @@ const ERROR_SLOTS: usize = 64usize
 
 var error_slot_thread: [64]usize
 var error_slot_code: [64]i32
-// 0 is unused, 1 derives the kind from the native code and 2 is the one contextual
-// override: openat2's EXDEV means a denied beneath-root walk, not unsupported I/O.
+// 0 is unused, 1 derives the kind from the native code, 2 is a contextual `Denied`
+// and 3 is a contextual `Timeout`.
 var error_slot_used: [64]u8
 // Set when a failure was recorded and not yet read (D360, H07): a failing cleanup
 // then leaves the slot alone, so the primary failure's detail is what
@@ -485,6 +485,7 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     detail.native_code = code
     detail.kind = error_kind_of(code)
     if used == 2u8 { detail.kind = .Denied }
+    if used == 3u8 { detail.kind = .Timeout }
     ret detail
 }
 
@@ -1601,7 +1602,10 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
         if remaining <= 0i64 {
             // Zero asked for one attempt, which is `WouldBlock`; a deadline that ran out is a
             // `Timeout`. Two different questions deserve two different answers.
+            record_error_detail(11i32)
             if timeout_ns == 0i64 { ret (lock, WouldBlock) }
+            let thread = current_thread_id()
+            error_slot_used[thread % ERROR_SLOTS] = 3u8
             ret (lock, Timeout)
         }
         var slice = LOCK_POLL_NS

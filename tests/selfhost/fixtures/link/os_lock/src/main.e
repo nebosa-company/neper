@@ -41,6 +41,8 @@ fn main(a: *mem.Arena) -> err {
     // A zero timeout asked for one attempt, so it says `WouldBlock` rather than waiting.
     let (blocked, blocked_error) = os.file_lock(second, true, 0i64)
     if blocked_error != os.WouldBlock { os.exit(21i32) }
+    let blocked_detail = os.last_error_detail("file_lock", "np-lock.bin")
+    if blocked_detail.native_code == 0i32 || blocked_detail.kind != .WouldBlock { os.exit(29i32) }
 
     // A deadline that runs out is a different answer from one attempt failing, and it must
     // actually have waited: the clock is what says the poll ran rather than returning at once.
@@ -48,6 +50,8 @@ fn main(a: *mem.Arena) -> err {
     if before_error != ok { os.exit(22i32) }
     let (timed, timed_error) = os.file_lock(second, true, 60000000i64)
     if timed_error != os.Timeout { os.exit(23i32) }
+    let timed_detail = os.last_error_detail("file_lock", "np-lock.bin")
+    if timed_detail.native_code == 0i32 || timed_detail.kind != .Timeout { os.exit(34i32) }
     let (after, after_error) = os.clock(.Monotonic)
     if after_error != ok { os.exit(24i32) }
     if after - before < 40000000i64 { os.exit(25i32) }

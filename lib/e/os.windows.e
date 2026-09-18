@@ -1175,6 +1175,7 @@ fn error_kind_of(code: i32) -> ErrorKind {
     if code == 123i32 { ret .NotFound }
     if code == 5i32 { ret .Denied }
     if code == 32i32 { ret .Denied }
+    if code == 33i32 { ret .WouldBlock }
     if code == 80i32 { ret .Exists }
     if code == 183i32 { ret .Exists }
     if code == 8i32 { ret .OutOfMemory }
@@ -1213,6 +1214,7 @@ const ERROR_SLOTS: usize = 64usize
 
 var error_slot_thread: [64]usize
 var error_slot_code: [64]i32
+// 0 is unused, 1 derives the kind from the native code and 2 is a contextual `Timeout`.
 var error_slot_used: [64]u8
 // Set when a failure was recorded and not yet read (D360, H07): a failing cleanup
 // then leaves the slot alone, so the primary failure's detail is what
@@ -1235,7 +1237,7 @@ fn record_error_detail(code: i32) {
 fn record_cleanup_error_detail(code: i32) {
     let thread = current_thread_id()
     let slot = thread % ERROR_SLOTS
-    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] == 1u8 && error_slot_thread[slot] == thread { ret }
+    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] != 0u8 && error_slot_thread[slot] == thread { ret }
     record_error_detail(code)
 }
 
@@ -1343,12 +1345,14 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     let thread = current_thread_id()
     let slot = thread % ERROR_SLOTS
     // Another thread's slot, or one nothing has written, is no detail at all.
-    if error_slot_used[slot] == 0u8 { ret detail }
+    let used = error_slot_used[slot]
+    if used == 0u8 { ret detail }
     if error_slot_thread[slot] != thread { ret detail }
     let code = error_slot_code[slot]
     error_slot_fresh[slot] = 0u8
     detail.native_code = code
     detail.kind = error_kind_of(code)
+    if used == 2u8 { detail.kind = .Timeout }
     ret detail
 }
 
@@ -2165,7 +2169,10 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
         if remaining <= 0i64 {
             // Zero asked for one attempt, which is `WouldBlock`; a deadline that ran out is a
             // `Timeout`. Two different questions deserve two different answers.
+            record_error_detail(i32(code))
             if timeout_ns == 0i64 { ret (lock, WouldBlock) }
+            let thread = current_thread_id()
+            error_slot_used[thread % ERROR_SLOTS] = 2u8
             ret (lock, Timeout)
         }
         var slice = i64(LOCK_POLL_MS) * 1000000i64
