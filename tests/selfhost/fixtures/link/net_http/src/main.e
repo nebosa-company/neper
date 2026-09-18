@@ -10,6 +10,7 @@ use e.str
 error Failed
 
 type OneByte = struct { data: str, off: usize }
+type Repeating = struct { events: usize, emitted: usize, off: usize }
 
 fn one_read(ctx: *void, dst: []u8) -> (usize, err) {
     let source = mem.cast[*OneByte](ctx)
@@ -24,6 +25,27 @@ fn one_reader(value: *OneByte, text: str) -> io.Reader {
     value.data = text
     value.off = 0usize
     ret io.Reader { ctx: mem.cast[*void](value), read: one_read }
+}
+
+fn repeating_read(ctx: *void, dst: []u8) -> (usize, err) {
+    let source = mem.cast[*Repeating](ctx)
+    if source.emitted == source.events { ret (0usize, io.End) }
+    if dst.len == 0usize { ret (0usize, ok) }
+    let pattern = "data: x\n\n"
+    dst[0usize] = pattern[source.off]
+    source.off += 1usize
+    if source.off == pattern.len {
+        source.off = 0usize
+        source.emitted += 1usize
+    }
+    ret (1usize, ok)
+}
+
+fn repeating_reader(value: *Repeating, events: usize) -> io.Reader {
+    value.events = events
+    value.emitted = 0usize
+    value.off = 0usize
+    ret io.Reader { ctx: mem.cast[*void](value), read: repeating_read }
 }
 
 fn limits(line: usize, event: usize) -> http.SseLimits {
@@ -91,5 +113,22 @@ fn main(a: *mem.Arena) -> err {
     var overflow_reader = retry_reader
     let (retry_event, retry_present, retry_error) = http.sse_next_err(&overflow_reader)
     if retry_error != http.TooLarge || retry_present { ret Failed }
+
+    // Ten thousand events are generated rather than stored. Construction is the only
+    // allocation: every event reuses the same buffers and leaves the arena mark fixed.
+    var repeated_source: Repeating = zero
+    let (repeated, repeated_error) = http.sse_reader(a, repeating_reader(&repeated_source, 10000usize), limits(16usize, 16usize))
+    if repeated_error != ok { ret repeated_error }
+    var repeated_reader = repeated
+    let steady = mem.mark(a)
+    var count = 0usize
+    while count < 10000usize {
+        let (repeated_event, repeated_present, repeated_next_error) = http.sse_next_err(&repeated_reader)
+        if repeated_next_error != ok || !repeated_present || !str.eq(repeated_event.data, "x") { ret Failed }
+        if mem.mark(a) != steady { ret Failed }
+        count += 1usize
+    }
+    let (repeated_end, repeated_more, repeated_end_error) = http.sse_next_err(&repeated_reader)
+    if repeated_end_error != ok || repeated_more || mem.mark(a) != steady { ret Failed }
     ret ok
 }

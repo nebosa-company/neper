@@ -12035,3 +12035,14 @@ sequences, CR/LF/CRLF boundaries, comments, repeated data fields, empty-id reset
 non-decimal-retry refusal, retained state, malformed-byte replacement, independent line and
 event limits, retry overflow and EOF without a dispatching blank line. `e.net.http` moves from
 planned to partial; its HTTP message and connection-facing declarations remain planned.
+
+## D589 -- A long-lived event stream does not grow the arena
+
+The SSE fixture now drives ten thousand `data: x` events through a synthetic reader that
+produces one byte per call and stores no aggregate input. It records the arena mark after
+`sse_reader` construction, requires every event to contain the expected byte and requires
+the mark to remain identical after every `sse_next_err`, including the final EOF call.
+
+No production change is needed: D588 already allocated all state once and reused it. D589
+adds the missing long-lived acceptance evidence and regenerates the five-feature progress
+batch rather than inventing a second memory accounting mechanism.

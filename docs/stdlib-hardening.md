@@ -244,6 +244,12 @@ byte per read, so the BOM, multibyte replacement and every CRLF boundary are gen
 split; it also pins comments, repeated data, empty and NUL ids, invalid retry fields and
 the no-dispatch-at-EOF rule. The network-facing HTTP response stream remains planned.
 
+D589 pins the long-lived half of that memory contract. A synthetic one-byte source emits
+ten thousand complete events without retaining their input; after reader construction,
+the fixture requires every decoded event to leave the caller arena at exactly the same
+mark. This distinguishes a truly reusable bounded reader from one that merely hides
+per-event growth behind an arena. The D585-D589 progress batch is regenerated here.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with
