@@ -2918,7 +2918,9 @@ Client masking material and handshake entropy are caller-supplied. The module ne
 reads OS randomness implicitly.
 
 The delivered `client_key` is allocation-free standard padded Base64 over exactly the
-sixteen supplied entropy bytes. Upgrade validation and framed transport remain planned.
+sixteen supplied entropy bytes. `client_upgrade` emits and validates the bounded RFC 6455
+HTTP exchange and preserves the first frame boundary. Server upgrade and framed transport
+remain planned.
 
 ### `e.db`
 

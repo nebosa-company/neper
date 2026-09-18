@@ -313,6 +313,13 @@ padded alphabet and reports the module's `TooLarge` before exposing short output
 fixture pins RFC 6455's sample nonce and exact key on both hosts. Upgrade validation and
 frame transport remain separate bounded slices; no host randomness is introduced.
 
+D597 delivers the client HTTP upgrade. It emits the five required handshake headers,
+validates status 101, case-insensitive Upgrade/Connection tokens and the exact RFC SHA-1
+accept, reusing `e.crypto.hash`'s existing legacy SHA-1 primitive plus `e.bytes` Base64.
+Handshake reads are intentionally one byte, preventing an eager source from over-reading
+the first WebSocket frame into a discarded HTTP buffer. The fixture pins the complete RFC
+sample request/response and rejects a forged accept. Server upgrade and frames remain.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

@@ -12159,3 +12159,17 @@ The cross-host fixture uses RFC 6455's `the sample nonce` and requires the exact
 `dGhlIHNhbXBsZSBub25jZQ==` key. A twenty-three-byte destination fails before output is
 reported. Upgrade validation and framed transport stay for the following slices rather
 than coupling a simple entropy transform to socket policy.
+
+## D597 -- Client upgrade preserves the first WebSocket frame
+
+`client_upgrade` emits a bounded HTTP/1.1 GET with the explicit Host, Upgrade,
+Connection, version and caller-entropy key headers, then validates status 101,
+case-insensitive Upgrade/Connection tokens and the exact RFC SHA-1 accept. Its handshake
+reader deliberately requests one byte at a time from the supplied stream, so an
+underlying eager reader cannot hand HTTP parsing bytes from the first frame that the
+returned connection would otherwise lose.
+
+The accept computation reuses the existing legacy SHA-1 primitive in `e.crypto.hash` and
+the reviewed Base64 codec; no new cryptographic implementation is introduced. The
+fixture pins RFC 6455's full sample exchange and exact emitted request, accepts mixed-case
+and comma-separated response tokens, and rejects a forged accept value.
