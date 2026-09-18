@@ -298,6 +298,15 @@ full-body return cannot represent its tunnel. A real cross-host loopback server 
 exact GET and HEAD wire messages, a bounded response body and retained Content-Length.
 Controlled `ResponseStream` and TLS requests remain planned.
 
+D595 delivers that plain `ResponseStream`. Its controlled connection returns after the
+bounded head; `response_read` incrementally decodes fixed-length, chunked (with bounded
+trailers) and close-delimited bodies into caller storage while enforcing the total body
+limit. Every network refill retains the original cancellation/deadline control. Closing
+is idempotent and never drains an unbounded peer; HEAD and body-forbidden statuses begin
+at EOF. The real loopback fixture reads a chunked body across three-byte destinations,
+pins its terminal trailer/EOF and cancels a second stream between head and body. TLS full
+and streaming requests remain planned with `e.net.tls`.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

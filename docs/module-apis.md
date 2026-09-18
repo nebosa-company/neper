@@ -2870,8 +2870,9 @@ compression and connection pooling remain outside the version-1 surface.
 The delivered plain `request` opens one TCP connection, writes one request, reads one
 bounded full response and closes the connection on every path. HEAD retains response
 headers but consumes no body; CONNECT returns Unsupported because its successful result
-is a tunnel rather than a full HTTP response. `request_tls` and both streaming request
-forms remain planned until their transports are delivered.
+is a tunnel rather than a full HTTP response. `request_stream` provides the controlled
+incremental form over plain TCP. `request_tls` and `request_tls_stream` remain planned
+until their transport is delivered.
 
 ResponseStream owns the connection; headers borrow its arena and response_read
 incrementally decodes framing without buffering a complete body. Limits.body_bytes

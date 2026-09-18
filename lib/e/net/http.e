@@ -1,8 +1,9 @@
 // Bounded HTTP/1.0 and HTTP/1.1 message parsing/writing plus the event-stream body
-// format. The plain full-body client owns one connection per request; controlled
-// response streaming and TLS remain planned.
+// format. Plain full-body and controlled streaming clients each own one connection;
+// TLS remains planned.
 
 use e.io
+use e.cancel
 use e.mem
 use e.net
 use e.text.utf8
@@ -15,6 +16,8 @@ type Response = struct { version: Version, status: u16, reason: str, headers: []
 type Limits = struct { start_line: usize, header_bytes: usize, header_count: usize, body_bytes: usize }
 type Reader = struct { state: *void }
 type Writer = struct { sink: io.Writer }
+type ResponseHead = struct { version: Version, status: u16, reason: str, headers: []const Header }
+type ResponseStream = struct { state: *void }
 
 type SseEvent = struct {
     event: str,
@@ -50,6 +53,48 @@ type ReaderState = struct {
     input_len: usize,
     line: []u8,
     limits: Limits,
+}
+
+type NetworkIo = struct { socket: net.Socket, control: cancel.Control }
+
+type ResponseMeta = struct {
+    head: ResponseHead,
+    length: usize,
+    has_length: bool,
+    chunked: bool,
+}
+
+type ResponseStreamState = struct {
+    network: NetworkIo,
+    decoder: Reader,
+    head: ResponseHead,
+    limits: Limits,
+    remaining: usize,
+    total: usize,
+    chunk_remaining: usize,
+    chunked: bool,
+    chunk_needs_crlf: bool,
+    close_delimited: bool,
+    ended: bool,
+    closed: bool,
+}
+
+fn network_read(ctx: *void, dst: []u8) -> (usize, err) {
+    let network = mem.cast[*NetworkIo](ctx)
+    let (count, read_error) = net.receive_with_control(network.socket, dst, network.control)
+    if read_error != ok { ret (count, read_error) }
+    if count == 0usize { ret (0usize, io.End) }
+    ret (count, ok)
+}
+
+fn network_write(ctx: *void, src: []const u8) -> (usize, err) {
+    let network = mem.cast[*NetworkIo](ctx)
+    let (count, write_error) = net.send_with_control(network.socket, src, network.control)
+    ret (count, write_error)
+}
+
+fn network_flush(ctx: *void) -> err {
+    ret ok
 }
 
 fn ascii_lower(byte: u8) -> u8 {
@@ -286,6 +331,24 @@ fn expect_crlf(s: *ReaderState) -> err {
     ret ok
 }
 
+fn read_trailers(s: *ReaderState) -> err {
+    var trailer_bytes = 0usize
+    var trailer_count = 0usize
+    while true {
+        let (trailer, trailer_error) = http_line(s, s.limits.header_bytes)
+        if trailer_error != ok { ret trailer_error }
+        if trailer.len == 0usize { ret ok }
+        if trailer.len + 2usize > s.limits.header_bytes - trailer_bytes { ret TooLarge }
+        trailer_bytes += trailer.len + 2usize
+        trailer_count += 1usize
+        if trailer_count > s.limits.header_count { ret TooLarge }
+        var colon = 0usize
+        while colon < trailer.len && trailer[colon] != 58u8 { colon += 1usize }
+        if colon == trailer.len || !valid_token(trailer[..colon]) { ret Invalid }
+    }
+    ret Invalid
+}
+
 fn read_chunked(a: *mem.Arena, s: *ReaderState) -> ([]const u8, err) {
     var empty: []const u8 = zero
     let (body, allocation_error) = mem.alloc[u8](a, s.limits.body_bytes)
@@ -297,20 +360,9 @@ fn read_chunked(a: *mem.Arena, s: *ReaderState) -> ([]const u8, err) {
         let (size, size_error) = parse_hex(size_line)
         if size_error != ok { ret (empty, size_error) }
         if size == 0usize {
-            var trailer_bytes = 0usize
-            var trailer_count = 0usize
-            while true {
-                let (trailer, trailer_error) = http_line(s, s.limits.header_bytes)
-                if trailer_error != ok { ret (empty, trailer_error) }
-                if trailer.len == 0usize { ret (body[..used], ok) }
-                if trailer.len + 2usize > s.limits.header_bytes - trailer_bytes { ret (empty, TooLarge) }
-                trailer_bytes += trailer.len + 2usize
-                trailer_count += 1usize
-                if trailer_count > s.limits.header_count { ret (empty, TooLarge) }
-                var colon = 0usize
-                while colon < trailer.len && trailer[colon] != 58u8 { colon += 1usize }
-                if colon == trailer.len || !valid_token(trailer[..colon]) { ret (empty, Invalid) }
-            }
+            let trailers_error = read_trailers(s)
+            if trailers_error != ok { ret (empty, trailers_error) }
+            ret (body[..used], ok)
         }
         if size > s.limits.body_bytes - used { ret (empty, TooLarge) }
         let copy_error = exact_bytes(s, body[used..used + size])
@@ -421,8 +473,8 @@ fn no_response_body(status: u16) -> bool {
     ret (status >= 100u16 && status < 200u16) || status == 204u16 || status == 304u16
 }
 
-fn read_response_for(a: *mem.Arena, r: *Reader, suppress_body: bool) -> (Response, err) {
-    var out: Response = zero
+fn read_response_meta(a: *mem.Arena, r: *Reader) -> (ResponseMeta, err) {
+    var out: ResponseMeta = zero
     let mark = mem.mark(a)
     let s = mem.cast[*ReaderState](r.state)
     let (line, line_error) = http_line(s, s.limits.start_line)
@@ -442,16 +494,29 @@ fn read_response_for(a: *mem.Arena, r: *Reader, suppress_body: bool) -> (Respons
         mem.reset(a, mark)
         ret (out, headers_error)
     }
+    out.head = ResponseHead { version: version, status: status, reason: reason_text, headers: headers }
+    out.length = length
+    out.has_length = has_header(headers, "Content-Length")
+    out.chunked = chunked
+    ret (out, ok)
+}
+
+fn read_response_for(a: *mem.Arena, r: *Reader, suppress_body: bool) -> (Response, err) {
+    var out: Response = zero
+    let mark = mem.mark(a)
+    let (meta, meta_error) = read_response_meta(a, r)
+    if meta_error != ok { ret (out, meta_error) }
     var body: []const u8 = zero
-    if !no_response_body(status) && !suppress_body {
-        let (read, body_error) = read_body(a, s, length, chunked, !chunked && !has_header(headers, "Content-Length"))
+    if !no_response_body(meta.head.status) && !suppress_body {
+        let s = mem.cast[*ReaderState](r.state)
+        let (read, body_error) = read_body(a, s, meta.length, meta.chunked, !meta.chunked && !meta.has_length)
         if body_error != ok {
             mem.reset(a, mark)
             ret (out, body_error)
         }
         body = read
     }
-    out = Response { version: version, status: status, reason: reason_text, headers: headers, body: body }
+    out = Response { version: meta.head.version, status: meta.head.status, reason: meta.head.reason, headers: meta.head.headers, body: body }
     ret (out, ok)
 }
 
@@ -489,6 +554,176 @@ fn request(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: L
         ret (out, response_error)
     }
     ret (response, ok)
+}
+
+fn request_stream(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: Limits, control: cancel.Control) -> (ResponseStream, err) {
+    var out: ResponseStream = zero
+    if req.method == .Connect { ret (out, Unsupported) }
+    let (opened, connect_error) = net.tcp_connect_with_control(endpoint, control)
+    if connect_error != ok { ret (out, connect_error) }
+    let mark = mem.mark(a)
+    let (storage, storage_error) = mem.alloc[ResponseStreamState](a, 1usize)
+    if storage_error != ok {
+        let unused = net.close(opened)
+        ret (out, storage_error)
+    }
+    let state = &storage[0usize]
+    state.network.socket = opened
+    state.network.control = control
+    state.limits = limits
+    state.remaining = 0usize
+    state.total = 0usize
+    state.chunk_remaining = 0usize
+    state.chunked = false
+    state.chunk_needs_crlf = false
+    state.close_delimited = false
+    state.ended = false
+    state.closed = false
+
+    var sink = io.Writer { ctx: mem.cast[*void](&state.network), write: network_write, flush: network_flush }
+    var encoder = writer(sink)
+    let write_error = write_request(&encoder, req)
+    if write_error != ok {
+        let unused = net.close(state.network.socket)
+        mem.reset(a, mark)
+        ret (out, write_error)
+    }
+    let source = io.Reader { ctx: mem.cast[*void](&state.network), read: network_read }
+    let (created, reader_error) = reader(a, source, limits)
+    if reader_error != ok {
+        let unused = net.close(state.network.socket)
+        mem.reset(a, mark)
+        ret (out, reader_error)
+    }
+    state.decoder = created
+    let (meta, meta_error) = read_response_meta(a, &state.decoder)
+    if meta_error != ok {
+        let unused = net.close(state.network.socket)
+        mem.reset(a, mark)
+        ret (out, meta_error)
+    }
+    state.head = meta.head
+    if req.method == .Head || no_response_body(meta.head.status) {
+        state.ended = true
+    } else if meta.chunked {
+        state.chunked = true
+    } else if meta.has_length {
+        if meta.length > limits.body_bytes {
+            let unused = net.close(state.network.socket)
+            mem.reset(a, mark)
+            ret (out, TooLarge)
+        }
+        state.remaining = meta.length
+        state.ended = meta.length == 0usize
+    } else {
+        state.close_delimited = true
+    }
+    out.state = mem.cast[*void](state)
+    ret (out, ok)
+}
+
+fn response_head(stream: *const ResponseStream) -> ResponseHead {
+    let state = mem.cast[*ResponseStreamState](stream.state)
+    ret state.head
+}
+
+fn response_read(stream: *ResponseStream, dst: []u8) -> (usize, err) {
+    let state = mem.cast[*ResponseStreamState](stream.state)
+    if dst.len == 0usize { ret (0usize, ok) }
+    if state.closed || state.ended { ret (0usize, io.End) }
+    let decoder = mem.cast[*ReaderState](state.decoder.state)
+
+    if !state.chunked && !state.close_delimited {
+        var count = dst.len
+        if count > state.remaining { count = state.remaining }
+        var at = 0usize
+        while at < count {
+            let (byte, more, read_error) = http_take(decoder)
+            if read_error != ok { ret (at, read_error) }
+            if !more { ret (at, Invalid) }
+            dst[at] = byte
+            at += 1usize
+        }
+        state.remaining -= count
+        state.total += count
+        if state.remaining == 0usize { state.ended = true }
+        ret (count, ok)
+    }
+
+    if state.close_delimited {
+        if state.total == state.limits.body_bytes {
+            let (extra, more, read_error) = http_take(decoder)
+            if read_error != ok { ret (0usize, read_error) }
+            if more { ret (0usize, TooLarge) }
+            state.ended = true
+            ret (0usize, io.End)
+        }
+        var count = dst.len
+        let available = state.limits.body_bytes - state.total
+        if count > available { count = available }
+        var at = 0usize
+        while at < count {
+            let (byte, more, read_error) = http_take(decoder)
+            if read_error != ok { ret (at, read_error) }
+            if !more {
+                state.ended = true
+                if at == 0usize { ret (0usize, io.End) }
+                state.total += at
+                ret (at, ok)
+            }
+            dst[at] = byte
+            at += 1usize
+        }
+        state.total += count
+        ret (count, ok)
+    }
+
+    var written = 0usize
+    while written < dst.len {
+        if state.chunk_remaining == 0usize {
+            if state.chunk_needs_crlf {
+                let ending_error = expect_crlf(decoder)
+                if ending_error != ok { ret (written, ending_error) }
+                state.chunk_needs_crlf = false
+            }
+            let (size_line, line_error) = http_line(decoder, state.limits.start_line)
+            if line_error != ok { ret (written, line_error) }
+            let (size, size_error) = parse_hex(size_line)
+            if size_error != ok { ret (written, size_error) }
+            if size == 0usize {
+                let trailers_error = read_trailers(decoder)
+                if trailers_error != ok { ret (written, trailers_error) }
+                state.ended = true
+                if written == 0usize { ret (0usize, io.End) }
+                ret (written, ok)
+            }
+            if size > state.limits.body_bytes - state.total { ret (written, TooLarge) }
+            state.chunk_remaining = size
+        }
+        var count = dst.len - written
+        if count > state.chunk_remaining { count = state.chunk_remaining }
+        var at = 0usize
+        while at < count {
+            let (byte, more, read_error) = http_take(decoder)
+            if read_error != ok { ret (written + at, read_error) }
+            if !more { ret (written + at, Invalid) }
+            dst[written + at] = byte
+            at += 1usize
+        }
+        written += count
+        state.total += count
+        state.chunk_remaining -= count
+        if state.chunk_remaining == 0usize { state.chunk_needs_crlf = true }
+    }
+    ret (written, ok)
+}
+
+fn response_close(stream: *ResponseStream) -> err {
+    let state = mem.cast[*ResponseStreamState](stream.state)
+    if state.closed { ret ok }
+    state.closed = true
+    state.ended = true
+    ret net.close(state.network.socket)
 }
 
 fn has_header(headers: []const Header, name: str) -> bool {

@@ -12133,3 +12133,17 @@ into a tunnel that this return type cannot own. Controlled incremental bodies be
 cross-host fixture runs a real two-connection loopback server, verifies exact emitted GET
 and HEAD messages, a bounded response and case-insensitive response header lookup, and
 proves HEAD returns immediately with its nonzero Content-Length intact.
+
+## D595 -- Plain response streams decode framing without retaining the body
+
+`request_stream` owns one controlled TCP connection and returns after a bounded response
+head. `response_read` copies fixed-length, chunked or close-delimited body bytes directly
+into caller storage, counts decoded bytes against `Limits.body_bytes`, consumes bounded
+trailers and returns `io.End` only at a complete body boundary. It uses D593's controlled
+send/receive adapter, so a token or deadline remains live for every later network refill.
+
+`response_close` disposes the connection without draining the peer and is idempotent;
+HEAD and body-forbidden status codes begin at EOF. The loopback fixture reads a chunked
+`Wikipedia` response through three-byte caller slices, consumes a trailer and terminal
+EOF, then opens another stream, cancels its token after the head, and requires the first
+body read to return `cancel.Cancelled`. TLS streaming remains planned with `e.net.tls`.

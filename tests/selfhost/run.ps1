@@ -1293,9 +1293,9 @@ $netWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\lin
 if ($LASTEXITCODE -ne 0 -or $netWritten -ne 'executable written') { throw 'e.net emission failed' }
 & $netPath
 if ($LASTEXITCODE -ne 0) { throw "an e.net address codec answered wrongly: exit $LASTEXITCODE" }
-# The delivered `e.net.http` codecs run over a one-byte source, and the plain client
-# uses a real loopback server for bounded GET and HEAD requests. SSE pins split UTF-8/
-# CRLF, retained state, the EOF rule and flat memory over ten thousand events.
+# The delivered `e.net.http` codecs run over a one-byte source, and real loopback clients
+# pin bounded GET/HEAD plus chunked streaming and cancellation. SSE pins split UTF-8/CRLF,
+# retained state, the EOF rule and flat memory over ten thousand events.
 $httpPath = Join-Path $testBuild 'net-http-selfhost.exe'
 $httpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http\src\main.e') $repo 'x64' 'windows' $httpPath
 if ($LASTEXITCODE -ne 0 -or $httpWritten -ne 'executable written') { throw 'e.net.http emission failed' }

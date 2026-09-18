@@ -3,6 +3,7 @@
 // on a whole input buffer.
 
 use e.io
+use e.cancel
 use e.mem
 use e.net
 use e.net.http
@@ -43,7 +44,19 @@ fn serve_live(s: *LiveServer) {
     }
     let head_request = "HEAD /head HTTP/1.1\r\nHost: local\r\nContent-Length: 0\r\n\r\n"
     let head_response = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n"
-    if !exchange(s.listener, head_request, head_response) { s.failed = true }
+    if !exchange(s.listener, head_request, head_response) {
+        s.failed = true
+        ret
+    }
+    let stream_request = "GET /stream HTTP/1.1\r\nHost: local\r\nContent-Length: 0\r\n\r\n"
+    let stream_response = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\n0\r\nX-End: yes\r\n\r\n"
+    if !exchange(s.listener, stream_request, stream_response) {
+        s.failed = true
+        ret
+    }
+    let cancel_request = "GET /cancel HTTP/1.1\r\nHost: local\r\nContent-Length: 0\r\n\r\n"
+    let cancel_response = "HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\n"
+    if !exchange(s.listener, cancel_request, cancel_response) { s.failed = true }
 }
 
 fn one_read(ctx: *void, dst: []u8) -> (usize, err) {
@@ -212,16 +225,63 @@ fn main(a: *mem.Arena) -> err {
     live_request.method = .Head
     live_request.target = "/head"
     let (head_response, head_error) = http.request(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize))
+
+    var stream_failed = false
+    live_request.method = .Get
+    live_request.target = "/stream"
+    var no_control: cancel.Control = zero
+    let (opened_stream, stream_error) = http.request_stream(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize), no_control)
+    if stream_error != ok {
+        stream_failed = true
+    } else {
+        var stream = opened_stream
+        let stream_head = http.response_head(&stream)
+        if stream_head.status != 200u16 { stream_failed = true }
+        var streamed: [9]u8 = zero
+        var streamed_count = 0usize
+        while streamed_count < streamed.len {
+            var end = streamed_count + 3usize
+            if end > streamed.len { end = streamed.len }
+            let (count, read_error) = http.response_read(&stream, streamed[streamed_count..end])
+            if read_error != ok || count == 0usize {
+                stream_failed = true
+                break
+            }
+            streamed_count += count
+        }
+        var tail: [1]u8 = zero
+        let (tail_count, tail_error) = http.response_read(&stream, tail[0..])
+        if tail_error != io.End || tail_count != 0usize { stream_failed = true }
+        if streamed_count != streamed.len || !str.eq(streamed[0..], "Wikipedia") { stream_failed = true }
+        if http.response_close(&stream) != ok || http.response_close(&stream) != ok { stream_failed = true }
+    }
+
+    var cancel_failed = false
+    var stopped = cancel.token()
+    let live_control = cancel.Control { token: &stopped, deadline: zero, has_deadline: false }
+    live_request.target = "/cancel"
+    let (opened_cancel_stream, cancel_stream_error) = http.request_stream(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize), live_control)
+    if cancel_stream_error != ok {
+        cancel_failed = true
+    } else {
+        var cancel_stream = opened_cancel_stream
+        cancel.request(&stopped)
+        var cancelled_byte: [1]u8 = zero
+        let (cancelled_count, cancelled_error) = http.response_read(&cancel_stream, cancelled_byte[0..])
+        if cancelled_error != cancel.Cancelled || cancelled_count != 0usize { cancel_failed = true }
+        if http.response_close(&cancel_stream) != ok { cancel_failed = true }
+    }
+
+    live_request.method = .Connect
+    let (tunnel_response, tunnel_error) = http.request(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize))
     let joined = thread.join(worker)
-    if joined != ok || server.failed { ret Failed }
+    if joined != ok || server.failed || stream_failed || cancel_failed { ret Failed }
     if live_error != ok || live_response.status != 201u16 || !str.eq(live_response.body, "hello") { ret Failed }
     let (live_value, live_found) = http.header(live_response.headers, "x-live")
     if !live_found || !str.eq(live_value, "yes") { ret Failed }
     if head_error != ok || head_response.status != 200u16 || head_response.body.len != 0usize { ret Failed }
     let (head_length, head_length_found) = http.header(head_response.headers, "content-length")
     if !head_length_found || !str.eq(head_length, "5") { ret Failed }
-    live_request.method = .Connect
-    let (tunnel_response, tunnel_error) = http.request(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize))
     if tunnel_error != http.Unsupported { ret Failed }
 
     // BOM, comment, all three line endings, repeated data and retained id/retry state.
