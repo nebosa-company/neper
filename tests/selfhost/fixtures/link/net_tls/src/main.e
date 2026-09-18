@@ -19,6 +19,47 @@ fn same_bytes(left: []const u8, right: []const u8) -> bool {
     ret true
 }
 
+type ServerJob = struct {
+    reading: *os.File,
+    writing: *os.File,
+    config: tls.ServerConfig,
+    selected: str,
+    failure: err,
+}
+
+fn serve(job: *ServerJob) {
+    var storage: [262144]u8 = zero
+    var arena = mem.arena_from(storage[0..])
+    let source = io.file_reader(job.reading)
+    let sink = io.file_writer(job.writing)
+    let (stream0, create_error) = tls.server(&arena, source, sink, job.config)
+    if create_error != ok {
+        job.failure = create_error
+        ret
+    }
+    var stream = stream0
+    job.failure = tls.handshake(&stream)
+    if job.failure == ok { job.selected = tls.negotiated_alpn(&stream) }
+}
+
+fn live_handshake(a: *mem.Arena, server_read: *os.File, client_write: *os.File, client_read: *os.File, server_write: *os.File, server_config: tls.ServerConfig, client_config: tls.ClientConfig, client_selected: *str, server_selected: *str) -> err {
+    var server_job = ServerJob { reading: server_read, writing: server_write, config: server_config, selected: "", failure: ok }
+    let (server_thread, thread_error) = os.thread_create[ServerJob](serve, &server_job, 1048576usize)
+    if thread_error != ok { ret thread_error }
+    let client_source = io.file_reader(client_read)
+    let client_sink = io.file_writer(client_write)
+    let (live_stream0, live_create_error) = tls.client(a, client_source, client_sink, client_config)
+    if live_create_error != ok { os.exit(20i32) }
+    var live_stream = live_stream0
+    if tls.handshake(&live_stream) != ok { os.exit(21i32) }
+    let join_error = os.thread_join(server_thread)
+    if join_error != ok { os.exit(22i32) }
+    if server_job.failure != ok { os.exit(22i32) }
+    *client_selected = tls.negotiated_alpn(&live_stream)
+    *server_selected = server_job.selected
+    ret ok
+}
+
 fn main(a: *mem.Arena) -> err {
     let none: [0]u8 = zero
     var source_state = io.SliceReader { data: none[0..], off: 0usize }
@@ -114,5 +155,31 @@ fn main(a: *mem.Arena) -> err {
     if certificate_verify_error != ok || certificate_verify_len != 72usize || tls.verify_certificate_verify(certificate_set.leaf, transcript_hash, certificate_verify[0..]) != ok { os.exit(18i32) }
     certificate_verify[20] = certificate_verify[20] ^ 1u8
     if tls.verify_certificate_verify(certificate_set.leaf, transcript_hash, certificate_verify[0..]) != tls.InvalidCertificate { os.exit(19i32) }
+
+    // A real duplex exchange drives both synchronous state machines through
+    // every encrypted authentication message and both Finished checks.
+    var server_read: os.File = zero
+    var client_write: os.File = zero
+    let (server_read_open, client_write_open, client_to_server_error) = os.pipe()
+    if client_to_server_error != ok { ret client_to_server_error }
+    server_read = server_read_open
+    client_write = client_write_open
+    var client_read: os.File = zero
+    var server_write: os.File = zero
+    let (client_read_open, server_write_open, server_to_client_error) = os.pipe()
+    if server_to_client_error != ok {
+        let _ = os.close(server_read)
+        let _ = os.close(client_write)
+        ret server_to_client_error
+    }
+    client_read = client_read_open
+    server_write = server_write_open
+    var client_selected = ""
+    var server_selected = ""
+    let live_config = tls.ClientConfig { server_name: "example.com", trust_roots: mid_der, alpn: client_protocols[0..], entropy: client_entropy[0..], now: time.Timestamp { nanos: 1780272000000000000i64 } }
+    let live_error = live_handshake(a, &server_read, &client_write, &client_read, &server_write, credential_config, live_config, &client_selected, &server_selected)
+    if live_error != ok { os.exit(25i32) }
+    if !same_bytes(client_selected, "h2") || !same_bytes(server_selected, "h2") { os.exit(23i32) }
+    if os.close(server_read) != ok || os.close(client_write) != ok || os.close(client_read) != ok || os.close(server_write) != ok { os.exit(24i32) }
     ret ok
 }

@@ -12650,3 +12650,18 @@ uses `e.crypto.x509.verify` with its explicit roots, server name, timestamp,
 ServerAuth usage and a depth of eight, then verifies the RFC 8446 server
 CertificateVerify context with Ed25519. The focused fixture uses a real signed DER
 chain and rejects a mutated handshake signature.
+
+## D635 -- TLS handshakes authenticate before exposing application keys
+
+`handshake` now drives the complete client and server TLS 1.3 state machines over
+their retained reader and writer. The transcript covers the exact handshake bytes;
+the SHA-256 schedule changes from handshake to application traffic keys only after
+the server Finished, and each role verifies its peer Finished before marking the
+stream complete. EncryptedExtensions carries the negotiated ALPN, and all server
+authentication messages are protected with the server handshake key.
+
+The profile sends one handshake message per record and caps each message at 16 KiB,
+including the certificate chain. It does not implement retry, PSK, resumption, 0-RTT,
+client certificates or post-handshake authentication. The focused fixture runs both
+roles concurrently over two OS pipes and requires the authenticated ALPN result on
+both sides.

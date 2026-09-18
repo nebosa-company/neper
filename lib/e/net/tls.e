@@ -7,6 +7,7 @@ use e.mem
 use e.time
 use e.crypto.hash as hash
 use e.crypto.kdf as kdf
+use e.crypto.mac as mac
 use e.crypto.aead as aead
 use e.crypto.kx as kx
 use e.crypto.sign as sign
@@ -21,6 +22,7 @@ type TrafficKeys = struct { key: [16]u8, iv: [12]u8, sequence: u64 }
 type Cursor = struct { data: []const u8, off: usize }
 type ClientHelloInfo = struct { peer_key: kx.X25519PublicKey, selected_alpn: str }
 type CertificateSet = struct { leaf: x509.Certificate, intermediates: []const x509.Certificate }
+type HandshakeSecrets = struct { client: [32]u8, server: [32]u8, master: [32]u8 }
 
 error InvalidCertificate
 error Handshake
@@ -29,12 +31,18 @@ error Closed
 error Unsupported
 
 type State = struct {
+    arena: *mem.Arena,
     source: io.Reader,
     sink: io.Writer,
     client_side: bool,
     client_config: ClientConfig,
     server_config: ServerConfig,
     selected_alpn: str,
+    read_keys: TrafficKeys,
+    write_keys: TrafficKeys,
+    complete: bool,
+    failed: bool,
+    closed: bool,
 }
 
 // RFC 8446 section 7.1's HKDF-Expand-Label over the one supported hash. The
@@ -656,16 +664,305 @@ fn validate_server_credentials(a: *mem.Arena, config: ServerConfig) -> (sign.Ed2
     ret (secret, ok)
 }
 
+fn transcript_digest(transcript: hash.Sha256) -> [32]u8 {
+    var copy = transcript
+    ret hash.sha256_done(&copy)
+}
+
+fn handshake_secrets(shared_key: kx.X25519SharedKey, transcript_hash: [32]u8) -> (HandshakeSecrets, err) {
+    var out: HandshakeSecrets = zero
+    let zeros: [32]u8 = zero
+    let early = kdf.hkdf_sha256_extract("", zeros[0..])
+    let (early_derived, early_derived_error) = derive_secret(early, "derived", empty_hash())
+    if early_derived_error != ok { ret (out, early_derived_error) }
+    let handshake_secret = kdf.hkdf_sha256_extract(early_derived[0..], shared_key.bytes[0..])
+    let (client_secret, client_error) = derive_secret(handshake_secret, "c hs traffic", transcript_hash)
+    if client_error != ok { ret (out, client_error) }
+    let (server_secret, server_error) = derive_secret(handshake_secret, "s hs traffic", transcript_hash)
+    if server_error != ok { ret (out, server_error) }
+    let (handshake_derived, handshake_derived_error) = derive_secret(handshake_secret, "derived", empty_hash())
+    if handshake_derived_error != ok { ret (out, handshake_derived_error) }
+    out.client = client_secret
+    out.server = server_secret
+    out.master = kdf.hkdf_sha256_extract(handshake_derived[0..], zeros[0..])
+    ret (out, ok)
+}
+
+fn application_keys(secrets: HandshakeSecrets, transcript_hash: [32]u8) -> (TrafficKeys, TrafficKeys, err) {
+    var client_keys: TrafficKeys = zero
+    var server_keys: TrafficKeys = zero
+    let (client_secret, client_secret_error) = derive_secret(secrets.master, "c ap traffic", transcript_hash)
+    if client_secret_error != ok { ret (client_keys, server_keys, client_secret_error) }
+    let (server_secret, server_secret_error) = derive_secret(secrets.master, "s ap traffic", transcript_hash)
+    if server_secret_error != ok { ret (client_keys, server_keys, server_secret_error) }
+    let (client_result, client_error) = traffic_keys(client_secret)
+    if client_error != ok { ret (client_keys, server_keys, client_error) }
+    let (server_result, server_error) = traffic_keys(server_secret)
+    ret (client_result, server_result, server_error)
+}
+
+fn finished_verify_data(secret: [32]u8, transcript_hash: [32]u8) -> ([32]u8, err) {
+    var finished_key: [32]u8 = zero
+    let key_error = hkdf_expand_label(secret, "finished", "", finished_key[0..])
+    if key_error != ok { ret (zero, key_error) }
+    ret (mac.hmac_sha256(finished_key[0..], transcript_hash[0..]), ok)
+}
+
+fn build_finished(secret: [32]u8, transcript_hash: [32]u8) -> ([36]u8, err) {
+    var out: [36]u8 = zero
+    let (verify_data, verify_error) = finished_verify_data(secret, transcript_hash)
+    if verify_error != ok { ret (out, verify_error) }
+    out[0] = 20u8
+    out[3] = 32u8
+    mem.copy[u8](out[4..], verify_data[0..])
+    ret (out, ok)
+}
+
+fn verify_finished(secret: [32]u8, transcript_hash: [32]u8, message: []const u8) -> err {
+    if message.len != 36usize || message[0] != 20u8 || message[1] != 0u8 || message[2] != 0u8 || message[3] != 32u8 { ret Protocol }
+    let (expected, expected_error) = finished_verify_data(secret, transcript_hash)
+    if expected_error != ok { ret expected_error }
+    if !hash.equal_constant_time(expected[0..], message[4..]) { ret Handshake }
+    ret ok
+}
+
+fn build_encrypted_extensions(selected_alpn: str, out: []u8) -> (usize, err) {
+    if selected_alpn.len > 255usize { ret (0usize, Protocol) }
+    var at = 0usize
+    var body_len = 2usize
+    if selected_alpn.len != 0usize { body_len += 7usize + selected_alpn.len }
+    let first_error = put_u8(out, &at, 8u8)
+    if first_error != ok { ret (0usize, first_error) }
+    let body_error = put_u24(out, &at, body_len)
+    if body_error != ok { ret (0usize, body_error) }
+    let extensions_error = put_u16(out, &at, body_len - 2usize)
+    if extensions_error != ok { ret (0usize, extensions_error) }
+    if selected_alpn.len != 0usize {
+        var alpn: [260]u8 = zero
+        var alpn_at = 0usize
+        let list_error = put_u16(alpn[0..], &alpn_at, selected_alpn.len + 1usize)
+        if list_error != ok { ret (0usize, list_error) }
+        let length_error = put_u8(alpn[0..], &alpn_at, u8(selected_alpn.len))
+        if length_error != ok { ret (0usize, length_error) }
+        let protocol_error = put_bytes(alpn[0..], &alpn_at, selected_alpn)
+        if protocol_error != ok { ret (0usize, protocol_error) }
+        let extension_error = put_extension(out, &at, 16usize, alpn[..alpn_at])
+        if extension_error != ok { ret (0usize, extension_error) }
+    }
+    ret (at, ok)
+}
+
+fn parse_encrypted_extensions(message: []const u8, offered: []const str) -> (str, err) {
+    var c = Cursor { data: message, off: 0usize }
+    let (kind, kind_error) = take_u8(&c)
+    let (body_len, body_error) = take_u24(&c)
+    let (extensions_len, extensions_error) = take_u16(&c)
+    let (extensions, extensions_bytes_error) = take_bytes(&c, extensions_len)
+    if kind_error != ok || body_error != ok || extensions_error != ok || extensions_bytes_error != ok || kind != 8u8 || body_len != message.len - 4usize || c.off != c.data.len { ret ("", Protocol) }
+    var selected = ""
+    var e = Cursor { data: extensions, off: 0usize }
+    while e.off < e.data.len {
+        let (extension_kind, extension_kind_error) = take_u16(&e)
+        let (extension_len, extension_len_error) = take_u16(&e)
+        let (value, value_error) = take_bytes(&e, extension_len)
+        if extension_kind_error != ok || extension_len_error != ok || value_error != ok { ret ("", Protocol) }
+        if extension_kind == 16usize {
+            if selected.len != 0usize || value.len < 3usize { ret ("", Protocol) }
+            let list_len = (usize(value[0]) << 8usize) | usize(value[1])
+            let protocol_len = usize(value[2])
+            if list_len != value.len - 2usize || protocol_len != value.len - 3usize || protocol_len == 0usize { ret ("", Protocol) }
+            var at = 0usize
+            while at < offered.len {
+                if bytes_same(value[3..], offered[at]) { selected = offered[at] }
+                at += 1usize
+            }
+            if selected.len == 0usize { ret ("", Unsupported) }
+        }
+    }
+    ret (selected, ok)
+}
+
+fn send_plain(state: *State, content_type: u8, content: []const u8) -> err {
+    if content.len > 16384usize { ret Protocol }
+    var header: [5]u8 = zero
+    header[0] = content_type
+    header[1] = 3u8
+    header[2] = 3u8
+    header[3] = u8(content.len >> 8usize)
+    header[4] = u8(content.len & 255usize)
+    let header_error = io.write_all(&state.sink, header[0..])
+    if header_error != ok { ret Handshake }
+    let content_error = io.write_all(&state.sink, content)
+    if content_error != ok { ret Handshake }
+    ret ok
+}
+
+fn read_plain(state: *State, expected_type: u8, out: []u8) -> (usize, err) {
+    var header: [5]u8 = zero
+    let header_error = io.read_exact(&state.source, header[0..])
+    if header_error != ok { ret (0usize, Handshake) }
+    let length = (usize(header[3]) << 8usize) | usize(header[4])
+    if header[0] != expected_type || header[1] != 3u8 || header[2] != 3u8 || length > 16384usize || length > out.len { ret (0usize, Protocol) }
+    let content_error = io.read_exact(&state.source, out[..length])
+    if content_error != ok { ret (0usize, Handshake) }
+    ret (length, ok)
+}
+
+fn send_protected(state: *State, keys: *TrafficKeys, content_type: u8, content: []const u8) -> err {
+    var record: [16406]u8 = zero
+    let (length, seal_error) = seal_record(keys, content_type, content, record[0..])
+    if seal_error != ok { ret seal_error }
+    let write_error = io.write_all(&state.sink, record[..length])
+    if write_error != ok { ret Handshake }
+    ret ok
+}
+
+fn read_protected(state: *State, keys: *TrafficKeys, expected_type: u8, out: []u8) -> (usize, err) {
+    var header: [5]u8 = zero
+    let header_error = io.read_exact(&state.source, header[0..])
+    if header_error != ok { ret (0usize, Handshake) }
+    let sealed_len = (usize(header[3]) << 8usize) | usize(header[4])
+    if sealed_len > 16640usize { ret (0usize, Protocol) }
+    var record: [16645]u8 = zero
+    mem.copy[u8](record[..5usize], header[0..])
+    let record_error = io.read_exact(&state.source, record[5usize..5usize + sealed_len])
+    if record_error != ok { ret (0usize, Handshake) }
+    let (length, content_type, open_error) = open_record(keys, record[..5usize + sealed_len], out)
+    if open_error != ok { ret (0usize, open_error) }
+    if content_type != expected_type { ret (0usize, Protocol) }
+    ret (length, ok)
+}
+
+fn client_handshake(state: *State) -> err {
+    var transcript = hash.sha256_init()
+    var hello: [4096]u8 = zero
+    let (client_hello_len, client_secret, client_hello_error) = build_client_hello(state.client_config, hello[0..])
+    if client_hello_error != ok { ret client_hello_error }
+    let send_client_error = send_plain(state, 22u8, hello[..client_hello_len])
+    if send_client_error != ok { ret send_client_error }
+    hash.sha256_update(&transcript, hello[..client_hello_len])
+    let (server_hello_len, server_hello_error) = read_plain(state, 22u8, hello[0..])
+    if server_hello_error != ok { ret server_hello_error }
+    let (server_key, parse_server_error) = parse_server_hello(hello[..server_hello_len])
+    if parse_server_error != ok { ret parse_server_error }
+    hash.sha256_update(&transcript, hello[..server_hello_len])
+    let (shared_key, shared_error) = kx.x25519_exchange(client_secret, server_key)
+    if shared_error != ok { ret Handshake }
+    let (secrets, secrets_error) = handshake_secrets(shared_key, transcript_digest(transcript))
+    if secrets_error != ok { ret secrets_error }
+    let (client_handshake_keys0, client_keys_error) = traffic_keys(secrets.client)
+    let (server_handshake_keys0, server_keys_error) = traffic_keys(secrets.server)
+    if client_keys_error != ok || server_keys_error != ok { ret Handshake }
+    var client_handshake_keys = client_handshake_keys0
+    var server_handshake_keys = server_handshake_keys0
+    var message: [16384]u8 = zero
+    let (extensions_len, extensions_error) = read_protected(state, &server_handshake_keys, 22u8, message[0..])
+    if extensions_error != ok { ret extensions_error }
+    let (selected, selection_error) = parse_encrypted_extensions(message[..extensions_len], state.client_config.alpn)
+    if selection_error != ok { ret selection_error }
+    state.selected_alpn = selected
+    hash.sha256_update(&transcript, message[..extensions_len])
+    let (certificate_len, certificate_error) = read_protected(state, &server_handshake_keys, 22u8, message[0..])
+    if certificate_error != ok { ret certificate_error }
+    let (certificates, parse_certificate_error) = parse_certificate_message(state.arena, message[..certificate_len])
+    if parse_certificate_error != ok { ret parse_certificate_error }
+    let verify_chain_error = verify_certificate_set(state.arena, certificates, state.client_config)
+    if verify_chain_error != ok { ret verify_chain_error }
+    hash.sha256_update(&transcript, message[..certificate_len])
+    let (certificate_verify_len, certificate_verify_error) = read_protected(state, &server_handshake_keys, 22u8, message[0..])
+    if certificate_verify_error != ok { ret certificate_verify_error }
+    let verify_signature_error = verify_certificate_verify(certificates.leaf, transcript_digest(transcript), message[..certificate_verify_len])
+    if verify_signature_error != ok { ret verify_signature_error }
+    hash.sha256_update(&transcript, message[..certificate_verify_len])
+    let (server_finished_len, server_finished_error) = read_protected(state, &server_handshake_keys, 22u8, message[0..])
+    if server_finished_error != ok { ret server_finished_error }
+    let verify_server_finished_error = verify_finished(secrets.server, transcript_digest(transcript), message[..server_finished_len])
+    if verify_server_finished_error != ok { ret verify_server_finished_error }
+    hash.sha256_update(&transcript, message[..server_finished_len])
+    let application_hash = transcript_digest(transcript)
+    let (client_application_keys, server_application_keys, application_error) = application_keys(secrets, application_hash)
+    if application_error != ok { ret application_error }
+    let (client_finished, client_finished_error) = build_finished(secrets.client, application_hash)
+    if client_finished_error != ok { ret client_finished_error }
+    let send_finished_error = send_protected(state, &client_handshake_keys, 22u8, client_finished[0..])
+    if send_finished_error != ok { ret send_finished_error }
+    state.write_keys = client_application_keys
+    state.read_keys = server_application_keys
+    ret ok
+}
+
+fn server_handshake(state: *State) -> err {
+    var transcript = hash.sha256_init()
+    var hello: [4096]u8 = zero
+    let (client_hello_len, client_hello_error) = read_plain(state, 22u8, hello[0..])
+    if client_hello_error != ok { ret client_hello_error }
+    let (client_info, parse_client_error) = parse_client_hello(hello[..client_hello_len], state.server_config.alpn)
+    if parse_client_error != ok { ret parse_client_error }
+    state.selected_alpn = client_info.selected_alpn
+    hash.sha256_update(&transcript, hello[..client_hello_len])
+    let (signing_key, credential_error) = validate_server_credentials(state.arena, state.server_config)
+    if credential_error != ok { ret credential_error }
+    let (server_hello_len, server_secret, server_hello_error) = build_server_hello(state.server_config, hello[0..])
+    if server_hello_error != ok { ret server_hello_error }
+    let send_server_error = send_plain(state, 22u8, hello[..server_hello_len])
+    if send_server_error != ok { ret send_server_error }
+    hash.sha256_update(&transcript, hello[..server_hello_len])
+    let (shared_key, shared_error) = kx.x25519_exchange(server_secret, client_info.peer_key)
+    if shared_error != ok { ret Handshake }
+    let (secrets, secrets_error) = handshake_secrets(shared_key, transcript_digest(transcript))
+    if secrets_error != ok { ret secrets_error }
+    let (client_handshake_keys0, client_keys_error) = traffic_keys(secrets.client)
+    let (server_handshake_keys0, server_keys_error) = traffic_keys(secrets.server)
+    if client_keys_error != ok || server_keys_error != ok { ret Handshake }
+    var client_handshake_keys = client_handshake_keys0
+    var server_handshake_keys = server_handshake_keys0
+    var message: [16384]u8 = zero
+    let (extensions_len, extensions_error) = build_encrypted_extensions(state.selected_alpn, message[0..])
+    if extensions_error != ok { ret extensions_error }
+    let send_extensions_error = send_protected(state, &server_handshake_keys, 22u8, message[..extensions_len])
+    if send_extensions_error != ok { ret send_extensions_error }
+    hash.sha256_update(&transcript, message[..extensions_len])
+    let (certificate_len, certificate_error) = build_certificate_message(state.server_config.certificate_chain, message[0..])
+    if certificate_error != ok { ret certificate_error }
+    let send_certificate_error = send_protected(state, &server_handshake_keys, 22u8, message[..certificate_len])
+    if send_certificate_error != ok { ret send_certificate_error }
+    hash.sha256_update(&transcript, message[..certificate_len])
+    let (certificate_verify_len, certificate_verify_error) = build_certificate_verify(signing_key, transcript_digest(transcript), message[0..])
+    if certificate_verify_error != ok { ret certificate_verify_error }
+    let send_certificate_verify_error = send_protected(state, &server_handshake_keys, 22u8, message[..certificate_verify_len])
+    if send_certificate_verify_error != ok { ret send_certificate_verify_error }
+    hash.sha256_update(&transcript, message[..certificate_verify_len])
+    let (server_finished, server_finished_error) = build_finished(secrets.server, transcript_digest(transcript))
+    if server_finished_error != ok { ret server_finished_error }
+    let send_finished_error = send_protected(state, &server_handshake_keys, 22u8, server_finished[0..])
+    if send_finished_error != ok { ret send_finished_error }
+    hash.sha256_update(&transcript, server_finished[0..])
+    let application_hash = transcript_digest(transcript)
+    let (client_application_keys, server_application_keys, application_error) = application_keys(secrets, application_hash)
+    if application_error != ok { ret application_error }
+    let (client_finished_len, client_finished_error) = read_protected(state, &client_handshake_keys, 22u8, message[0..])
+    if client_finished_error != ok { ret client_finished_error }
+    let verify_client_finished_error = verify_finished(secrets.client, application_hash, message[..client_finished_len])
+    if verify_client_finished_error != ok { ret verify_client_finished_error }
+    state.read_keys = client_application_keys
+    state.write_keys = server_application_keys
+    ret ok
+}
+
 fn client(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ClientConfig) -> (Stream, err) {
     let (storage, storage_error) = mem.alloc[State](a, 1usize)
     if storage_error != ok { ret (zero, storage_error) }
     let state = &storage[0usize]
+    state.arena = a
     state.source = source
     state.sink = sink
     state.client_side = true
     state.client_config = config
     state.server_config = ServerConfig { certificate_chain: "", private_key: "", alpn: config.alpn[0usize..0usize], entropy: config.entropy[0usize..0usize] }
     state.selected_alpn = ""
+    state.complete = false
+    state.failed = false
+    state.closed = false
     ret (Stream { state: mem.cast[*void](state) }, ok)
 }
 
@@ -673,12 +970,16 @@ fn server(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ServerConfi
     let (storage, storage_error) = mem.alloc[State](a, 1usize)
     if storage_error != ok { ret (zero, storage_error) }
     let state = &storage[0usize]
+    state.arena = a
     state.source = source
     state.sink = sink
     state.client_side = false
     state.client_config = ClientConfig { server_name: "", trust_roots: "", alpn: config.alpn[0usize..0usize], entropy: config.entropy[0usize..0usize], now: time.Timestamp { nanos: 0i64 } }
     state.server_config = config
     state.selected_alpn = ""
+    state.complete = false
+    state.failed = false
+    state.closed = false
     ret (Stream { state: mem.cast[*void](state) }, ok)
 }
 
@@ -687,4 +988,23 @@ fn protocol(stream: *const Stream) -> Version { ret .Tls13 }
 fn negotiated_alpn(stream: *const Stream) -> str {
     let state = mem.cast[*const State](stream.state)
     ret state.selected_alpn
+}
+
+fn handshake(stream: *Stream) -> err {
+    if stream.state == nil { ret Closed }
+    let state = mem.cast[*State](stream.state)
+    if state.closed || state.failed { ret Closed }
+    if state.complete { ret ok }
+    var handshake_error: err = ok
+    if state.client_side {
+        handshake_error = client_handshake(state)
+    } else {
+        handshake_error = server_handshake(state)
+    }
+    if handshake_error != ok {
+        state.failed = true
+        ret handshake_error
+    }
+    state.complete = true
+    ret ok
 }
