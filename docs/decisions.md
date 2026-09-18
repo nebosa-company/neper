@@ -12602,3 +12602,11 @@ for a plain, non-owning handle view.
 
 This is a fixture migration only: the borrowed aggregate and field-view behavior it
 tests is unchanged, and Neper checks the same source on both targets.
+
+## D631 -- TLS key derivation is the RFC 8446 SHA-256 schedule
+
+The first complete TLS slice pins `HKDF-Expand-Label` byte for byte and composes it
+only from `e.crypto.kdf.hkdf_sha256_expand`. The profile is therefore limited to
+SHA-256 cipher suites; no SHA-384 suite can be advertised by implication. The focused
+fixture checks the `tls13 derived` expansion from RFC 8448 before handshake state is
+allowed to depend on it.
