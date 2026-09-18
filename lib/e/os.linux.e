@@ -320,7 +320,7 @@ fn error_kind_of(code: i32) -> ErrorKind {
     if code == 11i32 { ret .WouldBlock }
     if code == 12i32 { ret .OutOfMemory }
     if code == 17i32 { ret .Exists }
-    if code == 22i32 { ret .Invalid }
+    if code == 22i32 { ret .Unsupported }
     if code == 38i32 { ret .Unsupported }
     if code == 40i32 { ret .Denied }
     if code == 110i32 { ret .Timeout }

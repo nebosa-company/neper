@@ -12005,3 +12005,19 @@ from that native code. A deadline expiration preserves the same code and marks t
 contextual `Timeout` in the existing slot-state byte; no new global storage or allocation
 is added. The fixture reads each detail immediately and requires a nonzero code and the
 matching kind.
+
+## D587 -- Durability failure does not imply replacement rollback
+
+Durable replacement has two ordered effects: the atomic namespace change, then persistence.
+The public filesystem fixture now exercises a real failure in the second effect. On Linux,
+the runner supplies `/dev/null` as a link target. Renaming the link succeeds, but the
+post-rename flush follows that target and receives `EINVAL`, which the public fence reports
+as `Invalid` with nonzero native `Unsupported` detail.
+
+The fixture reads that detail before another host call, then proves the source name is absent
+and the destination remains the same symbolic link. This pins the documented partial-success
+contract without a fault-injection hook or a rollback claim the host cannot keep. Windows has
+no deterministic unprivileged way to fail `MOVEFILE_WRITE_THROUGH` after the move, so its
+runner omits only this failure injection; its durable-success path remains mandatory.
+Linux's errno 22 detail now says `Unsupported`, matching the `e.os` result that
+`error_of_result` has always returned instead of contradicting it with `Invalid`.

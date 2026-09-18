@@ -43,6 +43,8 @@ fn clear(a: *mem.Arena) {
     let from_file = fs.remove_file(a, "np-fs/from.txt")
     let landed_file = fs.remove_file(a, "np-fs/landed.txt")
     let cross_source = fs.remove_file(a, "np-fs/cross-source.txt")
+    let durability_source = fs.remove_file(a, "np-fs/durability-source")
+    let durability_destination = fs.remove_file(a, "np-fs/durability-destination")
     let scratch = fs.remove_file(a, "np-fs/scratch.txt")
     let moved_deep = fs.remove_file(a, "np-fs/deep/moved.txt")
     let root_probe = fs.remove_file(a, "np-fs/deep/root-probe.txt")
@@ -443,6 +445,28 @@ fn main(a: *mem.Arena) -> err {
         if fs.remove_file(a, "np-fs/cross-source.txt") != ok { os.exit(148i32) }
     } else {
         if cross_dir_error != os.NotFound { os.exit(149i32) }
+    }
+
+    // Linux can make the post-rename sync fail without a test hook: renaming a link is
+    // valid, but flushing the supplied device target is not. The error therefore cannot
+    // mean the namespace change was rolled back -- the source is gone and the destination
+    // is the intact link. Other runners omit the target and skip only this host-dependent
+    // failure injection.
+    let (durability_target, durability_target_error) = os.env(a, "NEPER_PARTIAL_DURABILITY_TARGET")
+    if durability_target_error == ok {
+        if fs.symlink(a, durability_target, "np-fs/durability-source") != ok { os.exit(106i32) }
+        if fs.replace(a, "np-fs/durability-source", "np-fs/durability-destination", durably) != fs.Invalid { os.exit(108i32) }
+        let durability_detail = fs.last_error_detail("replace", "np-fs/durability-destination")
+        if durability_detail.native_code == 0i32 || durability_detail.kind != .Unsupported { os.exit(109i32) }
+        let (old_durability_entry, old_durability_error) = fs.metadata(a, "np-fs/durability-source", false)
+        if old_durability_error != fs.NotFound { os.exit(127i32) }
+        let (new_durability_entry, new_durability_error) = fs.metadata(a, "np-fs/durability-destination", false)
+        if new_durability_error != ok || new_durability_entry.kind != .Symlink { os.exit(128i32) }
+        let (kept_durability_target, kept_durability_error) = fs.read_link(a, "np-fs/durability-destination")
+        if kept_durability_error != ok || !same(kept_durability_target, durability_target) { os.exit(129i32) }
+        if fs.remove_file(a, "np-fs/durability-destination") != ok { os.exit(237i32) }
+    } else {
+        if durability_target_error != os.NotFound { os.exit(262i32) }
     }
 
     // Race a real directory against a link that points outside the held root. The host

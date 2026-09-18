@@ -4,4 +4,4 @@
 {"record":"edit","op":"rename-symbol","symbol":"explain.same","site":"use","span":{"source":{"root":"operand","path":"explain.e"},"byte_start":717,"byte_end":721,"line":23,"column":22,"end_line":23,"end_column":26,"column_utf16":22,"end_column_utf16":26},"replacement":"alike"}
 {"record":"edit","op":"rename-symbol","symbol":"explain.same","site":"use","span":{"source":{"root":"operand","path":"explain.e"},"byte_start":756,"byte_end":760,"line":24,"column":22,"end_line":24,"end_column":26,"column_utf16":22,"end_column_utf16":26},"replacement":"alike"}
 {"record":"postcondition","check":"check-file passes; uses-file --symbol explain.alike reports uses at 2 sites and explain.same names no function"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":1,"complete":true,"snapshot":"0f1c50270c6a4577"}}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":1,"complete":true,"snapshot":"bcdf994b457c12ab"}}

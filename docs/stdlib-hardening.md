@@ -211,6 +211,14 @@ It now also requires nonzero native detail whose kind matches `WouldBlock` or `T
 Both hosts retain the native contention code; the existing slot-state byte marks only the
 deadline-expired result as the contextual `Timeout`, without another runtime allocation.
 
+D587 pins the non-transactional edge of durable replacement on the real Linux host. The
+runner supplies a device that accepts an opened link target but refuses `fsync`; the atomic
+rename therefore completes before the durability step returns `Invalid`. The fixture reads
+the native `Unsupported` detail immediately, then proves the source name is gone and the
+destination is still the same link. Hosts without a deterministic user-space sync failure
+skip only this injection, not the successful durable-replacement contract. Linux errno 22
+now reports the same `Unsupported` detail kind as its portable `e.os` result.
+
 ## SL07 — streaming HTTP and event streams
 
 ResponseStream separates headers from bounded incremental body reads. It owns the

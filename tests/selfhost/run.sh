@@ -638,9 +638,9 @@ chmod +x "$test_build/fs-basics-selfhost"
 fs_native_scratch=$(mktemp -d "${TMPDIR:-/tmp}/neper-fs.XXXXXX")
 trap 'rm -rf "$fs_native_scratch"' EXIT HUP INT TERM
 if [ "$(stat -c %d "$fs_native_scratch")" != "$(stat -c %d "$test_build")" ]; then
-    (cd "$fs_native_scratch" && NEPER_CROSS_VOLUME_DIR="$test_build" "$test_build/fs-basics-selfhost")
+    (cd "$fs_native_scratch" && NEPER_CROSS_VOLUME_DIR="$test_build" NEPER_PARTIAL_DURABILITY_TARGET=/dev/null "$test_build/fs-basics-selfhost")
 else
-    (cd "$fs_native_scratch" && env -u NEPER_CROSS_VOLUME_DIR "$test_build/fs-basics-selfhost")
+    (cd "$fs_native_scratch" && env -u NEPER_CROSS_VOLUME_DIR NEPER_PARTIAL_DURABILITY_TARGET=/dev/null "$test_build/fs-basics-selfhost")
 fi
 rm -rf "$fs_native_scratch"
 trap - EXIT HUP INT TERM
