@@ -12814,3 +12814,11 @@ accepts the empty server-name acknowledgement that a server may return for offer
 This closes the record layout used by OpenRouter's endpoint: one compatibility record
 followed by one protected record containing EncryptedExtensions, Certificate,
 CertificateVerify and Finished. Application and alert records remain strict.
+
+## D649 -- Unsupported certificate suffixes stay non-authoritative
+
+The deterministic X.509 fixture now includes a P-384/SHA-384 CA certificate matching
+the unsupported shape at the tail of OpenRouter's served chain. Parsing preserves its
+97-byte public point as `Unsupported`, while signature verification refuses it. This
+pins D646's distinction between accepting an unused syntactically valid suffix and
+allowing that suffix to authenticate a chain.

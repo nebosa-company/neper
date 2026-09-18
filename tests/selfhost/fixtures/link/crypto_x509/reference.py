@@ -52,6 +52,9 @@ p256_root = build(name("P256 Root"), name("P256 Root"), p256_root_key.public_key
 p256_leaf = build(name("p256.example"), p256_root.subject, p256_leaf_key.public_key(), p256_root_key,
                   start, end, dns=["p256.example"], eku=[ExtendedKeyUsageOID.SERVER_AUTH],
                   serial=102, algorithm=hashes.SHA256())
+p384_key = ec.derive_private_key(1, ec.SECP384R1())
+p384_suffix = build(name("P384 Suffix"), name("P384 Suffix"), p384_key.public_key(), p384_key,
+                    start, end, ca=True, serial=103, algorithm=hashes.SHA384())
 
 # Python checks the chain itself before it is trusted here.
 mid.verify_directly_issued_by(root)
@@ -59,7 +62,8 @@ leaf.verify_directly_issued_by(mid)
 
 der = {n: c.public_bytes(serialization.Encoding.DER) for n, c in
        [("root", root), ("mid", mid), ("leaf", leaf), ("plain", plain), ("expired", expired),
-        ("stranger", stranger), ("p256_root", p256_root), ("p256_leaf", p256_leaf)]}
+        ("stranger", stranger), ("p256_root", p256_root), ("p256_leaf", p256_leaf),
+        ("p384_suffix", p384_suffix)]}
 pem_text = b"".join(c.public_bytes(serialization.Encoding.PEM) for c in [root, mid])
 
 
@@ -172,6 +176,15 @@ BODY = '''    let (root, e1) = x509.parse(a, root_der)
     p256_roots[0] = p256_root
     let (p256_chain, e24) = x509.verify(a, p256_leaf, options(p256_roots[0..], zero, "p256.example", .ServerAuth, 2u16))
     if e24 != ok || p256_chain.certificates.len != 2usize { os.exit(33) }
+    let (p384_suffix, e25) = x509.parse(a, p384_suffix_der)
+    if e25 != ok { os.exit(34) }
+    switch p384_suffix.public_key {
+    case .Unsupported as raw:
+        if raw.len != 97usize { os.exit(35) }
+    default:
+        os.exit(35)
+    }
+    if x509.verify_signature(p384_suffix, p384_suffix) != x509.InvalidCertificate { os.exit(36) }
     ret ok
 }
 ''' % (start_ns, end_ns)
