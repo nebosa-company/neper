@@ -12288,3 +12288,17 @@ before allocation, and a late sample failure restores the caller arena checkpoin
 The focused fixture pins 2 Hz to 4 Hz duplication, 2 Hz to 1 Hz selection and zero-rate
 rejection on both hosts. Higher-quality filtering can be layered later without changing
 the frozen caller-owned API.
+
+## D608 -- WAV decoding owns the RIFF bytes and streams frames
+
+`e.fmt.wav.open` validates a bounded RIFF/WAVE chunk tree, copies the declared RIFF bytes
+into the caller arena and accepts PCM16, PCM32 or IEEE float32 with internally consistent
+rate, alignment and data length. Unknown chunks are skipped with their RIFF padding;
+truncated chunks, unsupported encodings and partial frames are rejected before a decoder
+is returned.
+
+`decode_into` converts through `e.audio`'s canonical signed full scale into the caller's
+chosen sample encoding, advances only by frames actually written and returns zero at EOF.
+`seek` accepts the EOF position but nothing beyond it. The focused cross-host fixture
+pins a two-frame PCM16 file, one-frame streaming, I32 conversion, EOF, rewind and a bad
+RIFF signature.

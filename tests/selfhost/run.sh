@@ -1252,6 +1252,11 @@ audio_mixer_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$audio_mixer_written" = 'executable written' ]
 chmod +x "$test_build/audio-mixer-selfhost"
 "$test_build/audio-mixer-selfhost"
+# `e.fmt.wav` pins bounded PCM RIFF parsing, streaming decode and seek.
+wav_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_wav/src/main.e" "$repo" x64 linux "$test_build/fmt-wav-selfhost")
+[ "$wav_written" = 'executable written' ]
+chmod +x "$test_build/fmt-wav-selfhost"
+"$test_build/fmt-wav-selfhost"
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

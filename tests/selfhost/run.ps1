@@ -1346,6 +1346,12 @@ $audioMixerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $audioMixerWritten -ne 'executable written') { throw 'e.audio.mixer emission failed' }
 & $audioMixerPath
 if ($LASTEXITCODE -ne 0) { throw "an e.audio.mixer lifecycle, mix or resample answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.wav` pins bounded PCM RIFF parsing, streaming decode and seek.
+$wavPath = Join-Path $testBuild 'fmt-wav-selfhost.exe'
+$wavWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_wav\src\main.e') $repo 'x64' 'windows' $wavPath
+if ($LASTEXITCODE -ne 0 -or $wavWritten -ne 'executable written') { throw 'e.fmt.wav emission failed' }
+& $wavPath
+if ($LASTEXITCODE -ne 0) { throw "an e.fmt.wav open, decode or seek answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
