@@ -277,6 +277,18 @@ in both directions and a real UDP datagram, observes stream EOF through the read
 checks peer endpoints and forces an `AddressInUse` conflict. Controlled deadline and
 cancellation variants remain the final four `e.net` declarations.
 
+D593 completes those four controlled declarations. TCP connect and connected receive/send
+temporarily use nonblocking mode plus the existing OS poller, checking `e.cancel` at slices
+no longer than one millisecond and restoring blocking mode before return. Cancellation
+wins an expired deadline at observation; completed host I/O wins a later request and byte
+counts survive terminal cleanup failure. The synchronous resolver prechecks control but
+returns `os.Unsupported` for a still-live token/deadline it cannot honestly interrupt.
+The fixture pins uncontrolled resolution through the controlled entry point, unsupported
+live DNS control, cancel-over-timeout precedence, controlled connect/transfers, a live
+five-millisecond receive deadline bounded below 100 ms and pre-start cancellation. Winsock
+failures now populate the existing `e.os` native-detail slot, matching Linux and enabling
+portable refusal/reset/unreachable classification.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

@@ -3,8 +3,10 @@
 // the smaller portable error set. Deadline-aware operations are the remaining slice.
 
 use e.io
+use e.cancel
 use e.mem
 use e.os
+use e.time
 
 type Socket = os.Socket
 type Ip4 = struct { bytes: [4]u8 }
@@ -318,12 +320,15 @@ fn format_ip(address: Address, dst: []u8) -> (str, err) {
 }
 
 fn map_error(source_error: err) -> err {
+    let detail = os.last_error_detail("network", "")
+    ret map_error_with_code(source_error, detail.native_code)
+}
+
+fn map_error_with_code(source_error: err, code: i32) -> err {
     if source_error == ok { ret ok }
     if source_error == os.NotFound { ret NotFound }
     if source_error == os.Timeout { ret Timeout }
     if source_error == os.Exists { ret AddressInUse }
-    let detail = os.last_error_detail("network", "")
-    let code = detail.native_code
     if code == 111i32 || code == 10061i32 { ret Refused }
     if code == 104i32 || code == 10054i32 { ret Reset }
     if code == 101i32 || code == 113i32 || code == 10051i32 || code == 10065i32 { ret Unreachable }
@@ -543,4 +548,153 @@ fn reader(socket: *Socket) -> io.Reader {
 
 fn writer(socket: *Socket) -> io.Writer {
     ret io.Writer { ctx: mem.cast[*void](socket), write: socket_write, flush: socket_flush }
+}
+
+const CONTROL_SLICE_NS: i64 = 1000000i64
+
+fn control_wait(control: cancel.Control) -> (i64, err) {
+    var now: time.Instant = zero
+    if control.has_deadline {
+        let (observed, clock_error) = time.monotonic()
+        if clock_error != ok { ret (0i64, clock_error) }
+        now = observed
+    }
+    let stopped = cancel.check(control, now)
+    if stopped == cancel.Cancelled { ret (0i64, cancel.Cancelled) }
+    if stopped == cancel.Timeout { ret (0i64, Timeout) }
+    var wait = CONTROL_SLICE_NS
+    if control.has_deadline {
+        let remaining = control.deadline.nanos - now.nanos
+        if remaining < wait { wait = remaining }
+    }
+    ret (wait, ok)
+}
+
+fn wait_socket(socket: Socket, writable: bool, control: cancel.Control) -> err {
+    var storage: [8192]u8 = zero
+    var arena = mem.arena_from(storage[0..])
+    let (poller, open_error) = os.poller_open(&arena)
+    if open_error != ok { ret map_error(open_error) }
+    defer let _ = os.poller_close(poller)
+    let interest = os.PollInterest { readable: !writable, writable: writable }
+    let register_error = os.poller_register(poller, os.socket_handle(socket), 1usize, interest)
+    if register_error != ok { ret map_error(register_error) }
+    var events: [1]os.PollEvent = zero
+    while true {
+        let (wait, control_error) = control_wait(control)
+        if control_error != ok { ret control_error }
+        let (count, wait_error) = os.poller_wait(poller, events[0..], wait)
+        if wait_error != ok { ret map_error(wait_error) }
+        if count != 0usize { ret ok }
+    }
+    ret Failed
+}
+
+fn precheck(control: cancel.Control) -> err {
+    let (wait, control_error) = control_wait(control)
+    ret control_error
+}
+
+fn resolve_with_control(a: *mem.Arena, host: str, port: u16, family: Family, control: cancel.Control) -> ([]Endpoint, err) {
+    var empty: []Endpoint = zero
+    let check_error = precheck(control)
+    if check_error != ok { ret (empty, check_error) }
+    // The host resolver is one blocking call. A live deadline/token would promise an
+    // acknowledgement bound it cannot provide without a worker whose lifetime outlives
+    // this call, so reject that guarantee explicitly.
+    if control.token != nil || control.has_deadline { ret (empty, os.Unsupported) }
+    let (addresses, resolve_error) = resolve(a, host, port, family)
+    ret (addresses, resolve_error)
+}
+
+fn tcp_connect_with_control(endpoint: Endpoint, control: cancel.Control) -> (Socket, err) {
+    var empty: Socket = zero
+    let check_error = precheck(control)
+    if check_error != ok { ret (empty, check_error) }
+    let (socket, open_error) = os.socket_open(socket_family(endpoint.address), .Stream)
+    if open_error != ok { ret (empty, map_error(open_error)) }
+    let nonblock_error = os.socket_set_nonblocking(socket, true)
+    if nonblock_error != ok {
+        let mapped = map_error(nonblock_error)
+        let unused = os.socket_close(socket)
+        ret (empty, mapped)
+    }
+    var connect_error = os.socket_connect(socket, to_os_address(endpoint))
+    while connect_error == os.WouldBlock {
+        let wait_error = wait_socket(socket, true, control)
+        if wait_error != ok {
+            let unused = os.socket_close(socket)
+            ret (empty, wait_error)
+        }
+        connect_error = os.socket_connect(socket, to_os_address(endpoint))
+    }
+    if connect_error != ok {
+        let detail = os.last_error_detail("connect", "")
+        // A second connect after writable readiness reports already-connected on both
+        // hosts rather than repeating success.
+        if detail.native_code != 106i32 && detail.native_code != 10056i32 {
+            let mapped = map_error_with_code(connect_error, detail.native_code)
+            let unused = os.socket_close(socket)
+            ret (empty, mapped)
+        }
+    }
+    let block_error = os.socket_set_nonblocking(socket, false)
+    if block_error != ok {
+        let mapped = map_error(block_error)
+        let unused = os.socket_close(socket)
+        ret (empty, mapped)
+    }
+    ret (socket, ok)
+}
+
+fn receive_with_control(socket: Socket, dst: []u8, control: cancel.Control) -> (usize, err) {
+    let check_error = precheck(control)
+    if check_error != ok { ret (0usize, check_error) }
+    let nonblock_error = os.socket_set_nonblocking(socket, true)
+    if nonblock_error != ok { ret (0usize, map_error(nonblock_error)) }
+    while true {
+        let (count, receive_error) = os.socket_receive(socket, dst)
+        if receive_error == ok {
+            let block_error = os.socket_set_nonblocking(socket, false)
+            if block_error != ok { ret (count, map_error(block_error)) }
+            ret (count, ok)
+        }
+        if receive_error != os.WouldBlock {
+            let mapped = map_error(receive_error)
+            let unused = os.socket_set_nonblocking(socket, false)
+            ret (count, mapped)
+        }
+        let wait_error = wait_socket(socket, false, control)
+        if wait_error != ok {
+            let unused = os.socket_set_nonblocking(socket, false)
+            ret (0usize, wait_error)
+        }
+    }
+    ret (0usize, Failed)
+}
+
+fn send_with_control(socket: Socket, src: []const u8, control: cancel.Control) -> (usize, err) {
+    let check_error = precheck(control)
+    if check_error != ok { ret (0usize, check_error) }
+    let nonblock_error = os.socket_set_nonblocking(socket, true)
+    if nonblock_error != ok { ret (0usize, map_error(nonblock_error)) }
+    while true {
+        let (count, send_error) = os.socket_send(socket, src)
+        if send_error == ok {
+            let block_error = os.socket_set_nonblocking(socket, false)
+            if block_error != ok { ret (count, map_error(block_error)) }
+            ret (count, ok)
+        }
+        if send_error != os.WouldBlock {
+            let mapped = map_error(send_error)
+            let unused = os.socket_set_nonblocking(socket, false)
+            ret (count, mapped)
+        }
+        let wait_error = wait_socket(socket, true, control)
+        if wait_error != ok {
+            let unused = os.socket_set_nonblocking(socket, false)
+            ret (0usize, wait_error)
+        }
+    }
+    ret (0usize, Failed)
 }

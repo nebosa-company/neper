@@ -1286,8 +1286,8 @@ Push-Location $fsScratch
 $csvExit = $LASTEXITCODE
 Pop-Location
 if ($csvExit -ne 0) { throw "an e.fmt.csv read or write answered wrongly: exit $csvExit" }
-# `e.net` covers strict/canonical IP values plus real loopback TCP/UDP transport,
-# portable conflict mapping, stream adapters and affine cleanup.
+# `e.net` covers strict IP values, real TCP/UDP, stream adapters, portable native-error
+# mapping and honest poll-based control; synchronous controlled DNS refuses unsupported bounds.
 $netPath = Join-Path $testBuild 'net-selfhost.exe'
 $netWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net\src\main.e') $repo 'x64' 'windows' $netPath
 if ($LASTEXITCODE -ne 0 -or $netWritten -ne 'executable written') { throw 'e.net emission failed' }

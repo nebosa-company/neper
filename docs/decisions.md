@@ -12100,3 +12100,21 @@ bytes through those adapters, observes half-close EOF, sends a real UDP datagram
 source endpoint and binds the live TCP endpoint again to pin portable `AddressInUse` error
 mapping. The four controlled operations stay for D593, rather than claiming cancellation
 around a blocking call.
+
+## D593 -- Controlled sockets poll; controlled DNS refuses a promise it cannot keep
+
+`tcp_connect_with_control`, `receive_with_control` and `send_with_control` temporarily set
+their socket nonblocking and wait through the existing `e.os` poller. The poller lives in
+a fixed stack-backed arena and observes the token/deadline at intervals no longer than one
+millisecond. A completed syscall is committed before another observation, so completion
+wins a later request; cancellation wins timeout when both are visible. Every terminal path
+restores blocking mode before acknowledging that caller buffers are free.
+
+The host resolver is one synchronous call on both fences. `resolve_with_control` therefore
+prechecks cancellation and deadline, delegates only when neither is live, and otherwise
+returns `os.Unsupported` instead of blocking behind a false guarantee. Tests pin that
+choice, cancel-over-expired precedence, a live five-millisecond receive deadline with a
+100 ms outer bound, pre-start connect cancellation and controlled connect/send/receive.
+The work also found that Windows socket failures read WSAGetLastError but never recorded
+that code in `e.os`'s native-detail slot; doing so now matches Linux and lets `e.net` map
+refusal, reset and unreachable results from the actual socket channel.

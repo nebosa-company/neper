@@ -2771,6 +2771,13 @@ require bounded worker isolation; completion is not acknowledged while caller-ow
 buffers remain in use. Unsupported cancellation guarantees are reported explicitly,
 not implemented as a blocking call ignoring its deadline.
 
+The controlled socket operations temporarily use nonblocking mode and the `e.os` poller,
+observing the token/deadline at intervals no greater than one millisecond. Completion of
+a host transfer wins a later request; a wait observes cancellation before timeout and
+restores blocking mode before acknowledging either. The synchronous host resolver cannot
+provide that bound: after the common precheck, a still-live token or deadline returns
+`os.Unsupported`; an uncontrolled `Control` uses the ordinary resolver.
+
 ### `e.net.tls`
 
 ```neper

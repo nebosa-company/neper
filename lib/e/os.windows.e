@@ -1802,6 +1802,9 @@ fn decode_address(raw: RawAddress) -> SocketAddress {
 
 fn from_socket_error() -> err {
     let code = raw_socket_error()
+    // Winsock has a separate last-error channel, but callers of the portable fence
+    // still need the same immediate native detail that every other host failure keeps.
+    record_error_detail(code)
     if code == 10004i32 { ret Interrupted }
     if code == 10013i32 { ret Denied }
     if code == 10035i32 { ret WouldBlock }

@@ -1204,8 +1204,8 @@ csv_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$csv_written" = 'executable written' ]
 chmod +x "$test_build/fmt-csv-selfhost"
 (cd "$fs_scratch" && "$test_build/fmt-csv-selfhost")
-# `e.net` covers strict/canonical IP values plus real loopback TCP/UDP transport,
-# portable conflict mapping, stream adapters and affine cleanup.
+# `e.net` covers strict IP values, real TCP/UDP, stream adapters, portable native-error
+# mapping and honest poll-based control; synchronous controlled DNS refuses unsupported bounds.
 net_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net/src/main.e" "$repo" x64 linux "$test_build/net-selfhost")
 [ "$net_written" = 'executable written' ]
 chmod +x "$test_build/net-selfhost"
