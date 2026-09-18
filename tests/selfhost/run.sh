@@ -1210,9 +1210,9 @@ net_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$net_written" = 'executable written' ]
 chmod +x "$test_build/net-selfhost"
 "$test_build/net-selfhost"
-# The delivered `e.net.http` codecs run over a one-byte source: HTTP pins pipelining,
-# fixed/chunked/close framing and independent limits; SSE pins split UTF-8/CRLF,
-# retained state, the EOF rule and flat memory over ten thousand events.
+# The delivered `e.net.http` codecs run over a one-byte source, and the plain client
+# uses a real loopback server for bounded GET and HEAD requests. SSE pins split UTF-8/
+# CRLF, retained state, the EOF rule and flat memory over ten thousand events.
 http_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http/src/main.e" "$repo" x64 linux "$test_build/net-http-selfhost")
 [ "$http_written" = 'executable written' ]
 chmod +x "$test_build/net-http-selfhost"

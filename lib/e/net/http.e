@@ -1,9 +1,10 @@
 // Bounded HTTP/1.0 and HTTP/1.1 message parsing/writing plus the event-stream body
-// format. The codec works over byte streams; connection establishment and the
-// network-facing response stream remain planned.
+// format. The plain full-body client owns one connection per request; controlled
+// response streaming and TLS remain planned.
 
 use e.io
 use e.mem
+use e.net
 use e.text.utf8
 
 type Method = enum u8 { Get, Head, Post, Put, Patch, Delete, Options, Connect, Trace }
@@ -420,7 +421,7 @@ fn no_response_body(status: u16) -> bool {
     ret (status >= 100u16 && status < 200u16) || status == 204u16 || status == 304u16
 }
 
-fn read_response(a: *mem.Arena, r: *Reader) -> (Response, err) {
+fn read_response_for(a: *mem.Arena, r: *Reader, suppress_body: bool) -> (Response, err) {
     var out: Response = zero
     let mark = mem.mark(a)
     let s = mem.cast[*ReaderState](r.state)
@@ -442,7 +443,7 @@ fn read_response(a: *mem.Arena, r: *Reader) -> (Response, err) {
         ret (out, headers_error)
     }
     var body: []const u8 = zero
-    if !no_response_body(status) {
+    if !no_response_body(status) && !suppress_body {
         let (read, body_error) = read_body(a, s, length, chunked, !chunked && !has_header(headers, "Content-Length"))
         if body_error != ok {
             mem.reset(a, mark)
@@ -452,6 +453,42 @@ fn read_response(a: *mem.Arena, r: *Reader) -> (Response, err) {
     }
     out = Response { version: version, status: status, reason: reason_text, headers: headers, body: body }
     ret (out, ok)
+}
+
+fn read_response(a: *mem.Arena, r: *Reader) -> (Response, err) {
+    let (response, response_error) = read_response_for(a, r, false)
+    ret (response, response_error)
+}
+
+fn request(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: Limits) -> (Response, err) {
+    var out: Response = zero
+    // CONNECT changes a successful connection into a byte tunnel, which a full-body
+    // response cannot represent. The later stream surface owns that protocol switch.
+    if req.method == .Connect { ret (out, Unsupported) }
+    let (opened, connect_error) = net.tcp_connect(endpoint)
+    if connect_error != ok { ret (out, connect_error) }
+    var connection = opened
+    defer let _ = net.close(connection)
+
+    var sink = net.writer(&connection)
+    var encoder = writer(sink)
+    let write_error = write_request(&encoder, req)
+    if write_error != ok { ret (out, write_error) }
+
+    let mark = mem.mark(a)
+    var source = net.reader(&connection)
+    let (created, reader_error) = reader(a, source, limits)
+    if reader_error != ok {
+        mem.reset(a, mark)
+        ret (out, reader_error)
+    }
+    var decoder = created
+    let (response, response_error) = read_response_for(a, &decoder, req.method == .Head)
+    if response_error != ok {
+        mem.reset(a, mark)
+        ret (out, response_error)
+    }
+    ret (response, ok)
 }
 
 fn has_header(headers: []const Header, name: str) -> bool {

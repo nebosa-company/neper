@@ -289,6 +289,15 @@ five-millisecond receive deadline bounded below 100 ms and pre-start cancellatio
 failures now populate the existing `e.os` native-detail slot, matching Linux and enabling
 portable refusal/reset/unreachable classification.
 
+D594 connects the codec to the blocking transport with the plain full-body `request`.
+Each call owns one TCP connection, emits the validated request, reads one response under
+the existing independent limits and closes on every path; response parse failures reset
+the request's arena allocations. HEAD parses and retains its response head without reading
+the advertised representation bytes, while CONNECT is explicitly unsupported because a
+full-body return cannot represent its tunnel. A real cross-host loopback server checks the
+exact GET and HEAD wire messages, a bounded response body and retained Content-Length.
+Controlled `ResponseStream` and TLS requests remain planned.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

@@ -12118,3 +12118,18 @@ choice, cancel-over-expired precedence, a live five-millisecond receive deadline
 The work also found that Windows socket failures read WSAGetLastError but never recorded
 that code in `e.os`'s native-detail slot; doing so now matches Linux and lets `e.net` map
 refusal, reset and unreachable results from the actual socket channel.
+
+## D594 -- A plain HTTP request owns exactly one connection
+
+`e.net.http.request` connects through `e.net`, writes the existing validated request
+codec, reads one bounded response and closes the socket on every return path. Response
+headers and the full body borrow the caller arena; a parse failure resets all allocations
+made by the request. HEAD uses the same head parser but suppresses body consumption, so a
+server may advertise the representation length without sending those bytes.
+
+The full-body API rejects CONNECT because a successful CONNECT changes the connection
+into a tunnel that this return type cannot own. Controlled incremental bodies belong to
+`request_stream`; TLS remains coupled to the separately planned `e.net.tls`. The
+cross-host fixture runs a real two-connection loopback server, verifies exact emitted GET
+and HEAD messages, a bounded response and case-insensitive response header lookup, and
+proves HEAD returns immediately with its nonzero Content-Length intact.

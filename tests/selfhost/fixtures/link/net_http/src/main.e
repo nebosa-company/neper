@@ -4,13 +4,47 @@
 
 use e.io
 use e.mem
+use e.net
 use e.net.http
+use e.os
 use e.str
+use e.thread
 
 error Failed
 
 type OneByte = struct { data: str, off: usize }
 type Repeating = struct { events: usize, emitted: usize, off: usize }
+type LiveServer = struct { listener: net.Socket, failed: bool }
+
+fn exchange(listener: net.Socket, expected: str, response: str) -> bool {
+    let (accepted, peer, accept_error) = net.tcp_accept(listener)
+    if accept_error != ok { ret false }
+    var connection = accepted
+    defer let _ = net.close(connection)
+    var received: [128]u8 = zero
+    var used = 0usize
+    while used < expected.len {
+        let (count, receive_error) = net.receive(connection, received[used..expected.len])
+        if receive_error != ok || count == 0usize { ret false }
+        used += count
+    }
+    if !str.eq(received[..used], expected) { ret false }
+    var sink = net.writer(&connection)
+    if io.write_all(&sink, response) != ok { ret false }
+    ret true
+}
+
+fn serve_live(s: *LiveServer) {
+    let get_request = "GET /live HTTP/1.1\r\nHost: local\r\nContent-Length: 0\r\n\r\n"
+    let get_response = "HTTP/1.1 201 Created\r\nContent-Length: 5\r\nX-Live: yes\r\n\r\nhello"
+    if !exchange(s.listener, get_request, get_response) {
+        s.failed = true
+        ret
+    }
+    let head_request = "HEAD /head HTTP/1.1\r\nHost: local\r\nContent-Length: 0\r\n\r\n"
+    let head_response = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n"
+    if !exchange(s.listener, head_request, head_response) { s.failed = true }
+}
 
 fn one_read(ctx: *void, dst: []u8) -> (usize, err) {
     let source = mem.cast[*OneByte](ctx)
@@ -155,6 +189,40 @@ fn main(a: *mem.Arena) -> err {
     let response_write_error = http.write_response(&response_writer, &outgoing_response)
     if response_write_error != ok || !str.eq(io.memory_bytes(&response_capture), "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n") { ret Failed }
     if !str.eq(http.reason(503u16), "Service Unavailable") || http.reason(799u16).len != 0usize { ret Failed }
+
+    // The plain client owns one real loopback connection per request. A HEAD response
+    // retains its advertised length without trying to consume a body the server omits.
+    let (loopback, loopback_error) = net.parse_ip("127.0.0.1")
+    if loopback_error != ok { ret loopback_error }
+    var endpoint = net.Endpoint { address: loopback, port: 0u16 }
+    let (listener, listen_error) = net.tcp_listen(endpoint, 2u32)
+    if listen_error != ok { ret listen_error }
+    var server = LiveServer { listener: listener, failed: false }
+    defer let _ = net.close(server.listener)
+    let (bound, bound_error) = os.socket_local_address(server.listener)
+    if bound_error != ok || bound.port == 0u16 { ret Failed }
+    endpoint.port = bound.port
+    let (worker, spawn_error) = thread.spawn[LiveServer](serve_live, &server, 0usize)
+    if spawn_error != ok { ret spawn_error }
+
+    var live_headers: [1]http.Header = zero
+    live_headers[0usize] = http.Header { name: "Host", value: "local" }
+    var live_request = http.Request { method: .Get, target: "/live", version: .Http11, headers: live_headers[0..], body: "" }
+    let (live_response, live_error) = http.request(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize))
+    live_request.method = .Head
+    live_request.target = "/head"
+    let (head_response, head_error) = http.request(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize))
+    let joined = thread.join(worker)
+    if joined != ok || server.failed { ret Failed }
+    if live_error != ok || live_response.status != 201u16 || !str.eq(live_response.body, "hello") { ret Failed }
+    let (live_value, live_found) = http.header(live_response.headers, "x-live")
+    if !live_found || !str.eq(live_value, "yes") { ret Failed }
+    if head_error != ok || head_response.status != 200u16 || head_response.body.len != 0usize { ret Failed }
+    let (head_length, head_length_found) = http.header(head_response.headers, "content-length")
+    if !head_length_found || !str.eq(head_length, "5") { ret Failed }
+    live_request.method = .Connect
+    let (tunnel_response, tunnel_error) = http.request(a, endpoint, &live_request, message_limits(64usize, 128usize, 8usize, 16usize))
+    if tunnel_error != http.Unsupported { ret Failed }
 
     // BOM, comment, all three line endings, repeated data and retained id/retry state.
     var first_source: OneByte = zero
