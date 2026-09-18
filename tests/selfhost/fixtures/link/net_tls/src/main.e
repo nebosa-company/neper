@@ -8,6 +8,7 @@ use e.os
 use e.time
 use e.crypto.kdf as kdf
 use e.crypto.kx as kx
+use e.cancel
 
 fn same_bytes(left: []const u8, right: []const u8) -> bool {
     if left.len != right.len { ret false }
@@ -153,6 +154,18 @@ fn main(a: *mem.Arena) -> err {
     let (client_shared, client_shared_error) = kx.x25519_exchange(client_secret, server_key)
     let (server_shared, server_shared_error) = kx.x25519_exchange(server_secret, hello_info.peer_key)
     if client_shared_error != ok || server_shared_error != ok || !same_bytes(client_shared.bytes[0..], server_shared.bytes[0..]) { os.exit(13i32) }
+    var stopped = cancel.token()
+    cancel.request(&stopped)
+    var cancelled_source_state = io.SliceReader { data: none[0..], off: 0usize }
+    let cancelled_source = io.slice_reader(&cancelled_source_state)
+    var cancelled_sink_bytes: [1]u8 = zero
+    var cancelled_sink_state = io.SliceWriter { data: cancelled_sink_bytes[0..], off: 0usize }
+    let cancelled_sink = io.slice_writer(&cancelled_sink_state)
+    let (cancelled_stream0, cancelled_create_error) = tls.client(a, cancelled_source, cancelled_sink, hello_client_config)
+    if cancelled_create_error != ok { os.exit(31i32) }
+    var cancelled_stream = cancelled_stream0
+    let control = cancel.Control { token: &stopped, deadline: zero, has_deadline: false }
+    if tls.handshake_with_control(&cancelled_stream, control) != cancel.Cancelled || cancelled_source_state.off != 0usize || cancelled_sink_state.off != 0usize { os.exit(32i32) }
 
     // Ed25519 leaf and intermediate from the e.crypto.x509 reference chain.
     let mid_der = "0\x82\x01\x130\x81\xc6\xa0\x03\x02\x01\x02\x02\x01\x020\x05\x06\x03+ep0%1\x130\x11\x06\x03U\x04\x03\x0c\x0aNeper Root1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0-1\x1b0\x19\x06\x03U\x04\x03\x0c\x12Neper Intermediate1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0*0\x05\x06\x03+ep\x03!\x00\x819w\x0e\xa8}\x17_V\xa3Tf\xc3L~\xcc\xcb\x8d\x8a\x91\xb4\xee7\xa2]\xf6\x0f[\x8f\xc9\xb3\x94\xa3\x130\x110\x0f\x06\x03U\x1d\x13\x01\x01\xff\x04\x050\x03\x01\x01\xff0\x05\x06\x03+ep\x03A\x00R^\x187\xb39[\xa4N\xc4\x83\x10\xde\xfc\x7f\xa0\xbfF[\xa8^\x04S\xa1\xb2\xf8\xbcM\xc7\xfb\xf1t\x89\xa0\x0e\x07\xcc\xbf\x8f6R\x16\x15\xab\x99\x0e\xdd\xc1,\x8d\x8f*\xd4\xaf\x97\xaae\x8b\xab\xe5\x0d\x8e'\x08"

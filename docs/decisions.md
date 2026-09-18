@@ -12699,3 +12699,15 @@ transport, it does not close that transport behind the caller's back.
 
 The live fixture now observes the server alert as EOF, sends the reciprocal client
 alert, checks idempotence and proves a post-close write returns `Closed`.
+
+## D639 -- Controlled TLS handshakes stop at every transport boundary
+
+`handshake_with_control` checks the shared cancellation token and monotonic deadline
+before every record header and body read or write. A request wins a coincident
+deadline through `cancel.check`, and a stopped handshake becomes terminal without
+emitting later protocol bytes. The retained reader/writer still defines the blocking
+behavior of each individual callback; network callers obtain the one-millisecond
+bound by supplying the existing controlled `e.net` adapters.
+
+The focused fixture presents an already-requested token and proves the handshake
+returns `cancel.Cancelled` before consuming or producing one byte.

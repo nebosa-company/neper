@@ -3,6 +3,7 @@
 // later slices rather than reporting plaintext transport as TLS.
 
 use e.io
+use e.cancel
 use e.mem
 use e.time
 use e.crypto.hash as hash
@@ -48,6 +49,8 @@ type State = struct {
     read_buffer: [16384]u8,
     read_at: usize,
     read_len: usize,
+    control: cancel.Control,
+    controlled: bool,
 }
 
 // RFC 8446 section 7.1's HKDF-Expand-Label over the one supported hash. The
@@ -787,7 +790,20 @@ fn parse_encrypted_extensions(message: []const u8, offered: []const str) -> (str
     ret (selected, ok)
 }
 
+fn check_control(state: *State) -> err {
+    if !state.controlled { ret ok }
+    var now: time.Instant = zero
+    if state.control.has_deadline {
+        let (observed, clock_error) = time.monotonic()
+        if clock_error != ok { ret clock_error }
+        now = observed
+    }
+    ret cancel.check(state.control, now)
+}
+
 fn send_plain(state: *State, content_type: u8, content: []const u8) -> err {
+    let check_error = check_control(state)
+    if check_error != ok { ret check_error }
     if content.len > 16384usize { ret Protocol }
     var header: [5]u8 = zero
     header[0] = content_type
@@ -797,23 +813,31 @@ fn send_plain(state: *State, content_type: u8, content: []const u8) -> err {
     header[4] = u8(content.len & 255usize)
     let header_error = io.write_all(&state.sink, header[0..])
     if header_error != ok { ret Handshake }
+    let content_check_error = check_control(state)
+    if content_check_error != ok { ret content_check_error }
     let content_error = io.write_all(&state.sink, content)
     if content_error != ok { ret Handshake }
     ret ok
 }
 
 fn read_plain(state: *State, expected_type: u8, out: []u8) -> (usize, err) {
+    let check_error = check_control(state)
+    if check_error != ok { ret (0usize, check_error) }
     var header: [5]u8 = zero
     let header_error = io.read_exact(&state.source, header[0..])
     if header_error != ok { ret (0usize, Handshake) }
     let length = (usize(header[3]) << 8usize) | usize(header[4])
     if header[0] != expected_type || header[1] != 3u8 || header[2] != 3u8 || length > 16384usize || length > out.len { ret (0usize, Protocol) }
+    let content_check_error = check_control(state)
+    if content_check_error != ok { ret (0usize, content_check_error) }
     let content_error = io.read_exact(&state.source, out[..length])
     if content_error != ok { ret (0usize, Handshake) }
     ret (length, ok)
 }
 
 fn send_protected(state: *State, keys: *TrafficKeys, content_type: u8, content: []const u8) -> err {
+    let check_error = check_control(state)
+    if check_error != ok { ret check_error }
     var record: [16406]u8 = zero
     let (length, seal_error) = seal_record(keys, content_type, content, record[0..])
     if seal_error != ok { ret seal_error }
@@ -823,11 +847,15 @@ fn send_protected(state: *State, keys: *TrafficKeys, content_type: u8, content: 
 }
 
 fn read_protected_content(state: *State, keys: *TrafficKeys, out: []u8) -> (usize, u8, err) {
+    let check_error = check_control(state)
+    if check_error != ok { ret (0usize, 0u8, check_error) }
     var header: [5]u8 = zero
     let header_error = io.read_exact(&state.source, header[0..])
     if header_error != ok { ret (0usize, 0u8, Handshake) }
     let sealed_len = (usize(header[3]) << 8usize) | usize(header[4])
     if sealed_len > 16640usize { ret (0usize, 0u8, Protocol) }
+    let content_check_error = check_control(state)
+    if content_check_error != ok { ret (0usize, 0u8, content_check_error) }
     var record: [16645]u8 = zero
     mem.copy[u8](record[..5usize], header[0..])
     let record_error = io.read_exact(&state.source, record[5usize..5usize + sealed_len])
@@ -977,6 +1005,7 @@ fn client(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ClientConfi
     state.sent_close = false
     state.read_at = 0usize
     state.read_len = 0usize
+    state.controlled = false
     ret (Stream { state: mem.cast[*void](state) }, ok)
 }
 
@@ -998,6 +1027,7 @@ fn server(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ServerConfi
     state.sent_close = false
     state.read_at = 0usize
     state.read_len = 0usize
+    state.controlled = false
     ret (Stream { state: mem.cast[*void](state) }, ok)
 }
 
@@ -1008,7 +1038,7 @@ fn negotiated_alpn(stream: *const Stream) -> str {
     ret state.selected_alpn
 }
 
-fn handshake(stream: *Stream) -> err {
+fn run_handshake(stream: *Stream) -> err {
     if stream.state == nil { ret Closed }
     let state = mem.cast[*State](stream.state)
     if state.closed || state.failed { ret Closed }
@@ -1025,6 +1055,22 @@ fn handshake(stream: *Stream) -> err {
     }
     state.complete = true
     ret ok
+}
+
+fn handshake(stream: *Stream) -> err {
+    if stream.state != nil {
+        let state = mem.cast[*State](stream.state)
+        state.controlled = false
+    }
+    ret run_handshake(stream)
+}
+
+fn handshake_with_control(stream: *Stream, control: cancel.Control) -> err {
+    if stream.state == nil { ret Closed }
+    let state = mem.cast[*State](stream.state)
+    state.control = control
+    state.controlled = true
+    ret run_handshake(stream)
 }
 
 fn stream_read(ctx: *void, dst: []u8) -> (usize, err) {
