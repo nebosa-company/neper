@@ -449,3 +449,7 @@ is an opaque boundary, not generic deferral: the unrolled loop has zero copies.
 **D626 follow-up.** `meta.get[FIELD, T]` refuses an affine `FIELD.ty` in checked
 code. Returning such a field by value would copy it out of its aggregate owner, so
 the instance reports E-SAFETY-0005 with the field binding's name.
+
+**D627 follow-up.** `meta.set[FIELD, T]` applies the same affine-field gate. Its
+ordinary value parameter cannot transfer ownership, so storing that value would
+copy the resource identity; the instance reports E-SAFETY-0005 with the field name.

@@ -12557,3 +12557,14 @@ as its subject.
 The template pass still defers the question while `FIELD` is unset; every concrete
 unrolled copy checks the bound field type. A focused `Box.file` fixture pins that
 instance-time verdict on both hosts.
+
+## D627 -- Reflective writes do not copy affine fields
+
+The matching `meta.set[FIELD, T]` path now rejects an affine `FIELD.ty` in checked
+code. Its value parameter is not an ownership transfer, so storing a resource or a
+containing aggregate through it would copy the supplied identity into the subject.
+Like `meta.get`, it reports E-SAFETY-0005 with the compile-time field name.
+
+The focused fixture binds a zero `File` slot only to make the attempted generic
+store well typed; the error is attached to `Box.file` before argument checking and
+is identical on both hosts.

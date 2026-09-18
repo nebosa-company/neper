@@ -3676,7 +3676,8 @@ fixed-array owner are not tracked as wholes. Reflection and the
 representation is not a reflective serialization surface. Format-codec rejection
 of an affine field in an otherwise plain aggregate begins at `meta.get`: returning
 that field by value would copy it, so the instantiated access is E-SAFETY-0005 and
-names the field. The matching `meta.set` rule remains staged below.
+names the field. `meta.set` rejects the same field type because its ordinary value
+parameter would copy the supplied identity into the aggregate.
 
 ### Debug fills
 

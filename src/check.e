@@ -8280,6 +8280,10 @@ fn meta_access_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
             record_failure(c, module_index, field_node, .ResourceCopy, argument.text, "`meta.get`")
             ret (info, ResourceViolation)
         }
+        if info.writes && c.resources_on && affine_kind(c, argument.ty, 0usize) != 0u8 {
+            record_failure(c, module_index, field_node, .ResourceCopy, argument.text, "`meta.set`")
+            ret (info, ResourceViolation)
+        }
     }
     info.field = argument
     info.subject = subject
