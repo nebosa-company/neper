@@ -3549,6 +3549,10 @@ fields are read only in the module that declares it, or in an `@unsafe` function
 gains `file_handle`. These rules are checked statically, in every build mode, and
 none becomes a trap:
 
+A concrete generic aggregate is classified after its type arguments are
+substituted. Thus `Box[File]` contains and tracks a resource even though the
+unresolved `Box[T]` has no ownership classification (D611).
+
 - A parameter borrows unless it is declared `own`: `fn close(f: own File) -> err`.
   Passing a resource to an `own` parameter moves it; the callee owns it and its
   obligation. A `let`/`var` from a resource local, a `ret` of one, and a store of one

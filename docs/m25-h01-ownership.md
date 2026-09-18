@@ -398,3 +398,7 @@ surface gains `file_handle`; the `@unsafe` inventory in the manifest and `index`
 `p` was bound from `&f`) resolves to the resource it points at before applying the
 ordinary move rule. The kept pointer therefore pins `f` and the call is
 E-SAFETY-0004 rather than an untracked close.
+
+**D611 follow-up.** A concrete generic aggregate clears the unresolved template's
+affine memo and classifies its substituted fields. `Box[File]` therefore moves and
+audits its `File` field like an equivalent nongeneric struct.

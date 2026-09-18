@@ -2438,6 +2438,13 @@ $test_build/neper-self check-file "$conformance_root/reject/safety_pointer_move.
 [ "$pointer_move_status" -eq 1 ]
 cmp -s "$test_build/conformance-reject-safety_pointer_move.jsonl" "$conformance_root/reject/safety_pointer_move.expected.jsonl" || { printf '%s
 ' "check-file --json on reject/safety_pointer_move.e differs from the conformance corpus" >&2; exit 1; }
+# A concrete generic aggregate is classified from its substituted resource fields
+# (D611, H01).
+generic_aggregate_status=0
+$test_build/neper-self check-file "$conformance_root/reject/safety_generic_aggregate.e" "$repo" x64 linux --json > "$test_build/conformance-reject-safety_generic_aggregate.jsonl" || generic_aggregate_status=$?
+[ "$generic_aggregate_status" -eq 1 ]
+cmp -s "$test_build/conformance-reject-safety_generic_aggregate.jsonl" "$conformance_root/reject/safety_generic_aggregate.expected.jsonl" || { printf '%s
+' "check-file --json on reject/safety_generic_aggregate.e differs from the conformance corpus" >&2; exit 1; }
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
 for reject_project in module_cycle module_variants safety_opaque; do

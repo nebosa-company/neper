@@ -12330,3 +12330,19 @@ This does not infer where an arbitrary pointer came from: only the lexical alias
 H02 already records (`let p = &f`, including assignment) participate. Raw, imported
 and integer-derived pointers remain outside the checked subset and belong behind an
 unsafe boundary.
+
+## D611 -- Generic containment is decided after substitution
+
+The ownership memo on a generic aggregate template was copied into every concrete
+instance. If `Box[T]` had been classified while `T` was unresolved, the memo said
+plain data and `Box[os.File]` inherited that answer even though its substituted
+field was a resource. Concrete instances now begin with empty affine and pointer
+memos and compute both properties from their own specialized fields. The ordinary
+H01 struct machinery then moves, audits and protects the fields without a generic-
+specific path.
+
+`reject/safety_generic_aggregate` constructs `Box[File]`, moves it, closes the
+file through the destination and rejects a close through the moved source on both
+hosts. Dynamic containers that relocate storage or can fail after taking an
+element remain H02 work; this row closes the generic aggregate classification bug,
+not that separate failure story.

@@ -3215,6 +3215,11 @@ fn instantiate_aggregate(c: *Checker, template_index: usize, first_argument: usi
     instance.first_argument = first_argument
     instance.generic = !concrete
     instance.instance = true
+    // The template's memo describes unresolved type parameters. A concrete
+    // instance must classify its substituted fields for itself (D611): Box[File]
+    // is affine even when Box[T] was previously memoized as plain.
+    instance.affine_memo = 0u8
+    instance.pointer_memo = 0u8
     // The instance is registered before its fields are substituted, so that a field
     // naming the instance itself -- `left: *Node[K, V]` inside `Node[K, V]` -- finds it in
     // the cache instead of instantiating it again without end. Its fields are filled in

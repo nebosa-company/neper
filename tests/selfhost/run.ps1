@@ -2343,6 +2343,12 @@ $pointerMoveActual = Join-Path $testBuild 'conformance-reject-safety_pointer_mov
 cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot 'reject\safety_pointer_move.e')`" `"$repo`" x64 windows --json > `"$pointerMoveActual`""
 if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/safety_pointer_move.e exited $LASTEXITCODE, not 1" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $pointerMoveActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'reject\safety_pointer_move.expected.jsonl')).Hash) { throw 'check-file --json on reject/safety_pointer_move.e differs from the conformance corpus' }
+# A concrete generic aggregate is classified from its substituted resource fields
+# (D611, H01).
+$genericAggregateActual = Join-Path $testBuild 'conformance-reject-safety_generic_aggregate.jsonl'
+cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot 'reject\safety_generic_aggregate.e')`" `"$repo`" x64 windows --json > `"$genericAggregateActual`""
+if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/safety_generic_aggregate.e exited $LASTEXITCODE, not 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericAggregateActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'reject\safety_generic_aggregate.expected.jsonl')).Hash) { throw 'check-file --json on reject/safety_generic_aggregate.e differs from the conformance corpus' }
 # A reject fixture that is a project (D297): a cycle and an ambiguous variant need
 # more than one module, so the operand is `reject/<name>/src/main.e`.
 foreach ($rejectProject in @('module_cycle', 'module_variants', 'safety_opaque')) {
