@@ -359,6 +359,10 @@ type Resource = struct {
     // whose every use reaches the target; the member's name for a struct local one
     // of whose fields holds `&x`, where only a use through that field does.
     points_to_field: str,
+    // A slice alias into a fixed array: the first array slot represented by index
+    // zero, when the range's lower bound is comptime-known.
+    slice_offset: usize,
+    slice_offset_known: bool,
     view: bool,
     // H02's lexical subset (D354): a mark local's arena, as written; a region value's
     // mark, plus one; a view's container local, plus one; and why a value dangles
@@ -5799,7 +5803,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     var no_fields: []u8 = zero
     var no_elements_acquired: []usize = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "" }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "", slice_offset: 0usize, slice_offset_known: false }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -13448,21 +13452,12 @@ fn resource_part_acquired(c: *Checker, local_index: usize, at: usize) -> usize {
     ret c.resources[local_index].acquired
 }
 
-// A comptime-indexed slot of a fixed affine array. Dynamic indices retain the
-// existing view rule until their set-of-elements state is specified.
-fn resource_element_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, bool) {
-    let node = tree.nodes[node_index]
-    if node.kind != .BracketPostfix { ret (0usize, 0usize, false) }
-    var bracket: BracketInfo = zero
-    if read_bracket(c, tree, node, &bracket) != ok || bracket.range || bracket.child_count != 2usize { ret (0usize, 0usize, false) }
-    if tree.nodes[bracket.base].kind != .NameExpr { ret (0usize, 0usize, false) }
-    let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, bracket.base)
-    if !is_resource || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (0usize, 0usize, false) }
+fn resource_index_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
     let checkpoint = c.constant_expr_count
     let expected_before = c.failure_expected
     let actual_before = c.failure_actual
     let mismatch_before = c.failure_mismatch_end
-    let (expression, copy_error) = copy_constant_expr(c, g, tree, module_index, bracket.first)
+    let (expression, copy_error) = copy_constant_expr(c, g, tree, module_index, node_index)
     var index = normalized_integer(0usize, false)
     var index_type = invalid_type()
     var index_error = copy_error
@@ -13471,8 +13466,36 @@ fn resource_element_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     c.failure_expected = expected_before
     c.failure_actual = actual_before
     c.failure_mismatch_end = mismatch_before
-    if index_error != ok || index.negative || index_type.kind != .Integer || index.magnitude >= c.resources[local_index].fields.len { ret (0usize, 0usize, false) }
-    ret (local_index, index.magnitude, true)
+    if index_error != ok || index.negative || index_type.kind != .Integer { ret (0usize, false) }
+    ret (index.magnitude, true)
+}
+
+// A comptime-indexed slot of a fixed affine array, reached either directly or
+// through a known full-slice alias. Dynamic indices retain the existing view rule.
+fn resource_element_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .BracketPostfix { ret (0usize, 0usize, false) }
+    var bracket: BracketInfo = zero
+    if read_bracket(c, tree, node, &bracket) != ok || bracket.range || bracket.child_count != 2usize { ret (0usize, 0usize, false) }
+    let base = tree.nodes[bracket.base]
+    if base.kind != .NameExpr { ret (0usize, 0usize, false) }
+    let token = c.tokens[usize(base.token_start)]
+    if token.kind != .Identifier { ret (0usize, 0usize, false) }
+    let (base_local, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    if !found { ret (0usize, 0usize, false) }
+    var local_index = base_local
+    var offset = 0usize
+    if c.locals[base_local].ty.kind == .Slice {
+        if !c.resources[base_local].slice_offset_known || c.resources[base_local].points_to == 0usize { ret (0usize, 0usize, false) }
+        local_index = c.resources[base_local].points_to - 1usize
+        offset = c.resources[base_local].slice_offset
+    }
+    if local_index >= c.local_count || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (0usize, 0usize, false) }
+    let (relative, is_constant) = resource_index_value(c, g, tree, module_index, bracket.first)
+    if !is_constant || relative > c.resources[local_index].fields.len || offset > c.resources[local_index].fields.len - relative { ret (0usize, 0usize, false) }
+    let index = offset + relative
+    if index >= c.resources[local_index].fields.len { ret (0usize, 0usize, false) }
+    ret (local_index, index, true)
 }
 
 // `resource(cleanup)` between a type declaration's `=` and its body.
@@ -13557,6 +13580,8 @@ fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, local_index: usize, initializer_index: usize, has_initializer: bool) {
     c.resources[local_index].points_to = 0usize
     c.resources[local_index].points_to_field = ""
+    c.resources[local_index].slice_offset = 0usize
+    c.resources[local_index].slice_offset_known = false
     if c.locals[local_index].ty.kind == .Slice {
         var other = 0usize
         while other < c.local_count {
@@ -13578,7 +13603,20 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     }
     if c.locals[local_index].ty.kind == .Slice {
         let (viewed, is_place) = place_base_local(c, g, tree, module_index, initializer_index)
-        if is_place && viewed != local_index && (c.locals[viewed].ty.kind == .Slice || c.locals[viewed].ty.kind == .Array || c.locals[viewed].ty.kind == .Named) { c.resources[local_index].points_to = viewed + 1usize }
+        if is_place && viewed != local_index && (c.locals[viewed].ty.kind == .Slice || c.locals[viewed].ty.kind == .Array || c.locals[viewed].ty.kind == .Named) {
+            c.resources[local_index].points_to = viewed + 1usize
+            let initializer = tree.nodes[initializer_index]
+            if initializer.kind == .BracketPostfix {
+                var bracket: BracketInfo = zero
+                if read_bracket(c, tree, initializer, &bracket) == ok && bracket.range && bracket.child_count == 1usize { c.resources[local_index].slice_offset_known = true }
+            } else {
+                if c.locals[viewed].ty.kind == .Slice && c.resources[viewed].slice_offset_known && c.resources[viewed].points_to != 0usize {
+                    c.resources[local_index].points_to = c.resources[viewed].points_to
+                    c.resources[local_index].slice_offset = c.resources[viewed].slice_offset
+                    c.resources[local_index].slice_offset_known = true
+                }
+            }
+        }
     }
     // The view, as a fact (D487): the local and what it views.
     if c.resources[local_index].points_to != 0usize {

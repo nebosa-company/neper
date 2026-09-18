@@ -426,3 +426,9 @@ checker diagnostic state untouched.
 token. Diagnostics render the semantic subject as `name[index]` and use that slot's
 token for the related span, rather than blaming the array generally or whichever
 slot happened to be assigned last.
+
+**D619 follow-up.** A local full-slice view of a tracked fixed array retains the
+array owner and zero offset; direct slice aliases retain that same owner. A comptime
+index through either spelling reads or consumes the array's one slot state, so a
+slice cannot manufacture a second resource identity. Offset ranges and dynamic
+indices remain outside this increment.

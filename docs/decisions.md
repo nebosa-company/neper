@@ -12450,3 +12450,17 @@ existing state table by one parallel token table and reuses the same audit, bran
 and loop paths. A two-slot fixture acquires both, consumes the second and proves the
 first slot's earlier site is the one reported at the fallible exit. The earlier leak
 and double-close goldens now pin their exact slot subjects on both hosts.
+
+## D619 -- A full-slice alias retains its resource-array owner
+
+Binding `let view = files[..]` where `files` is a tracked fixed resource array keeps
+the array local as the slice's owner with offset zero. A direct slice alias keeps the
+same owner rather than pointing at the intermediate view. A comptime-indexed store,
+read or consuming call through either slice therefore reaches the original slot
+state and its diagnostic site; the view never creates another resource identity.
+
+The rule reuses H02's existing local alias record and D616's slot table. It adds no
+slice obligation and does not claim offset-range or dynamic-index tracking. The
+accept fixture closes one slot through a two-slice alias chain; the reject fixture
+closes through the slice and then the array and pins E-SAFETY-0001 at the second use
+on both host compilers.

@@ -3665,7 +3665,9 @@ Fixed arrays inherit the affine and cleanup classification of their element. A
 comptime-indexed slot is tracked independently: a store moves ownership into it, a
 consuming read moves ownership out, and a live obligated slot is audited at every
 exit (D616, D617). Dynamic indices remain views until a conservative set-of-elements rule
-is specified. Each diagnostic names the indexed slot and preserves that slot's own
+is specified. A local full-slice alias of such an array, and a direct alias of that
+slice, reaches the same comptime-indexed ownership slots (D619); no second identity
+is created by the view. Each diagnostic names the indexed slot and preserves that slot's own
 acquisition or move site (D618). Slices of resources are not tracked as wholes. Reflection and the
 format codecs are not yet told a resource has no fields outside its module.
 
