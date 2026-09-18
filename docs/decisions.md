@@ -12768,3 +12768,14 @@ and server messages reject extensions outside the advertised narrow profile.
 The focused fixture pins padded authenticated application data and duplicate
 ServerHello rejection. Historical hardening notes now identify the slice at which
 TLS remained planned instead of contradicting D631-D641's delivered profile.
+
+## D645 -- P-256 verification is one public-input primitive
+
+`e.crypto.sign` adds verification-only ECDSA P-256 with SHA-256. Public keys use
+the 65-byte uncompressed SEC1 form and signatures use strict DER; points, scalars
+and the curve equation are validated before one joint scalar multiplication. The
+implementation is self-contained over eight `u32` limbs and does not add platform
+crypto dependencies or a private-key/signing surface.
+
+RFC 6979's P-256/SHA-256 sample pins a valid signature plus changed-message,
+invalid-point and malformed-DER refusals through the Neper-built fixture.

@@ -11,6 +11,7 @@ use e.crypto.hash as hash
 type Ed25519PublicKey = struct { bytes: [32]u8 }
 type Ed25519SecretKey = struct { bytes: [32]u8 }
 type Ed25519Signature = struct { bytes: [64]u8 }
+type P256PublicKey = struct { bytes: [65]u8 }
 error InvalidKey
 error InvalidSignature
 
@@ -588,4 +589,266 @@ fn ed25519_verify(public: Ed25519PublicKey, message: []const u8, signature: Ed25
     let lhs = pt_encode(pt_mul(s_bytes, pt_base()))
     let rhs = pt_encode(pt_add(r, pt_mul(k, a)))
     ret bytes_equal(lhs, rhs)
+}
+
+// ECDSA P-256 verification for TLS and X.509. Values are eight little-endian
+// 32-bit limbs; modular multiplication uses bounded double-and-add so the
+// implementation needs no wider integer or platform crypto dependency.
+// ponytail: verification handles public inputs, so variable-time scalar work is
+// acceptable here; add a constant-time signing implementation only if signing is
+// added to the public surface.
+type P256Int = struct { v: [8]u32 }
+type P256Affine = struct { x: P256Int, y: P256Int }
+type P256Point = struct { x: P256Int, y: P256Int, z: P256Int }
+
+fn p256_p() -> P256Int {
+    ret P256Int { v: [8]u32{ 4294967295, 4294967295, 4294967295, 0, 0, 0, 1, 4294967295 } }
+}
+
+fn p256_n() -> P256Int {
+    ret P256Int { v: [8]u32{ 4234356049, 4089039554, 2803342980, 3169254061, 4294967295, 4294967295, 0, 4294967295 } }
+}
+
+fn p256_b() -> P256Int {
+    ret P256Int { v: [8]u32{ 668098635, 1003371582, 3428036854, 1696401072, 1989707452, 3018571093, 2855965671, 1522939352 } }
+}
+
+fn p256_base() -> P256Affine {
+    let x = P256Int { v: [8]u32{ 3633889942, 4104206661, 770388896, 1996717441, 1671708914, 4173129445, 3777774151, 1796723186 } }
+    let y = P256Int { v: [8]u32{ 935285237, 3417718888, 1798397646, 734933847, 2081398294, 2397563722, 4263149467, 1340293858 } }
+    ret P256Affine { x: x, y: y }
+}
+
+fn p256_zero(a: P256Int) -> bool {
+    var i = 0usize
+    while i < 8usize {
+        if a.v[i] != 0u32 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn p256_equal(a: P256Int, b: P256Int) -> bool {
+    var i = 0usize
+    while i < 8usize {
+        if a.v[i] != b.v[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn p256_compare(a: P256Int, b: P256Int) -> i32 {
+    var i = 8usize
+    while i > 0usize {
+        i -= 1usize
+        if a.v[i] < b.v[i] { ret -1i32 }
+        if a.v[i] > b.v[i] { ret 1i32 }
+    }
+    ret 0i32
+}
+
+fn p256_sub_raw(a: P256Int, b: P256Int) -> P256Int {
+    var out: P256Int = zero
+    var borrow = 0u64
+    var i = 0usize
+    while i < 8usize {
+        let lhs = u64(a.v[i])
+        let rhs = u64(b.v[i]) + borrow
+        if lhs >= rhs {
+            out.v[i] = u32(lhs - rhs)
+            borrow = 0u64
+        } else {
+            out.v[i] = u32(lhs + 4294967296u64 - rhs)
+            borrow = 1u64
+        }
+        i += 1usize
+    }
+    ret out
+}
+
+fn p256_add_mod(a: P256Int, b: P256Int, modulus: P256Int) -> P256Int {
+    var out: P256Int = zero
+    var carry = 0u64
+    var i = 0usize
+    while i < 8usize {
+        let sum = u64(a.v[i]) + u64(b.v[i]) + carry
+        out.v[i] = u32(sum & 4294967295u64)
+        carry = sum >> 32u32
+        i += 1usize
+    }
+    if carry != 0u64 || p256_compare(out, modulus) >= 0i32 { ret p256_sub_raw(out, modulus) }
+    ret out
+}
+
+fn p256_sub_mod(a: P256Int, b: P256Int, modulus: P256Int) -> P256Int {
+    if p256_compare(a, b) >= 0i32 { ret p256_sub_raw(a, b) }
+    ret p256_sub_raw(modulus, p256_sub_raw(b, a))
+}
+
+fn p256_bit(a: P256Int, bit: usize) -> bool {
+    ret ((a.v[bit / 32usize] >> u32(bit % 32usize)) & 1u32) != 0u32
+}
+
+fn p256_mul_mod(a: P256Int, b: P256Int, modulus: P256Int) -> P256Int {
+    var out: P256Int = zero
+    var addend = a
+    var bit = 0usize
+    while bit < 256usize {
+        if p256_bit(b, bit) { out = p256_add_mod(out, addend, modulus) }
+        addend = p256_add_mod(addend, addend, modulus)
+        bit += 1usize
+    }
+    ret out
+}
+
+fn p256_pow_mod(a: P256Int, exponent: P256Int, modulus: P256Int) -> P256Int {
+    var out: P256Int = zero
+    out.v[0] = 1u32
+    var base = a
+    var bit = 0usize
+    while bit < 256usize {
+        if p256_bit(exponent, bit) { out = p256_mul_mod(out, base, modulus) }
+        base = p256_mul_mod(base, base, modulus)
+        bit += 1usize
+    }
+    ret out
+}
+
+fn p256_inverse(a: P256Int, modulus: P256Int) -> P256Int {
+    var two: P256Int = zero
+    two.v[0] = 2u32
+    ret p256_pow_mod(a, p256_sub_raw(modulus, two), modulus)
+}
+
+fn p256_from_be(bytes: []const u8) -> (P256Int, bool) {
+    var out: P256Int = zero
+    if bytes.len == 0usize || bytes.len > 32usize { ret (out, false) }
+    var i = 0usize
+    while i < bytes.len {
+        let from_end = bytes.len - 1usize - i
+        out.v[from_end / 4usize] = out.v[from_end / 4usize] | (u32(bytes[i]) << u32((from_end % 4usize) * 8usize))
+        i += 1usize
+    }
+    ret (out, true)
+}
+
+fn p256_field_add(a: P256Int, b: P256Int) -> P256Int { ret p256_add_mod(a, b, p256_p()) }
+fn p256_field_sub(a: P256Int, b: P256Int) -> P256Int { ret p256_sub_mod(a, b, p256_p()) }
+fn p256_field_mul(a: P256Int, b: P256Int) -> P256Int { ret p256_mul_mod(a, b, p256_p()) }
+fn p256_field_square(a: P256Int) -> P256Int { ret p256_field_mul(a, a) }
+fn p256_field_double(a: P256Int) -> P256Int { ret p256_field_add(a, a) }
+
+fn p256_field_four(a: P256Int) -> P256Int { ret p256_field_double(p256_field_double(a)) }
+fn p256_field_eight(a: P256Int) -> P256Int { ret p256_field_double(p256_field_four(a)) }
+
+fn p256_point_double(point: P256Point) -> P256Point {
+    if p256_zero(point.z) || p256_zero(point.y) { ret zero }
+    let delta = p256_field_square(point.z)
+    let gamma = p256_field_square(point.y)
+    let beta = p256_field_mul(point.x, gamma)
+    let product = p256_field_mul(p256_field_sub(point.x, delta), p256_field_add(point.x, delta))
+    let alpha = p256_field_add(p256_field_double(product), product)
+    let x = p256_field_sub(p256_field_square(alpha), p256_field_eight(beta))
+    let z = p256_field_sub(p256_field_sub(p256_field_square(p256_field_add(point.y, point.z)), gamma), delta)
+    let y = p256_field_sub(p256_field_mul(alpha, p256_field_sub(p256_field_four(beta), x)), p256_field_eight(p256_field_square(gamma)))
+    ret P256Point { x: x, y: y, z: z }
+}
+
+fn p256_point_add_mixed(point: P256Point, affine: P256Affine) -> P256Point {
+    if p256_zero(point.z) {
+        var one: P256Int = zero
+        one.v[0] = 1u32
+        ret P256Point { x: affine.x, y: affine.y, z: one }
+    }
+    let zz = p256_field_square(point.z)
+    let u = p256_field_mul(affine.x, zz)
+    let s = p256_field_mul(affine.y, p256_field_mul(point.z, zz))
+    let h = p256_field_sub(u, point.x)
+    if p256_zero(h) {
+        if p256_equal(s, point.y) { ret p256_point_double(point) }
+        ret zero
+    }
+    let hh = p256_field_square(h)
+    let i = p256_field_four(hh)
+    let j = p256_field_mul(h, i)
+    let r = p256_field_double(p256_field_sub(s, point.y))
+    let v = p256_field_mul(point.x, i)
+    let x = p256_field_sub(p256_field_sub(p256_field_square(r), j), p256_field_double(v))
+    let y = p256_field_sub(p256_field_mul(r, p256_field_sub(v, x)), p256_field_double(p256_field_mul(point.y, j)))
+    let z = p256_field_sub(p256_field_sub(p256_field_square(p256_field_add(point.z, h)), zz), hh)
+    ret P256Point { x: x, y: y, z: z }
+}
+
+fn p256_public(public: P256PublicKey) -> (P256Affine, bool) {
+    var out: P256Affine = zero
+    if public.bytes[0] != 4u8 { ret (out, false) }
+    let (x, x_ok) = p256_from_be(public.bytes[1usize..33usize])
+    let (y, y_ok) = p256_from_be(public.bytes[33usize..65usize])
+    let modulus = p256_p()
+    if !x_ok || !y_ok || p256_compare(x, modulus) >= 0i32 || p256_compare(y, modulus) >= 0i32 { ret (out, false) }
+    let x3 = p256_field_mul(p256_field_square(x), x)
+    let three_x = p256_field_add(p256_field_double(x), x)
+    let rhs = p256_field_add(p256_field_sub(x3, three_x), p256_b())
+    if !p256_equal(p256_field_square(y), rhs) { ret (out, false) }
+    ret (P256Affine { x: x, y: y }, true)
+}
+
+fn p256_der_integer(encoded: []const u8, at: *usize) -> (P256Int, bool) {
+    var out: P256Int = zero
+    if *at + 2usize > encoded.len || encoded[*at] != 2u8 { ret (out, false) }
+    let length = usize(encoded[*at + 1usize])
+    *at += 2usize
+    if length == 0usize || length > 33usize || *at + length > encoded.len { ret (out, false) }
+    var value = encoded[*at..*at + length]
+    *at += length
+    if (value[0] & 128u8) != 0u8 { ret (out, false) }
+    if value.len > 1usize && value[0] == 0u8 {
+        if (value[1] & 128u8) == 0u8 { ret (out, false) }
+        value = value[1usize..]
+    }
+    let (parsed, parsed_ok) = p256_from_be(value)
+    if !parsed_ok || p256_zero(parsed) || p256_compare(parsed, p256_n()) >= 0i32 { ret (out, false) }
+    ret (parsed, true)
+}
+
+fn p256_signature(encoded: []const u8) -> (P256Int, P256Int, bool) {
+    var empty: P256Int = zero
+    if encoded.len < 8usize || encoded[0] != 48u8 || usize(encoded[1]) + 2usize != encoded.len { ret (empty, empty, false) }
+    var at = 2usize
+    let (r, r_ok) = p256_der_integer(encoded, &at)
+    let (s, s_ok) = p256_der_integer(encoded, &at)
+    if !r_ok || !s_ok || at != encoded.len { ret (empty, empty, false) }
+    ret (r, s, true)
+}
+
+fn p256_joint_mul(u1: P256Int, u2: P256Int, public: P256Affine) -> P256Point {
+    let base = p256_base()
+    var out: P256Point = zero
+    var bit = 256usize
+    while bit > 0usize {
+        bit -= 1usize
+        out = p256_point_double(out)
+        if p256_bit(u1, bit) { out = p256_point_add_mixed(out, base) }
+        if p256_bit(u2, bit) { out = p256_point_add_mixed(out, public) }
+    }
+    ret out
+}
+
+fn p256_verify(public: P256PublicKey, message: []const u8, signature_der: []const u8) -> bool {
+    let (point, point_ok) = p256_public(public)
+    let (r, s, signature_ok) = p256_signature(signature_der)
+    if !point_ok || !signature_ok { ret false }
+    let digest = hash.sha256(message)
+    let (z, z_ok) = p256_from_be(digest[0..])
+    if !z_ok { ret false }
+    let order = p256_n()
+    let inverse = p256_inverse(s, order)
+    let u1 = p256_mul_mod(z, inverse, order)
+    let u2 = p256_mul_mod(r, inverse, order)
+    let result = p256_joint_mul(u1, u2, point)
+    if p256_zero(result.z) { ret false }
+    let z_inverse = p256_inverse(result.z, p256_p())
+    var x = p256_field_mul(result.x, p256_field_square(z_inverse))
+    if p256_compare(x, order) >= 0i32 { x = p256_sub_raw(x, order) }
+    ret p256_equal(x, r)
 }

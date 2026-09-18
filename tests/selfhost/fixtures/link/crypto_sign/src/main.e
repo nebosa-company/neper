@@ -1,7 +1,8 @@
 // `e.crypto.sign`: Ed25519 against RFC 8032 section 7.1 tests 1-3 (public key from
 // the seed, the signature byte for byte, verification), then the refusals: a flipped
 // signature bit, a changed message, a non-canonical public key, the identity as a
-// public key (small order), and S at L. Every check has its own exit code.
+// public key, and S at L. RFC 6979's P-256/SHA-256 sample pins ECDSA verification,
+// strict DER and invalid-point rejection. Every check has its own exit code.
 use e.os
 use e.mem
 use e.crypto.sign as sign
@@ -78,5 +79,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if sign.ed25519_verify(pk, m3[0..], bad) { os.exit(35) }
+    let p256_public_bytes = "\x04\x60\xfe\xd4\xba\x25\x5a\x9d\x31\xc9\x61\xeb\x74\xc6\x35\x6d\x68\xc0\x49\xb8\x92\x3b\x61\xfa\x6c\xe6\x69\x62\x2e\x60\xf2\x9f\xb6\x79\x03\xfe\x10\x08\xb8\xbc\x99\xa4\x1a\xe9\xe9\x56\x28\xbc\x64\xf2\xf1\xb2\x0c\x2d\x7e\x9f\x51\x77\xa3\xc2\x94\xd4\x46\x22\x99"
+    let p256_signature = "\x30\x46\x02\x21\x00\xef\xd4\x8b\x2a\xac\xb6\xa8\xfd\x11\x40\xdd\x9c\xd4\x5e\x81\xd6\x9d\x2c\x87\x7b\x56\xaa\xf9\x91\xc3\x4d\x0e\xa8\x4e\xaf\x37\x16\x02\x21\x00\xf7\xcb\x1c\x94\x2d\x65\x7c\x41\xd4\x36\xc7\xa1\xb6\xe2\x9f\x65\xf3\xe9\x00\xdb\xb9\xaf\xf4\x06\x4d\xc4\xab\x2f\x84\x3a\xcd\xa8"
+    var p256_public: sign.P256PublicKey = zero
+    i = 0usize
+    while i < 65usize {
+        p256_public.bytes[i] = p256_public_bytes[i]
+        i += 1usize
+    }
+    if !sign.p256_verify(p256_public, "sample", p256_signature) { os.exit(36) }
+    var bad_p256 = p256_public
+    bad_p256.bytes[20] = bad_p256.bytes[20] ^ 1u8
+    if sign.p256_verify(bad_p256, "sample", p256_signature) { os.exit(37) }
+    if sign.p256_verify(p256_public, "test", p256_signature) { os.exit(38) }
+    if sign.p256_verify(p256_public, "sample", p256_signature[..p256_signature.len - 1usize]) { os.exit(39) }
     ret ok
 }

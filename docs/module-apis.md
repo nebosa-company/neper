@@ -1432,16 +1432,19 @@ The sealed representation is ciphertext followed by the 16-byte authentication t
 type Ed25519PublicKey = struct { bytes: [32]u8 }
 type Ed25519SecretKey = struct { bytes: [32]u8 }
 type Ed25519Signature = struct { bytes: [64]u8 }
+type P256PublicKey = struct { bytes: [65]u8 }
 error InvalidKey
 error InvalidSignature
 
 fn ed25519_public_from_secret(secret: Ed25519SecretKey) -> (Ed25519PublicKey, err)
 fn ed25519_sign(secret: Ed25519SecretKey, message: []const u8) -> (Ed25519Signature, err)
 fn ed25519_verify(public: Ed25519PublicKey, message: []const u8, signature: Ed25519Signature) -> bool
+fn p256_verify(public: P256PublicKey, message: []const u8, signature_der: []const u8) -> bool
 ```
 
 `Ed25519SecretKey.bytes` is the 32-byte seed form. Verification rejects non-canonical
-encodings and small-order public keys.
+encodings and small-order public keys. `P256PublicKey` is the uncompressed SEC1 point;
+P-256 verification hashes with SHA-256 and accepts strict DER ECDSA signatures.
 
 ### `e.crypto.kx`
 
