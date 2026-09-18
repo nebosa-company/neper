@@ -11873,3 +11873,24 @@ This completes the D575-D579 batch. The generated progress page is refreshed to
 compiler 86.92, modules 76.71 and tooling 83.12, crediting the wider semantic gate
 and D578's controlled process path without claiming the remaining SL05 drain edge,
 variant-composed spec surfaces or deferred-library fixture manifest.
+
+## D580 -- Process capture has a bounded final drain
+
+`e.os.pipe_read` now gives both hosts the same zero-time pipe operation: bytes already
+ready are read, a live empty writer reports `WouldBlock`, and closed writers report EOF.
+Windows uses `PeekNamedPipe` because its socket poller cannot accept anonymous pipes;
+Linux uses a zero-time `poll(2)` before `read(2)`. Linux group termination also treats an
+already-empty group as success, making cleanup idempotent after the direct child is reaped.
+
+`e.proc.run` drains both streams without blocking while a waiter owns the direct child.
+After child reaping, child-only mode allows a fixed final drain and locally closes writers
+still retained by descendants, recording truncation. Strict mode terminates the established
+process group/job, honours its grace, forces the remainder and then performs the same bounded
+drain. The real-child fixture spawns a descendant that holds both capture writers and proves
+the child-only and contained outcomes on both hosts. The remaining SL05 gap is the explicit
+full-grace case where a contained descendant ignores cooperative termination.
+
+The Linux static gate is re-pinned for the delivered interface and supervisor bodies:
+the sc500k debug arena high-water moves from 2273 to 2274 MB (under 0.05%), while its
+2,979,824-byte image and both release measurements remain unchanged. The zero-growth
+gate makes that one-megabyte allocator boundary an explicit D580 cost rather than noise.

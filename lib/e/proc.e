@@ -5,10 +5,9 @@
 // Everything here is `e.os` with the shape a caller wants rather than the shape the host has:
 // a program and its arguments rather than an argv, three streams rather than a `Stdio`, and
 // the pipes that `spawn_piped` opens closed on the side that is not the caller's. The one
-// thing this file adds that `e.os` does not have is the second reader. A child that writes to
-// both of its streams will fill one pipe while the parent is blocked on the other, and then
-// neither moves; so `output` drains them on two threads, which is the only way two pipes can
-// be read at once without a poller that both hosts have for pipes.
+// thing this file adds that `e.os` does not have is supervision. Legacy `output` drains on two
+// threads; `run` uses the host-neutral non-blocking pipe read so it can stop after a bounded
+// drain even when an uncontained descendant retains a writer.
 //
 use e.cancel
 use e.mem
@@ -61,6 +60,11 @@ const DEFAULT_OUTPUT_LIMIT: usize = 1048576usize
 // needs more, so its stack is small.
 const DRAIN_STACK: usize = 262144usize
 
+// Once the direct child is reaped (and contained descendants have been ended), this is long
+// enough to collect bytes already in the pipes without letting a leaked writer own the call.
+const RUN_DRAIN_NS: i64 = 100000000i64
+const RUN_POLL_NS: i64 = 1000000i64
+
 // What one stream is drained into, by whichever thread is reading it. `overflowed` is set the
 // moment a byte arrives that the buffer has no room for, and the child is ended then rather
 // than read to exhaustion: a program producing more than it was allowed is not one to wait on.
@@ -72,6 +76,8 @@ type Drain = struct {
     buffer: []u8,
     filled: usize,
     overflowed: bool,
+    cut_short: bool,
+    active: bool,
     failure: err,
 }
 
@@ -369,15 +375,10 @@ fn spawn_piped_group(a: *mem.Arena, command: Command) -> (Child, os.ProcGroup, e
     ret (child, group, ok)
 }
 
-type RunWatch = struct {
-    control: cancel.Control,
-    done: *const cancel.Token,
+type RunWait = struct {
     process: os.Proc,
-    group: *const os.ProcGroup,
-    contain_tree: bool,
-    grace: time.Duration,
-    triggered: bool,
-    outcome: Outcome,
+    done: *cancel.Token,
+    status: i32,
     failure: err,
 }
 
@@ -386,57 +387,50 @@ fn terminate_run(process: os.Proc, group: *const os.ProcGroup, contain_tree: boo
     ret os.kill(process)
 }
 
-// Cancellation is watched separately because either pipe reader may be blocked. A
-// child-only run has no portable gentle signal, so it ends immediately; a contained
-// run uses the host's cooperative group termination before the caller's grace and a
-// forced termination after it.
-fn watch_run(w: *RunWatch) {
-    if w.control.token == nil && !w.control.has_deadline { ret }
-    while !cancel.requested(w.done) {
-        var now: time.Instant = zero
-        if w.control.has_deadline {
-            let (current, clock_error) = time.monotonic()
-            if clock_error != ok {
-                w.failure = clock_error
-                let ended = terminate_run(w.process, w.group, w.contain_tree, true)
+// Read every byte currently available without ever beginning a blocking read. Reaching the
+// limit needs one probe byte to distinguish exact fit from overflow, just like legacy output.
+fn drain_ready(d: *Drain) {
+    while d.active {
+        if d.filled == d.buffer.len {
+            var probe: [1]u8 = zero
+            let (count, read_error) = os.pipe_read(d.file, probe[..])
+            if read_error == os.WouldBlock { ret }
+            if read_error != ok {
+                d.failure = read_error
+                d.active = false
                 ret
             }
-            now = current
-        }
-        let stopped = cancel.check(w.control, now)
-        if stopped == ok { continue }
-        w.triggered = true
-        if stopped == cancel.Cancelled {
-            w.outcome = .Cancelled
-        } else {
-            w.outcome = .TimedOut
-        }
-        if !w.contain_tree || w.grace.nanos <= 0i64 {
-            w.failure = terminate_run(w.process, w.group, w.contain_tree, true)
-            ret
-        }
-        let gentle = terminate_run(w.process, w.group, true, false)
-        if gentle != ok {
-            w.failure = gentle
-            ret
-        }
-        let (started, start_error) = time.monotonic()
-        if start_error != ok {
-            w.failure = start_error
-            let forced = terminate_run(w.process, w.group, true, true)
-            ret
-        }
-        while true {
-            let (current, clock_error) = time.monotonic()
-            if clock_error != ok {
-                w.failure = clock_error
-                break
+            if count == 0usize {
+                d.active = false
+                ret
             }
-            if time.instant_diff(current, started).nanos >= w.grace.nanos { break }
+            d.overflowed = true
+            d.active = false
+            ret
         }
-        let forced = terminate_run(w.process, w.group, true, true)
-        ret
+        let (count, read_error) = os.pipe_read(d.file, d.buffer[d.filled..])
+        if read_error == os.WouldBlock { ret }
+        if read_error != ok {
+            d.failure = read_error
+            d.active = false
+            ret
+        }
+        if count == 0usize {
+            d.active = false
+            ret
+        }
+        d.filled += count
     }
+}
+
+// Waiting is the one blocking operation left in `run`; publishing through the token makes the
+// status visible before the supervisor observes completion, and the wake avoids a poll delay.
+fn wait_run(w: *RunWait) {
+    let (status, wait_error) = os.wait(os.Proc { raw: w.process.raw })
+    w.status = status
+    w.failure = wait_error
+    cancel.request(w.done)
+    os.wake_one_u32(&w.done.state)
 }
 
 fn run(a: *mem.Arena, command: Command, options: RunOptions) -> (RunResult, err) {
@@ -518,78 +512,149 @@ fn run_started(
 
     var stdout_drain: Drain = zero
     stdout_drain.file = child.streams.stdout
-    stdout_drain.process = child.process
-    stdout_drain.group = &group
-    stdout_drain.contain_tree = contain_tree
     stdout_drain.buffer = stdout_buffer
+    stdout_drain.active = true
     var stderr_drain: Drain = zero
     stderr_drain.file = child.streams.stderr
-    stderr_drain.process = child.process
-    stderr_drain.group = &group
-    stderr_drain.contain_tree = contain_tree
     stderr_drain.buffer = stderr_buffer
-
-    let (stderr_worker, stderr_thread_error) = os.thread_create[Drain](
-        drain,
-        &stderr_drain,
-        DRAIN_STACK,
-    )
-    if stderr_thread_error != ok {
-        let ended = terminate_run(child.process, &group, contain_tree, true)
-        let closed_stdout = os.close(child.streams.stdout)
-        let closed_stderr = os.close(child.streams.stderr)
-        let (status, waited) = os.wait(os.Proc { raw: child.process.raw })
-        ret (result, stderr_thread_error)
-    }
+    stderr_drain.active = true
 
     var done = cancel.token()
-    var watch: RunWatch = zero
-    watch.control = options.control
-    watch.done = &done
-    watch.process = child.process
-    watch.group = &group
-    watch.contain_tree = contain_tree
-    watch.grace = options.terminate_grace
-    let (watch_worker, watch_error) = os.thread_create[RunWatch](watch_run, &watch, DRAIN_STACK)
-    if watch_error != ok {
+    var waiting: RunWait = zero
+    waiting.process = child.process
+    waiting.done = &done
+    let (wait_worker, wait_thread_error) = os.thread_create[RunWait](wait_run, &waiting, DRAIN_STACK)
+    if wait_thread_error != ok {
         let ended = terminate_run(child.process, &group, contain_tree, true)
-        let joined_stderr = os.thread_join(stderr_worker)
         let closed_stdout = os.close(child.streams.stdout)
         let closed_stderr = os.close(child.streams.stderr)
         let (status, waited) = os.wait(os.Proc { raw: child.process.raw })
-        ret (result, watch_error)
+        ret (result, wait_thread_error)
     }
 
-    drain(&stdout_drain)
-    let joined_stderr = os.thread_join(stderr_worker)
+    var failure = ok
+    var outcome = Outcome.Exited
+    var outcome_set = false
+    var termination_started = false
+    var forced = false
+    var force_at: time.Instant = zero
+    var drain_started = false
+    var drain_until: time.Instant = zero
+
+    while true {
+        let finished = cancel.requested(&done)
+        drain_ready(&stdout_drain)
+        drain_ready(&stderr_drain)
+
+        if failure == ok && stdout_drain.failure != ok { failure = stdout_drain.failure }
+        if failure == ok && stderr_drain.failure != ok { failure = stderr_drain.failure }
+
+        let overflowed = stdout_drain.overflowed || stderr_drain.overflowed
+        if overflowed {
+            if !outcome_set {
+                outcome = .OutputLimit
+                outcome_set = true
+            }
+            if !forced && (!finished || contain_tree) {
+                let ended = terminate_run(child.process, &group, contain_tree, true)
+                if failure == ok && ended != ok { failure = ended }
+            }
+            termination_started = true
+            forced = true
+        }
+
+        let (now, clock_error) = time.monotonic()
+        if clock_error != ok {
+            if failure == ok { failure = clock_error }
+            if !forced && (!finished || contain_tree) {
+                let ended = terminate_run(child.process, &group, contain_tree, true)
+                if failure == ok && ended != ok { failure = ended }
+            }
+            stdout_drain.cut_short = stdout_drain.active
+            stderr_drain.cut_short = stderr_drain.active
+            stdout_drain.active = false
+            stderr_drain.active = false
+            break
+        }
+
+        if !finished && !outcome_set {
+            let stopped = cancel.check(options.control, now)
+            if stopped != ok {
+                if stopped == cancel.Cancelled {
+                    outcome = .Cancelled
+                } else {
+                    outcome = .TimedOut
+                }
+                outcome_set = true
+                termination_started = true
+                if contain_tree && options.terminate_grace.nanos > 0i64 {
+                    let gentle = terminate_run(child.process, &group, true, false)
+                    if failure == ok && gentle != ok { failure = gentle }
+                    force_at = time.instant_add(now, options.terminate_grace)
+                } else {
+                    let ended = terminate_run(child.process, &group, contain_tree, true)
+                    if failure == ok && ended != ok { failure = ended }
+                    forced = true
+                }
+            }
+        }
+
+        // A contained run owns the descendants even after its direct child exits. Give them
+        // the same grace, then force the group; child-only mode deliberately leaves them alone.
+        if finished && contain_tree && !termination_started {
+            termination_started = true
+            if options.terminate_grace.nanos > 0i64 {
+                let gentle = terminate_run(child.process, &group, true, false)
+                if failure == ok && gentle != ok { failure = gentle }
+                force_at = time.instant_add(now, options.terminate_grace)
+            } else {
+                let ended = terminate_run(child.process, &group, true, true)
+                if failure == ok && ended != ok { failure = ended }
+                forced = true
+            }
+        }
+
+        if termination_started && !forced && time.instant_cmp(now, force_at) >= 0i32 {
+            let ended = terminate_run(child.process, &group, contain_tree, true)
+            if failure == ok && ended != ok { failure = ended }
+            forced = true
+        }
+
+        if finished && (!contain_tree || forced) && !drain_started {
+            drain_started = true
+            drain_until = time.instant_add(now, time.Duration { nanos: RUN_DRAIN_NS })
+        }
+        if drain_started && time.instant_cmp(now, drain_until) >= 0i32 {
+            stdout_drain.cut_short = stdout_drain.active
+            stderr_drain.cut_short = stderr_drain.active
+            stdout_drain.active = false
+            stderr_drain.active = false
+        }
+
+        if finished && !stdout_drain.active && !stderr_drain.active && (!contain_tree || forced) {
+            break
+        }
+        let paused = os.wait_u32(&done.state, 0u32, RUN_POLL_NS)
+        if failure == ok && paused != ok && paused != os.Timeout { failure = paused }
+    }
+
     let closed_stdout = os.close(child.streams.stdout)
     let closed_stderr = os.close(child.streams.stderr)
-    let (status, wait_error) = os.wait(os.Proc { raw: child.process.raw })
-    cancel.request(&done)
-    let watch_join_error = os.thread_join(watch_worker)
+    let wait_join_error = os.thread_join(wait_worker)
 
-    result.status = status
-    result.status_known = wait_error == ok
+    result.status = waiting.status
+    result.status_known = waiting.failure == ok
     result.stdout = stdout_buffer[0usize..stdout_drain.filled]
     result.stderr = stderr_buffer[0usize..stderr_drain.filled]
     result.stdout_bytes = u64(stdout_drain.filled)
     result.stderr_bytes = u64(stderr_drain.filled)
     if stdout_drain.overflowed { result.stdout_bytes += 1u64 }
     if stderr_drain.overflowed { result.stderr_bytes += 1u64 }
-    result.truncated = stdout_drain.overflowed || stderr_drain.overflowed
-    if watch.triggered {
-        result.outcome = watch.outcome
-    } else if result.truncated {
-        result.outcome = .OutputLimit
-    } else {
-        result.outcome = .Exited
-    }
+    result.truncated = stdout_drain.overflowed || stderr_drain.overflowed || stdout_drain.cut_short || stderr_drain.cut_short
+    result.outcome = outcome
 
-    if wait_error != ok { ret (result, wait_error) }
-    if joined_stderr != ok { ret (result, joined_stderr) }
-    if stdout_drain.failure != ok { ret (result, stdout_drain.failure) }
-    if stderr_drain.failure != ok { ret (result, stderr_drain.failure) }
-    if watch.failure != ok { ret (result, watch.failure) }
-    if watch_join_error != ok { ret (result, watch_join_error) }
+    if waiting.failure != ok { ret (result, waiting.failure) }
+    if wait_join_error != ok { ret (result, wait_join_error) }
+    if failure != ok { ret (result, failure) }
     ret (result, ok)
 }

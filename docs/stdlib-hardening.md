@@ -140,9 +140,15 @@ D578 delivers `RunOptions` and `run` over the two hosts' process-group/job suppo
 independent bounded prefixes, observed byte counts, explicit exit/cancel/timeout/limit
 outcomes, pre-start control checks, live deadline termination and negative-grace
 rejection are exercised by `link/proc_output`. The module remains partial: a child-only
-descendant retaining an inherited pipe still needs the bounded post-termination drain
-above, and the fixture does not yet exercise a descendant that ignores gentle group
-termination through the whole grace interval.
+descendant retaining an inherited pipe still needs the bounded post-termination drain.
+
+D580 closes that drain gap with `os.pipe_read`, a zero-time readiness probe on both hosts.
+`run` reaps on a waiter while it drains ready bytes, then closes any capture writer still
+held after a fixed bounded drain and records truncation. The real-child fixture now spawns
+a descendant that retains both writers: child-only mode returns bounded and truncated,
+while process-group/job mode ends the descendant and reaches ordinary EOF. The remaining
+SL05 acceptance gap is a descendant that ignores gentle group termination through the
+complete grace interval.
 
 ## SL06 — handle-anchored filesystem operations
 

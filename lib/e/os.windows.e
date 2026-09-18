@@ -844,6 +844,12 @@ extern fn raw_cancel_io(handle: usize) -> i32
 @import("kernel32.dll", "CreatePipe")
 extern fn raw_create_pipe(reading: *usize, writing: *usize, security: usize, size: u32) -> i32
 
+@import("kernel32.dll", "PeekNamedPipe")
+extern fn raw_peek_pipe(handle: usize, buffer: usize, size: u32, bytes_read: usize, available: *u32, left: usize) -> i32
+
+@import("kernel32.dll", "ReadFile")
+extern fn raw_pipe_read(handle: usize, buffer: *u8, size: u32, bytes_read: *u32, overlapped: usize) -> i32
+
 @import("kernel32.dll", "DuplicateHandle")
 extern fn raw_duplicate_handle(source_process: usize, source: usize, target_process: usize, duplicate: *usize, access: u32, inherit: i32, options: u32) -> i32
 
@@ -2182,6 +2188,33 @@ fn pipe() -> (File, File, err) {
     reading.raw = read_handle
     writing.raw = write_handle
     ret (reading, writing, ok)
+}
+
+// A readiness probe followed by a read no larger than the bytes the probe observed. Anonymous
+// pipes use the named-pipe implementation on this host, so `PeekNamedPipe` is the one portable
+// way to avoid beginning a synchronous read that an inherited writer could hold forever.
+fn pipe_read(f: File, buffer: []u8) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    var available = 0u32
+    if raw_peek_pipe(f.raw, 0usize, 0u32, 0usize, &available, 0usize) == 0i32 {
+        let code = raw_last_error()
+        // ERROR_BROKEN_PIPE / ERROR_NO_DATA: every writer is gone, which is ordinary EOF.
+        if code == 109u32 || code == 232u32 { ret (0usize, ok) }
+        record_error_detail(i32(code))
+        ret (0usize, error_of_code(code))
+    }
+    if available == 0u32 { ret (0usize, WouldBlock) }
+    var wanted = buffer.len
+    if wanted > usize(available) { wanted = usize(available) }
+    if wanted > 4294967295usize { wanted = 4294967295usize }
+    var taken = 0u32
+    if raw_pipe_read(f.raw, &buffer[0usize], u32(wanted), &taken, 0usize) == 0i32 {
+        let code = raw_last_error()
+        if code == 109u32 || code == 232u32 { ret (0usize, ok) }
+        record_error_detail(i32(code))
+        ret (0usize, error_of_code(code))
+    }
+    ret (usize(taken), ok)
 }
 
 // A second identity for the same open file (D349): the OS's duplication, owed its own

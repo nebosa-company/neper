@@ -1572,6 +1572,7 @@ fn canonical(a: *mem.Arena, path: str) -> (str, err)
 fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err
 fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
 fn pipe() -> (File, File, err)
+fn pipe_read(f: File, buf: []u8) -> (usize, err)
 fn dup(f: File) -> (File, err)
 fn spawn(a: *mem.Arena, argv: []const str, stdio: Stdio) -> (Proc, err)
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err)
@@ -1733,6 +1734,10 @@ every other resource here carries a handle: what it retains is a set, and no hos
 single handle that is one. Only handles the host can report readiness for may be registered
 — sockets everywhere, and pipes where the host has them; a handle it cannot poll comes back
 as a failed event rather than being ignored.
+`pipe_read` is the cross-host zero-time pipe probe: it returns `WouldBlock` while a writer
+exists but no byte is ready, zero on EOF, and otherwise reads only bytes already available.
+It is what lets process supervision bound its final drain on Windows, whose poller accepts
+sockets but not anonymous pipe handles.
 
 Every failing `e.os` call records the native code and portable classification in
 thread-local runtime state. `last_error_detail` copies that state into an explicit

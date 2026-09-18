@@ -11,7 +11,7 @@
    "workload": "sc500k",
    "mode": "debug",
    "command": "/mnt/d/Temp/claude/scratch475/neper-linux emit-executable /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/src/main.e /mnt/d/repos/neper-cot x64 linux /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/static-debug -j 8 --stats --json",
-   "arena_mb": 2273,
+   "arena_mb": 2274,
    "image_bytes": 2979824
   },
   {

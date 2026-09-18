@@ -600,7 +600,7 @@ Pop-Location
 if ($fsBasicsExit -ne 0) { throw "e.fs answered wrongly: exit $fsBasicsExit" }
 # `e.proc` against a real child, which is the fixture's own image. Besides the legacy output
 # path, `run` checks independent limits, pre-start cancellation, a live contained deadline,
-# explicit outcomes and invalid grace. A child that never stops proves each limit ends it.
+# explicit outcomes, invalid grace and a descendant retaining both capture writers.
 $procPath = Join-Path $testBuild 'proc-output-selfhost.exe'
 $procWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\proc_output\src\main.e') $repo 'x64' 'windows' $procPath
 if ($LASTEXITCODE -ne 0 -or $procWritten -ne 'executable written') { throw 'e.proc emission failed' }

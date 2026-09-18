@@ -4,6 +4,7 @@
 // and the parent checks each through the module rather than through `e.os`.
 
 use e.cancel
+use e.atomic
 use e.mem
 use e.os
 use e.str
@@ -74,6 +75,29 @@ fn child(a: *mem.Arena, what: str) {
     }
     if str.eq(what, "np-hang") {
         while true {}
+    }
+    if str.eq(what, "np-pipe-writer") {
+        // Long enough to distinguish the supervisor's bounded drain from waiting for EOF.
+        var sleeper: Atomic[u32] = zero
+        let paused = os.wait_u32(&sleeper, 0u32, 750000000i64)
+        os.exit(0i32)
+    }
+    if str.eq(what, "np-orphan") {
+        let (image, image_error) = os.executable_path(a)
+        if image_error != ok { os.exit(95i32) }
+        var descendant_args: [2]str = zero
+        descendant_args[0usize] = image
+        descendant_args[1usize] = "np-pipe-writer"
+        var descendant_options: os.SpawnOptions = zero
+        descendant_options.argv = descendant_args[..]
+        descendant_options.inherit_env = true
+        descendant_options.stdio.stdin = os.stdin()
+        descendant_options.stdio.stdout = os.stdout()
+        descendant_options.stdio.stderr = os.stderr()
+        let (descendant, spawn_error) = os.spawn_with_options(a, descendant_options)
+        if spawn_error != ok { os.exit(94i32) }
+        // Deliberately do not wait: the descendant inherited both capture writers.
+        os.exit(0i32)
     }
     os.exit(96i32)
 }
@@ -284,5 +308,38 @@ fn main(a: *mem.Arena) -> err {
     invalid_options.terminate_grace = time.Duration { nanos: -1i64 }
     let (_, grace_error) = proc.run(a, command, invalid_options)
     if grace_error != time.Invalid { os.exit(104i32) }
+
+    // A child-only descendant may outlive the direct child and retain both pipe writers.
+    // `run` returns after its fixed drain rather than waiting for that descendant's EOF.
+    args[0usize] = "np-orphan"
+    command.args = args[..]
+    let (orphan_started, orphan_clock_error) = time.monotonic()
+    if orphan_clock_error != ok { os.exit(105i32) }
+    var orphan_options: proc.RunOptions = zero
+    let (orphaned, orphan_error) = proc.run(a, command, orphan_options)
+    let (orphan_finished, orphan_finish_error) = time.monotonic()
+    if orphan_finish_error != ok { os.exit(106i32) }
+    if orphan_error != ok || orphaned.outcome != .Exited || !orphaned.status_known || orphaned.status != 0i32 {
+        os.exit(107i32)
+    }
+    if !orphaned.truncated { os.exit(108i32) }
+    if time.instant_diff(orphan_finished, orphan_started).nanos >= 500000000i64 { os.exit(113i32) }
+
+    // Strict containment owns the same descendant: it gets the configured grace and is then
+    // forced, so the inherited writers close naturally instead of being truncated locally.
+    let (contained_started, contained_clock_error) = time.monotonic()
+    if contained_clock_error != ok { os.exit(109i32) }
+    var contained_options: proc.RunOptions = zero
+    contained_options.contain_tree = true
+    contained_options.terminate_grace = time.millis(20i64)
+    let (contained, contained_error) = proc.run(a, command, contained_options)
+    let (contained_finished, contained_finish_error) = time.monotonic()
+    if contained_finish_error != ok { os.exit(110i32) }
+    if contained_error != ok || contained.outcome != .Exited || !contained.status_known || contained.status != 0i32 {
+        os.exit(111i32)
+    }
+    if contained.truncated || time.instant_diff(contained_finished, contained_started).nanos >= 500000000i64 {
+        os.exit(112i32)
+    }
     ret ok
 }

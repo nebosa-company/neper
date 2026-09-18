@@ -130,6 +130,7 @@ const SYS_MSYNC: usize = 26usize
 const SYS_INOTIFY_ADD_WATCH: usize = 254usize
 const SYS_INOTIFY_INIT1: usize = 294usize
 const SYS_FCNTL: usize = 72usize
+const SYS_POLL: usize = 7usize
 const SYS_ACCEPT4: usize = 288usize
 const SYS_EPOLL_WAIT: usize = 232usize
 const SYS_EPOLL_CTL: usize = 233usize
@@ -1552,7 +1553,10 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
     var signal = SIGTERM
     if force { signal = SIGKILL }
     let negated = 0usize -% group.raw
-    ret from_errno(syscall(SYS_KILL, negated, signal, 0usize, 0usize, 0usize, 0usize))
+    let result = syscall(SYS_KILL, negated, signal, 0usize, 0usize, 0usize, 0usize)
+    // ESRCH means the group is already empty, so termination has achieved its postcondition.
+    if result == -3isize { ret ok }
+    ret from_errno(result)
 }
 
 // A group identifier is not a handle here, so there is nothing to give back. The call exists
@@ -1626,6 +1630,21 @@ fn pipe() -> (File, File, err) {
     reading.raw = usize(pair[0usize])
     writing.raw = usize(pair[1usize])
     ret (reading, writing, ok)
+}
+
+// `pollfd` is two u32 words on x64: fd, then the input and output u16 masks. Keeping the
+// temporary in words avoids exporting a host-layout type for one zero-time readiness probe.
+fn pipe_read(f: File, buffer: []u8) -> (usize, err) {
+    if buffer.len == 0usize { ret (0usize, ok) }
+    var descriptor: [2]u32 = zero
+    descriptor[0usize] = u32(f.raw)
+    descriptor[1usize] = 1u32
+    let ready = syscall(SYS_POLL, mem.address_of(&descriptor[0usize]), 1usize, 0usize, 0usize, 0usize, 0usize)
+    if ready < 0isize { ret (0usize, from_errno(ready)) }
+    if ready == 0isize { ret (0usize, WouldBlock) }
+    let taken = syscall(SYS_READ, f.raw, mem.address_of(&buffer[0usize]), buffer.len, 0usize, 0usize, 0usize)
+    if taken < 0isize { ret (0usize, from_errno(taken)) }
+    ret (usize(taken), ok)
 }
 
 // A second identity for the same open file (D349): the OS's duplication, owed its own

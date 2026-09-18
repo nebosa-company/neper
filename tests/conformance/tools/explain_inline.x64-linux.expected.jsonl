@@ -109,7 +109,7 @@
 {"record":"inline","symbol":"e.os.poller_wake","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.poller_close","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.family_value","decision":"inlinable","reason":"at or under the cap","pass":2}
-{"record":"inline","symbol":"e.os.proc_group_terminate","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.proc_group_terminate","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.proc_group_close","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.file_unlock","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.page_size","decision":"inlinable","reason":"at or under the cap","pass":2}
