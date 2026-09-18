@@ -534,6 +534,21 @@ fn main(a: *mem.Arena) -> err {
     if leaf_size != 3u64 { os.exit(74i32) }
     if fs.walk_close(&deep_walk) != ok { os.exit(75i32) }
 
+    // Abandon a fresh recursive walk after one entry. Closing is what makes the rest of
+    // the traversal unreachable; it is safe to ask again and safe to close again, so a
+    // caller does not need to know whether the host buffered or streamed directories.
+    let (abandoned_start, abandoned_error) = fs.walk(a, "np-fs", deep_options)
+    if abandoned_error != ok { os.exit(76i32) }
+    var abandoned_walk = abandoned_start
+    let (abandoned_first, abandoned_more, abandoned_next_error) = fs.walk_next_err(&abandoned_walk)
+    if abandoned_next_error != ok { os.exit(77i32) }
+    if !abandoned_more { os.exit(78i32) }
+    if fs.walk_close(&abandoned_walk) != ok { os.exit(79i32) }
+    let (after_close, after_close_more, after_close_error) = fs.walk_next_err(&abandoned_walk)
+    if after_close_error != ok { os.exit(88i32) }
+    if after_close_more { os.exit(89i32) }
+    if fs.walk_close(&abandoned_walk) != ok { os.exit(107i32) }
+
     // A non-empty directory stays, so a recursive delete is the caller's to write.
     if fs.remove_dir(a, "np-fs") == ok { os.exit(80i32) }
     if fs.remove_file(a, "np-fs/deep/leaf.txt") != ok { os.exit(81i32) }

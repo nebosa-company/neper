@@ -11931,3 +11931,17 @@ can preserve the handle contract there. The lower-level `e.os` fixture still run
 mounted filesystem. This separates a host-filesystem limitation from the Linux target's
 native handle semantics without adding a race-prone path fallback. No production code
 changed; D582 closes the missing acceptance evidence.
+
+## D583 -- Walk abandonment has a tested close boundary
+
+The public `e.fs` fixture previously closed walks only after consuming every entry. That
+proved exhaustion but not the distinct promise that a caller may abandon traversal early.
+It now starts a fresh recursive walk, consumes one entry, calls `walk_close`, and proves a
+subsequent `walk_next_err` is terminal. A second close must also succeed, making cleanup
+idempotent for ordinary error paths.
+
+No implementation-specific handle count is asserted. The contract is deliberately about
+the public lifetime boundary, so an implementation may buffer a directory or stream it as
+long as close releases whatever remains and no later entry escapes. The existing
+implementation already met that rule; D583 adds the missing acceptance evidence without a
+production change.

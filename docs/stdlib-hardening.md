@@ -185,6 +185,11 @@ When link creation is available, `remove_at` removes the final link itself and t
 remains reachable through that moved root. This distinguishes handle authority from a
 path string remembered at `root` time.
 
+D583 exercises the other explicit lifetime boundary: a recursive walk is stopped after
+one entry and closed before exhaustion. Further iteration is terminal, and a second close
+is harmless. The same public fixture pins that behavior on both hosts without exposing
+whether a particular implementation buffers directory entries or holds native handles.
+
 ## SL07 — streaming HTTP and event streams
 
 ResponseStream separates headers from bounded incremental body reads. It owns the
