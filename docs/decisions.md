@@ -12674,3 +12674,16 @@ OS-intrinsics oracle reading `File.raw` and constructing a raw zero file outside
 public `os.stdin` value for the child's standard input. The process behavior under
 test is unchanged; the oracle now obeys the same representation boundary as user
 code.
+
+## D637 -- TLS stream adapters never fall back to plaintext
+
+`reader` and `writer` now expose authenticated application data only after a
+successful handshake. Writes fragment at the TLS 2^14 record limit; reads retain a
+decrypted record in stream-owned storage so arbitrarily small caller buffers neither
+lose bytes nor force unauthenticated publication. Empty application records are cover
+traffic, alerts and unexpected post-handshake messages are not returned as data, and
+every record direction keeps its own application sequence.
+
+The duplex fixture now sends `ping` and `pong` through the adapters after the live
+handshake. Calling either adapter before authentication or after terminal failure
+returns `Closed`; there is still no plaintext compatibility path.

@@ -43,6 +43,10 @@ type State = struct {
     complete: bool,
     failed: bool,
     closed: bool,
+    peer_closed: bool,
+    read_buffer: [16384]u8,
+    read_at: usize,
+    read_len: usize,
 }
 
 // RFC 8446 section 7.1's HKDF-Expand-Label over the one supported hash. The
@@ -817,17 +821,22 @@ fn send_protected(state: *State, keys: *TrafficKeys, content_type: u8, content: 
     ret ok
 }
 
-fn read_protected(state: *State, keys: *TrafficKeys, expected_type: u8, out: []u8) -> (usize, err) {
+fn read_protected_content(state: *State, keys: *TrafficKeys, out: []u8) -> (usize, u8, err) {
     var header: [5]u8 = zero
     let header_error = io.read_exact(&state.source, header[0..])
-    if header_error != ok { ret (0usize, Handshake) }
+    if header_error != ok { ret (0usize, 0u8, Handshake) }
     let sealed_len = (usize(header[3]) << 8usize) | usize(header[4])
-    if sealed_len > 16640usize { ret (0usize, Protocol) }
+    if sealed_len > 16640usize { ret (0usize, 0u8, Protocol) }
     var record: [16645]u8 = zero
     mem.copy[u8](record[..5usize], header[0..])
     let record_error = io.read_exact(&state.source, record[5usize..5usize + sealed_len])
-    if record_error != ok { ret (0usize, Handshake) }
+    if record_error != ok { ret (0usize, 0u8, Handshake) }
     let (length, content_type, open_error) = open_record(keys, record[..5usize + sealed_len], out)
+    ret (length, content_type, open_error)
+}
+
+fn read_protected(state: *State, keys: *TrafficKeys, expected_type: u8, out: []u8) -> (usize, err) {
+    let (length, content_type, open_error) = read_protected_content(state, keys, out)
     if open_error != ok { ret (0usize, open_error) }
     if content_type != expected_type { ret (0usize, Protocol) }
     ret (length, ok)
@@ -963,6 +972,9 @@ fn client(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ClientConfi
     state.complete = false
     state.failed = false
     state.closed = false
+    state.peer_closed = false
+    state.read_at = 0usize
+    state.read_len = 0usize
     ret (Stream { state: mem.cast[*void](state) }, ok)
 }
 
@@ -980,6 +992,9 @@ fn server(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ServerConfi
     state.complete = false
     state.failed = false
     state.closed = false
+    state.peer_closed = false
+    state.read_at = 0usize
+    state.read_len = 0usize
     ret (Stream { state: mem.cast[*void](state) }, ok)
 }
 
@@ -1007,4 +1022,65 @@ fn handshake(stream: *Stream) -> err {
     }
     state.complete = true
     ret ok
+}
+
+fn stream_read(ctx: *void, dst: []u8) -> (usize, err) {
+    let state = mem.cast[*State](ctx)
+    if state.closed || state.failed || !state.complete { ret (0usize, Closed) }
+    if state.peer_closed { ret (0usize, io.End) }
+    while state.read_at == state.read_len {
+        let (length, content_type, read_error) = read_protected_content(state, &state.read_keys, state.read_buffer[0..])
+        if read_error != ok {
+            state.failed = true
+            ret (0usize, read_error)
+        }
+        if content_type == 21u8 {
+            if length != 2usize || state.read_buffer[1] != 0u8 {
+                state.failed = true
+                ret (0usize, Protocol)
+            }
+            state.peer_closed = true
+            ret (0usize, io.End)
+        }
+        if content_type != 23u8 {
+            state.failed = true
+            ret (0usize, Protocol)
+        }
+        state.read_at = 0usize
+        state.read_len = length
+        // Empty application records are cover traffic, not end-of-stream.
+    }
+    var count = dst.len
+    let available = state.read_len - state.read_at
+    if count > available { count = available }
+    mem.copy[u8](dst[..count], state.read_buffer[state.read_at..state.read_at + count])
+    state.read_at += count
+    ret (count, ok)
+}
+
+fn stream_write(ctx: *void, src: []const u8) -> (usize, err) {
+    let state = mem.cast[*State](ctx)
+    if state.closed || state.peer_closed || state.failed || !state.complete { ret (0usize, Closed) }
+    var count = src.len
+    if count > 16384usize { count = 16384usize }
+    let write_error = send_protected(state, &state.write_keys, 23u8, src[..count])
+    if write_error != ok {
+        state.failed = true
+        ret (0usize, write_error)
+    }
+    ret (count, ok)
+}
+
+fn stream_flush(ctx: *void) -> err {
+    let state = mem.cast[*State](ctx)
+    if state.closed || state.failed || !state.complete { ret Closed }
+    ret io.flush(&state.sink)
+}
+
+fn reader(stream: *Stream) -> io.Reader {
+    ret io.Reader { ctx: stream.state, read: stream_read }
+}
+
+fn writer(stream: *Stream) -> io.Writer {
+    ret io.Writer { ctx: stream.state, write: stream_write, flush: stream_flush }
 }
