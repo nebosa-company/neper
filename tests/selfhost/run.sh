@@ -1204,6 +1204,13 @@ csv_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$csv_written" = 'executable written' ]
 chmod +x "$test_build/fmt-csv-selfhost"
 (cd "$fs_scratch" && "$test_build/fmt-csv-selfhost")
+# The first delivered `e.net.http` slice is its bounded SSE reader. A one-byte source
+# splits every multibyte scalar and CRLF pair while the fixture covers the event-stream
+# state machine, retained state, EOF rule and both limits.
+http_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http/src/main.e" "$repo" x64 linux "$test_build/net-http-selfhost")
+[ "$http_written" = 'executable written' ]
+chmod +x "$test_build/net-http-selfhost"
+"$test_build/net-http-selfhost"
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

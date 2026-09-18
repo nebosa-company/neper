@@ -1286,6 +1286,14 @@ Push-Location $fsScratch
 $csvExit = $LASTEXITCODE
 Pop-Location
 if ($csvExit -ne 0) { throw "an e.fmt.csv read or write answered wrongly: exit $csvExit" }
+# The first delivered `e.net.http` slice is its bounded SSE reader. A one-byte source
+# splits every multibyte scalar and CRLF pair while the fixture covers the event-stream
+# state machine, retained state, EOF rule and both limits.
+$httpPath = Join-Path $testBuild 'net-http-selfhost.exe'
+$httpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http\src\main.e') $repo 'x64' 'windows' $httpPath
+if ($LASTEXITCODE -ne 0 -or $httpWritten -ne 'executable written') { throw 'e.net.http emission failed' }
+& $httpPath
+if ($LASTEXITCODE -ne 0) { throw "an e.net.http SSE read answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

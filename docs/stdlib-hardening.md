@@ -237,6 +237,13 @@ Acceptance: one-byte reads, long-lived streams, event/line/body limit failure,
 chunked transfer boundaries, client disconnect/cancellation and bounded memory over
 many events. Neither SSE nor streaming HTTP requires HTTP/2 implementation.
 
+D588 delivers the pure SSE half first. Its arena-owned reader uses fixed line/event
+buffers, accepts CR, LF and CRLF incrementally, replaces malformed UTF-8, retains id/retry
+state and refuses line, event and retry-overflow bounds. The cross-host fixture feeds one
+byte per read, so the BOM, multibyte replacement and every CRLF boundary are genuinely
+split; it also pins comments, repeated data, empty and NUL ids, invalid retry fields and
+the no-dispatch-at-EOF rule. The network-facing HTTP response stream remains planned.
+
 ## SL08 — reusable cryptographic composition
 
 Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with

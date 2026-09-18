@@ -12021,3 +12021,17 @@ no deterministic unprivileged way to fail `MOVEFILE_WRITE_THROUGH` after the mov
 runner omits only this failure injection; its durable-success path remains mandatory.
 Linux's errno 22 detail now says `Unsupported`, matching the `e.os` result that
 `error_of_result` has always returned instead of contradicting it with `Invalid`.
+
+## D588 -- SSE is a bounded reader before HTTP owns a connection
+
+The first delivered `e.net.http` slice is the event-stream decoder because it needs only
+`e.io.Reader`; socket, TLS and response ownership can arrive without changing its state
+machine. Construction allocates fixed input, line, data, event-name and retained-id buffers
+from the caller arena. Every later call reuses them, and returned strings expire on the next
+call.
+
+The fixture supplies exactly one byte per read. It therefore exercises split BOM and UTF-8
+sequences, CR/LF/CRLF boundaries, comments, repeated data fields, empty-id reset, NUL-id and
+non-decimal-retry refusal, retained state, malformed-byte replacement, independent line and
+event limits, retry overflow and EOF without a dispatching blank line. `e.net.http` moves from
+planned to partial; its HTTP message and connection-facing declarations remain planned.
