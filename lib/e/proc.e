@@ -425,8 +425,17 @@ fn drain_ready(d: *Drain) {
 
 // Waiting is the one blocking operation left in `run`; publishing through the token makes the
 // status visible before the supervisor observes completion, and the wake avoids a poll delay.
+// Exactly one path waits: the worker after a successful start, or the caller when starting the
+// worker failed. The raw reconstruction is the audited bridge that lets the supervisor retain
+// its borrowed process view for a concurrent kill request.
+@unsafe
+fn wait_shared(process: os.Proc) -> (i32, err) {
+    let (status, wait_error) = os.wait(os.Proc { raw: process.raw })
+    ret (status, wait_error)
+}
+
 fn wait_run(w: *RunWait) {
-    let (status, wait_error) = os.wait(os.Proc { raw: w.process.raw })
+    let (status, wait_error) = wait_shared(w.process)
     w.status = status
     w.failure = wait_error
     cancel.request(w.done)
@@ -528,7 +537,7 @@ fn run_started(
         let ended = terminate_run(child.process, &group, contain_tree, true)
         let closed_stdout = os.close(child.streams.stdout)
         let closed_stderr = os.close(child.streams.stderr)
-        let (status, waited) = os.wait(os.Proc { raw: child.process.raw })
+        let (status, waited) = wait_shared(child.process)
         ret (result, wait_thread_error)
     }
 

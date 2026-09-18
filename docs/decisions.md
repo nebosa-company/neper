@@ -12581,3 +12581,14 @@ Focused JSON encode and decode fixtures exercise the two directions through a re
 codec on both hosts. Because every delivered typed codec uses the same reflection
 sequence, one shared gate closes the format-codec part of H01 without duplicating
 the check across each wire format.
+
+## D629 -- Concurrent process waiting has one audited representation bridge
+
+D624's full-suite integration exposed `e.proc.run` reconstructing `os.Proc` from
+its raw field in two places. The runtime has exactly one waiter: the worker after a
+successful thread start, or the caller when that start fails. Meanwhile the
+supervisor retains a borrowed process view so it can issue a concurrent kill.
+
+Those two spellings now share `wait_shared`, one `@unsafe` function that documents
+and audits the representation bridge. Checked `e.proc` code no longer reads
+`Proc.raw`, and the exception appears in the existing unsafe-boundary inventory.
