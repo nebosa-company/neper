@@ -12623,3 +12623,16 @@ publish no caller plaintext and do not consume a sequence number.
 The fixture reproduces RFC 8448's protected client Finished record byte for byte,
 opens it again, and rejects a mutated ciphertext. AES-256 and ChaCha20 are not
 silently negotiated merely because their primitives exist elsewhere in `e.crypto`.
+
+## D633 -- TLS hello negotiation exposes only the reviewed profile
+
+ClientHello and ServerHello now negotiate TLS 1.3, `TLS_AES_128_GCM_SHA256`,
+X25519 and Ed25519. Client entropy supplies distinct 32-byte random and X25519
+secret inputs; fewer than 64 bytes is unsupported. ALPN is length-checked and chosen
+in server preference order, while an offered-but-unmatched protocol fails rather than
+being silently ignored. Unknown extensions are skipped, but every required version,
+group, signature and key-share extension must carry the exact supported value.
+
+The focused fixture builds and parses both hello messages, pins the 90-byte
+ServerHello shape, verifies server-preference ALPN, and proves both roles derive the
+same X25519 shared secret.

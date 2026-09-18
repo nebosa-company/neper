@@ -7,6 +7,7 @@ use e.net.tls
 use e.os
 use e.time
 use e.crypto.kdf as kdf
+use e.crypto.kx as kx
 
 fn same_bytes(left: []const u8, right: []const u8) -> bool {
     if left.len != right.len { ret false }
@@ -64,5 +65,33 @@ fn main(a: *mem.Arena) -> err {
     var bad_keys = record_keys0
     let (_, _, bad_error) = tls.open_record(&bad_keys, record[0..], opened[0..])
     if bad_error != tls.Protocol || bad_keys.sequence != 0u64 { os.exit(8i32) }
+
+    // The narrow hello profile negotiates only TLS 1.3, AES-128-GCM/SHA-256,
+    // X25519 and Ed25519, with server-preference ALPN.
+    var client_entropy: [64]u8 = zero
+    var server_entropy: [64]u8 = zero
+    var entropy_at = 0usize
+    while entropy_at < 64usize {
+        client_entropy[entropy_at] = u8(entropy_at + 1usize)
+        server_entropy[entropy_at] = u8(128usize + entropy_at)
+        entropy_at += 1usize
+    }
+    let client_protocols: [2]str = [2]str{ "http/1.1", "h2" }
+    let server_protocols: [2]str = [2]str{ "h2", "http/1.1" }
+    let hello_client_config = tls.ClientConfig { server_name: "example.com", trust_roots: none[0..], alpn: client_protocols[0..], entropy: client_entropy[0..], now: time.Timestamp { nanos: 0i64 } }
+    let hello_server_config = tls.ServerConfig { certificate_chain: none[0..], private_key: none[0..], alpn: server_protocols[0..], entropy: server_entropy[0..] }
+    var client_hello: [512]u8 = zero
+    let (client_hello_len, client_secret, client_hello_error) = tls.build_client_hello(hello_client_config, client_hello[0..])
+    if client_hello_error != ok { os.exit(9i32) }
+    let (hello_info, parse_client_error) = tls.parse_client_hello(client_hello[..client_hello_len], server_protocols[0..])
+    if parse_client_error != ok || !same_bytes(hello_info.selected_alpn, "h2") { os.exit(10i32) }
+    var server_hello: [128]u8 = zero
+    let (server_hello_len, server_secret, server_hello_error) = tls.build_server_hello(hello_server_config, server_hello[0..])
+    if server_hello_error != ok || server_hello_len != 90usize { os.exit(11i32) }
+    let (server_key, parse_server_error) = tls.parse_server_hello(server_hello[..server_hello_len])
+    if parse_server_error != ok { os.exit(12i32) }
+    let (client_shared, client_shared_error) = kx.x25519_exchange(client_secret, server_key)
+    let (server_shared, server_shared_error) = kx.x25519_exchange(server_secret, hello_info.peer_key)
+    if client_shared_error != ok || server_shared_error != ok || !same_bytes(client_shared.bytes[0..], server_shared.bytes[0..]) { os.exit(13i32) }
     ret ok
 }
