@@ -1340,6 +1340,12 @@ $audioWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $audioWritten -ne 'executable written') { throw 'e.audio emission failed' }
 & $audioPath
 if ($LASTEXITCODE -ne 0) { throw "an e.audio view or conversion answered wrongly: exit $LASTEXITCODE" }
+# `e.audio.mixer` pins caller-owned voice lifecycle before mixing is added.
+$audioMixerPath = Join-Path $testBuild 'audio-mixer-selfhost.exe'
+$audioMixerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audio_mixer\src\main.e') $repo 'x64' 'windows' $audioMixerPath
+if ($LASTEXITCODE -ne 0 -or $audioMixerWritten -ne 'executable written') { throw 'e.audio.mixer emission failed' }
+& $audioMixerPath
+if ($LASTEXITCODE -ne 0) { throw "an e.audio.mixer lifecycle operation answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

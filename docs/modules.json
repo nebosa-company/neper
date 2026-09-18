@@ -461,7 +461,7 @@
   {
    "name": "e.audio.mixer",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [

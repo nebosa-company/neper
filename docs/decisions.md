@@ -12252,3 +12252,15 @@ unsupported rather than converted unpredictably. Views reject zero-rate/channel 
 and partial frames, while conversion allocates exactly the destination frame storage in
 the caller arena. The focused fixture pins stereo indexing, both integer extremes,
 float conversion, mutation, bounds and silence.
+
+## D605 -- Mixer voices live entirely in caller storage
+
+`e.audio.mixer` begins with its caller-owned lifecycle. `init` takes the complete voice
+slot array, clears it and sets Q16 unity master gain; `play` occupies the first idle slot,
+while `stop` is idempotent and immediately makes that slot reusable. Sources must already
+match the mixer's rate and channel count, because rate conversion is an explicit later
+operation rather than an accidental cost inside `play`.
+
+No allocation, clock or device is involved. The focused cross-host fixture fills two
+slots, observes `Full`, changes gain, stops twice, reuses the first slot and rejects a
+mismatched-rate source.
