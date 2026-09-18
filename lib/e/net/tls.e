@@ -9,6 +9,9 @@ use e.crypto.hash as hash
 use e.crypto.kdf as kdf
 use e.crypto.aead as aead
 use e.crypto.kx as kx
+use e.crypto.sign as sign
+use e.crypto.x509 as x509
+use e.fmt.asn1 as asn1
 
 type Version = enum u8 { Tls13 }
 type ClientConfig = struct { server_name: str, trust_roots: []const u8, alpn: []const str, entropy: []const u8, now: time.Timestamp }
@@ -17,6 +20,7 @@ type Stream = struct { state: *void }
 type TrafficKeys = struct { key: [16]u8, iv: [12]u8, sequence: u64 }
 type Cursor = struct { data: []const u8, off: usize }
 type ClientHelloInfo = struct { peer_key: kx.X25519PublicKey, selected_alpn: str }
+type CertificateSet = struct { leaf: x509.Certificate, intermediates: []const x509.Certificate }
 
 error InvalidCertificate
 error Handshake
@@ -442,6 +446,214 @@ fn parse_server_hello(message: []const u8) -> (kx.X25519PublicKey, err) {
     }
     if !has_version || !has_share { ret (key, Unsupported) }
     ret (key, ok)
+}
+
+fn parse_der_certificates(a: *mem.Arena, bundle: []const u8) -> ([]const x509.Certificate, err) {
+    var count = 0usize
+    var probe = asn1.reader(bundle, 16u16)
+    while probe.off < probe.data.len {
+        let (value, present, value_error) = asn1.reader_next_err(&probe)
+        if value_error != ok || !present || !asn1.is_universal(value, 16u32, true) { ret (zero, InvalidCertificate) }
+        count += 1usize
+    }
+    let (certificates, allocation_error) = mem.alloc[x509.Certificate](a, count)
+    if allocation_error != ok { ret (zero, allocation_error) }
+    var walk = asn1.reader(bundle, 16u16)
+    var index = 0usize
+    while index < count {
+        let (value, present, value_error) = asn1.reader_next_err(&walk)
+        if value_error != ok || !present { ret (zero, InvalidCertificate) }
+        let (certificate, parse_error) = x509.parse(a, value.encoded)
+        if parse_error != ok { ret (zero, InvalidCertificate) }
+        certificates[index] = certificate
+        index += 1usize
+    }
+    ret (certificates[0..], ok)
+}
+
+// RFC 8410 PKCS#8: version zero, Ed25519 AlgorithmIdentifier without
+// parameters, and the 32-byte seed wrapped in the privateKey OCTET STRING.
+fn parse_private_key(der: []const u8) -> (sign.Ed25519SecretKey, err) {
+    var out: sign.Ed25519SecretKey = zero
+    var top = asn1.reader(der, 8u16)
+    let (outer, has_outer, outer_error) = asn1.reader_next_err(&top)
+    if outer_error != ok || !has_outer || top.off != der.len || !asn1.is_universal(outer, 16u32, true) { ret (out, InvalidCertificate) }
+    let (parts0, parts_error) = asn1.children(outer, 8u16)
+    if parts_error != ok { ret (out, InvalidCertificate) }
+    var parts = parts0
+    let (version, has_version, version_error) = asn1.reader_next_err(&parts)
+    if version_error != ok || !has_version || !asn1.is_universal(version, 2u32, false) { ret (out, InvalidCertificate) }
+    let (version_number, integer_error) = asn1.integer_of(version)
+    if integer_error != ok || version_number != 0i64 { ret (out, InvalidCertificate) }
+    let (algorithm, has_algorithm, algorithm_error) = asn1.reader_next_err(&parts)
+    if algorithm_error != ok || !has_algorithm || !asn1.is_universal(algorithm, 16u32, true) { ret (out, InvalidCertificate) }
+    let (algorithm_parts0, algorithm_parts_error) = asn1.children(algorithm, 8u16)
+    if algorithm_parts_error != ok { ret (out, InvalidCertificate) }
+    var algorithm_parts = algorithm_parts0
+    let (oid, has_oid, oid_error) = asn1.reader_next_err(&algorithm_parts)
+    if oid_error != ok || !has_oid || !asn1.is_universal(oid, 6u32, false) || oid.content.len != 3usize || oid.content[0] != 43u8 || oid.content[1] != 101u8 || oid.content[2] != 112u8 || algorithm_parts.off != algorithm_parts.data.len { ret (out, InvalidCertificate) }
+    let (private_wrapper, has_private, private_error) = asn1.reader_next_err(&parts)
+    if private_error != ok || !has_private || !asn1.is_universal(private_wrapper, 4u32, false) || parts.off != parts.data.len { ret (out, InvalidCertificate) }
+    var inner = asn1.reader(private_wrapper.content, 2u16)
+    let (seed, has_seed, seed_error) = asn1.reader_next_err(&inner)
+    if seed_error != ok || !has_seed || inner.off != inner.data.len || !asn1.is_universal(seed, 4u32, false) || seed.content.len != 32usize { ret (out, InvalidCertificate) }
+    mem.copy[u8](out.bytes[0..], seed.content)
+    ret (out, ok)
+}
+
+fn fill_certificate_message(bundle: []const u8, out: []u8, written: *usize) -> err {
+    var body_bytes = 4usize
+    var scan = asn1.reader(bundle, 16u16)
+    var count = 0usize
+    while scan.off < scan.data.len {
+        let (value, present, value_error) = asn1.reader_next_err(&scan)
+        if value_error != ok || !present || !asn1.is_universal(value, 16u32, true) || value.encoded.len > 16777215usize { ret InvalidCertificate }
+        if body_bytes > 16777215usize - value.encoded.len - 5usize { ret Protocol }
+        body_bytes += value.encoded.len + 5usize
+        count += 1usize
+    }
+    if count == 0usize { ret InvalidCertificate }
+    var at = 0usize
+    try put_u8(out, &at, 11u8)
+    try put_u24(out, &at, body_bytes)
+    try put_u8(out, &at, 0u8)
+    try put_u24(out, &at, body_bytes - 4usize)
+    var walk = asn1.reader(bundle, 16u16)
+    while walk.off < walk.data.len {
+        let (value, present, value_error) = asn1.reader_next_err(&walk)
+        if value_error != ok || !present { ret InvalidCertificate }
+        try put_u24(out, &at, value.encoded.len)
+        try put_bytes(out, &at, value.encoded)
+        try put_u16(out, &at, 0usize)
+    }
+    *written = at
+    ret ok
+}
+
+fn build_certificate_message(bundle: []const u8, out: []u8) -> (usize, err) {
+    var written = 0usize
+    let build_error = fill_certificate_message(bundle, out, &written)
+    ret (written, build_error)
+}
+
+fn parse_certificate_message(a: *mem.Arena, message: []const u8) -> (CertificateSet, err) {
+    var out: CertificateSet = zero
+    var c = Cursor { data: message, off: 0usize }
+    let (kind, kind_error) = take_u8(&c)
+    let (body_len, body_error) = take_u24(&c)
+    let (context_len, context_error) = take_u8(&c)
+    if kind_error != ok || body_error != ok || context_error != ok || kind != 11u8 || body_len != message.len - 4usize || context_len != 0u8 { ret (out, Protocol) }
+    let (list_len, list_error) = take_u24(&c)
+    let (list, list_bytes_error) = take_bytes(&c, list_len)
+    if list_error != ok || list_bytes_error != ok || c.off != c.data.len || list.len == 0usize { ret (out, Protocol) }
+    var probe = Cursor { data: list, off: 0usize }
+    var count = 0usize
+    while probe.off < probe.data.len {
+        let (certificate_len, certificate_len_error) = take_u24(&probe)
+        let (_, certificate_error) = take_bytes(&probe, certificate_len)
+        let (extensions_len, extensions_error) = take_u16(&probe)
+        let (_, extension_bytes_error) = take_bytes(&probe, extensions_len)
+        if certificate_len_error != ok || certificate_error != ok || extensions_error != ok || extension_bytes_error != ok || extensions_len != 0usize { ret (out, Protocol) }
+        count += 1usize
+    }
+    let (certificates, allocation_error) = mem.alloc[x509.Certificate](a, count)
+    if allocation_error != ok { ret (out, allocation_error) }
+    var walk = Cursor { data: list, off: 0usize }
+    var index = 0usize
+    while index < count {
+        let (certificate_len, certificate_len_error) = take_u24(&walk)
+        let certificate_start = walk.off
+        let (_, certificate_error) = take_bytes(&walk, certificate_len)
+        let (extensions_len, extensions_error) = take_u16(&walk)
+        let (_, extension_bytes_error) = take_bytes(&walk, extensions_len)
+        if certificate_len_error != ok || certificate_error != ok || extensions_error != ok || extension_bytes_error != ok { ret (out, Protocol) }
+        let (certificate, parse_error) = x509.parse(a, list[certificate_start..certificate_start + certificate_len])
+        if parse_error != ok { ret (out, InvalidCertificate) }
+        certificates[index] = certificate
+        index += 1usize
+    }
+    out.leaf = certificates[0]
+    out.intermediates = certificates[1usize..]
+    ret (out, ok)
+}
+
+fn verify_certificate_set(a: *mem.Arena, set: CertificateSet, config: ClientConfig) -> err {
+    let (roots, roots_error) = parse_der_certificates(a, config.trust_roots)
+    if roots_error != ok || roots.len == 0usize { ret InvalidCertificate }
+    var options: x509.VerifyOptions = zero
+    options.roots = x509.Pool { certificates: roots }
+    options.intermediates = x509.Pool { certificates: set.intermediates }
+    options.dns_name = config.server_name
+    options.now = time.Instant { nanos: config.now.nanos }
+    options.usage = .ServerAuth
+    options.max_depth = 8u16
+    let (_, verify_error) = x509.verify(a, set.leaf, options)
+    if verify_error != ok { ret InvalidCertificate }
+    ret ok
+}
+
+fn certificate_verify_input(server_side: bool, transcript_hash: [32]u8) -> [130]u8 {
+    var out: [130]u8 = zero
+    var at = 0usize
+    while at < 64usize {
+        out[at] = 32u8
+        at += 1usize
+    }
+    let server_context = "TLS 1.3, server CertificateVerify"
+    let client_context = "TLS 1.3, client CertificateVerify"
+    var context = client_context
+    if server_side { context = server_context }
+    mem.copy[u8](out[64usize..64usize + context.len], context)
+    out[64usize + context.len] = 0u8
+    mem.copy[u8](out[65usize + context.len..], transcript_hash[0..])
+    ret out
+}
+
+fn build_certificate_verify(secret: sign.Ed25519SecretKey, transcript_hash: [32]u8, out: []u8) -> (usize, err) {
+    let input = certificate_verify_input(true, transcript_hash)
+    let (signature, signature_error) = sign.ed25519_sign(secret, input[0..])
+    if signature_error != ok { ret (0usize, InvalidCertificate) }
+    if out.len < 72usize { ret (0usize, Protocol) }
+    out[0] = 15u8
+    out[1] = 0u8
+    out[2] = 0u8
+    out[3] = 68u8
+    out[4] = 8u8
+    out[5] = 7u8
+    out[6] = 0u8
+    out[7] = 64u8
+    mem.copy[u8](out[8..72], signature.bytes[0..])
+    ret (72usize, ok)
+}
+
+fn verify_certificate_verify(leaf: x509.Certificate, transcript_hash: [32]u8, message: []const u8) -> err {
+    if message.len != 72usize || message[0] != 15u8 || message[1] != 0u8 || message[2] != 0u8 || message[3] != 68u8 || message[4] != 8u8 || message[5] != 7u8 || message[6] != 0u8 || message[7] != 64u8 { ret Protocol }
+    var signature: sign.Ed25519Signature = zero
+    mem.copy[u8](signature.bytes[0..], message[8..])
+    let input = certificate_verify_input(true, transcript_hash)
+    switch leaf.public_key {
+    case .Ed25519 as public:
+        if sign.ed25519_verify(public, input[0..], signature) { ret ok }
+        ret InvalidCertificate
+    default:
+        ret Unsupported
+    }
+}
+
+fn validate_server_credentials(a: *mem.Arena, config: ServerConfig) -> (sign.Ed25519SecretKey, err) {
+    let (secret, secret_error) = parse_private_key(config.private_key)
+    if secret_error != ok { ret (zero, secret_error) }
+    let (certificates, certificates_error) = parse_der_certificates(a, config.certificate_chain)
+    if certificates_error != ok || certificates.len == 0usize { ret (zero, InvalidCertificate) }
+    let (public, public_error) = sign.ed25519_public_from_secret(secret)
+    if public_error != ok { ret (zero, InvalidCertificate) }
+    switch certificates[0].public_key {
+    case .Ed25519 as leaf_public:
+        if !bytes_same(public.bytes[0..], leaf_public.bytes[0..]) { ret (zero, InvalidCertificate) }
+    default:
+        ret (zero, Unsupported)
+    }
+    ret (secret, ok)
 }
 
 fn client(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ClientConfig) -> (Stream, err) {

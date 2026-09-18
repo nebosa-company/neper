@@ -93,5 +93,26 @@ fn main(a: *mem.Arena) -> err {
     let (client_shared, client_shared_error) = kx.x25519_exchange(client_secret, server_key)
     let (server_shared, server_shared_error) = kx.x25519_exchange(server_secret, hello_info.peer_key)
     if client_shared_error != ok || server_shared_error != ok || !same_bytes(client_shared.bytes[0..], server_shared.bytes[0..]) { os.exit(13i32) }
+
+    // Ed25519 leaf and intermediate from the e.crypto.x509 reference chain.
+    let mid_der = "0\x82\x01\x130\x81\xc6\xa0\x03\x02\x01\x02\x02\x01\x020\x05\x06\x03+ep0%1\x130\x11\x06\x03U\x04\x03\x0c\x0aNeper Root1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0-1\x1b0\x19\x06\x03U\x04\x03\x0c\x12Neper Intermediate1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0*0\x05\x06\x03+ep\x03!\x00\x819w\x0e\xa8}\x17_V\xa3Tf\xc3L~\xcc\xcb\x8d\x8a\x91\xb4\xee7\xa2]\xf6\x0f[\x8f\xc9\xb3\x94\xa3\x130\x110\x0f\x06\x03U\x1d\x13\x01\x01\xff\x04\x050\x03\x01\x01\xff0\x05\x06\x03+ep\x03A\x00R^\x187\xb39[\xa4N\xc4\x83\x10\xde\xfc\x7f\xa0\xbfF[\xa8^\x04S\xa1\xb2\xf8\xbcM\xc7\xfb\xf1t\x89\xa0\x0e\x07\xcc\xbf\x8f6R\x16\x15\xab\x99\x0e\xdd\xc1,\x8d\x8f*\xd4\xaf\x97\xaae\x8b\xab\xe5\x0d\x8e'\x08"
+    let leaf_der = "0\x82\x01=0\x81\xf0\xa0\x03\x02\x01\x02\x02\x01\x030\x05\x06\x03+ep0-1\x1b0\x19\x06\x03U\x04\x03\x0c\x12Neper Intermediate1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0\x161\x140\x12\x06\x03U\x04\x03\x0c\x0bexample.com0*0\x05\x06\x03+ep\x03!\x00\xedI(\xc6(\xd1\xc2\xc6\xea\xe9\x038\x90Y\x95a)Y':\\c\xf966\xc1F\x14\xac\x877\xd1\xa3L0J0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000%\x06\x03U\x1d\x11\x04\x1e0\x1c\x82\x0bexample.com\x82\x0d*.example.org0\x13\x06\x03U\x1d%\x04\x0c0\x0a\x06\x08+\x06\x01\x05\x05\x07\x03\x010\x05\x06\x03+ep\x03A\x00\x84Pf\xea\x11\xb7\xdb-w\xdf\xd2\xa8\xden\xd3\xbey|r`B'h\xfc\x22\x08\xca\x8e%u\xa8\xa7)\xd3\xb3\x15Tc\xc8\x10\xa0\x97\x84C\xaaU4\xf0>\x00\x0f\xfau\xe7\xaa\xb9\xae\x9e\x9br\xe8Bv\x09"
+    let leaf_pkcs8 = "0.\x02\x01\x000\x05\x06\x03+ep\x04\x22\x04\x20\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03"
+    var certificate_message: [1024]u8 = zero
+    let (certificate_len, certificate_error) = tls.build_certificate_message(leaf_der, certificate_message[0..])
+    if certificate_error != ok { os.exit(14i32) }
+    let (certificate_set, certificate_parse_error) = tls.parse_certificate_message(a, certificate_message[..certificate_len])
+    if certificate_parse_error != ok { os.exit(15i32) }
+    let verify_config = tls.ClientConfig { server_name: "example.com", trust_roots: mid_der, alpn: client_protocols[0..], entropy: client_entropy[0..], now: time.Timestamp { nanos: 1780272000000000000i64 } }
+    if tls.verify_certificate_set(a, certificate_set, verify_config) != ok { os.exit(16i32) }
+    let credential_config = tls.ServerConfig { certificate_chain: leaf_der, private_key: leaf_pkcs8, alpn: server_protocols[0..], entropy: server_entropy[0..] }
+    let (signing_key, credential_error) = tls.validate_server_credentials(a, credential_config)
+    if credential_error != ok { os.exit(17i32) }
+    var transcript_hash: [32]u8 = zero
+    var certificate_verify: [72]u8 = zero
+    let (certificate_verify_len, certificate_verify_error) = tls.build_certificate_verify(signing_key, transcript_hash, certificate_verify[0..])
+    if certificate_verify_error != ok || certificate_verify_len != 72usize || tls.verify_certificate_verify(certificate_set.leaf, transcript_hash, certificate_verify[0..]) != ok { os.exit(18i32) }
+    certificate_verify[20] = certificate_verify[20] ^ 1u8
+    if tls.verify_certificate_verify(certificate_set.leaf, transcript_hash, certificate_verify[0..]) != tls.InvalidCertificate { os.exit(19i32) }
     ret ok
 }

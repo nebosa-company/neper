@@ -12636,3 +12636,17 @@ group, signature and key-share extension must carry the exact supported value.
 The focused fixture builds and parses both hello messages, pins the 90-byte
 ServerHello shape, verifies server-preference ALPN, and proves both roles derive the
 same X25519 shared secret.
+
+## D634 -- TLS server authentication is Ed25519 X.509 over bounded DER
+
+TLS credentials are concatenated, complete DER certificates (leaf first for a
+server chain, roots for client trust) and an RFC 8410 PKCS#8 Ed25519 private key.
+The PKCS#8 parser accepts only version zero, the parameter-free Ed25519 OID and one
+32-byte seed. Construction rejects an empty chain, and the key must match the leaf
+certificate before it can sign a handshake.
+
+Certificate messages accept no per-entry extensions in this profile. The client
+uses `e.crypto.x509.verify` with its explicit roots, server name, timestamp,
+ServerAuth usage and a depth of eight, then verifies the RFC 8446 server
+CertificateVerify context with Ed25519. The focused fixture uses a real signed DER
+chain and rejects a mutated handshake signature.
