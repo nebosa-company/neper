@@ -20,6 +20,7 @@
 {"record":"inline","symbol":"e.os.create_new_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
 {"record":"inline","symbol":"e.os.read_link_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
 {"record":"inline","symbol":"e.os.canonical_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.detail_from_code","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
 {"record":"inline","symbol":"e.os.from_errno","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.from_errno_cleanup","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.kind_from_mode","decision":"inlinable","reason":"at or under the cap","pass":1}
