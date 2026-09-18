@@ -44,5 +44,25 @@ fn main(a: *mem.Arena) -> err {
     let derive_error = tls.hkdf_expand_label(early, "derived", empty[0..], derived[0..])
     let expected = "\x6f\x26\x15\xa1\x08\xc7\x02\xc5\x67\x8f\x54\xfc\x9d\xba\xb6\x97\x16\xc0\x76\x18\x9c\x48\x25\x0c\xeb\xea\xc3\x57\x6c\x36\x11\xba"
     if derive_error != ok || !same_bytes(derived[0..], expected) { os.exit(4i32) }
+
+    // RFC 8448's protected client Finished record pins AES-128-GCM framing,
+    // the authenticated header, inner content type and sequence-zero nonce.
+    let client_handshake_secret: [32]u8 = [32]u8{ 179, 237, 219, 18, 110, 6, 127, 53, 167, 128, 179, 171, 244, 94, 45, 143, 59, 26, 149, 7, 56, 245, 46, 150, 0, 116, 106, 14, 39, 165, 90, 33 }
+    let (record_keys0, keys_error) = tls.traffic_keys(client_handshake_secret)
+    if keys_error != ok { os.exit(5i32) }
+    var record_keys = record_keys0
+    let finished = "\x14\x00\x00\x20\xa8\xec\x43\x6d\x67\x76\x34\xae\x52\x5a\xc1\xfc\xeb\xe1\x1a\x03\x9e\xc1\x76\x94\xfa\xc6\xe9\x85\x27\xb6\x42\xf2\xed\xd5\xce\x61"
+    var record: [58]u8 = zero
+    let (record_len, record_error) = tls.seal_record(&record_keys, 22u8, finished, record[0..])
+    let expected_record = "\x17\x03\x03\x00\x35\x75\xec\x4d\xc2\x38\xcc\xe6\x0b\x29\x80\x44\xa7\x1e\x21\x9c\x56\xcc\x77\xb0\x51\x7f\xe9\xb9\x3c\x7a\x4b\xfc\x44\xd8\x7f\x38\xf8\x03\x38\xac\x98\xfc\x46\xde\xb3\x84\xbd\x1c\xae\xac\xab\x68\x67\xd7\x26\xc4\x05\x46"
+    if record_error != ok || record_len != 58usize || !same_bytes(record[0..], expected_record) { os.exit(6i32) }
+    var read_keys = record_keys0
+    var opened: [36]u8 = zero
+    let (opened_len, opened_type, open_error) = tls.open_record(&read_keys, record[0..], opened[0..])
+    if open_error != ok || opened_type != 22u8 || opened_len != finished.len || !same_bytes(opened[0..], finished) { os.exit(7i32) }
+    record[20] = record[20] ^ 1u8
+    var bad_keys = record_keys0
+    let (_, _, bad_error) = tls.open_record(&bad_keys, record[0..], opened[0..])
+    if bad_error != tls.Protocol || bad_keys.sequence != 0u64 { os.exit(8i32) }
     ret ok
 }

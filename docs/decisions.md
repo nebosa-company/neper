@@ -12610,3 +12610,16 @@ only from `e.crypto.kdf.hkdf_sha256_expand`. The profile is therefore limited to
 SHA-256 cipher suites; no SHA-384 suite can be advertised by implication. The focused
 fixture checks the `tls13 derived` expansion from RFC 8448 before handshake state is
 allowed to depend on it.
+
+## D632 -- TLS records authenticate their framing before publishing plaintext
+
+The TLS record slice implements the RFC 8446 `TLSInnerPlaintext` and
+`TLSCiphertext` forms for `TLS_AES_128_GCM_SHA256`. It authenticates the five-byte
+outer header, derives the nonce by XORing a big-endian 64-bit sequence into the
+twelve-byte IV, enforces the 2^14 plaintext and 2^14+256 ciphertext bounds, and
+advances a direction's sequence only after successful authentication. Failed tags
+publish no caller plaintext and do not consume a sequence number.
+
+The fixture reproduces RFC 8448's protected client Finished record byte for byte,
+opens it again, and rejects a mutated ciphertext. AES-256 and ChaCha20 are not
+silently negotiated merely because their primitives exist elsewhere in `e.crypto`.

@@ -7,11 +7,13 @@ use e.mem
 use e.time
 use e.crypto.hash as hash
 use e.crypto.kdf as kdf
+use e.crypto.aead as aead
 
 type Version = enum u8 { Tls13 }
 type ClientConfig = struct { server_name: str, trust_roots: []const u8, alpn: []const str, entropy: []const u8, now: time.Timestamp }
 type ServerConfig = struct { certificate_chain: []const u8, private_key: []const u8, alpn: []const str, entropy: []const u8 }
 type Stream = struct { state: *void }
+type TrafficKeys = struct { key: [16]u8, iv: [12]u8, sequence: u64 }
 
 error InvalidCertificate
 error Handshake
@@ -67,6 +69,69 @@ fn derive_secret(secret: [32]u8, label: str, transcript_hash: [32]u8) -> ([32]u8
 }
 
 fn empty_hash() -> [32]u8 { ret hash.sha256("") }
+
+fn traffic_keys(secret: [32]u8) -> (TrafficKeys, err) {
+    var out: TrafficKeys = zero
+    let key_error = hkdf_expand_label(secret, "key", "", out.key[0..])
+    if key_error != ok { ret (out, key_error) }
+    let iv_error = hkdf_expand_label(secret, "iv", "", out.iv[0..])
+    ret (out, iv_error)
+}
+
+fn record_nonce(keys: *const TrafficKeys) -> [12]u8 {
+    var nonce = keys.iv
+    var at = 0usize
+    while at < 8usize {
+        let shift = u32((7usize - at) * 8usize)
+        nonce[4usize + at] = nonce[4usize + at] ^ u8((keys.sequence >> shift) & 255u64)
+        at += 1usize
+    }
+    ret nonce
+}
+
+// One unpadded TLSCiphertext. The header is authenticated, and the sequence
+// advances only after a successful seal/open.
+fn seal_record(keys: *TrafficKeys, content_type: u8, content: []const u8, out: []u8) -> (usize, err) {
+    if content.len > 16384usize { ret (0usize, Protocol) }
+    if content_type != 21u8 && content_type != 22u8 && content_type != 23u8 { ret (0usize, Protocol) }
+    if content.len == 0usize && content_type != 23u8 { ret (0usize, Protocol) }
+    let sealed_len = content.len + 17usize
+    if out.len < sealed_len + 5usize || keys.sequence == 18446744073709551615u64 { ret (0usize, Protocol) }
+    out[0] = 23u8
+    out[1] = 3u8
+    out[2] = 3u8
+    out[3] = u8(sealed_len >> 8usize)
+    out[4] = u8(sealed_len & 255usize)
+    var inner: [16385]u8 = zero
+    mem.copy[u8](inner[..content.len], content)
+    inner[content.len] = content_type
+    let nonce = record_nonce(keys)
+    let (written, seal_error) = aead.aes128_gcm_seal(out[5usize..], keys.key, nonce, out[..5usize], inner[..content.len + 1usize])
+    if seal_error != ok { ret (0usize, seal_error) }
+    keys.sequence += 1u64
+    ret (5usize + written, ok)
+}
+
+fn open_record(keys: *TrafficKeys, record: []const u8, out: []u8) -> (usize, u8, err) {
+    if record.len < 22usize || record[0] != 23u8 || record[1] != 3u8 || record[2] != 3u8 { ret (0usize, 0u8, Protocol) }
+    let sealed_len = (usize(record[3]) << 8usize) | usize(record[4])
+    if sealed_len > 16640usize || sealed_len + 5usize != record.len || keys.sequence == 18446744073709551615u64 { ret (0usize, 0u8, Protocol) }
+    var inner: [16385]u8 = zero
+    let nonce = record_nonce(keys)
+    let (plain_len, open_error) = aead.aes128_gcm_open(inner[0..], keys.key, nonce, record[..5usize], record[5usize..])
+    if open_error != ok { ret (0usize, 0u8, Protocol) }
+    var end = plain_len
+    while end > 0usize && inner[end - 1usize] == 0u8 { end -= 1usize }
+    if end == 0usize { ret (0usize, 0u8, Protocol) }
+    let content_type = inner[end - 1usize]
+    if content_type != 21u8 && content_type != 22u8 && content_type != 23u8 { ret (0usize, 0u8, Protocol) }
+    let content_len = end - 1usize
+    if content_len == 0usize && content_type != 23u8 { ret (0usize, 0u8, Protocol) }
+    if out.len < content_len { ret (0usize, 0u8, Protocol) }
+    mem.copy[u8](out[..content_len], inner[..content_len])
+    keys.sequence += 1u64
+    ret (content_len, content_type, ok)
+}
 
 fn client(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ClientConfig) -> (Stream, err) {
     let (storage, storage_error) = mem.alloc[State](a, 1usize)
