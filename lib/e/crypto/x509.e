@@ -1,5 +1,5 @@
-// X.509 certificates over DER through `e.fmt.asn1`, with the algorithm set pinned to
-// Ed25519 (RFC 8410): `parse` reads a certificate's version, names, validity,
+// X.509 certificates over DER through `e.fmt.asn1`, with Ed25519 (RFC 8410) and
+// ECDSA P-256/SHA-256 (RFC 5480/RFC 5758): `parse` reads names, validity,
 // subject public key, the subjectAltName DNS names and basicConstraints; `parse_pem`
 // takes every CERTIFICATE block of a PEM text; `verify_signature` checks a
 // certificate's signature over its TBSCertificate bytes with its issuer's key; and
@@ -7,8 +7,8 @@
 // checking each signature, each validity window against the caller's `now`, each
 // intermediate's CA bit, the leaf's DNS name (a leftmost wildcard allowed) and its
 // extended key usage. A name is written `CN=x, O=y` from its attributes in order.
-// Any other signature or key algorithm is `InvalidCertificate`; nothing here reads a
-// host store, clock or network.
+// Unsupported algorithms parse so an unused server-supplied chain suffix is harmless,
+// but verification through one is `InvalidCertificate`. Nothing here reads host state.
 use e.mem
 use e.str
 use e.time
@@ -16,7 +16,7 @@ use e.crypto.sign as sign
 use e.fmt.asn1 as asn1
 use e.fmt.pem as pem
 
-type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey }
+type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey, P256: sign.P256PublicKey, Unsupported: []const u8 }
 type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool }
 type Pool = struct { certificates: []const Certificate }
 type VerifyOptions = struct { roots: Pool, intermediates: Pool, dns_name: str, now: time.Instant, usage: KeyUsage, max_depth: u16 }
@@ -30,6 +30,7 @@ error InvalidUsage
 error TooDeep
 
 const DEPTH: u16 = 16u16
+type SignatureAlgorithm = enum u8 { Ed25519, EcdsaSha256, Unsupported }
 
 // The next value of a reader, or `InvalidCertificate` when there is none.
 fn next(r: *asn1.Reader) -> (asn1.Value, err) {
@@ -159,34 +160,48 @@ fn parse_time(value: asn1.Value) -> (time.Instant, err) {
 
 // The pieces `verify_signature` needs beside the fields: the TBS bytes and the
 // signature, found by walking the outer SEQUENCE again.
-fn signed_parts(der: []const u8) -> ([]const u8, []const u8, err) {
+fn signature_algorithm(value: asn1.Value) -> (SignatureAlgorithm, err) {
+    let (parts0, parts_error) = inside(value)
+    if parts_error != ok { ret (.Unsupported, parts_error) }
+    var parts = parts0
+    let (oid, oid_error) = expect(&parts, 6u32, false)
+    if oid_error != ok { ret (.Unsupported, oid_error) }
+    let ed25519: [3]u8 = [3]u8{ 43, 101, 112 }
+    let ecdsa_sha256: [8]u8 = [8]u8{ 42, 134, 72, 206, 61, 4, 3, 2 }
+    var algorithm = SignatureAlgorithm.Unsupported
+    if oid_equal(oid.content, ed25519[0..]) { algorithm = .Ed25519 }
+    if oid_equal(oid.content, ecdsa_sha256[0..]) { algorithm = .EcdsaSha256 }
+    if algorithm != .Unsupported {
+        let (_, has_parameter, parameter_error) = asn1.reader_next_err(&parts)
+        if parameter_error != ok || has_parameter { ret (.Unsupported, InvalidCertificate) }
+    }
+    ret (algorithm, ok)
+}
+
+fn signed_parts(der: []const u8) -> ([]const u8, []const u8, SignatureAlgorithm, []const u8, err) {
     var top = asn1.reader(der, DEPTH)
     let (outer, outer_error) = expect(&top, 16u32, true)
-    if outer_error != ok { ret (zero, zero, outer_error) }
+    if outer_error != ok { ret (zero, zero, .Unsupported, zero, outer_error) }
     let (parts0, parts_error) = inside(outer)
-    if parts_error != ok { ret (zero, zero, parts_error) }
+    if parts_error != ok { ret (zero, zero, .Unsupported, zero, parts_error) }
     var parts = parts0
     let (tbs, tbs_error) = expect(&parts, 16u32, true)
-    if tbs_error != ok { ret (zero, zero, tbs_error) }
+    if tbs_error != ok { ret (zero, zero, .Unsupported, zero, tbs_error) }
     let (algorithm, algorithm_error) = expect(&parts, 16u32, true)
-    if algorithm_error != ok { ret (zero, zero, algorithm_error) }
-    let (algorithm_inner0, inner_error) = inside(algorithm)
-    if inner_error != ok { ret (zero, zero, inner_error) }
-    var algorithm_inner = algorithm_inner0
-    let (oid, oid_error) = expect(&algorithm_inner, 6u32, false)
-    if oid_error != ok { ret (zero, zero, oid_error) }
-    let ed25519: [3]u8 = [3]u8{ 43, 101, 112 }
-    if !oid_equal(oid.content, ed25519[0..]) { ret (zero, zero, InvalidCertificate) }
+    if algorithm_error != ok { ret (zero, zero, .Unsupported, zero, algorithm_error) }
+    let (algorithm_kind, kind_error) = signature_algorithm(algorithm)
+    if kind_error != ok { ret (zero, zero, .Unsupported, zero, kind_error) }
     let (signature, signature_error) = expect(&parts, 3u32, false)
-    if signature_error != ok { ret (zero, zero, signature_error) }
-    if signature.content.len != 65usize || signature.content[0] != 0u8 { ret (zero, zero, InvalidCertificate) }
-    ret (tbs.encoded, signature.content[1usize..], ok)
+    if signature_error != ok { ret (zero, zero, .Unsupported, zero, signature_error) }
+    if signature.content.len < 2usize || signature.content[0] != 0u8 { ret (zero, zero, .Unsupported, zero, InvalidCertificate) }
+    if algorithm_kind == .Ed25519 && signature.content.len != 65usize { ret (zero, zero, .Unsupported, zero, InvalidCertificate) }
+    ret (tbs.encoded, signature.content[1usize..], algorithm_kind, algorithm.encoded, ok)
 }
 
 fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
     var certificate: Certificate = zero
     certificate.der = der
-    let (tbs_bytes, signature, parts_error) = signed_parts(der)
+    let (tbs_bytes, signature, outer_signature_algorithm, outer_algorithm, parts_error) = signed_parts(der)
     if parts_error != ok { ret (zero, parts_error) }
     var top = asn1.reader(tbs_bytes, DEPTH)
     let (tbs, tbs_error) = expect(&top, 16u32, true)
@@ -214,6 +229,8 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
     if item.tag.number != 2u32 { ret (zero, InvalidCertificate) }
     let (inner_algorithm, inner_algorithm_error) = expect(&fields, 16u32, true)
     if inner_algorithm_error != ok { ret (zero, inner_algorithm_error) }
+    let (inner_signature_algorithm, inner_signature_error) = signature_algorithm(inner_algorithm)
+    if inner_signature_error != ok || inner_signature_algorithm != outer_signature_algorithm || !same_der(inner_algorithm.encoded, outer_algorithm) { ret (zero, InvalidCertificate) }
     let (issuer, issuer_error) = expect(&fields, 16u32, true)
     if issuer_error != ok { ret (zero, issuer_error) }
     let (issuer_text, issuer_render_error) = render_name(a, issuer)
@@ -239,7 +256,7 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
     let (subject_text, subject_render_error) = render_name(a, subject)
     if subject_render_error != ok { ret (zero, subject_render_error) }
     certificate.subject = subject_text
-    // subjectPublicKeyInfo: the algorithm must be Ed25519 and the key 32 bytes.
+    // subjectPublicKeyInfo: Ed25519 or an uncompressed named P-256 point.
     let (spki, spki_error) = expect(&fields, 16u32, true)
     if spki_error != ok { ret (zero, spki_error) }
     let (spki_inner0, spki_inner_error) = inside(spki)
@@ -253,13 +270,37 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
     let (key_oid, key_oid_error) = expect(&key_algorithm_inner, 6u32, false)
     if key_oid_error != ok { ret (zero, key_oid_error) }
     let ed25519: [3]u8 = [3]u8{ 43, 101, 112 }
-    if !oid_equal(key_oid.content, ed25519[0..]) { ret (zero, InvalidCertificate) }
+    let ec_public: [7]u8 = [7]u8{ 42, 134, 72, 206, 61, 2, 1 }
+    let p256_curve: [8]u8 = [8]u8{ 42, 134, 72, 206, 61, 3, 1, 7 }
+    var key_kind = 0u8
+    if oid_equal(key_oid.content, ed25519[0..]) {
+        let (_, has_parameter, parameter_error) = asn1.reader_next_err(&key_algorithm_inner)
+        if parameter_error != ok || has_parameter { ret (zero, InvalidCertificate) }
+        key_kind = 1u8
+    } else if oid_equal(key_oid.content, ec_public[0..]) {
+        let (curve, curve_error) = expect(&key_algorithm_inner, 6u32, false)
+        if curve_error != ok { ret (zero, curve_error) }
+        let (_, has_parameter, parameter_error) = asn1.reader_next_err(&key_algorithm_inner)
+        if parameter_error != ok || has_parameter { ret (zero, InvalidCertificate) }
+        if oid_equal(curve.content, p256_curve[0..]) { key_kind = 2u8 }
+    }
     let (key_bits, key_bits_error) = expect(&spki_inner, 3u32, false)
     if key_bits_error != ok { ret (zero, key_bits_error) }
-    if key_bits.content.len != 33usize || key_bits.content[0] != 0u8 { ret (zero, InvalidCertificate) }
-    var public: sign.Ed25519PublicKey = zero
-    mem.copy[u8](public.bytes[0..], key_bits.content[1usize..])
-    certificate.public_key = PublicKey{ Ed25519: public }
+    let (_, has_spki_tail, spki_tail_error) = asn1.reader_next_err(&spki_inner)
+    if spki_tail_error != ok || has_spki_tail || key_bits.content.len < 2usize || key_bits.content[0] != 0u8 { ret (zero, InvalidCertificate) }
+    if key_kind == 1u8 {
+        if key_bits.content.len != 33usize { ret (zero, InvalidCertificate) }
+        var public: sign.Ed25519PublicKey = zero
+        mem.copy[u8](public.bytes[0..], key_bits.content[1usize..])
+        certificate.public_key = PublicKey{ Ed25519: public }
+    } else if key_kind == 2u8 {
+        if key_bits.content.len != 66usize || key_bits.content[1] != 4u8 { ret (zero, InvalidCertificate) }
+        var public: sign.P256PublicKey = zero
+        mem.copy[u8](public.bytes[0..], key_bits.content[1usize..])
+        certificate.public_key = PublicKey{ P256: public }
+    } else {
+        certificate.public_key = PublicKey{ Unsupported: key_bits.content[1usize..] }
+    }
     // Extensions [3] EXPLICIT, v3 only: subjectAltName and basicConstraints.
     var names: []const str = zero
     while true {
@@ -382,17 +423,28 @@ fn pool(a: *mem.Arena, certificates: []const Certificate) -> Pool {
 }
 
 fn verify_signature(certificate: Certificate, issuer: Certificate) -> err {
-    let (tbs, signature_bytes, parts_error) = signed_parts(certificate.der)
+    let (tbs, signature_bytes, algorithm, outer_algorithm, parts_error) = signed_parts(certificate.der)
     if parts_error != ok { ret parts_error }
-    var signature: sign.Ed25519Signature = zero
-    mem.copy[u8](signature.bytes[0..], signature_bytes)
-    switch issuer.public_key {
-    case .Ed25519 as key:
-        if sign.ed25519_verify(key, tbs, signature) { ret ok }
-        ret InvalidCertificate
-    default:
+    if algorithm == .Ed25519 {
+        var signature: sign.Ed25519Signature = zero
+        mem.copy[u8](signature.bytes[0..], signature_bytes)
+        switch issuer.public_key {
+        case .Ed25519 as key:
+            if sign.ed25519_verify(key, tbs, signature) { ret ok }
+        default:
+            ret InvalidCertificate
+        }
         ret InvalidCertificate
     }
+    if algorithm == .EcdsaSha256 {
+        switch issuer.public_key {
+        case .P256 as key:
+            if sign.p256_verify(key, tbs, signature_bytes) { ret ok }
+        default:
+            ret InvalidCertificate
+        }
+    }
+    ret InvalidCertificate
 }
 
 fn same_der(a: []const u8, b: []const u8) -> bool {
@@ -428,7 +480,7 @@ fn usage_oid(usage: KeyUsage) -> [8]u8 {
 fn usage_excluded(certificate: Certificate, usage: KeyUsage) -> bool {
     if usage == .Any { ret false }
     let wanted = usage_oid(usage)
-    let (tbs_bytes, signature, parts_error) = signed_parts(certificate.der)
+    let (tbs_bytes, signature, algorithm, outer_algorithm, parts_error) = signed_parts(certificate.der)
     if parts_error != ok { ret true }
     var top = asn1.reader(tbs_bytes, DEPTH)
     let (tbs, tbs_error) = expect(&top, 16u32, true)

@@ -5,8 +5,8 @@
 import datetime
 
 from cryptography import x509
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 UTC = datetime.timezone.utc
@@ -23,7 +23,7 @@ def name(cn, org=None):
     return x509.Name(parts)
 
 
-def build(subject, issuer, public, signer, start, end, ca=False, dns=None, eku=None, serial=1):
+def build(subject, issuer, public, signer, start, end, ca=False, dns=None, eku=None, serial=1, algorithm=None):
     b = (x509.CertificateBuilder().subject_name(subject).issuer_name(issuer).public_key(public)
          .serial_number(serial).not_valid_before(start).not_valid_after(end)
          .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True))
@@ -31,7 +31,7 @@ def build(subject, issuer, public, signer, start, end, ca=False, dns=None, eku=N
         b = b.add_extension(x509.SubjectAlternativeName([x509.DNSName(d) for d in dns]), critical=False)
     if eku:
         b = b.add_extension(x509.ExtendedKeyUsage(eku), critical=False)
-    return b.sign(signer, None)
+    return b.sign(signer, algorithm)
 
 
 root_key, mid_key, leaf_key, other_key = key(1), key(2), key(3), key(4)
@@ -45,13 +45,21 @@ plain = build(name("plain"), mid.subject, leaf_key.public_key(), mid_key, start,
 expired = build(name("old.example.com"), mid.subject, leaf_key.public_key(), mid_key,
                 datetime.datetime(2020, 1, 1, tzinfo=UTC), datetime.datetime(2021, 1, 1, tzinfo=UTC), dns=["old.example.com"], serial=5)
 stranger = build(name("stranger"), name("Other CA"), leaf_key.public_key(), other_key, start, end, serial=6)
+p256_root_key = ec.derive_private_key(1, ec.SECP256R1())
+p256_leaf_key = ec.derive_private_key(2, ec.SECP256R1())
+p256_root = build(name("P256 Root"), name("P256 Root"), p256_root_key.public_key(), p256_root_key,
+                  start, end, ca=True, serial=101, algorithm=hashes.SHA256())
+p256_leaf = build(name("p256.example"), p256_root.subject, p256_leaf_key.public_key(), p256_root_key,
+                  start, end, dns=["p256.example"], eku=[ExtendedKeyUsageOID.SERVER_AUTH],
+                  serial=102, algorithm=hashes.SHA256())
 
 # Python checks the chain itself before it is trusted here.
 mid.verify_directly_issued_by(root)
 leaf.verify_directly_issued_by(mid)
 
 der = {n: c.public_bytes(serialization.Encoding.DER) for n, c in
-       [("root", root), ("mid", mid), ("leaf", leaf), ("plain", plain), ("expired", expired), ("stranger", stranger)]}
+       [("root", root), ("mid", mid), ("leaf", leaf), ("plain", plain), ("expired", expired),
+        ("stranger", stranger), ("p256_root", p256_root), ("p256_leaf", p256_leaf)]}
 pem_text = b"".join(c.public_bytes(serialization.Encoding.PEM) for c in [root, mid])
 
 
@@ -150,6 +158,20 @@ BODY = '''    let (root, e1) = x509.parse(a, root_der)
     if e20 != x509.UnknownAuthority { os.exit(27) }
     let (bad7, e21) = x509.verify(a, leaf, options(roots[0..], intermediates[0..], "", .Any, 1u16))
     if e21 != x509.TooDeep { os.exit(28) }
+    let (p256_root, e22) = x509.parse(a, p256_root_der)
+    let (p256_leaf, e23) = x509.parse(a, p256_leaf_der)
+    if e22 != ok || e23 != ok { os.exit(29) }
+    switch p256_leaf.public_key {
+    case .P256 as key:
+        if key.bytes[0] != 4u8 { os.exit(30) }
+    default:
+        os.exit(31)
+    }
+    if x509.verify_signature(p256_leaf, p256_root) != ok || x509.verify_signature(p256_root, p256_root) != ok { os.exit(32) }
+    var p256_roots: [1]x509.Certificate = zero
+    p256_roots[0] = p256_root
+    let (p256_chain, e24) = x509.verify(a, p256_leaf, options(p256_roots[0..], zero, "p256.example", .ServerAuth, 2u16))
+    if e24 != ok || p256_chain.certificates.len != 2usize { os.exit(33) }
     ret ok
 }
 ''' % (start_ns, end_ns)

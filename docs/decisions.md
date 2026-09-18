@@ -12779,3 +12779,15 @@ crypto dependencies or a private-key/signing surface.
 
 RFC 6979's P-256/SHA-256 sample pins a valid signature plus changed-message,
 invalid-point and malformed-DER refusals through the Neper-built fixture.
+
+## D646 -- X.509 verifies P-256 chains without rejecting unused suffixes
+
+`e.crypto.x509` parses RFC 5480 uncompressed P-256 subject keys and verifies
+`ecdsa-with-SHA256` certificate signatures with D645. Inner and outer signature
+AlgorithmIdentifiers must match exactly. Unsupported key/signature algorithms may
+be represented while parsing a server-supplied chain, but they cannot verify a link;
+this lets a caller anchor directly at a supported P-256 issuer without treating an
+unused SHA-384 or RSA suffix as a malformed certificate.
+
+A deterministic P-256 root and server leaf generated beside the existing Ed25519
+fixture pin parsing, self/leaf signatures, DNS/ServerAuth policy and chain building.

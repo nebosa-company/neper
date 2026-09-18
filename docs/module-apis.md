@@ -1479,7 +1479,7 @@ sampling.
 ### `e.crypto.x509`
 
 ```neper
-type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey }
+type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey, P256: sign.P256PublicKey, Unsupported: []const u8 }
 type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool }
 type Pool = struct { certificates: []const Certificate }
 type VerifyOptions = struct { roots: Pool, intermediates: Pool, dns_name: str, now: time.Instant, usage: KeyUsage, max_depth: u16 }
@@ -1501,7 +1501,9 @@ fn verify_signature(certificate: Certificate, issuer: Certificate) -> err
 
 Parsing and verification use the DER and PEM modules and the algorithm set pinned to
 the toolchain. Verification receives roots and time explicitly; it never consults a
-host trust store, clock or network revocation service implicitly.
+host trust store, clock or network revocation service implicitly. The delivered set
+verifies Ed25519 and uncompressed P-256 keys with Ed25519 or ECDSA/SHA-256 signatures;
+unsupported chain suffixes parse but cannot authenticate a link.
 
 ---
 
