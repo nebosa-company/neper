@@ -13421,7 +13421,7 @@ fn resource_field_name(c: *Checker, local_index: usize, at: usize) -> str {
     ret c.locals[local_index].name
 }
 
-// A literal-indexed slot of a fixed affine array. Dynamic indices retain the
+// A comptime-indexed slot of a fixed affine array. Dynamic indices retain the
 // existing view rule until their set-of-elements state is specified.
 fn resource_element_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, bool) {
     let node = tree.nodes[node_index]
@@ -13431,9 +13431,21 @@ fn resource_element_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if tree.nodes[bracket.base].kind != .NameExpr { ret (0usize, 0usize, false) }
     let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, bracket.base)
     if !is_resource || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (0usize, 0usize, false) }
-    let (index, index_type, index_error) = integer_literal_value(c, g.modules[module_index].text, tree.nodes[bracket.first])
-    if index_error != ok || index_type.kind != .Integer || index >= c.resources[local_index].fields.len { ret (0usize, 0usize, false) }
-    ret (local_index, index, true)
+    let checkpoint = c.constant_expr_count
+    let expected_before = c.failure_expected
+    let actual_before = c.failure_actual
+    let mismatch_before = c.failure_mismatch_end
+    let (expression, copy_error) = copy_constant_expr(c, g, tree, module_index, bracket.first)
+    var index = normalized_integer(0usize, false)
+    var index_type = invalid_type()
+    var index_error = copy_error
+    if copy_error == ok { (index, index_type, index_error) = evaluate_constant_expr(c, expression, make_type(.Integer, "usize", module_index)) }
+    c.constant_expr_count = checkpoint
+    c.failure_expected = expected_before
+    c.failure_actual = actual_before
+    c.failure_mismatch_end = mismatch_before
+    if index_error != ok || index.negative || index_type.kind != .Integer || index.magnitude >= c.resources[local_index].fields.len { ret (0usize, 0usize, false) }
+    ret (local_index, index.magnitude, true)
 }
 
 // `resource(cleanup)` between a type declaration's `=` and its body.

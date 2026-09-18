@@ -385,7 +385,7 @@ follow-up. Cold wall, warm wall and image size are within their budgets
 
 **Remaining limitations** (each an obligation, none closed by this record):
 reflection and the format codecs are not stopped at a resource's fields
-(E-SAFETY-0005's last case); D616 tracks literal-indexed slots of fixed arrays, but
+(E-SAFETY-0005's last case); D616-D617 track comptime-indexed slots of fixed arrays, but
 dynamic indices and slices of resources are not tracked as wholes; the generic containers take their element by `own` (D353), but none can hold an
 obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
@@ -416,3 +416,8 @@ a GPU-specific ownership path.
 its element. Literal-indexed slots carry independent states through stores, moves,
 branches, loops and exit audits; the existing dynamic worker-array idiom remains a
 view until the set-of-elements rule is specified.
+
+**D617 follow-up.** The slot identity accepts any comptime integer expression, not
+only a literal. Constant names and arithmetic that evaluate to the same index reach
+the same state, and a failed attempt to fold a dynamic expression leaves the normal
+checker diagnostic state untouched.

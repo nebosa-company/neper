@@ -12422,3 +12422,17 @@ identifying which element is live. Dynamic indices retain the existing view rule
 until a conservative set-of-elements state is specified, and slices remain the next
 containment step. The new accept fixture transfers and closes one literal slot; the
 reject fixtures pin forgotten cleanup and a second close on both host compilers.
+
+## D617 -- Comptime array indices share one ownership slot
+
+D616's fixed-array slot identity is the evaluated comptime integer, not its source
+spelling. A constant name, arithmetic expression or equivalent literal that settles
+to the same in-bounds index reads and updates the same state. The checker reuses the
+existing constant-expression evaluator, restores its scratch checkpoint and any
+tentative mismatch detail, and falls back to the dynamic-index view rule when the
+expression cannot be settled; ownership analysis therefore does not leak a failed
+speculative fold into the program's real diagnostic.
+
+The accept fixture stores through a constant expression and closes through its name.
+The reject fixture closes through that name and then through different arithmetic
+for the same slot, pinning one E-SAFETY-0001 on both host compilers.
