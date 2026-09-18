@@ -12802,3 +12802,15 @@ leaf; algorithm/key mismatches remain protocol or authentication failures.
 The TLS fixture pins the emitted signature-scheme list and an independently generated
 P-256 CertificateVerify. `neper info` reports `ECDSA_P256_SHA256`; P-384/SHA-384,
 RSA and P-256 server private keys remain outside this profile.
+
+## D648 -- TLS handshake framing follows records rather than assuming them
+
+The client now accepts the RFC 8446 compatibility ChangeCipherSpec, then reassembles
+bounded handshake messages across protected records and retains additional messages
+coalesced in one record. Transcript updates remain message-exact and record sequence
+numbers still advance only once per authenticated record. EncryptedExtensions also
+accepts the empty server-name acknowledgement that a server may return for offered SNI.
+
+This closes the record layout used by OpenRouter's endpoint: one compatibility record
+followed by one protected record containing EncryptedExtensions, Certificate,
+CertificateVerify and Finished. Application and alert records remain strict.

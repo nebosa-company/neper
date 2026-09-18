@@ -194,6 +194,33 @@ fn main(a: *mem.Arena) -> err {
     var padded_open_keys = record_keys0
     let (padded_len, padded_type, padded_open_error) = tls.open_record(&padded_open_keys, padded_record[..5usize + padded_written], opened[0..])
     if padded_seal_error != ok || padded_written != 22usize || padded_open_error != ok || padded_len != 2usize || padded_type != 23u8 || !same_bytes(opened[..2usize], "ok") { os.exit(43i32) }
+    let coalesced = "\x08\x00\x00\x00\x14\x00\x00\x00"
+    var coalesced_record: [30]u8 = zero
+    var coalesced_keys = record_keys0
+    let (coalesced_len, coalesced_seal_error) = tls.seal_record(&coalesced_keys, 22u8, coalesced, coalesced_record[0..])
+    if coalesced_seal_error != ok || coalesced_len != 30usize { os.exit(47i32) }
+    var framed: [36]u8 = zero
+    framed[0] = 20u8
+    framed[1] = 3u8
+    framed[2] = 3u8
+    framed[4] = 1u8
+    framed[5] = 1u8
+    mem.copy[u8](framed[6usize..], coalesced_record[0..])
+    var framed_source_state = io.SliceReader { data: framed[0..], off: 0usize }
+    let framed_source = io.slice_reader(&framed_source_state)
+    var framed_sink_state = io.SliceWriter { data: sink_bytes[0..0], off: 0usize }
+    let framed_sink = io.slice_writer(&framed_sink_state)
+    let (framed_stream, framed_create_error) = tls.client(a, framed_source, framed_sink, client_config)
+    if framed_create_error != ok { os.exit(48i32) }
+    var framed_read_keys = record_keys0
+    var messages: tls.HandshakeReader = zero
+    messages.state = mem.cast[*tls.State](framed_stream.state)
+    messages.keys = &framed_read_keys
+    var first_message: [4]u8 = zero
+    var second_message: [4]u8 = zero
+    let (first_len, first_error) = tls.read_handshake_message(&messages, first_message[0..])
+    let (second_len, second_error) = tls.read_handshake_message(&messages, second_message[0..])
+    if first_error != ok || second_error != ok || first_len != 4usize || second_len != 4usize || !same_bytes(first_message[0..], coalesced[..4usize]) || !same_bytes(second_message[0..], coalesced[4usize..]) { os.exit(49i32) }
 
     // The narrow hello profile negotiates only TLS 1.3, AES-128-GCM/SHA-256,
     // X25519 and Ed25519, with server-preference ALPN.

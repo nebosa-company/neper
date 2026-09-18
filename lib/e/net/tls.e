@@ -53,6 +53,14 @@ type State = struct {
     controlled: bool,
 }
 
+type HandshakeReader = struct {
+    state: *State,
+    keys: *TrafficKeys,
+    bytes: [32768]u8,
+    at: usize,
+    len: usize,
+}
+
 // RFC 8446 section 7.1's HKDF-Expand-Label over the one supported hash. The
 // fixed buffer is larger than every TLS 1.3 label; the explicit one-byte
 // vector limits prevent accidental truncation.
@@ -815,6 +823,10 @@ fn parse_encrypted_extensions(message: []const u8, offered: []const str) -> (str
         let (value, value_error) = take_bytes(&e, extension_len)
         if extension_kind_error != ok || extension_len_error != ok || value_error != ok { ret ("", Protocol) }
         if has_extension(extensions[..extension_at], extension_kind) { ret ("", Protocol) }
+        if extension_kind == 0usize {
+            if value.len != 0usize { ret ("", Protocol) }
+            continue
+        }
         if extension_kind != 16usize { ret ("", Unsupported) }
         if extension_kind == 16usize {
             if selected.len != 0usize || value.len < 3usize { ret ("", Protocol) }
@@ -888,29 +900,72 @@ fn send_protected(state: *State, keys: *TrafficKeys, content_type: u8, content: 
     ret ok
 }
 
-fn read_protected_content(state: *State, keys: *TrafficKeys, out: []u8) -> (usize, u8, err) {
-    let check_error = check_control(state)
-    if check_error != ok { ret (0usize, 0u8, check_error) }
-    var header: [5]u8 = zero
-    let header_error = io.read_exact(&state.source, header[0..])
-    if header_error != ok { ret (0usize, 0u8, Handshake) }
-    let sealed_len = (usize(header[3]) << 8usize) | usize(header[4])
-    if sealed_len > 16640usize { ret (0usize, 0u8, Protocol) }
-    let content_check_error = check_control(state)
-    if content_check_error != ok { ret (0usize, 0u8, content_check_error) }
-    var record: [16645]u8 = zero
-    mem.copy[u8](record[..5usize], header[0..])
-    let record_error = io.read_exact(&state.source, record[5usize..5usize + sealed_len])
-    if record_error != ok { ret (0usize, 0u8, Handshake) }
-    let (length, content_type, open_error) = open_record(keys, record[..5usize + sealed_len], out)
-    ret (length, content_type, open_error)
+fn read_protected_content(state: *State, keys: *TrafficKeys, out: []u8, allow_ccs: bool) -> (usize, u8, err) {
+    while true {
+        let check_error = check_control(state)
+        if check_error != ok { ret (0usize, 0u8, check_error) }
+        var header: [5]u8 = zero
+        let header_error = io.read_exact(&state.source, header[0..])
+        if header_error != ok { ret (0usize, 0u8, Handshake) }
+        let sealed_len = (usize(header[3]) << 8usize) | usize(header[4])
+        if header[0] == 20u8 {
+            if !allow_ccs || header[1] != 3u8 || header[2] != 3u8 || sealed_len != 1usize { ret (0usize, 0u8, Protocol) }
+            var ccs: [1]u8 = zero
+            let ccs_error = io.read_exact(&state.source, ccs[0..])
+            if ccs_error != ok { ret (0usize, 0u8, Handshake) }
+            if ccs[0] != 1u8 { ret (0usize, 0u8, Protocol) }
+            continue
+        }
+        if header[0] != 23u8 || sealed_len > 16640usize { ret (0usize, 0u8, Protocol) }
+        let content_check_error = check_control(state)
+        if content_check_error != ok { ret (0usize, 0u8, content_check_error) }
+        var record: [16645]u8 = zero
+        mem.copy[u8](record[..5usize], header[0..])
+        let record_error = io.read_exact(&state.source, record[5usize..5usize + sealed_len])
+        if record_error != ok { ret (0usize, 0u8, Handshake) }
+        let (length, content_type, open_error) = open_record(keys, record[..5usize + sealed_len], out)
+        ret (length, content_type, open_error)
+    }
 }
 
 fn read_protected(state: *State, keys: *TrafficKeys, expected_type: u8, out: []u8) -> (usize, err) {
-    let (length, content_type, open_error) = read_protected_content(state, keys, out)
+    let (length, content_type, open_error) = read_protected_content(state, keys, out, true)
     if open_error != ok { ret (0usize, open_error) }
     if content_type != expected_type { ret (0usize, Protocol) }
     ret (length, ok)
+}
+
+fn read_handshake_message(messages: *HandshakeReader, out: []u8) -> (usize, err) {
+    while true {
+        let available = messages.len - messages.at
+        if available >= 4usize {
+            let body_len = (usize(messages.bytes[messages.at + 1usize]) << 16usize) | (usize(messages.bytes[messages.at + 2usize]) << 8usize) | usize(messages.bytes[messages.at + 3usize])
+            let total = body_len + 4usize
+            if total > 16384usize || total > out.len { ret (0usize, Protocol) }
+            if available >= total {
+                mem.copy[u8](out[..total], messages.bytes[messages.at..messages.at + total])
+                messages.at += total
+                if messages.at == messages.len {
+                    messages.at = 0usize
+                    messages.len = 0usize
+                }
+                ret (total, ok)
+            }
+        }
+        if messages.at != 0usize {
+            var move_at = 0usize
+            while messages.at + move_at < messages.len {
+                messages.bytes[move_at] = messages.bytes[messages.at + move_at]
+                move_at += 1usize
+            }
+            messages.len = move_at
+            messages.at = 0usize
+        }
+        let (count, content_type, read_error) = read_protected_content(messages.state, messages.keys, messages.bytes[messages.len..], true)
+        if read_error != ok { ret (0usize, read_error) }
+        if content_type != 22u8 || count == 0usize { ret (0usize, Protocol) }
+        messages.len += count
+    }
 }
 
 fn client_handshake(state: *State) -> err {
@@ -935,26 +990,29 @@ fn client_handshake(state: *State) -> err {
     if client_keys_error != ok || server_keys_error != ok { ret Handshake }
     var client_handshake_keys = client_handshake_keys0
     var server_handshake_keys = server_handshake_keys0
+    var server_messages: HandshakeReader = zero
+    server_messages.state = state
+    server_messages.keys = &server_handshake_keys
     var message: [16384]u8 = zero
-    let (extensions_len, extensions_error) = read_protected(state, &server_handshake_keys, 22u8, message[0..])
+    let (extensions_len, extensions_error) = read_handshake_message(&server_messages, message[0..])
     if extensions_error != ok { ret extensions_error }
     let (selected, selection_error) = parse_encrypted_extensions(message[..extensions_len], state.client_config.alpn)
     if selection_error != ok { ret selection_error }
     state.selected_alpn = selected
     hash.sha256_update(&transcript, message[..extensions_len])
-    let (certificate_len, certificate_error) = read_protected(state, &server_handshake_keys, 22u8, message[0..])
+    let (certificate_len, certificate_error) = read_handshake_message(&server_messages, message[0..])
     if certificate_error != ok { ret certificate_error }
     let (certificates, parse_certificate_error) = parse_certificate_message(state.arena, message[..certificate_len])
     if parse_certificate_error != ok { ret parse_certificate_error }
     let verify_chain_error = verify_certificate_set(state.arena, certificates, state.client_config)
     if verify_chain_error != ok { ret verify_chain_error }
     hash.sha256_update(&transcript, message[..certificate_len])
-    let (certificate_verify_len, certificate_verify_error) = read_protected(state, &server_handshake_keys, 22u8, message[0..])
+    let (certificate_verify_len, certificate_verify_error) = read_handshake_message(&server_messages, message[0..])
     if certificate_verify_error != ok { ret certificate_verify_error }
     let verify_signature_error = verify_certificate_verify(certificates.leaf, transcript_digest(transcript), message[..certificate_verify_len])
     if verify_signature_error != ok { ret verify_signature_error }
     hash.sha256_update(&transcript, message[..certificate_verify_len])
-    let (server_finished_len, server_finished_error) = read_protected(state, &server_handshake_keys, 22u8, message[0..])
+    let (server_finished_len, server_finished_error) = read_handshake_message(&server_messages, message[0..])
     if server_finished_error != ok { ret server_finished_error }
     let verify_server_finished_error = verify_finished(secrets.server, transcript_digest(transcript), message[..server_finished_len])
     if verify_server_finished_error != ok { ret verify_server_finished_error }
@@ -1120,7 +1178,7 @@ fn stream_read(ctx: *void, dst: []u8) -> (usize, err) {
     if state.closed || state.failed || !state.complete { ret (0usize, Closed) }
     if state.peer_closed { ret (0usize, io.End) }
     while state.read_at == state.read_len {
-        let (length, content_type, read_error) = read_protected_content(state, &state.read_keys, state.read_buffer[0..])
+        let (length, content_type, read_error) = read_protected_content(state, &state.read_keys, state.read_buffer[0..], false)
         if read_error != ok {
             state.failed = true
             ret (0usize, read_error)
