@@ -8,6 +8,8 @@ use e.mem
 
 error GenericSnapshot
 error GenericMutation
+error MultipleSnapshot
+error MultipleMutation
 
 type Big = struct { a: usize, b: usize, c: usize }
 type Holder = struct { big: Big, target: *usize }
@@ -28,6 +30,13 @@ fn overwrite_envelope[T: type](v: Envelope[T], p: *Envelope[T]) -> usize {
 fn overwrite_element(v: Big, items: []Big) -> usize {
     items[0usize].a = 77usize
     ret v.a
+}
+
+fn overwrite_multiple(v: Big, p: *Big) -> (Big, usize) {
+    p.a = 0usize
+    p.b = 0usize
+    p.c = 0usize
+    ret (v, v.a + v.b + v.c)
 }
 
 fn through_field(h: Holder, p: *Holder) -> usize {
@@ -52,6 +61,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let generic_before = overwrite_envelope[u8](generic, &generic)
     if generic_before != 100usize { ret GenericSnapshot }
     if generic.left != 0usize || generic.right != 0usize { ret GenericMutation }
+    var multiple = Big { a: 11usize, b: 12usize, c: 13usize }
+    let (multiple_before, multiple_sum) = overwrite_multiple(multiple, &multiple)
+    if read(multiple_before) != 1233usize || multiple_sum != 36usize { ret MultipleSnapshot }
+    if read(multiple) != 0usize { ret MultipleMutation }
     let (items, items_error) = mem.alloc[Big](a, 1usize)
     if items_error != ok { ret items_error }
     items[0usize] = Big { a: 4usize, b: 0usize, c: 0usize }

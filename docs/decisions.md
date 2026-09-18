@@ -12834,3 +12834,15 @@ The same fixture observes the returned snapshot and the zeroed original in debug
 release builds. This closes the generic-instance item in H05's acceptance list without
 adding a generic-specific lowering path: the instantiated call uses D358's ordinary
 aggregate snapshot lowering.
+
+## D651 -- Multiple returns preserve a by-value snapshot
+
+H05's snapshot remains the source for every result when a call uses the hidden
+multiple-return slot. A focused call passes one large aggregate both by value and by
+pointer, overwrites the caller's storage, then returns the saved aggregate together
+with a scalar derived from it.
+
+Debug and release fixtures require both returned values to describe the pre-call
+aggregate while the caller observes the overwrite. This pins the interaction between
+D358's argument copy and the multiple-return ABI rather than testing either mechanism
+in isolation.
