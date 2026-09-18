@@ -3672,7 +3672,9 @@ offset (D619, D620); no second identity
 is created by the view. Each diagnostic names the indexed slot and preserves that slot's own
 acquisition or move site (D618). Dynamic slice offsets and slices without a tracked
 fixed-array owner are not tracked as wholes. Reflection and the
-format codecs are not yet told a resource has no fields outside its module.
+`meta.fields[T]()` is empty when `T` is a resource named by another module; its
+representation is not a reflective serialization surface. Format-codec rejection
+of an affine field in an otherwise plain aggregate remains staged below.
 
 ### Debug fills
 

@@ -12533,3 +12533,15 @@ accessors, which return plain view values without exposing an affine value's bit
 
 The focused accept fixture reads a standard stream through `os.file_handle`; the
 reject fixture reads `File.raw` directly and pins E-SAFETY-0010 on both hosts.
+
+## D625 -- Resource reflection is an empty field sequence outside its module
+
+`meta.fields[T]()` now yields no fields when `T` is a resource owned by another
+module. The checker records this as an explicit empty sequence rather than generic
+deferral, so a concrete unrolled loop emits and checks zero copies while an
+unresolved type parameter still waits for its instance.
+
+The rule hides representation without hiding the fields of a plain aggregate that
+contains a resource; those fields remain visible so D626-D627 can diagnose the
+attempted reflective copy by name. A focused executable asserts that `os.File` has
+zero reflectable fields on both hosts.

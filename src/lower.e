@@ -5363,6 +5363,7 @@ fn lower_binding_member_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tr
 }
 
 fn lower_unrolled_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, sequence: check.MetaSequence, name: str, body_index: usize, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
+    if sequence.empty { ret ok }
     let aggregate = c.aggregates[sequence.aggregate_index]
     var field_at = 0usize
     while field_at < aggregate.field_count {

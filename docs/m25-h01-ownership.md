@@ -384,8 +384,8 @@ follow-up. Cold wall, warm wall and image size are within their budgets
 (warm p50 96 ms against 82 ms is +17% at eight workers, +0% single-worker).
 
 **Remaining limitations** (each an obligation, none closed by this record):
-reflection and the format codecs are not stopped at a resource's fields
-(E-SAFETY-0005's last case); D616-D617 track comptime-indexed slots of fixed arrays, but
+format codecs are not yet stopped at an affine field of an otherwise plain
+aggregate (E-SAFETY-0005's last case); D616-D617 track comptime-indexed slots of fixed arrays, but
 dynamic indices and slices of resources are not tracked as wholes; the generic containers take their element by `own` (D353), but none can hold an
 obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
@@ -441,3 +441,7 @@ slices without a tracked fixed-array owner remain outside the rule.
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
 returns a plain `Handle` view when callers need the platform value, so `File.raw`
 now receives the same E-SAFETY-0010 as a declared resource's private field.
+
+**D625 follow-up.** `meta.fields[T]()` produces an empty compile-time sequence when
+`T` is a resource declared by another module, including the seeded OS handles. This
+is an opaque boundary, not generic deferral: the unrolled loop has zero copies.

@@ -11136,6 +11136,9 @@ type MetaSequence = struct {
     kind: MetaSequenceKind,
     subject: Type,
     aggregate_index: usize,
+    // A resource outside its declaring module has no reflectable fields. This is
+    // a real empty sequence, distinct from a generic subject deferred to an instance.
+    empty: bool,
     // The subject is still a comptime parameter, so there is nothing to enumerate
     // yet. The template body is checked symbolically once and each instance is checked
     // again with the parameter bound, and that is where the unrolling belongs.
@@ -11207,6 +11210,7 @@ fn meta_sequence(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     }
     info.subject = subject
     info.aggregate_index = aggregate_index
+    if kind == .Fields && resource_type(c, subject) && !seeded_arena(c, subject) && aggregate.module_index != module_index { info.empty = true }
     ret (info, ok)
 }
 
@@ -11243,6 +11247,7 @@ fn meta_sequence_binding(c: *Checker, sequence: MetaSequence, field_index: usize
 // One checked copy of the body per step. Nothing is added to `c.locals`: the binding
 // is a comptime value, not a local, so the body reaches it through the binding stack.
 fn check_unrolled_for(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function, sequence: MetaSequence, name: str, block_index: usize) -> err {
+    if sequence.empty { ret ok }
     let aggregate = c.aggregates[sequence.aggregate_index]
     var field_at = 0usize
     while field_at < aggregate.field_count {
