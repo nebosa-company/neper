@@ -12395,3 +12395,13 @@ fixture pins failed read/write counts and labels, successful one-byte transfer w
 unchanged prior details, and concurrent failures where host threads are available,
 on both host builds. Generic propagation through arbitrary `e.io` callbacks and the
 allocation-failure rows remain H07 work.
+
+## D615 -- The Linux static gate records D614's checked I/O surface
+
+D614 adds two source functions and one shared detail constructor to the Linux host
+module. The fixed sc500k debug build consequently crosses the next one-megabyte worker-
+arena boundary: 2274 to 2275 MB (under 0.05%), reproduced identically in a second
+measurement. Its 2,979,824-byte image is unchanged, and the release cell remains
+2981 MB and 2,079,280 bytes. D506's zero-growth rule makes this deterministic source-
+surface cost an explicit decision rather than measurement noise, so the Linux static
+baseline is re-pinned only for that debug arena cell.
