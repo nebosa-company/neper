@@ -12846,3 +12846,14 @@ Debug and release fixtures require both returned values to describe the pre-call
 aggregate while the caller observes the overwrite. This pins the interaction between
 D358's argument copy and the multiple-return ABI rather than testing either mechanism
 in isolation.
+
+## D652 -- Foreign-call wrappers cannot invalidate a value snapshot
+
+A checked wrapper may call an imported function that writes through a pointer passed
+beside a large by-value aggregate. The aggregate still has D358 snapshot semantics:
+the wrapper observes its value at argument evaluation even after the foreign write,
+while the caller observes the write on return.
+
+The cross-host fixture uses the platform C runtime's `memset` through the declared C
+ABI and checks the same behavior in debug and release. This closes H05's external-ABI
+wrapper acceptance item without granting foreign code a special alias exception.

@@ -5,11 +5,14 @@
 // value still reaches the storage it points at. Built in both modes, so the
 // inliner's view is the same.
 use e.mem
+use plat
 
 error GenericSnapshot
 error GenericMutation
 error MultipleSnapshot
 error MultipleMutation
+error ExternalSnapshot
+error ExternalMutation
 
 type Big = struct { a: usize, b: usize, c: usize }
 type Holder = struct { big: Big, target: *usize }
@@ -39,6 +42,11 @@ fn overwrite_multiple(v: Big, p: *Big) -> (Big, usize) {
     ret (v, v.a + v.b + v.c)
 }
 
+fn overwrite_external(v: Big, p: *Big) -> usize {
+    plat.fill_zero(mem.cast[*u8](p), mem.size_of[Big]())
+    ret read(v)
+}
+
 fn through_field(h: Holder, p: *Holder) -> usize {
     p.big.c = 55usize
     *h.target = 12usize
@@ -65,6 +73,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (multiple_before, multiple_sum) = overwrite_multiple(multiple, &multiple)
     if read(multiple_before) != 1233usize || multiple_sum != 36usize { ret MultipleSnapshot }
     if read(multiple) != 0usize { ret MultipleMutation }
+    var external = Big { a: 14usize, b: 15usize, c: 16usize }
+    if overwrite_external(external, &external) != 1566usize { ret ExternalSnapshot }
+    if read(external) != 0usize { ret ExternalMutation }
     let (items, items_error) = mem.alloc[Big](a, 1usize)
     if items_error != ok { ret items_error }
     items[0usize] = Big { a: 4usize, b: 0usize, c: 0usize }
