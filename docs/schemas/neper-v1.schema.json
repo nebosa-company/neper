@@ -1370,7 +1370,8 @@
         "host_target",
         "build_targets",
         "cpu_levels",
-        "features"
+        "features",
+        "tls"
       ],
       "properties": {
         "record": {
@@ -1433,6 +1434,44 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "versions",
+            "cipher_suites",
+            "key_exchange",
+            "signature_algorithms",
+            "certificate_format",
+            "certificate_message_limit",
+            "chain_depth",
+            "key_schedule",
+            "entropy_minimum_bytes_per_handshake"
+          ],
+          "properties": {
+            "versions": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "cipher_suites": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "key_exchange": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "signature_algorithms": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "certificate_format": { "type": "string" },
+            "certificate_message_limit": { "type": "integer", "minimum": 1 },
+            "chain_depth": { "type": "integer", "minimum": 1 },
+            "key_schedule": { "type": "string" },
+            "entropy_minimum_bytes_per_handshake": { "type": "integer", "minimum": 1 }
           }
         }
       }

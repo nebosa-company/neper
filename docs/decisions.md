@@ -12741,3 +12741,10 @@ version, cipher suite, X25519, Ed25519, concatenated-DER certificate profile, 16
 certificate-message limit, depth-eight validation, HKDF-SHA256 schedule and 64-byte
 fresh-entropy minimum. Unsupported profiles remain absent instead of being inferred
 from lower-level crypto primitives.
+
+## D642 -- The v1 stream schema types the TLS capability record
+
+Full-suite validation found that D641's structured `tls` object was not yet admitted
+by the closed `info` record schema. The v1 schema now requires and types every emitted
+TLS profile field, including its arrays, limits and entropy minimum, so consumers can
+validate the release contract instead of treating it as unstructured metadata.
