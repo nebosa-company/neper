@@ -12464,3 +12464,17 @@ slice obligation and does not claim offset-range or dynamic-index tracking. The
 accept fixture closes one slot through a two-slice alias chain; the reject fixture
 closes through the slice and then the array and pins E-SAFETY-0001 at the second use
 on both host compilers.
+
+## D620 -- Comptime slice offsets retain the same resource slots
+
+A local slice range over a tracked fixed resource array records a comptime lower
+bound in addition to its owner. Index zero of `files[1..]` is therefore `files[1]`,
+and a direct alias of that slice carries both the ultimate array owner and the
+accumulated offset. The lower bound uses the same speculative constant evaluator as
+D617 and restores its scratch and mismatch state on failure.
+
+Dynamic lower bounds remain views outside this tracked subset, and an upper bound
+does not create ownership: the runtime bounds check still decides whether an access
+is valid. The accept fixture transfers slot one through a shifted slice and a second
+alias; the reject fixture closes through the slice and then through `files[1]`,
+pinning the shared identity and move site on both host compilers.

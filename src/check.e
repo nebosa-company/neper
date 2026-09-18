@@ -13605,14 +13605,32 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         let (viewed, is_place) = place_base_local(c, g, tree, module_index, initializer_index)
         if is_place && viewed != local_index && (c.locals[viewed].ty.kind == .Slice || c.locals[viewed].ty.kind == .Array || c.locals[viewed].ty.kind == .Named) {
             c.resources[local_index].points_to = viewed + 1usize
+            var owner = viewed
+            var base_offset = 0usize
+            var base_known = c.locals[viewed].ty.kind == .Array
+            if c.locals[viewed].ty.kind == .Slice && c.resources[viewed].slice_offset_known && c.resources[viewed].points_to != 0usize {
+                owner = c.resources[viewed].points_to - 1usize
+                base_offset = c.resources[viewed].slice_offset
+                base_known = true
+                c.resources[local_index].points_to = owner + 1usize
+            }
             let initializer = tree.nodes[initializer_index]
             if initializer.kind == .BracketPostfix {
                 var bracket: BracketInfo = zero
-                if read_bracket(c, tree, initializer, &bracket) == ok && bracket.range && bracket.child_count == 1usize { c.resources[local_index].slice_offset_known = true }
+                if read_bracket(c, tree, initializer, &bracket) == ok && bracket.range && base_known {
+                    var lower = 0usize
+                    var lower_known = true
+                    var range_at = usize(tree.nodes[bracket.base].token_end)
+                    while range_at < usize(initializer.token_end) && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
+                    if bracket.child_count >= 2usize && usize(tree.nodes[bracket.first].token_start) < range_at { (lower, lower_known) = resource_index_value(c, g, tree, module_index, bracket.first) }
+                    if lower_known && base_offset <= c.resources[owner].fields.len && lower <= c.resources[owner].fields.len - base_offset {
+                        c.resources[local_index].slice_offset = base_offset + lower
+                        c.resources[local_index].slice_offset_known = true
+                    }
+                }
             } else {
-                if c.locals[viewed].ty.kind == .Slice && c.resources[viewed].slice_offset_known && c.resources[viewed].points_to != 0usize {
-                    c.resources[local_index].points_to = c.resources[viewed].points_to
-                    c.resources[local_index].slice_offset = c.resources[viewed].slice_offset
+                if base_known {
+                    c.resources[local_index].slice_offset = base_offset
                     c.resources[local_index].slice_offset_known = true
                 }
             }

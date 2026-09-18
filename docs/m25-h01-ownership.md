@@ -432,3 +432,8 @@ array owner and zero offset; direct slice aliases retain that same owner. A comp
 index through either spelling reads or consumes the array's one slot state, so a
 slice cannot manufacture a second resource identity. Offset ranges and dynamic
 indices remain outside this increment.
+
+**D620 follow-up.** A slice range with a comptime lower bound retains that offset
+into the fixed array's slot table, including through direct slice aliases. Thus
+`files[1..][0]` and `files[1]` name one ownership identity. Dynamic lower bounds and
+slices without a tracked fixed-array owner remain outside the rule.
