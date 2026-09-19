@@ -13459,3 +13459,13 @@ still points to live storage.
 Runtime indices use a wildcard query segment over the existing inline and sparse
 alias paths. Single-target consumers do not choose an arbitrary candidate; broader
 ownership moves through dynamic indices remain outside this increment.
+
+## D712 -- Runtime array pointer returns check every candidate region
+
+Returning a runtime-indexed pointer from a tracked fixed array across a deferred
+region reset checks every owner at the matching alias path. If any candidate
+belongs to the reset region, the return is E-SAFETY-0018 against that owner.
+
+The return boundary consumes the same candidate iterator as reads. It does not
+fall back to an unrelated alias elsewhere in the carrier once the expression is
+known to be a runtime-indexed path.

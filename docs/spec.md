@@ -3658,7 +3658,9 @@ not add partial moves from a variant payload.
   (D707-D708); separate comptime element assignments preserve the same identities
   (D709). A runtime-indexed read queries every possible tracked element owner and
   is rejected if any candidate dangles (D711); it does not choose an arbitrary
-  owner for operations that require one exact identity. An
+  owner for operations that require one exact identity. Returning such a pointer
+  across a deferred reset checks the same candidate set and rejects when any
+  matching owner belongs to that region (D712). An
   aggregate whose second or later tracked field points into that region is the same
   carrier escape, including when it has only nested pointer paths (D692, D697,
   D702), and copying that aggregate or assigning its pointer fields separately

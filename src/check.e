@@ -14156,6 +14156,12 @@ fn dynamic_alias_candidate(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modu
     ret (pointed, true)
 }
 
+fn has_dynamic_alias_path(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> bool {
+    var members: [128]str = zero
+    let (_, member_count, found) = local_field_path(c, g, tree, module_index, node_index, members[0usize..members.len])
+    ret found && resource_members_dynamic(members[0usize..member_count])
+}
+
 // The first field of a struct literal given `&x` of a local (D413): which local, and
 // the field's name.
 fn literal_address_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, literal_index: usize) -> (usize, str, bool) {
@@ -15385,7 +15391,21 @@ fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         local_index = aliased
         is_resource = true
     }
-    if !has_alias {
+    let dynamic_path = has_dynamic_alias_path(c, g, tree, module_index, node_index)
+    if !has_alias && dynamic_path {
+        var wanted = 0usize
+        while true {
+            let (candidate, found) = dynamic_alias_candidate(c, g, tree, module_index, node_index, wanted)
+            if !found { break }
+            if c.resources[candidate].region != 0usize {
+                local_index = candidate
+                is_resource = true
+                break
+            }
+            wanted += 1usize
+        }
+    }
+    if !has_alias && !dynamic_path {
         let (carrier, has_carrier) = place_base_local(c, g, tree, module_index, node_index)
         if has_carrier {
             if c.resources[carrier].points_to != 0usize {

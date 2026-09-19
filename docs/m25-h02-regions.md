@@ -326,3 +326,7 @@ not an earlier element or the fixed-array carrier.
 **D711** resolves a runtime-indexed pointer element as the set of every tracked
 owner at the longest matching alias path. A read is E-SAFETY-0013 when any member
 of that set dangles; exact indices retain their existing single-owner behavior.
+
+**D712** applies that candidate set at a return boundary. A runtime-selected
+pointer cannot cross a deferred reset when any matching element belongs to the
+reset region, and unrelated carrier paths are not substituted for the selection.
