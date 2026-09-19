@@ -481,6 +481,10 @@ discharge is specified by the following increments.
 E-SAFETY-0003. Without a proven exhaustive sweep, the checker cannot identify the
 remaining owners or discharge the slice's collective obligation.
 
+**D723 follow-up.** The canonical zero-to-`slice.len` unit-step loop is an exhaustive
+sweep. A consuming element access in that loop discharges the collective owned-slice
+obligation; other loop shapes remain partial moves.
+
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
 returns a plain `Handle` view when callers need the platform value, so `File.raw`

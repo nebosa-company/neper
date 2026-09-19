@@ -13579,3 +13579,13 @@ the slice's collective obligation or identify which elements remain for an exit.
 
 Borrowed slices keep their existing view behavior. The rule applies only to the
 owned slice state introduced by D721.
+
+## D723 -- A zero-to-length sweep drains an owned resource slice
+
+The canonical `i = 0; while i < slice.len { consume(slice[i]); i += 1 }`
+discharges the owned slice's collective obligation. The induction variable must be
+initialized to zero, advance once by one, and index the same slice whose length is
+the loop bound.
+
+This is a bounded syntactic proof, not general relational range analysis. Any other
+single-element consume remains D722's partial move.
