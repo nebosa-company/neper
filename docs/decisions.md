@@ -13111,3 +13111,13 @@ one of its local copies.
 This extends the existing `points_to` record instead of adding a second alias graph.
 The focused fixture pins an arena mark through a copied parameter and E-SAFETY-0013
 after reset through the original spelling.
+
+## D677 -- A copied region mark retains the original checkpoint
+
+A local copied from a live mark records that mark's canonical local. Reset through
+the copy starts at the original checkpoint, so allocations made between the original
+binding and the copy are invalidated too.
+
+The canonical local reuses the existing `points_to` slot, and allocation matching
+ignores copied marks as independent nested checkpoints. The focused fixture pins the
+otherwise-missed allocation and its E-SAFETY-0013 evidence.

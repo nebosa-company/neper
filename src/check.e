@@ -355,9 +355,9 @@ type Resource = struct {
     borrowed: bool,
     pinned: usize,
     pin_at: usize,
-    // A pointer local's target (D393, H02/H04): the local `&x` was taken of, plus
-    // one, when this local was bound from `&x`; a read or a store through it is a
-    // read or a store of `x`, which the lending rule then sees.
+    // A pointer local's target (D393, H02/H04), or a copied mark's original mark
+    // (D677), plus one. Pointer reads/stores reach the target; reset reaches the
+    // original checkpoint rather than treating its copy as a newer mark.
     points_to: usize,
     // The field the alias runs through (D413): empty for a pointer or slice local,
     // whose every use reaches the target; the member's name for a struct local one
@@ -13293,7 +13293,7 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         var mark_at = c.local_count
         while mark_at > 0usize {
             mark_at = mark_at - 1usize
-            if mark_at != local_index && c.resources[mark_at].mark_arena.len != 0usize && c.resources[mark_at].state == resource_owned && same(c.resources[mark_at].mark_arena, arena_text) {
+            if mark_at != local_index && c.resources[mark_at].mark_arena.len != 0usize && c.resources[mark_at].points_to == 0usize && c.resources[mark_at].state == resource_owned && same(c.resources[mark_at].mark_arena, arena_text) {
                 c.resources[local_index].region = mark_at + 1usize
                 break
             }
@@ -13330,8 +13330,9 @@ fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         let (mark_argument, has_mark) = call_argument_node(tree, node, 1usize)
         if !has_mark || tree.nodes[mark_argument].kind != .NameExpr { ret }
         let mark_token = c.tokens[usize(tree.nodes[mark_argument].token_start)]
-        let (mark_index, mark_found) = find_local(c, g.modules[module_index].text[mark_token.start..mark_token.end])
+        var (mark_index, mark_found) = find_local(c, g.modules[module_index].text[mark_token.start..mark_token.end])
         if !mark_found || c.resources[mark_index].mark_arena.len == 0usize { ret }
+        if c.resources[mark_index].points_to != 0usize { mark_index = c.resources[mark_index].points_to - 1usize }
         // A deferred call runs at scope exit, not where it is registered (D675).
         // Reuse otherwise-unused mark fields to remember that boundary without
         // growing every Resource record.
@@ -14208,6 +14209,20 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     // a field aliases `x` through that field (D413). An assignment records the same
     // (D416), in `resource_assign`.
     record_alias(c, g, tree, module_index, local_index, initializer_index, has_initializer)
+    if has_initializer && tree.nodes[initializer_index].kind == .NameExpr {
+        let source_token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
+        let (source_local, source_found) = find_local(c, g.modules[module_index].text[source_token.start..source_token.end])
+        if source_found && c.resources[source_local].mark_arena.len != 0usize {
+            c.resources[local_index].mark_arena = c.resources[source_local].mark_arena
+            c.resources[local_index].points_to = source_local + 1usize
+            if c.resources[source_local].points_to != 0usize { c.resources[local_index].points_to = c.resources[source_local].points_to }
+            c.resources[local_index].state = resource_owned
+            c.resources[local_index].view = true
+            c.resources[local_index].obligated = false
+            c.affine_answer_valid = false
+            ret ok
+        }
+    }
     let kind = affine_kind(c, c.locals[local_index].ty, 0usize)
     if kind == 0u8 { ret region_bind(c, g, tree, module_index, local_index, statement, initializer_index, has_initializer, from_call, call) }
     c.resources[local_index].acquired = usize(statement.token_start)

@@ -185,3 +185,7 @@ pin both halves of that timing rule.
 **D676** extends canonical storage identity to copies of pointer parameters. The
 parameter is the lexical identity when its external pointee has no local of its own,
 so marks and allocations made through the original and its copies share one region.
+
+**D677** preserves a mark's original checkpoint across local copies. Reset through
+the copy therefore invalidates allocations made after the original mark, including
+those bound before the copy itself; the copy is not modeled as a nested mark.

@@ -3619,7 +3619,8 @@ not add partial moves from a variant payload.
   back something that can hold a pointer belongs to that region, as does a binding
   from such a value; `mem.reset(a, m)` ends the region and every value of it, and of
   any later mark on `a`, is dangling: it cannot be read, passed, stored or returned
-  (`E-SAFETY-0013`); its `.len` may be read. A slice, pointer or string bound from a
+  (`E-SAFETY-0013`); a copied mark denotes the original checkpoint rather than a
+  newer nested one (D677); its `.len` may be read. A slice, pointer or string bound from a
   call given `&c`, where `c` is a local and the call takes no arena, is a view of
   `c`; a later call given `&c` through a `*T` parameter that gives back nothing
   holding a pointer mutates `c`, and every view of it is dangling (`E-SAFETY-0014`).
