@@ -4781,6 +4781,21 @@ fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) 
         ret (expression.value, contextual_type, ok)
     }
     if expression.kind == .Name {
+        // A generic instance's integer argument is a constant in its body. Resolve it
+        // here as array lengths and explicit generic arguments already do, so a
+        // comptime `if N == 0` can discard an unreachable recursive arm.
+        if c.active_arguments && c.active_instance < c.function_count && expression.module_index == c.functions[c.active_instance].module_index {
+            let (parameter_index, parameter_found) = active_comptime_parameter(c, expression.name)
+            if parameter_found {
+                let parameter = c.comptime_parameters[parameter_index]
+                if parameter.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+                let (argument, argument_found) = active_argument(c, parameter_index)
+                if !argument_found { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
+                let (argument_type, context_error) = apply_context(c, parameter.ty, expected)
+                if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+                ret (normalized_integer(argument.value, false), argument_type, ok)
+            }
+        }
         let (constant_index, found) = find_constant(c, expression.module_index, expression.name)
         if !found { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let dependency_error = evaluate_constant(c, constant_index)

@@ -13642,3 +13642,16 @@ The selected functions live in another module, so the comparison covers the publ
 strategy identity and cross-module specialization path rather than comparing two
 local helper calls. This is the equivalent-task evidence H06 requires before the
 explicit path is treated as a supported alternative to implicit dispatch.
+
+## D729 -- Recursive strategy specialization has a measured boundary
+
+`protocol_strategy_recursive` forwards one exact function strategy through a
+generic specialized recursively from 32 to 0. A comptime `if` removes the
+recursive arm at zero; increment and decrement strategies therefore create two
+finite, behaviorally distinct chains and both execute to their expected result.
+
+The focused gate also builds the fixture immediately below its required
+`--instances` count and requires the existing structured E-COMPTIME-0001 refusal,
+then builds at the exact count. This connects recursive strategy stress to the
+user-selected specialization budget instead of treating compiler capacity as the
+only recursion limit.
