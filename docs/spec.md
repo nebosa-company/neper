@@ -3668,7 +3668,8 @@ not add partial moves from a variant payload.
   that backing local rather than the slice descriptor (D679). An address reached
   through a tracked aggregate pointer field, such as `&ctx.target.hits`, lends the
   storage named by that pointer rather than the aggregate carrying it (D686),
-  including when that pointer is the aggregate's second tracked field (D695).
+  including when that pointer is the aggregate's second or later tracked field
+  (D695, D700).
   From the start to
   the join of that thread local, the parent neither reads nor writes `x` -- a value
   read, a store, a move -- (`E-SAFETY-0016`); it may take `&x` or `&x.field` again,

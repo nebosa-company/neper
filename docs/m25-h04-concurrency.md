@@ -57,7 +57,8 @@ An address into a local slice whose backing local is known, `&s[i]`, likewise le
 the backing storage rather than only the slice descriptor (D679). An address reached
 through a tracked aggregate pointer field, `&ctx.target.hits`, lends the pointed-to
 local rather than the aggregate that carries the pointer (D686). The field-specific
-identity also holds for the second tracked pointer field in an aggregate (D695).
+identity also holds for the second and later tracked pointer fields in an aggregate
+(D695, D700).
 
 ## 4. Locks, guards and atomics
 
@@ -124,6 +125,7 @@ thread contexts through local slices to known backing storage; **D686** gives an
 address through a tracked aggregate pointer field that same underlying identity;
 **D695** proves the second tracked pointer field lends its own owner rather than the
 first field's owner or the carrier;
+**D700** proves the same identity for a sparse third-or-later pointer field;
 **D379**
 section 4's first half (`sync.Guard`, the fixtures `sync_guard` and
 `reject/safety_guard_leak`). The compiler's own crews pass as written under

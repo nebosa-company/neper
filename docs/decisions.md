@@ -13339,3 +13339,13 @@ later assignment to that field updates it without erasing either inline sibling.
 
 This replaces the assignment path's duplicate two-slot logic with the shared helper;
 it adds no new representation or analysis.
+
+## D700 -- Thread contexts resolve later aggregate pointer fields
+
+A thread context addressed through an aggregate's third or later tracked pointer
+field lends the local named by that field. Parent access to that local before the
+join is E-SAFETY-0016; neither an earlier field's owner nor the aggregate carrier
+substitutes for it.
+
+This is executable concurrency evidence that the sparse alias representation from
+D696 flows through the existing thread-start resolver without a second mechanism.
