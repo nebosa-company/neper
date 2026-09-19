@@ -13235,5 +13235,15 @@ aggregate the same lexical region identity. Returning that outer carrier across 
 deferred reset is therefore E-SAFETY-0018, even when the pointer is below another
 aggregate field.
 
+## D690 -- Aggregate field assignment retains an enclosed region pointer
+
+Assigning a pointer-bearing aggregate literal into a field gives the outer aggregate
+the lexical identity of the first tracked address inside that literal. Returning the
+outer carrier across a deferred reset is therefore E-SAFETY-0018.
+
+The field-assignment path reuses D689's recursive literal walk and the existing
+single-target carrier fact. Arbitrary aggregate values and multiple pointer targets
+remain outside this bounded lexical rule.
+
 The existing single-target literal walk becomes recursive and keeps the outer field
 as its access path. Multiple independent pointer fields remain a later H02 problem.
