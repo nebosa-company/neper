@@ -2224,6 +2224,10 @@ not a function pointer and forms none, which is why `gpu.launch[K]` (§10) can t
 kernel where a pointer to device code is banned — and why any function, a device
 helper included, may declare a function parameter of its own: it is monomorphisation,
 not indirection. `neper-0` (roadmap) omits the `fn` kind along with packs.
+An enclosing generic may forward its function parameter in another generic's
+bracketed argument list. The inner instance remains dependent while the outer
+declaration is checked; when the outer instance binds the strategy, that exact
+function identity and signature flow into the inner specialization.
 
 A type expression in a declaration may refer to earlier comptime parameters and to
 comptime fields of their values. It is evaluated at instantiation before the body is

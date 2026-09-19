@@ -6436,9 +6436,18 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                             let (outer_index, has_outer) = active_comptime_parameter(c, argument_name)
                             if has_outer && c.comptime_parameters[outer_index].kind == .Function {
                                 let (outer, has_argument) = active_argument(c, outer_index)
-                                if !has_argument { ret (0usize, MissingContext) }
-                                let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, outer.ty, outer.value, .Function)
-                                if bind_error != ok { ret (0usize, bind_error) }
+                                if has_argument {
+                                    let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, outer.ty, outer.value, .Function)
+                                    if bind_error != ok { ret (0usize, bind_error) }
+                                } else {
+                                    if !c.generic_declaration { ret (0usize, MissingContext) }
+                                    let argument_index = first_argument + argument_position
+                                    c.generic_arguments[argument_index].kind = .Function
+                                    c.generic_arguments[argument_index].ty = c.comptime_parameters[outer_index].ty
+                                    c.generic_arguments[argument_index].value = outer_index
+                                    c.generic_arguments[argument_index].symbolic = true
+                                    c.generic_arguments[argument_index].set = true
+                                }
                             } else {
                                 let (found_index, found) = find_function(c, module_index, argument_name)
                                 if found { selected = found_index }

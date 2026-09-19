@@ -13022,3 +13022,17 @@ type's implicit protocol. The focused fixture selects addition and subtraction f
 the same operand types and requires different answers, while `explain-file` names
 the selected qualified function in each instance's arguments. Artifact declaration
 records assign the function kind its own discriminator and retain its exact type.
+
+## D669 -- Comptime function strategies forward through dependent instances
+
+A generic function may pass its function-typed comptime parameter to another
+generic. During the outer declaration check the inner function argument is kept as
+a symbolic dependency; during a concrete outer instantiation it is replaced by the
+selected declaration and the inner instance is specialized under that same exact
+identity and signature.
+
+The strategy fixture now makes `relay[T, F]` call `apply[T, F]`, exercising both a
+dependent type and a dependent function choice. Selecting subtraction through the
+wrapper produces the subtraction result, and `explain-file` exposes both the outer
+instance and the inner `apply[i64, main.subtract]` request at the generic source
+site. No runtime callback is introduced.
