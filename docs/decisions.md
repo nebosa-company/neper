@@ -13518,6 +13518,11 @@ An exact one-slot range retains the ordinary moved or deferred-reserved state. T
 rule adds no relational index solver: uncertainty is represented by the existing
 branch-join state and the slot's move provenance.
 
+The existing canonical exhaustive sweep, `i = 0; while i < N { ...; i += 1 }`,
+is the bounded exception: when `N` is the fixed-array length, its dynamic store or
+move covers every slot once. This preserves the accepted initialize-then-clean-up
+idiom without treating an arbitrary runtime index as exact.
+
 ## D718 -- Runtime affine-array stores protect every candidate
 
 A store through a runtime index is rejected with E-SAFETY-0006 when any possible
@@ -13538,6 +13543,11 @@ silently forget which slot received it.
 This deliberately uses the existing maybe state rather than a new symbolic-index
 record. It is conservative: later code must establish a precise slot identity or
 the ordinary read and exit rules reject the unresolved ownership.
+
+Seeded `os.Thread` arrays retain D616's non-owning dynamic-store behavior while a
+helper receives them only as an unowned slice. Owned resource-slice summaries are
+required before that existing worker-array idiom can carry a caller-visible join
+obligation without a false leak.
 
 ## D720 -- Runtime-offset slices retain affine-array candidates
 

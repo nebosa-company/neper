@@ -451,7 +451,9 @@ own provenance. Dynamic ownership transfer and stores remain subsequent steps.
 **D717 follow-up.** A consuming runtime-indexed read first requires every possible
 slot to be consumable, then marks each possible obligated slot maybe-moved. A later
 operation therefore cannot double-consume the runtime-selected resource. Exact
-one-slot ranges still use the ordinary moved or deferred-reserved state.
+one-slot ranges still use the ordinary moved or deferred-reserved state. A
+canonical zero-to-length unit-step loop is recognized as an exhaustive sweep, so
+the established initialize-then-clean-up loop owns and then moves every slot.
 
 **D718 follow-up.** A runtime-indexed store checks every possible destination before
 writing. If any candidate still carries an owned, maybe-owned, unchecked or
@@ -461,7 +463,9 @@ site; an empty sibling cannot hide the possible overwrite.
 **D719 follow-up.** A valid runtime-indexed store joins the new value into every
 possible destination. For an obligated value, every candidate becomes maybe-owned
 with the store's provenance, so scope-exit auditing cannot lose the resource merely
-because its concrete slot is known only at run time.
+because its concrete slot is known only at run time. The existing dynamically filled
+`os.Thread` worker array remains a view at this boundary until a helper's resource
+slice can summarize the joins it performs for its caller.
 
 **D720 follow-up.** A runtime lower-bound slice retains its fixed-array owner while
 leaving the offset unknown. Indexing that slice or its direct alias queries every
