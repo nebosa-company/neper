@@ -316,15 +316,21 @@ fn sse(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, rm: usize, opc
     ret modrm(buffer, reg, rm)
 }
 
-// SSE2's packed forms, which operate on all sixteen bytes of a vector at once. A
-// vector lives in its stack slot, which is aligned to eight bytes and not to sixteen,
-// so both operands come in through `movups` -- the unaligned move, the one packed load
-// that does not fault on an eight-byte-aligned address.
-fn vector_load(buffer: *Buffer, destination: usize, address: usize) -> err {
+// SSE2's packed forms, which operate on all sixteen bytes of a vector at once, or on
+// the register's low eight when the operand is a mask of eight lanes. A vector lives in
+// its stack slot, which is aligned to eight bytes and not to sixteen, so sixteen bytes
+// come in through `movups` -- the unaligned move, the one packed load that does not
+// fault on an eight-byte-aligned address -- and eight through `movlps`, which is a
+// quadword and never faults. `movlps` leaves the register's high half as it found it,
+// which no caller reads: only the low half is stored back, and the eight bytes it
+// leaves out are not the operand's to touch.
+fn vector_load(buffer: *Buffer, destination: usize, address: usize, half: bool) -> err {
+    if half { ret sse_memory(buffer, destination, address, 18usize) }
     ret sse_memory(buffer, destination, address, 16usize)
 }
 
-fn vector_store(buffer: *Buffer, address: usize, source: usize) -> err {
+fn vector_store(buffer: *Buffer, address: usize, source: usize, half: bool) -> err {
+    if half { ret sse_memory(buffer, source, address, 19usize) }
     ret sse_memory(buffer, source, address, 17usize)
 }
 

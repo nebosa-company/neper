@@ -5226,13 +5226,20 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 }
 // The lane-wise shapes one vector instruction covers: a sixteen-byte vector -- the
 // width SSE2 and NEON both have -- whose lane type and operator name a single packed
-// instruction on that baseline, plus `~`, which is two. A sixteen-lane mask is sixteen
-// bytes too, and takes the three bitwise ones and its own `~`. Everything else keeps
-// the lane loop below: the wider widths, `f16`, the shifts, and `*%` on any lane but
-// the sixteen-bit one, which is the only packed multiply SSE2 has.
+// instruction on that baseline, plus `~`, which is two. A mask is one byte per lane, so
+// sixteen lanes are sixteen bytes and eight lanes are the register's low half; both
+// take the three bitwise ones and the mask's own `~`. Everything else keeps the lane
+// loop below: the wider widths, `f16`, the shifts, the masks of four lanes and fewer,
+// and `*%` on any lane but the sixteen-bit one, the only packed multiply SSE2 has.
 // ponytail: the sixteen-byte baseline only; `--cpu` and wider widths widen this table.
 fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, bool) {
-    if lanes * lane_size != 16usize { ret (0usize, false) }
+    // Sixteen bytes is a whole register, and eight is the only narrower operand the
+    // closed table reaches: a mask of eight lanes, since the smallest `Vec` is sixteen
+    // bytes. The same instruction answers those eight on the register's low half.
+    let mask_lanes = lane.kind == .Bool && lane_size == 1usize
+    let bytes = lanes * lane_size
+    let packable = bytes == 16usize || (bytes == 8usize && mask_lanes)
+    if !packable { ret (0usize, false) }
     var lane_code = 16usize
     if lane.kind == .Float {
         if lane_size == 4usize { lane_code = 4usize }
@@ -5244,11 +5251,10 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
         if lane_size == 4usize { lane_code = 2usize }
         if lane_size == 8usize { lane_code = 3usize }
     }
-    // A mask's lanes are bytes of `0` and `1`, so sixteen of them are the byte lanes'
-    // own sixteen bytes and `pand`, `por` and `pxor` answer `& | ^` on them bit for
-    // bit. `~` is the one that is not shared: a packed `not` leaves `0xfe` where a
-    // lane's `!` is `0`, so a mask takes rank 11 and its own instruction pair.
-    let mask_lanes = lane.kind == .Bool && lane_size == 1usize
+    // A mask's lanes are bytes of `0` and `1`, so they are the byte lanes' own bytes and
+    // `pand`, `por` and `pxor` answer `& | ^` on them bit for bit. `~` is the one that
+    // is not shared: a packed `not` leaves `0xfe` where a lane's `!` is `0`, so a mask
+    // takes rank 11 and its own instruction pair.
     if mask_lanes { lane_code = 0usize }
     if lane_code == 16usize { ret (0usize, false) }
     var operation = 16usize

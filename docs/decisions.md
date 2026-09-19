@@ -14001,3 +14001,34 @@ vector's lane type is -- while the four and sixty-four lane masks keep the loop,
 vectors at those widths do. The `link/simd_lanes` fixture checks the form over two
 patterns that differ in every nibble and checks that a flipped lane still reduces as a
 mask lane, in both suites.
+
+## D755 -- The packed forms reach an eight-lane mask
+
+D751 to D754 gate every packed form on a sixteen-byte operand, which is a whole xmm
+register. A mask is a byte per lane, so the widths a mask comes in are the lane counts
+the closed table has -- two, four, eight, sixteen, thirty-two and sixty-four bytes --
+and eight of them is the one narrower operand the baseline can still answer whole: the
+register's low half, which every instruction in the table already operates on, since a
+packed operation is lane-wise and reads no lane it is not given.
+
+What the eight bytes need is a move of their own. `movups` is sixteen bytes in both
+directions, and a mask of eight lanes occupies eight: loading it would read past the
+slot and storing it would write over what follows. `movlps` -- `0f 12` and `0f 13`, no
+mandatory prefix and the same modrm as `movups` -- is a quadword either way, so
+`emit_x64.vector_load` and `vector_store` take a `half` and pick the opcode. It leaves
+the register's high half as it found it, which costs nothing here: no operand in the
+table is wider than what was loaded, and only the low half is stored back.
+
+The width is not in the immediate and does not need to be. `lanes` and the lane code
+are both there, so the back end multiplies them, and `packed_lane_size` is that lane
+code's byte width. Sixteen and eight are the two totals it accepts; everything else
+falls back to the lane loop as before, and the closed table keeps a `Vec` from ever
+being eight, so an eight-byte operand is an eight-lane mask and nothing else.
+
+`Mask[i16, 8]`, `Mask[f32, 8]` and `Mask[u64, 8]` are all eight lanes, over vectors of
+sixteen, thirty-two and sixty-four bytes: the mask's width is its lane count and not
+its vector's, so a mask is packed here while the vector it came from still takes the
+loop. The `link/simd_lanes` fixture checks `& | ^ ~` over two alternating patterns at
+eight lanes, over both a sixteen-byte vector's mask and a thirty-two-byte vector's, and
+checks that a flipped lane still reduces as a mask lane, in both suites. The masks of
+four lanes and fewer keep the loop; a doubleword move would be the same shape again.

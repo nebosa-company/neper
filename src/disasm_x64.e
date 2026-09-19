@@ -693,6 +693,11 @@ fn instruction(c: *Cursor, start: usize) -> bool {
             if operand16 { if !okay(puts(c, "d ")) { ret false } } else { if !okay(puts(c, "s ")) { ret false } }
             ret two_operands(c, second != 17usize, 4usize, rex_r, rex_x, rex_b, rex, 4usize)
         }
+        // The quadword half of the register, which carries an eight-lane mask.
+        if second == 18usize || second == 19usize {
+            if !okay(puts(c, "movlps ")) { ret false }
+            ret two_operands(c, second == 18usize, 4usize, rex_r, rex_x, rex_b, rex, 4usize)
+        }
         if second == 88usize || second == 89usize || second == 92usize || second == 94usize || second == 81usize {
             if second == 88usize { if !okay(puts(c, "add")) { ret false } }
             if second == 89usize { if !okay(puts(c, "mul")) { ret false } }

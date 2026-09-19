@@ -588,7 +588,12 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     let lane = nir.vector_binary_lane(instruction.immediate)
     let operation = nir.vector_binary_operation(instruction.immediate)
     let (mandatory, opcode, known) = packed_instruction(operation, lane)
-    if !known || nir.vector_binary_lanes(instruction.immediate) == 0usize { ret Unsupported }
+    // Sixteen bytes is a whole register; eight -- a mask of eight lanes, the one
+    // narrower operand the closed table has -- is its low half, which the same
+    // instruction answers and a quadword move carries.
+    let bytes = nir.vector_binary_lanes(instruction.immediate) * packed_lane_size(lane)
+    let half = bytes == 8usize
+    if !known || (bytes != 16usize && !half) { ret Unsupported }
     let destination_value = builder.operands[instruction.first_operand]
     let left_value = builder.operands[instruction.first_operand + 1usize]
     let (left, left_error) = read_value(allocations, left_value, 10usize, output)
@@ -597,7 +602,7 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     // subtraction has to answer in the register the store reads.
     var loaded = 0usize
     if operation == 11usize { loaded = 1usize }
-    try emit_x64.vector_load(output, loaded, left)
+    try emit_x64.vector_load(output, loaded, left, half)
     if operation == 10usize {
         // `~v` is a `pxor` against all ones, which `pcmpeqd` on a register against
         // itself makes without reading the register or the image. Lowering repeats the
@@ -617,13 +622,22 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     if operation < 10usize {
         let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
         if right_error != ok { ret right_error }
-        try emit_x64.vector_load(output, 1usize, right)
+        try emit_x64.vector_load(output, 1usize, right, half)
     }
     try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
     if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
     let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
     if destination_error != ok { ret destination_error }
-    ret emit_x64.vector_store(output, destination, 0usize)
+    ret emit_x64.vector_store(output, destination, 0usize, half)
+}
+
+// The byte width of one lane, by the lane code the immediate carries: an integer of
+// one, two, four or eight bytes, then `f32` and `f64`.
+fn packed_lane_size(lane: usize) -> usize {
+    if lane == 0usize { ret 1usize }
+    if lane == 1usize { ret 2usize }
+    if lane == 2usize || lane == 4usize { ret 4usize }
+    ret 8usize
 }
 
 // The mandatory prefix and second opcode byte of one packed operation. The float forms

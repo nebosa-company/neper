@@ -245,6 +245,23 @@ fn operators() {
     // A flipped lane is still a mask lane, so it selects and reduces like one.
     if simd.all[Vec[u8, 16]](~ma) || !simd.any[Vec[u8, 16]](~ma) { os.exit(116) }
     if !simd.all[Vec[u8, 16]](~simd.mask[Vec[u8, 16]](0u64)) { os.exit(117) }
+    // Eight mask lanes are eight bytes, the register's low half, and take the same four
+    // instructions over a quadword move. The mask's width is the lane count and not the
+    // vector's, so the mask of a thirty-two-byte vector is packed here while the vector
+    // itself is not. The two patterns alternate, so a packed form that reached past the
+    // eight bytes, or short of them, would be caught at one end.
+    let na = simd.mask[Vec[i16, 8]](180u64)
+    let nb = simd.mask[Vec[i16, 8]](90u64)
+    if simd.bits[Vec[i16, 8]](na & nb) != 16u64 { os.exit(118) }
+    if simd.bits[Vec[i16, 8]](na | nb) != 254u64 { os.exit(119) }
+    if simd.bits[Vec[i16, 8]](na ^ nb) != 238u64 { os.exit(120) }
+    if simd.bits[Vec[i16, 8]](~na) != 75u64 { os.exit(121) }
+    if simd.bits[Vec[i16, 8]](~nb) != 165u64 { os.exit(122) }
+    if simd.all[Vec[i16, 8]](~na) || !simd.any[Vec[i16, 8]](~na) { os.exit(123) }
+    let wa = simd.mask[Vec[f32, 8]](180u64)
+    let wb = simd.mask[Vec[f32, 8]](90u64)
+    if simd.bits[Vec[f32, 8]](wa ^ wb) != 238u64 { os.exit(124) }
+    if simd.bits[Vec[f32, 8]](~(wa & wb)) != 239u64 { os.exit(125) }
     // Through a generic, where the vector is still `V` when the operator is checked.
     let r = axpy[Vec[f64, 2]](simd.splat[Vec[f64, 2]](2.0), simd.splat[Vec[f64, 2]](3.0), simd.splat[Vec[f64, 2]](1.0))
     if r.lanes[1] != 7.0 { os.exit(92) }
