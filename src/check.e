@@ -13780,6 +13780,15 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         var (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
         // Copying a pointer local copies its borrow, not an unrelated identity.
         if !is_address { (pointed, is_address) = alias_target(c, g, tree, module_index, initializer_index) }
+        // A parameter pointer has no local pointee, so its first copy names the
+        // parameter as the lexical identity shared by later copies (D676).
+        if !is_address {
+            let (source, is_place) = place_base_local(c, g, tree, module_index, initializer_index)
+            if is_place && c.locals[source].ty.kind == .Pointer {
+                pointed = source
+                is_address = true
+            }
+        }
         if is_address && pointed != local_index { c.resources[local_index].points_to = pointed + 1usize }
     }
     if c.locals[local_index].ty.kind == .Slice {

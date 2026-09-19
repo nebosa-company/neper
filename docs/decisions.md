@@ -13100,3 +13100,14 @@ that escape is E-SAFETY-0018 with the defer registration as related evidence.
 The mark records the pending boundary in existing resource fields. This avoids a new
 defer graph or larger resource records while covering the direct local return shape;
 aggregate and interprocedural escape summaries remain later H02 work.
+
+## D676 -- A pointer-parameter copy keeps the parameter's storage identity
+
+When a pointer parameter has no local pointee, its first local copy records the
+parameter itself as the lexical storage identity. Further copies follow that identity,
+so region marks and allocations agree whether a call uses the original parameter or
+one of its local copies.
+
+This extends the existing `points_to` record instead of adding a second alias graph.
+The focused fixture pins an arena mark through a copied parameter and E-SAFETY-0013
+after reset through the original spelling.

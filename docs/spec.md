@@ -3633,7 +3633,8 @@ not add partial moves from a variant payload.
   preserves the same target, so local pointer-copy chains are followed too (D672).
   Arena arguments are matched by their underlying local storage identity, so a
   mark, allocation, and reset may consistently use `a`, `&a`, or a pointer alias
-  of `&a` (D673). A deferred reset runs at scope exit rather than at registration;
+  of `&a` (D673); copying a pointer parameter preserves that parameter as the same
+  lexical identity (D676). A deferred reset runs at scope exit rather than at registration;
   uses before that exit remain valid, while returning a value from the region is
   refused because the reset precedes delivery to the caller (E-SAFETY-0018, D675).
   Both checks are lexical and within one function: what is returned otherwise, stored,

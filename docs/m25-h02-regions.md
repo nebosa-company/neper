@@ -181,3 +181,7 @@ same region with the existing E-SAFETY-0013 evidence.
 already-bound region values, but returning such a value is E-SAFETY-0018 because
 the reset executes before delivery to the caller. Focused accept and reject fixtures
 pin both halves of that timing rule.
+
+**D676** extends canonical storage identity to copies of pointer parameters. The
+parameter is the lexical identity when its external pointee has no local of its own,
+so marks and allocations made through the original and its copies share one region.
