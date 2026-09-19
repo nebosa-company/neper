@@ -13630,3 +13630,15 @@ to fail the harness.
 This does not pretend the compiler can prove arbitrary function bodies obey a law.
 It makes the declaring module's section 9 obligation executable and demonstrates
 that the check detects the exact equal-keys/different-hashes defect H06 names.
+
+## D728 -- Explicit and implicit strategies are compared on one task
+
+The `protocol_strategy_equivalence` fixture evaluates every pair in one nominal
+type's finite domain through both `T.cmp` and an exact function-typed comptime
+parameter. Selecting the type's declared comparison must produce the same answer;
+selecting a reverse comparison must produce its inverse.
+
+The selected functions live in another module, so the comparison covers the public
+strategy identity and cross-module specialization path rather than comparing two
+local helper calls. This is the equivalent-task evidence H06 requires before the
+explicit path is treated as a supported alternative to implicit dispatch.
