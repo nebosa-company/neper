@@ -149,6 +149,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if checked_read_detail.native_code == 0i32 || !mem.eq[u8](checked_read_detail.operation, "read") { os.exit(57i32) }
     let _ = os.close(invalid_reader_file)
 
+    var invalid_writer_file: os.File = zero
+    invalid_writer_file.raw = 18446744073709551615usize
+    var checked_writer = io.file_detail_writer(&invalid_writer_file)
+    var checked_write_detail: os.ErrorDetail = zero
+    let (checked_write_count, checked_write_error) = io.write_detail(&checked_writer, "x", &checked_write_detail)
+    if checked_write_error == ok || checked_write_count != 0usize { os.exit(58i32) }
+    if checked_write_detail.native_code == 0i32 || !mem.eq[u8](checked_write_detail.operation, "write") { os.exit(59i32) }
+    let _ = os.close(invalid_writer_file)
+
     // Caller-owned details remain independent when the operations overlap. A host
     // without runtime threads has already exercised both checked calls above.
     var concurrent_read_job: IoDetailJob = zero
@@ -161,11 +170,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let _ = os.thread_join(read_worker)
             ret write_started
         }
-        if os.thread_join(read_worker) != ok { os.exit(58i32) }
-        if os.thread_join(write_worker) != ok { os.exit(59i32) }
-        if concurrent_read_job.failure == ok || concurrent_write_job.failure == ok { os.exit(60i32) }
-        if !mem.eq[u8](concurrent_read_job.detail.operation, "read") || !mem.eq[u8](concurrent_write_job.detail.operation, "write") { os.exit(61i32) }
-        if concurrent_read_job.detail.native_code == 0i32 || concurrent_write_job.detail.native_code == 0i32 { os.exit(62i32) }
+        if os.thread_join(read_worker) != ok { os.exit(60i32) }
+        if os.thread_join(write_worker) != ok { os.exit(61i32) }
+        if concurrent_read_job.failure == ok || concurrent_write_job.failure == ok { os.exit(62i32) }
+        if !mem.eq[u8](concurrent_read_job.detail.operation, "read") || !mem.eq[u8](concurrent_write_job.detail.operation, "write") { os.exit(63i32) }
+        if concurrent_read_job.detail.native_code == 0i32 || concurrent_write_job.detail.native_code == 0i32 { os.exit(64i32) }
     }
     ret os.dir_close(here)
 }

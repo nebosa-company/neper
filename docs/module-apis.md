@@ -1824,6 +1824,7 @@ See stdlib-hardening.md SL03 for operation-level completion/partial-progress rul
 type Reader = struct { ctx: *void, read: fn(*void, []u8) -> (usize, err) }
 type DetailReader = struct { ctx: *void, read: fn(*void, []u8, *os.ErrorDetail) -> (usize, err) }
 type Writer = struct { ctx: *void, write: fn(*void, []const u8) -> (usize, err), flush: fn(*void) -> err }
+type DetailWriter = struct { ctx: *void, write: fn(*void, []const u8, *os.ErrorDetail) -> (usize, err), flush: fn(*void, *os.ErrorDetail) -> err }
 type SliceReader = struct { data: []const u8, off: usize }
 type SliceWriter = struct { data: []u8, off: usize }
 type BufferedReader = struct { state: *void }
@@ -1841,12 +1842,15 @@ error NoProgress
 fn reader(ctx: *void, read_fn: fn(*void, []u8) -> (usize, err)) -> Reader
 fn detail_reader(ctx: *void, read_fn: fn(*void, []u8, *os.ErrorDetail) -> (usize, err)) -> DetailReader
 fn writer(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err)) -> Writer
+fn detail_writer(ctx: *void, write_fn: fn(*void, []const u8, *os.ErrorDetail) -> (usize, err)) -> DetailWriter
 fn file_reader(file: *os.File) -> Reader
 fn file_detail_reader(file: *os.File) -> DetailReader
 fn file_writer(file: *os.File) -> Writer
+fn file_detail_writer(file: *os.File) -> DetailWriter
 fn slice_reader(state: *SliceReader) -> Reader
 fn slice_detail_reader(state: *SliceReader) -> DetailReader
 fn slice_writer(state: *SliceWriter) -> Writer
+fn slice_detail_writer(state: *SliceWriter) -> DetailWriter
 fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedReader, err)
 fn buffered_writer(a: *mem.Arena, sink: Writer, capacity: usize) -> (BufferedWriter, err)
 fn file_seeker(file: *os.File) -> Seeker
@@ -1862,23 +1866,29 @@ fn read_exact_detail(r: *DetailReader, dst: []u8, detail: *os.ErrorDetail) -> (u
 fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err)
 fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, err)
 fn write(w: *Writer, src: []const u8) -> (usize, err)
+fn write_detail(w: *DetailWriter, src: []const u8, detail: *os.ErrorDetail) -> (usize, err)
 fn write_all_progress(w: *Writer, src: []const u8) -> (usize, err)
 fn write_all(w: *Writer, src: []const u8) -> err
+fn write_all_detail(w: *DetailWriter, src: []const u8, detail: *os.ErrorDetail) -> (usize, err)
 fn flush(w: *Writer) -> err
+fn flush_detail(w: *DetailWriter, detail: *os.ErrorDetail) -> err
 fn seek(s: *Seeker, off: i64, whence: os.SeekWhence) -> (u64, err)
 fn copy(dst: *Writer, src: *Reader, scratch: []u8) -> (u64, err)
 fn print(s: str) -> err
 fn printf[FMT: str](args: ...) -> err
 fn writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err), flush_fn: fn(*void) -> err) -> Writer
+fn detail_writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8, *os.ErrorDetail) -> (usize, err), flush_fn: fn(*void, *os.ErrorDetail) -> err) -> DetailWriter
 fn buffered_source(buffer: *BufferedReader) -> Reader
 fn buffered_sink(buffer: *BufferedWriter) -> Writer
 fn file_read(ctx: *void, dst: []u8) -> (usize, err)
 fn file_read_detail(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err)
 fn file_write(ctx: *void, src: []const u8) -> (usize, err)
+fn file_write_detail(ctx: *void, src: []const u8, detail: *os.ErrorDetail) -> (usize, err)
 fn file_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err)
 fn slice_read(ctx: *void, dst: []u8) -> (usize, err)
 fn slice_read_detail(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err)
 fn slice_write(ctx: *void, src: []const u8) -> (usize, err)
+fn slice_write_detail(ctx: *void, src: []const u8, detail: *os.ErrorDetail) -> (usize, err)
 fn limited_read(ctx: *void, dst: []u8) -> (usize, err)
 fn counting_write(ctx: *void, src: []const u8) -> (usize, err)
 fn tee_write(ctx: *void, src: []const u8) -> (usize, err)
@@ -1888,6 +1898,7 @@ fn buffered_write(ctx: *void, src: []const u8) -> (usize, err)
 fn buffered_writer_flush(ctx: *void) -> err
 fn forwarding_flush(ctx: *void) -> err
 fn no_flush(ctx: *void) -> err
+fn no_flush_detail(ctx: *void, detail: *os.ErrorDetail) -> err
 
 ```
 

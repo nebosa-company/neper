@@ -29,6 +29,12 @@ type Writer = struct {
     flush: fn(*void) -> err,
 }
 
+type DetailWriter = struct {
+    ctx: *void,
+    write: fn(*void, []const u8, *os.ErrorDetail) -> (usize, err),
+    flush: fn(*void, *os.ErrorDetail) -> err,
+}
+
 type SliceReader = struct {
     data: []const u8,
     off: usize,
@@ -88,6 +94,10 @@ fn no_flush(ctx: *void) -> err {
     ret ok
 }
 
+fn no_flush_detail(ctx: *void, detail: *os.ErrorDetail) -> err {
+    ret ok
+}
+
 fn reader(ctx: *void, read_fn: fn(*void, []u8) -> (usize, err)) -> Reader {
     ret Reader { ctx: ctx, read: read_fn }
 }
@@ -100,8 +110,16 @@ fn writer(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err)) -> Writer
     ret Writer { ctx: ctx, write: write_fn, flush: no_flush }
 }
 
+fn detail_writer(ctx: *void, write_fn: fn(*void, []const u8, *os.ErrorDetail) -> (usize, err)) -> DetailWriter {
+    ret DetailWriter { ctx: ctx, write: write_fn, flush: no_flush_detail }
+}
+
 fn writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err), flush_fn: fn(*void) -> err) -> Writer {
     ret Writer { ctx: ctx, write: write_fn, flush: flush_fn }
+}
+
+fn detail_writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8, *os.ErrorDetail) -> (usize, err), flush_fn: fn(*void, *os.ErrorDetail) -> err) -> DetailWriter {
+    ret DetailWriter { ctx: ctx, write: write_fn, flush: flush_fn }
 }
 
 fn file_read(ctx: *void, dst: []u8) -> (usize, err) {
@@ -131,6 +149,12 @@ fn file_write(ctx: *void, src: []const u8) -> (usize, err) {
     ret (count, write_error)
 }
 
+fn file_write_detail(ctx: *void, src: []const u8, detail: *os.ErrorDetail) -> (usize, err) {
+    var file = mem.cast[*os.File](ctx)
+    let (count, write_error) = os.write_detail(*file, src, detail)
+    ret (count, write_error)
+}
+
 fn file_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err) {
     var file = mem.cast[*os.File](ctx)
     let (position, seek_error) = os.seek(*file, off, whence)
@@ -147,6 +171,10 @@ fn file_detail_reader(file: *os.File) -> DetailReader {
 
 fn file_writer(file: *os.File) -> Writer {
     ret Writer { ctx: mem.cast[*void](file), write: file_write, flush: no_flush }
+}
+
+fn file_detail_writer(file: *os.File) -> DetailWriter {
+    ret DetailWriter { ctx: mem.cast[*void](file), write: file_write_detail, flush: no_flush_detail }
 }
 
 fn file_seeker(file: *os.File) -> Seeker {
@@ -186,6 +214,17 @@ fn slice_write(ctx: *void, src: []const u8) -> (usize, err) {
     ret (take, ok)
 }
 
+fn slice_write_detail(ctx: *void, src: []const u8, detail: *os.ErrorDetail) -> (usize, err) {
+    let (count, write_error) = slice_write(ctx, src)
+    if write_error != ok {
+        detail.kind = .Invalid
+        detail.native_code = 0i32
+        detail.operation = "write"
+        detail.subject = "capacity"
+    }
+    ret (count, write_error)
+}
+
 fn slice_reader(state: *SliceReader) -> Reader {
     ret Reader { ctx: mem.cast[*void](state), read: slice_read }
 }
@@ -196,6 +235,10 @@ fn slice_detail_reader(state: *SliceReader) -> DetailReader {
 
 fn slice_writer(state: *SliceWriter) -> Writer {
     ret Writer { ctx: mem.cast[*void](state), write: slice_write, flush: no_flush }
+}
+
+fn slice_detail_writer(state: *SliceWriter) -> DetailWriter {
+    ret DetailWriter { ctx: mem.cast[*void](state), write: slice_write_detail, flush: no_flush_detail }
 }
 
 fn limited_read(ctx: *void, dst: []u8) -> (usize, err) {
@@ -350,6 +393,30 @@ fn write_all_progress(w: *Writer, src: []const u8) -> (usize, err) {
     ret (written, ok)
 }
 
+fn write_detail(w: *DetailWriter, src: []const u8, detail: *os.ErrorDetail) -> (usize, err) {
+    if src.len == 0usize { ret (0usize, ok) }
+    let (count, write_error) = w.write(w.ctx, src, detail)
+    if write_error != ok { ret (count, write_error) }
+    if count == 0usize {
+        detail.kind = .Invalid
+        detail.native_code = 0i32
+        detail.operation = "write"
+        detail.subject = "no progress"
+        ret (0usize, NoProgress)
+    }
+    ret (count, ok)
+}
+
+fn write_all_detail(w: *DetailWriter, src: []const u8, detail: *os.ErrorDetail) -> (usize, err) {
+    var written = 0usize
+    while written < src.len {
+        let (count, write_error) = write_detail(w, src[written..], detail)
+        written += count
+        if write_error != ok { ret (written, write_error) }
+    }
+    ret (written, ok)
+}
+
 fn write_all(w: *Writer, src: []const u8) -> err {
     let (written, write_error) = write_all_progress(w, src)
     ret write_error
@@ -357,6 +424,10 @@ fn write_all(w: *Writer, src: []const u8) -> err {
 
 fn flush(w: *Writer) -> err {
     ret w.flush(w.ctx)
+}
+
+fn flush_detail(w: *DetailWriter, detail: *os.ErrorDetail) -> err {
+    ret w.flush(w.ctx, detail)
 }
 
 fn seek(s: *Seeker, off: i64, whence: os.SeekWhence) -> (u64, err) {

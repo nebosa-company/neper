@@ -12908,3 +12908,16 @@ End-of-stream follows the existing `End` result and is not a native failure. A
 successful callback leaves the caller's detail unchanged; a callback returning
 `(0, ok)` becomes `NoProgress` with explicit library provenance. The cross-host
 error-detail fixture proves the file adapter does not use ambient error state.
+
+## D657 -- Detail-capable writers include flush provenance
+
+`e.io.DetailWriter` is the writer-side additive callback ABI. Its write and flush
+callbacks both receive the caller's `os.ErrorDetail`; `file_detail_writer` reaches
+`os.write_detail` directly, and slice capacity failures carry explicit library
+provenance with no invented native code. `write_all_detail` returns the exact prefix
+accepted before an error, while `flush_detail` leaves provenance to the operation
+that actually failed.
+
+Keeping this type beside, rather than inside, `Writer` avoids migrating every
+existing callback and aggregate solely to add optional failure evidence. The
+cross-host error-detail fixture pins native file-write provenance through `e.io`.
