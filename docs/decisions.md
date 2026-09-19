@@ -13283,5 +13283,15 @@ owners.
 The update is bounded by D691's two inline slots. Assignments to a third independent
 pointer field remain outside the lexical subset rather than allocating a side table.
 
+## D695 -- Thread contexts resolve the second aggregate pointer field
+
+A thread context addressed through an aggregate's second tracked pointer field lends
+the local named by that field. Parent access to that local before the join is
+E-SAFETY-0016; neither the first field's owner nor the aggregate carrier substitutes
+for it.
+
+This is executable concurrency evidence for the field-specific alias resolution
+introduced by D691. The thread-start path needs no separate alias representation.
+
 The existing single-target literal walk becomes recursive and keeps the outer field
 as its access path. Multiple independent pointer fields remain a later H02 problem.
