@@ -213,3 +213,7 @@ not required for the checker to retain the region identity.
 **D684** preserves that identity across a direct lexical aggregate copy. If `copy`
 is bound from a local aggregate that carries `&scratch[i]`, returning `copy` across
 the deferred reset is E-SAFETY-0018 as well.
+
+**D685** gives a direct local assignment the same semantics. Assigning the carrier
+into an existing local copies its lexical region identity, so returning the assigned
+local across the deferred reset is E-SAFETY-0018.

@@ -3642,8 +3642,8 @@ not add partial moves from a variant payload.
   refused because the reset precedes delivery to the caller; a derived slice has the
   same restriction as its region local, as does a pointer made with `&` from that
   storage, copied through an aggregate pointer field, carried by that aggregate
-  itself, or carried by a lexical copy of the aggregate (E-SAFETY-0018, D675,
-  D680-D684).
+  itself, or carried by a lexical copy or assignment of the aggregate
+  (E-SAFETY-0018, D675, D680-D685).
   Both checks are lexical and within one function: what is returned otherwise, stored,
   handed to a callback, an import or a thread, reached through any other pointer,
   or made by a cast is outside the rule, and `m25-h02-regions.md` says so.

@@ -13188,3 +13188,12 @@ cannot be returned across that region's deferred reset.
 
 Only a direct local-to-local copy is covered. The rule does not infer identity
 through calls, control-flow merges or arbitrary field assignments.
+
+## D685 -- Aggregate assignment copies the same pointer alias
+
+A direct assignment from one local aggregate to another preserves the source's
+lexical pointer alias just as a binding does. Returning the assigned aggregate
+across the pointed-to region's deferred reset is therefore E-SAFETY-0018.
+
+Reassigning from a value without an alias still clears the previous fact; this adds
+no flow merge and does not make aggregate aliases interprocedural.
