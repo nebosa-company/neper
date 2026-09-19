@@ -3655,7 +3655,8 @@ not add partial moves from a variant payload.
   array literal retains the same identity per comptime-indexed fixed-array element,
   so a later element cannot hide behind an earlier one (D706), including when the
   whole array is returned across a deferred reset or first copied lexically
-  (D707-D708). An
+  (D707-D708); separate comptime element assignments preserve the same identities
+  (D709). An
   aggregate whose second or later tracked field points into that region is the same
   carrier escape, including when it has only nested pointer paths (D692, D697,
   D702), and copying that aggregate or assigning its pointer fields separately

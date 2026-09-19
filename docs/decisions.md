@@ -13430,3 +13430,12 @@ region owner stored in a later element.
 
 This widens the existing named-carrier copy branch to fixed arrays and reuses its
 bounded sparse-table snapshot; it adds no array-specific copy structure.
+
+## D709 -- Comptime array-element assignments retain aliases
+
+Assigning an address to a comptime-indexed fixed-array element records or updates
+that exact element path. Independently assigning sibling elements cannot erase a
+later element's region owner, so deferred return still produces E-SAFETY-0018.
+
+Field and bracket assignments now share the existing syntax-path extractor and
+path insertion. Dynamic indices remain outside this lexical subset.

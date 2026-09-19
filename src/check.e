@@ -15048,11 +15048,12 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         let (assigned_local, found_assigned) = find_local(c, g.modules[module_index].text[place_token.start..place_token.end])
         if found_assigned { try record_alias(c, g, tree, module_index, assigned_local, initializer_index, true) }
     }
-    // `s.p = &x` (D413): `s` aliases `x` through `p` from here.
-    if place.kind == .FieldExpr {
+    // `s.p = &x` or `items[i] = &x`: the carrier aliases `x` through that
+    // complete comptime field/element path from here (D413, D704, D709).
+    if place.kind == .FieldExpr || place.kind == .BracketPostfix {
         var fields: [128]str = zero
         let (struct_local, field_count, found_struct) = local_field_path(c, g, tree, module_index, place_index, fields[0usize..fields.len])
-        if found_struct && field_count != 0usize && c.locals[struct_local].ty.kind == .Named {
+        if found_struct && field_count != 0usize && (c.locals[struct_local].ty.kind == .Named || c.locals[struct_local].ty.kind == .Array) {
             // `local_field_path` reads the syntax from leaf to base; stored paths run
             // from the carrier outward.
             var left = 0usize

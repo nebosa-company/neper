@@ -313,3 +313,8 @@ element behind earlier pointers to live storage.
 **D708** preserves all inline and sparse element paths across a lexical fixed-array
 copy. Returning the copy across a deferred reset therefore remains E-SAFETY-0018
 against the actual element owner rather than losing the array's region identity.
+
+**D709** gives a separate comptime-indexed array-element assignment the same path
+semantics as its literal. Assigning one element updates only that exact element
+identity, so a later region pointer remains visible at deferred return after its
+live siblings are assigned independently.
