@@ -684,6 +684,56 @@ fn instruction(c: *Cursor, start: usize) -> bool {
         if second == 192usize || second == 176usize { atomic_width = 0usize }
         ret two_operands(c, false, atomic_width, rex_r, rex_x, rex_b, rex, atomic_width)
     }
+    // SSE2 packed forms, which operate on a whole sixteen-byte vector: no mandatory
+    // prefix is the single-precision form and 66 the double-precision or the integer
+    // one, where the scalar forms below are always F2 or F3.
+    if repeat == 0usize {
+        if second == 16usize || second == 17usize || second == 40usize {
+            if second == 40usize { if !okay(puts(c, "movap")) { ret false } } else { if !okay(puts(c, "movup")) { ret false } }
+            if operand16 { if !okay(puts(c, "d ")) { ret false } } else { if !okay(puts(c, "s ")) { ret false } }
+            ret two_operands(c, second != 17usize, 4usize, rex_r, rex_x, rex_b, rex, 4usize)
+        }
+        if second == 88usize || second == 89usize || second == 92usize || second == 94usize || second == 81usize {
+            if second == 88usize { if !okay(puts(c, "add")) { ret false } }
+            if second == 89usize { if !okay(puts(c, "mul")) { ret false } }
+            if second == 92usize { if !okay(puts(c, "sub")) { ret false } }
+            if second == 94usize { if !okay(puts(c, "div")) { ret false } }
+            if second == 81usize { if !okay(puts(c, "sqrt")) { ret false } }
+            if operand16 { if !okay(puts(c, "pd ")) { ret false } } else { if !okay(puts(c, "ps ")) { ret false } }
+            ret two_operands(c, true, 4usize, rex_r, rex_x, rex_b, rex, 4usize)
+        }
+        if second == 194usize {
+            if !okay(puts(c, "cmp")) { ret false }
+            if operand16 { if !okay(puts(c, "pd ")) { ret false } } else { if !okay(puts(c, "ps ")) { ret false } }
+            if !two_operands(c, true, 4usize, rex_r, rex_x, rex_b, rex, 4usize) { ret false }
+            if !okay(puts(c, ", ")) { ret false }
+            let (predicate, predicate_present) = fetch(c)
+            if !predicate_present { ret false }
+            ret okay(put_number(c, predicate))
+        }
+        if operand16 && (second == 114usize || second == 115usize) {
+            let (modrm, modrm_present) = fetch(c)
+            if !modrm_present { ret false }
+            let extension = (modrm >> 3usize) & 7usize
+            if extension == 6usize { if !okay(puts(c, "psll")) { ret false } }
+            if extension == 2usize { if !okay(puts(c, "psrl")) { ret false } }
+            if extension != 6usize && extension != 2usize { ret false }
+            if second == 114usize { if !okay(puts(c, "d ")) { ret false } } else { if !okay(puts(c, "q ")) { ret false } }
+            let (unused, rm_ok) = operand_rm(c, modrm, false, rex_x, rex_b, 4usize, rex)
+            if !rm_ok { ret false }
+            if !okay(puts(c, ", ")) { ret false }
+            let (count, count_present) = fetch(c)
+            if !count_present { ret false }
+            ret okay(put_number(c, count))
+        }
+        if operand16 {
+            let mnemonic = packed_integer_mnemonic(second)
+            if mnemonic.len != 0usize {
+                if !okay(puts(c, mnemonic)) { ret false }
+                ret two_operands(c, true, 4usize, rex_r, rex_x, rex_b, rex, 4usize)
+            }
+        }
+    }
     // SSE scalar forms: the mandatory prefix picks single (F3) or double (F2), and a
     // 66 here is that prefix, not an operand-size override -- a general register in an
     // SSE form is 64 bits under REX.W and 32 otherwise.
@@ -732,6 +782,25 @@ fn instruction(c: *Cursor, start: usize) -> bool {
         ret two_operands(c, false, gpr, rex_r, rex_x, rex_b, rex, 4usize)
     }
     ret false
+}
+
+// The 66-prefixed integer forms this back end emits, by their second opcode byte.
+fn packed_integer_mnemonic(second: usize) -> str {
+    if second == 252usize { ret "paddb " }
+    if second == 253usize { ret "paddw " }
+    if second == 254usize { ret "paddd " }
+    if second == 212usize { ret "paddq " }
+    if second == 248usize { ret "psubb " }
+    if second == 249usize { ret "psubw " }
+    if second == 250usize { ret "psubd " }
+    if second == 251usize { ret "psubq " }
+    if second == 213usize { ret "pmullw " }
+    if second == 219usize { ret "pand " }
+    if second == 223usize { ret "pandn " }
+    if second == 235usize { ret "por " }
+    if second == 239usize { ret "pxor " }
+    if second == 118usize { ret "pcmpeqd " }
+    ret ""
 }
 
 // A relative landing as the function-relative offset it lands on.

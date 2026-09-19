@@ -2160,12 +2160,15 @@ for hot_mode in --release --time; do
     # Artifact-only enumeration (D557, H27): the first artifact is the root, every
     # artifact is hashed, and their Inventory sections reproduce the source manifest.
     inventory_artifact_dir="$inventory_scratch/.neper/$hot_manifest_mode/em"
-    inventory_artifacts=("$inventory_artifact_dir/main.x64-linux.em")
+    # A word list, not a bash array: this runner is POSIX sh, and no path here holds a
+    # space, so the unquoted expansions below are the argument list.
+    inventory_root="$inventory_artifact_dir/main.x64-linux.em"
+    inventory_artifacts="$inventory_root"
     for inventory_artifact in "$inventory_artifact_dir"/*.em; do
-        [ "$inventory_artifact" = "${inventory_artifacts[0]}" ] || inventory_artifacts+=("$inventory_artifact")
+        [ "$inventory_artifact" = "$inventory_root" ] || inventory_artifacts="$inventory_artifacts $inventory_artifact"
     done
-    "$test_build/neper-self" manifest-em "${inventory_artifacts[@]}" --json > "$test_build/inventory-artifacts.json"
-    python3 -c "import hashlib,json,sys; source=json.load(open(sys.argv[1])); artifact=json.load(open(sys.argv[2])); paths=sys.argv[3:]; assert artifact['unsafe']==source['unsafe']; assert artifact['mode']==sys.argv[3]; assert artifact['root_module']=='main' and artifact['inputs']==[] and artifact['options']['checks']=='retained'; paths=paths[1:]; assert len(artifact['artifacts'])==len(paths); assert all(row['path']==path and row['sha256']==hashlib.sha256(open(path,'rb').read()).hexdigest() for row,path in zip(artifact['artifacts'],paths))" "$inventory_scratch/.neper/$hot_manifest_mode/build-manifest.json" "$test_build/inventory-artifacts.json" "$hot_manifest_mode" "${inventory_artifacts[@]}"
+    "$test_build/neper-self" manifest-em $inventory_artifacts --json > "$test_build/inventory-artifacts.json"
+    python3 -c "import hashlib,json,sys; source=json.load(open(sys.argv[1])); artifact=json.load(open(sys.argv[2])); paths=sys.argv[3:]; assert artifact['unsafe']==source['unsafe']; assert artifact['mode']==sys.argv[3]; assert artifact['root_module']=='main' and artifact['inputs']==[] and artifact['options']['checks']=='retained'; paths=paths[1:]; assert len(artifact['artifacts'])==len(paths); assert all(row['path']==path and row['sha256']==hashlib.sha256(open(path,'rb').read()).hexdigest() for row,path in zip(artifact['artifacts'],paths))" "$inventory_scratch/.neper/$hot_manifest_mode/build-manifest.json" "$test_build/inventory-artifacts.json" "$hot_manifest_mode" $inventory_artifacts
     # A write that dies (D435, H24): the second module's artifact write dies after
     # staging; the warm build after it rebuilds that module alone and is the clean build.
     cp "$hot_fixture/src/dep.e" "$hot_source/dep.e"
@@ -2200,11 +2203,12 @@ for hot_mode in --release --time; do
         hot_unchecked_warm=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_unchecked" --release --unchecked --incremental 2>/dev/null)
         [ "$hot_unchecked_warm" = 'executable written' ]
         hot_unchecked_artifact_dir="$hot_scratch/.neper/release/em"
-        hot_unchecked_artifacts=("$hot_unchecked_artifact_dir/main.x64-linux.em")
+        hot_unchecked_root="$hot_unchecked_artifact_dir/main.x64-linux.em"
+        hot_unchecked_artifacts="$hot_unchecked_root"
         for hot_unchecked_artifact in "$hot_unchecked_artifact_dir"/*.em; do
-            [ "$hot_unchecked_artifact" = "${hot_unchecked_artifacts[0]}" ] || hot_unchecked_artifacts+=("$hot_unchecked_artifact")
+            [ "$hot_unchecked_artifact" = "$hot_unchecked_root" ] || hot_unchecked_artifacts="$hot_unchecked_artifacts $hot_unchecked_artifact"
         done
-        "$test_build/neper-self" manifest-em "${hot_unchecked_artifacts[@]}" --json > "$test_build/hot-unchecked-artifacts.json"
+        "$test_build/neper-self" manifest-em $hot_unchecked_artifacts --json > "$test_build/hot-unchecked-artifacts.json"
         python3 -c "import json,sys; manifest=json.load(open(sys.argv[1])); assert manifest['mode']=='release' and manifest['options']['checks']=='off'" "$test_build/hot-unchecked-artifacts.json"
         python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:mode-changed dep=rebuilt:mode-changed
         hot_unchecked_clean_written=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_unchecked_clean" --release --unchecked 2>/dev/null)

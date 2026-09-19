@@ -377,6 +377,7 @@ fn opcode_id(opcode: nir.Opcode) -> usize {
     if opcode == .AtomicFence { ret 53usize }
     if opcode == .GlobalAddress { ret 54usize }
     if opcode == .Sqrt { ret 55usize }
+    if opcode == .VectorBinary { ret 56usize }
     ret 0usize
 }
 

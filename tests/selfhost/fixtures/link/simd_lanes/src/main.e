@@ -236,6 +236,18 @@ fn operators() {
     n.lanes[0] = mem.bitcast[f64](9221120237041090560u64)
     let s = n + n
     if s.lanes[0] == s.lanes[0] || s.lanes[1] != 2.0 { os.exit(94) }
+    // Section 11's canonical NaN lane by lane, bit for bit: a NaN that comes out of a
+    // vector operation carries no sign and no payload, whichever width the lanes are.
+    var g = simd.splat[Vec[f64, 2]](1.0)
+    g.lanes[0] = mem.bitcast[f64](18444492273895866369u64)
+    let h = g * g
+    if mem.bitcast[u64](h.lanes[0]) != 9221120237041090560u64 { os.exit(95) }
+    if h.lanes[1] != 1.0 { os.exit(96) }
+    var e = simd.splat[Vec[f32, 4]](1.0)
+    e.lanes[2] = mem.bitcast[f32](4290772993u32)
+    let f = e - e
+    if mem.bitcast[u32](f.lanes[2]) != 2143289344u32 { os.exit(97) }
+    if f.lanes[0] != 0.0 { os.exit(98) }
 }
 
 fn first_two[V: type](v: V) -> f64 {

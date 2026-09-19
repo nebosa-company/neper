@@ -5224,6 +5224,44 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     ret (result, result_type, ok)
     ret (0usize, check.invalid_type(), check.Unsupported)
 }
+// The lane-wise shapes one vector instruction covers: a sixteen-byte vector -- the
+// width SSE2 and NEON both have -- whose lane type and operator name a single packed
+// instruction on that baseline. Everything else keeps the lane loop below: the wider
+// widths, `f16`, the shifts, the masks, and `*%` on any lane but the sixteen-bit one,
+// which is the only packed multiply SSE2 has.
+// ponytail: the sixteen-byte baseline only; `--cpu` and wider widths widen this table.
+fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, bool) {
+    if lanes * lane_size != 16usize { ret (0usize, false) }
+    var lane_code = 16usize
+    if lane.kind == .Float {
+        if lane_size == 4usize { lane_code = 4usize }
+        if lane_size == 8usize { lane_code = 5usize }
+    }
+    if lane.kind == .Integer {
+        if lane_size == 1usize { lane_code = 0usize }
+        if lane_size == 2usize { lane_code = 1usize }
+        if lane_size == 4usize { lane_code = 2usize }
+        if lane_size == 8usize { lane_code = 3usize }
+    }
+    if lane_code == 16usize { ret (0usize, false) }
+    var operation = 16usize
+    if lane.kind == .Float {
+        if opcode == .Add { operation = 0usize }
+        if opcode == .Subtract { operation = 1usize }
+        if opcode == .Multiply { operation = 2usize }
+        if opcode == .Divide { operation = 3usize }
+    } else {
+        if opcode == .AddWrap { operation = 4usize }
+        if opcode == .SubtractWrap { operation = 5usize }
+        if opcode == .MultiplyWrap && lane_size == 2usize { operation = 6usize }
+        if opcode == .BitAnd { operation = 7usize }
+        if opcode == .BitOr { operation = 8usize }
+        if opcode == .BitXor { operation = 9usize }
+    }
+    if operation == 16usize { ret (0usize, false) }
+    ret (nir.vector_binary_immediate(operation, lane_code, lanes), true)
+}
+
 // Section 4's lane-wise operators over the one-field representation of a vector
 // (D148): both operands are addresses, the result is a fresh slot, and each lane is
 // one scalar instruction between a load and a store at the lane's offset. A shift's
@@ -5250,6 +5288,18 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     if right_error != ok { ret (0usize, right_error) }
     let (stack, stack_error) = vector_slot(c, result_type, builder, token)
     if stack_error != ok { ret (0usize, stack_error) }
+    let (packed, is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, opcode)
+    if is_packed {
+        let (instruction, value, emit_error) = nir.emit(builder, .VectorBinary, result_type, false, packed, token)
+        if emit_error != ok { ret (0usize, emit_error) }
+        let stack_operand_error = nir.add_operand(builder, instruction, stack)
+        if stack_operand_error != ok { ret (0usize, stack_operand_error) }
+        let left_operand_error = nir.add_operand(builder, instruction, left)
+        if left_operand_error != ok { ret (0usize, left_operand_error) }
+        let right_operand_error = nir.add_operand(builder, instruction, right)
+        if right_operand_error != ok { ret (0usize, right_operand_error) }
+        ret (stack, ok)
+    }
     var at = 0usize
     while at < lanes.array_length {
         let offset = at * lane_info.size

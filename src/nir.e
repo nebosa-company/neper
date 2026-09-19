@@ -78,7 +78,27 @@ type Opcode = enum u8 {
     // `math.sqrt`: the one float operation that is an instruction on every target and has no
     // operator, so it is an opcode of its own rather than a call.
     Sqrt = 55,
+    // Section 4's lane-wise binary operator as one instruction over the whole vector.
+    // The operands are the destination address, the left address and the right address;
+    // the immediate says which operation over which lane shape, packed by
+    // `vector_binary_immediate`. Only the shapes a vector unit does in one instruction
+    // at the sixteen-byte width reach here -- lowering keeps its lane loop for the rest.
+    VectorBinary = 56,
 }
+
+// `operation` is the rank below, `lane` the lane shape (0, 1, 2, 3 for an integer of
+// one, two, four or eight bytes; 4 for `f32`, 5 for `f64`), and `lanes` the count.
+// Operation ranks: 0 add, 1 subtract, 2 multiply, 3 divide -- all float -- then
+// 4 `+%`, 5 `-%`, 6 `*%`, 7 `&`, 8 `|`, 9 `^`.
+fn vector_binary_immediate(operation: usize, lane: usize, lanes: usize) -> usize {
+    ret operation * 4096usize + lane * 256usize + lanes
+}
+
+fn vector_binary_operation(immediate: usize) -> usize { ret immediate / 4096usize }
+
+fn vector_binary_lane(immediate: usize) -> usize { ret immediate / 256usize % 16usize }
+
+fn vector_binary_lanes(immediate: usize) -> usize { ret immediate % 256usize }
 
 // `AtomicRmw`'s immediate is `kind * 8 + ordering`, so the two travel in the one
 // immediate an instruction has. Never renumber these either: they are in the format.

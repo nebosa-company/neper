@@ -316,6 +316,52 @@ fn sse(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, rm: usize, opc
     ret modrm(buffer, reg, rm)
 }
 
+// SSE2's packed forms, which operate on all sixteen bytes of a vector at once. A
+// vector lives in its stack slot, which is aligned to eight bytes and not to sixteen,
+// so both operands come in through `movups` -- the unaligned move, the one packed load
+// that does not fault on an eight-byte-aligned address.
+fn vector_load(buffer: *Buffer, destination: usize, address: usize) -> err {
+    ret sse_memory(buffer, destination, address, 16usize)
+}
+
+fn vector_store(buffer: *Buffer, address: usize, source: usize) -> err {
+    ret sse_memory(buffer, source, address, 17usize)
+}
+
+fn sse_memory(buffer: *Buffer, reg: usize, address: usize, opcode: usize) -> err {
+    try check_register(reg)
+    try check_register(address)
+    var extension = 0usize
+    if reg >= 8usize { extension += 4usize }
+    if address >= 8usize { extension += 1usize }
+    if extension != 0usize { try byte(buffer, 64usize + extension) }
+    try byte(buffer, 15usize)
+    try byte(buffer, opcode)
+    ret memory_modrm(buffer, reg, address)
+}
+
+// One packed operation between two xmm registers: the mandatory prefix and the opcode
+// come from the caller's table, since that pair is the whole instruction selection.
+fn vector_op(buffer: *Buffer, mandatory: usize, destination: usize, source: usize, opcode: usize) -> err {
+    ret sse(buffer, mandatory, false, destination, source, opcode)
+}
+
+// `cmpps`/`cmppd` with the unordered predicate: every lane that is a NaN becomes all
+// ones, every other lane zero.
+fn vector_unordered(buffer: *Buffer, mandatory: usize, destination: usize, source: usize) -> err {
+    try sse(buffer, mandatory, false, destination, source, 194usize)
+    ret byte(buffer, 3usize)
+}
+
+// `pslld`/`psrld` (0x72) and `psllq`/`psrlq` (0x73) by a constant, where the modrm
+// register field is the opcode extension: 6 to shift left, 2 to shift right.
+fn vector_shift(buffer: *Buffer, extension: usize, destination: usize, count: usize, wide: bool) -> err {
+    var opcode = 114usize
+    if wide { opcode = 115usize }
+    try sse(buffer, 102usize, false, extension, destination, opcode)
+    ret byte(buffer, count)
+}
+
 // `movq`/`movd` in both directions: the bits move, nothing is converted.
 fn move_to_float(buffer: *Buffer, destination: usize, source: usize, wide: bool) -> err {
     ret sse(buffer, 102usize, wide, destination, source, 110usize)

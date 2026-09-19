@@ -13915,3 +13915,27 @@ operand are untouched, so `e.simd` itself -- whose comparisons return masks and 
 A module-scope `var` of any vector type was already refused before this, as the
 builtins are seeded after globals are collected; the guard is there for the rule
 rather than for a reachable message, so it carries no fixture.
+
+## D751 -- One packed instruction per sixteen-byte lane-wise operator
+
+Section 4's lane-wise binary operators lower to a single SSE2 instruction whenever
+the whole vector is sixteen bytes wide and the lane shape is one the unit does in
+one instruction: IEEE `+ - * /` on `f32` and `f64` lanes, `+%` and `-%` on every
+integer width, `*%` on sixteen-bit lanes, and `& | ^` on all of them. Everything
+else -- shifts, `~`, masks, `f16`, and the eight, thirty-two and sixty-four byte
+widths -- keeps the scalar lane loop D148 lowers, so the change subtracts work
+rather than adding a second path to maintain.
+
+The vector stays the one-field struct it has been; no register class and no ABI
+change. `VectorBinary` carries the destination, left and right addresses as its
+operands and the operation, lane shape and lane count packed into its immediate, so
+the back end reads both operands with `movups` -- an eight-byte-aligned stack slot
+cannot feed a packed memory operand -- applies one instruction, and stores the
+result. Two scratch general registers already exist for the addresses, and `xmm0`
+through `xmm3` are already the float scratch.
+
+Section 11's canonical NaN is produced without a constant pool: `cmpunord` against
+itself marks the NaN lanes, `pcmpeqd` on a dead register makes all ones, and a
+left-then-right shift pair turns those into the quiet bit pattern for the width,
+which `pand`/`pandn`/`por` merges lane by lane. The cost is paid only on float
+lanes, where the scalar path paid it per lane instead.

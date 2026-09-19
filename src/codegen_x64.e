@@ -576,6 +576,92 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
     ret store_result(allocations, instruction.result, destination, output)
 }
 
+// Section 4's lane-wise operator as one packed SSE2 instruction over the whole
+// sixteen-byte vector, which `lower` asks for by emitting `VectorBinary` for the
+// shapes the baseline covers. The vectors stay in memory and xmm0 to xmm3 are borrowed
+// for the operation, as the scalar float path borrows xmm0 and xmm1: this is
+// instruction selection, not yet a vector register class.
+// ponytail: four scratch xmm registers per operation; a second register class in
+// `regalloc` keeps a vector live across operations and drops the two moves.
+fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    if instruction.has_result || instruction.operand_count != 3usize { ret Unsupported }
+    let lane = nir.vector_binary_lane(instruction.immediate)
+    let (mandatory, opcode, known) = packed_instruction(nir.vector_binary_operation(instruction.immediate), lane)
+    if !known || nir.vector_binary_lanes(instruction.immediate) == 0usize { ret Unsupported }
+    let destination_value = builder.operands[instruction.first_operand]
+    let left_value = builder.operands[instruction.first_operand + 1usize]
+    let right_value = builder.operands[instruction.first_operand + 2usize]
+    let (left, left_error) = read_value(allocations, left_value, 10usize, output)
+    if left_error != ok { ret left_error }
+    try emit_x64.vector_load(output, 0usize, left)
+    let (right, right_error) = read_value(allocations, right_value, 10usize, output)
+    if right_error != ok { ret right_error }
+    try emit_x64.vector_load(output, 1usize, right)
+    try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
+    if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
+    let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
+    if destination_error != ok { ret destination_error }
+    ret emit_x64.vector_store(output, destination, 0usize)
+}
+
+// The mandatory prefix and second opcode byte of one packed operation. The float forms
+// are `addps` 0x58, `mulps` 0x59, `subps` 0x5c and `divps` 0x5e, with the 0x66 prefix
+// making each the double form; the integer forms are all 0x66-prefixed.
+fn packed_instruction(operation: usize, lane: usize) -> (usize, usize, bool) {
+    if lane >= 4usize {
+        var mandatory = 0usize
+        if lane == 5usize { mandatory = 102usize }
+        if operation == 0usize { ret (mandatory, 88usize, true) }
+        if operation == 1usize { ret (mandatory, 92usize, true) }
+        if operation == 2usize { ret (mandatory, 89usize, true) }
+        if operation == 3usize { ret (mandatory, 94usize, true) }
+        ret (0usize, 0usize, false)
+    }
+    // `paddb/w/d/q` 0xfc 0xfd 0xfe 0xd4 and `psubb/w/d/q` 0xf8 0xf9 0xfa 0xfb, then
+    // `pmullw` 0xd5, `pand` 0xdb, `por` 0xeb, `pxor` 0xef.
+    if operation == 4usize {
+        if lane == 0usize { ret (102usize, 252usize, true) }
+        if lane == 1usize { ret (102usize, 253usize, true) }
+        if lane == 2usize { ret (102usize, 254usize, true) }
+        ret (102usize, 212usize, true)
+    }
+    if operation == 5usize {
+        if lane == 0usize { ret (102usize, 248usize, true) }
+        if lane == 1usize { ret (102usize, 249usize, true) }
+        if lane == 2usize { ret (102usize, 250usize, true) }
+        ret (102usize, 251usize, true)
+    }
+    if operation == 6usize && lane == 1usize { ret (102usize, 213usize, true) }
+    if operation == 7usize { ret (102usize, 219usize, true) }
+    if operation == 8usize { ret (102usize, 235usize, true) }
+    if operation == 9usize { ret (102usize, 239usize, true) }
+    ret (0usize, 0usize, false)
+}
+
+// Section 11's canonical NaN lane by lane, without leaving the vector unit and without
+// a constant in the image: the unordered compare of the result against itself marks
+// every NaN lane, and the canonical quiet NaN is built out of an all-ones register by
+// two shifts -- 23 then 1 for `f32`, 52 then 1 for `f64`, which leaves the exponent
+// and the quiet bit set and everything else clear.
+fn canonicalize_packed_nan(wide: bool, output: *emit_x64.Buffer) -> err {
+    var mandatory = 0usize
+    if wide { mandatory = 102usize }
+    try emit_x64.vector_op(output, 0usize, 2usize, 0usize, 40usize)
+    try emit_x64.vector_unordered(output, mandatory, 2usize, 2usize)
+    try emit_x64.vector_op(output, 102usize, 3usize, 3usize, 118usize)
+    if wide {
+        try emit_x64.vector_shift(output, 6usize, 3usize, 52usize, true)
+        try emit_x64.vector_shift(output, 2usize, 3usize, 1usize, true)
+    } else {
+        try emit_x64.vector_shift(output, 6usize, 3usize, 23usize, false)
+        try emit_x64.vector_shift(output, 2usize, 3usize, 1usize, false)
+    }
+    try emit_x64.vector_op(output, 102usize, 3usize, 2usize, 219usize)
+    try emit_x64.vector_op(output, 102usize, 2usize, 0usize, 223usize)
+    try emit_x64.vector_op(output, 102usize, 2usize, 3usize, 235usize)
+    ret emit_x64.vector_op(output, 0usize, 0usize, 2usize, 40usize)
+}
+
 // Section 6 asks for IEEE ordered comparison: every ordering against a NaN is false,
 // `==` is false and `!=` is true. `ucomis` reports unordered by setting CF, ZF and PF
 // at once, so `above` and `above or equal` already answer false for a NaN and the two
@@ -2447,7 +2533,11 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     try restore_callee_registers(output, saved_base, saved_count)
                     try emit_x64.function_epilogue(output)
                 } else {
-                    ret Unsupported
+                    if instruction.opcode == .VectorBinary {
+                        try select_vector_binary(builder, instruction, allocations, output)
+                    } else {
+                        ret Unsupported
+                    }
                 }
                 }
                     }
