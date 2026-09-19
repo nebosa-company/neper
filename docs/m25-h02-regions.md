@@ -322,3 +322,7 @@ live siblings are assigned independently.
 **D710** proves the same comptime element identity reaches H04's thread-context
 resolver. An address through a later pointer element lends that element's owner,
 not an earlier element or the fixed-array carrier.
+
+**D711** resolves a runtime-indexed pointer element as the set of every tracked
+owner at the longest matching alias path. A read is E-SAFETY-0013 when any member
+of that set dangles; exact indices retain their existing single-owner behavior.

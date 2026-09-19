@@ -13772,8 +13772,15 @@ fn producer_borrowed(c: *Checker, function: Function) -> bool {
 // the place, a local bound from `&x`, with `x` lent to a running thread.
 fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
     let (pointed, has_target) = alias_target(c, g, tree, module_index, node_index)
-    if !has_target || c.resources[pointed].lent_to == 0usize { ret (0usize, false) }
-    ret (pointed, true)
+    if has_target && c.resources[pointed].lent_to != 0usize { ret (pointed, true) }
+    var wanted = 0usize
+    while true {
+        let (candidate, found) = dynamic_alias_candidate(c, g, tree, module_index, node_index, wanted)
+        if !found { break }
+        if c.resources[candidate].lent_to != 0usize { ret (candidate, true) }
+        wanted += 1usize
+    }
+    ret (0usize, false)
 }
 
 fn clear_resource_aliases(c: *Checker, carrier: usize) {
@@ -13866,13 +13873,60 @@ fn resource_path_matches(path: []str, members: []str) -> bool {
     if path.len == 0usize || path.len > members.len { ret false }
     var at = 0usize
     while at < path.len {
-        if !same(path[at], members[members.len - at - 1usize]) { ret false }
+        let member = members[members.len - at - 1usize]
+        if !same(member, "*") && !same(path[at], member) { ret false }
         at += 1usize
     }
     ret true
 }
 
+fn resource_members_dynamic(members: []str) -> bool {
+    var at = 0usize
+    while at < members.len {
+        if same(members[at], "*") { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// The nth possible target of a runtime-indexed alias path. Only aliases at the
+// longest matching path participate, preserving the exact-path rule above.
+fn resource_alias_candidate(c: *Checker, carrier: usize, members: []str, wanted: usize) -> (usize, bool) {
+    if members.len == 0usize { ret (0usize, false) }
+    var longest = 0usize
+    var at = 0usize
+    while at < c.resource_alias_count {
+        let alias = c.resource_aliases[at]
+        if alias.carrier == carrier && alias.path.len > longest && resource_path_matches(alias.path, members) { longest = alias.path.len }
+        at += 1usize
+    }
+    let field = members[members.len - 1usize]
+    if longest < 1usize && c.resources[carrier].points_to != 0usize && (same(field, "*") || same(field, c.resources[carrier].points_to_field)) { longest = 1usize }
+    if longest < 1usize && c.resources[carrier].slice_offset_known && (same(field, "*") || same(field, c.resources[carrier].mark_arena)) { longest = 1usize }
+    if longest == 0usize { ret (0usize, false) }
+    var ordinal = 0usize
+    if longest == 1usize && c.resources[carrier].points_to != 0usize && (same(field, "*") || same(field, c.resources[carrier].points_to_field)) {
+        if ordinal == wanted { ret (c.resources[carrier].points_to - 1usize, true) }
+        ordinal += 1usize
+    }
+    if longest == 1usize && c.resources[carrier].slice_offset_known && (same(field, "*") || same(field, c.resources[carrier].mark_arena)) {
+        if ordinal == wanted { ret (c.resources[carrier].slice_offset - 1usize, true) }
+        ordinal += 1usize
+    }
+    at = 0usize
+    while at < c.resource_alias_count {
+        let alias = c.resource_aliases[at]
+        if alias.carrier == carrier && alias.path.len == longest && resource_path_matches(alias.path, members) {
+            if ordinal == wanted { ret (alias.pointed, true) }
+            ordinal += 1usize
+        }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
 fn resource_alias_target(c: *Checker, carrier: usize, members: []str) -> (usize, bool) {
+    if resource_members_dynamic(members) { ret (0usize, false) }
     var pointed = 0usize
     var longest = 0usize
     var at = 0usize
@@ -14064,8 +14118,8 @@ fn local_field_path(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
             var bracket: BracketInfo = zero
             if read_bracket(c, tree, tree.nodes[base_index], &bracket) != ok || bracket.range || bracket.child_count != 2usize { ret (0usize, 0usize, false) }
             let (index, index_known) = resource_index_value(c, g, tree, module_index, bracket.first)
-            if !index_known || member_count == members.len { ret (0usize, 0usize, false) }
-            members[member_count] = decimal_text(c, index)
+            if member_count == members.len { ret (0usize, 0usize, false) }
+            if index_known { members[member_count] = decimal_text(c, index) } else { members[member_count] = "*" }
             member_count += 1usize
         }
         base_index = deeper_index
@@ -14090,6 +14144,15 @@ fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     let (pointed, has_target) = resource_alias_target(c, pointer_local, members[0usize..member_count])
     if !has_target { ret (0usize, false) }
     if pointed >= c.local_count { ret (0usize, false) }
+    ret (pointed, true)
+}
+
+fn dynamic_alias_candidate(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, wanted: usize) -> (usize, bool) {
+    var members: [128]str = zero
+    let (carrier, member_count, found) = local_field_path(c, g, tree, module_index, node_index, members[0usize..members.len])
+    if !found || !resource_members_dynamic(members[0usize..member_count]) { ret (0usize, false) }
+    let (pointed, has_target) = resource_alias_candidate(c, carrier, members[0usize..member_count], wanted)
+    if !has_target || pointed >= c.local_count { ret (0usize, false) }
     ret (pointed, true)
 }
 
@@ -14134,10 +14197,19 @@ fn literal_address_field_after(c: *Checker, g: *graph.Graph, tree: *parse.Tree, 
 // The alias's target when a region reset or a container's change made it dangle (D394).
 fn alias_of_dangling(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
     let (pointed, has_target) = alias_target(c, g, tree, module_index, node_index)
-    if !has_target || c.resources[pointed].dangling == 0u8 { ret (0usize, false) }
-    let state = c.resources[pointed].state
-    if state != resource_moved && state != resource_maybe { ret (0usize, false) }
-    ret (pointed, true)
+    if has_target && c.resources[pointed].dangling != 0u8 {
+        let state = c.resources[pointed].state
+        if state == resource_moved || state == resource_maybe { ret (pointed, true) }
+    }
+    var wanted = 0usize
+    while true {
+        let (candidate, found) = dynamic_alias_candidate(c, g, tree, module_index, node_index, wanted)
+        if !found { break }
+        let state = c.resources[candidate].state
+        if c.resources[candidate].dangling != 0u8 && (state == resource_moved || state == resource_maybe) { ret (candidate, true) }
+        wanted += 1usize
+    }
+    ret (0usize, false)
 }
 
 fn resource_local_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {

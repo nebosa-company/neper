@@ -435,6 +435,11 @@ into the fixed array's slot table, including through direct slice aliases. Thus
 `files[1..][0]` and `files[1]` name one ownership identity. Dynamic lower bounds and
 slices without a tracked fixed-array owner remain outside the rule.
 
+**D711 follow-up.** A runtime index over a fixed array of tracked pointer aliases
+queries every possible element owner for read safety. If any candidate dangles,
+the dereference is rejected. This is the first conservative set-of-elements use;
+dynamic moves of affine array slots remain outside the ownership subset.
+
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
 returns a plain `Handle` view when callers need the platform value, so `File.raw`

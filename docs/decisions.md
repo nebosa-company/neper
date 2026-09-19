@@ -13448,3 +13448,14 @@ against that owner rather than an earlier element or the fixed-array carrier.
 
 This is executable concurrency evidence for D706's shared path resolver. The
 thread-start analysis needs no array-specific representation or traversal.
+
+## D711 -- Runtime array alias reads use every possible element owner
+
+A runtime index into a fixed array of tracked pointers denotes the set of
+comptime element aliases at the longest matching path. A dereference is rejected
+with E-SAFETY-0013 when any candidate owner is dangling, even when another element
+still points to live storage.
+
+Runtime indices use a wildcard query segment over the existing inline and sparse
+alias paths. Single-target consumers do not choose an arbitrary candidate; broader
+ownership moves through dynamic indices remain outside this increment.

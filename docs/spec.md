@@ -3656,7 +3656,9 @@ not add partial moves from a variant payload.
   so a later element cannot hide behind an earlier one (D706), including when the
   whole array is returned across a deferred reset or first copied lexically
   (D707-D708); separate comptime element assignments preserve the same identities
-  (D709). An
+  (D709). A runtime-indexed read queries every possible tracked element owner and
+  is rejected if any candidate dangles (D711); it does not choose an arbitrary
+  owner for operations that require one exact identity. An
   aggregate whose second or later tracked field points into that region is the same
   carrier escape, including when it has only nested pointer paths (D692, D697,
   D702), and copying that aggregate or assigning its pointer fields separately
