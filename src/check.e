@@ -11178,8 +11178,8 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                     ret ResourceViolation
                 }
             }
-            let noescape_from = function_noescape_from(c, function)
-            if noescape_from != 0usize && holds_pointer(c, expected, 0usize) && expression_borrows_from(c, g, tree, module_index, parse.child_index_at(tree, at), noescape_from - 1usize) {
+            let noescape_from = expression_noescape_from(c, g, tree, module_index, function, parse.child_index_at(tree, at))
+            if noescape_from != 0usize && holds_pointer(c, expected, 0usize) {
                 let parameter = c.parameters[function.first_parameter + noescape_from - 1usize]
                 record_failure(c, module_index, tree.nodes[parse.child_index_at(tree, at)], .NoEscapeContract, parameter.name, "")
                 ret ResourceViolation
@@ -13640,6 +13640,15 @@ fn function_noescape_from(c: *Checker, function: Function) -> usize {
     while at < function.parameter_count {
         if function_noescape_at(c, function, at + 1usize) { ret at + 1usize }
         at += 1usize
+    }
+    ret 0usize
+}
+
+fn expression_noescape_from(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: Function, expression_index: usize) -> usize {
+    var position = 1usize
+    while position <= function.parameter_count {
+        if function_noescape_at(c, function, position) && expression_borrows_from(c, g, tree, module_index, expression_index, position - 1usize) { ret position }
+        position += 1usize
     }
     ret 0usize
 }

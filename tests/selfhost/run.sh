@@ -2505,7 +2505,7 @@ borrow_summary_artifact="$test_build/borrow-summary.x64-linux.em"
 borrow_summary_interface=$(od -An -tu8 -j64 -N8 "$borrow_summary_artifact" | tr -d ' ')
 [ "$(od -An -tu4 -j$((borrow_summary_interface + 44)) -N4 "$borrow_summary_artifact" | tr -d ' ')" = '2' ]
 # D736-D740: declared, proved, propagated and serialized no-escape inputs.
-for conformance_case in 'accept regions_noescape_contract 0' 'reject regions_noescape_contract_name 1' 'accept regions_noescape_multi_contract 0' 'reject regions_noescape_multi_contract_duplicate 1' 'reject regions_noescape_contract_return 1' 'reject regions_noescape_contract_global 1' 'accept regions_noescape_contract_forward 0' 'reject regions_noescape_contract_call 1' 'reject regions_noescape_contract_callback 1' 'reject regions_noescape_contract_thread 1' 'accept regions_noescape_contract_generic 0' 'accept regions_noescape_contract_artifact 0'; do
+for conformance_case in 'accept regions_noescape_contract 0' 'reject regions_noescape_contract_name 1' 'accept regions_noescape_multi_contract 0' 'reject regions_noescape_multi_contract_duplicate 1' 'reject regions_noescape_contract_return 1' 'reject regions_noescape_multi_return 1' 'reject regions_noescape_contract_global 1' 'accept regions_noescape_contract_forward 0' 'reject regions_noescape_contract_call 1' 'reject regions_noescape_contract_callback 1' 'reject regions_noescape_contract_thread 1' 'accept regions_noescape_contract_generic 0' 'accept regions_noescape_contract_artifact 0'; do
     set -- $conformance_case
     conformance_status=0
     $test_build/neper-self check-file "$conformance_root/$1/$2.e" "$repo" x64 linux --json > "$test_build/conformance-$1-$2.jsonl" || conformance_status=$?
