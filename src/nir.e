@@ -82,7 +82,8 @@ type Opcode = enum u8 {
     // The operands are the destination address, the left address and the right address;
     // the immediate says which operation over which lane shape, packed by
     // `vector_binary_immediate`. Only the shapes a vector unit does in one instruction
-    // at the sixteen-byte width reach here -- lowering keeps its lane loop for the rest.
+    // at the sixteen-byte width reach here -- lowering keeps its lane loop for the rest,
+    // and gives an operand wider than a register one instruction per sixteen-byte chunk.
     VectorBinary = 56,
 }
 

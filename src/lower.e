@@ -5228,20 +5228,28 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // width SSE2 and NEON both have -- whose lane type and operator name a single packed
 // instruction on that baseline, plus `~`, which is two. A mask is one byte per lane, so
 // sixteen lanes are sixteen bytes, eight are the register's low half, four its low
-// quarter and two its low eighth; all four take the three bitwise ones and the mask's
-// own `~`. Everything else keeps the lane loop below: the wider widths, `f16`, the
-// shifts, the masks of more than sixteen lanes, and `*%` on any lane but the
-// sixteen-bit one, the only packed multiply SSE2 has.
+// quarter and two its low eighth, and thirty-two or sixty-four are two or four whole
+// registers' worth; all of them take the three bitwise ones and the mask's own `~`.
+// Everything else keeps the lane loop below: the wider vector widths, `f16`, the
+// shifts, and `*%` on any lane but the sixteen-bit one, the only packed multiply SSE2
+// has. The second return is how many sixteen-byte chunks the operands are, which is
+// one for everything but the two widest masks.
 // ponytail: the sixteen-byte baseline only; `--cpu` and wider widths widen this table.
-fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, bool) {
-    // Sixteen bytes is a whole register, and a mask is the only narrower operand the
-    // closed table reaches, since the smallest `Vec` is sixteen bytes: eight bytes for
-    // eight lanes, four for four, two for two. The same instruction answers those on
-    // the register's low half, quarter or eighth, which the narrower moves carry.
+fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, usize, bool) {
+    // Sixteen bytes is a whole register, and a mask is the only operand the closed
+    // table gives another width to, since a `Vec` is sixteen bytes or more: eight bytes
+    // for eight lanes, four for four, two for two, and thirty-two or sixty-four for the
+    // two widest. The same instruction answers the narrow ones on the register's low
+    // half, quarter or eighth, which the narrower moves carry, and the wide ones a
+    // chunk at a time, since a packed operation reads no lane it is not given.
     let mask_lanes = lane.kind == .Bool && lane_size == 1usize
     let bytes = lanes * lane_size
-    let packable = bytes == 16usize || ((bytes == 8usize || bytes == 4usize || bytes == 2usize) && mask_lanes)
-    if !packable { ret (0usize, false) }
+    let narrow = bytes == 8usize || bytes == 4usize || bytes == 2usize
+    let wide = bytes == 32usize || bytes == 64usize
+    let packable = bytes == 16usize || ((narrow || wide) && mask_lanes)
+    if !packable { ret (0usize, 0usize, false) }
+    var chunks = 1usize
+    if wide { chunks = bytes / 16usize }
     var lane_code = 16usize
     if lane.kind == .Float {
         if lane_size == 4usize { lane_code = 4usize }
@@ -5258,7 +5266,7 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
     // is not shared: a packed `not` leaves `0xfe` where a lane's `!` is `0`, so a mask
     // takes rank 11 and its own instruction pair.
     if mask_lanes { lane_code = 0usize }
-    if lane_code == 16usize { ret (0usize, false) }
+    if lane_code == 16usize { ret (0usize, 0usize, false) }
     var operation = 16usize
     if lane.kind == .Float {
         if opcode == .Add { operation = 0usize }
@@ -5277,8 +5285,48 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
         if opcode == .BitOr { operation = 8usize }
         if opcode == .BitXor { operation = 9usize }
     }
-    if operation == 16usize { ret (0usize, false) }
-    ret (nir.vector_binary_immediate(operation, lane_code, lanes), true)
+    if operation == 16usize { ret (0usize, 0usize, false) }
+    ret (nir.vector_binary_immediate(operation, lane_code, lanes / chunks), chunks, true)
+}
+
+// `VectorBinary` over operands that may be more than one register wide: one instruction
+// per sixteen-byte chunk, each over the chunk's own addresses, which `FieldAddress`
+// names at the chunk's offset the way a field is named. A packed operation is lane-wise
+// and reads no lane it is not given, so the chunks are independent and the back end
+// needs nothing new. The unary forms pass the one operand as both, which stays one
+// address per chunk.
+fn emit_packed_vector(c: *check.Checker, result_type: check.Type, packed: usize, chunks: usize, stack: usize, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    var chunk = 0usize
+    while chunk < chunks {
+        let offset = chunk * 16usize
+        var destination = stack
+        var left_chunk = left
+        var right_chunk = right
+        if offset != 0usize {
+            let (destination_at, destination_error) = component_at(c, result_type, stack, offset, builder, token)
+            if destination_error != ok { ret destination_error }
+            destination = destination_at
+            let (left_at, left_error) = component_at(c, result_type, left, offset, builder, token)
+            if left_error != ok { ret left_error }
+            left_chunk = left_at
+            right_chunk = left_at
+            if right != left {
+                let (right_at, right_error) = component_at(c, result_type, right, offset, builder, token)
+                if right_error != ok { ret right_error }
+                right_chunk = right_at
+            }
+        }
+        let (instruction, value, emit_error) = nir.emit(builder, .VectorBinary, result_type, false, packed, token)
+        if emit_error != ok { ret emit_error }
+        let stack_operand_error = nir.add_operand(builder, instruction, destination)
+        if stack_operand_error != ok { ret stack_operand_error }
+        let left_operand_error = nir.add_operand(builder, instruction, left_chunk)
+        if left_operand_error != ok { ret left_operand_error }
+        let right_operand_error = nir.add_operand(builder, instruction, right_chunk)
+        if right_operand_error != ok { ret right_operand_error }
+        chunk += 1usize
+    }
+    ret ok
 }
 
 // Section 4's lane-wise operators over the one-field representation of a vector
@@ -5307,16 +5355,10 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     if right_error != ok { ret (0usize, right_error) }
     let (stack, stack_error) = vector_slot(c, result_type, builder, token)
     if stack_error != ok { ret (0usize, stack_error) }
-    let (packed, is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, opcode)
+    let (packed, chunks, is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, opcode)
     if is_packed {
-        let (instruction, value, emit_error) = nir.emit(builder, .VectorBinary, result_type, false, packed, token)
-        if emit_error != ok { ret (0usize, emit_error) }
-        let stack_operand_error = nir.add_operand(builder, instruction, stack)
-        if stack_operand_error != ok { ret (0usize, stack_operand_error) }
-        let left_operand_error = nir.add_operand(builder, instruction, left)
-        if left_operand_error != ok { ret (0usize, left_operand_error) }
-        let right_operand_error = nir.add_operand(builder, instruction, right)
-        if right_operand_error != ok { ret (0usize, right_operand_error) }
+        let packed_error = emit_packed_vector(c, result_type, packed, chunks, stack, left, right, builder, token)
+        if packed_error != ok { ret (0usize, packed_error) }
         ret (stack, ok)
     }
     var at = 0usize
@@ -5356,16 +5398,10 @@ fn lower_vector_not(c: *check.Checker, node: syntax.Node, operand: usize, result
     if lane_info_error != ok { ret (0usize, lane_info_error) }
     let (stack, stack_error) = vector_slot(c, result_type, builder, token)
     if stack_error != ok { ret (0usize, stack_error) }
-    let (packed, is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, .BitNot)
+    let (packed, chunks, is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, .BitNot)
     if is_packed {
-        let (instruction, value, emit_error) = nir.emit(builder, .VectorBinary, result_type, false, packed, token)
-        if emit_error != ok { ret (0usize, emit_error) }
-        let stack_operand_error = nir.add_operand(builder, instruction, stack)
-        if stack_operand_error != ok { ret (0usize, stack_operand_error) }
-        let left_operand_error = nir.add_operand(builder, instruction, operand)
-        if left_operand_error != ok { ret (0usize, left_operand_error) }
-        let right_operand_error = nir.add_operand(builder, instruction, operand)
-        if right_operand_error != ok { ret (0usize, right_operand_error) }
+        let packed_error = emit_packed_vector(c, result_type, packed, chunks, stack, operand, operand, builder, token)
+        if packed_error != ok { ret (0usize, packed_error) }
         ret (stack, ok)
     }
     var at = 0usize

@@ -291,6 +291,32 @@ fn operators() {
     if simd.bits[Vec[f64, 2]](~ha) != 1u64 { os.exit(67) }
     if simd.bits[Vec[f64, 2]](~hb) != 0u64 { os.exit(68) }
     if simd.all[Vec[f64, 2]](~ha) || !simd.any[Vec[f64, 2]](~ha) { os.exit(69) }
+    // Thirty-two and sixty-four mask lanes are more bytes than a register holds, so they
+    // are two and four whole registers' worth and take the same four instructions once
+    // per chunk. The two patterns differ in every chunk, so a form that answered only
+    // the first chunk, or read the chunks in the wrong order, is caught.
+    let da = simd.mask[Vec[u8, 32]](2779115760u64)
+    let db = simd.mask[Vec[u8, 32]](1010604441u64)
+    if simd.bits[Vec[u8, 32]](da & db) != 606376080u64 { os.exit(126) }
+    if simd.bits[Vec[u8, 32]](da | db) != 3183344121u64 { os.exit(127) }
+    if simd.bits[Vec[u8, 32]](da ^ db) != 2576968041u64 { os.exit(128) }
+    if simd.bits[Vec[u8, 32]](~da) != 1515851535u64 { os.exit(129) }
+    if simd.bits[Vec[u8, 32]](~db) != 3284362854u64 { os.exit(130) }
+    if simd.all[Vec[u8, 32]](~da) || !simd.any[Vec[u8, 32]](~da) { os.exit(131) }
+    // The mask's width is its lane count and not its vector's, so the thirty-two lanes of
+    // a sixty-four-byte vector are the same thirty-two bytes.
+    let dc = simd.mask[Vec[i16, 32]](2779115760u64)
+    if simd.bits[Vec[i16, 32]](~(dc & dc)) != 1515851535u64 { os.exit(132) }
+    if !simd.all[Vec[i16, 32]](dc | ~dc) { os.exit(133) }
+    let ea = simd.mask[Vec[u8, 64]](11936211302008789401u64)
+    let eb = simd.mask[Vec[u8, 64]](1085185381097498214u64)
+    if simd.bits[Vec[u8, 64]](ea & eb) != 361783649600798720u64 { os.exit(134) }
+    if simd.bits[Vec[u8, 64]](ea | eb) != 12659613033505488895u64 { os.exit(135) }
+    if simd.bits[Vec[u8, 64]](ea ^ eb) != 12297829383904690175u64 { os.exit(136) }
+    if simd.bits[Vec[u8, 64]](~ea) != 6510532771700762214u64 { os.exit(137) }
+    // A flipped lane is still a mask lane, so it selects and reduces like one.
+    if !simd.all[Vec[u8, 64]](~simd.mask[Vec[u8, 64]](0u64)) { os.exit(27) }
+    if simd.all[Vec[u8, 64]](~ea) || !simd.any[Vec[u8, 64]](~ea) { os.exit(28) }
     // An integer vector of two lanes has the same two-byte mask, and it reduces the same.
     let hc = simd.mask[Vec[i64, 2]](1u64)
     if simd.bits[Vec[i64, 2]](~hc) != 2u64 { os.exit(58) }

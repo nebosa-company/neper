@@ -14094,3 +14094,32 @@ and that a flipped lane still reduces as a mask lane, in both suites.
 Two bytes is the floor: one lane is a `bool`, not a vector, so every mask the closed
 table has is now packed except those of more than sixteen lanes, which want the second
 register their vectors want.
+
+## D758 -- The packed forms reach the masks of more than sixteen lanes
+
+D757 leaves the thirty-two- and sixty-four-lane masks on the lane loop as the ones that
+"want the second register their vectors want". They do not: a packed operation is
+lane-wise and reads no lane it is not given, so an operand wider than a register is the
+same instruction once per sixteen-byte chunk, over the chunk's own addresses. Lowering
+names those the way a field is named -- `FieldAddress` at the chunk's offset, which the
+lane loop next to it already uses for a lane -- and emits one `VectorBinary` per chunk.
+The back end is untouched: every instruction it sees is still sixteen bytes, and the
+widths it accepts are still sixteen, eight, four and two.
+
+So `vector_packed_immediate` returns a chunk count beside the immediate, and the
+immediate's lane count is the chunk's, not the operand's. One is what everything but
+these two masks answers, which keeps the single-instruction forms exactly as they were:
+the chunk loop's first pass uses the operands as given, so a sixteen-byte operand emits
+the same instruction over the same addresses it did before.
+
+This is the masks only, not the thirty-two- and sixty-four-byte vectors, which are the
+same chunks. Those are a width in the closed table and their own step: their float lanes
+carry section 11's canonical NaN per chunk, and their alignment is the width rather than
+the eight bytes a mask's slot has. What the chunk loop settles here is the mask ladder --
+every mask the closed table has is now packed -- and the `link/simd_lanes` fixture checks
+`& | ^ ~` at thirty-two lanes over two patterns that differ in every chunk, at
+thirty-two lanes of a sixty-four-byte vector as well as of a thirty-two-byte one, and at
+sixty-four lanes, with a flipped lane still reducing as a mask lane, in both suites. A
+probe under `build/` confirms the shape the fixture cannot see: two `pand` for a
+thirty-two-lane `&`, four `pxor` for a sixty-four-lane `^`, and no `paddb` for the
+thirty-two-byte vector next to them, which still takes the loop.
