@@ -13401,3 +13401,14 @@ or the aggregate carrier.
 
 This is executable concurrency evidence for D701's shared longest-prefix resolver;
 the thread-start path needs no additional representation or traversal.
+
+## D706 -- Fixed-array literals retain comptime element alias paths
+
+Each pointer in a fixed-array literal records the comptime element index between
+the array local and its lexical owner. Alias resolution includes bracket indices,
+so a later element cannot be mistaken for the first element and a post-reset use
+reports E-SAFETY-0013 against the owner actually stored there.
+
+Numeric index segments reuse D701's immutable sparse path representation. The first
+two one-segment paths may still use the existing inline slots; no `Resource` record
+or general dynamic-index analysis is added.

@@ -3652,6 +3652,8 @@ not add partial moves from a variant payload.
   so a later field cannot be hidden behind the first two (D691, D696). Pointer
   identities below recursively nested aggregate fields retain their complete access
   paths, so a later nested pointer cannot hide behind the first one (D701). An
+  array literal retains the same identity per comptime-indexed fixed-array element,
+  so a later element cannot hide behind an earlier one (D706). An
   aggregate whose second or later tracked field points into that region is the same
   carrier escape, including when it has only nested pointer paths (D692, D697,
   D702), and copying that aggregate or assigning its pointer fields separately

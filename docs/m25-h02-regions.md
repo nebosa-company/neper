@@ -60,8 +60,9 @@ binding or the assignment that made it so until the next (D416): once `x` dangle
 or stored to, are refused as `x`'s own use is, naming `x`; `first.len` is not,
 for the reason `x.len` is not. A pointer from anywhere else is not followed.
 Pointer-bearing fields in one aggregate retain distinct lexical targets at every
-nested aggregate path (D691, D696, D701), so a use through a later top-level or
-recursively nested field follows its own owner rather than the first pointer found.
+nested aggregate path (D691, D696, D701), and a fixed array literal retains them
+per comptime element (D706), so a later path follows its own owner rather than the
+first pointer found.
 
 ## 3. Views of containers
 
@@ -90,8 +91,9 @@ Stated so that no one reads the rules above as more than they are:
   reset of its region (D675): the caller otherwise sees an
   ordinary slice. The signature does not say what it borrows; H02's borrow
   summaries across modules are later delivery (section 7).
-- **Stored** into a struct field, an array element, a global, or a container:
-  the store is a use, and the copy in the aggregate is not tracked.
+- **Stored** into a global or a dynamic container: the store is a use, and the
+  copy is not tracked. Local named aggregates and comptime-indexed fixed arrays
+  retain the lexical pointer paths explicitly covered in section 2.
 - Passed to a **callback** or an **imported** function, or handed to another
   **thread**: the call is a use; what the callee keeps is not known.
 - A pointer made by `mem.cast`, `mem.address_of`, arithmetic on a `usize`, or read
@@ -296,3 +298,9 @@ E-SAFETY-0018 against the later nested pointer's region owner.
 assignments. Direct pointer stores upsert their exact carrier path, while an
 aggregate literal assigned at any nesting depth recursively contributes all paths
 below it. A later nested region pointer therefore remains E-SAFETY-0018 at return.
+
+**D706** extends those paths with comptime fixed-array element segments. A pointer
+in a later array-literal element retains its own local owner, so a use through that
+element after the owner's region reset is E-SAFETY-0013 rather than resolving to an
+earlier live element. Numeric segments reuse the sparse aggregate-path table and do
+not grow every local's `Resource` record.

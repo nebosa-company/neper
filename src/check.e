@@ -388,8 +388,8 @@ type Resource = struct {
     lent_at: usize,
 }
 
-// Pointer-bearing fields past a named aggregate's two inline aliases (D696), and
-// recursively nested pointer paths which cannot fit either top-level slot (D701).
+// Pointer-bearing fields past a named aggregate's two inline aliases (D696),
+// recursively nested pointer paths (D701), and fixed-array element paths (D706).
 // ponytail: this sparse table is scanned linearly because ordinary locals allocate
 // nothing; add per-local heads only if measured aggregate-heavy code needs them.
 type ResourceAlias = struct {
@@ -13899,23 +13899,35 @@ fn resource_alias_target(c: *Checker, carrier: usize, members: []str) -> (usize,
 fn record_literal_alias_paths(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, carrier: usize, literal_index: usize, fields: []str, depth: usize) -> err {
     let literal = tree.nodes[literal_index]
     let text = g.modules[module_index].text
+    let (header_index, _, header_error) = aggregate_literal_header(tree, literal)
+    let indexed = header_error == ok && tree.nodes[header_index].kind == .ArrayType
     let end = usize(literal.first_child) + usize(literal.child_count)
     var at = usize(literal.first_child)
+    var item_index = 0usize
     while at < end {
         if parse.child_is_node_at(tree, at) {
             let item = tree.nodes[parse.child_index_at(tree, at)]
             if item.kind == .LiteralItem {
-                let name_token = c.tokens[usize(item.token_start)]
                 let (value_index, has_value) = first_node_child(tree, item)
-                if name_token.kind == .Identifier && has_value {
+                if has_value {
                     if depth == fields.len { ret Capacity }
-                    fields[depth] = text[name_token.start..name_token.end]
-                    let (pointed, found) = address_argument_local(c, g, tree, module_index, value_index)
-                    if found && pointed != carrier { try set_resource_path_alias(c, carrier, fields[0usize..depth + 1usize], pointed) }
-                    if !found && tree.nodes[value_index].kind == .AggregateLiteral {
-                        try record_literal_alias_paths(c, g, tree, module_index, carrier, value_index, fields, depth + 1usize)
+                    var has_segment = indexed
+                    if indexed {
+                        fields[depth] = decimal_text(c, item_index)
+                    } else {
+                        let (field, found_field) = literal_item_name(c, text, item)
+                        fields[depth] = field
+                        has_segment = found_field
+                    }
+                    if has_segment {
+                        let (pointed, found) = address_argument_local(c, g, tree, module_index, value_index)
+                        if found && pointed != carrier { try set_resource_path_alias(c, carrier, fields[0usize..depth + 1usize], pointed) }
+                        if !found && tree.nodes[value_index].kind == .AggregateLiteral {
+                            try record_literal_alias_paths(c, g, tree, module_index, carrier, value_index, fields, depth + 1usize)
+                        }
                     }
                 }
+                item_index += 1usize
             }
         }
         at += 1usize
@@ -13948,7 +13960,7 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         }
     }
     if !has_initializer { ret ok }
-    if c.locals[local_index].ty.kind == .Named && tree.nodes[initializer_index].kind == .AggregateLiteral {
+    if (c.locals[local_index].ty.kind == .Named || c.locals[local_index].ty.kind == .Array) && tree.nodes[initializer_index].kind == .AggregateLiteral {
         try record_literal_aliases(c, g, tree, module_index, local_index, initializer_index)
     }
     if c.locals[local_index].ty.kind == .Named && tree.nodes[initializer_index].kind == .NameExpr {
@@ -14047,6 +14059,14 @@ fn local_field_path(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
                 members[member_count] = member
                 member_count += 1usize
             }
+        }
+        if tree.nodes[base_index].kind == .BracketPostfix {
+            var bracket: BracketInfo = zero
+            if read_bracket(c, tree, tree.nodes[base_index], &bracket) != ok || bracket.range || bracket.child_count != 2usize { ret (0usize, 0usize, false) }
+            let (index, index_known) = resource_index_value(c, g, tree, module_index, bracket.first)
+            if !index_known || member_count == members.len { ret (0usize, 0usize, false) }
+            members[member_count] = decimal_text(c, index)
+            member_count += 1usize
         }
         base_index = deeper_index
     }
