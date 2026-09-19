@@ -12557,8 +12557,8 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         if place_error != ok { ret place_error }
         let (actual, expression_error) = check_expr(c, g, tree, module_index, initializer_index, place_type)
         if expression_error != ok { ret expression_error }
-        let noescape_from = function_noescape_from(c, function)
-        if noescape_from != 0usize && holds_pointer(c, place_type, 0usize) && assignment_place_is_global(c, g, tree, module_index, first_index) && expression_borrows_from(c, g, tree, module_index, initializer_index, noescape_from - 1usize) {
+        let noescape_from = expression_noescape_from(c, g, tree, module_index, function, initializer_index)
+        if noescape_from != 0usize && holds_pointer(c, place_type, 0usize) && assignment_place_is_global(c, g, tree, module_index, first_index) {
             let parameter = c.parameters[function.first_parameter + noescape_from - 1usize]
             record_failure(c, module_index, initializer, .NoEscapeContract, parameter.name, "")
             ret ResourceViolation
