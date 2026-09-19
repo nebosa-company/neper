@@ -13702,13 +13702,16 @@ fn resource_element_candidates(c: *Checker, g: *graph.Graph, tree: *parse.Tree, 
     if !found { ret (0usize, 0usize, 0usize, false) }
     var local_index = base_local
     var offset = 0usize
+    var offset_known = true
     if c.locals[base_local].ty.kind == .Slice {
-        if !c.resources[base_local].slice_offset_known || c.resources[base_local].points_to == 0usize { ret (0usize, 0usize, 0usize, false) }
+        if c.resources[base_local].points_to == 0usize { ret (0usize, 0usize, 0usize, false) }
         local_index = c.resources[base_local].points_to - 1usize
-        offset = c.resources[base_local].slice_offset
+        offset_known = c.resources[base_local].slice_offset_known
+        if offset_known { offset = c.resources[base_local].slice_offset }
     }
     if local_index >= c.local_count || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize || offset >= c.resources[local_index].fields.len { ret (0usize, 0usize, 0usize, false) }
     let (relative, is_constant) = resource_index_value(c, g, tree, module_index, bracket.first)
+    if !offset_known { ret (local_index, 0usize, c.resources[local_index].fields.len, true) }
     if !is_constant { ret (local_index, offset, c.resources[local_index].fields.len, true) }
     if relative > c.resources[local_index].fields.len || offset > c.resources[local_index].fields.len - relative { ret (0usize, 0usize, 0usize, false) }
     let index = offset + relative
@@ -14085,11 +14088,13 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
             var owner = viewed
             var base_offset = 0usize
             var base_known = c.locals[viewed].ty.kind == .Array
-            if c.locals[viewed].ty.kind == .Slice && c.resources[viewed].slice_offset_known && c.resources[viewed].points_to != 0usize {
+            if c.locals[viewed].ty.kind == .Slice && c.resources[viewed].points_to != 0usize {
                 owner = c.resources[viewed].points_to - 1usize
-                base_offset = c.resources[viewed].slice_offset
-                base_known = true
                 c.resources[local_index].points_to = owner + 1usize
+                if c.resources[viewed].slice_offset_known {
+                    base_offset = c.resources[viewed].slice_offset
+                    base_known = true
+                }
             }
             let initializer = tree.nodes[initializer_index]
             if initializer.kind == .BracketPostfix {

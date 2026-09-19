@@ -3753,8 +3753,10 @@ therefore leaves each candidate maybe-owned until a precise identity discharges 
 direct alias of that slice, reaches the corresponding ownership slots at that
 offset (D619, D620); no second identity
 is created by the view. Each diagnostic names the indexed slot and preserves that slot's own
-acquisition or move site (D618). Dynamic slice offsets and slices without a tracked
-fixed-array owner are not tracked as wholes. `meta.fields[T]()` is empty when `T`
+acquisition or move site (D618). A runtime lower-bound slice retains its tracked
+fixed-array owner and indexes the conservative set of possible owner slots, including
+through a direct slice alias (D720). Slices without a tracked fixed-array owner remain
+outside this rule. `meta.fields[T]()` is empty when `T`
 is a resource named by another module; its
 representation is not a reflective serialization surface. Format-codec rejection
 of an affine field in an otherwise plain aggregate begins at `meta.get`: returning

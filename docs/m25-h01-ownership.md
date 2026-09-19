@@ -386,8 +386,9 @@ follow-up. Cold wall, warm wall and image size are within their budgets
 **Remaining limitations** (each an obligation, none closed by this record):
 D616-D617 track comptime-indexed slots of fixed arrays, D716-D717 check and
 transfer runtime candidate sets, and D718 protects candidate stores from
-overwrites; D719 retains new dynamic obligations, but runtime-offset
-slices are not yet tracked; the generic containers take their element by `own` (D353), but none can hold an
+overwrites; D719 retains new dynamic obligations and D720 carries the candidate set
+through runtime-offset slices. Slices without a tracked fixed-array owner remain
+outside this subset; the generic containers take their element by `own` (D353), but none can hold an
 obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
 is H02's; the pin rule is lexical, and infers nothing about what a callee keeps
@@ -461,6 +462,11 @@ site; an empty sibling cannot hide the possible overwrite.
 possible destination. For an obligated value, every candidate becomes maybe-owned
 with the store's provenance, so scope-exit auditing cannot lose the resource merely
 because its concrete slot is known only at run time.
+
+**D720 follow-up.** A runtime lower-bound slice retains its fixed-array owner while
+leaving the offset unknown. Indexing that slice or its direct alias queries every
+possible owner slot through the same D716-D719 rules. A comptime lower bound still
+narrows the range; a slice with no tracked fixed-array owner remains untracked.
 
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface

@@ -13538,3 +13538,14 @@ silently forget which slot received it.
 This deliberately uses the existing maybe state rather than a new symbolic-index
 record. It is conservative: later code must establish a precise slot identity or
 the ordinary read and exit rules reject the unresolved ownership.
+
+## D720 -- Runtime-offset slices retain affine-array candidates
+
+A local slice with a runtime lower bound retains its tracked fixed-array owner even
+though it cannot retain one numeric offset. Indexing that slice, or a direct alias
+of it, therefore denotes the conservative set of owner slots and applies D716-D719
+instead of falling back to an untracked view.
+
+A comptime lower bound still narrows the candidate range to its known suffix. A
+slice without a tracked fixed-array owner remains outside the lexical ownership
+subset; no heap or interprocedural backing-store inference is claimed.
