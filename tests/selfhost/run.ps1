@@ -376,6 +376,37 @@ $suppliedEqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $suppliedEqWritten -ne 'executable written') { throw 'supplied eq executable emission failed' }
 & $suppliedEqPath
 if ($LASTEXITCODE -ne 0) { throw 'the supplied eq is wrong for a scalar, pointer, sequence, tagged union or declared component' }
+# H06's semantic-law properties: supplied equality is reflexive, symmetric and
+# transitive over a finite domain, and equal values always have equal hashes.
+$protocolLawSuppliedPath = Join-Path $testBuild 'protocol-law-supplied-selfhost.exe'
+$protocolLawSuppliedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\protocol_law_supplied\src\main.e') $repo 'x64' 'windows' $protocolLawSuppliedPath
+if ($LASTEXITCODE -ne 0 -or $protocolLawSuppliedWritten -ne 'executable written') { throw 'supplied protocol-law executable emission failed' }
+& $protocolLawSuppliedPath
+if ($LASTEXITCODE -ne 0) { throw 'a supplied equality or hash law failed' }
+# The same harness accepts a coherent declared pair and detects an intentionally
+# incoherent one, proving the property check is not vacuous.
+$protocolLawDeclaredPath = Join-Path $testBuild 'protocol-law-declared-selfhost.exe'
+$protocolLawDeclaredWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\protocol_law_declared\src\main.e') $repo 'x64' 'windows' $protocolLawDeclaredPath
+if ($LASTEXITCODE -ne 0 -or $protocolLawDeclaredWritten -ne 'executable written') { throw 'declared protocol-law executable emission failed' }
+& $protocolLawDeclaredPath
+if ($LASTEXITCODE -ne 0) { throw 'the declared protocol-law harness failed' }
+# Implicit dispatch and an explicit function strategy agree over the same task;
+# a reverse strategy remains observably distinct across the module boundary.
+$protocolStrategyPath = Join-Path $testBuild 'protocol-strategy-equivalence-selfhost.exe'
+$protocolStrategyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\protocol_strategy_equivalence\src\main.e') $repo 'x64' 'windows' $protocolStrategyPath
+if ($LASTEXITCODE -ne 0 -or $protocolStrategyWritten -ne 'executable written') { throw 'protocol strategy equivalence executable emission failed' }
+& $protocolStrategyPath
+if ($LASTEXITCODE -ne 0) { throw 'implicit and explicit protocol strategies disagree' }
+# A recursively forwarded strategy produces exactly 66 instances. One fewer is a
+# structured budget refusal; the exact budget builds and executes.
+$protocolRecursivePath = Join-Path $testBuild 'protocol-strategy-recursive-selfhost.exe'
+$protocolRecursiveRejected = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\protocol_strategy_recursive\src\main.e') $repo 'x64' 'windows' $protocolRecursivePath --json --instances 65
+$protocolRecursiveStatus = $LASTEXITCODE
+if ($protocolRecursiveStatus -ne 1 -or ($protocolRecursiveRejected -join "`n") -notmatch '"code":"E-COMPTIME-0001"' -or ($protocolRecursiveRejected -join "`n") -notmatch '66 instances.*budget of 65') { throw 'recursive strategy specialization did not honor its instance budget' }
+$protocolRecursiveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\protocol_strategy_recursive\src\main.e') $repo 'x64' 'windows' $protocolRecursivePath --instances 66
+if ($LASTEXITCODE -ne 0 -or $protocolRecursiveWritten -ne 'executable written') { throw 'recursive strategy executable emission failed at its exact budget' }
+& $protocolRecursivePath
+if ($LASTEXITCODE -ne 0) { throw 'recursive strategy specialization computed the wrong result' }
 # A value whose bytes are not contiguous folds one hash per component instead of
 # hashing one run. The fixture pins that the contiguous path is unchanged, that equal
 # contents through different storage agree, and that regrouping the same flat bytes

@@ -429,6 +429,37 @@ supplied_eq_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$supplied_eq_written" = 'executable written' ]
 chmod +x "$test_build/supplied-eq-selfhost"
 "$test_build/supplied-eq-selfhost"
+# H06's semantic-law properties: supplied equality is reflexive, symmetric and
+# transitive over a finite domain, and equal values always have equal hashes.
+protocol_law_supplied_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/protocol_law_supplied/src/main.e" "$repo" x64 linux "$test_build/protocol-law-supplied-selfhost")
+[ "$protocol_law_supplied_written" = 'executable written' ]
+chmod +x "$test_build/protocol-law-supplied-selfhost"
+"$test_build/protocol-law-supplied-selfhost"
+# The same harness accepts a coherent declared pair and detects an intentionally
+# incoherent one, proving the property check is not vacuous.
+protocol_law_declared_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/protocol_law_declared/src/main.e" "$repo" x64 linux "$test_build/protocol-law-declared-selfhost")
+[ "$protocol_law_declared_written" = 'executable written' ]
+chmod +x "$test_build/protocol-law-declared-selfhost"
+"$test_build/protocol-law-declared-selfhost"
+# Implicit dispatch and an explicit function strategy agree over the same task;
+# a reverse strategy remains observably distinct across the module boundary.
+protocol_strategy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/protocol_strategy_equivalence/src/main.e" "$repo" x64 linux "$test_build/protocol-strategy-equivalence-selfhost")
+[ "$protocol_strategy_written" = 'executable written' ]
+chmod +x "$test_build/protocol-strategy-equivalence-selfhost"
+"$test_build/protocol-strategy-equivalence-selfhost"
+# A recursively forwarded strategy produces exactly 66 instances. One fewer is a
+# structured budget refusal; the exact budget builds and executes.
+protocol_recursive_status=0
+protocol_recursive_rejected=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/protocol_strategy_recursive/src/main.e" "$repo" x64 linux "$test_build/protocol-strategy-recursive-selfhost" --json --instances 65) || protocol_recursive_status=$?
+[ "$protocol_recursive_status" = 1 ] || { echo "recursive strategy budget refusal exited $protocol_recursive_status" >&2; exit 1; }
+case "$protocol_recursive_rejected" in
+    *'"code":"E-COMPTIME-0001"'*'66 instances'*'budget of 65'*) ;;
+    *) echo 'recursive strategy specialization returned the wrong budget diagnostic' >&2; exit 1 ;;
+esac
+protocol_recursive_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/protocol_strategy_recursive/src/main.e" "$repo" x64 linux "$test_build/protocol-strategy-recursive-selfhost" --instances 66)
+[ "$protocol_recursive_written" = 'executable written' ]
+chmod +x "$test_build/protocol-strategy-recursive-selfhost"
+"$test_build/protocol-strategy-recursive-selfhost"
 # A value whose bytes are not contiguous folds one hash per component instead of
 # hashing one run. The fixture pins that the contiguous path is unchanged, that equal
 # contents through different storage agree, and that regrouping the same flat bytes
