@@ -14258,10 +14258,12 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             while true {
                 let (argument_index, has_argument) = call_argument_node(tree, tree.nodes[initializer_index], argument_at)
                 if !has_argument { break }
-                var (pointed, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
+                // Prefer the lexical alias: `&ctx.target.hits` names the storage
+                // behind `ctx.target`, not the aggregate carrying that pointer.
+                var (pointed, is_address) = alias_target(c, g, tree, module_index, argument_index)
                 // Starting through a pointer alias lends the aliased storage just
-                // as spelling `&x` at the call does (D674).
-                if !is_address { (pointed, is_address) = alias_target(c, g, tree, module_index, argument_index) }
+                // as spelling `&x` at the call does (D674, D686).
+                if !is_address { (pointed, is_address) = address_argument_local(c, g, tree, module_index, argument_index) }
                 // `&slice[i]` and `&pointer.field` name the backing local when the
                 // lexical alias record knows it (D679).
                 if is_address && c.resources[pointed].points_to != 0usize && (c.locals[pointed].ty.kind == .Slice || c.locals[pointed].ty.kind == .Pointer) {

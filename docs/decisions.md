@@ -13197,3 +13197,14 @@ across the pointed-to region's deferred reset is therefore E-SAFETY-0018.
 
 Reassigning from a value without an alias still clears the previous fact; this adds
 no flow merge and does not make aggregate aliases interprocedural.
+
+## D686 -- Thread contexts prefer the storage behind an aggregate pointer field
+
+When a thread context takes an address through a tracked aggregate pointer field,
+such as `&ctx.target.hits`, it lends the local named by `target`, not the aggregate
+that happens to carry the pointer. Parent access to that local before the join is
+therefore E-SAFETY-0016.
+
+The thread-start path reuses the existing lexical aggregate alias and only falls
+back to the syntactic address base when no alias is known. No interprocedural points-
+to analysis is added.

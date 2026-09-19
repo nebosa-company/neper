@@ -54,7 +54,9 @@ A thread context passed through a local pointer alias of `&x` identifies and len
 the same `x` (D674). The stack-escape and pre-join access rules therefore do not
 depend on whether the start call spells the context directly or through that alias.
 An address into a local slice whose backing local is known, `&s[i]`, likewise lends
-the backing storage rather than only the slice descriptor (D679).
+the backing storage rather than only the slice descriptor (D679). An address reached
+through a tracked aggregate pointer field, `&ctx.target.hits`, lends the pointed-to
+local rather than the aggregate that carries the pointer (D686).
 
 ## 4. Locks, guards and atomics
 
@@ -117,7 +119,9 @@ atomics through addresses while workers run, joins by element.
 
 **D357** delivered section 2; **D365** section 3 and this document; **D674**
 extended section 3 to thread starts through local pointer aliases; **D679** follows
-thread contexts through local slices to known backing storage; **D379**
+thread contexts through local slices to known backing storage; **D686** gives an
+address through a tracked aggregate pointer field that same underlying identity;
+**D379**
 section 4's first half (`sync.Guard`, the fixtures `sync_guard` and
 `reject/safety_guard_leak`). The compiler's own crews pass as written under
 all three. Not delivered: section 4's second half, section 5's cases, the
