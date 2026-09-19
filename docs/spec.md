@@ -3639,7 +3639,8 @@ not add partial moves from a variant payload.
   of `&a` (D673); copying a pointer parameter preserves that parameter as the same
   lexical identity (D676). A deferred reset runs at scope exit rather than at registration;
   uses before that exit remain valid, while returning a value from the region is
-  refused because the reset precedes delivery to the caller (E-SAFETY-0018, D675).
+  refused because the reset precedes delivery to the caller; a derived slice has the
+  same restriction as its region local (E-SAFETY-0018, D675, D680).
   Both checks are lexical and within one function: what is returned otherwise, stored,
   handed to a callback, an import or a thread, reached through any other pointer,
   or made by a cast is outside the rule, and `m25-h02-regions.md` says so.

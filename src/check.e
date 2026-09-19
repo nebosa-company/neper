@@ -15056,7 +15056,14 @@ fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // its state but moved -- an unchecked one goes with the error it was bound beside.
 fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     if !any_affine_local(c) { ret ok }
-    let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+    var (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+    if !is_resource && tree.nodes[node_index].kind == .BracketPostfix {
+        var bracket: BracketInfo = zero
+        if read_bracket(c, tree, tree.nodes[node_index], &bracket) == ok && bracket.range {
+            (local_index, is_resource) = place_base_local(c, g, tree, module_index, node_index)
+            if is_resource { is_resource = c.resources[local_index].region != 0usize }
+        }
+    }
     if is_resource && c.resources[local_index].region != 0usize {
         let region_mark = c.resources[local_index].region - 1usize
         var mark_at = 0usize

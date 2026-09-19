@@ -193,3 +193,7 @@ those bound before the copy itself; the copy is not modeled as a nested mark.
 **D678** follows local pointer aliases on the accessor side of the view rule as well
 as the mutation side. A slice, pointer or string returned by a call through `p = &c`
 is tagged as a view of `c`, so a later mutation reports E-SAFETY-0014.
+
+**D680** extends deferred-reset escape checking from a region local to a slice derived
+from it at the return site. Returning `scratch[a..b]` is E-SAFETY-0018 for the same
+reason as returning `scratch`: the deferred reset runs before the caller sees either.

@@ -13141,3 +13141,13 @@ only the slice descriptor was marked.
 
 Thread binding follows the existing `points_to` fact after resolving the addressed
 place. Dynamic or externally sourced slice backing remains outside the local rule.
+
+## D680 -- A derived slice cannot escape across its deferred reset
+
+A slice expression derived from a region local at a return site carries the local's
+region for the deferred-reset escape check. `ret scratch[a..b]` is therefore refused
+with E-SAFETY-0018 when that region resets before the caller receives the result.
+
+The checker recognizes the existing range postfix and resolves its base place; it
+does not add a general expression-lifetime graph. Field and aggregate escapes remain
+later H02 work.
