@@ -12445,6 +12445,22 @@ fn check_compound_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
     ret Unsupported
 }
 
+fn assignment_place_is_global(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> bool {
+    var base_index = node_index
+    while tree.nodes[base_index].kind == .FieldExpr || tree.nodes[base_index].kind == .BracketPostfix {
+        let (child_index, has_child) = first_node_child(tree, tree.nodes[base_index])
+        if !has_child { ret false }
+        base_index = child_index
+    }
+    let base = tree.nodes[base_index]
+    if base.kind != .NameExpr { ret false }
+    let token = c.tokens[usize(base.token_start)]
+    if token.kind != .Identifier { ret false }
+    let name = g.modules[module_index].text[token.start..token.end]
+    let (_, found) = find_global(c, module_index, name)
+    ret found
+}
+
 fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
     var count = 0usize
     var first_index = 0usize
@@ -12470,6 +12486,12 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         if place_error != ok { ret place_error }
         let (actual, expression_error) = check_expr(c, g, tree, module_index, initializer_index, place_type)
         if expression_error != ok { ret expression_error }
+        let noescape_from = function_noescape_from(c, function)
+        if noescape_from != 0usize && holds_pointer(c, place_type, 0usize) && assignment_place_is_global(c, g, tree, module_index, first_index) && expression_borrows_from(c, g, tree, module_index, initializer_index, noescape_from - 1usize) {
+            let parameter = c.parameters[function.first_parameter + noescape_from - 1usize]
+            record_failure(c, module_index, initializer, .NoEscapeContract, parameter.name, "")
+            ret ResourceViolation
+        }
         // `dst[i] = src[j]` over a resource type copies the bits of a handle (D349):
         // an element read is a view, and a view stored is a second owner.
         if c.resources_on && tree.nodes[first_index].kind == .BracketPostfix && initializer.kind == .BracketPostfix && affine_kind(c, place_type, 0usize) != 0u8 {
