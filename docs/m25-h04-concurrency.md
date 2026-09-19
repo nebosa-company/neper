@@ -128,6 +128,8 @@ address through a tracked aggregate pointer field that same underlying identity;
 first field's owner or the carrier;
 **D700** proves the same identity for a sparse third-or-later pointer field;
 **D705** proves a later pointer on a recursively nested path lends its own owner;
+**D710** proves a later comptime-indexed fixed-array pointer element lends its own
+owner rather than an earlier element or the carrier;
 **D379**
 section 4's first half (`sync.Guard`, the fixtures `sync_guard` and
 `reject/safety_guard_leak`). The compiler's own crews pass as written under

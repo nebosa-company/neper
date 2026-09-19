@@ -13439,3 +13439,12 @@ later element's region owner, so deferred return still produces E-SAFETY-0018.
 
 Field and bracket assignments now share the existing syntax-path extractor and
 path insertion. Dynamic indices remain outside this lexical subset.
+
+## D710 -- Thread contexts resolve fixed-array element aliases
+
+A thread context addressed through a later comptime-indexed pointer element lends
+the local named by that element. Parent access before the join is E-SAFETY-0016
+against that owner rather than an earlier element or the fixed-array carrier.
+
+This is executable concurrency evidence for D706's shared path resolver. The
+thread-start analysis needs no array-specific representation or traversal.

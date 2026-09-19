@@ -318,3 +318,7 @@ against the actual element owner rather than losing the array's region identity.
 semantics as its literal. Assigning one element updates only that exact element
 identity, so a later region pointer remains visible at deferred return after its
 live siblings are assigned independently.
+
+**D710** proves the same comptime element identity reaches H04's thread-context
+resolver. An address through a later pointer element lends that element's owner,
+not an earlier element or the fixed-array carrier.
