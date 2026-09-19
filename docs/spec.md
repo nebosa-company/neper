@@ -3632,6 +3632,8 @@ not add partial moves from a variant payload.
   receiving such an alias through a mutable pointer changes `x` and invalidates its
   views exactly as a call receiving `&x` does (D671). Copying that pointer local
   preserves the same target, so local pointer-copy chains are followed too (D672).
+  An accessor called through the alias tags its returned slice, pointer or string as
+  a view of that same container (D678).
   Arena arguments are matched by their underlying local storage identity, so a
   mark, allocation, and reset may consistently use `a`, `&a`, or a pointer alias
   of `&a` (D673); copying a pointer parameter preserves that parameter as the same

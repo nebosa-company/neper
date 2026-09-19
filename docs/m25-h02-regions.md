@@ -189,3 +189,7 @@ so marks and allocations made through the original and its copies share one regi
 **D677** preserves a mark's original checkpoint across local copies. Reset through
 the copy therefore invalidates allocations made after the original mark, including
 those bound before the copy itself; the copy is not modeled as a nested mark.
+
+**D678** follows local pointer aliases on the accessor side of the view rule as well
+as the mutation side. A slice, pointer or string returned by a call through `p = &c`
+is tagged as a view of `c`, so a later mutation reports E-SAFETY-0014.

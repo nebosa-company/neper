@@ -13262,8 +13262,9 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     while viewable && !has_address {
         let (argument_index, has_argument) = call_argument_node(tree, source, address_at)
         if !has_argument { break }
-        let argument = tree.nodes[argument_index]
-        if argument.kind == .UnaryExpr && c.tokens[usize(argument.token_start)].kind == .PunctAmp { has_address = true }
+        var (_, names_storage) = address_argument_local(c, g, tree, module_index, argument_index)
+        if !names_storage { (_, names_storage) = alias_target(c, g, tree, module_index, argument_index) }
+        if names_storage { has_address = true }
         address_at += 1usize
     }
     if !has_address && !any_affine_local(c) { ret ok }
@@ -13303,7 +13304,8 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     while !allocates && has_address && c.resources[local_index].view_of == 0usize {
         let (argument_index, has_argument) = call_argument_node(tree, source, argument_at)
         if !has_argument { break }
-        let (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
+        var (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
+        if !is_address { (container, is_address) = alias_target(c, g, tree, module_index, argument_index) }
         if is_address && container != local_index { c.resources[local_index].view_of = container + 1usize }
         argument_at += 1usize
     }

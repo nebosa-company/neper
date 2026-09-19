@@ -13121,3 +13121,13 @@ binding and the copy are invalidated too.
 The canonical local reuses the existing `points_to` slot, and allocation matching
 ignores copied marks as independent nested checkpoints. The focused fixture pins the
 otherwise-missed allocation and its E-SAFETY-0013 evidence.
+
+## D678 -- Accessors follow local pointer aliases to their container
+
+When a view-returning call receives a local pointer alias of `&c`, its returned slice,
+pointer or string is a view of `c`, just as if the call had received `&c` directly.
+A later mutable call therefore invalidates that view with E-SAFETY-0014.
+
+Both accessor detection and view binding reuse `alias_target`; no accessor summary or
+second alias analysis is introduced. The focused fixture pins the call-through-alias
+form and the mutation provenance.
