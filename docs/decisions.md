@@ -13048,3 +13048,14 @@ The target-independent conformance fixture asks whether `target.arch` is `.X64`,
 which is true on both supported hosts, and pins the byte-exact stream and schema.
 Together with existing `if` and `const` records, H06 now exposes control folding,
 target selection and constant evaluation as compile-time rather than runtime work.
+
+## D671 -- Mutable calls follow a direct pointer alias to the container
+
+A mutable pointer argument bound from `&c` names the same container as `&c` for
+H02's view-invalidation rule. A call such as `list.push(p, x)` therefore ends every
+live view of `c`; using one reports E-SAFETY-0014 at the mutation with the same
+structured evidence as the directly addressed form.
+
+This extends the existing local alias record instead of introducing an effect
+summary or a second container analysis. Pointer-copy chains remain a separate
+increment. The focused conformance fixture pins the direct alias on both hosts.

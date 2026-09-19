@@ -94,9 +94,9 @@ Stated so that no one reads the rules above as more than they are:
   out of a struct (`s.items`): not a region value or a view, since nothing says what
   it borrows. These are the raw-pointer cases H02 asks to record outside the
   guarantee, and an `@unsafe` function is where they belong when they matter.
-- A container mutated through a **second alias** (`let p = &l; list.push(p, x)`):
-  `p` is a pointer local, and a call through it is not a call with `&l`. The
-  lexical subset does not chase aliases; H02's alias tracking is later delivery.
+- A container mutation through a direct pointer alias (`let p = &l; list.push(p,
+  x)`) is followed and invalidates `l`'s views (D671). Longer alias chains remain
+  later delivery.
 - Non-lexical liveness: a view whose last use is before the mutation is still
   refused if it is used after. H02 asks to measure before inferring liveness; the
   measurement is in section 8.
@@ -162,3 +162,8 @@ and H02 together +15% over D344). Not delivered, as section 7 lists: summaries,
 escapes, aliases through pointer locals, non-lexical liveness, `freeze`, tagged
 handles; and `list.iter(&l)`-shaped struct views, which the narrowed reading
 leaves untracked.
+
+**D671** closes the direct pointer-alias mutation hole: a mutable pointer argument
+bound from `&c` resolves to `c` before the view invalidation pass runs. The same
+E-SAFETY-0014 and mutation provenance now cover `list.push(p, x)` as already covered
+`list.push(&c, x)`; the focused fixture pins the alias form on both hosts.
