@@ -13618,3 +13618,15 @@ The `protocol_law_supplied` fixture exhausts reflexivity, symmetry, transitivity
 equal-implies-equal-hash over a finite scalar domain, then repeats the coherence check
 for equal slices over distinct backing positions. It is an executable property check
 of the compiler-supplied operations, not a list of hand-picked expected digests.
+
+## D727 -- Declared protocol laws use one generic property harness
+
+The semantic-law fixture applies one generic finite-domain harness to operations
+declared beside their nominal type. A coherent equality/hash pair that ignores one
+field passes reflexivity, symmetry, transitivity and hash coherence; a deliberately
+incoherent pair with the same equality but a hash of the ignored field is required
+to fail the harness.
+
+This does not pretend the compiler can prove arbitrary function bodies obey a law.
+It makes the declaring module's section 9 obligation executable and demonstrates
+that the check detects the exact equal-keys/different-hashes defect H06 names.
