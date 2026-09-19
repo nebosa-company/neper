@@ -3741,13 +3741,26 @@ not add partial moves from a variant payload.
 Fixed arrays inherit the affine and cleanup classification of their element. A
 comptime-indexed slot is tracked independently: a store moves ownership into it, a
 consuming read moves ownership out, and a live obligated slot is audited at every
-exit (D616, D617). Dynamic indices remain views until a conservative set-of-elements rule
-is specified. A local slice alias with an omitted or comptime lower bound, and a
+exit (D616, D617). A runtime-indexed read checks the conservative set of every
+possible slot and is invalid if any candidate is moved, maybe moved or unchecked
+(D716). A consuming runtime-indexed read requires every candidate to be consumable
+and makes each possible obligated slot maybe-moved; an exact one-slot range becomes
+moved as usual (D717). A canonical `i = 0; while i < N { ...; i += 1 }` with `N`
+equal to the fixed-array length is an exhaustive sweep: a dynamic store or move in
+that loop covers every slot once. A runtime-indexed store is invalid if any possible destination
+still carries an owned, maybe-owned, unchecked or deferred obligation (D718). A
+valid store joins the new value into every possible destination; an obligated value
+therefore leaves each candidate maybe-owned until a precise identity discharges it
+(D719). A dynamically filled seeded `os.Thread` array remains non-owning when its
+cleanup crosses an unowned slice helper; owned resource-slice summaries are required
+before that compatibility boundary can be tightened. A local slice alias with an omitted or comptime lower bound, and a
 direct alias of that slice, reaches the corresponding ownership slots at that
 offset (D619, D620); no second identity
 is created by the view. Each diagnostic names the indexed slot and preserves that slot's own
-acquisition or move site (D618). Dynamic slice offsets and slices without a tracked
-fixed-array owner are not tracked as wholes. `meta.fields[T]()` is empty when `T`
+acquisition or move site (D618). A runtime lower-bound slice retains its tracked
+fixed-array owner and indexes the conservative set of possible owner slots, including
+through a direct slice alias (D720). Slices without a tracked fixed-array owner remain
+outside this rule. `meta.fields[T]()` is empty when `T`
 is a resource named by another module; its
 representation is not a reflective serialization surface. Format-codec rejection
 of an affine field in an otherwise plain aggregate begins at `meta.get`: returning

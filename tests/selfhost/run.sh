@@ -2445,6 +2445,14 @@ for conformance_case in 'reject regions_pointer_chain 1' 'reject regions_arena_a
     [ "$conformance_status" -eq "$3" ]
     cmp -s "$test_build/conformance-$1-$2.jsonl" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s\n' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
 done
+# D716-D720: runtime-indexed affine fixed-array ownership and slice candidates.
+for conformance_case in 'reject safety_dynamic_array_read 1' 'reject safety_dynamic_array_move 1' 'reject safety_dynamic_array_overwrite 1' 'reject safety_dynamic_array_store_leak 1' 'reject safety_dynamic_array_slice_offset 1'; do
+    set -- $conformance_case
+    conformance_status=0
+    $test_build/neper-self check-file "$conformance_root/$1/$2.e" "$repo" x64 linux --json > "$test_build/conformance-$1-$2.jsonl" || conformance_status=$?
+    [ "$conformance_status" -eq "$3" ]
+    cmp -s "$test_build/conformance-$1-$2.jsonl" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s\n' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
+done
 # A consuming dereference follows its lexical pointer alias to the pinned resource
 # (D610, H01).
 pointer_move_status=0

@@ -384,8 +384,11 @@ follow-up. Cold wall, warm wall and image size are within their budgets
 (warm p50 96 ms against 82 ms is +17% at eight workers, +0% single-worker).
 
 **Remaining limitations** (each an obligation, none closed by this record):
-D616-D617 track comptime-indexed slots of fixed arrays, but
-dynamic indices and slices of resources are not tracked as wholes; the generic containers take their element by `own` (D353), but none can hold an
+D616-D617 track comptime-indexed slots of fixed arrays, D716-D717 check and
+transfer runtime candidate sets, and D718 protects candidate stores from
+overwrites; D719 retains new dynamic obligations and D720 carries the candidate set
+through runtime-offset slices. Slices without a tracked fixed-array owner remain
+outside this subset; the generic containers take their element by `own` (D353), but none can hold an
 obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
 is H02's; the pin rule is lexical, and infers nothing about what a callee keeps
@@ -439,6 +442,35 @@ slices without a tracked fixed-array owner remain outside the rule.
 queries every possible element owner for read safety. If any candidate dangles,
 the dereference is rejected. This is the first conservative set-of-elements use;
 dynamic moves of affine array slots remain outside the ownership subset.
+
+**D716 follow-up.** The same conservative set-of-elements shape now applies to a
+runtime-indexed affine-array read. Every possible slot must be readable; a moved,
+maybe-moved or unchecked candidate produces the ordinary slot diagnostic with its
+own provenance. Dynamic ownership transfer and stores remain subsequent steps.
+
+**D717 follow-up.** A consuming runtime-indexed read first requires every possible
+slot to be consumable, then marks each possible obligated slot maybe-moved. A later
+operation therefore cannot double-consume the runtime-selected resource. Exact
+one-slot ranges still use the ordinary moved or deferred-reserved state. A
+canonical zero-to-length unit-step loop is recognized as an exhaustive sweep, so
+the established initialize-then-clean-up loop owns and then moves every slot.
+
+**D718 follow-up.** A runtime-indexed store checks every possible destination before
+writing. If any candidate still carries an owned, maybe-owned, unchecked or
+deferred obligation, the store is E-SAFETY-0006 against that slot and its acquisition
+site; an empty sibling cannot hide the possible overwrite.
+
+**D719 follow-up.** A valid runtime-indexed store joins the new value into every
+possible destination. For an obligated value, every candidate becomes maybe-owned
+with the store's provenance, so scope-exit auditing cannot lose the resource merely
+because its concrete slot is known only at run time. The existing dynamically filled
+`os.Thread` worker array remains a view at this boundary until a helper's resource
+slice can summarize the joins it performs for its caller.
+
+**D720 follow-up.** A runtime lower-bound slice retains its fixed-array owner while
+leaving the offset unknown. Indexing that slice or its direct alias queries every
+possible owner slot through the same D716-D719 rules. A comptime lower bound still
+narrows the range; a slice with no tracked fixed-array owner remains untracked.
 
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface

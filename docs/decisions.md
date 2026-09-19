@@ -13497,3 +13497,65 @@ element or by the outer aggregate.
 
 Wildcard query segments participate in the existing longest-prefix path match;
 there is no flattened nested-array representation or special traversal.
+
+## D716 -- Runtime affine-array reads check every possible slot
+
+A runtime index into a tracked fixed array denotes every slot the expression may
+select. Reading it is rejected with E-SAFETY-0001 when any candidate is moved or
+maybe moved, and with E-SAFETY-0008 when any candidate is unchecked.
+
+The candidate range reuses the existing per-slot state and provenance table. A
+comptime index remains a one-slot range, so exact diagnostics and behavior do not
+fork into a second ownership analysis.
+
+## D717 -- Runtime affine-array moves make candidate slots uncertain
+
+A consuming runtime-indexed read validates every possible fixed-array slot before
+the transfer. Each obligated candidate that may be selected then becomes
+maybe-moved; a later read, move or exit cannot assume which slot remains owned.
+
+An exact one-slot range retains the ordinary moved or deferred-reserved state. The
+rule adds no relational index solver: uncertainty is represented by the existing
+branch-join state and the slot's move provenance.
+
+The existing canonical exhaustive sweep, `i = 0; while i < N { ...; i += 1 }`,
+is the bounded exception: when `N` is the fixed-array length, its dynamic store or
+move covers every slot once. This preserves the accepted initialize-then-clean-up
+idiom without treating an arbitrary runtime index as exact.
+
+## D718 -- Runtime affine-array stores protect every candidate
+
+A store through a runtime index is rejected with E-SAFETY-0006 when any possible
+destination slot still owns, may own, has not checked, or has deferred an obligated
+resource. The store cannot choose a convenient empty sibling at compile time.
+
+The check scans the same bounded candidate range as reads and reports the first
+conflicting slot with its own acquisition provenance. Exact stores retain their
+existing one-slot overwrite rule.
+
+## D719 -- Runtime affine-array stores retain possible obligations
+
+After a valid store through a runtime index, every possible destination slot joins
+its old empty state with the stored value. An obligated value therefore leaves a
+maybe-owned obligation, carrying the store site, on every candidate; an exit cannot
+silently forget which slot received it.
+
+This deliberately uses the existing maybe state rather than a new symbolic-index
+record. It is conservative: later code must establish a precise slot identity or
+the ordinary read and exit rules reject the unresolved ownership.
+
+Seeded `os.Thread` arrays retain D616's non-owning dynamic-store behavior while a
+helper receives them only as an unowned slice. Owned resource-slice summaries are
+required before that existing worker-array idiom can carry a caller-visible join
+obligation without a false leak.
+
+## D720 -- Runtime-offset slices retain affine-array candidates
+
+A local slice with a runtime lower bound retains its tracked fixed-array owner even
+though it cannot retain one numeric offset. Indexing that slice, or a direct alias
+of it, therefore denotes the conservative set of owner slots and applies D716-D719
+instead of falling back to an untracked view.
+
+A comptime lower bound still narrows the candidate range to its known suffix. A
+slice without a tracked fixed-array owner remains outside the lexical ownership
+subset; no heap or interprocedural backing-store inference is claimed.
