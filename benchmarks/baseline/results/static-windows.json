@@ -5,13 +5,13 @@
  "host": "windows",
  "jobs": 8,
  "compiler": "stage 2 (neper-big / neper-linux, cross-compiled) at the revision",
- "revision": "c7257b68ec45",
+ "revision": "cd1af340da31",
  "cells": [
   {
    "workload": "sc500k",
    "mode": "debug",
    "command": "D:\\repos\\neper-cot\\build\\neper-big.exe emit-executable D:\\Temp\\claude\\scratch475\\fixtures-win\\sc500k\\src\\main.e D:\\repos\\neper-cot x64 windows D:\\Temp\\claude\\scratch475\\fixtures-win\\sc500k\\static-debug.exe -j 8 --stats --json",
-   "arena_mb": 2284,
+   "arena_mb": 2285,
    "image_bytes": 2982400
   },
   {

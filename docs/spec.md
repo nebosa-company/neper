@@ -1459,6 +1459,15 @@ therefore retain independent values. Both return the same exact progress count a
 the plain operation, and a successful call leaves `detail` unchanged. Because a
 `File` does not retain its opening path, their `subject` is the empty string.
 
+The checked generic stream path is additive: `e.io.DetailReader` and
+`e.io.DetailWriter` callbacks receive the caller's `ErrorDetail`, including the flush
+callback. File adapters use the checked host forms above; buffered adapters preserve
+data paired with an error and retain only the unwritten suffix after a failed flush.
+Counted helpers return the exact accepted prefix. Library-originated limits,
+no-progress and allocation failures use native code zero and name their operation and
+constraint; failed constructors restore their entry arena mark. Existing
+`e.io.Reader` and `e.io.Writer` remain the compact no-detail callback ABI.
+
 **Outputs on failure.** Every `(T, err)` of the fixed surface says what `T` holds
 when `err` is not `ok`: a handle -- `open`, `create_new`, `pipe`, `spawn`,
 `thread_create` and the variants' openers -- is null, owned by nobody, and §11's

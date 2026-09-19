@@ -12934,5 +12934,27 @@ Detail-buffer constructors mark the arena before allocating state and storage. O
 either allocation failure they reset to that mark and name `state` or `buffer` in a
 caller-owned `OutOfMemory` detail. `read_all_detail` likewise distinguishes its hard
 limit from arena exhaustion. The focused fixtures cover nested native write failure,
-successful composed copy without detail clobbering, and rollback of the first
-allocation step on both hosts.
+successful composed copy without detail clobbering, and rollback of both allocation
+steps on both hosts.
+
+## D659 -- Caller-owned detail closes H07
+
+H07 is closed for the delivered checked CPU surface. D360 preserves the primary
+failure across cleanup; D417/D443 make host path failures caller-owned; D479/D480
+carry them through filesystem and process wrappers; D614 makes concurrent byte I/O
+independent; and D655-D658 complete generic stream progress, provenance and
+allocation-failure behavior. `m25-h07-error-detail.md` records the selected design,
+alternatives, normative rules, compatibility effects, evidence and measurements.
+
+The compatibility decision is additive API evolution under `.em` format 11.
+Existing `Reader`/`Writer` layouts and the legacy temporal function remain unchanged;
+new detail stream types have distinct layouts and symbols, and normal Interface-hash
+invalidation rebuilds importers. No artifact encoding or existing ABI meaning changed,
+so another format bump would reject compatible artifacts without adding safety.
+
+The deterministic sc500k gate was re-pinned with this closure. The additional
+source declarations raise Windows debug arena high-water from 2,284 to 2,285 MB and
+Linux release high-water from 2,988 to 2,989 MB; the opposite modes are unchanged.
+Windows images are unchanged. Linux debug/release images grow by 272/192 bytes, both
+well inside the five-percent image budget. These are exact eight-worker static cells,
+not timed measurements.

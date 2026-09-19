@@ -5,21 +5,21 @@
  "host": "linux",
  "jobs": 8,
  "compiler": "stage 2 (neper-big / neper-linux, cross-compiled) at the revision",
- "revision": "e59e4625434f",
+ "revision": "cd1af340da31",
  "cells": [
   {
    "workload": "sc500k",
    "mode": "debug",
    "command": "/mnt/d/Temp/claude/scratch475/neper-linux emit-executable /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/src/main.e /mnt/d/repos/neper-cot x64 linux /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/static-debug -j 8 --stats --json",
    "arena_mb": 2283,
-   "image_bytes": 2979824
+   "image_bytes": 2980096
   },
   {
    "workload": "sc500k",
    "mode": "release",
    "command": "/mnt/d/Temp/claude/scratch475/neper-linux emit-executable /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/src/main.e /mnt/d/repos/neper-cot x64 linux /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/static-release --release -j 8 --stats --json",
-   "arena_mb": 2988,
-   "image_bytes": 2079280
+   "arena_mb": 2989,
+   "image_bytes": 2079472
   }
  ]
 }

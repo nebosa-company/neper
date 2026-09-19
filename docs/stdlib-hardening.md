@@ -75,6 +75,10 @@ accepted-prefix result. D658 carries those callbacks through buffered streams an
 copy, retains data paired with an error, and records rollback-safe allocation-step
 failures.
 
+D659 closes H07 for the delivered checked CPU surface. The selected design,
+compatibility boundary, fixtures, measurements and remaining legacy limitation are in
+`m25-h07-error-detail.md`.
+
 Acceptance: file -> buffer -> decompressor -> JSON stream using only public APIs;
 nested buffered sinks; short writes; data plus error; flush failure after a prefix;
 empty input; abandoned traversal; no double-close and no borrowed view after reset.
