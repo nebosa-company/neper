@@ -477,6 +477,10 @@ the callee. If `T` is obligated, the parameter carries one collective cleanup
 obligation; an ordinary `[]T` parameter remains a borrowed view. Element-level
 discharge is specified by the following increments.
 
+**D722 follow-up.** A consuming access to one element of an owned resource slice is
+E-SAFETY-0003. Without a proven exhaustive sweep, the checker cannot identify the
+remaining owners or discharge the slice's collective obligation.
+
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
 returns a plain `Handle` view when callers need the platform value, so `File.raw`

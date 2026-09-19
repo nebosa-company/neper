@@ -13829,6 +13829,20 @@ fn resource_element_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     ret (local_index, first, true)
 }
 
+fn resource_owned_slice_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .BracketPostfix { ret (0usize, false) }
+    var bracket: BracketInfo = zero
+    if read_bracket(c, tree, node, &bracket) != ok || bracket.range { ret (0usize, false) }
+    let base = tree.nodes[bracket.base]
+    if base.kind != .NameExpr { ret (0usize, false) }
+    let token = c.tokens[usize(base.token_start)]
+    if token.kind != .Identifier { ret (0usize, false) }
+    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    if !found || c.locals[local_index].ty.kind != .Slice || c.resources[local_index].state == resource_plain || c.resources[local_index].borrowed { ret (0usize, false) }
+    ret (local_index, affine_slice_kind(c, c.locals[local_index].ty) != 0u8)
+}
+
 // `resource(cleanup)` between a type declaration's `=` and its body.
 fn resource_declaration(c: *Checker, text: str, node: syntax.Node, body: syntax.Node) -> (bool, str) {
     var at = usize(node.token_start)
@@ -15741,7 +15755,15 @@ fn resource_consume_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
 // index may move any candidate, so every owed candidate becomes maybe-moved.
 fn resource_consume_element(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     let (local_index, first, end, is_element) = resource_element_candidates(c, g, tree, module_index, node_index)
-    if !is_element { ret ok }
+    if !is_element {
+        let (slice_local, owned_slice) = resource_owned_slice_of(c, g, tree, module_index, node_index)
+        if owned_slice {
+            let node = tree.nodes[node_index]
+            record_failure_related(c, module_index, node, .ResourcePartialMove, c.locals[slice_local].name, line_detail(c, g, module_index, c.resources[slice_local].acquired), c.resources[slice_local].acquired)
+            ret ResourceViolation
+        }
+        ret ok
+    }
     let node = tree.nodes[node_index]
     var at = first
     var owed = false

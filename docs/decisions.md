@@ -13570,3 +13570,12 @@ must drain or transfer all of its elements before every exit. A parameter withou
 The collective state is deliberately separate from fixed-array slot tracking. It
 gives an untracked slice a serializable signature contract without inventing a
 backing allocation or a hidden destructor.
+
+## D722 -- Owned resource slices reject partial element moves
+
+Consuming one element of an owned resource slice is E-SAFETY-0003 unless the
+operation is part of a proven exhaustive sweep. A runtime index cannot discharge
+the slice's collective obligation or identify which elements remain for an exit.
+
+Borrowed slices keep their existing view behavior. The rule applies only to the
+owned slice state introduced by D721.
