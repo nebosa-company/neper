@@ -15292,21 +15292,24 @@ fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
     }
     if !has_alias {
         let (carrier, has_carrier) = place_base_local(c, g, tree, module_index, node_index)
-        if has_carrier && c.resources[carrier].points_to != 0usize {
-            let carried = c.resources[carrier].points_to - 1usize
-            if carried < c.local_count && c.resources[carried].region != 0usize {
-                local_index = carried
-                is_resource = true
-            }
-            if !is_resource && c.resources[carrier].slice_offset_known {
-                let second = c.resources[carrier].slice_offset - 1usize
-                if second < c.local_count && c.resources[second].region != 0usize {
-                    local_index = second
+        if has_carrier {
+            if c.resources[carrier].points_to != 0usize {
+                let carried = c.resources[carrier].points_to - 1usize
+                if carried < c.local_count && c.resources[carried].region != 0usize {
+                    local_index = carried
                     is_resource = true
+                }
+                if !is_resource && c.resources[carrier].slice_offset_known {
+                    let second = c.resources[carrier].slice_offset - 1usize
+                    if second < c.local_count && c.resources[second].region != 0usize {
+                        local_index = second
+                        is_resource = true
+                    }
                 }
             }
             // A third or later aggregate pointer field is retained in the sparse
-            // alias table and is the same carrier escape (D697).
+            // alias table and is the same carrier escape (D697, D702), including
+            // a nested-only carrier which has no inline alias.
             var alias_at = 0usize
             while !is_resource && alias_at < c.resource_alias_count {
                 let alias = c.resource_aliases[alias_at]

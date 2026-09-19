@@ -283,3 +283,7 @@ inside an aggregate literal. Alias resolution selects the longest path prefix us
 by the expression, so `outer.middle.inner.scratch` follows `scratch` rather than the
 first pointer below `middle`; a post-reset use is E-SAFETY-0013. Nested paths live
 only in the sparse side table, leaving the per-local `Resource` record unchanged.
+
+**D702** lets a sparse nested path establish a carrier escape without requiring any
+top-level inline alias. Returning an aggregate whose later nested pointer belongs to
+the deferred-reset region is therefore E-SAFETY-0018 against that actual owner.

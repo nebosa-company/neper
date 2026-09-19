@@ -13361,3 +13361,13 @@ actual owner.
 Nested identities use the existing sparse alias table and immutable path slices.
 The two inline top-level slots and every `Resource` record remain unchanged; lookup
 stays a linear scan until aggregate-heavy measurements justify an index.
+
+## D702 -- Nested-only carriers participate in deferred escape checks
+
+Returning a whole aggregate across a deferred region reset scans its sparse nested
+paths even when the carrier has no top-level inline alias. A later pointer below a
+nested aggregate therefore reports E-SAFETY-0018 against its region owner rather
+than escaping because the inline slots are empty.
+
+This removes an inline-presence gate from the existing carrier scan; it introduces
+no new representation or control-flow analysis.
