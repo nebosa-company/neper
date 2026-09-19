@@ -1,0 +1,58 @@
+{
+  "schema": "neper-protocol-strategies",
+  "version": 1,
+  "host": "linux",
+  "machine": "x86_64",
+  "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "compiler": "/mnt/d/repos/neper-cot3/build/linux/neper-self",
+  "revision": "38aa25367942568997c05ab69cc7af3d32cdc32c",
+  "types": 256,
+  "runs": 5,
+  "workers": 1,
+  "cells": [
+    {
+      "strategy": "implicit",
+      "source_sha256": "b2d335c4f6578021e3578fe54d990e77a1718d1fd9a8be4e6493077478e89924",
+      "source_bytes": 75626,
+      "check_bodies_ms": {
+        "p50": 46,
+        "p95": 50.8,
+        "min": 42,
+        "max": 52,
+        "runs": 5
+      },
+      "instance_instructions": 1024,
+      "instance_bytes": 22784,
+      "executable_bytes": 197520
+    },
+    {
+      "strategy": "explicit",
+      "source_sha256": "2d662b7dff56d24f46eeea518f050aa035432d3d4131790427c04d7d443aa43b",
+      "source_bytes": 79226,
+      "check_bodies_ms": {
+        "p50": 43,
+        "p95": 49.8,
+        "min": 41,
+        "max": 51,
+        "runs": 5
+      },
+      "instance_instructions": 1024,
+      "instance_bytes": 22784,
+      "executable_bytes": 197520
+    }
+  ],
+  "explicit_minus_implicit": {
+    "check_bodies_p50_ms": {
+      "absolute": -3,
+      "percent": -6.5
+    },
+    "instance_bytes": {
+      "absolute": 0,
+      "percent": 0.0
+    },
+    "executable_bytes": {
+      "absolute": 0,
+      "percent": 0.0
+    }
+  }
+}

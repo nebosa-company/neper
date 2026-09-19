@@ -13655,3 +13655,20 @@ The focused gate also builds the fixture immediately below its required
 then builds at the exact count. This connects recursive strategy stress to the
 user-selected specialization budget instead of treating compiler capacity as the
 only recursion limit.
+
+## D730 -- Explicit protocol strategy cost is measured against implicit dispatch
+
+`benchmarks/protocol_strategies/measure.py` generates equivalent implicit and
+explicit `cmp` workloads over 256 nominal types, warms filesystem caches, then
+measures five one-worker builds on each host. It reads the compiler's own
+`check bodies` progress record and sums its per-instance NIR and machine-byte
+records; the final executable size is recorded separately. The generator, parser
+unit check, commands, source hashes, samples and host details are retained beside
+the two reports.
+
+At revision 38aa253, both mechanisms produced 22,784 instance bytes and identical
+images on each host (199,680 bytes on Windows; 197,520 on Linux). Median body-check
+time was 19 ms implicit versus 18 ms explicit on Windows, and 46 ms versus 43 ms
+on Linux. These small samples support no speed claim; they show that selecting the
+operation explicitly did not add measured check-time or code-size cost on H06's
+fixed equivalent task.
