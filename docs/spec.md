@@ -3746,7 +3746,10 @@ possible slot and is invalid if any candidate is moved, maybe moved or unchecked
 (D716). A consuming runtime-indexed read requires every candidate to be consumable
 and makes each possible obligated slot maybe-moved; an exact one-slot range becomes
 moved as usual (D717). A runtime-indexed store is invalid if any possible destination
-still carries an owned, maybe-owned, unchecked or deferred obligation (D718). A local slice alias with an omitted or comptime lower bound, and a
+still carries an owned, maybe-owned, unchecked or deferred obligation (D718). A
+valid store joins the new value into every possible destination; an obligated value
+therefore leaves each candidate maybe-owned until a precise identity discharges it
+(D719). A local slice alias with an omitted or comptime lower bound, and a
 direct alias of that slice, reaches the corresponding ownership slots at that
 offset (D619, D620); no second identity
 is created by the view. Each diagnostic names the indexed slot and preserves that slot's own

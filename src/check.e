@@ -15250,6 +15250,46 @@ fn resource_assign_inner(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
             }
             candidate_at += 1usize
         }
+        var owed = affine_kind(c, c.types[c.locals[candidate_local].ty.element], 0usize) == 2u8
+        let initializer_node = tree.nodes[initializer_index]
+        if contains_token(c, usize(statement.token_start), usize(statement.token_end), .KwZero) && initializer_node.kind != .CallExpr { owed = false }
+        if initializer_node.kind == .BracketPostfix {
+            owed = false
+            let (source_local, source_first, source_end, source_is_element) = resource_element_candidates(c, g, tree, module_index, initializer_index)
+            if source_is_element {
+                var source_at = source_first
+                while source_at < source_end {
+                    if field_owed(c.resources[source_local].fields[source_at]) { owed = true }
+                    source_at += 1usize
+                }
+                try resource_consume(c, g, tree, module_index, initializer_index)
+            }
+        } else {
+            if initializer_node.kind == .NameExpr {
+                let (source_local, source_is_resource) = resource_local_of(c, g, tree, module_index, initializer_index)
+                if source_is_resource && !c.resources[source_local].obligated && c.resources[source_local].fields.len == 0usize { owed = false }
+            }
+            if !from_call { try resource_move_literal_fields(c, g, tree, module_index, initializer_index) }
+        }
+        var producer = call
+        var from_producer = from_call
+        if !from_call && initializer_node.kind == .CallExpr {
+            let (info, info_error) = check_call(c, g, tree, module_index, initializer_node)
+            if info_error == ok {
+                producer = info
+                from_producer = true
+            }
+        }
+        if from_producer && producer_borrowed(c, producer.function) { owed = false }
+        candidate_at = candidate_first
+        while candidate_at < candidate_end {
+            c.resources[candidate_local].fields[candidate_at] = field_with(resource_maybe, owed)
+            c.resources[candidate_local].elements_acquired[candidate_at] = usize(statement.token_start)
+            candidate_at += 1usize
+        }
+        c.resources[candidate_local].state = resource_owned
+        c.resources[candidate_local].acquired = usize(statement.token_start)
+        ret ok
     }
     let (element_local, element_at, is_element) = resource_element_of(c, g, tree, module_index, place_index)
     if is_element {

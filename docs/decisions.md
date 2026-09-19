@@ -13527,3 +13527,14 @@ resource. The store cannot choose a convenient empty sibling at compile time.
 The check scans the same bounded candidate range as reads and reports the first
 conflicting slot with its own acquisition provenance. Exact stores retain their
 existing one-slot overwrite rule.
+
+## D719 -- Runtime affine-array stores retain possible obligations
+
+After a valid store through a runtime index, every possible destination slot joins
+its old empty state with the stored value. An obligated value therefore leaves a
+maybe-owned obligation, carrying the store site, on every candidate; an exit cannot
+silently forget which slot received it.
+
+This deliberately uses the existing maybe state rather than a new symbolic-index
+record. It is conservative: later code must establish a precise slot identity or
+the ordinary read and exit rules reject the unresolved ownership.
