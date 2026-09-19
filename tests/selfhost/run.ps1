@@ -2402,6 +2402,21 @@ foreach ($case in @(@('reject', 'safety_owned_slice_leak', 1), @('reject', 'safe
     if ($LASTEXITCODE -ne $case[2]) { throw "check-file --json on $($case[0])/$($case[1]).e exited $LASTEXITCODE, not $($case[2])" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
 }
+# D731-D735: declared, proved, propagated and serialized result-borrow summaries.
+foreach ($case in @(@('reject', 'regions_borrow_contract_name', 1), @('reject', 'regions_borrow_contract_body', 1), @('accept', 'regions_borrow_contract_aggregate', 0), @('reject', 'regions_borrow_contract_call', 1), @('reject', 'regions_borrow_contract_generic', 1), @('accept', 'regions_borrow_contract_artifact', 0))) {
+    $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
+    $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
+    $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
+    cmd /c "`"$compiler`" check-file `"$conformanceFixture`" `"$repo`" x64 windows --json > `"$conformanceActual`""
+    if ($LASTEXITCODE -ne $case[2]) { throw "check-file --json on $($case[0])/$($case[1]).e exited $LASTEXITCODE, not $($case[2])" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
+}
+$borrowSummaryArtifact = Join-Path $testBuild 'borrow-summary.x64-windows.em'
+$borrowSummaryWritten = & $compiler emit-em (Join-Path $conformanceRoot 'accept\regions_borrow_contract_artifact.e') $repo x64 windows $borrowSummaryArtifact
+if ($LASTEXITCODE -ne 0 -or $borrowSummaryWritten -ne 'compiled module written') { throw 'writing the borrow-summary artifact failed' }
+$borrowSummaryBytes = [IO.File]::ReadAllBytes($borrowSummaryArtifact)
+$borrowSummaryInterface = [BitConverter]::ToUInt64($borrowSummaryBytes, 64)
+if ([BitConverter]::ToUInt32($borrowSummaryBytes, [int]$borrowSummaryInterface + 44) -ne 2) { throw 'the function interface did not serialize borrow_from=2' }
 # A consuming dereference follows its lexical pointer alias to the pinned resource
 # (D610, H01).
 $pointerMoveActual = Join-Path $testBuild 'conformance-reject-safety_pointer_move.jsonl'
@@ -4164,7 +4179,7 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 11 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 12 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 9) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'

@@ -78,6 +78,7 @@ type DiagnosticKind = enum u8 {
     ResourceMovedWhileBorrowed,
     RegionReset,
     RegionEscape,
+    BorrowContract,
     ViewMutated,
     ThreadFrameEscape,
     ThreadShared,
@@ -244,6 +245,9 @@ type Function = struct {
     external: bool,
     // `@import(LIB, SYM)` on an `extern fn`: the library to bind against and the name
     // to bind to, which is not the neper-side name -- D11 keeps those independent.
+    // External functions store their import library here. Non-extern functions use
+    // the otherwise-empty slot for an `@borrows` parameter name; the checked public
+    // identity is still its position, computed by `function_borrow_from`.
     import_library: str,
     import_symbol: str,
     intrinsic: bool,
@@ -3574,6 +3578,52 @@ fn declaration_import(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     ret ("", "", false)
 }
 
+// The single parameter named by `@borrows("parameter")`. The summary is part of
+// the function declaration, so malformed or repeated summaries fail before bodies.
+fn declaration_borrow(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (str, bool, err) {
+    let text = g.modules[module_index].text
+    var result = ""
+    var found = false
+    var at = node_index
+    while at > 1usize {
+        at = at - 1usize
+        let node = tree.nodes[at]
+        if !node.top_level { continue }
+        if node.kind != .Attribute { break }
+        var name = ""
+        var token_at = usize(node.token_start)
+        while token_at < usize(node.token_end) && token_at < c.token_count {
+            let token = c.tokens[token_at]
+            if token.kind == .Identifier {
+                name = text[token.start..token.end]
+                break
+            }
+            token_at += 1usize
+        }
+        if !same(name, "borrows") { continue }
+        if found { ret ("", false, InvalidType) }
+        let child_end = usize(node.first_child) + usize(node.child_count)
+        var child_at = usize(node.first_child)
+        var argument_index = 0usize
+        var argument_count = 0usize
+        while child_at < child_end {
+            if parse.child_is_node_at(tree, child_at) {
+                argument_index = parse.child_index_at(tree, child_at)
+                argument_count += 1usize
+            }
+            child_at += 1usize
+        }
+        if argument_count != 1usize { ret ("", false, InvalidType) }
+        let argument = tree.nodes[argument_index]
+        if argument.kind != .LiteralExpr { ret ("", false, InvalidType) }
+        let (value, has_value) = attribute_string(c, text, usize(argument.token_start))
+        if !has_value || value.len == 0usize { ret ("", false, InvalidType) }
+        result = value
+        found = true
+    }
+    ret (result, found, ok)
+}
+
 // Whether the attribute run above a declaration names `name`.
 fn declaration_has_attribute(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, name: str) -> bool {
     let text = g.modules[module_index].text
@@ -3692,6 +3742,36 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         if item.external && return_type.kind == .Err { ret InvalidType }
         if return_type.kind == .Err && return_index + 1usize != item.return_count { ret InvalidType }
         return_index += 1usize
+    }
+    let (borrow_name, has_borrow, borrow_error) = declaration_borrow(c, g, tree, module_index, node_index)
+    if borrow_error != ok {
+        record_failure(c, module_index, node, .BorrowContract, "", "")
+        ret borrow_error
+    }
+    if has_borrow {
+        var parameter_at = 0usize
+        while parameter_at < item.parameter_count {
+            let parameter = c.parameters[item.first_parameter + parameter_at]
+            if same(parameter.name, borrow_name) {
+                if item.external || declaration_has_attribute(c, g, tree, module_index, node_index, "unsafe") || parameter.own || !holds_pointer(c, parameter.ty, 0usize) {
+                    record_failure(c, module_index, node, .BorrowContract, borrow_name, "")
+                    ret InvalidType
+                }
+                item.import_library = borrow_name
+                break
+            }
+            parameter_at += 1usize
+        }
+        var pointer_result = false
+        return_index = 0usize
+        while return_index < item.return_count {
+            if holds_pointer(c, c.return_types[item.first_return + return_index], 0usize) { pointer_result = true }
+            return_index += 1usize
+        }
+        if function_borrow_from(c, item) == 0usize || !pointer_result {
+            record_failure(c, module_index, node, .BorrowContract, borrow_name, "")
+            ret InvalidType
+        }
     }
     // Section 5's closed table of what crosses the C ABI: a parameter or return of an
     // extern naming a type without a C mapping is refused here, at the declaration.
@@ -6361,6 +6441,7 @@ fn instantiate_function(c: *Checker, owner_module_index: usize, template_index: 
     instance.first_return = c.return_type_count
     instance.return_count = template.return_count
     instance.generic = !function_arguments_concrete(c, template_index, first_argument)
+    instance.import_library = template.import_library
     var generic: FunctionGeneric = zero
     generic.first_comptime = c.function_generics[template_index].first_comptime
     generic.comptime_count = c.function_generics[template_index].comptime_count
@@ -10992,12 +11073,96 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                 ret ReturnType
             }
             if expression_error != ok { ret expression_error }
+            let borrow_from = function_borrow_from(c, function)
+            if borrow_from != 0usize && holds_pointer(c, expected, 0usize) {
+                if !result_borrows_from(c, g, tree, module_index, parse.child_index_at(tree, at), borrow_from - 1usize) {
+                    let parameter = c.parameters[function.first_parameter + borrow_from - 1usize]
+                    record_failure(c, module_index, tree.nodes[parse.child_index_at(tree, at)], .BorrowContract, parameter.name, "")
+                    ret ResourceViolation
+                }
+            }
             try resource_return_value(c, g, tree, module_index, parse.child_index_at(tree, at))
             return_index += 1usize
         }
         at += 1usize
     }
     ret resource_audit(c, g, module_index, node, 0usize, .ResourceCleanupForgotten)
+}
+
+// The parameter-local identity retained by a pointer or slice result. Bindings and
+// derived places already use the resource alias table, so the contract check follows
+// that one source of truth instead of growing a second provenance analysis.
+fn result_borrow_origin(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    var (origin, found) = alias_target(c, g, tree, module_index, node_index)
+    if !found { (origin, found) = address_argument_local(c, g, tree, module_index, node_index) }
+    if !found { (origin, found) = place_base_local(c, g, tree, module_index, node_index) }
+    if !found || origin >= c.local_count { ret (0usize, false) }
+    var steps = 0usize
+    while c.resources[origin].points_to != 0usize && steps < c.local_count {
+        origin = c.resources[origin].points_to - 1usize
+        if origin >= c.local_count { ret (0usize, false) }
+        steps += 1usize
+    }
+    ret (origin, true)
+}
+
+fn pointer_leaf_count(c: *Checker, ty: Type, depth: usize) -> (usize, bool) {
+    if depth > 16usize { ret (0usize, false) }
+    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .String || ty.kind == .Function { ret (1usize, true) }
+    if ty.kind == .Array {
+        if !ty.has_element || !ty.has_length || ty.element >= c.type_count { ret (0usize, false) }
+        let (elements, known) = pointer_leaf_count(c, c.types[ty.element], depth + 1usize)
+        if !known { ret (0usize, false) }
+        ret (elements * ty.array_length, true)
+    }
+    if ty.kind != .Named { ret (0usize, ty.kind != .TypeParameter) }
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found { ret (0usize, false) }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind != .Struct { ret (0usize, !holds_pointer(c, ty, 0usize)) }
+    var count = 0usize
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index >= c.aggregate_field_count { ret (0usize, false) }
+        let (fields, known) = pointer_leaf_count(c, c.aggregate_fields[field_index].ty, depth + 1usize)
+        if !known { ret (0usize, false) }
+        count += fields
+        at += 1usize
+    }
+    ret (count, true)
+}
+
+fn carrier_borrows_from(c: *Checker, carrier: usize, parameter: usize) -> bool {
+    if carrier >= c.local_count { ret false }
+    let (wanted, known) = pointer_leaf_count(c, c.locals[carrier].ty, 0usize)
+    if !known || wanted == 0usize { ret false }
+    var found = 0usize
+    if c.resources[carrier].points_to != 0usize {
+        if c.resources[carrier].points_to - 1usize != parameter { ret false }
+        found += 1usize
+    }
+    if c.resources[carrier].slice_offset_known {
+        if c.resources[carrier].slice_offset - 1usize != parameter { ret false }
+        found += 1usize
+    }
+    var at = 0usize
+    while at < c.resource_alias_count {
+        let alias = c.resource_aliases[at]
+        if alias.carrier == carrier {
+            if alias.pointed != parameter { ret false }
+            found += 1usize
+        }
+        at += 1usize
+    }
+    ret found == wanted
+}
+
+fn result_borrows_from(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, parameter: usize) -> bool {
+    let (origin, found) = result_borrow_origin(c, g, tree, module_index, node_index)
+    if found && origin == parameter { ret true }
+    let (carrier, has_carrier) = place_base_local(c, g, tree, module_index, node_index)
+    ret has_carrier && carrier_borrows_from(c, carrier, parameter)
 }
 
 fn check_children(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
@@ -13060,6 +13225,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ResourceMovedWhileBorrowed { ret "E-SAFETY-0004" }
     if kind == .RegionReset { ret "E-SAFETY-0013" }
     if kind == .RegionEscape { ret "E-SAFETY-0018" }
+    if kind == .BorrowContract { ret "E-SAFETY-0019" }
     if kind == .ViewMutated { ret "E-SAFETY-0014" }
     if kind == .ThreadFrameEscape { ret "E-SAFETY-0015" }
     if kind == .ThreadShared { ret "E-SAFETY-0016" }
@@ -13148,6 +13314,7 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .MultipleAssignmentImmutable { ret "multiple assignment target is immutable" }
     if kind == .AggregateMemberUnknown { ret "aggregate member has an unknown or unsized type" }
     if kind == .BindingUnknownNamed { ret "binding has an unknown named type" }
+    if kind == .BorrowContract { ret "@borrows must name one borrowed pointer-bearing parameter of a function with a pointer-bearing result" }
     ret "type checking failed"
 }
 
@@ -13274,6 +13441,21 @@ fn call_returns_pointer(c: *Checker, info: CallInfo) -> bool {
     ret false
 }
 
+// The one-based position retained by an `@borrows` result. The attribute name rides
+// in an import-library slot that is otherwise empty on every non-extern function;
+// this keeps the hot Function record unchanged while its public identity stays the
+// positional value serialized by artifacts.
+fn function_borrow_from(c: *Checker, function: Function) -> usize {
+    if function.external || function.import_library.len == 0usize { ret 0usize }
+    var at = 0usize
+    while at < function.parameter_count {
+        let parameter_index = function.first_parameter + at
+        if parameter_index < c.parameter_count && same(c.parameters[parameter_index].name, function.import_library) { ret at + 1usize }
+        at += 1usize
+    }
+    ret 0usize
+}
+
 // A plain local bound from a call (D354): a region value when the call took a
 // live mark's arena and gives back something that can hold a pointer; a view when
 // it took `&c` of a local; from another local, the same as that local.
@@ -13305,6 +13487,33 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         ret ok
     }
     if !from_call || source.kind != .CallExpr || !call_returns_pointer(c, call) { ret ok }
+    // A checked result-borrow summary is exact: retain the named argument's region
+    // or container identity rather than guessing from the first address-like input.
+    let declared_borrow = function_borrow_from(c, call.function)
+    if declared_borrow != 0usize && declared_borrow <= call.function.parameter_count {
+        let parameter_at = declared_borrow - 1usize
+        let parameter_index = call.function.first_parameter + parameter_at
+        var arena_parameter = false
+        if parameter_index < c.parameter_count {
+            let parameter_type = c.parameters[parameter_index].ty
+            arena_parameter = parameter_type.kind == .Pointer && parameter_type.has_element && parameter_type.element < c.type_count && seeded_arena(c, c.types[parameter_type.element])
+        }
+        if !arena_parameter {
+            let (argument_index, has_argument) = call_argument_node(tree, source, parameter_at)
+            if has_argument {
+                var (origin, found_origin) = alias_target(c, g, tree, module_index, argument_index)
+                if !found_origin { (origin, found_origin) = address_argument_local(c, g, tree, module_index, argument_index) }
+                if !found_origin { (origin, found_origin) = place_base_local(c, g, tree, module_index, argument_index) }
+                if found_origin && origin < c.local_count && origin != local_index {
+                    c.resources[local_index].region = c.resources[origin].region
+                    c.resources[local_index].view_of = c.resources[origin].view_of
+                    if c.resources[local_index].region == 0usize && c.resources[local_index].view_of == 0usize { c.resources[local_index].view_of = origin + 1usize }
+                    region_tag(c, local_index, usize(statement.token_start))
+                }
+            }
+            ret ok
+        }
+    }
     // A view is a slice, a pointer or a string that came back from a call given
     // `&c`; a call that takes an arena hands back an allocation instead.
     let bound_kind = c.locals[local_index].ty.kind
@@ -14152,7 +14361,15 @@ fn record_literal_alias_paths(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
                         has_segment = found_field
                     }
                     if has_segment {
-                        let (pointed, found) = address_argument_local(c, g, tree, module_index, value_index)
+                        var (pointed, found) = address_argument_local(c, g, tree, module_index, value_index)
+                        if !found { (pointed, found) = alias_target(c, g, tree, module_index, value_index) }
+                        if !found {
+                            let (source, is_place) = place_base_local(c, g, tree, module_index, value_index)
+                            if is_place && holds_pointer(c, c.locals[source].ty, 0usize) {
+                                pointed = source
+                                found = true
+                            }
+                        }
                         if found && pointed != carrier { try set_resource_path_alias(c, carrier, fields[0usize..depth + 1usize], pointed) }
                         if !found && tree.nodes[value_index].kind == .AggregateLiteral {
                             try record_literal_alias_paths(c, g, tree, module_index, carrier, value_index, fields, depth + 1usize)
@@ -15399,7 +15616,15 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                 fields[right] = held
                 left += 1usize
             }
-            let (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
+            var (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
+            if !is_address { (pointed, is_address) = alias_target(c, g, tree, module_index, initializer_index) }
+            if !is_address {
+                let (source, is_place) = place_base_local(c, g, tree, module_index, initializer_index)
+                if is_place && holds_pointer(c, c.locals[source].ty, 0usize) {
+                    pointed = source
+                    is_address = true
+                }
+            }
             if is_address && pointed != struct_local {
                 try set_resource_path_alias(c, struct_local, fields[0usize..field_count], pointed)
             }
