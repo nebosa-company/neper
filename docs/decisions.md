@@ -13320,3 +13320,13 @@ which is reset before delivery; the return is E-SAFETY-0018 against that owner.
 
 This extends the existing carrier scan and diagnostic only. It adds no new escape
 kind, summary or control-flow analysis.
+
+## D698 -- Aggregate copies preserve sparse pointer-field identities
+
+Copying a named aggregate to another local copies its sparse third-and-later
+field-to-local identities as well as the two inline identities. Returning the copy
+across a deferred region reset therefore cannot erase a later field's region owner.
+
+Copy propagation snapshots the sparse table's old tail before appending destination
+entries. That keeps the operation finite without a second table or temporary
+allocation.

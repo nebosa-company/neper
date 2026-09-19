@@ -13906,6 +13906,15 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                 c.resources[local_index].slice_offset_known = true
                 c.resources[local_index].mark_arena = c.resources[source].mark_arena
             }
+            // Preserve third-and-later field identities across a lexical aggregate
+            // copy; stop at the old tail because appending grows this same table.
+            let source_alias_count = c.resource_alias_count
+            var alias_at = 0usize
+            while alias_at < source_alias_count {
+                let alias = c.resource_aliases[alias_at]
+                if alias.carrier == source { try set_resource_alias(c, local_index, alias.field, alias.pointed) }
+                alias_at += 1usize
+            }
         }
     }
     if c.locals[local_index].ty.kind == .Pointer {

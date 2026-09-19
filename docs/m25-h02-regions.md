@@ -267,3 +267,8 @@ field; arbitrary nested pointer paths remain outside this lexical subset.
 whole aggregate whose third or later field points into the region reset before
 delivery is E-SAFETY-0018 against that field's owner, even when the first two fields
 point at live storage.
+
+**D698** copies sparse aliases with the named aggregate that carries them. A direct
+lexical copy therefore preserves a third or later field's region identity, and
+returning the copy across the deferred reset remains E-SAFETY-0018 against that
+field's owner.
