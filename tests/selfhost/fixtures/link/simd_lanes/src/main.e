@@ -224,6 +224,56 @@ fn operators() {
     // covered only part of the vector would be caught at one end or the other.
     let flipped = ~Vec[u8, 16]{ 0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8, 13u8, 14u8, 15u8 }
     if flipped[0] != 255u8 || flipped[7] != 248u8 || flipped[15] != 240u8 { os.exit(99) }
+    // Thirty-two and sixty-four byte vectors are two and four whole registers' worth,
+    // and a packed operation reads no lane it is not given, so each is the same
+    // instruction once per sixteen-byte chunk over the chunk's own addresses. Every
+    // check writes a lane in each chunk, so a form that answered only the first chunk,
+    // or read the chunks in the wrong order, is caught.
+    var fa = simd.splat[Vec[f32, 8]](1.5)
+    fa[0] = 0.5
+    fa[4] = 2.5
+    fa[7] = 4.0
+    let fb = simd.splat[Vec[f32, 8]](2.0)
+    let fc = fa * fb + fa
+    if fc[0] != 1.5 || fc[3] != 4.5 || fc[4] != 7.5 || fc[7] != 12.0 { os.exit(138) }
+    let fd = (fc - fa) / fb
+    if fd[0] != 0.5 || fd[4] != 2.5 || fd[7] != 4.0 { os.exit(139) }
+    // Section 11's canonical NaN is made lane by lane inside each chunk, so a NaN in
+    // the second one is canonical too and the other chunk is untouched by it.
+    var fe = simd.splat[Vec[f32, 8]](1.0)
+    fe[5] = mem.bitcast[f32](4290772993u32)
+    let ff = fe - fe
+    if mem.bitcast[u32](ff[5]) != 2143289344u32 { os.exit(140) }
+    if ff[0] != 0.0 || ff[7] != 0.0 { os.exit(141) }
+    var ia = simd.splat[Vec[i32, 8]](6i32)
+    ia[0] = 2147483647i32
+    ia[4] = -1i32
+    let ib = simd.splat[Vec[i32, 8]](1i32)
+    let ic = ia +% ib
+    if ic[0] != -2147483648i32 || ic[3] != 7i32 || ic[4] != 0i32 || ic[7] != 7i32 { os.exit(142) }
+    let ig = (ia & ib) | (ib ^ ib)
+    if ig[0] != 1i32 || ig[3] != 0i32 || ig[4] != 1i32 { os.exit(143) }
+    let ih = ~ia
+    if ih[0] != -2147483648i32 || ih[3] != -7i32 || ih[4] != 0i32 { os.exit(144) }
+    // Sixteen-bit lanes are the one packed multiply the baseline has, at this width too.
+    var ja = simd.splat[Vec[i16, 16]](3i16)
+    ja[0] = 300i16
+    ja[8] = -4i16
+    let jb = ja *% simd.splat[Vec[i16, 16]](7i16)
+    if jb[0] != 2100i16 || jb[7] != 21i16 || jb[8] != -28i16 || jb[15] != 21i16 { os.exit(145) }
+    // Sixty-four bytes are four chunks, with a lane of its own in each.
+    var ka = simd.splat[Vec[u8, 64]](9u8)
+    ka[0] = 1u8
+    ka[16] = 2u8
+    ka[32] = 3u8
+    ka[63] = 4u8
+    let kb = simd.splat[Vec[u8, 64]](250u8)
+    let kc = ka +% kb
+    if kc[0] != 251u8 || kc[16] != 252u8 || kc[32] != 253u8 || kc[63] != 254u8 { os.exit(146) }
+    if kc[1] != 3u8 || kc[47] != 3u8 { os.exit(147) }
+    let kd = ~(ka ^ kb)
+    if kd[0] != 4u8 || kd[16] != 7u8 || kd[32] != 6u8 || kd[63] != 1u8 { os.exit(148) }
+    if kd[1] != 12u8 { os.exit(149) }
     let p = simd.mask[Vec[i32, 4]](3u64)
     let q = simd.mask[Vec[i32, 4]](6u64)
     if simd.bits[Vec[i32, 4]](p & q) != 2u64 { os.exit(88) }

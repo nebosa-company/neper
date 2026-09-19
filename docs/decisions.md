@@ -14123,3 +14123,31 @@ sixty-four lanes, with a flipped lane still reducing as a mask lane, in both sui
 probe under `build/` confirms the shape the fixture cannot see: two `pand` for a
 thirty-two-lane `&`, four `pxor` for a sixty-four-lane `^`, and no `paddb` for the
 thirty-two-byte vector next to them, which still takes the loop.
+
+## D759 -- The packed forms reach the thirty-two- and sixty-four-byte vectors
+
+D758 packs the two widest masks with a chunk loop and leaves the two widest vectors on
+the lane loop, as "a width in the closed table and their own step". That step is the
+condition and nothing else: the chunk loop it already emits is per sixteen bytes, and a
+`Vec[f32, 8]` is two of those and a `Vec[u8, 64]` four, so `vector_packed_immediate`
+admits the wide widths for every lane type rather than for a mask's byte lanes only.
+Lowering emits one `VectorBinary` per chunk over the chunk's own `FieldAddress`, the way
+it already does for a thirty-two-lane mask, and the back end is untouched again: every
+instruction it is given is sixteen bytes.
+
+The two things D758 named as this step's own both cost nothing. Section 11's canonical
+NaN is made inside `select_vector_binary`, after the one packed operation and over the
+one register, so each chunk canonicalises its own lanes and a NaN in the second chunk is
+as canonical as one in the first. The alignment is not a question either: the sixteen-
+byte moves are `movups` and `movaps` is never emitted, so a chunk at offset 16 of a
+thirty-two-aligned slot is loaded and stored like any other.
+
+That leaves the lane loop to `f16`, the shifts, and `*%` on any lane but the sixteen-bit
+one -- the shapes the baseline has no instruction for -- rather than to a width. The
+`link/simd_lanes` fixture checks the wide widths in both suites over lanes written in
+each chunk, so a form that answered one chunk, or read them in the wrong order, fails:
+`* + - /` and a canonical NaN in the second chunk at `Vec[f32, 8]`, `+% & | ^ ~` at
+`Vec[i32, 8]`, the packed multiply at `Vec[i16, 16]`, and `+% ^ ~` at `Vec[u8, 64]`,
+whose four chunks each carry a lane of their own. A probe under `build/` confirms the
+shape the fixture cannot see: `a + a` on a `Vec[f32, 8]` emits two `addps` and no
+`addss` at all, where it emitted eight scalar adds before.

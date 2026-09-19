@@ -5224,29 +5224,30 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     ret (result, result_type, ok)
     ret (0usize, check.invalid_type(), check.Unsupported)
 }
-// The lane-wise shapes one vector instruction covers: a sixteen-byte vector -- the
+// The lane-wise shapes one vector instruction covers: a sixteen-byte operand -- the
 // width SSE2 and NEON both have -- whose lane type and operator name a single packed
-// instruction on that baseline, plus `~`, which is two. A mask is one byte per lane, so
-// sixteen lanes are sixteen bytes, eight are the register's low half, four its low
-// quarter and two its low eighth, and thirty-two or sixty-four are two or four whole
-// registers' worth; all of them take the three bitwise ones and the mask's own `~`.
-// Everything else keeps the lane loop below: the wider vector widths, `f16`, the
-// shifts, and `*%` on any lane but the sixteen-bit one, the only packed multiply SSE2
-// has. The second return is how many sixteen-byte chunks the operands are, which is
-// one for everything but the two widest masks.
-// ponytail: the sixteen-byte baseline only; `--cpu` and wider widths widen this table.
+// instruction on that baseline, plus `~`, which is two. The closed table's other two
+// vector widths are two and four of those, and a packed operation reads no lane it is
+// not given, so they are that same instruction once per sixteen-byte chunk. A mask is
+// one byte per lane, so its sixteen lanes are sixteen bytes, its eight the register's
+// low half, its four the low quarter and its two the low eighth, and its thirty-two or
+// sixty-four whole registers' worth again.
+// Everything else keeps the lane loop below: `f16`, the shifts, and `*%` on any lane
+// but the sixteen-bit one, the only packed multiply SSE2 has. The second return is how
+// many sixteen-byte chunks the operands are.
+// ponytail: the sixteen-byte baseline only; `--cpu` widens this table to AVX.
 fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, usize, bool) {
-    // Sixteen bytes is a whole register, and a mask is the only operand the closed
-    // table gives another width to, since a `Vec` is sixteen bytes or more: eight bytes
-    // for eight lanes, four for four, two for two, and thirty-two or sixty-four for the
-    // two widest. The same instruction answers the narrow ones on the register's low
-    // half, quarter or eighth, which the narrower moves carry, and the wide ones a
-    // chunk at a time, since a packed operation reads no lane it is not given.
+    // Sixteen bytes is a whole register, thirty-two and sixty-four are two and four of
+    // them, and a mask is the only operand the closed table gives a narrower width to,
+    // since a `Vec` is sixteen bytes or more: eight bytes for eight lanes, four for
+    // four, two for two. The same instruction answers the narrow ones on the register's
+    // low half, quarter or eighth, which the narrower moves carry, and the wide ones a
+    // chunk at a time.
     let mask_lanes = lane.kind == .Bool && lane_size == 1usize
     let bytes = lanes * lane_size
     let narrow = bytes == 8usize || bytes == 4usize || bytes == 2usize
     let wide = bytes == 32usize || bytes == 64usize
-    let packable = bytes == 16usize || ((narrow || wide) && mask_lanes)
+    let packable = bytes == 16usize || wide || (narrow && mask_lanes)
     if !packable { ret (0usize, 0usize, false) }
     var chunks = 1usize
     if wide { chunks = bytes / 16usize }
