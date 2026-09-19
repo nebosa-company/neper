@@ -304,3 +304,8 @@ in a later array-literal element retains its own local owner, so a use through t
 element after the owner's region reset is E-SAFETY-0013 rather than resolving to an
 earlier live element. Numeric segments reuse the sparse aggregate-path table and do
 not grow every local's `Resource` record.
+
+**D707** includes those element paths when a fixed-array carrier crosses a deferred
+reset boundary. Returning the whole array is E-SAFETY-0018 when any tracked element
+belongs to the region reset before delivery, including a third or later sparse
+element behind earlier pointers to live storage.

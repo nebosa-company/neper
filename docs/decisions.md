@@ -13412,3 +13412,12 @@ reports E-SAFETY-0013 against the owner actually stored there.
 Numeric index segments reuse D701's immutable sparse path representation. The first
 two one-segment paths may still use the existing inline slots; no `Resource` record
 or general dynamic-index analysis is added.
+
+## D707 -- Deferred escape checks fixed-array element aliases
+
+Returning a fixed-array carrier across a deferred region reset examines every
+tracked comptime element path. A third or later element pointing into that region
+therefore produces E-SAFETY-0018 even when earlier elements point to live locals.
+
+The existing carrier scan already covers the shared sparse path table. This decision
+adds executable boundary evidence rather than a second array-specific escape pass.
