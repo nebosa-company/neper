@@ -13263,5 +13263,15 @@ which is reset before delivery; the return is E-SAFETY-0018 against that owner.
 This extends the existing carrier check and diagnostic only. It adds no new escape
 kind or control-flow analysis.
 
+## D693 -- Aggregate copies preserve both pointer-field targets
+
+Copying a two-pointer aggregate to another local copies both recorded field-to-local
+identities. A region pointer in the second field therefore remains visible to the
+deferred-return boundary after the copy.
+
+This extends the existing lexical copy propagation by one inline slot. It does not
+add aggregate flattening, data-flow merging or support for more than two independent
+pointer fields.
+
 The existing single-target literal walk becomes recursive and keeps the outer field
 as its access path. Multiple independent pointer fields remain a later H02 problem.

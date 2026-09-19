@@ -246,3 +246,7 @@ second field is E-SAFETY-0013 even when the first field points at live storage.
 **D692** extends the deferred-return boundary to the whole two-pointer carrier. If
 the first field names live storage but the second belongs to the deferred-reset
 region, returning the aggregate is E-SAFETY-0018 against that second owner.
+
+**D693** preserves both recorded pointer-field targets when a two-pointer aggregate
+is copied to another local. Returning the copy across the deferred reset therefore
+remains E-SAFETY-0018 against the owner named by its second field.

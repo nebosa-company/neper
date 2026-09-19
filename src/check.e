@@ -13799,6 +13799,8 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         if found && c.locals[source].ty.kind == .Named && c.resources[source].points_to != 0usize {
             c.resources[local_index].points_to = c.resources[source].points_to
             c.resources[local_index].points_to_field = c.resources[source].points_to_field
+            c.resources[local_index].points_to_second = c.resources[source].points_to_second
+            c.resources[local_index].points_to_second_field = c.resources[source].points_to_second_field
         }
     }
     if c.locals[local_index].ty.kind == .Pointer {
