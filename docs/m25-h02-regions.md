@@ -250,3 +250,7 @@ region, returning the aggregate is E-SAFETY-0018 against that second owner.
 **D693** preserves both recorded pointer-field targets when a two-pointer aggregate
 is copied to another local. Returning the copy across the deferred reset therefore
 remains E-SAFETY-0018 against the owner named by its second field.
+
+**D694** keeps independently assigned pointer fields in separate alias slots. A
+later assignment to one sibling cannot erase the other sibling's region identity,
+so returning the carrier still reports E-SAFETY-0018 for that owner.

@@ -3649,8 +3649,8 @@ not add partial moves from a variant payload.
   itself, nested inside aggregate literals or field assignments, or carried by a
   lexical copy or assignment of the aggregate (E-SAFETY-0018, D675, D680-D685,
   D689-D690). An aggregate whose second tracked field points into that region is the
-  same carrier escape (D692), and copying that aggregate preserves both tracked
-  targets (D693).
+  same carrier escape (D692), and copying that aggregate or assigning its pointer
+  fields separately preserves both tracked targets (D693-D694).
   Both checks are lexical and within one function: what is returned otherwise, stored,
   handed to a callback, an import or a thread, reached through any other pointer,
   or made by a cast is outside the rule, and `m25-h02-regions.md` says so.

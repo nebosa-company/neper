@@ -13273,5 +13273,15 @@ This extends the existing lexical copy propagation by one inline slot. It does n
 add aggregate flattening, data-flow merging or support for more than two independent
 pointer fields.
 
+## D694 -- Pointer-field assignment preserves sibling aliases
+
+Assigning an address to a field updates that field's existing alias slot or occupies
+the next free slot. It no longer overwrites a different pointer field already
+recorded on the same aggregate, so the deferred-return boundary can still see both
+owners.
+
+The update is bounded by D691's two inline slots. Assignments to a third independent
+pointer field remain outside the lexical subset rather than allocating a side table.
+
 The existing single-target literal walk becomes recursive and keeps the outer field
 as its access path. Multiple independent pointer fields remain a later H02 problem.
