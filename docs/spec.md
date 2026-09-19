@@ -3685,7 +3685,8 @@ not add partial moves from a variant payload.
   storage named by that pointer rather than the aggregate carrying it (D686),
   including when that pointer is the aggregate's second or later tracked field
   or lies on a recursively nested field path or a comptime-indexed fixed-array
-  element path (D695, D700, D705, D710).
+  element path (D695, D700, D705, D710). A runtime-indexed element may name any
+  tracked owner at that path, so every candidate is lent until the join (D714).
   From the start to
   the join of that thread local, the parent neither reads nor writes `x` -- a value
   read, a store, a move -- (`E-SAFETY-0016`); it may take `&x` or `&x.field` again,

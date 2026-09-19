@@ -14520,6 +14520,21 @@ fn resource_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     ret ok
 }
 
+fn lend_thread_storage(c: *Checker, thread_local: usize, pointed_index: usize, token: usize) {
+    var pointed = pointed_index
+    if c.resources[pointed].points_to != 0usize && (c.locals[pointed].ty.kind == .Slice || c.locals[pointed].ty.kind == .Pointer) {
+        pointed = c.resources[pointed].points_to - 1usize
+    }
+    if c.resources[thread_local].frame_borrow == 0usize && c.locals[pointed].ty.kind != .Slice && c.locals[pointed].ty.kind != .Pointer {
+        c.resources[thread_local].frame_borrow = pointed + 1usize
+    }
+    if pointed != thread_local && c.locals[pointed].ty.kind != .Pointer {
+        if c.resources[pointed].state == resource_plain { region_tag(c, pointed, token) }
+        c.resources[pointed].lent_to = thread_local + 1usize
+        c.resources[pointed].lent_at = token
+    }
+}
+
 // A local bound to a resource-typed value: from a call's result -- owned when the
 // call cannot fail or was `try`d, unchecked until its error is tested otherwise,
 // nothing at all from a borrowed producer -- from another local, which is moved,
@@ -14581,25 +14596,24 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             while true {
                 let (argument_index, has_argument) = call_argument_node(tree, tree.nodes[initializer_index], argument_at)
                 if !has_argument { break }
-                // Prefer the lexical alias: `&ctx.target.hits` names the storage
-                // behind `ctx.target`, not the aggregate carrying that pointer.
-                var (pointed, is_address) = alias_target(c, g, tree, module_index, argument_index)
-                // Starting through a pointer alias lends the aliased storage just
-                // as spelling `&x` at the call does (D674, D686).
-                if !is_address { (pointed, is_address) = address_argument_local(c, g, tree, module_index, argument_index) }
-                // `&slice[i]` and `&pointer.field` name the backing local when the
-                // lexical alias record knows it (D679).
-                if is_address && c.resources[pointed].points_to != 0usize && (c.locals[pointed].ty.kind == .Slice || c.locals[pointed].ty.kind == .Pointer) {
-                    pointed = c.resources[pointed].points_to - 1usize
-                }
-                if is_address && c.resources[local_index].frame_borrow == 0usize && c.locals[pointed].ty.kind != .Slice && c.locals[pointed].ty.kind != .Pointer { c.resources[local_index].frame_borrow = pointed + 1usize }
-                // What the thread was given is its until the join (D365): the parent
-                // neither reads nor writes it, except through an address, which is how
-                // an atomic or a second thread reaches it.
-                if is_address && pointed != local_index && c.locals[pointed].ty.kind != .Pointer {
-                    if c.resources[pointed].state == resource_plain { region_tag(c, pointed, usize(statement.token_start)) }
-                    c.resources[pointed].lent_to = local_index + 1usize
-                    c.resources[pointed].lent_at = usize(statement.token_start)
+                if has_dynamic_alias_path(c, g, tree, module_index, argument_index) {
+                    var wanted = 0usize
+                    while true {
+                        let (pointed, found) = dynamic_alias_candidate(c, g, tree, module_index, argument_index, wanted)
+                        if !found { break }
+                        lend_thread_storage(c, local_index, pointed, usize(statement.token_start))
+                        wanted += 1usize
+                    }
+                } else {
+                    // Prefer the lexical alias: `&ctx.target.hits` names the storage
+                    // behind `ctx.target`, not the aggregate carrying that pointer.
+                    var (pointed, is_address) = alias_target(c, g, tree, module_index, argument_index)
+                    // Starting through a pointer alias lends the aliased storage just
+                    // as spelling `&x` at the call does (D674, D686).
+                    if !is_address { (pointed, is_address) = address_argument_local(c, g, tree, module_index, argument_index) }
+                    // What the thread was given is its until the join (D365): the
+                    // parent neither reads nor writes it, except through an address.
+                    if is_address { lend_thread_storage(c, local_index, pointed, usize(statement.token_start)) }
                 }
                 argument_at += 1usize
             }

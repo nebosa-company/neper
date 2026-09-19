@@ -59,7 +59,8 @@ through a tracked aggregate pointer field, `&ctx.target.hits`, lends the pointed
 local rather than the aggregate that carries the pointer (D686). The field-specific
 identity also holds for the second and later tracked pointer fields in an aggregate
 (D695, D700), including pointers reached through recursively nested aggregate paths
-(D705).
+(D705). A runtime-indexed pointer element may name any tracked element owner, so
+all candidates are lent until the join (D714).
 
 ## 4. Locks, guards and atomics
 
@@ -130,6 +131,8 @@ first field's owner or the carrier;
 **D705** proves a later pointer on a recursively nested path lends its own owner;
 **D710** proves a later comptime-indexed fixed-array pointer element lends its own
 owner rather than an earlier element or the carrier;
+**D714** lends every possible owner when that fixed-array element is selected by a
+runtime index;
 **D379**
 section 4's first half (`sync.Guard`, the fixtures `sync_guard` and
 `reject/safety_guard_leak`). The compiler's own crews pass as written under

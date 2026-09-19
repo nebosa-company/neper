@@ -13478,3 +13478,12 @@ every candidate, and a later use reports E-SAFETY-0014 at the call.
 
 The existing view-invalidation loop is shared by exact and candidate-set paths.
 No mutation-effect summary or array-specific view state is introduced.
+
+## D714 -- Runtime array thread contexts lend every candidate owner
+
+A thread context reached through a runtime-indexed pointer element may refer to
+any owner in the matching alias set. Each candidate is lent to the running thread,
+so parent access to any of them before the join is E-SAFETY-0016.
+
+Thread escape tracking retains one representative frame borrow, while the existing
+per-local lend state records every candidate. Exact-index contexts are unchanged.
