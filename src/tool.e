@@ -2688,8 +2688,10 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
                 if e.found { try text(&out, "true") } else { try text(&out, "false") }
             } else {
             if e.kind == 8u8 {
-                // The phase (D463, H06): an `if` settled at compile time.
-                try text(&out, "{\"record\":\"phase\",\"construct\":\"if\",\"phase\":\"comptime\",\"taken\":")
+                // The phase (D463, D670, H06): control settled at compile time.
+                try text(&out, "{\"record\":\"phase\",\"construct\":")
+                try quoted(&out, e.protocol)
+                try text(&out, ",\"phase\":\"comptime\",\"taken\":")
                 if e.found { try text(&out, "true") } else { try text(&out, "false") }
             } else {
             try text(&out, "{\"record\":\"instance\",\"template\":")
@@ -4120,7 +4122,12 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         // A folded `if` (D463) as a fact of the body (D486): the record was written
         // with no kind before, which was not a record at all.
         if e.kind == 8u8 {
-            if e.found { try text(&out, "\"phase\",\"provenance\":\"compiler-proved\",\"value\":\"an if settled at compile time: the true arm is taken\"") } else { try text(&out, "\"phase\",\"provenance\":\"compiler-proved\",\"value\":\"an if settled at compile time: the false arm is taken\"") }
+            try text(&out, "\"phase\",\"provenance\":\"compiler-proved\",\"value\":\"")
+            if graph.same(e.protocol, "if") { try text(&out, "an ") } else { try text(&out, "a ") }
+            try text(&out, e.protocol)
+            try text(&out, " settled at compile time: the ")
+            if e.found { try text(&out, "true") } else { try text(&out, "false") }
+            try text(&out, " arm is taken\"")
         }
         // A view ended (D501, H02): the local, and what ended it.
         if e.kind == 11u8 {

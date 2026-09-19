@@ -13036,3 +13036,15 @@ dependent type and a dependent function choice. Selecting subtraction through th
 wrapper produces the subtraction result, and `explain-file` exposes both the outer
 instance and the inner `apply[i64, main.subtract]` request at the generic source
 site. No runtime callback is introduced.
+
+## D670 -- Target-dependent `when` decisions expose their compile-time phase
+
+`explain-file --json` now emits a `phase` record for every checked `when`, carrying
+`construct:"when"`, `phase:"comptime"`, the selected arm and the source span. This
+uses the same checker decision that validates the target condition; it does not
+re-evaluate source text in the query.
+
+The target-independent conformance fixture asks whether `target.arch` is `.X64`,
+which is true on both supported hosts, and pins the byte-exact stream and schema.
+Together with existing `if` and `const` records, H06 now exposes control folding,
+target selection and constant evaluation as compile-time rather than runtime work.

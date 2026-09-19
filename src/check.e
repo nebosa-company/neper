@@ -9187,9 +9187,9 @@ fn record_explain_comptime_call(c: *Checker, expression: ConstantExpr) {
     c.explain_count += 1usize
 }
 
-// A settled `if` (D463, H06): the condition was answered at compile time and one
-// arm is not code; `found` is whether the first arm is the one that stands.
-fn record_explain_fold(c: *Checker, module_index: usize, node: syntax.Node, taken: bool) {
+// A settled control expression (D463, D670, H06): the condition was answered at
+// compile time and one arm is not code; `found` is whether the first arm stands.
+fn record_explain_fold(c: *Checker, module_index: usize, node: syntax.Node, construct: str, taken: bool) {
     if c.explains.len == 0usize { ret }
     if c.explain_count >= c.explains.len {
         c.explain_overflow = true
@@ -9197,7 +9197,7 @@ fn record_explain_fold(c: *Checker, module_index: usize, node: syntax.Node, take
     }
     var offset = 0usize
     if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
-    c.explains[c.explain_count] = Explain { kind: 8u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: taken, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
+    c.explains[c.explain_count] = Explain { kind: 8u8, module_index: module_index, offset: offset, protocol: construct, receiver: invalid_type(), function_index: 0usize, found: taken, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     c.explain_count += 1usize
 }
 
@@ -11034,7 +11034,7 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
             if condition_type.kind != .Bool { ret InvalidCondition }
             let (taken, settled) = comptime_condition(c, g, tree, module_index, condition_index)
             if settled {
-                record_explain_fold(c, module_index, node, taken)
+                record_explain_fold(c, module_index, node, "if", taken)
                 if taken { ret check_block(c, r, g, tree, module_index, tree.nodes[arms[0usize]], function) }
                 if arm_count == 2usize { ret check_block(c, r, g, tree, module_index, tree.nodes[arms[1usize]], function) }
                 ret ok
@@ -12405,6 +12405,7 @@ fn check_when_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree
             if first {
                 let (taken, condition_error) = when_condition(c, g, tree, module_index, child_index)
                 if condition_error != ok { ret condition_error }
+                record_explain_fold(c, module_index, node, "when", taken)
                 first = false
             } else {
                 try check_block(c, r, g, tree, module_index, tree.nodes[child_index], function)

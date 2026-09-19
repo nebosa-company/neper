@@ -2864,6 +2864,10 @@ $explainFoldActual = Join-Path $testBuild 'conformance-tools-explain-fold.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file explain_fold.e `"$repo`" x64 windows --json > `"$explainFoldActual`""
 if ($LASTEXITCODE -ne 0) { throw "explain-file --json on explain_fold.e failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainFoldActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_fold.expected.jsonl')).Hash) { throw "the phase and layout records differ from the conformance corpus" }
+$explainWhenActual = Join-Path $testBuild 'conformance-tools-explain-when.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file explain_when.e `"$repo`" x64 windows --json > `"$explainWhenActual`""
+if ($LASTEXITCODE -ne 0) { throw "explain-file --json on explain_when.e failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainWhenActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_when.expected.jsonl')).Hash) { throw "the when phase record differs from the conformance corpus" }
 foreach ($explainNone in @(@('explain_none/src/main.e', 'explain_none'), @('explain_arm.e', 'explain_arm'))) {
     $explainNoneActual = Join-Path $testBuild "conformance-tools-$($explainNone[1]).jsonl"
     cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file $($explainNone[0]) `"$repo`" x64 windows --json > `"$explainNoneActual`""

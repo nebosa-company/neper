@@ -312,11 +312,12 @@ the same way written once:
   call whose error is dropped), `deferred` (true under `defer`), and `span`, the
   binding. Dropping an error is an explicit source choice, and this is where a
   harness reads the choices a program made.
-- `phase` (D463, H06) — an `if` settled before the program runs (spec §9: one side
-  a `meta` question): `construct` (`if`), `phase` (`comptime`), `taken` (whether
-  the first arm is the one that stands; the other is not code), and `span`, the
-  `if`. A template's `if` that folds each way in different instances is two
-  records, `false` first. And, after every site's record (D468), one per `const`
+- `phase` (D463, D670, H06) — an `if` or target-dependent `when` settled before
+  the program runs: `construct` (`if` or `when`), `phase` (`comptime`), `taken`
+  (whether the first arm is the one that stands; the other is not code), and
+  `span`, the control expression. A template's `if` that folds each way in
+  different instances is two records, `false` first. And, after every site's
+  record (D468), one per `const`
   the operand module declares and the checker settled: `construct` (`const`),
   `phase` (`comptime`), `symbol` (`module.NAME`), `type`, `value` (a decimal, or
   `true`/`false`) and `span`, the declaration -- what the source cannot show

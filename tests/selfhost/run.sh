@@ -2916,6 +2916,8 @@ cmp -s "$test_build/conformance-tools-fold-const.jsonl" "$conformance_root/tools
 # The phase and the layouts (D463, H06).
 (cd "$conformance_root/tools" && $test_build/neper-self explain-file explain_fold.e "$repo" x64 linux --json > "$test_build/conformance-tools-explain-fold.jsonl")
 cmp -s "$test_build/conformance-tools-explain-fold.jsonl" "$conformance_root/tools/explain_fold.expected.jsonl" || { printf '%s\n' "the phase and layout records differ from the conformance corpus" >&2; exit 1; }
+(cd "$conformance_root/tools" && $test_build/neper-self explain-file explain_when.e "$repo" x64 linux --json > "$test_build/conformance-tools-explain-when.jsonl")
+cmp -s "$test_build/conformance-tools-explain-when.jsonl" "$conformance_root/tools/explain_when.expected.jsonl" || { printf '%s\n' "the when phase record differs from the conformance corpus" >&2; exit 1; }
 # `explain-file --json` over a program that does not check (D430, H06).
 for explain_none in 'explain_none/src/main.e explain_none' 'explain_arm.e explain_arm'; do
     set -- $explain_none
