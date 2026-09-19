@@ -13262,8 +13262,8 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     while viewable && !has_address {
         let (argument_index, has_argument) = call_argument_node(tree, source, address_at)
         if !has_argument { break }
-        var (_, names_storage) = address_argument_local(c, g, tree, module_index, argument_index)
-        if !names_storage { (_, names_storage) = alias_target(c, g, tree, module_index, argument_index) }
+        var (storage, names_storage) = address_argument_local(c, g, tree, module_index, argument_index)
+        if !names_storage { (storage, names_storage) = alias_target(c, g, tree, module_index, argument_index) }
         if names_storage { has_address = true }
         address_at += 1usize
     }
