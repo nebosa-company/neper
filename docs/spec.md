@@ -3743,7 +3743,9 @@ comptime-indexed slot is tracked independently: a store moves ownership into it,
 consuming read moves ownership out, and a live obligated slot is audited at every
 exit (D616, D617). A runtime-indexed read checks the conservative set of every
 possible slot and is invalid if any candidate is moved, maybe moved or unchecked
-(D716); ownership transfer through that set is specified separately. A local slice alias with an omitted or comptime lower bound, and a
+(D716). A consuming runtime-indexed read requires every candidate to be consumable
+and makes each possible obligated slot maybe-moved; an exact one-slot range becomes
+moved as usual (D717). A local slice alias with an omitted or comptime lower bound, and a
 direct alias of that slice, reaches the corresponding ownership slots at that
 offset (D619, D620); no second identity
 is created by the view. Each diagnostic names the indexed slot and preserves that slot's own

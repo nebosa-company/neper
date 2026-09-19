@@ -15558,44 +15558,57 @@ fn resource_consume_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
     ret ok
 }
 
-// A literal-indexed fixed-array element is a separately owned slot. This is the
-// array counterpart of a tracked struct field; dynamic indices remain views.
+// A fixed-array element consumed through an exact index moves one slot. A runtime
+// index may move any candidate, so every owed candidate becomes maybe-moved.
 fn resource_consume_element(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
-    let (local_index, at, is_element) = resource_element_of(c, g, tree, module_index, node_index)
+    let (local_index, first, end, is_element) = resource_element_candidates(c, g, tree, module_index, node_index)
     if !is_element { ret ok }
     let node = tree.nodes[node_index]
-    let byte = c.resources[local_index].fields[at]
-    let state = field_state(byte)
-    let acquired = resource_part_acquired(c, local_index, at)
-    if state == resource_reserved {
-        record_failure_related(c, module_index, node, .ResourceDeferredConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
-        ret ResourceViolation
+    var at = first
+    var owed = false
+    while at < end {
+        let byte = c.resources[local_index].fields[at]
+        let state = field_state(byte)
+        let acquired = resource_part_acquired(c, local_index, at)
+        if state == resource_reserved {
+            record_failure_related(c, module_index, node, .ResourceDeferredConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
+            ret ResourceViolation
+        }
+        if state == resource_unchecked {
+            record_failure_related(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
+            ret ResourceViolation
+        }
+        if state != resource_owned && state != resource_null {
+            record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
+            ret ResourceViolation
+        }
+        if state == resource_owned && c.resource_transfer && c.resources[local_index].borrowed {
+            record_failure_related(c, module_index, node, .ResourceBorrowConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
+            ret ResourceViolation
+        }
+        if state == resource_owned && field_owed(byte) { owed = true }
+        at += 1usize
     }
-    if state == resource_null { ret ok }
-    if state == resource_unchecked {
-        record_failure_related(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
-        ret ResourceViolation
-    }
-    if state != resource_owned {
-        record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
-        ret ResourceViolation
-    }
-    if c.resource_transfer && c.resources[local_index].borrowed {
-        record_failure_related(c, module_index, node, .ResourceBorrowConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
-        ret ResourceViolation
-    }
-    if !field_owed(byte) { ret ok }
-    if c.defer_depth != 0usize {
-        c.resources[local_index].fields[at] = field_with(resource_reserved, true)
-        ret ok
-    }
+    if !owed { ret ok }
     if c.resources[local_index].pinned != 0usize {
-        record_failure_related(c, module_index, node, .ResourceMovedWhileBorrowed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].pin_at), c.resources[local_index].pin_at)
+        record_failure_related(c, module_index, node, .ResourceMovedWhileBorrowed, resource_field_name(c, local_index, first), line_detail(c, g, module_index, c.resources[local_index].pin_at), c.resources[local_index].pin_at)
         ret ResourceViolation
     }
-    c.resources[local_index].fields[at] = field_with(resource_moved, true)
+    var next = resource_maybe
+    if end == first + 1usize {
+        next = resource_moved
+        if c.defer_depth != 0usize { next = resource_reserved }
+    }
+    at = first
+    while at < end {
+        let byte = c.resources[local_index].fields[at]
+        if field_state(byte) == resource_owned && field_owed(byte) {
+            c.resources[local_index].fields[at] = field_with(next, true)
+            c.resources[local_index].elements_acquired[at] = usize(node.token_start)
+        }
+        at += 1usize
+    }
     c.resources[local_index].acquired = usize(node.token_start)
-    c.resources[local_index].elements_acquired[at] = usize(node.token_start)
     ret ok
 }
 

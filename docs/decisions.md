@@ -13507,3 +13507,13 @@ maybe moved, and with E-SAFETY-0008 when any candidate is unchecked.
 The candidate range reuses the existing per-slot state and provenance table. A
 comptime index remains a one-slot range, so exact diagnostics and behavior do not
 fork into a second ownership analysis.
+
+## D717 -- Runtime affine-array moves make candidate slots uncertain
+
+A consuming runtime-indexed read validates every possible fixed-array slot before
+the transfer. Each obligated candidate that may be selected then becomes
+maybe-moved; a later read, move or exit cannot assume which slot remains owned.
+
+An exact one-slot range retains the ordinary moved or deferred-reserved state. The
+rule adds no relational index solver: uncertainty is represented by the existing
+branch-join state and the slot's move provenance.
