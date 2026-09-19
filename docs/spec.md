@@ -3649,10 +3649,12 @@ not add partial moves from a variant payload.
   itself, nested inside aggregate literals or field assignments, or carried by a
   lexical copy or assignment of the aggregate (E-SAFETY-0018, D675, D680-D685,
   D689-D690). Every top-level pointer-bearing field retains its own lexical target,
-  so a later field cannot be hidden behind the first two (D691, D696). An aggregate
-  whose second or later tracked field points into that region is the same carrier
-  escape (D692, D697), and copying that aggregate or assigning its pointer fields
-  separately preserves every tracked target (D693-D694, D698-D699).
+  so a later field cannot be hidden behind the first two (D691, D696). Pointer
+  identities below recursively nested aggregate fields retain their complete access
+  paths, so a later nested pointer cannot hide behind the first one (D701). An
+  aggregate whose second or later tracked field points into that region is the same
+  carrier escape (D692, D697), and copying that aggregate or assigning its pointer
+  fields separately preserves every tracked target (D693-D694, D698-D699).
   Both checks are lexical and within one function: what is returned otherwise, stored,
   handed to a callback, an import or a thread, reached through any other pointer,
   or made by a cast is outside the rule, and `m25-h02-regions.md` says so.

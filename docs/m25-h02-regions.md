@@ -59,9 +59,9 @@ through that field alone (D413), is `x` by another name (D393, D394), from the
 binding or the assignment that made it so until the next (D416): once `x` dangles, `*first`, `first.field` and `first[i]`, read
 or stored to, are refused as `x`'s own use is, naming `x`; `first.len` is not,
 for the reason `x.len` is not. A pointer from anywhere else is not followed.
-Top-level pointer-bearing fields in one aggregate retain distinct lexical targets
-(D691, D696), so a use through the third or any later field follows its own owner
-rather than either of the first two.
+Pointer-bearing fields in one aggregate retain distinct lexical targets at every
+nested aggregate path (D691, D696, D701), so a use through a later top-level or
+recursively nested field follows its own owner rather than the first pointer found.
 
 ## 3. Views of containers
 
@@ -260,8 +260,8 @@ so returning the carrier still reports E-SAFETY-0018 for that owner.
 two targets remain inline in the existing resource record; only a third or later
 target enters a sparse checker-side table. A post-reset use through that later field
 is therefore E-SAFETY-0013 without increasing every local's resource footprint.
-Nested aggregates still retain only the first address found below each top-level
-field; arbitrary nested pointer paths remain outside this lexical subset.
+At D696 nested aggregates still retained only the first address below each top-level
+field; D701 subsequently removes that path ambiguity.
 
 **D697** includes those sparse aliases at the deferred-return boundary. Returning a
 whole aggregate whose third or later field points into the region reset before
@@ -277,3 +277,9 @@ field's owner.
 used by aggregate literals. Assigning a third or later field therefore inserts or
 updates its sparse identity without erasing either inline sibling, so a deferred
 return remains E-SAFETY-0018 against its region owner.
+
+**D701** records a complete field-segment path for every pointer found recursively
+inside an aggregate literal. Alias resolution selects the longest path prefix used
+by the expression, so `outer.middle.inner.scratch` follows `scratch` rather than the
+first pointer below `middle`; a post-reset use is E-SAFETY-0013. Nested paths live
+only in the sparse side table, leaving the per-local `Resource` record unchanged.

@@ -13349,3 +13349,15 @@ substitutes for it.
 
 This is executable concurrency evidence that the sparse alias representation from
 D696 flows through the existing thread-start resolver without a second mechanism.
+
+## D701 -- Nested aggregate pointer aliases retain complete paths
+
+Every pointer found recursively inside a named aggregate literal records the complete
+field-segment path from its carrier. Alias resolution chooses the longest matching
+prefix of a use, so a later nested pointer cannot be mistaken for the first pointer
+under the same outer field; post-reset access reports E-SAFETY-0013 against the
+actual owner.
+
+Nested identities use the existing sparse alias table and immutable path slices.
+The two inline top-level slots and every `Resource` record remain unchanged; lookup
+stays a linear scan until aggregate-heavy measurements justify an index.
