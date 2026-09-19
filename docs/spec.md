@@ -3656,7 +3656,7 @@ not add partial moves from a variant payload.
   carrier escape, including when it has only nested pointer paths (D692, D697,
   D702), and copying that aggregate or assigning its pointer fields separately
   preserves every tracked target, nested paths included (D693-D694, D698-D699,
-  D703).
+  D703-D704).
   Both checks are lexical and within one function: what is returned otherwise, stored,
   handed to a callback, an import or a thread, reached through any other pointer,
   or made by a cast is outside the rule, and `m25-h02-regions.md` says so.

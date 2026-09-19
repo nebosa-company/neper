@@ -15030,25 +15030,25 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     }
     // `s.p = &x` (D413): `s` aliases `x` through `p` from here.
     if place.kind == .FieldExpr {
-        let (struct_index, has_struct) = first_node_child(tree, place)
-        if has_struct && tree.nodes[struct_index].kind == .NameExpr {
-            let struct_token = c.tokens[usize(tree.nodes[struct_index].token_start)]
-            if struct_token.kind == .Identifier {
-                let (struct_local, found_struct) = find_local(c, g.modules[module_index].text[struct_token.start..struct_token.end])
-                if found_struct && c.locals[struct_local].ty.kind == .Named {
-                    var (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
-                    if !is_address && tree.nodes[initializer_index].kind == .AggregateLiteral {
-                        let (nested, _, nested_address) = literal_address_field(c, g, tree, module_index, initializer_index)
-                        if nested_address {
-                            pointed = nested
-                            is_address = true
-                        }
-                    }
-                    let (member, has_member) = field_expression_name(c, g.modules[module_index].text, tree, place)
-                    if is_address && has_member && pointed != struct_local {
-                        try set_resource_alias(c, struct_local, member, pointed)
-                    }
-                }
+        var fields: [128]str = zero
+        let (struct_local, field_count, found_struct) = local_field_path(c, g, tree, module_index, place_index, fields[0usize..fields.len])
+        if found_struct && field_count != 0usize && c.locals[struct_local].ty.kind == .Named {
+            // `local_field_path` reads the syntax from leaf to base; stored paths run
+            // from the carrier outward.
+            var left = 0usize
+            while left < field_count / 2usize {
+                let right = field_count - left - 1usize
+                let held = fields[left]
+                fields[left] = fields[right]
+                fields[right] = held
+                left += 1usize
+            }
+            let (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
+            if is_address && pointed != struct_local {
+                try set_resource_path_alias(c, struct_local, fields[0usize..field_count], pointed)
+            }
+            if !is_address && tree.nodes[initializer_index].kind == .AggregateLiteral {
+                try record_literal_alias_paths(c, g, tree, module_index, struct_local, initializer_index, fields[0usize..fields.len], field_count)
             }
         }
     }

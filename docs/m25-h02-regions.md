@@ -291,3 +291,8 @@ the deferred-reset region is therefore E-SAFETY-0018 against that actual owner.
 **D703** copies sparse nested paths even when the source aggregate has no inline
 alias. Returning the lexical copy across the deferred reset therefore remains
 E-SAFETY-0018 against the later nested pointer's region owner.
+
+**D704** uses the same complete path representation for separate nested field
+assignments. Direct pointer stores upsert their exact carrier path, while an
+aggregate literal assigned at any nesting depth recursively contributes all paths
+below it. A later nested region pointer therefore remains E-SAFETY-0018 at return.

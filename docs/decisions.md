@@ -13380,3 +13380,14 @@ therefore cannot erase the region identity of a later recursively nested pointer
 
 The existing copy branch now conditions only the inline-slot copy on inline state;
 its sparse-table pass is independently authoritative.
+
+## D704 -- Nested field assignments use recursive alias paths
+
+Assigning an address to a recursively nested aggregate field records the complete
+path from the carrier, and assigning an aggregate literal at any field path records
+every pointer path below that literal. Later sibling assignments update only their
+own exact paths, so a nested region pointer remains visible at deferred return.
+
+Reads and assignments share one syntax-path extractor. The assignment reverses that
+leaf-to-base syntax order once before using the existing path insertion and literal
+walk; no parallel alias mechanism is introduced.
