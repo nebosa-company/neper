@@ -1,0 +1,760 @@
+{
+  "schema": "neper-widget-plan-v1",
+  "version": 1,
+  "proposal": "docs/widget-library-proposal.md",
+  "candidate_modules": [
+    "e.ui.control",
+    "e.ui.collection",
+    "e.ui.overlay",
+    "e.ui.navigation"
+  ],
+  "resolved_blockers": [],
+  "phases": [
+    {
+      "id": "P0",
+      "name": "Contracts and reference theme",
+      "blocked_by": [
+        "e.gfx.scene",
+        "e.text.layout",
+        "e.ui.input"
+      ],
+      "items": [
+        {
+          "id": "P0-01",
+          "name": "Theme and adaptation",
+          "module": "e.ui.style",
+          "components": [
+            "ThemeTokens",
+            "ControlStateResolution",
+            "AdaptiveCapabilityProfile",
+            "ReferenceTheme"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P0-02",
+          "name": "Typed actions and gestures",
+          "module": "e.ui.widget",
+          "components": [
+            "TypedAction",
+            "ActionGestureRegion",
+            "GestureArena"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P0-03",
+          "name": "Focus and shortcuts",
+          "module": "e.ui.widget",
+          "components": [
+            "FocusScope",
+            "ShortcutScope"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P0-04",
+          "name": "Editable text primitive",
+          "module": "e.ui.widget",
+          "components": [
+            "EditableText"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P0-05",
+          "name": "Viewport primitives",
+          "module": "e.ui.widget",
+          "components": [
+            "ScrollViewport",
+            "LazyViewport"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P0-06",
+          "name": "Semantic primitive",
+          "module": "e.ui.accessibility",
+          "components": [
+            "SemanticsNode"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P0-07",
+          "name": "Overlay primitives",
+          "module": "e.ui.widget",
+          "components": [
+            "OverlayPortal",
+            "OverlayAnchor"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P0-08",
+          "name": "Host capability model",
+          "module": "e.ui.window",
+          "components": [
+            "HostCapabilities",
+            "SafeInsets",
+            "LifecycleEvents"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P0-09",
+          "name": "Reference harness",
+          "module": "e.ui.testing",
+          "components": [
+            "WidgetHarness",
+            "WidgetGallery"
+          ],
+          "delivered": [],
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "Useful desktop and mobile core",
+      "blocked_by": [
+        "P0"
+      ],
+      "items": [
+        {
+          "id": "P1-01",
+          "name": "Content",
+          "module": "e.ui.control",
+          "components": [
+            "Text",
+            "SelectableText",
+            "RichText",
+            "Icon",
+            "Image",
+            "Canvas"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-02",
+          "name": "Surfaces",
+          "module": "e.ui.control",
+          "components": [
+            "Surface",
+            "Panel",
+            "Card",
+            "GroupBox",
+            "Divider",
+            "Badge",
+            "Avatar",
+            "Placeholder"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-03",
+          "name": "Primary layout",
+          "module": "e.ui.widget",
+          "components": [
+            "Box",
+            "Row",
+            "Column",
+            "Flex",
+            "Wrap",
+            "Grid",
+            "Stack",
+            "Positioned"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-04",
+          "name": "Layout adapters",
+          "module": "e.ui.widget",
+          "components": [
+            "Align",
+            "Center",
+            "Padding",
+            "Spacer",
+            "Constrained",
+            "AspectRatio",
+            "Fitted",
+            "Responsive"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-05",
+          "name": "Scrolling and insets",
+          "module": "e.ui.widget",
+          "components": [
+            "ScrollView",
+            "Scrollbar",
+            "SafeArea",
+            "KeyboardAvoiding"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-06",
+          "name": "Button family",
+          "module": "e.ui.control",
+          "components": [
+            "Button",
+            "IconButton",
+            "ToggleButton",
+            "Link"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-07",
+          "name": "Discrete selection",
+          "module": "e.ui.control",
+          "components": [
+            "Checkbox",
+            "Radio",
+            "RadioGroup",
+            "Switch",
+            "SegmentedControl"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-08",
+          "name": "Range selection",
+          "module": "e.ui.control",
+          "components": [
+            "Slider",
+            "RangeSlider"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-09",
+          "name": "Progress",
+          "module": "e.ui.control",
+          "components": [
+            "ProgressBar",
+            "ProgressRing"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-10",
+          "name": "Text fields",
+          "module": "e.ui.control",
+          "components": [
+            "TextField",
+            "PasswordField",
+            "SearchField",
+            "TextArea"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-11",
+          "name": "Basic choice",
+          "module": "e.ui.control",
+          "components": [
+            "Select",
+            "ListBox"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-12",
+          "name": "Forms",
+          "module": "e.ui.control",
+          "components": [
+            "Form",
+            "FormField",
+            "FieldLabel",
+            "FieldMessage",
+            "ValidationSummary"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-13",
+          "name": "Disclosure and panes",
+          "module": "e.ui.control",
+          "components": [
+            "Disclosure",
+            "Expander",
+            "Tabs",
+            "TabView",
+            "SplitView",
+            "ResizablePane"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-14",
+          "name": "Basic transient UI",
+          "module": "e.ui.overlay",
+          "components": [
+            "Tooltip",
+            "Menu",
+            "AlertDialog"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P1-15",
+          "name": "Basic application navigation",
+          "module": "e.ui.navigation",
+          "components": [
+            "AppBar",
+            "Toolbar",
+            "StatusBar",
+            "NavigationStack",
+            "AdaptiveDestinationBar"
+          ],
+          "delivered": [],
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Scalable application UI",
+      "blocked_by": [
+        "P1"
+      ],
+      "items": [
+        {
+          "id": "P2-01",
+          "name": "Advanced actions",
+          "module": "e.ui.control",
+          "components": [
+            "SplitButton",
+            "MenuButton",
+            "SpeedDial",
+            "Chip",
+            "Rating"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-02",
+          "name": "Numeric and shortcut input",
+          "module": "e.ui.control",
+          "components": [
+            "SpinBox",
+            "Stepper",
+            "Dial",
+            "ShortcutRecorder"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-03",
+          "name": "Advanced text and choice input",
+          "module": "e.ui.control",
+          "components": [
+            "FormattedField",
+            "Autocomplete",
+            "TokenField",
+            "ComboBox",
+            "Picker",
+            "MultiSelectList"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-04",
+          "name": "Feedback and disclosure",
+          "module": "e.ui.control",
+          "components": [
+            "Gauge",
+            "Level",
+            "Toast",
+            "Snackbar",
+            "Banner",
+            "InfoBar",
+            "Skeleton",
+            "EmptyState",
+            "Accordion"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-05",
+          "name": "Virtual collections",
+          "module": "e.ui.collection",
+          "components": [
+            "List",
+            "VirtualList",
+            "GridView",
+            "VirtualGrid"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-06",
+          "name": "Paged collections",
+          "module": "e.ui.collection",
+          "components": [
+            "Carousel",
+            "PageView",
+            "PageIndicator",
+            "Pagination"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-07",
+          "name": "Collection interaction",
+          "module": "e.ui.collection",
+          "components": [
+            "ReorderableList",
+            "PullToRefresh",
+            "SwipeActions"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-08",
+          "name": "Adaptive navigation",
+          "module": "e.ui.navigation",
+          "components": [
+            "MenuBar",
+            "ContextMenu",
+            "NavigationSplit",
+            "NavigationDrawer",
+            "NavigationRail",
+            "BottomNavigation",
+            "Breadcrumbs",
+            "Sidebar"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-09",
+          "name": "Transient presentation",
+          "module": "e.ui.overlay",
+          "components": [
+            "Popup",
+            "Popover",
+            "Flyout",
+            "Dialog",
+            "Sheet",
+            "BottomSheet",
+            "ActionSheet"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-10",
+          "name": "Pickers",
+          "module": "e.ui.overlay",
+          "components": [
+            "DatePicker",
+            "DateRangePicker",
+            "TimePicker",
+            "DurationPicker",
+            "Calendar",
+            "ColorPicker"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P2-11",
+          "name": "Content manipulation",
+          "module": "e.ui.widget",
+          "components": [
+            "ZoomView",
+            "DragSource",
+            "DropTarget",
+            "ClipboardCommands"
+          ],
+          "delivered": [],
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Productivity controls",
+      "blocked_by": [
+        "P2"
+      ],
+      "items": [
+        {
+          "id": "P3-01",
+          "name": "Rich tabular data",
+          "module": "e.ui.collection",
+          "components": [
+            "Table",
+            "DataGrid",
+            "Tree",
+            "Outline",
+            "TreeTable"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P3-02",
+          "name": "Property editing",
+          "module": "e.ui.collection",
+          "components": [
+            "PropertyGrid",
+            "KeyValueEditor"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P3-03",
+          "name": "Document workspace",
+          "module": "e.ui.navigation",
+          "components": [
+            "DocumentTabs",
+            "DockLayout",
+            "DockPanel",
+            "MultiDocumentWorkspace"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P3-04",
+          "name": "Productivity navigation",
+          "module": "e.ui.navigation",
+          "components": [
+            "Wizard",
+            "WindowSwitcher",
+            "CommandPalette"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P3-05",
+          "name": "Desktop selection and history",
+          "module": "e.ui.control",
+          "components": [
+            "FontPicker",
+            "NotificationList"
+          ],
+          "delivered": [],
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "name": "Host OS integration",
+      "blocked_by": [
+        "P3"
+      ],
+      "items": [
+        {
+          "id": "P4-01",
+          "name": "System tray and status items",
+          "module": "e.ui.app",
+          "blocked_by": ["native-shell-api"],
+          "components": [
+            "SystemTray",
+            "TrayMenu",
+            "TrayBadge"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-02",
+          "name": "Windows shell integration",
+          "module": "e.ui.app",
+          "blocked_by": ["native-shell-api"],
+          "components": [
+            "JumpList",
+            "TaskbarProgress",
+            "TaskbarOverlay"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-03",
+          "name": "Native notifications",
+          "module": "e.ui.app",
+          "blocked_by": ["native-notification-api"],
+          "components": [
+            "SystemNotification",
+            "NotificationActions",
+            "NotificationPermission"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-04",
+          "name": "Typed host data exchange",
+          "module": "e.ui.app",
+          "blocked_by": ["native-data-exchange-api"],
+          "components": [
+            "ContentType",
+            "DataOffer",
+            "DataRepresentation",
+            "DataProvider"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-05",
+          "name": "Cross-application drag and drop",
+          "module": "e.ui.app",
+          "blocked_by": ["native-data-exchange-api"],
+          "components": [
+            "SystemDragSource",
+            "SystemDropTarget",
+            "DragOperation",
+            "PromisedFile"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-06",
+          "name": "System clipboard and sharing",
+          "module": "e.ui.app",
+          "blocked_by": ["native-data-exchange-api"],
+          "components": [
+            "SystemClipboard",
+            "ClipboardMonitor",
+            "ShareSheet",
+            "ShareTarget"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-07",
+          "name": "File and document access",
+          "module": "e.ui.app",
+          "blocked_by": ["native-file-access-api"],
+          "components": [
+            "OpenFileDialog",
+            "SaveFileDialog",
+            "FolderDialog",
+            "DocumentGrant",
+            "RecentDocuments"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-08",
+          "name": "Activation and associations",
+          "module": "e.ui.app",
+          "blocked_by": ["native-activation-api"],
+          "components": [
+            "ActivationEvent",
+            "FileAssociation",
+            "ProtocolAssociation",
+            "StartupRegistration",
+            "SingleInstanceActivation"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-09",
+          "name": "Shell file operations",
+          "module": "e.ui.app",
+          "blocked_by": ["native-shell-api"],
+          "components": [
+            "OpenUri",
+            "RevealInFileManager",
+            "MoveToTrash"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-10",
+          "name": "Global input and lifecycle",
+          "module": "e.ui.app",
+          "blocked_by": ["native-lifecycle-api", "native-shell-api"],
+          "components": [
+            "GlobalShortcutSession",
+            "BackgroundPermission",
+            "LoginItem",
+            "PowerInhibitor",
+            "SessionLifecycle",
+            "SessionRestore"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-11",
+          "name": "Native printing",
+          "module": "e.ui.app",
+          "blocked_by": ["native-print-api"],
+          "components": [
+            "PrintDialog",
+            "PageSetupDialog",
+            "PrintJob"
+          ],
+          "delivered": [],
+          "evidence": ""
+        },
+        {
+          "id": "P4-12",
+          "name": "Hardware and security services",
+          "module": "e.ui.app",
+          "blocked_by": ["native-permission-api"],
+          "components": [
+            "PermissionStatus",
+            "CameraAccess",
+            "MicrophoneAccess",
+            "PhotoLibraryPicker",
+            "LocationAccess",
+            "BiometricAuthentication",
+            "CredentialStore",
+            "ScreenCapture"
+          ],
+          "delivered": [],
+          "evidence": ""
+        }
+      ]
+    }
+  ]
+}

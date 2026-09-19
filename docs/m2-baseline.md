@@ -1,8 +1,9 @@
 # The M2 baseline
 
-M2.5 stage A ([`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) section 29, H25):
+Shared post-M2 baseline ([`post-m2-llm-hardening.md`](post-m2-llm-hardening.md)
+section 29, H25):
 the compiler as it stands at the end of M2, preserved and measured before any of the
-M2.5 semantic changes, so that every later revision is compared against fixed
+M2.5-core, T2 or E2 changes, so that every later revision is compared against fixed
 numbers and a budget breach is a recorded decision rather than a drift. What this
 document freezes is the compiler and its build-time budgets; the H12 model-family
 evaluation is a separate obligation that this baseline does not claim (below).
@@ -154,7 +155,7 @@ Cold phase split, p50 over the runs (ms):
 ## The budgets
 
 Set from the baseline with the noise margin the p95 columns show, per workload and
-host, for the M2.5 compiler at every stage until the H25 report replaces them with
+host, for every post-M2 compiler stage until the H25/E2 report replaces them with
 its own. A revision that exceeds a budget on either host is not merged without a
 recorded decision (`docs/decisions.md`) naming the number, the cause and the
 trade; a budget is never met by weakening a check, and rebaselining is itself such
@@ -164,7 +165,7 @@ a decision.
 |---|---|---|
 | cold build p50, any workload and mode | baseline p50 + 10% | the cold p95 sits within 5% of p50 on the quiet cells; 10% leaves the noise a margin and a regression none |
 | warm build p50, any workload and mode | baseline p50 + 15% | warm cells are small numbers where 10 ms is 10%; a warm build must stay under 0.1 s for the compiler and 0.3 s for a million lines |
-| peak resident set | baseline + 10% | memory is the cost the M2.5 checks are most likely to add to; a checked ownership model that needs more than a tenth more must say why |
+| peak resident set | baseline + 10% | memory is the cost the new checks are most likely to add to; a checked ownership model that needs more than a tenth more must say why |
 | arena high-water mark | baseline, not above | the one figure to bring down, not up: the Windows `sc2m` release cell is the budget already exceeded, recorded here as the first H25 debt |
 | image size, debug and release | baseline + 5% | code the retained checks add is the ablation H25 asks for, reported, not hidden in a wider budget |
 | self-build fixed point | stage 2 == stage 3, both hosts | not a budget: a gate, as in M2 |

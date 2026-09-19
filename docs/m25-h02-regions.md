@@ -87,15 +87,22 @@ section 2; a view used as a `for` subject is a use.
 
 Stated so that no one reads the rules above as more than they are:
 
-- A region value or a view **returned** from the function, except across a deferred
-  reset of its region (D675): the caller otherwise sees an
-  ordinary slice. The signature does not say what it borrows; H02's borrow
-  summaries across modules are later delivery (section 7).
-- **Stored** into a global or a dynamic container: the store is a use, and the
-  copy is not tracked. Local named aggregates and comptime-indexed fixed arrays
-  retain the lexical pointer paths explicitly covered in section 2.
+- A region value or a view **returned** from an unannotated function, except across
+  a deferred reset of its region (D675): the caller otherwise sees an ordinary
+  pointer-bearing value. `@borrows("p")` now supplies one exact result-borrow
+  identity across calls and module artifacts (D731-D735). `@noescape("p", ...)`
+  rejects that return for every named input, including through tracked aggregate
+  leaves (D736-D737, D741-D742); functions with neither contract remain outside the
+  guarantee.
+- **Stored** into a dynamic container: the store is a use, and arbitrary heap-like
+  retention is not tracked. A global store from an `@noescape` input is rejected,
+  directly or through a tracked aggregate leaf (D738). Local named aggregates and
+  comptime-indexed fixed arrays retain the lexical pointer paths in section 2.
 - Passed to a **callback** or an **imported** function, or handed to another
-  **thread**: the call is a use; what the callee keeps is not known.
+  **thread** from an `@noescape` body: the unknown retention or asynchronous handoff
+  is rejected. A direct call is allowed only when the corresponding callee parameter
+  carries the same checked `@noescape` summary (D739). Code without that public
+  contract makes no no-escape claim.
 - A pointer made by `mem.cast`, `mem.address_of`, arithmetic on a `usize`, or read
   out of a struct (`s.items`): not a region value or a view, since nothing says what
   it borrows. These are the raw-pointer cases H02 asks to record outside the
@@ -111,15 +118,30 @@ Stated so that no one reads the rules above as more than they are:
 
 ## 5. Signatures and summaries
 
-Nothing is added to a signature in this stage: what a result borrows is read from
-the parameter types the callee already has (`*mem.Arena`, `*T`, `*const T`) and
-from the result type, in the caller, at the binding. This is the reading a caller
-can do without the callee's body and without a serialized summary, which is what
-keeps it warm-path free (H14, D205: a signature edge). The later delivery is a
-summary per function in the artifact -- "the result borrows parameter 1", "no
-argument escapes" -- inferred from the body and checked against the callers,
-which is the cross-module contract H02 names; it needs the escape analysis of
-section 4's cases, and is not attempted here.
+`@borrows("p")` declares that every pointer retained by a function result comes
+from the named non-`own`, pointer-bearing parameter. The checker proves the claim at
+every return, including every pointer-bearing leaf of a returned struct or fixed
+array; missing or different provenance is E-SAFETY-0019 (D731-D733). `@unsafe`
+functions cannot publish this checked claim.
+
+At a call, the result inherits the declared argument's exact region or view
+identity rather than the first address-like argument's identity (D734). Generic
+instances retain the declaration, and artifact format 12 serializes its one-based
+parameter position in the function interface and canonical signature (D735).
+Unannotated functions keep the earlier parameter-shape heuristic for compatibility;
+artifact format 14 retains that result-borrow position beside the counted no-escape
+position set.
+
+`@noescape("p", ...)` declares that every named, distinct non-`own`, pointer-bearing
+input is not retained after the call. The checker rejects pointer-bearing returns
+and global stores containing any named input, including through tracked aggregate
+leaves, and rejects forwarding one to an unannotated/extern callee, indirect
+callback or thread context. A direct callee may receive it only at an exact parameter
+position that callee also marks `@noescape` (D736-D744). Generic instances retain
+the complete summary; artifact format 14 serializes a count and ordered one-based
+positions in the function interface and canonical signature (D745). Raw-cast
+provenance and arbitrary dynamic-container retention remain outside the bounded
+subset.
 
 ## 6. Diagnostics and fixtures
 
@@ -128,6 +150,8 @@ section 4's cases, and is not attempted here.
 | E-SAFETY-0013 | a region value used after its region was reset | the reset, the use |
 | E-SAFETY-0014 | a view used after its container was mutated | the mutation, the use |
 | E-SAFETY-0018 | a region value returned across its deferred reset | the defer, the return |
+| E-SAFETY-0019 | an invalid declaration or unprovable result-borrow contract | the attribute or return |
+| E-SAFETY-0020 | an invalid no-escape declaration or a retained/unknown input escape | the attribute, return, store or argument |
 
 Fixtures under `tests/conformance`: a slice allocated after a mark and read after
 the reset (reject); a view of a list read after a push (reject); a value reset on
@@ -136,19 +160,25 @@ region reset after its last use, a view retaken after the push, a `defer`red
 reset registered before or after allocation, a view through `&const` -- in the
 accept fixtures. A return across that deferred reset is rejected. The compiler's own
 `mark`/`reset` sites are the measurement of false positives (section 8).
+Focused fixtures also pin invalid contract declarations, scalar and aggregate body
+proofs, exact caller propagation, generic specialization and serialized positions.
+The no-escape matrix adds direct and aggregate returns, global retention, accepted
+checked forwarding, refused unannotated/extern-equivalent and indirect calls, thread
+handoff, duplicate-name rejection, multi-input proofs and artifact-format-14 sets on
+both hosts.
 
 ## 7. Delivery
 
-**M2.5:** sections 2, 3, 4 and 6 as written; the fixtures; the false-positive
+**M2.5:** sections 2, 3, 4, 5 and 6 as written; the fixtures; the false-positive
 measurement over the compiler and the library; the closure record.
 
-**Later:** borrow summaries in the artifact and their check at the callers;
-escape through structs, callbacks and threads; alias tracking through pointer
-locals; non-lexical liveness if the measurement asks for it; build-then-freeze
-containers -- a `freeze` that consumes the builder and returns the slice, after
-which the builder cannot grow (H02's container redesign) -- and generation-tagged
-handles for the dynamic containers that want them, with the owner identity,
-generation-wrap policy and per-access cost H02 lists.
+**Later:** arbitrary retention through dynamic containers; raw-cast provenance;
+non-lexical liveness if the measurement asks for it;
+build-then-freeze containers -- a `freeze` that consumes
+the builder and returns the slice, after which the builder cannot grow (H02's
+container redesign) -- and generation-tagged handles for the dynamic containers
+that want them, with the owner identity, generation-wrap policy and per-access cost
+H02 lists.
 
 ## 8. Implementation record
 
@@ -338,3 +368,66 @@ candidate and later use retains the ordinary E-SAFETY-0014 mutation provenance.
 **D715** composes runtime element selection with complete nested aggregate paths.
 The wildcard segment matches only aliases at that longest path, so a dangling
 later element cannot hide behind a live sibling or an unrelated outer field.
+
+**D731** adds `@borrows("parameter")` as an explicit result-borrow contract. It is
+legal only when the named input is borrowed and pointer-bearing and the function has
+a pointer-bearing result; invalid declarations are E-SAFETY-0019.
+
+**D732** proves the contract at every pointer-bearing return and refuses unchecked
+functions from asserting it. Existing lexical aliases carry the proof back to the
+declared input; another or unknown origin is E-SAFETY-0019.
+
+**D733** extends that proof to every pointer-bearing leaf of a returned struct or
+fixed array. Aggregate literals and lexical copies preserve direct parameter
+origins, and any untracked leaf makes the exact contract unprovable.
+
+**D734** makes callers inherit the declared argument's region or view identity.
+The explicit identity replaces the first-address-like-argument heuristic, so a
+later mutation or reset invalidates the returned value against the right owner.
+
+**D735** carries the contract through generic specialization and artifact format
+12. The one-based parameter position participates in the canonical signature and
+is present in the serialized function interface. Both complete self-host suites
+inspect the position and retain byte-identical stages and unchanged static arena
+and image gates.
+
+**D736** adds `@noescape("parameter")` for one borrowed pointer-bearing input on a
+checked non-extern function. Invalid names, scalar/`own` inputs, repetition and
+`@unsafe` declarations are E-SAFETY-0020.
+
+**D737** rejects a pointer-bearing return that retains that input, directly or in a
+tracked struct/fixed-array leaf, while scalar observations remain valid.
+
+**D738** applies the same recursive origin proof to module-scope stores. Dynamic
+container retention remains explicit later work rather than an optimistic claim.
+
+**D739** permits forwarding only to the matching parameter of a direct checked
+`@noescape` callee. Unannotated/extern calls, indirect callbacks and thread contexts
+are E-SAFETY-0020.
+
+**D740** carries the summary through generic specialization and artifact format 13.
+Its one-based position participates in the canonical signature and is serialized
+beside the result-borrow position. Both full host suites pass the ten-fixture matrix,
+inspect position 2, retain byte-identical self-host stages and show zero static gate
+breaches.
+
+**D741** extends `@noescape` to a nonempty list of distinct borrowed pointer-bearing
+inputs. Every name is declaration-checked, while the quoted source list reuses the
+non-extern import-symbol slot rather than growing every function record.
+
+**D742** checks every listed input at each pointer-bearing return. The existing
+recursive origin proof reports the actual later-listed parameter retained by a
+direct value or tracked aggregate leaf.
+
+**D743** applies that complete-list proof to module-scope stores, so a later-listed
+origin cannot bypass the static-retention boundary.
+
+**D744** keeps every listed input active during body checking and permits a direct
+forward only at a callee position present in that callee's no-escape set. Unknown,
+indirect, imported and thread paths remain rejected.
+
+**D745** carries the set through generic specialization and artifact format 14. A
+count followed by ordered one-based positions replaces the single serialized
+position in canonical signatures and interfaces. Both complete host suites inspect
+`{1, 2}`, validate 2,602 records in 291 files, retain byte-identical stages and show
+zero static-gate breaches.

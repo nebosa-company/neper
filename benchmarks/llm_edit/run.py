@@ -19,6 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TASKS = Path(__file__).with_name("tasks.json")
 
 
+def reported_tokens(output: str) -> int | None:
+    match = re.search(r"tokens used\s*\n\s*([\d,]+)", output, re.IGNORECASE)
+    return int(match.group(1).replace(",", "")) if match else None
+
+
 def changed_lines(before: str, after: str) -> int:
     changes = 0
     for line in difflib.ndiff(before.splitlines(), after.splitlines()):
@@ -79,6 +84,7 @@ def run_trial(command: str, source: Path, task: dict) -> dict:
             "language": source.suffix[1:], "task": task["id"], "kind": task["kind"],
             "passed": passed, "detail": detail, "seconds": round(elapsed, 3),
             "changed_lines": changed_lines(before, after),
+            "tokens": reported_tokens(proc.stdout + "\n" + proc.stderr),
         }
 
 
@@ -100,11 +106,14 @@ def main() -> int:
     summary = {}
     for language in ("e", "rs"):
         rows = [r for r in results if r["language"] == language]
+        token_rows = [r["tokens"] for r in rows if r["tokens"] is not None]
         summary[language] = {
             "passed": sum(r["passed"] for r in rows), "total": len(rows),
             "pass_rate": sum(r["passed"] for r in rows) / len(rows),
             "mean_seconds": round(sum(r["seconds"] for r in rows) / len(rows), 3),
             "mean_changed_lines": round(sum(r["changed_lines"] for r in rows) / len(rows), 2),
+            "mean_reported_tokens": (round(sum(token_rows) / len(token_rows), 1)
+                                     if token_rows else None),
         }
     report = {"summary": summary, "results": results}
     if args.json:

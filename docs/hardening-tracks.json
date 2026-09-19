@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "authority": "Machine-readable ownership and current status for post-M2 hardening. Requirement semantics remain in post-m2-llm-hardening.md.",
+  "reference_host": {
+    "name": "neper-agent-host",
+    "path": "tools/neper-agent-host/",
+    "status": "planned",
+    "owns": ["H34", "H36", "H37", "H38", "H40", "H44"]
+  },
+  "tracks": [
+    {
+      "id": "M2.5-core",
+      "name": "Language safety and GPU contracts",
+      "owner": "language/compiler",
+      "status": "in_progress",
+      "blocks": ["M3"],
+      "requirements": ["H01", "H02", "H03", "H04", "H05", "H06", "H07", "H13", "H21", "H22", "H23"],
+      "exit": "Implemented language and ABI changes, migrated compiler/libraries, and frozen M3 contracts with accepted closure evidence.",
+      "source": "docs/roadmap.md"
+    },
+    {
+      "id": "T2.0",
+      "name": "Tooling foundations",
+      "owner": "compiler/tool service",
+      "status": "open",
+      "blocks": ["T2.1", "T2.2"],
+      "requirements": ["H15", "H16", "H18", "H24"],
+      "exit": "Versioned snapshots, identities, bounded transport/storage, cancellation and hardened publication pass conformance.",
+      "source": "docs/tooling-v2-draft.md"
+    },
+    {
+      "id": "T2.1",
+      "name": "Understand and check",
+      "owner": "compiler/tool service",
+      "status": "open",
+      "blocks": ["T2.2"],
+      "requirements": ["H08", "H10", "H11", "H14", "H19", "H20:functional", "H26", "H27", "H28", "H30:functional", "H31:functional"],
+      "exit": "Context, check and diagnostic workflow passes its absolute latency/resource budgets and functional conformance.",
+      "source": "docs/tooling-v2-draft.md"
+    },
+    {
+      "id": "T2.2",
+      "name": "Edit and test evidence",
+      "owner": "compiler/tool service and runner",
+      "status": "open",
+      "blocks": ["T2.3"],
+      "requirements": ["H09", "H17", "H29", "H32:functional", "H35", "H39", "H41", "H42"],
+      "exit": "Transactional edits, structured tests and contract-bound evidence are usable; without T2.3 trust evidence the terminal state is incomplete, never verified.",
+      "source": "docs/tooling-v2-draft.md"
+    },
+    {
+      "id": "T2.3",
+      "name": "Trusted verification",
+      "owner": "neper-agent-host",
+      "status": "open",
+      "blocks": ["T2.4", "E2"],
+      "requirements": ["H34:functional", "H36", "H37", "H40"],
+      "exit": "The reference host enforces policy and environment identity, proves obligation coverage, and alone can emit a scoped verified receipt.",
+      "source": "docs/tooling-v2-draft.md"
+    },
+    {
+      "id": "T2.4",
+      "name": "Integration and durable operation",
+      "owner": "neper-agent-host",
+      "status": "open",
+      "blocks": [],
+      "requirements": ["H38", "H44"],
+      "exit": "Parallel bundles are revalidated after integration and authorized tasks survive reconnect, approval and cancellation.",
+      "source": "docs/tooling-v2-draft.md"
+    },
+    {
+      "id": "E2",
+      "name": "Measured LLM-experience claim",
+      "owner": "evaluation harness",
+      "status": "open",
+      "blocks": ["registered superiority claim only"],
+      "requirements": ["H12", "H20:measured", "H25", "H30:comparative", "H31:comparative", "H32:comparative", "H33", "H34:comparative", "H43"],
+      "exit": "The registered agent-tooling cohort supports the exact versioned claim; misses withhold only that claim.",
+      "source": "docs/general-purpose-verification.md"
+    },
+    {
+      "id": "M6-provenance",
+      "name": "Release provenance bridge",
+      "owner": "package/release system",
+      "status": "planned",
+      "blocks": ["release provenance claim only"],
+      "requirements": ["H45"],
+      "exit": "Native receipts export into standards-based release provenance without strengthening their claims.",
+      "source": "docs/post-m2-llm-hardening.md"
+    }
+  ]
+}

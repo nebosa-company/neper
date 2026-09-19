@@ -39,6 +39,57 @@ class BenchmarkScoringTests(unittest.TestCase):
         output = "agent response\ntokens used\n\n22,778\n"
         self.assertEqual(semantic.reported_tokens(output), 22778)
 
+    def test_basic_runner_extracts_codex_reported_tokens(self):
+        self.assertEqual(benchmark.reported_tokens("tokens used\n\n22,778\n"), 22778)
+
+    def test_jev_router_uses_fast_only_above_threshold(self):
+        path = Path(__file__).parents[1] / "benchmarks" / "llm_edit" / "jev_router.py"
+        spec = importlib.util.spec_from_file_location("jev_router_benchmark", path)
+        router = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(router)
+        payload = {
+            "model": "jev-test",
+            "answers": {
+                "agent_tier": {
+                    "type": "choice", "choice": "fast", "confidence": 0.79,
+                    "probabilities": {"fast": 0.9, "strong": 0.1},
+                },
+                "task_risk": {"type": "score", "score": 0.5},
+            },
+            "usage": {"input_tokens": 123, "output_tokens": 10},
+            "provider": "TypeSafe",
+            "id": "decision-1",
+        }
+        low = router.interpret_response(payload, 0.8)
+        self.assertEqual(low["selected_agent"], "strong")
+        self.assertIsNotNone(low["fallback_reason"])
+        payload["answers"]["agent_tier"]["confidence"] = 0.8
+        high = router.interpret_response(payload, 0.8)
+        self.assertEqual(high["selected_agent"], "fast")
+        self.assertEqual(high["input_tokens"], 123)
+        self.assertEqual(high["provider"], "TypeSafe")
+        self.assertEqual(high["request_id"], "decision-1")
+
+    def test_jev_router_fails_closed_on_invalid_response(self):
+        path = Path(__file__).parents[1] / "benchmarks" / "llm_edit" / "jev_router.py"
+        spec = importlib.util.spec_from_file_location("jev_router_invalid", path)
+        router = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(router)
+        decision = router.interpret_response({"answers": {}}, 0.8)
+        self.assertEqual(decision["selected_agent"], "strong")
+        self.assertIn("invalid Jev response", decision["fallback_reason"])
+
+    def test_jev_router_does_not_send_source_text(self):
+        path = Path(__file__).parents[1] / "benchmarks" / "llm_edit" / "jev_router.py"
+        spec = importlib.util.spec_from_file_location("jev_router_state", path)
+        router = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(router)
+        source = Path(__file__).parents[1] / "examples" / "sample.e"
+        state = router.route_state({"kind": "search", "prompt": "find it"}, source)
+        serialized = json.dumps(state)
+        self.assertNotIn(source.read_text(encoding="utf-8"), serialized)
+        self.assertEqual(state["source"]["file_count"], 1)
+
     def test_audits_observable_agent_activity(self):
         semantic_path = Path(__file__).parents[1] / "benchmarks" / "llm_edit" / "semantic.py"
         spec = importlib.util.spec_from_file_location("semantic_audit", semantic_path)

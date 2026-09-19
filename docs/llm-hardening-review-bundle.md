@@ -1,3 +1,11 @@
+> Historical review bundle: this captures the 2026-09-06 R01–R11/H01–H29 review.
+> The current adopted recommendation set is R01–R16; the implementation plan is
+> H01–H45. R12–R16/H30–H34 are specified in
+> `llm-hardening-recommendations.md` and `post-m2-llm-hardening.md`; H35–H45 are the
+> latter document's operational additions. The current roadmap assigns them across
+> M2.5-core, T2, E2 and M6 rather than one pre-M3 gate. Counts and quoted
+> diffs below are intentionally preserved as the earlier review input.
+
 You are reviewing documentation changes to **neper**, a language designed to be written by LLMs and read by humans. I added a prioritized hardening plan and wired it into the existing docs. Treat every item below as *scheduled / not implemented* — do not claim anything is implemented, and do not propose new syntax.
 
 ## What to evaluate (answer each, with specific quotes or item IDs)

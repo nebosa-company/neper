@@ -5,7 +5,7 @@ Delivery commitment and presentation order come from `modules.json`'s `core`,
 `extended` and `experimental` tiers; this file remains dependency-layer ordered.
 This is the next-contract design, not an installed-toolchain availability report.
 The coordinated changes in `stdlib-hardening.md` migrate delivered CPU APIs during
-M2.5; later facilities retain their stated delivery gates. Semantic details in `spec.md` remain
+M2.5-core or T2 according to ownership; later facilities retain their stated delivery gates. Semantic details in `spec.md` remain
 authoritative; this file fixes names, public value shapes and signatures. A module
 implements no additional public declaration unless this file is amended.
 

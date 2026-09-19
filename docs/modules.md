@@ -8,7 +8,8 @@ surface of every toolchain module. All three views change together.
 
 The adopted [standard-library hardening](stdlib-hardening.md) (D84) defines
 composition, migration and executable acceptance. Delivered CPU surfaces migrate
-in M2.5; later modules remain proposals until their own tests and implementation
+under M2.5-core where language contracts require it and under T2 where tooling or
+catalogue contracts require it; later modules remain proposals until their own tests and implementation
 exist. The catalogue currently has 150 modules: 33 core, 97 extended, 20 experimental.
 
 ---
@@ -118,7 +119,7 @@ applicable conformance workload and records a compatibility decision. Experiment
 modules never satisfy a dependency of a core or extended module. This conservative
 rule protects public-type stability transitively, not only import legality.
 
-`e.text.utf8` and `e.cancel` are core additions delivered through M2.5's cross-cutting
+`e.text.utf8` and `e.cancel` are core additions delivered through M2.5-core's cross-cutting
 library gate, with `schedule:"later", milestone:null` rather than inventing an
 unvalidated Mn value. Their gate is specified in `stdlib-hardening.md`; this does
 not change the preserved M2 completion criteria or imply they are already available.
@@ -175,7 +176,7 @@ Global constraints:
   `modules.json`; the compiler independently enforces an acyclic import graph.
 - `python scripts/check_module_plan.py` checks the current plan/catalogue's graph,
   tiers, naming and import-qualifier consistency. It supplements, not replaces,
-  the M2.5 real parser/resolver and executable API tests.
+  the T2 real parser/resolver and executable API tests.
 - `python scripts/check_module_surfaces.py --compiler COMPILER --arch ARCH --os OS`
   runs every `surface:"source"` module through that compiler's parser and resolver,
   then compares its indexed declaration signatures with the catalogue. Both
@@ -309,7 +310,10 @@ HTML tree. Image codecs decode into caller-owned `e.gfx.image` pixels. Certifica
 validation is split the same way: `e.fmt.asn1` and `e.fmt.pem` own encodings, while
 `e.crypto.x509` owns chain and identity policy used by `e.net.tls`.
 
-The UI family is specified in [`ui-framework.md`](ui-framework.md). Declarative
+The UI family is specified in [`ui-framework.md`](ui-framework.md); its desktop/mobile
+component catalogue is [`widget-library-proposal.md`](widget-library-proposal.md), and
+[`widget-plan.json`](widget-plan.json) is the ordered implementation/evidence inventory
+rendered into `progress.html`. Declarative
 widgets are immutable frame-arena descriptions, not runtime objects. Reconciliation
 stores persistent elements and state behind generation-checked identifiers;
 layout produces retained render nodes, and `e.gfx.scene` compiles them into explicit

@@ -1,0 +1,698 @@
+{
+  "schema": "neper-semantic-coverage",
+  "version": 1,
+  "generated_by": "scripts/build_algorithm_format_matrix.py",
+  "items": [
+    {
+      "id": "crypto.hash",
+      "family": "cryptography",
+      "priority": "A1",
+      "neper_module": "e.crypto.hash",
+      "module_in_catalog": true,
+      "observed_name_mentions": 465,
+      "sub_capabilities": [
+        "SHA-2",
+        "SHA-3",
+        "BLAKE2/3",
+        "incremental hashing"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "crypto.mac",
+      "family": "cryptography",
+      "priority": "A1",
+      "neper_module": "e.crypto.mac",
+      "module_in_catalog": true,
+      "observed_name_mentions": 635,
+      "sub_capabilities": [
+        "HMAC",
+        "keyed hash",
+        "constant-time verify"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "crypto.aead",
+      "family": "cryptography",
+      "priority": "A1",
+      "neper_module": "e.crypto.aead",
+      "module_in_catalog": true,
+      "observed_name_mentions": 12,
+      "sub_capabilities": [
+        "AES-GCM",
+        "ChaCha20-Poly1305",
+        "nonce",
+        "associated data"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "crypto.kdf",
+      "family": "cryptography",
+      "priority": "A1",
+      "neper_module": "e.crypto.kdf",
+      "module_in_catalog": true,
+      "observed_name_mentions": 14,
+      "sub_capabilities": [
+        "HKDF",
+        "PBKDF2",
+        "scrypt/Argon2",
+        "parameter limits"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "crypto.kx",
+      "family": "cryptography",
+      "priority": "A1",
+      "neper_module": "e.crypto.kx",
+      "module_in_catalog": true,
+      "observed_name_mentions": 22,
+      "sub_capabilities": [
+        "X25519",
+        "key agreement",
+        "transcript binding"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "crypto.sign",
+      "family": "cryptography",
+      "priority": "A1",
+      "neper_module": "e.crypto.sign",
+      "module_in_catalog": true,
+      "observed_name_mentions": 1588,
+      "sub_capabilities": [
+        "Ed25519",
+        "ECDSA",
+        "RSA",
+        "key serialization"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "crypto.random",
+      "family": "cryptography",
+      "priority": "A1",
+      "neper_module": "e.crypto.random",
+      "module_in_catalog": true,
+      "observed_name_mentions": 168,
+      "sub_capabilities": [
+        "OS entropy",
+        "secure bytes",
+        "failure reporting"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "crypto.x509",
+      "family": "cryptography",
+      "priority": "A1",
+      "neper_module": "e.crypto.x509",
+      "module_in_catalog": true,
+      "observed_name_mentions": 0,
+      "sub_capabilities": [
+        "DER",
+        "PEM",
+        "chain validation",
+        "hostname validation"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "statistics",
+      "family": "statistics",
+      "priority": "A1",
+      "neper_module": "e.algo.stat",
+      "module_in_catalog": true,
+      "observed_name_mentions": 49,
+      "sub_capabilities": [
+        "descriptive",
+        "quantiles",
+        "distributions",
+        "regression",
+        "streaming"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.asn1",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.asn1",
+      "module_in_catalog": true,
+      "observed_name_mentions": 0,
+      "sub_capabilities": [
+        "asn1"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.bson",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.bson",
+      "module_in_catalog": true,
+      "observed_name_mentions": 6,
+      "sub_capabilities": [
+        "bson"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.bzip2",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.bzip2",
+      "module_in_catalog": true,
+      "observed_name_mentions": 3,
+      "sub_capabilities": [
+        "bzip2"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.csv",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.csv",
+      "module_in_catalog": true,
+      "observed_name_mentions": 467,
+      "sub_capabilities": [
+        "csv"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.gzip",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.gzip",
+      "module_in_catalog": true,
+      "observed_name_mentions": 40,
+      "sub_capabilities": [
+        "gzip"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.html",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.html",
+      "module_in_catalog": true,
+      "observed_name_mentions": 816,
+      "sub_capabilities": [
+        "html"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.ini",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.ini",
+      "module_in_catalog": true,
+      "observed_name_mentions": 3332,
+      "sub_capabilities": [
+        "ini"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.jpeg",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.jpeg",
+      "module_in_catalog": true,
+      "observed_name_mentions": 36,
+      "sub_capabilities": [
+        "jpeg"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.json",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.json",
+      "module_in_catalog": true,
+      "observed_name_mentions": 1026,
+      "sub_capabilities": [
+        "json"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.lzw",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.lzw",
+      "module_in_catalog": true,
+      "observed_name_mentions": 1,
+      "sub_capabilities": [
+        "lzw"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.mail",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.mail",
+      "module_in_catalog": true,
+      "observed_name_mentions": 372,
+      "sub_capabilities": [
+        "mail"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.mime",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.mime",
+      "module_in_catalog": true,
+      "observed_name_mentions": 49,
+      "sub_capabilities": [
+        "mime"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.mp3",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.mp3",
+      "module_in_catalog": true,
+      "observed_name_mentions": 6,
+      "sub_capabilities": [
+        "mp3"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.msgpack",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.msgpack",
+      "module_in_catalog": true,
+      "observed_name_mentions": 3,
+      "sub_capabilities": [
+        "msgpack"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.multipart",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.multipart",
+      "module_in_catalog": true,
+      "observed_name_mentions": 16,
+      "sub_capabilities": [
+        "multipart"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.pem",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.pem",
+      "module_in_catalog": true,
+      "observed_name_mentions": 28,
+      "sub_capabilities": [
+        "pem"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.png",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.png",
+      "module_in_catalog": true,
+      "observed_name_mentions": 232,
+      "sub_capabilities": [
+        "png"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.protobuf",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.protobuf",
+      "module_in_catalog": true,
+      "observed_name_mentions": 0,
+      "sub_capabilities": [
+        "protobuf"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.quoted_printable",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.quoted_printable",
+      "module_in_catalog": true,
+      "observed_name_mentions": 0,
+      "sub_capabilities": [
+        "quoted_printable"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.tar",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.tar",
+      "module_in_catalog": true,
+      "observed_name_mentions": 3857,
+      "sub_capabilities": [
+        "tar"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.uri",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.uri",
+      "module_in_catalog": true,
+      "observed_name_mentions": 356,
+      "sub_capabilities": [
+        "uri"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.wav",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.wav",
+      "module_in_catalog": true,
+      "observed_name_mentions": 55,
+      "sub_capabilities": [
+        "wav"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.webp",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.webp",
+      "module_in_catalog": true,
+      "observed_name_mentions": 26,
+      "sub_capabilities": [
+        "webp"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.xml",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.xml",
+      "module_in_catalog": true,
+      "observed_name_mentions": 874,
+      "sub_capabilities": [
+        "xml"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.yaml",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.yaml",
+      "module_in_catalog": true,
+      "observed_name_mentions": 53,
+      "sub_capabilities": [
+        "yaml"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.zip",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.zip",
+      "module_in_catalog": true,
+      "observed_name_mentions": 150,
+      "sub_capabilities": [
+        "zip"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.zlib",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.zlib",
+      "module_in_catalog": true,
+      "observed_name_mentions": 12,
+      "sub_capabilities": [
+        "zlib"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    },
+    {
+      "id": "format.zstd",
+      "family": "format",
+      "priority": "A2",
+      "neper_module": "e.fmt.zstd",
+      "module_in_catalog": true,
+      "observed_name_mentions": 17,
+      "sub_capabilities": [
+        "zstd"
+      ],
+      "status": "planned",
+      "required_evidence": [
+        "golden vectors",
+        "round-trip tests",
+        "malformed-input tests",
+        "streaming/limits tests"
+      ]
+    }
+  ]
+}

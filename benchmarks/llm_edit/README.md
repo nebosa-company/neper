@@ -5,6 +5,21 @@ to search and amend reliably. It gives the same search and surgical-edit request
 fresh copies of `examples/sample.e` and `examples/sample.rs`, then checks exact
 answers, required replacements, stale references, and unrelated changed lines.
 
+These search/edit tests do not establish lifetime safety, behavioral correctness or
+the post-M2 release decision. The mandatory pre-M3 M2.5 evaluation is specified in
+[`docs/post-m2-llm-hardening.md`](../../docs/post-m2-llm-hardening.md), H12. It adds
+held-out semantic tasks, actual compiler tools, independent behavioral oracles,
+baseline comparisons and per-family correctness/repair thresholds. Implementing
+that extension is scheduled for M2.5; the existing suite does not satisfy it yet.
+
+The adopted [library hardening](../../docs/stdlib-hardening.md) adds catalogue
+shadowing/alias, composable I/O, exact JSON integer/patch, bounded process and
+cancellation fixtures to that evaluation. Later streaming HTTP/SSE, crypto and
+image/codec cases activate only when their actual implementations are available.
+The static plan validator is run with `python scripts/check_module_plan.py` from
+the repository root; its tests are `python -m unittest discover -s tests -p test_module_plan.py`.
+Neither static success nor a generated API PDF is evidence of executable support.
+
 Run at least three trials because model output is nondeterministic:
 
 ```text
@@ -27,6 +42,31 @@ The harness itself has dependency-free unit tests:
 ```text
 python -m unittest discover -s tests
 ```
+
+## Jev routing experiment
+
+`jev_router.py` runs a paired A/B experiment: the baseline always uses a strong
+coding agent, while the routed arm asks TypeSafe Jev whether the same task can use a
+fast agent. Jev sees the task text and source statistics, not repository source. A
+low-confidence, malformed, or failed routing response falls back to the strong agent;
+the ordinary benchmark checks correctness after either choice.
+
+Set `OPENROUTER_API_KEY`, then run:
+
+```text
+python benchmarks/llm_edit/jev_router.py --trials 5 --json \
+  --strong-agent-command "STRONG_AGENT --prompt-file {prompt_file}" \
+  --fast-agent-command "FAST_AGENT --prompt-file {prompt_file}"
+```
+
+The router uses OpenRouter's Decisions API and the `~typesafe/jev-latest` model by
+default. The JSON report records the resolved Jev model, provider, confidence,
+probabilities, routing latency, token use and cost alongside both agent results.
+Replay exactly those routing
+choices without another Jev request by passing `--replay-report REPORT.json`. The
+default corpus is Neper only; add `--languages e,rs` when `examples/sample.rs` is
+present. Treat the task text sent to Jev as an external-service disclosure even
+though source text is excluded.
 
 ## One-million-line corpus
 

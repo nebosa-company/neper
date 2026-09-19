@@ -4,6 +4,13 @@ Status: normative. Codes are stable API values for tests and harnesses. The pros
 descriptive; the cited specification rule is authoritative. Retired codes remain in
 this file and are never reassigned.
 
+A registry `code` identifies a diagnostic meaning across compiler versions. It is
+not a diagnostic occurrence. The planned T2 tooling-v2 contract therefore also
+gives each occurrence a result-local `id` and a versioned, position-independent
+`fingerprint` for cross-invocation correlation. Neither changes this registry or the
+closed v1 stream; neither may be used in place of a source snapshot, edit
+precondition or evidence-backed verification receipt.
+
 Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM`,
 `GPU`, `SAFETY`, `MODULE`, `LINK`, `TEST`, `FORMAT`, and `TOOL`.
 
@@ -49,6 +56,8 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-SAFETY-0016` | storage lent to a running thread read or written before its join | spec §11 |
 | `E-SAFETY-0017` | `undef` of a type that admits only its members: `bool`, an enum, a tagged union, or a struct or array holding one (D475) | spec §11 |
 | `E-SAFETY-0018` | a region value returned across a deferred reset of that region (D675) | spec §11 |
+| `E-SAFETY-0019` | an invalid or unprovable `@borrows` result-borrow contract | spec §§5, 11 |
+| `E-SAFETY-0020` | an invalid `@noescape` input set or a return, global store, unknown call, callback or thread handoff that may retain a named input | spec §§5, 11 |
 | `E-SAFETY-9999` | statically diagnosed safety-contract violation | spec §11 |
 | `E-MODULE-0001` | module is missing or defined by multiple roots | spec §2 |
 | `E-MODULE-0002` | import graph contains a cycle | spec §2 |

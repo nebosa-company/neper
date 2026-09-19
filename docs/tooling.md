@@ -4,6 +4,11 @@ Status: normative companion to `docs/spec.md` §13–§14. Nothing here requires
 implementation before the compiler work begins; it fixes the interface that every
 implementation and harness must share.
 
+Planned successor requirements are isolated in
+[`tooling-v2-draft.md`](tooling-v2-draft.md). That document is scheduled and
+non-normative until its schema and conformance corpus freeze. Nothing in it changes
+this closed v1 protocol or advertises an implemented command.
+
 ## 1. Version and stream envelope
 
 On every finite command, `--json` means UTF-8 JSON Lines on stdout and no human text
@@ -622,7 +627,9 @@ named as a value or chosen by a protocol, a repeated or out-of-range index, a li
 sixteen items, or a parameter left out of the order that the body still names
 (D439) is refused. Every refused query (a subject that names nothing, a
 plan that cannot be made) exits 2 as its result says.
-`m25-h29-structured-edits.md` fixes the plan shape for the operations to come.
+`m25-h29-structured-edits.md` records the delivered v1 plan shape. T2.2 evolves it
+under the separately versioned, non-normative `tooling-v2-draft.md`; v1 behavior is
+unchanged until that successor freezes.
 
 ## 6. Formatting contract
 

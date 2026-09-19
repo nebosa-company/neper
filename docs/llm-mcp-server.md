@@ -3,7 +3,7 @@
 Status: **proposal, not adopted.** Nothing here is normative, and nothing here is
 evidence of implementation. `spec.md`, `grammar.ebnf`, `tooling.md`, `modules.md` and
 `decisions.md` remain authoritative, and this document changes none of them; it would
-become normative only through a versioned amendment during the M2.5 gate scheduled in
+become normative only through a versioned amendment during the T2 track scheduled in
 [`post-m2-llm-hardening.md`](post-m2-llm-hardening.md).
 
 Read it against the adopted set in

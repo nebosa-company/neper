@@ -101,16 +101,16 @@ never reused.
 | D79 | Declarative GPU UI proposal | Reserve toolchain-owned `gfx.*` and `ui.*` namespaces and add fifteen experimental modules for pure geometry/paint/images, shaping/layout, display lists, windows/input, immutable widgets, explicit state reconciliation, animation, accessibility, testing and application scheduling. Widgets are frame-arena values; persistent elements/state and GPU resources use bounded generation-checked stores. No new syntax, objects, closures, GC, reflection or hidden allocation is introduced. Delivery is blocked on reviewed `e.os` native-window/accessibility and `e.gpu` presentation designs and must pass GP-15 before promotion. | A Flutter-like value tree and GPU renderer fit Neper's explicit memory model better than a Swing-style object hierarchy. Experimental status permits workload-led API correction without expanding the first-stable commitment, while explicit blockers preserve the sole-platform-boundary rule. |
 | D80 | Embedded application assets | Add experimental `e.asset` and `ui.asset`. Root `project.yaml` declarations become a sorted linker-generated immutable registry; logical name, source, media type, attributes, size and SHA-256 enter build identity and the canonical build manifest. `e.asset` performs allocation-free zero-copy lookup. `ui.asset` deterministically selects locale/theme/scale variants, exposes fonts without copying and owns a caller-bounded GPU texture cache driven by a caller-supplied decoder. Raw bytes are embedded unchanged; package-provided, compressed and external runtime assets are deferred. | Flutter-style applications need reproducible fonts, images and other resources without runtime path assumptions. Keeping codecs injectable avoids a hidden format dependency, immutable executable slices fit the existing data model, and explicit bounded caches preserve Neper's allocation and ownership rules. |
 | D81 | Interoperability and verification expansion | Add extended `crypto.x509`, ASN.1/PEM, multipart/mail, quoted-printable, PNG/JPEG/WebP, bzip2/LZW/zlib, deterministic text and context-safe HTML templates, compiler-backed coverage/fuzzing, and generic `e.db` SQL contracts. Extend `e.bytes` with Base32 and Base85. Encodings/codecs remain bounded and streaming; image pixels are caller-owned; certificate roots and time are explicit. Concrete drivers are the owner-qualified packages `x.sqlite.sqlite`, `x.oracle.mysql` and `x.postgresql.libpq`. | Comparison with Go's standard library exposed operational gaps in TLS identity, common Internet messages, image interchange, SQL portability and verification tooling. Toolchain-owned protocol contracts improve interoperability without importing hidden allocation, ambient trust stores, driver registries or database implementations into the stable core. |
-| D82 | Post-M2 LLM hardening gate | Complete M2 against its existing contract, then execute M2.5 before any M3 implementation. `post-m2-llm-hardening.md` owns H01–H29 evaluation, required outcomes, migration and evidence; `llm-hardening-recommendations.md` distils that review into the prioritized R01–R11 set and registers R08–R11 as H26–H29. All items start scheduled/unresolved; adopted language/API/protocol changes require versioned normative amendments and implemented verification. CPU/tooling obligations close in M2.5; explicitly future GPU runtime evidence remains pending against frozen contracts. | The hidden-semantic-context concern raised by Jose Crespo's 2026-08-22 article motivates checked ownership/lifetimes, explicit unsafe and concurrency contracts, value/alias and error-state review, compiler-derived context and real LLM evaluation. The follow-up review adds incremental queries, snapshots, bounded semantic editing/transport, artifact hardening and measured CPU/GPU performance contracts. This decision fixes sequencing and the mandatory gate; it does not yet supersede D3/D14 or adopt proposed keywords. Documentation alone cannot close implemented-delivery obligations. |
+| D82 | Post-M2 hardening tracks | Complete M2 against its existing contract, then run separate tracks owned by `post-m2-llm-hardening.md`: M2.5-core (H01–H07, H13, H21–H23) blocks M3; T2 ships functional tooling-v2 and the in-repository `neper-agent-host` without blocking M3; E2 owns comparative LLM/performance claims; H45 ships with later package/release provenance. `tooling.md` remains normative v1 while `tooling-v2-draft.md` is non-normative until T2 freezes its schema. `hardening-tracks.json` is authoritative for track membership and current status. `llm-hardening-recommendations.md` retains R01–R16 and their H mappings. Each scoped track remains open until its closure evidence passes; existing v1 and stage-B implementations carry forward only as evidence for requirements they actually satisfy. | The individual safety and agent-experience requirements remain valuable, but treating H01–H44 and moving competitor rankings as one pre-M3 critical path would couple language design, compiler work, host security, orchestration and product claims into an indefinite waterfall. Separate ownership and vertical T2 slices preserve the guarantees while letting compiler/backend work progress. T2.2 can emit evidence but not `verified`; T2.3 binds one change contract, snapshot, policy, environment and coverage through the trusted host. E2 rankings gate only the exact public claim among the registered agent-tooling cohort, and any syntax/API proposal requires a separate versioned milestone. This decision does not supersede D3/D14 or adopt proposed keywords. Documentation alone cannot close implementation obligations. |
 
-| D83 | Explicit multi-GPU discovery and selection | Extend planned `e.gpu` with bounded caller-owned `devices`, `DeviceInfo`/`DeviceKind`/`DeviceKey`, exact `open_id` and opening-time `info`. Backend-scoped UUIDs are revalidated selectors, not immutable serial numbers; missing/duplicate keys fail without substitution. Indices are temporary; memory reports capacity, not availability; every queue/buffer belongs to one logical open device. | Applications and harnesses must be able to choose among multiple GPUs without assuming ordinal stability, unique names or Vulkan/CUDA identity equivalence. Freeze contracts and versioned tooling under M2.5 H18/H21/H22; implement CPU/Vulkan in M3 and CUDA in M4. No implicit offload, automatic fallback, peer sharing, device migration or optimized CPU kernel backend is adopted. |
+| D83 | Explicit multi-GPU discovery and selection | Extend planned `e.gpu` with bounded caller-owned `devices`, `DeviceInfo`/`DeviceKind`/`DeviceKey`, exact `open_id` and opening-time `info`. Backend-scoped UUIDs are revalidated selectors, not immutable serial numbers; missing/duplicate keys fail without substitution. Indices are temporary; memory reports capacity, not availability; every queue/buffer belongs to one logical open device. | Applications and harnesses must be able to choose among multiple GPUs without assuming ordinal stability, unique names or Vulkan/CUDA identity equivalence. Freeze H21/H22 contracts in M2.5-core and deliver H18 versioned tooling in T2; implement CPU/Vulkan in M3 and CUDA in M4. No implicit offload, automatic fallback, peer sharing, device migration or optimized CPU kernel backend is adopted. |
 
 ## D84 — standard-library composition and stable dependency closure
 
 Adopt `stdlib-hardening.md` SL01–SL11 and the synchronized next-contract catalogue.
 Keep ordinary parameters and the current shadowing rule; fix signature/import
-collisions and validate declarations with the real resolver during M2.5. Add core
-`e.cancel` and promote basic `text.utf8` to core through that cross-cutting gate.
+collisions and validate declarations with the real resolver during T2. Add core
+`e.cancel` and promote basic `text.utf8` to core through M2.5-core's cross-cutting work.
 Add extended `crypto.mac`, `crypto.kdf` and `e.test.support`; extend existing modules
 for composable buffering, lossless JSON/Pointer/Patch, bounded globbing, fallible
 iteration, safe directory-relative operations, supervised processes and HTTP/SSE
@@ -120,7 +120,7 @@ Promote the pure `gfx.geometry`/`gfx.paint`/`gfx.image` dependency closure to ex
 and stabilize it with the already-extended PNG/JPEG/WebP codecs. GPU rendering and
 UI remain experimental; stable public types cannot depend on experimental types.
 This amends D77/D79's planned tiers, not implementation status. Version/migrate
-delivered CPU contracts in M2.5 without moving M2's preserved baseline. Future
+delivered CPU contracts in M2.5-core or T2 according to ownership without moving M2's preserved baseline. Future
 libraries retain their own implementation gates and independent runtime evidence.
 
 ## D85 — `e.data.sort` becomes `algo.sort`
@@ -290,17 +290,23 @@ way to obtain it.
 
 ## D90 — one generated readiness document, updated by every session
 
-Readiness is reported in `docs/progress.html` and nowhere else. It gives three
-percentages — compiler, modules, tooling — each backed by a scored capability list in
+Readiness is reported in `docs/progress.html` and nowhere else. It gives four
+percentages — compiler, modules, widget library, tooling — each backed by a scored capability list in
 which every row carries its evidence or its gap.
 
 The page is generated by `scripts/render_progress.py`, never hand-edited. The compiler
 and tooling scores come from rubric tables in that script; the module score is derived
 from `docs/module-apis.md`, `docs/modules.json`, the committed `lib/e` sources and the
-intrinsics seeded in `src/resolve.e`, so it cannot drift from the plan it summarises.
+intrinsics seeded in `src/resolve.e`; the widget score is derived from the ordered
+component and evidence inventory in `docs/widget-plan.json`, so neither generated
+dimension can drift from the plan it summarises.
 Scoring is `1` delivered, `0` not started, and a stated fraction when partial; items are
 equally weighted inside a dimension, no dimension is weighted against another, and the
-three numbers are never combined into one.
+four numbers are never combined into one.
+
+Post-M2 hardening is deliberately not a fifth percentage. The same page renders its
+track ownership and categorical status from `docs/hardening-tracks.json`; existing v1
+capability scores are predecessor evidence and cannot manufacture T2/E2 closure.
 
 **Every session that lands a capability updates the page in the same commit.** A
 readiness figure that moves only when someone remembers to move it is worse than no
@@ -7186,11 +7192,11 @@ root-relative trap; the `run --json` golden's stderr changed from the operand's
 `../../../../tests/conformance/tools/run_trap.e` to `run_trap.e`, its identity's
 path, and nothing else in it moved.
 
-## D338 -- The M2 baseline: the compiler preserved and measured before M2.5 touches it
+## D338 -- The M2 baseline: the compiler preserved before post-M2 tracks touch it
 
-M2.5's stage A (`post-m2-llm-hardening.md` section 29): before any of the H01-H29
-changes alter the language or the compiler, the M2 compiler is preserved and its
-build-time numbers frozen, so that every later revision is compared against fixed
+The shared baseline (`post-m2-llm-hardening.md` section 29): before any M2.5-core,
+T2 or E2 change alters the language, compiler or measurements, preserve M2 and freeze
+its build-time numbers so that every later revision is compared against fixed
 figures and a budget breach is a recorded decision.
 
 The tag `m2-baseline` marks the revision; `docs/m2-baseline.md` records the stage-3
@@ -13672,3 +13678,142 @@ time was 19 ms implicit versus 18 ms explicit on Windows, and 46 ms versus 43 ms
 on Linux. These small samples support no speed claim; they show that selecting the
 operation explicitly did not add measured check-time or code-size cost on H06's
 fixed equivalent task.
+
+## D731 -- Result borrows are explicit declaration contracts
+
+`@borrows("parameter")` on a non-extern function declares that its pointer-bearing
+result retains exactly that borrowed input. The named parameter must exist, must be
+pointer-bearing and must not be `own`; at least one result must be pointer-bearing.
+Malformed, repeated or impossible contracts are E-SAFETY-0019.
+
+The checker stores the parameter identity without growing every function record:
+non-extern functions reuse the otherwise-empty import-library slot and derive the
+one-based position when needed. This preserves the rule that a parameter rename
+alone is not a signature change while giving body, call and artifact checks one
+compact summary to carry.
+
+## D732 -- A result-borrow contract is proved at every return
+
+For every pointer-bearing return position of an `@borrows("p")` function, the
+checker follows its existing lexical alias facts through pointer copies, slice
+copies, fields, addresses and derived places. The origin must be parameter `p`;
+returning another input or an untracked pointer is E-SAFETY-0019.
+
+The same attribute is refused on `@unsafe`. A body that has disabled the alias and
+resource checks cannot export a provenance statement as if those checks had proved
+it.
+
+## D733 -- Aggregate result contracts cover every pointer leaf
+
+A struct or fixed-array local returned under `@borrows("p")` satisfies the contract
+only when every pointer-bearing leaf has a tracked alias and every such alias ends at
+`p`. Aggregate literals retain pointer and slice parameter origins in addition to
+explicit `&local` origins; lexical aggregate copies retain the complete path set.
+
+Missing provenance is a refusal, not permission. Null or computed pointer fields
+that the lexical tracker cannot identify therefore require a simpler returned shape
+or a later, stronger proof; they cannot silently make an exact public summary false.
+
+## D734 -- Callers retain the declared input identity
+
+When a call's function has `@borrows("p")`, a pointer-bearing result inherits `p`'s
+existing region or view identity. If `p` is ordinary local storage, the result is a
+view of that storage. Resetting the region or mutating the container therefore
+invalidates the result under the same E-SAFETY-0013/E-SAFETY-0014 rules as a local
+borrow.
+
+The explicit summary takes precedence over the compatibility heuristic for
+unannotated functions. An earlier `&left` argument can no longer make a result
+declared to borrow `right` appear to retain `left`.
+
+## D735 -- Borrow summaries survive specialization and artifacts
+
+A generic function instance copies its template's declared borrow parameter; the
+substituted body is checked against that same identity and callers consume it like a
+non-generic summary. Parameter names remain irrelevant after declaration collection.
+
+Artifact format 12 writes the one-based position into each function-interface
+payload and into the canonical signature bytes. A summary change therefore changes
+the public signature hash, invalidates every recorded signature dependency, and
+remains inspectable in the `.em` interface rather than existing only in checker
+memory.
+
+## D736 -- No-escape inputs are explicit declaration contracts
+
+`@noescape("parameter")` on a non-extern function declares that the named borrowed,
+pointer-bearing input is not retained after the call. The name must resolve to one
+non-`own` parameter, and the function cannot also be `@unsafe`; malformed or
+uncheckable declarations are E-SAFETY-0020.
+
+The checker reuses the otherwise-empty import-symbol slot of non-extern functions
+and derives the public one-based parameter position when needed. Parameter spelling
+therefore remains local source information rather than public signature identity.
+
+## D737 -- A no-escape contract rejects returned aliases recursively
+
+Every pointer-bearing return of an `@noescape("p")` function is checked for an alias
+of `p`. The proof follows direct pointers and slices plus tracked pointer-bearing
+leaves in struct and fixed-array carriers. Returning `p`, a derived place, or an
+aggregate retaining it is E-SAFETY-0020; scalar observations such as `p.len` remain
+valid because they retain no pointer.
+
+## D738 -- A no-escape contract rejects global retention
+
+An assignment into a module-scope place cannot retain `p` directly or through a
+tracked aggregate leaf. The same E-SAFETY-0020 is reported at the stored expression.
+This is the static-storage boundary; arbitrary heap-like container mutation remains
+a separate H02 obligation.
+
+## D739 -- No-escape forwarding requires a checked matching callee
+
+A pointer-bearing argument derived from `p` may be forwarded only to the same
+one-based parameter of a direct callee carrying `@noescape`. A direct unannotated or
+extern callee, a function-value callback and `os.thread_create` are conservative
+escapes and are rejected. The rule is enforced while checking bodies only; lowering
+does not reinterpret or weaken it.
+
+## D740 -- No-escape summaries survive specialization and artifacts
+
+Generic instances copy the template's no-escape parameter and are checked against
+that exact identity. Artifact format 13 writes its one-based position beside the
+result-borrow position in every function interface and includes it in canonical
+signature bytes, so changing either contract invalidates signature dependencies.
+
+Both host self-test suites check all declaration, return, aggregate, global, direct,
+callback, thread, generic and artifact fixtures and inspect serialized position 2.
+
+## D741 -- One no-escape contract may name several inputs
+
+`@noescape("p", "q", ...)` names a nonempty list of distinct non-`own`,
+pointer-bearing parameters on a checked non-extern function. Each name is validated
+independently; an unknown, repeated, scalar or owned input is E-SAFETY-0020. The
+source spelling rides in the existing non-extern import-symbol slot, so the common
+`Function` record gains no summary allocation.
+
+## D742 -- Multi-input return proof checks every named origin
+
+Every pointer-bearing return is checked against every input in the no-escape list.
+The existing recursive aggregate-origin walk is reused, so a direct alias or any
+tracked struct/fixed-array leaf retaining any named input is E-SAFETY-0020 and names
+the actual input that escaped.
+
+## D743 -- Multi-input global proof checks every named origin
+
+A module-scope store is checked against the complete no-escape list with the same
+recursive origin proof. A later-listed input therefore cannot evade the static-
+storage boundary merely because an earlier input was checked first.
+
+## D744 -- Multi-input forwarding is positional at both ends
+
+While checking a body, every named input is active. A derived argument may cross a
+direct call only when that exact callee argument position is also present in the
+callee's no-escape set; unannotated, indirect, imported and thread paths retain the
+existing conservative rejection.
+
+## D745 -- Artifact format 14 carries a counted no-escape position set
+
+Generic instances retain the complete source list. Artifact format 14 replaces the
+single no-escape position with a count followed by ordered one-based parameter
+positions in both canonical signature bytes and function interfaces. Both host
+suites inspect `{1, 2}`, retain byte-identical self-host stages, validate 2,602
+records in 291 files and report zero static-gate breaches.

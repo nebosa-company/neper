@@ -336,11 +336,14 @@ On Linux:
 
 - [`docs/spec.md`](docs/spec.md) — the language specification
 - [`docs/grammar.ebnf`](docs/grammar.ebnf) — normative concrete grammar and token registry
-- [`docs/tooling.md`](docs/tooling.md) — normative harness, JSONL, span and formatter contracts
+- [`docs/tooling.md`](docs/tooling.md) — normative version-1 harness, JSONL, span and formatter contracts
+- [`docs/tooling-v2-draft.md`](docs/tooling-v2-draft.md) — scheduled, non-normative agent-tooling successor design
 - [`docs/diagnostics.md`](docs/diagnostics.md) — stable diagnostic-code registry
 - [`docs/roadmap.md`](docs/roadmap.md) — implementation milestones
-- [`docs/post-m2-llm-hardening.md`](docs/post-m2-llm-hardening.md) — mandatory post-M2, pre-M3 language/compiler hardening and LLM evidence gate
-- [`docs/llm-hardening-recommendations.md`](docs/llm-hardening-recommendations.md) — prioritized R01–R11 recommendations for a language optimized for LLM processing end-to-end
+- [`docs/post-m2-llm-hardening.md`](docs/post-m2-llm-hardening.md) — post-M2 requirements split into the pre-M3 core gate, T2 tooling and E2 claim evaluation
+- [`docs/hardening-tracks.json`](docs/hardening-tracks.json) — authoritative machine-readable ownership and status for those tracks
+- [`docs/llm-hardening-recommendations.md`](docs/llm-hardening-recommendations.md) — prioritized R01–R16 recommendations for a language optimized for LLM processing end-to-end
+- [`docs/llm-agent-compiler-toolchain-research.md`](docs/llm-agent-compiler-toolchain-research.md) — compiler/toolchain landscape and the evidence behind H30–H34's agent-experience requirements
 - [`docs/decisions.md`](docs/decisions.md) — settled architecture decisions and their reasoning
 - [`docs/modules.md`](docs/modules.md) — the standard library and package plan
 - [`docs/module-apis.md`](docs/module-apis.md) — exact proposed APIs for toolchain modules
@@ -348,6 +351,8 @@ On Linux:
 - [`docs/modules.json`](docs/modules.json) — machine-readable module catalogue
 - [`docs/general-purpose-verification.md`](docs/general-purpose-verification.md) — workload and LLM-generation acceptance plan
 - [`docs/ui-framework.md`](docs/ui-framework.md) — experimental declarative GPU UI architecture
+- [`docs/widget-library-proposal.md`](docs/widget-library-proposal.md) — desktop/mobile component catalogue and delivery design
+- [`docs/widget-plan.json`](docs/widget-plan.json) — machine-readable widget phase, pickup and evidence inventory
 - [`docs/pacman.md`](docs/pacman.md) — the M6 package manager architecture
 - [`examples/sample.e`](examples/sample.e) — every construct in the language, once, in one program
 - [`examples/`](examples/) — what the language is meant to look like

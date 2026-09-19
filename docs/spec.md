@@ -4,9 +4,10 @@ Status: design draft. Implementation coverage is tracked milestone by milestone 
 [`roadmap.md`](roadmap.md); implemented subsets do not imply full conformance.
 
 The post-M2 design revision is scheduled in
-[`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) as the mandatory M2.5 gate
-before M3. Its ownership, lifetime, check-policy and tooling proposals do not change
-the current rules below until versioned normative amendments land during M2.5.
+[`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) as separate tracks. The narrow
+M2.5-core language/GPU-contract gate blocks M3; T2 tooling and E2 comparative claims
+do not. None of their proposals changes the current rules below until its responsible
+track lands versioned normative amendments.
 
 Neper is a compact, ahead-of-time general-purpose language for model-generated
 software, with explicit memory, deterministic semantics, inexpensive abstraction,
@@ -1010,6 +1011,18 @@ neper call site, called there under the named convention — or on a `type`
 declaration whose right side is an
 `extern fn(...) -> R` type (External functions, below). `@nocheck` is a statement-level block (§11) and is the
 one attribute that does not take a line of its own.
+
+`@borrows("name")` is legal only on a non-extern function with a pointer-bearing
+result. It names exactly one non-`own`, pointer-bearing parameter and declares that
+every pointer retained by the result comes from that input. The parameter position,
+not its spelling, is the public contract identity. Section 11 defines the body and
+caller checks.
+
+`@noescape("name", ...)` is legal only on a non-extern, non-`@unsafe` function. It
+names one or more distinct non-`own`, pointer-bearing parameters and declares that
+the body does not retain any named input after the call. Parameter positions, not
+their spellings, are the public contract identity. Section 11 defines the return,
+store and forwarding checks.
 
 An attribute may appear at most once on a declaration. Multiple legal attributes
 have no source-order semantics; `neper fmt` sorts them by attribute name as specified
@@ -3673,9 +3686,33 @@ not add partial moves from a variant payload.
   D702), and copying that aggregate or assigning its pointer fields separately
   preserves every tracked target, nested paths included (D693-D694, D698-D699,
   D703-D704).
-  Both checks are lexical and within one function: what is returned otherwise, stored,
-  handed to a callback, an import or a thread, reached through any other pointer,
-  or made by a cast is outside the rule, and `m25-h02-regions.md` says so.
+  A function carrying `@borrows("p")` is checked at each pointer-bearing return:
+  the value must be `p` or a local, field, address or subslice whose tracked alias
+  chain ends at `p` (D732). A returned struct or fixed array is checked at every
+  pointer-bearing leaf; all leaves must be tracked and end at `p` (D733). The
+  contract is not legal on `@unsafe`; unchecked code cannot publish a provenance
+  fact the checker did not prove.
+  At a call, the result retains the named argument's existing region or view
+  identity; otherwise it becomes a view of that argument's underlying local storage
+  (D734). Other address-like arguments do not affect this choice. Generic function
+  instances carry the template's parameter position after substitution. The
+  position is serialized in the function interface and its canonical signature, so
+  changing the contract invalidates importers (D735).
+  A function carrying `@noescape("p", ...)` may observe its named inputs but cannot
+  retain any of them. A pointer-bearing return, a global store or a tracked struct/
+  fixed-array carrier containing an alias of a named input is E-SAFETY-0020
+  (D737-D738, D742-D743). Passing such an argument to a direct callee is legal only
+  at an exact parameter position that callee also marks `@noescape`; an unannotated
+  or imported callee, an indirect callback and thread handoff are rejected (D739,
+  D744). Scalar arguments and results retain no pointer and do not escape merely
+  because their expression reads a named input.
+  Generic instances preserve the template's complete position set. Artifact format
+  14 serializes the result-borrow position followed by a counted ordered no-escape
+  position set and includes both in the canonical signature, so either contract
+  change invalidates importers (D740-D745).
+  These checks remain the bounded lexical subset: heap-like container retention,
+  pointer origins erased by raw casts and non-lexical liveness are outside it, as
+  recorded in `m25-h02-regions.md`.
 - A thread started over the address of this frame's storage -- `os.thread_create`
   or `thread.spawn` given `&x` where `x` is a local that is not a slice or a
   pointer -- is joined in this frame: it can be bound to another name here and

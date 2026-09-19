@@ -2,8 +2,17 @@
 
 Status: verification plan, not language specification. This document adds no
 syntax, runtime facility or standard-library API. `spec.md` remains authoritative
-for the language, `grammar.ebnf` for concrete syntax, `tooling.md` for machine
-interfaces, `modules.md` for the library plan, and `roadmap.md` for sequencing.
+for the language, `grammar.ebnf` for concrete syntax, `tooling.md` for the closed v1
+machine interface, `tooling-v2-draft.md` for the non-normative successor design,
+`modules.md` for the library plan, and `roadmap.md` for sequencing.
+
+The post-M2 plan in
+[`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) separates the narrow
+M2.5-core language/GPU-contract gate from T2 tooling-v2 conformance and E2 comparative
+evaluation. Only M2.5-core blocks M3. Current guarantees remain those in `spec.md`
+and the closed v1 tooling protocol until their responsible track lands a versioned
+replacement. None implies completion of broader workloads requiring M3, M4, M6 or
+later libraries.
 
 ---
 
@@ -55,8 +64,11 @@ language construct.
   while values have different lifetimes?
 - Can persistent structures use explicit pools, free lists or arena generations
   without making their ordinary call sites error-prone?
-- Are stale slices after `mem.reset`, slices across container growth and copied arena
-  cursors caught reliably in debug builds?
+- Which stale slices after `mem.reset`, views across container growth and copied
+  arena cursors are rejected or detected, and which remain unprotected? The current
+  spec explicitly leaves a pre-growth slice silently stale; poison bytes are not
+  reliable lifetime detection. M2.5-core H01–H03 require an enforced checked subset and
+  separately reported unsafe/unknown cases rather than assuming debug fills suffice.
 
 Passing this section does not imply memory safety. Release-mode invalid memory access
 and unsynchronised data races retain the semantics specified in `spec.md`; reports
@@ -135,7 +147,7 @@ before proposing a language change.
 | GP-02 | Cross-platform CLI | Arguments, configuration, Unicode input, JSON, filesystem traversal, diagnostics, exit codes and subprocesses |
 | GP-03 | Parallel build executor | Worker pool, dependency scheduling, cancellation, timeouts, captured output and graceful shutdown |
 | GP-04 | Long-running HTTP service | Bounded steady-state memory, sockets, event loop, backpressure, request arenas, logging and concurrent shutdown |
-| GP-05 | Database client over a C library | FFI, callbacks, opaque handles, transactions, rich errors, ownership transfer and dynamic linking |
+| GP-05 | Database client implementing `e.db` over a C library | FFI, callbacks, opaque handles, streaming row reads, transactions, rich errors, ownership transfer and dynamic linking |
 | GP-06 | Streaming data parser | Partial input, malformed input, fallible iteration, source spans, bounded buffers and recovery |
 | GP-07 | Persistent bounded cache | Mixed lifetimes, insertion, lookup, eviction, fragmentation control and concurrency |
 | GP-08 | Plugin-style C ABI | Stable exported ABI, callbacks with context pointers, version checks, foreign ownership and failure isolation |
@@ -159,6 +171,14 @@ Character count is not token count, and no syntax is universally optimal across 
 tokenizers. Token efficiency is therefore measured on the target model families and
 never inferred from keyword length.
 
+The prioritized recommendation set in
+[`llm-hardening-recommendations.md`](llm-hardening-recommendations.md) elevates this
+principle from a measurement obligation to a **design input** (R03, R08/H26): a
+grammar-versioned tokenizer profile per supported family must exist, and a proposed
+syntax spelling is changed only when a measured token or repair-turn improvement on
+that profile justifies it, never on a character-count argument. The per-tokenizer
+report below is a required input to that decision and to the H12/H25 gate.
+
 ### Task set
 
 For every workload, evaluate at least these task shapes:
@@ -180,9 +200,26 @@ Record all of the following by model and model version:
 
 - First-pass parse rate and first-pass type-check rate.
 - First-pass test pass rate.
+- Cold and warm p50/p95 syntax, affected-semantic and workspace check latency, plus
+  p95 time to first useful diagnostic.
 - Mean and 95th-percentile repair turns.
 - Input, output and total model tokens.
 - Tokens per non-comment source line and per syntax-tree node.
+- Tokens and bytes separately for guidance, context, edits, diagnostics, tests,
+  complete-result retrieval and final verification.
+- Independent root diagnostics, dependent/suppressed counts, diagnostic bytes per
+  repaired fault and percentage of repairs that need neither prose parsing nor a
+  repeated check to recover omitted evidence.
+- Diagnostic-fingerprint retention after offset-only edits and rejection after a
+  changed anchor; hint-only bytes, repair-plan retrieval bytes, and plan status.
+- Planned action effects by kind and scope, including false-empty effect sets for
+  project execution, dependency, network, credential, VCS and external writes.
+- Selected/executed/cached test counts, affected-set completeness, default all-pass
+  result bytes and failure-evidence retrieval bytes.
+- Verified, failed, incomplete and cancelled terminal outcomes; edits made after a
+  `verified` result are counted as over-edits.
+- Verification-receipt validation, missing/modified evidence rejection and proof-core
+  bytes; subjective confidence or authorship labels never count as evidence.
 - Unrequested diff lines after canonical formatting.
 - Hallucinated keywords, APIs, implicit conversions and language features.
 - Identifier/import collisions and incorrect protocol names.
@@ -208,7 +245,89 @@ Thresholds may be tightened after a baseline exists, but may not be silently rel
 
 Generation quality must also be compared with equivalent C, C++, Rust, Go, Python,
 Java and C# tasks. Neper succeeds by reducing total model effort and review risk, not
-merely by producing shorter files.
+merely by producing shorter files. This **broad-generation cohort** characterizes
+transfer and does not support a leadership claim.
+
+### E2 five-category agent-experience claim gate
+
+The comparative portions of H30–H34 make the E2 claim explicit. The **registered
+agent-tooling cohort** is Go, Rust, TypeScript and Python. Pre-register eligible
+equivalent workloads using each ecosystem's native cached compiler/language service,
+structured diagnostic path, formatter and configured test runner. A reference is
+ineligible for a task it cannot express with the same behavioral
+and safety oracle; exclusions and adapter/setup costs remain in the report. Freeze the
+hardware, repositories, cache states, tool versions, model versions, prompts,
+tokenizers, confidence method and non-inferiority margin before candidate tuning.
+Also freeze the overall composite's normalization, weights and penalties for failed,
+timed-out, incomplete and escaped-defect cases; a post-result weighting change is a
+new experiment, not the registered gate.
+
+Report these categories independently:
+
+| Category | Primary measures | Required result |
+|---|---|---|
+| Check latency | Warm p50/p95 total and p95 first useful diagnostic for syntax, local semantic and workspace checks | First or statistically tied for first |
+| Structured diagnostics | Verified one-turn repair, root-cause precision, cross-edit fingerprint correlation, hint/plan/effect accuracy, output/retrieval tokens and no prose parsing | First or statistically tied for first |
+| Structured tests | Selection-to-result latency, all-pass bytes, failure evidence, repair success and selection completeness | First or statistically tied for first |
+| Source/token pressure | Source tokens and all interaction tokens per verified success, including failures and retrieval | First or statistically tied for first |
+| Overall fit | Receipt-backed verified completion, escaped defects, wall time, total tokens, retries and over-edits through the canonical loop | Strictly better composite verified cost than the best eligible reference in both model families |
+
+No category may be won by weakening an oracle, hiding setup/tool-schema tokens,
+discarding failures, truncating unrecoverable evidence, counting cached tests as newly
+executed or stopping before the requested wider verification tier. If any category
+misses its threshold, publish the measured result but do not claim the best LLM coding
+experience among the registered cohort and do not close the comparative portion of
+H34 or the E2 claim.
+This does not reopen T2 functional conformance or block a compiler/backend milestone.
+
+E2 may recommend a syntax or API spelling change but never authorizes one. Adoption
+requires a separate versioned language/API milestone, normative amendments,
+compatibility analysis and migration evidence; the proposal is not needed to close
+T2 or E2 and cannot move the contract under concurrent backend work.
+
+The applicable H35–H44 operational contracts are mandatory for the same runs. Each
+accepted task has a hashed external change contract and requirement-to-evidence coverage; execution uses
+an enforced policy and an environment classified as hermetic, observed or
+uncontrolled; retries preserve flaky outcomes; runtime failures remain structured;
+and parallel change bundles are verified again after integration. Exercise API/ABI
+diffs, performance obligations and disconnect/approval/cancellation recovery where
+the task requests them. A run cannot count as verified when a required obligation is
+uncovered, a prohibited effect occurs, required hermeticity is absent, a required test
+is flaky/quarantined, or the receipt names only a pre-integration snapshot.
+The reference `neper-agent-host` or an independently conforming host must supply that
+policy, environment and coverage evidence; a T2.2 evidence package alone is
+`incomplete` and cannot enter the verified-success denominator.
+
+### E2 evaluation and claim closure
+
+H12 and the applicable E2 portions of H30–H44 in
+[`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) are the additional
+acceptance protocol for the versioned claim. It requires a preserved M2 baseline,
+pre-registered held-out tasks, at least two independently trained model families,
+real compiler/query/repair tools, independent behavioral oracles and reporting by
+task stratum. Each family must meet the local-edit and repair thresholds above on
+the supported CPU corpus; synthetic index or regex success does not count as
+semantic verification.
+
+Include resource/region escape, aliasing, error/cleanup, scoped concurrency,
+protocol and target context, malformed source, stale transactions and long-running
+resource tests. Measure defect escape and false rejection alongside tokens, repair
+turns and completion. Report failures/timeouts and all retry costs, unsafe/check-
+suppression additions, confidence intervals and paired baseline effects. The full
+H12 sample sizes, decision rules and compiler/runtime budgets are mandatory for
+E2 claim closure; they do not replace the later cross-platform workload gate and do
+not block M3.
+
+The accepted library review in [`stdlib-hardening.md`](stdlib-hardening.md) adds
+SL01–SL11 fixtures to H11/H12: catalogue signatures must obey the real resolver's
+shadowing/import rules, buffered I/O must compose through public adapters, generic
+JSON must preserve large integer values, and process/filesystem/control operations
+must expose partial effects and bounded cleanup. Exercise the migrated CPU paths
+before closing the applicable T2/E2 work; do not require unfinished TLS/image
+implementations in the E2 runtime report. Activate streaming HTTP/SSE, HMAC/HKDF,
+fake-I/O and image/codec corpora when
+their extended modules are delivered. Image value types/codecs stabilize together
+without claiming that experimental GPU/UI modules passed GP-15.
 
 ---
 

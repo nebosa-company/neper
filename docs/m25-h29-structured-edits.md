@@ -1,10 +1,12 @@
-# M2.5 stage B: H29 -- structured edits
+# T2 predecessor implementation: H29 structured edits
 
 H29 of [`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) section 30 (R11 of the
 recommendations): the tool stream expresses semantic refactors as typed operations
 with pre- and postconditions, in addition to byte spans, so that H09/H17 multi-file
 migrations are verifiable rather than text-replacement-fragile. Sections 1-3 are the
-design; section 4 is what D376 delivered.
+v1 design; section 4 is what D376 delivered. The historical filename records its
+stage-B origin. Current ownership is T2.2: these commands are predecessor evidence,
+not closure of the tooling-v2 plan, effect, snapshot and receipt contracts.
 
 ## 1. The shape
 

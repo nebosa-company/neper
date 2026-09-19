@@ -16,7 +16,7 @@ built so that code written by a model can be checked rather than trusted: a
 deterministic compiler that never touches the network, `.em` artifacts with a
 stage-2 == stage-3 fixed point, a stdlib whose every module is fenced to a frozen
 surface and driven by per-check fixtures on two hosts, the LLM editing cards, the
-M2.5 hardening spec, and a package manager that verifies by hash and executes nothing
+M2.5-core/T2 hardening plan, and a package manager that verifies by hash and executes nothing
 on install. That is a product story for agents, not for people learning a language.
 
 The bet: **the first users are agents.** If a model writes neper reliably where it
@@ -102,7 +102,7 @@ Supporting claims, each backed by something in the repo:
 | Deterministic, offline compiler | no network in the compiler; pacman prepares the map, the compiler reads it |
 | Self-verifying toolchain | stage-2 == stage-3 fixed point in the suite; `.em` byte equality |
 | A stdlib a model can trust | every module fenced, fixture-driven, both hosts; `docs/progress.html` |
-| Written for models | the LLM cards, the hardening spec, M2.5 |
+| Written for models | the LLM cards, the hardening plan, T2 tooling and E2 evidence |
 | Batteries included | crypto, codecs, compression, time zones, concurrency in `e.*` |
 
 The audience for the first year is not "developers". It is the people choosing what
@@ -142,8 +142,9 @@ the launch material and the sales deck in one.
 
 ## 7. Sequence
 
-1. Finish M2.5 hardening; ship the MCP server publicly, free, with the cards.
-2. Run the benchmark in section 6 and publish it, including where neper lost.
+1. Finish M2.5-core and the usable T2 slices; ship the agent interface publicly, free, with the cards.
+2. Run E2 and publish the benchmark, including where neper lost. A missed leadership
+   threshold withholds the claim, not subsequent compiler work.
 3. Hosted agent (3.1) once three to five outside teams use the free one on real work.
 4. Registry and enterprise tier (3.2) when the first of those teams asks for a
    private registry — they will name the moment.

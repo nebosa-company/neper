@@ -6,20 +6,33 @@ against a moving language or harness contract.
 
 **The labels name deliverables, not a simple numeric order.** The order is: S0, M0,
 `neper-0`, the M2 rewrite of the compiler in `neper-0`, M1 implemented inside that
-self-hosted compiler, the rest of M2 (`.em`, the pool and the own linker), M3 and M4.
+self-hosted compiler, the rest of M2 (`.em`, the pool and the own linker), the
+mandatory M2.5-core language/GPU-contract gate, M3 and M4. T2 agent tooling and E2
+comparative evaluation start after M2 and may proceed alongside backend work.
 M5 follows M4. Pacman P0/P1 may proceed after M2; P2/P3 and M6 completion follow M4
 independently of M5. The later library waves remain deliberately unnumbered. M1 and
 M2 overlap by design; every other dependency is stated at its milestone.
 
+The tracks are planned in
+[`post-m2-llm-hardening.md`](post-m2-llm-hardening.md). Only M2.5-core must be
+implemented and migrated with accepted closure evidence before M3. T2 tooling conformance and E2 rankings
+do not block compiler/backend milestones. This scheduling decision does not change
+the language accepted by the bootstrap or the existing M2 completion contract.
+
 The normative documents divide authority rather than duplicate it: [`spec.md`](spec.md)
 defines language semantics, [`grammar.ebnf`](grammar.ebnf) defines concrete syntax
 and the closed token/syntax-node registries, [`tooling.md`](tooling.md) and
-[`schemas/neper-v1.schema.json`](schemas/neper-v1.schema.json) define machine
+[`schemas/neper-v1.schema.json`](schemas/neper-v1.schema.json) define the normative v1 machine
 interfaces, [`diagnostics.md`](diagnostics.md) owns stable diagnostic codes,
 [`modules.json`](modules.json) owns the module/package plan, and
 [`module-apis.md`](module-apis.md) fixes proposed toolchain APIs. The prose grouping
 in [`modules.md`](modules.md) explains that machine plan. A change that crosses these
 boundaries updates every affected document and fixture in the same change.
+[`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) owns post-M2 requirement
+semantics; [`tooling-v2-draft.md`](tooling-v2-draft.md) is deliberately non-normative
+until T2 freezes a successor schema. [`hardening-tracks.json`](hardening-tracks.json)
+is the machine-readable authority for track membership and current status; prose
+tables explain it but do not override it.
 
 The product commitment follows `modules.json`'s ordered delivery tiers. `core` gates
 the first stable CPU release. `extended` modules are stable only once independently
@@ -35,7 +48,7 @@ models.
 - Resolve every contradiction among the language specification, grammar, tooling
   protocol, diagnostic registry, module plan, API catalogue, package-manager design
   and general-purpose verification plan. Record intentional tradeoffs in
-  [`DECISIONS.md`](../DECISIONS.md); do not leave behavior to an implementation
+  [`decisions.md`](decisions.md); do not leave behavior to an implementation
   choice.
 - Validate `grammar.ebnf` mechanically and give every grammar production an accepted
   fixture and every stated restriction a rejected fixture with a registered primary
@@ -44,7 +57,7 @@ models.
 - Validate every tooling record and document against
   `schemas/neper-v1.schema.json`. Add sequence, key-order, sorting, lossless-source,
   recovery and cross-record tests for constraints JSON Schema cannot express.
-- Freeze the one-heading/one-`neper`-fence API-extraction contract for all 107
+- Freeze the one-heading/one-`neper`-fence API-extraction contract for all 128
   toolchain modules. Check that `modules.json`, `modules.md` and `module-apis.md`
   contain the same names; that tiers are ordered, exhaustive and disjoint; that
   layers, direct dependencies, blockers, surfaces, schedules and milestones are
@@ -418,8 +431,12 @@ arity, mutability, control-flow and return rules fail before any call, while ope
 on an unknown type shape are deferred and rechecked in each concrete specialization.
 The cross-host corpus distinguishes valid dependent arithmetic, fields, indexing,
 iteration, switching, mutation, calls and literals from independent declaration errors
-and invalid concrete instances. The next increments close remaining front-end parity
-gaps before the self-hosted NIR and code-generation rewrite.
+and invalid concrete instances. Bootstrap/self-hosted accept/reject parity is now
+enforced over all 51 `tests/neper0` sources on Windows and Linux, including ranges,
+contextual zero values, enum discriminants, recursive aggregate layouts, nested
+aggregate literals, intrinsic aggregates and iterator protocols. Rejected fixtures
+emit byte-identical ordered versioned diagnostics from exact source-token spans on
+both hosts. The self-hosted NIR and code-generation rewrite is next.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
@@ -547,6 +564,9 @@ S0 generated-code benchmark has been rerun with no unexplained regression.
 
 - Rewrite the compiler in `neper-0`, compiled by the bootstrap; single-threaded at
   first, gaining the pool and the rest of M1 once it compiles itself
+- Bootstrap recovery path archived: a tagged revision whose C bootstrap still
+  builds the self-hosted compiler from a clean checkout on a machine with no `neper`
+  binary, with that revision's stage hashes recorded for Windows and Linux (D95)
 - Bootstrap compiler frozen, then deleted
 - Work-stealing thread pool, per-thread arenas, sharded intern table
 - Parallel parse phase, then function-granular parallel codegen
@@ -586,7 +606,122 @@ supported worker count and perturbed-schedule builds produce byte-identical
 deterministic artifacts; every M2 API matches source; and the language- and
 tool-complete release gates below pass.
 
+## M2.5 — language-safety and GPU-contract gate
+
+**In progress. Entry: M2 complete. Exit blocks M3.** Existing stage-B safety work
+counts only where its scoped closure evidence satisfies this gate.
+
+This gate is deliberately narrow. It owns H01–H07's language/resource semantics and
+H13/H21–H23's frozen GPU integration contracts. It does not wait for agent-host
+services, comparative model rankings or the complete tooling-v2 product.
+
+- Archive the reproducible M2 compiler/source before changing semantics.
+- Resolve and implement checked ownership/cleanup, region and container-view
+  validity, checked optimized execution, unsafe boundaries, scoped concurrency,
+  large-value aliasing, protocol strategy and explicit native error state.
+- Migrate the self-hosted compiler and affected delivered M2 libraries; pass the
+  applicable semantic, ABI, determinism, failure-injection and two-host conformance
+  fixtures.
+- Freeze the ownership/sharing, completion, cross-queue, range-lifetime,
+  staging/pipeline-cache, numerical and capability contracts that M3 must implement.
+  Design fixtures remain pending rather than being reported as device runtime tests.
+
+**Done when:** H01–H07, H13 and H21–H23 have closure records; selected language and
+ABI changes are normative and implemented; the compiler and affected M2 libraries
+are migrated reproducibly on Windows and Linux; and the M3 contracts and fixture
+manifest are frozen. No tooling-v2 ranking or external-agent service is an M3 entry
+condition.
+
+## T2 — agent tooling v2
+
+**Open. Entry: M2 complete. Does not block M3 and may proceed in parallel with
+M3.** Existing v1 context, plan, diagnostic and runner capabilities are predecessor
+inputs; the integrated version-2 contract and conformance closure remain open.
+
+[`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) owns the H requirements.
+[`tooling-v2-draft.md`](tooling-v2-draft.md) is the non-normative protocol draft;
+[`tooling.md`](tooling.md) remains the closed v1 authority until T2 freezes and ships
+a versioned successor. T2 owns the functional and conformance portions of H08–H11,
+H14–H20, H24, H26–H32, H34–H42 and H44. Deliver it as vertical slices:
+
+1. **T2.0 — foundations:** immutable snapshots, complete cache identities, bounded
+   request/result storage, cancellation, compact transport and hardened artifact
+   publication (H15/H16/H18/H24).
+2. **T2.1 — understand and check:** compiler-derived context, reusable semantic
+   queries, generated provenance, compiled guidance, unsafe enumeration, tiered
+   checks, optimization explanations and causal/recoverable diagnostics
+   (H08/H10/H11/H14/H19/H20/H26–H28/H30/H31). Freeze absolute latency/startup/
+   resource budgets before implementation; require a retained session only if finite
+   batch requests miss those budgets, never because E2 loses a comparison.
+3. **T2.2 — edit and test evidence:** transactional semantic plans, structured tests,
+   change contracts, flaky-test semantics, runtime failures and compatibility diffs
+   (H09/H17/H29/H32/H35/H39/H41/H42). It may produce a receipt-shaped evidence
+   package, but without T2.3 trust evidence its terminal state is `incomplete`, never
+   `verified`.
+4. **T2.3 — trusted verification:** implement H34/H36/H37/H40 in the reference host
+   executable `neper-agent-host`, owned in this repository under the planned
+   `tools/neper-agent-host/` component. It enforces policy and sandbox mediation,
+   binds environment identity and obligation coverage, and is the first slice allowed
+   to emit a scoped `verified` receipt.
+5. **T2.4 — integration and durable operation:** implement H38/H44 in the same host:
+   isolated parallel change bundles, integrated-snapshot revalidation and durable
+   authorized tasks across reconnect, approval and cancellation. The compiler declares
+   semantic facts and requested effects; the host owns authority, credentials,
+   isolation, worktrees and durable lifecycle.
+
+Each slice has its own schema/conformance closure and leaves a usable system. A later
+slice may extend an earlier schema only through the advertised version/capability
+mechanism. `verified` always means that every required obligation in one exact
+change contract passed for the named snapshot, policy and environment; it is never an
+unscoped claim of arbitrary semantic correctness.
+
+**Done when:** the frozen tooling-v2 schema and conformance corpus pass; all required
+T2 capabilities are discoverable; compiler, runner and host ownership boundaries are
+executable; restart/retrieval and security fixtures pass; and the canonical workflow
+can produce and independently validate a scoped receipt. Comparative leadership is
+not a T2 completion condition.
+
+## E2 — measured LLM-experience claim gate
+
+**Scheduled after the relevant T2 slices; never blocks M3 or later compiler/backend
+implementation.**
+
+The M2 baseline and some performance instrumentation already exist. They are inputs
+to E2, not a completed comparative claim.
+
+E2 owns H12, measured H20, H25, H33 and H43 plus the comparative acceptance clauses of
+H30–H34. It freezes workloads, models, tokenizers, environments, baselines, weights,
+oracles and statistical rules before candidate tuning; then reports correctness,
+escaped defects, latency, tokens, repair turns, runtime/resource distributions and
+performance obligations from complete trajectories.
+
+Two cohorts have different purposes. The **broad-generation cohort** is C, C++, Rust,
+Go, Python, Java and C# and measures general transfer without a leadership claim. The
+**registered agent-tooling cohort** is Go, Rust, TypeScript and Python and is the only
+cohort used by the five-category E2 comparison. Therefore every leadership statement
+is qualified as "among the registered agent-tooling cohort" and names its frozen
+manifest.
+
+“First or statistically tied for first” and “strictly better composite” govern only a
+versioned public claim tied to that benchmark manifest. A competitor, model or
+hardware change may expire or require rerunning the claim; it never reopens M2.5, T2,
+M3 or another completed implementation milestone.
+
+E2 evidence may propose a syntax or API spelling change but cannot authorize one.
+Adoption requires a separate versioned language/API milestone with normative edits,
+compatibility analysis and migration evidence; it is neither a T2 nor E2 closure
+condition and cannot move the language contract underneath concurrent M3 work.
+
+**Done when:** H12/H20/H25/H33/H43 evidence and all comparative H30–H34 results are
+reproducible, every failed/incomplete trajectory remains in the report, and the exact
+claim is supported. If the thresholds miss, publish the result and keep the
+superiority claim open without blocking implementation.
+
 ## M3 — GPU
+
+**Entry requirement:** M2.5-core is complete. M3 requires H01–H07, H13 and H21–H23,
+not T2 tooling conformance or E2 comparative rankings. M3 supplies actual
+device/runtime evidence for the contracts and fixtures frozen under H13/H21–H23.
 
 - `@gpu(X, Y, Z)` profile enforcement with call-chain diagnostics; device types,
   device slices and address spaces (`[]shared T`); `shared var` (spec §10, D37)
@@ -607,6 +742,15 @@ tool-complete release gates below pass.
   set, capability inference into the `.em` and the launch check
   — the implementation and documentation must match the exact `e.gpu` API fence in
   `module-apis.md`
+- Device selection: bounded `devices`, `DeviceInfo`/`DeviceKind`/`DeviceKey`, exact
+  `open_id`, and opening-time `info` (spec §10, D83). Expose names, capacity and
+  capabilities without treating ordinals as persistent IDs. Reject missing or
+  ambiguous keys and cross-device handles; never silently choose a substitute.
+  Test zero/one/many devices, duplicate names/keys, changed ordinals, hotplug,
+  unsupported floors, arena/limit failure and simultaneous devices. CPU/Vulkan
+  run in M3; CUDA/partition-identity cases run when M4 adds that backend. Require
+  a hardware-gated two-device integration job; CPU mocks are supplemental evidence,
+  not reported as multi-GPU hardware passes. GPU tests cannot silently CPU-fallback.
 - Device-callable inference: plain functions reached from a kernel compile for the
   device into the kernel-owning module's `.em` (spec §12, D24), with call-chain
   diagnostics on violations
@@ -659,13 +803,32 @@ and bidirectional C ABI fixtures; clean and incremental outputs remain determini
 the native debug path agrees with standard debugger locations on shared fixtures; and
 GP-09/GP-10 have been rerun for every new applicable backend.
 
+## Later agent-protocol work — unnumbered
+
+After the native v2 schema and verification receipt are stable, provide an optional
+ANCP export adapter if a maintained protocol version and a real client require it.
+The adapter translates native results without weakening snapshot identity,
+diagnostic causality, effects, safety, omissions or evidence; Neper's schema remains
+authoritative, and wholesale replacement by ANCP is not a roadmap goal.
+
+Implement H45 with the M6 package/release boundary: export the unchanged change
+contract, verification receipt, environment identity, dependency lock and artifact
+digests into the selected standards-based source/build provenance envelope. Add an
+optional signature when a cross-machine or CI trust boundary needs authenticated
+provenance. Key management, builder/source identity, trust policy and revocation
+belong to the release environment, not the source language. Self-reported model
+confidence, authorship or review claims are never verification evidence and are not
+scheduled as compiler features.
+
 ## Later toolchain-library waves — unnumbered
 
-The 75 entries with `schedule:"later"` and `milestone:null` in `modules.json` are
-real proposed toolchain modules, but this roadmap does not disguise them as part of
+The entries with `schedule:"later"` and `milestone:null` in `modules.json` are real
+proposed toolchain modules, but this roadmap does not disguise them as part of
 M4, M5 or M6. They may begin when their declared dependencies exist. Before each
 wave starts, its `surface:"planned"` API is frozen; delivery requires tests, extracted
 source/API equality and a same-change transition to `surface:"source"`.
+The core `e.cancel`/`e.text.utf8` exceptions have explicit T2 cross-cutting delivery
+obligations in `stdlib-hardening.md`; null Mn milestones do not waive that gate.
 Their position here does not order them before M5 or M6; independent waves may run
 in parallel once their prerequisites and specifications are ready.
 
@@ -677,43 +840,75 @@ in parallel once their prerequisites and specifications are ready.
   immutable CSR views.
 - **Extended pure algorithms, text and cryptography:** `e.algo.stat`, `e.algo.complex`,
   `e.algo.decimal`, `e.algo.bignum`, `e.algo.deflate`,
-  `e.algo.linalg.matrix`, `e.algo.linalg.tensor`, `e.text.utf8`, `e.text.unicode`,
+  `e.algo.linalg.matrix`, `e.algo.linalg.tensor`, `e.text.unicode`,
   `e.text.encoding`, `e.text.normalize`, `e.text.collate`, `e.text.regex`, `e.text.locale`,
-  `e.crypto.hash`, `e.crypto.aead`,
-  `e.crypto.sign`, `e.crypto.kx` and `e.crypto.random`. Preserve caller-owned allocation,
+  `e.crypto.hash`, `e.crypto.mac`, `e.crypto.kdf`, `e.crypto.aead`,
+  `e.crypto.sign`, `e.crypto.kx`, `e.crypto.random` and `e.crypto.x509`. Preserve caller-owned allocation,
   caller-supplied entropy and the declared dependency edges. Cryptographic delivery
   requires published standard vectors, malformed-input cases and verification of
   every API that explicitly promises constant-time behavior.
 - **Extended host and application services:** `e.text.io`, `e.task`, `e.time.calendar`, `e.tz`,
   `e.fs.mmap`, `e.fs.watch`, `e.concurrent.queue`, `e.concurrent.map`, `e.debug`,
   `e.metrics`, `e.log`, `e.cli`, `e.async`, `e.async.io`, `e.net`, `e.net.tls`,
-  `e.net.http` and `e.net.ws`.
+  `e.net.http`, `e.net.ws`, `e.db`, `e.test.support`, `e.test.coverage` and `e.test.fuzz`.
   These build over the M1/M2 platform boundary and must demonstrate cancellation,
   backpressure, bounded buffers, partial I/O, deterministic shutdown and no hidden
   allocation or entropy. They unlock the GP-04 service workload.
-- **Interchange formats:** `e.fmt.uri`, `e.fmt.mime`, `e.fmt.gzip`, `e.fmt.zstd`, `e.fmt.zip`,
-  `e.fmt.tar`, `e.fmt.yaml`, `e.fmt.xml`, `e.fmt.html`, `e.fmt.bson`, `e.fmt.msgpack` and
-  `e.fmt.protobuf`. These consume caller-provided slices/readers and writers, never
+- **Interchange formats:** `e.fmt.uri`, `e.fmt.mime`, `e.fmt.asn1`, `e.fmt.pem`,
+  `e.fmt.multipart`, `e.fmt.mail`, `e.fmt.quoted_printable`, `e.fmt.gzip`, `e.fmt.zstd`,
+  `e.fmt.bzip2`, `e.fmt.lzw`, `e.fmt.zlib`, `e.fmt.zip`, `e.fmt.tar`, `e.fmt.yaml`, `e.fmt.xml`,
+  `e.fmt.html`, `e.fmt.png`, `e.fmt.jpeg`, `e.fmt.webp`, `e.fmt.bson`, `e.fmt.msgpack` and
+  `e.fmt.protobuf`, plus `e.text.template` and its context-safe `e.fmt.html.template`
+  specialization. These consume caller-provided slices/readers and writers, never
   open resources themselves, and require malformed, streaming, bounds and round-trip
   corpora in addition to API equality. `e.fmt.html` additionally runs the pinned
   html5lib tokenizer and tree-construction fixtures for the WHATWG behavior frozen by
   that toolchain release.
+- **Stable pure images and codecs:** deliver extended `e.gfx.geometry`, `e.gfx.paint`,
+  `e.gfx.image`, `e.fmt.png`, `e.fmt.jpeg` and `e.fmt.webp` as one compatibility cohort under
+  `image-codec-conformance` (D84). Test independent decoders, pixel/stride/alpha
+  contracts and hostile inputs. This wave requires no GPU/window or GP-15 UI gate.
 - **Experimental collection conveniences:** `e.data.stack`, `e.data.queue` and
   `e.data.linked` remain available for workload evaluation but have no compatibility
   promise. `e.gpu.tensor` is likewise experimental, follows both M3 `e.gpu` and
   extended `e.algo.linalg.tensor`, and keeps every operation as an explicit queue
   submission. Promotion requires an applicable general-purpose workload and a
   recorded compatibility decision.
-- **Experimental declarative GPU UI:** pure `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.image`,
-  `e.text.shape`, `e.text.layout`, `e.ui.style` and `e.ui.layout` support `e.gfx.scene`,
+- **Experimental declarative GPU UI and widget library:** extended pure image/geometry/paint values
+  support experimental `e.text.shape`, `e.text.layout`, `e.ui.style`, `e.ui.layout`, `e.gfx.scene`,
   `e.asset`, `e.ui.asset`, `e.ui.window`, `e.ui.input`, `e.ui.widget`, `e.ui.animation`,
   `e.ui.accessibility`, `e.ui.testing` and `e.ui.app`. Delivery follows the staged vertical slice and exact
-  lifetime/reconciliation contracts in `ui-framework.md`; implementation remains
+  lifetime/reconciliation contracts in [`ui-framework.md`](ui-framework.md) and the
+  cross-platform catalogue in
+  [`widget-library-proposal.md`](widget-library-proposal.md). The machine-readable
+  pickup order is [`widget-plan.json`](widget-plan.json): a harness selects the first
+  incomplete item in the lowest phase whose phase and item blockers are complete,
+  then the first undelivered component in that item; blocked sibling items do not
+  prevent an independent ready item from being selected. `python
+  scripts/check_widget_plan.py --next`
+  reports that blocker or component. Phase 0 freezes the candidate `e.ui.control`,
+  `e.ui.collection`, `e.ui.overlay` and `e.ui.navigation` module identities and their
+  phase-1 API fences before source implementation. Each delivery records evidence in
+  the inventory and regenerates `progress.html`. Implementation remains
   blocked on reviewed embedded-asset linking, native-window, GPU-presentation and
-  accessibility primitives.
+  accessibility primitives. Phase 4 host-OS delivery additionally requires the
+  reviewed shell, notification, data-exchange, file-access, activation, lifecycle,
+  printing and permission blockers recorded in the widget plan to be resolved. It
+  includes cross-application/desktop drag and drop, clipboard/share exchange,
+  native file grants, associations and deep links, global shortcuts, background and
+  power/session integration, printing, and permission-gated hardware/security
+  services.
+
+### Algorithms and file formats
+
+The first semantic rewrite-coverage workstream is tracked in
+[`algorithm-format-coverage.md`](algorithm-format-coverage.md). It covers
+cryptography, statistics, serialization, compression, archives, media, and binary
+formats. Harness work must complete the A0 conformance foundations before claiming
+any A1/A2 capability is equivalent.
   GP-15 must pass before any module in this family is promoted.
 
-The 6 owner-qualified `x.*` reservations are actual vendor packages, not a
+The 9 owner-qualified `x.*` reservations are actual vendor packages, not a
 fifth wave. Each gets a separate package specification only after its upstream API
 version, supported targets, ownership rules and licensing boundary are selected.
 `x.neper.*` is forbidden: Neper-owned locale, URI/MIME, TLS, compression, archive and
@@ -789,7 +984,7 @@ when a relevant backend, ABI, module, package or protocol changes.
 | GP-01 self-hosted compiler | `neper-0` and M2 |
 | GP-02 CLI, GP-03 parallel executor, GP-06 streaming parser, GP-07 bounded cache, GP-13 binary format | M1 tooling plus the M2 library set |
 | GP-04 HTTP service | later `e.async`, `e.net` and `e.net.http` |
-| GP-05 database client, GP-08 plugin C ABI | M1 FFI, M4 dynamic linking and a selected external package/API |
+| GP-05 database client, GP-08 plugin C ABI | M1 FFI, M4 dynamic linking, `e.db`, and one of `x.sqlite.sqlite`, `x.oracle.mysql` or `x.postgresql.libpq` |
 | GP-09 SIMD codec | M1 SIMD; rerun for each M4 CPU backend |
 | GP-10 CPU/GPU numerical work | M3; rerun for M4 PTX, M5 Metal and later `e.gpu.tensor` |
 | GP-11 terminal application | platform support plus a separately specified terminal package owned by its actual provider |
@@ -797,7 +992,10 @@ when a relevant backend, ABI, module, package or protocol changes.
 | GP-14 image/audio pipeline | M2 concurrency, M4 target/FFI coverage and a separately specified media package |
 | GP-15 declarative GPU desktop app | experimental `e.asset`/`e.gfx.*`/`e.ui.*` family plus asset linking, native window, presentation and accessibility blockers |
 
-The four named release gates are cumulative:
+The four named release gates are cumulative. In addition, M2.5-core is the mandatory
+transition between completed M2 and M3. T2 and E2 are independent product and claim
+gates; neither is smuggled into the compiler milestone. None claims that the later
+general-purpose or GPU gates have passed:
 
 1. **Language-complete:** `spec.md` and `grammar.ebnf` have no unresolved
    contradiction; every syntax/semantic rule has planned conformance coverage;

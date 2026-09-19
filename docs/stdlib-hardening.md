@@ -8,14 +8,13 @@ This document owns the composition, migration and acceptance obligations below.
 
 ## Delivery boundary
 
-Complete M2 against its preserved contract. During M2.5 H01/H02/H07/H11/H17/H18,
-migrate delivered CPU surfaces to this contract, implement the common `e.cancel`
-primitive and basic `e.text.utf8`, and validate the whole next-contract catalogue.
-These two core additions retain `schedule:"later", milestone:null` because M2.5
-is a cross-cutting gate, not an added Mn module milestone; this document explicitly
-schedules their CPU delivery within that gate. Do not retroactively claim them in
-the M2 baseline. Core release/admission checks must include these cross-cutting
-obligations as well as the manifest's numbered milestones.
+Complete M2 against its preserved contract. M2.5-core migrates delivered CPU surfaces
+required by H01/H02/H04/H07 and implements the common `e.cancel` primitive plus basic
+`e.text.utf8`; T2 applies H11/H17/H18 catalogue, context and machine-interface work.
+These two core additions retain `schedule:"later", milestone:null` because they are
+cross-cutting deliveries, not added Mn module milestones. Do not retroactively claim
+them in the M2 baseline. Only the language/ABI migration required by M2.5-core blocks
+M3; T2 catalogue/tooling conformance proceeds independently.
 
 Future networking, cryptographic and test-support libraries remain independently
 delivered extended modules. Their exact API designs and conformance plans freeze
@@ -38,7 +37,7 @@ examples, generated metadata and future source together. An added module helper
 can invalidate an existing local name even if no call changed: H17's insertion and
 move plans must expose that impact, not only deletions or protocol lookup changes.
 
-Static validation checks the exact fragments and graph now. During M2.5, feed
+Static validation checks the exact fragments and graph now. During T2, feed
 extracted declarations plus their imports into the real parser/resolver in a
 declaration-validation mode; omission of function bodies is not permission to
 accept illegal parameter names. Dependent compiler-intrinsic metavariables retain
@@ -82,7 +81,8 @@ compatibility boundary, fixtures, measurements and remaining legacy limitation a
 Acceptance: file -> buffer -> decompressor -> JSON stream using only public APIs;
 nested buffered sinks; short writes; data plus error; flush failure after a prefix;
 empty input; abandoned traversal; no double-close and no borrowed view after reset.
-Run the delivered portion in M2.5; later codec branches activate on codec delivery.
+Run language/ABI cases in M2.5-core and catalogue/tooling cases in T2; later codec
+branches activate on codec delivery.
 
 ## SL03 — common control and honest cancellation
 

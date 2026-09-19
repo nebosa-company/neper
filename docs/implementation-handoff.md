@@ -1,14 +1,24 @@
 # Neper implementation handoff
 
-Status captured: 2026-09-06. Revised the same day after committing the `.em`
-correctness increment and the generic-instance identity increment that followed
-it.
+Status captured: 2026-09-06. **Historical snapshot; do not use it as current
+sequencing or status.** Revised the same day after committing the `.em` correctness
+increment and the generic-instance identity increment that followed it. Current
+track ownership and gates live in [`roadmap.md`](roadmap.md) and
+[`post-m2-llm-hardening.md`](post-m2-llm-hardening.md).
 
 This document is a continuation guide for a new development session. It records
 what is implemented, what is only designed, what is currently uncommitted, and
 the safest order for continuing. It is not a normative language specification.
 Normative requirements remain in [`spec.md`](spec.md), [`roadmap.md`](roadmap.md),
 [`module-apis.md`](module-apis.md), and [`modules.json`](modules.json).
+Experimental widget delivery is additionally ordered by
+[`widget-plan.json`](widget-plan.json) under the design in
+[`widget-library-proposal.md`](widget-library-proposal.md). Once the roadmap's UI
+prerequisites are complete, select the first incomplete item in the lowest unblocked
+phase whose item blockers are also complete, freeze any new public API before
+implementation, record delivered components
+and evidence, and regenerate `progress.html` in the same change. Run
+`python scripts/check_widget_plan.py --next` for the blocker or exact next component.
 
 ## 1. Resume snapshot
 
@@ -20,7 +30,8 @@ Normative requirements remain in [`spec.md`](spec.md), [`roadmap.md`](roadmap.md
 - M0 is complete.
 - M1 and M2 overlap by design. M1 completes inside the self-hosted compiler; it
   is not currently complete.
-- M2.5 is designed and scheduled, but must not start until M2 is complete.
+- Post-M2 work is split into M2.5-core, T2 and E2. None starts until M2 is complete;
+  only M2.5-core blocks M3.
 - The `.em` correctness feature formerly described in section 7 is committed as
   `88c20f3`. Section 7 now records the generic-instance increment that followed.
 
@@ -793,7 +804,7 @@ Two things worth knowing:
 `docs_` prefix that reads as a download artifact, and declared itself a "normative
 extension to `docs/spec.md` and `docs/tooling.md`" -- authority no other file in the
 set grants it, and which contradicts `spec.md`'s own preamble, where the post-M2
-design revision changes no current rule until versioned amendments land in M2.5.
+design revision changes no current rule until its responsible track lands a versioned amendment.
 
 It is renamed to `docs/llm-mcp-server.md`, tracked, and re-statused as a proposal.
 The body is unchanged; the whole edit is the Status block. That block records the
@@ -811,7 +822,7 @@ is a client over `neper index --json`, `neper parse --json` and `neper check`, s
 needs an owning milestone rather than a place in the specification.
 
 `post-m2-llm-hardening.md` now names it, which is the right host: the file is a
-proposal for the M2.5 gate, and that document is the gate. `tooling.md`, the other
+proposal for the T2 track, and that document assigns its owner. `tooling.md`, the other
 candidate, was uncommitted work in another session's hands (section 8), and this tree
 is shared rather than branched, so editing it would have raced that session.
 
@@ -1224,7 +1235,7 @@ needs general `T.cmp` protocol resolution first.
   it as the normative source.
 - Reconcile the progress site with the committed compiler state after each grouped
   implementation commit.
-- Keep M2.5 requirements scheduled but do not silently add them to the preserved
+- Keep post-M2 requirements in their scheduled tracks but do not silently add them to the preserved
   M2 completion baseline.
 
 ## 11. Known implementation constraints
@@ -1298,5 +1309,5 @@ source module. What remains:
 6. Update the machine module plan and progress site only when an exact surface is
    actually delivered and verified.
 
-Do not start M2.5 or M3 during this continuation. The immediate goal remains full,
+Do not start M2.5-core, T2, E2 or M3 during this continuation. The immediate goal remains full,
 evidence-backed M2 completion.

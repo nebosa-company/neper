@@ -1,6 +1,7 @@
 # Neper — LLM-processing hardening recommendations
 
-Status: adopted recommendation set, recorded 2026-09-06. This document distils the
+Status: adopted recommendation set, recorded 2026-09-06 and extended 2026-09-18.
+This document distils the
 post-M2 LLM review into a prioritized, concrete list of what a language must do to be
 **optimized for LLM processing end-to-end** — generate, search, edit, verify, repair —
 rather than merely *readable by the human reviewing model output*.
@@ -9,9 +10,10 @@ It adds no syntax, runtime facility or standard-library API. `spec.md`, `grammar
 `tooling.md`, `modules.md` and `decisions.md` remain authoritative. Items R01–R07 map
 onto the mandatory obligations H01–H25 in
 [`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) and sharpen their priority;
-items R08–R11 are new and are registered as H26–H29 there. Each recommendation names
-the problem it closes, the concrete direction, its mapping, and the acceptance rule it
-inherits or adds.
+items R08–R11 are registered as H26–H29 there. The toolchain landscape review in
+[`llm-agent-compiler-toolchain-research.md`](llm-agent-compiler-toolchain-research.md)
+adds R12–R16, registered as H30–H34. Each recommendation names the problem it closes,
+the concrete direction, its mapping, and the acceptance rule it inherits or adds.
 
 ## 1. Summary and priority order
 
@@ -28,11 +30,18 @@ inherits or adds.
 | R09 | Unsafe/escape-hatch enumeration as a review surface | P2 | H27 (new) |
 | R10 | LLM cards compiled from the grammar | P2 | H28 (new) |
 | R11 | Structured (AST-level) edits over raw spans | P2 | H29 (new) |
+| R12 | Tiered, snapshot-correct fast checks | P0 | H30 (new) |
+| R13 | Causal diagnostics with recoverable compact views | P0 | H31 (new) |
+| R14 | Structured test selection, evidence and summaries | P0 | H32 (new) |
+| R15 | Source and protocol token-pressure budgets | P0 | H33 (new) |
+| R16 | One coherent agent workflow and verified stop state | P0 | H34 (new) |
 
 P0 items block any claim that the language is "optimized for LLM processing"; P1 items
-block the M3 admission gate in practice even where the existing H-plan does not yet
-sequence them first; P2 items are lower-volume but close the difference between
-"readable by reviewers" and "operated on by models".
+block T2 conformance or the E2 claim in practice; they do not block M3 unless they are
+part of the narrow M2.5-core set. P2 items are lower-volume but close the difference between
+"readable by reviewers" and "operated on by models". R12–R16 make the comparative
+categories in the toolchain research explicit gates rather than inferred benefits of
+the earlier requirements.
 
 ## 2. R01 — Compiler-enforced ownership and lifetime (P0)
 
@@ -72,7 +81,7 @@ highest-leverage tooling item and is unimplemented.
 
 **Recommendation.**
 
-1. Deliver `neper context` as the **first** M2.5 tooling increment, before repair and
+1. Deliver `neper context` as the **first** T2 tooling increment, before repair and
    refactor, because H09/H17/H18 consume its output.
 2. Make provenance a required field on every returned fact —
    `compiler-proved` / `declared-and-checked` / `trusted-external` /
@@ -95,7 +104,7 @@ post-hoc gate.
 
 **Recommendation.**
 
-1. Stand up a reproducible token-cost harness *now*, before M2.5: fixed model families,
+1. Stand up a reproducible token-cost harness before E2: fixed model families,
    fixed tokenizer identities, fixed task corpus, reporting input/output/total tokens,
    tokens per non-comment line and per syntax node, and repair turns — the metrics
    already listed in `general-purpose-verification.md` §4.
@@ -243,13 +252,141 @@ compiler re-derive spans instead of the model guessing them.
 operation, applied transactionally, and verified by re-check; no edit is applied from
 a span that the compiler has not re-validated against the target snapshot.
 
-## 13. Documentation wiring applied
+## 13. R12 — Tiered, snapshot-correct fast checks (P0, new → H30)
+
+**Problem.** H10 and H14–H16 require responsive incremental work, but they do not fix
+the agent-facing operation that gets the smallest sound answer after an edit. A fast
+compiler is not a fast edit loop if every validation performs emission, linking, a
+workspace-wide body check or process startup.
+
+**Recommendation.** Expose versioned syntax, affected-semantic and workspace check
+scopes over overlays and immutable snapshots. None performs code generation or
+linking. Each reports time to first diagnostic, total latency, checked/reused units,
+completeness and the exact snapshot. Reuse the same resolver and checker used by a
+build. Batch requests first; freeze an absolute T2 warm-latency, startup and resource
+budget before implementation, and deliver a bounded cancellable retained session with
+identical results only if finite batch requests cannot meet it. Competitor rankings do
+not change T2 scope.
+
+**Acceptance.** On the pre-registered small, large, broken-edit and edit/revert
+workloads, warm p50/p95 latency and first-diagnostic latency meet the frozen T2 budget.
+For the E2 claim they are statistically first or tied for first among the registered
+Go, Rust, TypeScript and Python agent-tooling cohort, subject to the same correctness
+oracle. Clean, incremental, batch and retained
+execution return equivalent diagnostics for the same snapshot; no cancelled or stale
+request publishes success.
+
+## 14. R13 — Causal diagnostics with recoverable compact views (P0, new → H31)
+
+**Problem.** Neper v1 has stable codes, exact spans, related sites and preconditioned
+fixes, but the common stream still lacks a diagnostic identity/causal graph, explicit
+dependent-cascade counts, sufficiently precise fix applicability, and a durable way to
+recover evidence omitted from the compact response without rerunning the compiler.
+
+**Recommendation.** Make every v2 diagnostic a normalized object with an invocation-
+local ID and a versioned position-independent fingerprint, primary cause or parent,
+phase, stable code, severity, exact span, typed semantic fields and role-labelled
+related spans. Put stable compact repair hints on diagnostics and fetch full H29 plans
+only on demand. Plans separate mechanical applicability from execution safety, label
+every tool action's workspace, project-execution and external effects, carry complete
+preconditions and require verification. Default agent views return independent root
+causes and counts, not duplicated excerpts or cascades. Every omission names a
+content-addressed, snapshot-bound complete result that remains readable for the
+advertised lifetime.
+
+**Acceptance.** Every diagnostic fixture is repairable without parsing human prose;
+dependent errors point to their primary cause; fingerprints survive offset-only edits
+but not changed anchors; compact and complete views have the same independent-error
+set; hint-only output stays bounded; ambiguous or partial plans never apply; every
+automatic fix is preconditioned and revalidated; effectful commands cannot be
+presented as effect-free; and no benchmark reruns a check solely to recover output
+that the compact view omitted.
+
+## 15. R14 — Structured test selection, evidence and summaries (P0, new → H32)
+
+**Problem.** Neper discovers and isolates tests and emits JSON, but v1 returns one
+record for every passing test and places arbitrary stdout/stderr inline. It does not
+normalize build/setup failure, cache provenance, assertion values or affected-set
+completeness into one agent-oriented contract.
+
+**Recommendation.** Version the test protocol with exact-test, module, affected-set
+and full-suite plans. A plan records why every test was selected, selection
+completeness and cached/executed status. The default result collapses passes into
+counts and returns detailed records only for failures. It distinguishes compile,
+setup, assertion, returned-error, trap, crash, timeout and cancellation; preserves
+structured expected/actual values where the assertion helper knows them; and stores
+large output as retrievable snapshot-bound evidence.
+
+**Acceptance.** Targeted and affected runs execute no unselected test; incomplete
+impact widens conservatively. Default all-pass output is constant-size apart from
+fixed metadata. Every failure has a stable identity, declaration/assertion location,
+outcome and complete retrievable evidence. Cached passes are never represented as
+new executions, and periodic full suites detect deliberately planted selection bugs.
+
+## 16. R15 — Source and protocol token-pressure budgets (P0, new → H33)
+
+**Problem.** H25/H26 measure tokenizer cost, but source compactness, context size,
+diagnostic size, test output and repeat retrieval are not yet one budgeted product
+property. Optimizing syntax alone can lose when unfamiliarity or weak diagnostics
+causes another repair turn.
+
+**Recommendation.** Budget and report source, guidance, context, edit, diagnostic,
+test and recovery tokens separately and as total tokens per independently verified
+success. Freeze default byte/token budgets for the language card and every agent view.
+Retain full evidence by reference instead of deleting it. Adopt a shorter spelling or
+schema projection only when both supported model families reduce total verified cost
+without worse correctness, first-pass checking, unsafe additions or unrelated diffs.
+
+**Acceptance.** The grammar-versioned report reproduces every component and result
+reference. Neper is statistically first or tied for first on source-token pressure
+and total interaction tokens among the registered agent-tooling cohort for the held-out
+tasks. No category is won by hiding failed runs, omitted evidence, setup tokens or
+reruns. E2 may propose a syntax/API change from this evidence, but adoption requires a
+separate versioned language/API milestone with normative and migration evidence;
+character count alone is never sufficient.
+
+## 17. R16 — One coherent agent workflow and verified stop state (P0, new → H34)
+
+**Problem.** Individual commands can be excellent while the product remains costly
+to drive. An agent needs one capability handshake, one snapshot identity and one
+deterministic generate/edit/check/test/verify loop, including an unambiguous point at
+which it must stop editing.
+
+**Recommendation.** The v2 tool family must advertise the canonical workflow and
+use one semantic graph, source identity, snapshot, result store and status vocabulary
+across context, edits, formatting, checks, tests and builds. A final verification
+record names the snapshot, requested obligations, executed and cached checks/tests,
+omissions, skipped/unproved obligations, complete-result references and one terminal
+state: `verified`, `failed`, `incomplete` or `cancelled`. T2.2 may emit the evidence
+package but no state stronger than `incomplete`; the T2.3 `neper-agent-host` binds
+enforced policy, environment and coverage before emitting `verified`. Finite CLI,
+batch and any
+retained session are transport choices over the same semantics. Persist that result
+as a canonical content-addressed verification receipt whose deterministic proof core
+binds exact tool/profile identities, evidence hashes and unsafe/unproved state and can
+be validated without rerunning the work; subjective confidence or self-declared
+authorship/review is not evidence.
+
+**Acceptance.** A harness can discover and execute the full loop without undocumented
+glue or parsing text. It stops on `verified` unless given a new obligation. Altered
+source, tool identity, evidence or unsafe inventory invalidates a receipt; only an
+intact fully evidenced receipt verifies. On the
+held-out benchmark Neper is first or statistically tied for first among the registered
+agent-tooling cohort in check latency,
+diagnostic repair, structured testing and source/token pressure, and strictly improves
+the composite time-and-token cost per verified success over the best eligible
+reference in both model families without increasing escaped defects.
+
+## 18. Documentation wiring applied
 
 | Change | Location |
 |---|---|
-| New recommendation set R01–R11 | this document |
-| Register R08–R11 as H26–H29; pointer at head | `post-m2-llm-hardening.md` |
-| M2.5 reference and H26–H29 scope | `roadmap.md` |
-| Token-cost steering note in §4 | `general-purpose-verification.md` |
-| D82 reference updated to H01–H29 | `decisions.md` |
+| Recommendation set R01–R16 | this document |
+| Register R08–R16 as H26–H34; pointer at head | `post-m2-llm-hardening.md` |
+| T2/E2 sequencing and H26–H34 scope | `roadmap.md` |
+| Token and five-category agent-experience gates in §4 | `general-purpose-verification.md` |
+| Planned v2 agent contract | `tooling-v2-draft.md` |
+| Machine-readable track ownership/status and reference host | `hardening-tracks.json`, planned `tools/neper-agent-host/` |
+| Operational implementation requirements H35–H44 and later H45 provenance bridge | `post-m2-llm-hardening.md`, `roadmap.md`, `tooling-v2-draft.md` |
+| D82 implementation-plan reference updated to H01–H45 | `decisions.md` |
 | Document index entry | `README.md` |

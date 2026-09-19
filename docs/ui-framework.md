@@ -4,6 +4,9 @@ Status: experimental architecture proposal. The exact public declarations live i
 [`module-apis.md`](module-apis.md); module identities, tiers, dependency edges and
 blockers live in [`modules.json`](modules.json).
 
+The proposed cross-platform component catalogue, adaptive desktop/mobile behavior and
+delivery order live in [`widget-library-proposal.md`](widget-library-proposal.md).
+
 ## 1. Goal and boundary
 
 The framework builds portable desktop applications from declarative Neper values and
@@ -72,9 +75,9 @@ Every input path, byte size and SHA-256 is recorded in the canonical build manif
 
 `e.ui.asset` groups physical entries by their `base` attribute and deterministically
 selects locale, theme and display-scale variants. Fonts become zero-copy
-`e.text.shape.Font` values. Images use a caller-supplied decoder so PNG, JPEG or a
-project-specific format remains a separate concern; decoded pixels occupy a caller
-scratch arena and are uploaded before it resets. A caller-sized cache owns the GPU
+`e.text.shape.Font` values. Images use a caller-supplied decoder; standard adapters use
+`e.fmt.png`, `e.fmt.jpeg` or `e.fmt.webp`, while project-specific formats remain separate.
+Decoded pixels occupy a caller scratch arena and are uploaded before it resets. A caller-sized cache owns the GPU
 textures and explicitly evicts or releases them. There is no global asset manager.
 
 ```neper
@@ -267,6 +270,12 @@ ordering, focus and pointer capture, resize/DPI changes, device loss, every reso
 limit, accessibility tree/action fixtures, and leak-free repeated open/close. GPU
 backends are compared against the CPU reference with declared per-pixel tolerances.
 
-All seventeen asset/UI modules remain experimental until a general-purpose application
+The remaining asset/text/UI/scene modules remain experimental until a general-purpose application
 workload builds a multi-window, keyboard-accessible application on Windows, Linux and
 macOS and records stable memory, frame-time and compatibility results.
+
+The pure `e.gfx.geometry`, `e.gfx.paint` and `e.gfx.image` dependency closure is instead
+extended and stabilizes together with `e.fmt.png`, `e.fmt.jpeg` and `e.fmt.webp` under
+`image-codec-conformance` (D84, `stdlib-hardening.md` SL10). It needs no native
+window, GPU initialization or GP-15 promotion. The UI consumes that stable value
+layer; its own rendering/presentation and lifecycle contracts remain experimental.
