@@ -13598,3 +13598,12 @@ caller can no longer use or transfer those slots, and its exit owes nothing for 
 
 The transfer is explicit in the callee signature and the full-range spelling. An
 ordinary borrowed slice call does not enter this path.
+
+## D725 -- Constant-offset owned slices transfer one suffix
+
+Passing `array[N..]` to an `own []T` parameter, with a comptime `N`, moves exactly
+the tracked slots from `N` to the fixed-array end. Slots before `N` remain owned by
+the caller and retain their original cleanup obligations.
+
+A runtime lower bound cannot identify that partition and is rejected as a partial
+move. This keeps the rule finite and makes caller and callee obligations disjoint.

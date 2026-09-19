@@ -3769,6 +3769,9 @@ i += 1 }`, with the same slice indexed by `i`; consuming its element discharges 
 collective obligation (D723). An unqualified `[]T` parameter remains borrowed.
 Passing a tracked fixed array as `array[..]` to an `own []T` parameter validates and
 moves every obligated slot into that collective obligation (D724).
+A comptime suffix `array[N..]` transfers exactly slots `N` through the end and leaves
+the earlier slots owned by the caller; a runtime lower bound is a forbidden partial
+move (D725).
 `meta.fields[T]()` is empty when `T`
 is a resource named by another module; its
 representation is not a reflective serialization surface. Format-codec rejection

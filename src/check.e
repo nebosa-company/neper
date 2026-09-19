@@ -14658,14 +14658,26 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
 fn resource_consume_full_slice(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (err, bool) {
     let node = tree.nodes[node_index]
     var bracket: BracketInfo = zero
-    if read_bracket(c, tree, node, &bracket) != ok || !bracket.range || bracket.child_count != 1usize { ret (ok, false) }
+    if read_bracket(c, tree, node, &bracket) != ok || !bracket.range || bracket.child_count == 0usize || bracket.child_count > 2usize { ret (ok, false) }
     let base = tree.nodes[bracket.base]
     if base.kind != .NameExpr { ret (ok, false) }
     let token = c.tokens[usize(base.token_start)]
     if token.kind != .Identifier { ret (ok, false) }
     let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
     if !found || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (ok, false) }
-    var at = 0usize
+    var first = 0usize
+    if bracket.child_count == 2usize {
+        var range_at = usize(base.token_end)
+        while range_at < usize(node.token_end) && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
+        if range_at == usize(node.token_end) || usize(tree.nodes[bracket.first].token_start) > range_at { ret (ok, false) }
+        let (lower, lower_constant) = resource_index_value(c, g, tree, module_index, bracket.first)
+        if !lower_constant || lower > c.resources[local_index].fields.len {
+            record_failure_related(c, module_index, node, .ResourcePartialMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+            ret (ResourceViolation, true)
+        }
+        first = lower
+    }
+    var at = first
     while at < c.resources[local_index].fields.len {
         let byte = c.resources[local_index].fields[at]
         if field_owed(byte) && field_state(byte) != resource_owned {
@@ -14675,7 +14687,7 @@ fn resource_consume_full_slice(c: *Checker, g: *graph.Graph, tree: *parse.Tree, 
         }
         at += 1usize
     }
-    at = 0usize
+    at = first
     while at < c.resources[local_index].fields.len {
         let byte = c.resources[local_index].fields[at]
         if field_owed(byte) {

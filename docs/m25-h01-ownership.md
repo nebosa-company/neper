@@ -489,6 +489,10 @@ obligation; other loop shapes remain partial moves.
 every obligated slot into the callee's collective slice obligation. Each source slot
 retains the transfer site as provenance for later-use diagnostics.
 
+**D725 follow-up.** A comptime lower-bound slice passed to an `own []T` parameter
+moves exactly that suffix. Earlier slots remain the caller's obligations; a runtime
+lower bound is rejected because it cannot form two precise ownership partitions.
+
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
 returns a plain `Handle` view when callers need the platform value, so `File.raw`
