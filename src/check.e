@@ -728,6 +728,9 @@ type Checker = struct {
     active_owner_set: bool,
     // The instance whose body is being checked (D543), for the request chain.
     active_instance: usize,
+    // The one-based `@noescape` parameter of the body currently being checked.
+    // Zero outside that body, including the lowering walk.
+    active_noescape: usize,
     generic_declaration: bool,
     loop_depth: usize,
     break_depth: usize,
@@ -902,6 +905,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.active_arguments = false
     c.active_owner_module = 0usize
     c.active_owner_set = false
+    c.active_noescape = 0usize
     c.generic_declaration = false
     c.loop_depth = 0usize
     c.break_depth = 0usize
@@ -8594,6 +8598,18 @@ fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // the cache holds is no longer about this scope.
 fn begin_call_scope(c: *Checker) {
     c.call_generation += 1usize
+    c.active_noescape = 0usize
+}
+
+fn check_noescape_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, info: CallInfo, child_index: usize, child_position: usize, parameter_type: Type) -> err {
+    if c.active_noescape == 0usize || !holds_pointer(c, parameter_type, 0usize) { ret ok }
+    let local = c.active_noescape - 1usize
+    if !expression_borrows_from(c, g, tree, module_index, child_index, local) { ret ok }
+    if !info.indirect && !info.thread_create && function_noescape_from(c, info.function) == child_position { ret ok }
+    var name = ""
+    if local < c.local_count { name = c.locals[local].name }
+    record_failure(c, module_index, tree.nodes[child_index], .NoEscapeContract, name, "")
+    ret ResourceViolation
 }
 
 fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
@@ -8945,6 +8961,8 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                             record_failure(c, module_index, node, .VariadicArgument, function.name, crossing_spelling(variadic_type))
                             ret (info, TypeMismatch)
                         }
+                        let noescape_error = check_noescape_argument(c, g, tree, module_index, info, child_index, child_position, variadic_type)
+                        if noescape_error != ok { ret (info, noescape_error) }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -8957,6 +8975,8 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         if !has_parameter { ret (info, ArgumentCount) }
                         let (indirect_argument, indirect_argument_error) = check_expr(c, g, tree, module_index, child_index, indirect_parameter)
                         if indirect_argument_error != ok { ret (info, indirect_argument_error) }
+                        let noescape_error = check_noescape_argument(c, g, tree, module_index, info, child_index, child_position, indirect_parameter)
+                        if noescape_error != ok { ret (info, noescape_error) }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -9067,6 +9087,8 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         if child_position == 3usize { parameter_type = make_type(.Integer, "usize", function.module_index) }
                         let (entry_type, entry_error) = check_expr(c, g, tree, module_index, child_index, parameter_type)
                         if entry_error != ok { ret (info, entry_error) }
+                        let noescape_error = check_noescape_argument(c, g, tree, module_index, info, child_index, child_position, parameter_type)
+                        if noescape_error != ok { ret (info, noescape_error) }
                         if child_position == 1usize { info.thread_entry = entry_type }
                         child_position += 1usize
                         at += 1usize
@@ -9109,6 +9131,8 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                     }
                     let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, parameter_type)
                     if argument_error != ok { ret (info, argument_error) }
+                    let noescape_error = check_noescape_argument(c, g, tree, module_index, info, child_index, child_position, parameter_type)
+                    if noescape_error != ok { ret (info, noescape_error) }
                 }
             }
             child_position += 1usize
@@ -12864,6 +12888,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     c.block_depth = 0usize
     c.pins_live = 0usize
     c.affine_answer_valid = false
+    c.active_noescape = function_noescape_from(c, function)
     c.body_returns_err = function.return_count == 1usize && c.return_types[function.first_return].kind == .Err
     var parameter_index = 0usize
     while parameter_index < function.parameter_count {

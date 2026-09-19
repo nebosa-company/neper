@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-SAFETY-0020","message":"@noescape must name one borrowed pointer-bearing parameter and the body must not let it escape","symbol":"bytes","span":{"source":{"root":"operand","path":"regions_noescape_contract_callback.e"},"byte_start":147,"byte_end":152,"line":4,"column":14,"end_line":4,"end_column":19,"column_utf16":14,"end_column_utf16":19},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}
