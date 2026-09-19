@@ -6,6 +6,7 @@ use e.mem
 use e.os
 use e.io
 use e.str
+use e.test.support
 
 error Failed
 
@@ -168,5 +169,19 @@ fn main(a: *mem.Arena) -> err {
     if flush_error != ok { ret flush_error }
     if flushed_state.off != 4usize { ret Failed }
     if !str.eq(flushed_buffer[0usize..4usize], "held") { ret Failed }
+
+    // A failed flush keeps only the unwritten suffix. Retrying therefore cannot
+    // duplicate the prefix that the sink accepted with the first error.
+    let flush_steps: [2]support.WriteStep = [2]support.WriteStep{ support.WriteStep { max_bytes: 2usize, failure: Failed }, support.WriteStep { max_bytes: 4usize, failure: ok } }
+    var (scripted, scripted_error) = support.scripted_writer(a, flush_steps[..], 8usize)
+    if scripted_error != ok { ret scripted_error }
+    var (retry_handle, retry_handle_error) = io.buffered_writer(a, support.writer(&scripted), 4usize)
+    if retry_handle_error != ok { ret retry_handle_error }
+    var retry_sink = io.buffered_sink(&retry_handle)
+    if io.write_all(&retry_sink, "held") != ok { ret Failed }
+    if io.flush(&retry_sink) != Failed { ret Failed }
+    if !str.eq(support.captured(&scripted), "he") { ret Failed }
+    if io.flush(&retry_sink) != ok { ret Failed }
+    if !str.eq(support.captured(&scripted), "held") { ret Failed }
     ret ok
 }

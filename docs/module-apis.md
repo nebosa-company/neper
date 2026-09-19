@@ -1856,6 +1856,7 @@ fn read_exact(r: *Reader, dst: []u8) -> err
 fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err)
 fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, err)
 fn write(w: *Writer, src: []const u8) -> (usize, err)
+fn write_all_progress(w: *Writer, src: []const u8) -> (usize, err)
 fn write_all(w: *Writer, src: []const u8) -> err
 fn flush(w: *Writer) -> err
 fn seek(s: *Seeker, off: i64, whence: os.SeekWhence) -> (u64, err)

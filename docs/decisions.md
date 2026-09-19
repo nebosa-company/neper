@@ -12882,3 +12882,15 @@ period in which the hidden-reference no-write contract could still be assumed, s
 compiler rejects it before reading sections or verifying its checksum. Both self-host
 suites mutate a current artifact's version back to 10 and require
 `UnsupportedVersion`.
+
+## D655 -- Buffered flushes retain only the unwritten suffix
+
+`e.io.write_all_progress` returns the exact prefix accepted before an error. A
+buffered writer uses that count to discard the accepted prefix and keep only the
+unwritten suffix before returning the failure. Retrying a flush therefore cannot
+duplicate bytes already accepted by the wrapped sink.
+
+The `io_streams` fixture drives a deterministic sink that accepts two bytes and
+fails, then accepts the retry. Its capture must be `held`, not `heheld`, on Windows
+and Linux. The existing `write_all` surface remains the convenience form that drops
+the count when its caller has no recovery state to maintain.

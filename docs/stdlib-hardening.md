@@ -65,7 +65,9 @@ bytes with an error. Never retry already accepted bytes after failed flush. Clos
 or resetting a borrowed wrapper/source requires completion of outstanding uses.
 At the host boundary, `os.read_detail` and `os.write_detail` preserve the same count
 while copying native provenance directly into caller-owned data (D614); generic
-`e.io` callback propagation remains a separate adapter design problem.
+`e.io` callback propagation remains a separate adapter design problem. D655 first
+closes the partial-write half: buffered flushes discard the accepted prefix before
+returning an error, and expose the count through `write_all_progress`.
 
 Acceptance: file -> buffer -> decompressor -> JSON stream using only public APIs;
 nested buffered sinks; short writes; data plus error; flush failure after a prefix;

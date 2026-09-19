@@ -284,14 +284,21 @@ fn write(w: *Writer, src: []const u8) -> (usize, err) {
     ret (count, ok)
 }
 
-fn write_all(w: *Writer, src: []const u8) -> err {
+// The counted form is the primitive for adapters that must retain an unwritten
+// suffix after a short write plus an error.
+fn write_all_progress(w: *Writer, src: []const u8) -> (usize, err) {
     var written = 0usize
     while written < src.len {
         let (count, write_error) = write(w, src[written..])
-        if write_error != ok { ret write_error }
         written += count
+        if write_error != ok { ret (written, write_error) }
     }
-    ret ok
+    ret (written, ok)
+}
+
+fn write_all(w: *Writer, src: []const u8) -> err {
+    let (written, write_error) = write_all_progress(w, src)
+    ret write_error
 }
 
 fn flush(w: *Writer) -> err {
@@ -422,7 +429,15 @@ fn buffered_write(ctx: *void, src: []const u8) -> (usize, err) {
 fn buffered_writer_flush(ctx: *void) -> err {
     var state = mem.cast[*BufferState](ctx)
     if state.len > 0usize {
-        let write_error = write_all(&state.sink, state.buffer[0usize..state.len])
+        let (written, write_error) = write_all_progress(&state.sink, state.buffer[0usize..state.len])
+        if written > 0usize {
+            var at = written
+            while at < state.len {
+                state.buffer[at - written] = state.buffer[at]
+                at += 1usize
+            }
+            state.len -= written
+        }
         if write_error != ok { ret write_error }
         state.len = 0usize
     }
