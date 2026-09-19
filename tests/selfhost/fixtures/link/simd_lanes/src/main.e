@@ -395,6 +395,52 @@ fn operators() {
     if f.lanes[0] != 0.0 { os.exit(98) }
 }
 
+// Section 4's shifts, which are packed when the count is one the compiler knows: the
+// baseline shifts sixteen-, thirty-two- and sixty-four-bit lanes by an immediate, all
+// three ways but the arithmetic right shift of a sixty-four-bit lane, and a byte lane
+// not at all. Every check has distinct lanes, so a form that shifted the wrong lane
+// width, or read past the vector, is caught at one end or the other.
+fn shifts() {
+    let wa = Vec[i16, 8]{ 1i16, -2i16, 3i16, -4i16, 5i16, -6i16, 7i16, -32768i16 }
+    let wl = wa << 2u32
+    if wl[0] != 4i16 || wl[1] != -8i16 || wl[7] != 0i16 { os.exit(150) }
+    // A signed lane shifts its sign in, which is a different instruction from the one
+    // an unsigned lane of the same width takes.
+    let wr = wa >> 1u32
+    if wr[1] != -1i16 || wr[3] != -2i16 || wr[6] != 3i16 { os.exit(151) }
+    let ua = Vec[u16, 8]{ 65535u16, 1u16, 2u16, 3u16, 4u16, 5u16, 6u16, 32768u16 }
+    let ur = ua >> 3u32
+    if ur[0] != 8191u16 || ur[1] != 0u16 || ur[7] != 4096u16 { os.exit(152) }
+    // Sixty-four-bit lanes shift left and right unsigned; the arithmetic right shift is
+    // the one shape of the three the baseline has no instruction for, so it keeps the
+    // lane loop and has to answer the same.
+    let qa = Vec[u64, 2]{ 18446744073709551615u64, 1u64 }
+    if (qa >> 60u32)[0] != 15u64 || (qa << 63u32)[1] != 9223372036854775808u64 { os.exit(153) }
+    let sa = Vec[i64, 2]{ -16i64, 48i64 }
+    if (sa >> 2u32)[0] != -4i64 || (sa >> 2u32)[1] != 12i64 { os.exit(154) }
+    // A count of zero is still a shift, and the width less one is the largest count a
+    // lane admits.
+    let za = Vec[i32, 4]{ -1i32, 2i32, 3i32, 4i32 }
+    if (za << 0u32)[0] != -1i32 || (za >> 31u32)[0] != -1i32 || (za >> 31u32)[3] != 0i32 { os.exit(155) }
+    // A count the compiler does not know keeps the lane loop, with the check that traps
+    // on a count the width does not admit, and answers the same.
+    let n = u32(za[1])
+    if (za << n)[1] != 8i32 { os.exit(156) }
+    // Byte lanes have no packed shift at all, so they keep the lane loop too.
+    let ba = Vec[u8, 16]{ 1u8, 2u8, 4u8, 8u8, 16u8, 32u8, 64u8, 128u8, 255u8, 3u8, 5u8, 9u8, 17u8, 33u8, 65u8, 129u8 }
+    if (ba >> 1u32)[8] != 127u8 || (ba << 1u32)[7] != 0u8 { os.exit(157) }
+    // Thirty-two bytes are two chunks with the one count in each, so a lane written in
+    // the second chunk is shifted like one in the first.
+    var wd = simd.splat[Vec[i32, 8]](3i32)
+    wd[0] = -8i32
+    wd[4] = 64i32
+    wd[7] = -1i32
+    let ws = wd >> 1u32
+    if ws[0] != -4i32 || ws[3] != 1i32 || ws[4] != 32i32 || ws[7] != -1i32 { os.exit(158) }
+    let wsl = wd << 4u32
+    if wsl[0] != -128i32 || wsl[3] != 48i32 || wsl[4] != 1024i32 || wsl[7] != -16i32 { os.exit(159) }
+}
+
 fn first_two[V: type](v: V) -> f64 {
     ret f64(v[0]) + f64(v[1])
 }
@@ -444,6 +490,7 @@ fn main() {
     conversions()
     bit_intrinsics()
     operators()
+    shifts()
     spellings()
     shuffles()
     os.exit(0)

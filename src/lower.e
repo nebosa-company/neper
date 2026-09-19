@@ -5232,9 +5232,10 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // one byte per lane, so its sixteen lanes are sixteen bytes, its eight the register's
 // low half, its four the low quarter and its two the low eighth, and its thirty-two or
 // sixty-four whole registers' worth again.
-// Everything else keeps the lane loop below: `f16`, the shifts, and `*%` on any lane
-// but the sixteen-bit one, the only packed multiply SSE2 has. The second return is how
-// many sixteen-byte chunks the operands are.
+// Everything else keeps the lane loop below: `f16` and `*%` on any lane but the
+// sixteen-bit one, the only packed multiply SSE2 has. The shifts have their own table
+// below, since their count is in the instruction. The second return is how many
+// sixteen-byte chunks the operands are.
 // ponytail: the sixteen-byte baseline only; `--cpu` widens this table to AVX.
 fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, usize, bool) {
     // Sixteen bytes is a whole register, thirty-two and sixty-four are two and four of
@@ -5290,6 +5291,46 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
     ret (nir.vector_binary_immediate(operation, lane_code, lanes / chunks), chunks, true)
 }
 
+// The shifts one packed instruction covers: SSE2 shifts sixteen-, thirty-two- and
+// sixty-four-bit lanes by a count and a byte lane not at all, and its arithmetic right
+// shift stops at thirty-two bits -- there is no `psraq`. The count is inside the
+// instruction rather than in a register, so it has to be one the compiler knows, and it
+// has to be below the lane's width, which is what section 11's `shift` requires of it
+// anyway: a count that is neither keeps the lane loop, and with it the check that traps
+// on a count the width does not admit.
+// ponytail: a constant count only; a count in a register is `psllw xmm, xmm` and one
+// scalar check ahead of it.
+fn vector_packed_shift(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode, count: usize, count_known: bool) -> (usize, usize, bool) {
+    if !count_known || lane.kind != .Integer || lane_size == 1usize { ret (0usize, 0usize, false) }
+    if count >= lane_size * 8usize { ret (0usize, 0usize, false) }
+    let bytes = lanes * lane_size
+    if bytes != 16usize && bytes != 32usize && bytes != 64usize { ret (0usize, 0usize, false) }
+    let signed = lane.name.len != 0usize && lane.name[0usize] == 105u8
+    var operation = 12usize
+    if opcode == .ShiftRight {
+        operation = 13usize
+        if signed {
+            if lane_size == 8usize { ret (0usize, 0usize, false) }
+            operation = 14usize
+        }
+    }
+    var lane_code = 1usize
+    if lane_size == 4usize { lane_code = 2usize }
+    if lane_size == 8usize { lane_code = 3usize }
+    let chunks = bytes / 16usize
+    ret (nir.vector_shift_immediate(operation, lane_code, lanes / chunks, count), chunks, true)
+}
+
+// The constant a value just lowered is, if it is one: a shift count that folded to a
+// `ConstInteger` is the count the packed form encodes. Anything else -- a variable, or
+// a constant reached through instructions emitted after it -- keeps the lane loop.
+fn constant_lowered(builder: *nir.Builder, value: usize) -> (usize, bool) {
+    if builder.instruction_count == 0usize { ret (0usize, false) }
+    let last = builder.instructions[builder.instruction_count - 1usize]
+    if last.opcode != .ConstInteger || !last.has_result || last.result != value { ret (0usize, false) }
+    ret (last.immediate, true)
+}
+
 // `VectorBinary` over operands that may be more than one register wide: one instruction
 // per sixteen-byte chunk, each over the chunk's own addresses, which `FieldAddress`
 // names at the chunk's offset the way a field is named. A packed operation is lane-wise
@@ -5297,6 +5338,7 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
 // needs nothing new. The unary forms pass the one operand as both, which stays one
 // address per chunk.
 fn emit_packed_vector(c: *check.Checker, result_type: check.Type, packed: usize, chunks: usize, stack: usize, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let shifting = nir.vector_binary_operation(packed) >= 12usize
     var chunk = 0usize
     while chunk < chunks {
         let offset = chunk * 16usize
@@ -5311,7 +5353,10 @@ fn emit_packed_vector(c: *check.Checker, result_type: check.Type, packed: usize,
             if left_error != ok { ret left_error }
             left_chunk = left_at
             right_chunk = left_at
-            if right != left {
+            // A shift's right operand is the one scalar count, which is in the
+            // immediate and stands as it is for every chunk; the others are addresses.
+            if shifting { right_chunk = right }
+            if !shifting && right != left {
                 let (right_at, right_error) = component_at(c, result_type, right, offset, builder, token)
                 if right_error != ok { ret right_error }
                 right_chunk = right_at
@@ -5354,9 +5399,25 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     }
     let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, right_index, right_expected, builder, bindings, binding_count)
     if right_error != ok { ret (0usize, right_error) }
+    // The count is peeked here, before the slot below writes an instruction of its own
+    // and leaves the constant no longer the last one emitted.
+    let (count, count_known) = constant_lowered(builder, right)
     let (stack, stack_error) = vector_slot(c, result_type, builder, token)
     if stack_error != ok { ret (0usize, stack_error) }
-    let (packed, chunks, is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, opcode)
+    var packed = 0usize
+    var chunks = 0usize
+    var is_packed = false
+    if shifting {
+        let (shift_packed, shift_chunks, shift_is_packed) = vector_packed_shift(lane, lanes.array_length, lane_info.size, opcode, count, count_known)
+        packed = shift_packed
+        chunks = shift_chunks
+        is_packed = shift_is_packed
+    } else {
+        let (binary_packed, binary_chunks, binary_is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, opcode)
+        packed = binary_packed
+        chunks = binary_chunks
+        is_packed = binary_is_packed
+    }
     if is_packed {
         let packed_error = emit_packed_vector(c, result_type, packed, chunks, stack, left, right, builder, token)
         if packed_error != ok { ret (0usize, packed_error) }

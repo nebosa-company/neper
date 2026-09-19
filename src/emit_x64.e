@@ -375,11 +375,10 @@ fn vector_unordered(buffer: *Buffer, mandatory: usize, destination: usize, sourc
     ret byte(buffer, 3usize)
 }
 
-// `pslld`/`psrld` (0x72) and `psllq`/`psrlq` (0x73) by a constant, where the modrm
-// register field is the opcode extension: 6 to shift left, 2 to shift right.
-fn vector_shift(buffer: *Buffer, extension: usize, destination: usize, count: usize, wide: bool) -> err {
-    var opcode = 114usize
-    if wide { opcode = 115usize }
+// `psllw`/`psrlw`/`psraw` (0x71), `pslld`/`psrld`/`psrad` (0x72) and `psllq`/`psrlq`
+// (0x73) by a constant, where the modrm register field is the opcode extension: 6 to
+// shift left, 2 to shift right and 4 to shift an arithmetic right, which 0x73 has not.
+fn vector_shift(buffer: *Buffer, extension: usize, destination: usize, count: usize, opcode: usize) -> err {
     try sse(buffer, 102usize, false, extension, destination, opcode)
     ret byte(buffer, count)
 }

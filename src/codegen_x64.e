@@ -587,6 +587,7 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     if instruction.has_result || instruction.operand_count != 3usize { ret Unsupported }
     let lane = nir.vector_binary_lane(instruction.immediate)
     let operation = nir.vector_binary_operation(instruction.immediate)
+    if operation >= 12usize { ret select_vector_shift(builder, instruction, allocations, output) }
     let (mandatory, opcode, known) = packed_instruction(operation, lane)
     // Sixteen bytes is a whole register; eight, four and two -- the masks of eight, of
     // four and of two lanes, the only narrower operands the closed table has -- are its
@@ -628,6 +629,31 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
     if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
     let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
+    if destination_error != ok { ret destination_error }
+    ret emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+}
+
+// A lane-wise shift by a constant count as one packed instruction. The count is inside
+// the instruction, so the only operand loaded is the vector: the lane width picks the
+// opcode -- `psllw` and its two relatives 0x71, the thirty-two-bit ones 0x72, the
+// sixty-four-bit ones 0x73 -- and the modrm register field says which of the three the
+// shift is. Lowering admits only a count below the lane's width, so nothing here has to
+// answer a count that the baseline would turn into zero rather than trap on.
+fn select_vector_shift(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    let lane = nir.vector_binary_lane(instruction.immediate)
+    let operation = nir.vector_binary_operation(instruction.immediate)
+    let count = nir.vector_binary_count(instruction.immediate)
+    let bytes = nir.vector_binary_lanes(instruction.immediate) * packed_lane_size(lane)
+    if bytes != 16usize || lane == 0usize || lane > 3usize { ret Unsupported }
+    if operation == 14usize && lane == 3usize { ret Unsupported }
+    var extension = 6usize
+    if operation == 13usize { extension = 2usize }
+    if operation == 14usize { extension = 4usize }
+    let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
+    if left_error != ok { ret left_error }
+    try emit_x64.vector_load(output, 0usize, left, bytes, 11usize)
+    try emit_x64.vector_shift(output, extension, 0usize, count, 112usize + lane)
+    let (destination, destination_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
     if destination_error != ok { ret destination_error }
     ret emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
 }
@@ -692,11 +718,11 @@ fn canonicalize_packed_nan(wide: bool, output: *emit_x64.Buffer) -> err {
     try emit_x64.vector_unordered(output, mandatory, 2usize, 2usize)
     try emit_x64.vector_op(output, 102usize, 3usize, 3usize, 118usize)
     if wide {
-        try emit_x64.vector_shift(output, 6usize, 3usize, 52usize, true)
-        try emit_x64.vector_shift(output, 2usize, 3usize, 1usize, true)
+        try emit_x64.vector_shift(output, 6usize, 3usize, 52usize, 115usize)
+        try emit_x64.vector_shift(output, 2usize, 3usize, 1usize, 115usize)
     } else {
-        try emit_x64.vector_shift(output, 6usize, 3usize, 23usize, false)
-        try emit_x64.vector_shift(output, 2usize, 3usize, 1usize, false)
+        try emit_x64.vector_shift(output, 6usize, 3usize, 23usize, 114usize)
+        try emit_x64.vector_shift(output, 2usize, 3usize, 1usize, 114usize)
     }
     try emit_x64.vector_op(output, 102usize, 3usize, 2usize, 219usize)
     try emit_x64.vector_op(output, 102usize, 2usize, 0usize, 223usize)

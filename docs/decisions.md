@@ -14151,3 +14151,46 @@ each chunk, so a form that answered one chunk, or read them in the wrong order, 
 whose four chunks each carry a lane of their own. A probe under `build/` confirms the
 shape the fixture cannot see: `a + a` on a `Vec[f32, 8]` emits two `addps` and no
 `addss` at all, where it emitted eight scalar adds before.
+
+## D760 -- The packed shifts, by a count the compiler knows
+
+D759 leaves the lane loop to `f16`, the shifts and `*%` on any lane but the sixteen-bit
+one. The shifts are the next of those to fall, and they are the first packed form whose
+operand is not a vector: SSE2 shifts sixteen-, thirty-two- and sixty-four-bit lanes by a
+count carried *inside* the instruction -- `psllw`/`psrlw`/`psraw` at 0x71, the
+thirty-two-bit three at 0x72 and `psllq`/`psrlq` at 0x73 -- with the modrm register
+field saying which of the three the shift is. A byte lane has no packed shift at all and
+a sixty-four-bit arithmetic right shift has none either: there is no `psraq`.
+
+So the packed form is taken only when the count is a constant the compiler has already
+folded, and only when it is below the lane's width. Lowering peeks at the instruction it
+just emitted for the right operand: a `ConstInteger` whose result is that operand is the
+count, and anything else -- a variable, or a constant reached through later instructions
+-- keeps the lane loop. The width condition is not a restriction so much as the part of
+section 11 that a single instruction cannot answer: a count the lane's width does not
+admit traps in debug and masks in release, and the baseline's packed shift quietly
+produces zero instead. A count that is not known, or not below the width, therefore
+keeps the loop and with it `emit_shift_check`, and nothing in the back end has to answer
+a count it cannot.
+
+The count rides in the immediate above the three fields the other operations use, where
+every immediate written before this was zero, so the `.em` format is unchanged and an
+artifact written yesterday reads the same; `vector_binary_operation` masks its field to
+stay the operation it always was. Ranks 12, 13 and 14 are `<<`, the unsigned `>>` and
+the signed one. The count stays the instruction's third operand as well, so it is still
+a value NIR and the allocator see used, and the chunk loop -- which turns a thirty-two-
+or sixty-four-byte operand into one instruction per sixteen bytes -- passes it through
+unchanged where it takes a chunk's own address for a vector: one count answers every
+chunk.
+
+The `link/simd_lanes` fixture checks the three widths both ways in both suites, each
+over lanes that are all distinct, with the shapes that must keep the loop beside them
+and answering the same: a signed sixty-four-bit right shift, a byte vector, and a count
+that is a variable. A count of zero and a count of the width less one are checked too,
+as the two ends the immediate has to carry. A probe under `build/` confirms what the
+fixture cannot see -- `v << 2u32` on a `Vec[i32, 4]` emits one `pslld xmm0, 2` and no
+scalar shift at all -- and the fixture's own image now carries all three opcodes.
+
+That leaves the lane loop to `f16` and to `*%` on any lane but the sixteen-bit one,
+which are the shapes the baseline has no instruction for, and to a shift by a count in a
+register, which it does have one for: `psllw xmm, xmm` with the check ahead of it.

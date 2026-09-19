@@ -94,12 +94,22 @@ type Opcode = enum u8 {
 // operand is the left one again: 10 is `~` on integer lanes and 11 is `~` on a mask,
 // which is a different instruction pair because a mask lane is `0` or `1` and not the
 // eight bits of a byte. No unit has a packed `not`, so the back end makes the operand
-// each of the two needs itself.
+// each of the two needs itself. 12, 13 and 14 are the shifts -- `<<`, `>>` on unsigned
+// lanes and `>>` on signed ones -- which carry their count in the immediate too.
 fn vector_binary_immediate(operation: usize, lane: usize, lanes: usize) -> usize {
     ret operation * 4096usize + lane * 256usize + lanes
 }
 
-fn vector_binary_operation(immediate: usize) -> usize { ret immediate / 4096usize }
+// A packed shift by a constant count: the baseline encodes the count in the
+// instruction, so it rides above the three fields the other operations use, where every
+// immediate written before it is zero.
+fn vector_shift_immediate(operation: usize, lane: usize, lanes: usize, count: usize) -> usize {
+    ret count * 65536usize + vector_binary_immediate(operation, lane, lanes)
+}
+
+fn vector_binary_operation(immediate: usize) -> usize { ret immediate / 4096usize % 16usize }
+
+fn vector_binary_count(immediate: usize) -> usize { ret immediate / 65536usize }
 
 fn vector_binary_lane(immediate: usize) -> usize { ret immediate / 256usize % 16usize }
 
