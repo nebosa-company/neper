@@ -2344,8 +2344,8 @@ foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('re
     if ((Get-Item -LiteralPath $conformanceStderr).Length -ne 0) { throw "check-file --json on $($case[0])/$($case[1]).e wrote to stderr" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
 }
-# D672-D680: alias-aware region/thread identity and deferred-reset timing.
-foreach ($case in @(@('reject', 'regions_pointer_chain', 1), @('reject', 'regions_arena_alias', 1), @('reject', 'safety_thread_context_alias', 1), @('accept', 'regions_deferred_after_alloc', 0), @('reject', 'regions_deferred_escape', 1), @('reject', 'regions_arena_pointer_copy', 1), @('reject', 'regions_mark_copy', 1), @('reject', 'regions_accessor_alias', 1), @('reject', 'safety_thread_slice_context', 1), @('reject', 'regions_deferred_slice_escape', 1))) {
+# D672-D685: alias-aware region/thread identity and deferred-reset timing.
+foreach ($case in @(@('reject', 'regions_pointer_chain', 1), @('reject', 'regions_arena_alias', 1), @('reject', 'safety_thread_context_alias', 1), @('accept', 'regions_deferred_after_alloc', 0), @('reject', 'regions_deferred_escape', 1), @('reject', 'regions_arena_pointer_copy', 1), @('reject', 'regions_mark_copy', 1), @('reject', 'regions_accessor_alias', 1), @('reject', 'safety_thread_slice_context', 1), @('reject', 'regions_deferred_slice_escape', 1), @('reject', 'regions_deferred_pointer_escape', 1), @('reject', 'regions_deferred_pointer_alias_escape', 1), @('reject', 'regions_deferred_aggregate_escape', 1), @('reject', 'regions_deferred_aggregate_copy_escape', 1), @('reject', 'regions_deferred_aggregate_assignment_escape', 1))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
     $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
     $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
