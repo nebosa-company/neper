@@ -15,7 +15,7 @@ class GpuContractTests(unittest.TestCase):
     def test_repository_contract(self):
         data, errors = CHECKER.validate(ROOT)
         self.assertEqual(errors, [])
-        self.assertEqual(list(data["requirements"]), ["H13", "H21"])
+        self.assertEqual(list(data["requirements"]), ["H13", "H21", "H22"])
 
     def test_release_checks_cannot_disappear(self):
         data, _ = CHECKER.validate(ROOT)
@@ -30,6 +30,15 @@ class GpuContractTests(unittest.TestCase):
         self.assertEqual(h21["token_states"],
                          ["queued", "running", "complete", "lost", "stale"])
         self.assertEqual(h21["cancellation"], "not_in_v1")
+
+    def test_cost_contract_never_mixes_clocks_or_grows_staging(self):
+        data, errors = CHECKER.validate(ROOT)
+        self.assertEqual(errors, [])
+        h22 = data["requirements"]["H22"]
+        self.assertFalse(h22["timeline"]["cross_clock_subtraction"])
+        self.assertEqual(h22["staging"]["on_full"], "wait_oldest")
+        self.assertIn("safety_policy", h22["cache_key"])
+        self.assertIn("numerical_policy", h22["cache_key"])
 
 
 if __name__ == "__main__":

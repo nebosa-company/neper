@@ -2469,6 +2469,7 @@ type DeviceInfo = struct {
 }
 type Device = struct { state: *void }
 type Queue = struct { state: *void }
+type StagingLimits = struct { blocks: u32, block_bytes: usize }
 type Buf[T: type] = struct { owner: u32, slot: u32, generation: u32, len: usize }
 type Token = struct { owner: u32, queue: u32, serial: u64 }
 type Grid = struct { x: usize, y: usize, z: usize }
@@ -2494,6 +2495,7 @@ fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err)
 fn close(device: *Device) -> err
 fn has(device: *Device, capability: Cap) -> bool
 fn queue(device: *Device) -> (*Queue, err)
+fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err)
 fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err)
 fn upload[T: type](q: *Queue, src: []const T) -> (Buf[T], err)
 fn len[T: type](buf: Buf[T]) -> usize

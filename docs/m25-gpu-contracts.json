@@ -129,6 +129,62 @@
           "expected": "cross-device wait_for returns WrongDevice"
         }
       ]
+    },
+    "H22": {
+      "design_status": "closed",
+      "runtime_status": "pending_m3",
+      "api_declarations": [
+        "type StagingLimits = struct { blocks: u32, block_bytes: usize }",
+        "fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err)"
+      ],
+      "timeline": {
+        "phases": ["staging-alloc", "staging-copy", "transfer", "submit", "queue-wait", "pipeline-compile", "kernel", "readback", "sync"],
+        "fields": ["kind", "phase", "queue", "serial", "kernel", "bytes", "clock", "start_ns", "end_ns", "implicit", "cold", "instrumentation_ns"],
+        "clocks": ["host", "device"],
+        "cross_clock_subtraction": false
+      },
+      "cache_key": ["kernel", "specialization", "device", "driver", "backend", "capabilities", "numerical_policy", "safety_policy", "compilation_options", "compiler"],
+      "staging": {
+        "default_blocks": 4,
+        "default_block_bytes": 16777216,
+        "on_full": "wait_oldest",
+        "oversize": "TooLarge",
+        "allocation_failure": "OutOfMemory"
+      },
+      "m3_features": ["bounded_staging_pool", "timeline", "pipeline_cache", "cold_warm_measurement"],
+      "deferred": ["batched_submission", "execution_graphs", "pinned_transfer", "optimized_cpu_backend"],
+      "fixtures": [
+        {
+          "id": "gpu_timeline_cold",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "the first kernel launch includes a cold pipeline-compile phase and matches the CPU oracle"
+        },
+        {
+          "id": "gpu_timeline_warm",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "a repeated launch is warm, omits compilation and matches the same output oracle"
+        },
+        {
+          "id": "gpu_staging_bound",
+          "profiles": ["vulkan"],
+          "status": "pending_m3",
+          "expected": "a full pool waits for the oldest transfer and never grows"
+        },
+        {
+          "id": "gpu_staging_exhausted",
+          "profiles": ["vulkan"],
+          "status": "pending_m3",
+          "expected": "initial pool allocation failure returns OutOfMemory and leaves launches usable"
+        },
+        {
+          "id": "gpu_cache_corrupt",
+          "profiles": ["vulkan"],
+          "status": "pending_m3",
+          "expected": "a corrupt pipeline entry is rejected and rebuilt without replacing the last valid entry on failure"
+        }
+      ]
     }
   }
 }

@@ -84,6 +84,33 @@ def validate(root=ROOT):
         actual = {item.get("id") for item in h21.get("fixtures", [])}
         if actual != required:
             errors.append("H21: dependency/discovery fixture manifest is incomplete")
+
+    h22 = requirements.get("H22")
+    if h22 is not None:
+        timeline = h22.get("timeline", {})
+        phases = {"staging-alloc", "staging-copy", "transfer", "submit", "queue-wait",
+                  "pipeline-compile", "kernel", "readback", "sync"}
+        if set(timeline.get("phases", [])) != phases:
+            errors.append("H22: timeline phases are incomplete")
+        fields = {"kind", "phase", "queue", "serial", "kernel", "bytes", "clock",
+                  "start_ns", "end_ns", "implicit", "cold", "instrumentation_ns"}
+        if set(timeline.get("fields", [])) != fields:
+            errors.append("H22: timeline fields are incomplete")
+        if timeline.get("cross_clock_subtraction") is not False:
+            errors.append("H22: host and device clocks must never be subtracted")
+        cache = {"kernel", "specialization", "device", "driver", "backend", "capabilities",
+                 "numerical_policy", "safety_policy", "compilation_options", "compiler"}
+        if set(h22.get("cache_key", [])) != cache:
+            errors.append("H22: pipeline cache identity is incomplete")
+        staging = h22.get("staging", {})
+        if (staging.get("default_blocks"), staging.get("default_block_bytes"),
+                staging.get("on_full")) != (4, 16 * 1024 * 1024, "wait_oldest"):
+            errors.append("H22: staging defaults or bounded-full policy changed")
+        required = {"gpu_timeline_cold", "gpu_timeline_warm", "gpu_staging_bound",
+                    "gpu_staging_exhausted", "gpu_cache_corrupt"}
+        actual = {item.get("id") for item in h22.get("fixtures", [])}
+        if actual != required:
+            errors.append("H22: cost/cache/staging fixture manifest is incomplete")
     return data, errors
 
 

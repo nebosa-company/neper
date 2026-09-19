@@ -413,6 +413,19 @@ stays the checked debugger and is **not advertised as a fallback**: the
 state-machine execution of D38 is the reference, the `.Cpu` record's `kind` is
 `.Cpu`, and a program that chooses it chooses it.
 
+### 3.4 Fixtures named for M3
+
+| fixture | shape | expected |
+|---|---|---|
+| `gpu_timeline_cold` | first launch of one kernel on a newly opened device | a cold `pipeline-compile` record, per-clock phase totals and CPU-matching output |
+| `gpu_timeline_warm` | repeat the same launch and inputs | warm records, no compilation phase and the same output oracle |
+| `gpu_staging_bound` | fill every staging block, then write again | wait for the oldest transfer, one implicit `queue-wait`, no pool growth |
+| `gpu_staging_exhausted` | inject failure into the first pool allocation | `OutOfMemory`; no block retained; later launches remain usable |
+| `gpu_cache_corrupt` | checksum-valid key with a corrupt driver blob, then injected rebuild failure | reject and rebuild; a failed rebuild does not replace the last valid entry |
+
+These fixture IDs, the timeline fields, cache-key parts and staging defaults are
+mirrored in `docs/m25-gpu-contracts.json`; M3 records their runtime evidence.
+
 ## 4. H23 -- numerical and capability contracts
 
 ### 4.1 Corrections to the spec (edited in D367)

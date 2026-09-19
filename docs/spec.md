@@ -3042,6 +3042,7 @@ type DeviceInfo = struct {
 }
 type Device  = struct { state: *void } // usable from any thread
 type Queue   = struct { state: *void } // one thread at a time
+type StagingLimits = struct { blocks: u32, block_bytes: usize }
 type Buf[T: type] = struct { owner: u32, slot: u32, generation: u32, len: usize }
 type Token = struct { owner: u32, queue: u32, serial: u64 }
 type Grid    = struct { x: usize, y: usize, z: usize } // invocation counts
@@ -3078,6 +3079,7 @@ their contents remain module-owned invariants.
 | `fn close(dev: *Device) -> err` | Atomically begins closing, rejects new operations, waits for every queue, releases every buffer and queue, then the device. A repeated close is `InvalidHandle`; a driver failure is `Lost`. |
 | `fn has(dev: *Device, c: Cap) -> bool` | Capability query; returns `false` after closing begins. |
 | `fn queue(dev: *Device) -> (*Queue, err)` | A new in-order stream: a hardware queue where the device has a spare one, otherwise a separate command stream on a shared one. The ordering guarantees are the same either way. |
+| `fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err)` | Creates the same in-order stream with an explicit bounded staging pool. Zero blocks or bytes is `TooLarge`; pool allocation remains lazy until the first upload/write and fails there with `OutOfMemory`. |
 | `fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err)` | `n` elements of device memory, contents unspecified. |
 | `fn upload[T: type](q: *Queue, src: []const T) -> (Buf[T], err)` | Atomically `alloc` then `write`; if staging or submission fails, it reclaims the allocation before returning the error and no handle escapes. |
 | `fn len[T: type](b: Buf[T]) -> usize` | The element count `alloc` or `upload` gave it; use through a released or stale handle is an `invalid` check. |
