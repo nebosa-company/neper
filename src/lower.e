@@ -5227,8 +5227,8 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // The lane-wise shapes one vector instruction covers: a sixteen-byte vector -- the
 // width SSE2 and NEON both have -- whose lane type and operator name a single packed
 // instruction on that baseline, plus `~`, which is two. A sixteen-lane mask is sixteen
-// bytes too, and takes the three bitwise ones. Everything else keeps the lane loop
-// below: the wider widths, `f16`, the shifts, `~` on a mask, and `*%` on any lane but
+// bytes too, and takes the three bitwise ones and its own `~`. Everything else keeps
+// the lane loop below: the wider widths, `f16`, the shifts, and `*%` on any lane but
 // the sixteen-bit one, which is the only packed multiply SSE2 has.
 // ponytail: the sixteen-byte baseline only; `--cpu` and wider widths widen this table.
 fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, bool) {
@@ -5246,8 +5246,8 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
     }
     // A mask's lanes are bytes of `0` and `1`, so sixteen of them are the byte lanes'
     // own sixteen bytes and `pand`, `por` and `pxor` answer `& | ^` on them bit for
-    // bit. `~` is the one the byte lanes have and a mask does not: a packed `not`
-    // leaves `0xfe` where a lane's `!` is `0`, so `~` keeps the lane loop.
+    // bit. `~` is the one that is not shared: a packed `not` leaves `0xfe` where a
+    // lane's `!` is `0`, so a mask takes rank 11 and its own instruction pair.
     let mask_lanes = lane.kind == .Bool && lane_size == 1usize
     if mask_lanes { lane_code = 0usize }
     if lane_code == 16usize { ret (0usize, false) }
@@ -5264,6 +5264,7 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
             if opcode == .MultiplyWrap && lane_size == 2usize { operation = 6usize }
             if opcode == .BitNot { operation = 10usize }
         }
+        if mask_lanes && opcode == .BitNot { operation = 11usize }
         if opcode == .BitAnd { operation = 7usize }
         if opcode == .BitOr { operation = 8usize }
         if opcode == .BitXor { operation = 9usize }

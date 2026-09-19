@@ -231,14 +231,20 @@ fn operators() {
     if simd.bits[Vec[i32, 4]](p ^ q) != 5u64 { os.exit(90) }
     if simd.bits[Vec[i32, 4]](~p) != 12u64 { os.exit(91) }
     // Sixteen mask lanes are sixteen bytes, so `& | ^` take the byte lanes' packed form
-    // while `~` keeps the lane loop. The two patterns differ in every nibble, so a
-    // packed form that covered only part of the mask would be caught at one end.
+    // and `~` a packed form of its own -- a mask lane is `0` or `1`, not eight bits, so
+    // its `~` is a compare and a subtract rather than the byte vector's `pxor`. The two
+    // patterns differ in every nibble, so a packed form that covered only part of the
+    // mask would be caught at one end.
     let ma = simd.mask[Vec[u8, 16]](43981u64)
     let mb = simd.mask[Vec[u8, 16]](61680u64)
     if simd.bits[Vec[u8, 16]](ma & mb) != 41152u64 { os.exit(107) }
     if simd.bits[Vec[u8, 16]](ma | mb) != 64509u64 { os.exit(108) }
     if simd.bits[Vec[u8, 16]](ma ^ mb) != 23357u64 { os.exit(109) }
     if simd.bits[Vec[u8, 16]](~ma) != 21554u64 { os.exit(114) }
+    if simd.bits[Vec[u8, 16]](~mb) != 3855u64 { os.exit(115) }
+    // A flipped lane is still a mask lane, so it selects and reduces like one.
+    if simd.all[Vec[u8, 16]](~ma) || !simd.any[Vec[u8, 16]](~ma) { os.exit(116) }
+    if !simd.all[Vec[u8, 16]](~simd.mask[Vec[u8, 16]](0u64)) { os.exit(117) }
     // Through a generic, where the vector is still `V` when the operator is checked.
     let r = axpy[Vec[f64, 2]](simd.splat[Vec[f64, 2]](2.0), simd.splat[Vec[f64, 2]](3.0), simd.splat[Vec[f64, 2]](1.0))
     if r.lanes[1] != 7.0 { os.exit(92) }

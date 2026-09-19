@@ -577,7 +577,7 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
 }
 
 // Section 4's lane-wise operator as one packed SSE2 instruction over the whole
-// sixteen-byte vector -- two for `~`, which no unit has -- which `lower` asks for by
+// sixteen-byte vector -- three for `~`, which no unit has -- which `lower` asks for by
 // emitting `VectorBinary` for the shapes the baseline covers. The vectors stay in memory and xmm0 to xmm3 are borrowed
 // for the operation, as the scalar float path borrows xmm0 and xmm1: this is
 // instruction selection, not yet a vector register class.
@@ -593,13 +593,28 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     let left_value = builder.operands[instruction.first_operand + 1usize]
     let (left, left_error) = read_value(allocations, left_value, 10usize, output)
     if left_error != ok { ret left_error }
-    try emit_x64.vector_load(output, 0usize, left)
+    // `~m` loads into xmm1 instead, because its compare reads the operand and its
+    // subtraction has to answer in the register the store reads.
+    var loaded = 0usize
+    if operation == 11usize { loaded = 1usize }
+    try emit_x64.vector_load(output, loaded, left)
     if operation == 10usize {
         // `~v` is a `pxor` against all ones, which `pcmpeqd` on a register against
         // itself makes without reading the register or the image. Lowering repeats the
         // one operand, so the third is the second and nothing is loaded for it.
         try emit_x64.vector_op(output, 102usize, 1usize, 1usize, 118usize)
-    } else {
+    }
+    if operation == 11usize {
+        // `~m` is not a packed `not`: a mask lane is a byte of `0` or `1`, whose `!` is
+        // `1` or `0` and not `0xfe` or `0xff`. `pcmpeqb` against zero answers all ones
+        // in exactly the lanes that were `0`, and all ones is `-1` per byte, so zero
+        // minus that is the `1` each of those lanes wants -- which is the tail's own
+        // `psubb`, with zero as its destination. Lowering repeats the one operand here
+        // too, so nothing is loaded for the third.
+        try emit_x64.vector_op(output, 102usize, 0usize, 0usize, 239usize)
+        try emit_x64.vector_op(output, 102usize, 1usize, 0usize, 116usize)
+    }
+    if operation < 10usize {
         let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
         if right_error != ok { ret right_error }
         try emit_x64.vector_load(output, 1usize, right)
@@ -644,6 +659,9 @@ fn packed_instruction(operation: usize, lane: usize) -> (usize, usize, bool) {
     if operation == 9usize { ret (102usize, 239usize, true) }
     // `~` is the same `pxor`, against the all-ones register the caller builds.
     if operation == 10usize { ret (102usize, 239usize, true) }
+    // `~` on a mask is `psubb` from the zero register the caller builds, which turns
+    // the compare's all-ones lanes back into the `1` a mask lane is.
+    if operation == 11usize { ret (102usize, 248usize, true) }
     ret (0usize, 0usize, false)
 }
 

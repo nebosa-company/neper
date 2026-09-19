@@ -13976,3 +13976,28 @@ vector reaches it at one.
 `pcmpeqb` against zero and a `psubb`, two more instructions and one more opcode in
 `emit_x64`, for the one operator of the four -- so the fixture checks `~` on the same
 sixteen-lane mask instead, to hold the exclusion in place rather than to prove a form.
+
+## D754 -- Packed `~` on a sixteen-lane mask
+
+`~m` joins D751's packed shapes at sixteen mask lanes, which D753 left as the one
+operator of the four still taking the loop. A mask lane is a byte of `0` or `1`, so
+its `~` is the lane's `!` and not the byte's bitwise not: `pxor` against all ones
+leaves `0xfe` where `0` is wanted. What answers it instead is `pcmpeqb` against zero,
+which sets all ones in exactly the lanes that were `0`, and all ones is `-1` per byte,
+so zero minus the compare is the `1` those lanes want and `0` everywhere else. Three
+instructions, one of them the zero register the compare needs.
+
+It travels as `VectorBinary` with operation rank 11 and the one operand given as both,
+the shape D752 gave `~`; rank 10 cannot be reused because the instruction pair is a
+different one. The register assignment is what keeps the back end's tail unchanged:
+the operand loads into `xmm1` and zero is `xmm0`, so the subtraction is the table's own
+`psubb` with the destination the store already reads. `pcmpeqb` is the only new opcode,
+and `emit_x64.vector_op` already takes the opcode byte from the caller's table, so what
+it cost is one line in the disassembler.
+
+Rank 11 is a mask's `~` at sixteen lanes only. `Mask[i16, 16]` and `Mask[i32, 16]` are
+sixteen mask lanes too and reach it the same way -- the lanes are bytes whatever the
+vector's lane type is -- while the four and sixty-four lane masks keep the loop, as the
+vectors at those widths do. The `link/simd_lanes` fixture checks the form over two
+patterns that differ in every nibble and checks that a flipped lane still reduces as a
+mask lane, in both suites.
