@@ -3651,6 +3651,8 @@ not add partial moves from a variant payload.
   (`E-SAFETY-0015`, D357). A thread over arena storage does as it likes.
 - What a thread was given is lent to it until the join (D365): the context may be
   written as `&x` or as a local pointer alias of `&x`, and both lend `x` (D674).
+  An address into a local slice with known backing storage, such as `&s[i]`, lends
+  that backing local rather than the slice descriptor (D679).
   From the start to
   the join of that thread local, the parent neither reads nor writes `x` -- a value
   read, a store, a move -- (`E-SAFETY-0016`); it may take `&x` or `&x.field` again,

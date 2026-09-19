@@ -13131,3 +13131,13 @@ A later mutable call therefore invalidates that view with E-SAFETY-0014.
 Both accessor detection and view binding reuse `alias_target`; no accessor summary or
 second alias analysis is introduced. The focused fixture pins the call-through-alias
 form and the mutation provenance.
+
+## D679 -- Thread contexts through slices lend their known backing storage
+
+When a thread context is `&s[i]` and the lexical slice alias record knows the local
+that backs `s`, the thread borrows and lends that backing local. Parent access to the
+array before the join is therefore E-SAFETY-0016, rather than being missed because
+only the slice descriptor was marked.
+
+Thread binding follows the existing `points_to` fact after resolving the addressed
+place. Dynamic or externally sourced slice backing remains outside the local rule.

@@ -14254,6 +14254,11 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                 // Starting through a pointer alias lends the aliased storage just
                 // as spelling `&x` at the call does (D674).
                 if !is_address { (pointed, is_address) = alias_target(c, g, tree, module_index, argument_index) }
+                // `&slice[i]` and `&pointer.field` name the backing local when the
+                // lexical alias record knows it (D679).
+                if is_address && c.resources[pointed].points_to != 0usize && (c.locals[pointed].ty.kind == .Slice || c.locals[pointed].ty.kind == .Pointer) {
+                    pointed = c.resources[pointed].points_to - 1usize
+                }
                 if is_address && c.resources[local_index].frame_borrow == 0usize && c.locals[pointed].ty.kind != .Slice && c.locals[pointed].ty.kind != .Pointer { c.resources[local_index].frame_borrow = pointed + 1usize }
                 // What the thread was given is its until the join (D365): the parent
                 // neither reads nor writes it, except through an address, which is how

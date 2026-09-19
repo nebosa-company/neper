@@ -53,6 +53,8 @@ own statement, which the one fixture that did otherwise now does.
 A thread context passed through a local pointer alias of `&x` identifies and lends
 the same `x` (D674). The stack-escape and pre-join access rules therefore do not
 depend on whether the start call spells the context directly or through that alias.
+An address into a local slice whose backing local is known, `&s[i]`, likewise lends
+the backing storage rather than only the slice descriptor (D679).
 
 ## 4. Locks, guards and atomics
 
@@ -81,8 +83,9 @@ view rule exists), cancellation.
 
 - A pointer to the frame taken before the thread starts and reached through the
   context indirectly (a callback environment, a struct of pointers).
-- Storage lent through a slice's elements -- what the parent reads through a
-  slice over the same storage. A pointer local bound from `&x` is followed
+- Storage reached through a slice whose backing local is unknown. A local slice
+  bound from an array place is followed when used as a thread context (D679), and
+  a pointer local bound from `&x` is followed
   (D393), as is a slice bound from a place of `x` (D395) and a struct local holding `&x` in a field, through that field (D413): a read or a store
   through it while `x` is lent is refused, and `&p.f` is an address like `&x.f`;
   a pointer that came from anywhere else is not.
@@ -113,7 +116,8 @@ atomics through addresses while workers run, joins by element.
 ## 7. Implementation record
 
 **D357** delivered section 2; **D365** section 3 and this document; **D674**
-extended section 3 to thread starts through local pointer aliases; **D379**
+extended section 3 to thread starts through local pointer aliases; **D679** follows
+thread contexts through local slices to known backing storage; **D379**
 section 4's first half (`sync.Guard`, the fixtures `sync_guard` and
 `reject/safety_guard_leak`). The compiler's own crews pass as written under
 all three. Not delivered: section 4's second half, section 5's cases, the
