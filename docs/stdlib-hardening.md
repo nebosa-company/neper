@@ -368,10 +368,20 @@ explicit inputs. Cryptographic implementation/review stays a later release gate.
 
 D600 starts `e.net.tls` with arena-owned client/server stream state over explicit caller
 I/O and configuration. D631-D641 complete the narrow TLS 1.3 profile: AES-128-GCM with
-SHA-256, X25519, Ed25519 plus P-256/SHA-256 verification, X.509/PKCS#8 DER, authenticated stream/close adapters,
-controlled handshakes and full/streaming HTTP clients. The exact limits and algorithms
-are emitted by `neper info`; RSA, P-384, SHA-384, resumption, 0-RTT and client
-authentication remain unsupported rather than weakening verification.
+SHA-256, X25519, Ed25519 plus P-256/SHA-256 verification, X.509/PKCS#8 DER,
+authenticated stream/close adapters, controlled handshakes and full/streaming HTTP
+clients. The exact limits and algorithms are emitted by `neper info`; RSA, P-384,
+SHA-384, resumption, 0-RTT and client authentication remain unsupported rather than
+weakening verification.
+
+D645-D649 add the P-256 path used by OpenRouter: strict ECDSA P-256/SHA-256
+verification, matching X.509 chain links, TLS 1.3 `ecdsa_secp256r1_sha256`, compatibility
+ChangeCipherSpec handling and handshake-message reassembly across record boundaries.
+The live `openrouter.ai` probe returns HTTP 200 on Windows and Linux when WE1 is supplied
+as the explicit trust root. That result is interoperability evidence, not ambient trust:
+Neper still does not consult a host root store, and the unused P-384/SHA-384/RSA suffix
+cannot authenticate a link. The complete boundary and focused evidence are recorded in
+[`tls-p256-openrouter.md`](tls-p256-openrouter.md).
 
 ## SL09 — fallible iteration, patterns and test support
 

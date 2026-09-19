@@ -264,6 +264,15 @@ for g, items in compiler.items():
                + '</em></h3>' + table(items))
 
 mod_body = ''
+module_evidence = {
+    'e.crypto.sign': ('P-256/SHA-256 ECDSA verification '
+                      '(D645; RFC 6979 fixture; tls-p256-openrouter.md)'),
+    'e.crypto.x509': ('P-256 X.509 chains and non-authoritative unsupported suffixes '
+                      '(D646, D649; tls-p256-openrouter.md)'),
+    'e.net.tls': ('TLS 1.3 ECDSA P-256/SHA-256 client authentication and OpenRouter '
+                  'record framing (D647-D648; live Windows/Linux HTTP 200; '
+                  'tls-p256-openrouter.md)'),
+}
 for m, h, d, surface, milestone, schedule, tier, blocked in mod_rows:
     # Both of these are intrinsics plus source now, and saying only "intrinsics" understates
     # how much of them is written down: e.os is mostly its two per-target files, and e.mem gained
@@ -280,6 +289,8 @@ for m, h, d, surface, milestone, schedule, tier, blocked in mod_rows:
         where = 'scheduled, not started'
     else:
         where = 'after the scheduled set'
+    if m in module_evidence:
+        where += '; ' + module_evidence[m]
     when = milestone if milestone else '&mdash;'
     mod_body += ('<tr><td class="nm"><code>' + esc(m) + '</code></td><td class="sc">'
                  + ('%d / %d' % (h, d)) + '</td><td class="sc">'
