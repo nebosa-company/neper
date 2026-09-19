@@ -13218,3 +13218,12 @@ it. Existing views of that local are invalidated and their next use is E-SAFETY-
 The mutation path reuses the same lexical alias fact as D671 and D686. It remains
 local, single-target and conservative; no callee-body or interprocedural analysis is
 introduced.
+
+## D688 -- Accessors prefer the storage behind an aggregate pointer field
+
+A pointer, slice or string returned by an accessor addressed through a tracked
+aggregate pointer field is a view of the local named by that pointer. A later direct
+mutation of that local therefore invalidates the view with E-SAFETY-0014.
+
+Accessor detection and view binding use the existing lexical alias before the
+syntactic address base. This is the accessor half of D687 and adds no new analysis.

@@ -3633,7 +3633,8 @@ not add partial moves from a variant payload.
   views exactly as a call receiving `&x` does (D671). Copying that pointer local
   preserves the same target, so local pointer-copy chains are followed too (D672).
   An accessor called through the alias tags its returned slice, pointer or string as
-  a view of that same container (D678). A mutable call addressed through a tracked
+  a view of that same container (D678), including when its address is reached through
+  a tracked aggregate pointer field (D688). A mutable call addressed through a tracked
   aggregate pointer field changes the storage named by that field, not the aggregate
   that carries it (D687).
   Arena arguments are matched by their underlying local storage identity, so a

@@ -224,3 +224,7 @@ local across the deferred reset is E-SAFETY-0018.
 field before falling back to the syntactic address base. A mutation such as
 `mutate(&ctx.target.field)` therefore invalidates views of the local named by
 `target`, with the existing E-SAFETY-0014 evidence.
+
+**D688** applies the same identity on the accessor side. A view returned by
+`view(&ctx.target.field)` belongs to the local named by `target`, so a later direct
+mutation of that local invalidates the view with E-SAFETY-0014.

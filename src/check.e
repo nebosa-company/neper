@@ -13262,8 +13262,8 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     while viewable && !has_address {
         let (argument_index, has_argument) = call_argument_node(tree, source, address_at)
         if !has_argument { break }
-        var (storage, names_storage) = address_argument_local(c, g, tree, module_index, argument_index)
-        if !names_storage { (storage, names_storage) = alias_target(c, g, tree, module_index, argument_index) }
+        var (storage, names_storage) = alias_target(c, g, tree, module_index, argument_index)
+        if !names_storage { (storage, names_storage) = address_argument_local(c, g, tree, module_index, argument_index) }
         if names_storage { has_address = true }
         address_at += 1usize
     }
@@ -13304,8 +13304,9 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     while !allocates && has_address && c.resources[local_index].view_of == 0usize {
         let (argument_index, has_argument) = call_argument_node(tree, source, argument_at)
         if !has_argument { break }
-        var (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
-        if !is_address { (container, is_address) = alias_target(c, g, tree, module_index, argument_index) }
+        // `view(&ctx.target.field)` borrows the local behind `target`, not `ctx`.
+        var (container, is_address) = alias_target(c, g, tree, module_index, argument_index)
+        if !is_address { (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index) }
         if is_address && container != local_index { c.resources[local_index].view_of = container + 1usize }
         argument_at += 1usize
     }
