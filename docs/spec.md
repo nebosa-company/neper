@@ -2415,6 +2415,10 @@ Five rules keep this from becoming a second way to call a function:
    slices, vectors and tagged unions recurse in index or declaration order, including
    the tag before the live payload. Every lookup that lands on a fallback is recorded as a lookup edge, so
    declaring the `fn` later is not silently ignored (§12, D36).
+   Wherever an algorithm uses both `eq` and `hash`, they form one semantic contract:
+   `eq(a, b)` implies `hash(a) == hash(b)`. Equality is reflexive, symmetric and
+   transitive. The supplied operations satisfy these laws; a declared pair is the
+   declaring module's obligation (D726).
 5. **A missing function is an error at the instantiation site**, not inside the generic
    body, and it names what is missing and where it goes:
    `instantiating map.get[Vec3, f32] needs fn vec3_hash(v: Vec3) -> u64 in module

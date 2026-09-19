@@ -13607,3 +13607,14 @@ the caller and retain their original cleanup obligations.
 
 A runtime lower bound cannot identify that partition and is rejected as a partial
 move. This keeps the rule finite and makes caller and callee obligations disjoint.
+
+## D726 -- Supplied equality and hashing carry executable laws
+
+Protocol equality is an equivalence relation, and any two values it calls equal must
+have the same protocol hash. The rule is normative in section 9 rather than an
+assumption left to map implementations.
+
+The `protocol_law_supplied` fixture exhausts reflexivity, symmetry, transitivity and
+equal-implies-equal-hash over a finite scalar domain, then repeats the coherence check
+for equal slices over distinct backing positions. It is an executable property check
+of the compiler-supplied operations, not a list of hand-picked expected digests.
