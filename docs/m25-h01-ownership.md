@@ -384,8 +384,9 @@ follow-up. Cold wall, warm wall and image size are within their budgets
 (warm p50 96 ms against 82 ms is +17% at eight workers, +0% single-worker).
 
 **Remaining limitations** (each an obligation, none closed by this record):
-D616-D617 track comptime-indexed slots of fixed arrays, but
-dynamic indices and slices of resources are not tracked as wholes; the generic containers take their element by `own` (D353), but none can hold an
+D616-D617 track comptime-indexed slots of fixed arrays, and D716 checks runtime
+reads against every possible slot, but dynamic moves, stores and runtime-offset
+slices are not yet tracked; the generic containers take their element by `own` (D353), but none can hold an
 obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
 is H02's; the pin rule is lexical, and infers nothing about what a callee keeps
@@ -439,6 +440,11 @@ slices without a tracked fixed-array owner remain outside the rule.
 queries every possible element owner for read safety. If any candidate dangles,
 the dereference is rejected. This is the first conservative set-of-elements use;
 dynamic moves of affine array slots remain outside the ownership subset.
+
+**D716 follow-up.** The same conservative set-of-elements shape now applies to a
+runtime-indexed affine-array read. Every possible slot must be readable; a moved,
+maybe-moved or unchecked candidate produces the ordinary slot diagnostic with its
+own provenance. Dynamic ownership transfer and stores remain subsequent steps.
 
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface

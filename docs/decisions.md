@@ -13497,3 +13497,13 @@ element or by the outer aggregate.
 
 Wildcard query segments participate in the existing longest-prefix path match;
 there is no flattened nested-array representation or special traversal.
+
+## D716 -- Runtime affine-array reads check every possible slot
+
+A runtime index into a tracked fixed array denotes every slot the expression may
+select. Reading it is rejected with E-SAFETY-0001 when any candidate is moved or
+maybe moved, and with E-SAFETY-0008 when any candidate is unchecked.
+
+The candidate range reuses the existing per-slot state and provenance table. A
+comptime index remains a one-slot range, so exact diagnostics and behavior do not
+fork into a second ownership analysis.

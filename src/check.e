@@ -13686,32 +13686,42 @@ fn resource_index_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
     ret (index.magnitude, true)
 }
 
-// A comptime-indexed slot of a fixed affine array, reached either directly or
-// through a known full-slice alias. Dynamic indices retain the existing view rule.
-fn resource_element_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, bool) {
+// The possible slots of a fixed affine array element. A comptime index names one;
+// a runtime index names every slot reachable through the direct array or a slice
+// whose owner and lower bound are known.
+fn resource_element_candidates(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, usize, bool) {
     let node = tree.nodes[node_index]
-    if node.kind != .BracketPostfix { ret (0usize, 0usize, false) }
+    if node.kind != .BracketPostfix { ret (0usize, 0usize, 0usize, false) }
     var bracket: BracketInfo = zero
-    if read_bracket(c, tree, node, &bracket) != ok || bracket.range || bracket.child_count != 2usize { ret (0usize, 0usize, false) }
+    if read_bracket(c, tree, node, &bracket) != ok || bracket.range || bracket.child_count != 2usize { ret (0usize, 0usize, 0usize, false) }
     let base = tree.nodes[bracket.base]
-    if base.kind != .NameExpr { ret (0usize, 0usize, false) }
+    if base.kind != .NameExpr { ret (0usize, 0usize, 0usize, false) }
     let token = c.tokens[usize(base.token_start)]
-    if token.kind != .Identifier { ret (0usize, 0usize, false) }
+    if token.kind != .Identifier { ret (0usize, 0usize, 0usize, false) }
     let (base_local, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
-    if !found { ret (0usize, 0usize, false) }
+    if !found { ret (0usize, 0usize, 0usize, false) }
     var local_index = base_local
     var offset = 0usize
     if c.locals[base_local].ty.kind == .Slice {
-        if !c.resources[base_local].slice_offset_known || c.resources[base_local].points_to == 0usize { ret (0usize, 0usize, false) }
+        if !c.resources[base_local].slice_offset_known || c.resources[base_local].points_to == 0usize { ret (0usize, 0usize, 0usize, false) }
         local_index = c.resources[base_local].points_to - 1usize
         offset = c.resources[base_local].slice_offset
     }
-    if local_index >= c.local_count || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (0usize, 0usize, false) }
+    if local_index >= c.local_count || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize || offset >= c.resources[local_index].fields.len { ret (0usize, 0usize, 0usize, false) }
     let (relative, is_constant) = resource_index_value(c, g, tree, module_index, bracket.first)
-    if !is_constant || relative > c.resources[local_index].fields.len || offset > c.resources[local_index].fields.len - relative { ret (0usize, 0usize, false) }
+    if !is_constant { ret (local_index, offset, c.resources[local_index].fields.len, true) }
+    if relative > c.resources[local_index].fields.len || offset > c.resources[local_index].fields.len - relative { ret (0usize, 0usize, 0usize, false) }
     let index = offset + relative
-    if index >= c.resources[local_index].fields.len { ret (0usize, 0usize, false) }
-    ret (local_index, index, true)
+    if index >= c.resources[local_index].fields.len { ret (0usize, 0usize, 0usize, false) }
+    ret (local_index, index, index + 1usize, true)
+}
+
+// A comptime-indexed slot of a fixed affine array, reached either directly or
+// through a known full-slice alias.
+fn resource_element_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, bool) {
+    let (local_index, first, end, found) = resource_element_candidates(c, g, tree, module_index, node_index)
+    if !found || end != first + 1usize { ret (0usize, 0usize, false) }
+    ret (local_index, first, true)
 }
 
 // `resource(cleanup)` between a type declaration's `=` and its body.
@@ -14330,8 +14340,9 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         }
     }
     if node.kind == .BracketPostfix {
-        let (local_index, at, is_element) = resource_element_of(c, g, tree, module_index, node_index)
-        if is_element {
+        let (local_index, first, end, is_element) = resource_element_candidates(c, g, tree, module_index, node_index)
+        var at = first
+        while is_element && at < end {
             let state = field_state(c.resources[local_index].fields[at])
             if state == resource_moved || state == resource_maybe {
                 let acquired = resource_part_acquired(c, local_index, at)
@@ -14343,8 +14354,9 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                 record_failure_related(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
                 ret ResourceViolation
             }
-            ret ok
+            at += 1usize
         }
+        if is_element { ret ok }
     }
     if node.kind == .FieldExpr {
         let (local_index, at, is_field) = resource_field_of(c, g, tree, module_index, node_index)
