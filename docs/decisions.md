@@ -13391,3 +13391,13 @@ own exact paths, so a nested region pointer remains visible at deferred return.
 Reads and assignments share one syntax-path extractor. The assignment reverses that
 leaf-to-base syntax order once before using the existing path insertion and literal
 walk; no parallel alias mechanism is introduced.
+
+## D705 -- Thread contexts resolve recursive aggregate alias paths
+
+A thread context addressed through a later pointer on a recursively nested aggregate
+path lends the local named by that complete path. Parent access before the join is
+E-SAFETY-0016 against that owner rather than the first pointer below an outer field
+or the aggregate carrier.
+
+This is executable concurrency evidence for D701's shared longest-prefix resolver;
+the thread-start path needs no additional representation or traversal.
