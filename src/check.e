@@ -13343,6 +13343,19 @@ fn region_tag(c: *Checker, local_index: usize, token: usize) {
     c.affine_answer_valid = false
 }
 
+fn invalidate_views_of(c: *Checker, module_index: usize, node: syntax.Node, container: usize) {
+    var at = 0usize
+    while at < c.local_count {
+        if c.resources[at].view_of == container + 1usize && c.resources[at].state == resource_owned {
+            c.resources[at].state = resource_moved
+            c.resources[at].dangling = 2u8
+            c.resources[at].acquired = usize(node.token_start)
+            record_explain_view_end(c, module_index, node, c.locals[at].name, 2u8)
+        }
+        at += 1usize
+    }
+}
+
 // A call that ends a region or mutates a container (D354): `mem.reset(a, m)` makes
 // every region value of `m`, and of any later mark on the same arena, dangling; a
 // call given `&c` through a `*T` parameter that gives back nothing holding a
@@ -13383,23 +13396,22 @@ fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         if !has_argument { break }
         let parameter_index = info.function.first_parameter + argument_at
         if parameter_index < c.parameter_count && c.parameters[parameter_index].ty.kind == .Pointer && !c.parameters[parameter_index].ty.is_const {
-            // Prefer the lexical alias: `&ctx.target.field` mutates the storage
-            // behind `target`, not the aggregate carrying that pointer (D687).
-            var (container, is_address) = alias_target(c, g, tree, module_index, argument_index)
-            // A pointer local bound from `&c` is the same mutable access to `c`.
-            // Following it here closes the direct-alias hole in H02's view rule.
-            if !is_address { (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index) }
-            if is_address {
-                var at = 0usize
-                while at < c.local_count {
-                    if c.resources[at].view_of == container + 1usize && c.resources[at].state == resource_owned {
-                        c.resources[at].state = resource_moved
-                        c.resources[at].dangling = 2u8
-                        c.resources[at].acquired = usize(node.token_start)
-                        record_explain_view_end(c, module_index, node, c.locals[at].name, 2u8)
-                    }
-                    at += 1usize
+            if has_dynamic_alias_path(c, g, tree, module_index, argument_index) {
+                var wanted = 0usize
+                while true {
+                    let (container, found) = dynamic_alias_candidate(c, g, tree, module_index, argument_index, wanted)
+                    if !found { break }
+                    invalidate_views_of(c, module_index, node, container)
+                    wanted += 1usize
                 }
+            } else {
+                // Prefer the lexical alias: `&ctx.target.field` mutates the storage
+                // behind `target`, not the aggregate carrying that pointer (D687).
+                var (container, is_address) = alias_target(c, g, tree, module_index, argument_index)
+                // A pointer local bound from `&c` is the same mutable access to `c`.
+                // Following it here closes the direct-alias hole in H02's view rule.
+                if !is_address { (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index) }
+                if is_address { invalidate_views_of(c, module_index, node, container) }
             }
         }
         argument_at += 1usize

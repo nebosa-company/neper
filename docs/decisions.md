@@ -13469,3 +13469,12 @@ belongs to the reset region, the return is E-SAFETY-0018 against that owner.
 The return boundary consumes the same candidate iterator as reads. It does not
 fall back to an unrelated alias elsewhere in the carrier once the expression is
 known to be a runtime-indexed path.
+
+## D713 -- Runtime array mutable calls invalidate every candidate's views
+
+A mutable call through a runtime-indexed pointer element may change any container
+named by the matching alias set. The checker therefore invalidates live views of
+every candidate, and a later use reports E-SAFETY-0014 at the call.
+
+The existing view-invalidation loop is shared by exact and candidate-set paths.
+No mutation-effect summary or array-specific view state is introduced.

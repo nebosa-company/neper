@@ -330,3 +330,7 @@ of that set dangles; exact indices retain their existing single-owner behavior.
 **D712** applies that candidate set at a return boundary. A runtime-selected
 pointer cannot cross a deferred reset when any matching element belongs to the
 reset region, and unrelated carrier paths are not substituted for the selection.
+
+**D713** applies the set to mutable pointer calls. Because a runtime index may
+select any matching container, the call invalidates the live views of every
+candidate and later use retains the ordinary E-SAFETY-0014 mutation provenance.

@@ -3637,7 +3637,9 @@ not add partial moves from a variant payload.
   a view of that same container (D678), including when its address is reached through
   a tracked aggregate pointer field (D688). A mutable call addressed through a tracked
   aggregate pointer field changes the storage named by that field, not the aggregate
-  that carries it (D687).
+  that carries it (D687). When that pointer is selected through a runtime fixed-array
+  index, the call may mutate every matching candidate and invalidates views of each
+  one (D713).
   Arena arguments are matched by their underlying local storage identity, so a
   mark, allocation, and reset may consistently use `a`, `&a`, or a pointer alias
   of `&a` (D673); copying a pointer parameter preserves that parameter as the same
