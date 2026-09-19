@@ -1829,12 +1829,15 @@ type SliceReader = struct { data: []const u8, off: usize }
 type SliceWriter = struct { data: []u8, off: usize }
 type BufferedReader = struct { state: *void }
 type BufferedWriter = struct { state: *void }
+type DetailBufferedReader = struct { state: *void }
+type DetailBufferedWriter = struct { state: *void }
 type Seeker = struct { ctx: *void, seek: fn(*void, i64, os.SeekWhence) -> (u64, err) }
 type LimitedReader = struct { source: Reader, remaining: u64 }
 type CountingWriter = struct { sink: Writer, count: u64 }
 type TeeWriter = struct { left: Writer, right: Writer }
 type MemoryWriter = struct { arena: *mem.Arena, start: usize, len: usize }
 type BufferState = struct { source: Reader, sink: Writer, buffer: []u8, off: usize, len: usize }
+type DetailBufferState = struct { source: DetailReader, sink: DetailWriter, buffer: []u8, off: usize, len: usize, pending_error: err, pending_detail: os.ErrorDetail }
 error End
 error TooSmall
 error NoProgress
@@ -1853,6 +1856,8 @@ fn slice_writer(state: *SliceWriter) -> Writer
 fn slice_detail_writer(state: *SliceWriter) -> DetailWriter
 fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedReader, err)
 fn buffered_writer(a: *mem.Arena, sink: Writer, capacity: usize) -> (BufferedWriter, err)
+fn buffered_detail_reader(a: *mem.Arena, source: DetailReader, capacity: usize, detail: *os.ErrorDetail) -> (DetailBufferedReader, err)
+fn buffered_detail_writer(a: *mem.Arena, sink: DetailWriter, capacity: usize, detail: *os.ErrorDetail) -> (DetailBufferedWriter, err)
 fn file_seeker(file: *os.File) -> Seeker
 fn limited_reader(state: *LimitedReader, source: Reader, limit: u64) -> Reader
 fn counting_writer(state: *CountingWriter, sink: Writer) -> Writer
@@ -1864,6 +1869,7 @@ fn read_detail(r: *DetailReader, dst: []u8, detail: *os.ErrorDetail) -> (usize, 
 fn read_exact(r: *Reader, dst: []u8) -> err
 fn read_exact_detail(r: *DetailReader, dst: []u8, detail: *os.ErrorDetail) -> (usize, err)
 fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err)
+fn read_all_detail(a: *mem.Arena, r: *DetailReader, limit: usize, detail: *os.ErrorDetail) -> ([]u8, err)
 fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, err)
 fn write(w: *Writer, src: []const u8) -> (usize, err)
 fn write_detail(w: *DetailWriter, src: []const u8, detail: *os.ErrorDetail) -> (usize, err)
@@ -1874,12 +1880,15 @@ fn flush(w: *Writer) -> err
 fn flush_detail(w: *DetailWriter, detail: *os.ErrorDetail) -> err
 fn seek(s: *Seeker, off: i64, whence: os.SeekWhence) -> (u64, err)
 fn copy(dst: *Writer, src: *Reader, scratch: []u8) -> (u64, err)
+fn copy_detail(dst: *DetailWriter, src: *DetailReader, scratch: []u8, detail: *os.ErrorDetail) -> (u64, err)
 fn print(s: str) -> err
 fn printf[FMT: str](args: ...) -> err
 fn writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err), flush_fn: fn(*void) -> err) -> Writer
 fn detail_writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8, *os.ErrorDetail) -> (usize, err), flush_fn: fn(*void, *os.ErrorDetail) -> err) -> DetailWriter
 fn buffered_source(buffer: *BufferedReader) -> Reader
 fn buffered_sink(buffer: *BufferedWriter) -> Writer
+fn buffered_detail_source(buffer: *DetailBufferedReader) -> DetailReader
+fn buffered_detail_sink(buffer: *DetailBufferedWriter) -> DetailWriter
 fn file_read(ctx: *void, dst: []u8) -> (usize, err)
 fn file_read_detail(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err)
 fn file_write(ctx: *void, src: []const u8) -> (usize, err)
@@ -1896,6 +1905,9 @@ fn memory_write(ctx: *void, src: []const u8) -> (usize, err)
 fn buffered_read(ctx: *void, dst: []u8) -> (usize, err)
 fn buffered_write(ctx: *void, src: []const u8) -> (usize, err)
 fn buffered_writer_flush(ctx: *void) -> err
+fn buffered_detail_read(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err)
+fn buffered_detail_write(ctx: *void, src: []const u8, detail: *os.ErrorDetail) -> (usize, err)
+fn buffered_detail_writer_flush(ctx: *void, detail: *os.ErrorDetail) -> err
 fn forwarding_flush(ctx: *void) -> err
 fn no_flush(ctx: *void) -> err
 fn no_flush_detail(ctx: *void, detail: *os.ErrorDetail) -> err
@@ -1929,6 +1941,13 @@ explicit callback. buffered_sink flushes buffered bytes before forwarding flush.
 Partial writes retain only the unwritten suffix; a failed flush is not a rollback.
 Compression finish, protocol shutdown, and durable filesystem sync are distinct
 operations, never implied by generic flush. See stdlib-hardening.md SL02.
+
+The additive `DetailReader`/`DetailWriter` family carries a caller-owned
+`os.ErrorDetail` through file, buffered and copy operations without changing the
+established callback ABI. Success and end-of-stream leave the value unchanged.
+Library limit, no-progress and allocation failures use native code zero and name the
+operation and failed constraint; native file failures retain the host code captured
+by `e.os` at that call.
 
 ### `e.text.io`
 

@@ -53,6 +53,14 @@ type BufferedWriter = struct {
     state: *void,
 }
 
+type DetailBufferedReader = struct {
+    state: *void,
+}
+
+type DetailBufferedWriter = struct {
+    state: *void,
+}
+
 type Seeker = struct {
     ctx: *void,
     seek: fn(*void, i64, os.SeekWhence) -> (u64, err),
@@ -88,6 +96,16 @@ type BufferState = struct {
     buffer: []u8,
     off: usize,
     len: usize,
+}
+
+type DetailBufferState = struct {
+    source: DetailReader,
+    sink: DetailWriter,
+    buffer: []u8,
+    off: usize,
+    len: usize,
+    pending_error: err,
+    pending_detail: os.ErrorDetail,
 }
 
 fn no_flush(ctx: *void) -> err {
@@ -470,6 +488,47 @@ fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err) {
     ret (mem.view(a, start, filled), ok)
 }
 
+fn read_all_detail(a: *mem.Arena, r: *DetailReader, limit: usize, detail: *os.ErrorDetail) -> ([]u8, err) {
+    let start = mem.mark(a)
+    var filled = 0usize
+    var reserved = 0usize
+    while true {
+        if filled == reserved {
+            var grow = reserved
+            if grow == 0usize { grow = 512usize }
+            if reserved + grow > limit { grow = limit - reserved }
+            if grow == 0usize {
+                mem.reset(a, start)
+                detail.kind = .Invalid
+                detail.native_code = 0i32
+                detail.operation = "read_all"
+                detail.subject = "limit"
+                ret (zero, TooSmall)
+            }
+            let (extra, extra_error) = mem.alloc[u8](a, grow)
+            if extra_error != ok {
+                mem.reset(a, start)
+                detail.kind = .OutOfMemory
+                detail.native_code = 0i32
+                detail.operation = "read_all"
+                detail.subject = "arena"
+                ret (zero, extra_error)
+            }
+            reserved += extra.len
+        }
+        let window = mem.view(a, start + filled, reserved - filled)
+        let (count, read_error) = read_detail(r, window, detail)
+        filled += count
+        if read_error == End { break }
+        if read_error != ok {
+            mem.reset(a, start)
+            ret (zero, read_error)
+        }
+    }
+    mem.reset(a, start + filled)
+    ret (mem.view(a, start, filled), ok)
+}
+
 // One byte at a time, because a `Reader` cannot give back what it has already handed
 // over and the delimiter is only known once it arrives.
 fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, err) {
@@ -508,6 +567,28 @@ fn copy(dst: *Writer, src: *Reader, scratch: []u8) -> (u64, err) {
         let write_error = write_all(dst, scratch[0usize..count])
         if write_error != ok { ret (moved, write_error) }
         moved += u64(count)
+    }
+    ret (moved, ok)
+}
+
+fn copy_detail(dst: *DetailWriter, src: *DetailReader, scratch: []u8, detail: *os.ErrorDetail) -> (u64, err) {
+    if scratch.len == 0usize {
+        detail.kind = .Invalid
+        detail.native_code = 0i32
+        detail.operation = "copy"
+        detail.subject = "scratch"
+        ret (0u64, TooSmall)
+    }
+    var moved = 0u64
+    while true {
+        let (count, read_error) = read_detail(src, scratch, detail)
+        if count > 0usize {
+            let (written, write_error) = write_all_detail(dst, scratch[0usize..count], detail)
+            moved += u64(written)
+            if write_error != ok { ret (moved, write_error) }
+        }
+        if read_error == End { ret (moved, ok) }
+        if read_error != ok { ret (moved, read_error) }
     }
     ret (moved, ok)
 }
@@ -569,6 +650,144 @@ fn buffered_writer_flush(ctx: *void) -> err {
     ret flush(&state.sink)
 }
 
+fn buffered_detail_read(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err) {
+    var state = mem.cast[*DetailBufferState](ctx)
+    if state.off == state.len {
+        state.off = 0usize
+        state.len = 0usize
+        state.pending_error = ok
+        let (count, read_error) = read_detail(&state.source, state.buffer, detail)
+        state.len = count
+        if read_error != ok {
+            state.pending_error = read_error
+            state.pending_detail = *detail
+        }
+        if count == 0usize { ret (0usize, read_error) }
+    }
+    var take = state.len - state.off
+    if take > dst.len { take = dst.len }
+    var at = 0usize
+    while at < take {
+        dst[at] = state.buffer[state.off + at]
+        at += 1usize
+    }
+    state.off += take
+    if state.off == state.len && state.pending_error != ok {
+        *detail = state.pending_detail
+        ret (take, state.pending_error)
+    }
+    ret (take, ok)
+}
+
+fn buffered_detail_write(ctx: *void, src: []const u8, detail: *os.ErrorDetail) -> (usize, err) {
+    var state = mem.cast[*DetailBufferState](ctx)
+    if state.len == state.buffer.len {
+        let flush_error = buffered_detail_writer_flush(ctx, detail)
+        if flush_error != ok { ret (0usize, flush_error) }
+    }
+    var take = state.buffer.len - state.len
+    if take > src.len { take = src.len }
+    var at = 0usize
+    while at < take {
+        state.buffer[state.len + at] = src[at]
+        at += 1usize
+    }
+    state.len += take
+    ret (take, ok)
+}
+
+fn buffered_detail_writer_flush(ctx: *void, detail: *os.ErrorDetail) -> err {
+    var state = mem.cast[*DetailBufferState](ctx)
+    if state.len > 0usize {
+        let (written, write_error) = write_all_detail(&state.sink, state.buffer[0usize..state.len], detail)
+        if written > 0usize {
+            var at = written
+            while at < state.len {
+                state.buffer[at - written] = state.buffer[at]
+                at += 1usize
+            }
+            state.len -= written
+        }
+        if write_error != ok { ret write_error }
+        state.len = 0usize
+    }
+    ret flush_detail(&state.sink, detail)
+}
+
+fn buffered_detail_reader(a: *mem.Arena, source: DetailReader, capacity: usize, detail: *os.ErrorDetail) -> (DetailBufferedReader, err) {
+    var handle: DetailBufferedReader = zero
+    if capacity == 0usize {
+        detail.kind = .Invalid
+        detail.native_code = 0i32
+        detail.operation = "buffered_reader"
+        detail.subject = "capacity"
+        ret (handle, TooSmall)
+    }
+    let start = mem.mark(a)
+    let (state, state_error) = mem.alloc[DetailBufferState](a, 1usize)
+    if state_error != ok {
+        mem.reset(a, start)
+        detail.kind = .OutOfMemory
+        detail.native_code = 0i32
+        detail.operation = "buffered_reader"
+        detail.subject = "state"
+        ret (handle, state_error)
+    }
+    let (buffer, buffer_error) = mem.alloc[u8](a, capacity)
+    if buffer_error != ok {
+        mem.reset(a, start)
+        detail.kind = .OutOfMemory
+        detail.native_code = 0i32
+        detail.operation = "buffered_reader"
+        detail.subject = "buffer"
+        ret (handle, buffer_error)
+    }
+    state[0usize].source = source
+    state[0usize].buffer = buffer
+    state[0usize].off = 0usize
+    state[0usize].len = 0usize
+    state[0usize].pending_error = ok
+    handle.state = mem.cast[*void](&state[0usize])
+    ret (handle, ok)
+}
+
+fn buffered_detail_writer(a: *mem.Arena, sink: DetailWriter, capacity: usize, detail: *os.ErrorDetail) -> (DetailBufferedWriter, err) {
+    var handle: DetailBufferedWriter = zero
+    if capacity == 0usize {
+        detail.kind = .Invalid
+        detail.native_code = 0i32
+        detail.operation = "buffered_writer"
+        detail.subject = "capacity"
+        ret (handle, TooSmall)
+    }
+    let start = mem.mark(a)
+    let (state, state_error) = mem.alloc[DetailBufferState](a, 1usize)
+    if state_error != ok {
+        mem.reset(a, start)
+        detail.kind = .OutOfMemory
+        detail.native_code = 0i32
+        detail.operation = "buffered_writer"
+        detail.subject = "state"
+        ret (handle, state_error)
+    }
+    let (buffer, buffer_error) = mem.alloc[u8](a, capacity)
+    if buffer_error != ok {
+        mem.reset(a, start)
+        detail.kind = .OutOfMemory
+        detail.native_code = 0i32
+        detail.operation = "buffered_writer"
+        detail.subject = "buffer"
+        ret (handle, buffer_error)
+    }
+    state[0usize].sink = sink
+    state[0usize].buffer = buffer
+    state[0usize].off = 0usize
+    state[0usize].len = 0usize
+    state[0usize].pending_error = ok
+    handle.state = mem.cast[*void](&state[0usize])
+    ret (handle, ok)
+}
+
 fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedReader, err) {
     var handle: BufferedReader = zero
     if capacity == 0usize { ret (handle, TooSmall) }
@@ -605,6 +824,14 @@ fn buffered_source(buffer: *BufferedReader) -> Reader {
 
 fn buffered_sink(buffer: *BufferedWriter) -> Writer {
     ret Writer { ctx: buffer.state, write: buffered_write, flush: buffered_writer_flush }
+}
+
+fn buffered_detail_source(buffer: *DetailBufferedReader) -> DetailReader {
+    ret DetailReader { ctx: buffer.state, read: buffered_detail_read }
+}
+
+fn buffered_detail_sink(buffer: *DetailBufferedWriter) -> DetailWriter {
+    ret DetailWriter { ctx: buffer.state, write: buffered_detail_write, flush: buffered_detail_writer_flush }
 }
 
 fn print(s: str) -> err {

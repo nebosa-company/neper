@@ -158,6 +158,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if checked_write_detail.native_code == 0i32 || !mem.eq[u8](checked_write_detail.operation, "write") { os.exit(59i32) }
     let _ = os.close(invalid_writer_file)
 
+    var nested_invalid_file: os.File = zero
+    nested_invalid_file.raw = 18446744073709551615usize
+    var nested_detail: os.ErrorDetail = zero
+    var nested_file_sink = io.file_detail_writer(&nested_invalid_file)
+    var (nested_handle, nested_handle_error) = io.buffered_detail_writer(a, nested_file_sink, 4usize, &nested_detail)
+    if nested_handle_error != ok { ret nested_handle_error }
+    var nested_sink = io.buffered_detail_sink(&nested_handle)
+    let (nested_count, nested_write_error) = io.write_all_detail(&nested_sink, "held", &nested_detail)
+    if nested_write_error != ok || nested_count != 4usize { os.exit(60i32) }
+    if io.flush_detail(&nested_sink, &nested_detail) == ok { os.exit(61i32) }
+    if nested_detail.native_code == 0i32 || !mem.eq[u8](nested_detail.operation, "write") { os.exit(62i32) }
+    let _ = os.close(nested_invalid_file)
+
     // Caller-owned details remain independent when the operations overlap. A host
     // without runtime threads has already exercised both checked calls above.
     var concurrent_read_job: IoDetailJob = zero
@@ -170,11 +183,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let _ = os.thread_join(read_worker)
             ret write_started
         }
-        if os.thread_join(read_worker) != ok { os.exit(60i32) }
-        if os.thread_join(write_worker) != ok { os.exit(61i32) }
-        if concurrent_read_job.failure == ok || concurrent_write_job.failure == ok { os.exit(62i32) }
-        if !mem.eq[u8](concurrent_read_job.detail.operation, "read") || !mem.eq[u8](concurrent_write_job.detail.operation, "write") { os.exit(63i32) }
-        if concurrent_read_job.detail.native_code == 0i32 || concurrent_write_job.detail.native_code == 0i32 { os.exit(64i32) }
+        if os.thread_join(read_worker) != ok { os.exit(63i32) }
+        if os.thread_join(write_worker) != ok { os.exit(64i32) }
+        if concurrent_read_job.failure == ok || concurrent_write_job.failure == ok { os.exit(65i32) }
+        if !mem.eq[u8](concurrent_read_job.detail.operation, "read") || !mem.eq[u8](concurrent_write_job.detail.operation, "write") { os.exit(66i32) }
+        if concurrent_read_job.detail.native_code == 0i32 || concurrent_write_job.detail.native_code == 0i32 { os.exit(67i32) }
     }
     ret os.dir_close(here)
 }

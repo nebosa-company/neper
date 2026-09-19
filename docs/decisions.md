@@ -12921,3 +12921,18 @@ that actually failed.
 Keeping this type beside, rather than inside, `Writer` avoids migrating every
 existing callback and aggregate solely to add optional failure evidence. The
 cross-host error-detail fixture pins native file-write provenance through `e.io`.
+
+## D658 -- Detail streams preserve nested effects and failed allocation steps
+
+The additive detail stream has its own buffered state. A buffered reader retains
+bytes returned together with an error and reports that error when the retained
+prefix is consumed; a buffered writer preserves the unwritten suffix and the
+wrapped sink's provenance. `copy_detail` counts every byte the destination accepted,
+including a prefix paired with an error.
+
+Detail-buffer constructors mark the arena before allocating state and storage. On
+either allocation failure they reset to that mark and name `state` or `buffer` in a
+caller-owned `OutOfMemory` detail. `read_all_detail` likewise distinguishes its hard
+limit from arena exhaustion. The focused fixtures cover nested native write failure,
+successful composed copy without detail clobbering, and rollback of the first
+allocation step on both hosts.

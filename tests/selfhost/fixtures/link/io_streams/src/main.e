@@ -183,5 +183,35 @@ fn main(a: *mem.Arena) -> err {
     if !str.eq(support.captured(&scripted), "he") { ret Failed }
     if io.flush(&retry_sink) != ok { ret Failed }
     if !str.eq(support.captured(&scripted), "held") { ret Failed }
+
+    // Detail streams compose without changing success provenance.
+    var detail_source_state = io.SliceReader { data: "detail copy", off: 0usize }
+    var detail_sink_bytes: [16]u8 = zero
+    var detail_sink_state = io.SliceWriter { data: detail_sink_bytes[..], off: 0usize }
+    var detail_source = io.slice_detail_reader(&detail_source_state)
+    var detail_sink = io.slice_detail_writer(&detail_sink_state)
+    var detail: os.ErrorDetail = zero
+    detail.native_code = 77i32
+    let (detail_moved, detail_copy_error) = io.copy_detail(&detail_sink, &detail_source, scratch[..], &detail)
+    if detail_copy_error != ok || detail_moved != 11u64 { ret Failed }
+    if !str.eq(detail_sink_bytes[0usize..11usize], "detail copy") || detail.native_code != 77i32 { ret Failed }
+
+    // A failed constructor names its allocation step and restores the arena mark.
+    var tiny_bytes: [1]u8 = zero
+    var tiny = mem.arena_from(tiny_bytes[..])
+    var allocation_detail: os.ErrorDetail = zero
+    var empty_source_state = io.SliceReader { data: "", off: 0usize }
+    let (tiny_reader, tiny_error) = io.buffered_detail_reader(&tiny, io.slice_detail_reader(&empty_source_state), 4usize, &allocation_detail)
+    if tiny_error == ok || allocation_detail.kind != .OutOfMemory { ret Failed }
+    if !str.eq(allocation_detail.operation, "buffered_reader") || !str.eq(allocation_detail.subject, "state") { ret Failed }
+    if mem.mark(&tiny) != 0usize { ret Failed }
+
+    var one_step_bytes: [512]u8 = zero
+    var one_step = mem.arena_from(one_step_bytes[..])
+    var buffer_allocation_detail: os.ErrorDetail = zero
+    let (large_reader, large_error) = io.buffered_detail_reader(&one_step, io.slice_detail_reader(&empty_source_state), 1024usize, &buffer_allocation_detail)
+    if large_error == ok || buffer_allocation_detail.kind != .OutOfMemory { ret Failed }
+    if !str.eq(buffer_allocation_detail.operation, "buffered_reader") || !str.eq(buffer_allocation_detail.subject, "buffer") { ret Failed }
+    if mem.mark(&one_step) != 0usize { ret Failed }
     ret ok
 }

@@ -71,7 +71,9 @@ returning an error, and expose the count through `write_all_progress`. D656 adds
 additive `DetailReader` callback path so generic file reads carry the same
 caller-owned native provenance without changing the established `Reader` ABI. D657
 adds the symmetric `DetailWriter`, including a detail-aware flush callback and exact
-accepted-prefix result.
+accepted-prefix result. D658 carries those callbacks through buffered streams and
+copy, retains data paired with an error, and records rollback-safe allocation-step
+failures.
 
 Acceptance: file -> buffer -> decompressor -> JSON stream using only public APIs;
 nested buffered sinks; short writes; data plus error; flush failure after a prefix;
