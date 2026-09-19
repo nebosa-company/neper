@@ -13151,3 +13151,12 @@ with E-SAFETY-0018 when that region resets before the caller receives the result
 The checker recognizes the existing range postfix and resolves its base place; it
 does not add a general expression-lifetime graph. Field and aggregate escapes remain
 later H02 work.
+
+## D681 -- A derived pointer cannot escape across its deferred reset
+
+A return expression that takes the address of a place in a region local carries that
+local's region for the deferred-reset escape check. `ret &scratch[i]` is therefore
+E-SAFETY-0018 when the deferred reset runs before delivery to the caller.
+
+The checker resolves the operand's existing base place and reuses D675's diagnostic;
+no general expression-lifetime graph is added.

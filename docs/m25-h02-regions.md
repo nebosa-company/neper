@@ -197,3 +197,7 @@ is tagged as a view of `c`, so a later mutation reports E-SAFETY-0014.
 **D680** extends deferred-reset escape checking from a region local to a slice derived
 from it at the return site. Returning `scratch[a..b]` is E-SAFETY-0018 for the same
 reason as returning `scratch`: the deferred reset runs before the caller sees either.
+
+**D681** applies the same boundary to a pointer formed from region storage at the
+return site. Returning `&scratch[i]` across the deferred reset is E-SAFETY-0018 with
+the defer registration as related evidence.

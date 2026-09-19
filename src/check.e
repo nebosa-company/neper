@@ -15064,6 +15064,13 @@ fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
             if is_resource { is_resource = c.resources[local_index].region != 0usize }
         }
     }
+    if !is_resource && tree.nodes[node_index].kind == .UnaryExpr && c.tokens[usize(tree.nodes[node_index].token_start)].kind == .PunctAmp {
+        let (inner_index, has_inner) = first_node_child(tree, tree.nodes[node_index])
+        if has_inner {
+            (local_index, is_resource) = place_base_local(c, g, tree, module_index, inner_index)
+            if is_resource { is_resource = c.resources[local_index].region != 0usize }
+        }
+    }
     if is_resource && c.resources[local_index].region != 0usize {
         let region_mark = c.resources[local_index].region - 1usize
         var mark_at = 0usize
