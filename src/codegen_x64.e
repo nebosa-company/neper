@@ -588,12 +588,13 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     let lane = nir.vector_binary_lane(instruction.immediate)
     let operation = nir.vector_binary_operation(instruction.immediate)
     let (mandatory, opcode, known) = packed_instruction(operation, lane)
-    // Sixteen bytes is a whole register; eight and four -- the masks of eight and of
-    // four lanes, the only narrower operands the closed table has -- are its low half
-    // and its low quarter, which the same instructions answer and a narrower move
-    // carries.
+    // Sixteen bytes is a whole register; eight, four and two -- the masks of eight, of
+    // four and of two lanes, the only narrower operands the closed table has -- are its
+    // low half, quarter and eighth, which the same instructions answer and a narrower
+    // move carries. r11 is the general register the two-byte move borrows, the scratch
+    // no value is ever allocated to.
     let bytes = nir.vector_binary_lanes(instruction.immediate) * packed_lane_size(lane)
-    if !known || (bytes != 16usize && bytes != 8usize && bytes != 4usize) { ret Unsupported }
+    if !known || (bytes != 16usize && bytes != 8usize && bytes != 4usize && bytes != 2usize) { ret Unsupported }
     let destination_value = builder.operands[instruction.first_operand]
     let left_value = builder.operands[instruction.first_operand + 1usize]
     let (left, left_error) = read_value(allocations, left_value, 10usize, output)
@@ -602,7 +603,7 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     // subtraction has to answer in the register the store reads.
     var loaded = 0usize
     if operation == 11usize { loaded = 1usize }
-    try emit_x64.vector_load(output, loaded, left, bytes)
+    try emit_x64.vector_load(output, loaded, left, bytes, 11usize)
     if operation == 10usize {
         // `~v` is a `pxor` against all ones, which `pcmpeqd` on a register against
         // itself makes without reading the register or the image. Lowering repeats the
@@ -622,13 +623,13 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     if operation < 10usize {
         let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
         if right_error != ok { ret right_error }
-        try emit_x64.vector_load(output, 1usize, right, bytes)
+        try emit_x64.vector_load(output, 1usize, right, bytes, 11usize)
     }
     try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
     if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
     let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
     if destination_error != ok { ret destination_error }
-    ret emit_x64.vector_store(output, destination, 0usize, bytes)
+    ret emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
 }
 
 // The byte width of one lane, by the lane code the immediate carries: an integer of

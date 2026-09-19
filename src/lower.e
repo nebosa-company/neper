@@ -5227,20 +5227,20 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // The lane-wise shapes one vector instruction covers: a sixteen-byte vector -- the
 // width SSE2 and NEON both have -- whose lane type and operator name a single packed
 // instruction on that baseline, plus `~`, which is two. A mask is one byte per lane, so
-// sixteen lanes are sixteen bytes, eight are the register's low half and four its low
-// quarter; all three take the three bitwise ones and the mask's own `~`. Everything
-// else keeps the lane loop below: the wider widths, `f16`, the shifts, the masks of two
-// lanes and of more than sixteen, and `*%` on any lane but the sixteen-bit one, the
-// only packed multiply SSE2 has.
+// sixteen lanes are sixteen bytes, eight are the register's low half, four its low
+// quarter and two its low eighth; all four take the three bitwise ones and the mask's
+// own `~`. Everything else keeps the lane loop below: the wider widths, `f16`, the
+// shifts, the masks of more than sixteen lanes, and `*%` on any lane but the
+// sixteen-bit one, the only packed multiply SSE2 has.
 // ponytail: the sixteen-byte baseline only; `--cpu` and wider widths widen this table.
 fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, bool) {
     // Sixteen bytes is a whole register, and a mask is the only narrower operand the
     // closed table reaches, since the smallest `Vec` is sixteen bytes: eight bytes for
-    // eight lanes, four for four. The same instruction answers those on the register's
-    // low half or low quarter, which the narrower moves carry.
+    // eight lanes, four for four, two for two. The same instruction answers those on
+    // the register's low half, quarter or eighth, which the narrower moves carry.
     let mask_lanes = lane.kind == .Bool && lane_size == 1usize
     let bytes = lanes * lane_size
-    let packable = bytes == 16usize || ((bytes == 8usize || bytes == 4usize) && mask_lanes)
+    let packable = bytes == 16usize || ((bytes == 8usize || bytes == 4usize || bytes == 2usize) && mask_lanes)
     if !packable { ret (0usize, false) }
     var lane_code = 16usize
     if lane.kind == .Float {

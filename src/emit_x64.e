@@ -317,21 +317,33 @@ fn sse(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, rm: usize, opc
 }
 
 // SSE2's packed forms, which operate on all sixteen bytes of a vector at once, or on
-// the low half or quarter of the register when the operand is narrower -- a mask, which
-// is one byte per lane. A vector lives in its stack slot, which is aligned to eight
-// bytes and not to sixteen, so sixteen bytes come in through `movups` -- the unaligned
-// move, the one packed load that does not fault on an eight-byte-aligned address --
-// eight through `movlps`, a quadword, and four through `movd`, a doubleword; neither
-// narrow move faults. Each move touches exactly the operand's bytes: the narrow loads
-// leave the lanes above them as they found them or clear them, which no caller reads,
-// and the narrow stores write only the bytes the mask owns.
-fn vector_load(buffer: *Buffer, destination: usize, address: usize, bytes: usize) -> err {
+// the low half, quarter or eighth of the register when the operand is narrower -- a
+// mask, which is one byte per lane. A vector lives in its stack slot, which is aligned
+// to eight bytes and not to sixteen, so sixteen bytes come in through `movups` -- the
+// unaligned move, the one packed load that does not fault on an eight-byte-aligned
+// address -- eight through `movlps`, a quadword, and four through `movd`, a doubleword;
+// neither narrow move faults. Two bytes are the one width the vector unit cannot carry
+// to and from memory on this baseline: `pinsrw` reads a word but the `pextrw` that
+// would write one back only answers into a general register before SSE4.1, so both
+// directions go through one instead -- a zero-extending word load and the `movq` the
+// scalar float path already moves bits with. Each move touches exactly the operand's
+// bytes: the narrow loads leave the lanes above them as they found them or clear them,
+// which no caller reads, and the narrow stores write only the bytes the mask owns.
+fn vector_load(buffer: *Buffer, destination: usize, address: usize, bytes: usize, scratch: usize) -> err {
+    if bytes == 2usize {
+        try load_memory(buffer, scratch, address, 16usize, false)
+        ret move_to_float(buffer, destination, scratch, true)
+    }
     if bytes == 4usize { ret sse_memory(buffer, 102usize, destination, address, 110usize) }
     if bytes == 8usize { ret sse_memory(buffer, 0usize, destination, address, 18usize) }
     ret sse_memory(buffer, 0usize, destination, address, 16usize)
 }
 
-fn vector_store(buffer: *Buffer, address: usize, source: usize, bytes: usize) -> err {
+fn vector_store(buffer: *Buffer, address: usize, source: usize, bytes: usize, scratch: usize) -> err {
+    if bytes == 2usize {
+        try move_from_float(buffer, scratch, source, true)
+        ret store_memory(buffer, address, scratch, 16usize)
+    }
     if bytes == 4usize { ret sse_memory(buffer, 102usize, source, address, 126usize) }
     if bytes == 8usize { ret sse_memory(buffer, 0usize, source, address, 19usize) }
     ret sse_memory(buffer, 0usize, source, address, 17usize)

@@ -14064,3 +14064,33 @@ The mask of two lanes keeps the loop: a word move into a vector register is `pin
 which reads a lane index and is not the same shape, and `Mask[i64, 2]` is the only
 mask the closed table gives two lanes to. The thirty-two- and sixty-four-lane masks
 keep it too, for the width their vectors keep it for.
+
+## D757 -- The packed forms reach a two-lane mask
+
+D756 takes the packed forms down to four bytes and leaves the two-lane mask on the lane
+loop for want of a move: a word into the low lanes of a vector register is `pinsrw`,
+which carries a lane index, and the `pextrw` that would write one back answers into a
+general register until SSE4.1. That is a reason to route the two bytes through a general
+register, not a reason to keep the loop. `vector_load` at two bytes is a zero-extending
+word load and the `movq` the scalar float path already moves bits with; `vector_store`
+is that `movq` the other way and a word store. Both borrow r11, the scratch no value is
+ever allocated to -- the same register `select_float_binary` borrows for a second
+operand -- so the two moves cost a general register that was already free.
+
+The operation between them is unchanged, which is the whole point: `pand`, `por`,
+`pxor`, `pcmpeqb` and `psubb` read no lane they are not given, so the instructions D753
+and D754 select answer two lanes exactly as they answer sixteen. The load zero-extends,
+so the fourteen lanes above the operand are zero rather than stale, and the store writes
+the two bytes the mask owns and nothing else. No new opcode reaches the emitter:
+`movzx`, `mov` and `movq` were all already there, so the disassembler needs no new case
+either.
+
+The closed table gives two lanes to its eight-byte lane types, so `Mask[i64, 2]` and
+`Mask[f64, 2]` -- the masks of a sixteen-byte vector -- are what this packs. The
+`link/simd_lanes` fixture checks `& | ^ ~` over two patterns that agree in the high lane
+and differ in the low one, so a move of the wrong width is caught in either direction,
+and that a flipped lane still reduces as a mask lane, in both suites.
+
+Two bytes is the floor: one lane is a `bool`, not a vector, so every mask the closed
+table has is now packed except those of more than sixteen lanes, which want the second
+register their vectors want.

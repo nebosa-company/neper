@@ -279,6 +279,22 @@ fn operators() {
     let qd = simd.mask[Vec[i32, 4]](13u64)
     if simd.bits[Vec[i32, 4]](~(qc & qd)) != 6u64 { os.exit(48) }
     if !simd.all[Vec[i32, 4]](qc | ~qc) { os.exit(49) }
+    // Two mask lanes are two bytes, the register's low eighth, which no packed move
+    // carries in both directions: the pair goes through a general register instead. The
+    // two patterns agree in the high lane and differ in the low one, so a move that
+    // reads or writes the wrong width is caught either way.
+    let ha = simd.mask[Vec[f64, 2]](2u64)
+    let hb = simd.mask[Vec[f64, 2]](3u64)
+    if simd.bits[Vec[f64, 2]](ha & hb) != 2u64 { os.exit(64) }
+    if simd.bits[Vec[f64, 2]](ha | hb) != 3u64 { os.exit(65) }
+    if simd.bits[Vec[f64, 2]](ha ^ hb) != 1u64 { os.exit(66) }
+    if simd.bits[Vec[f64, 2]](~ha) != 1u64 { os.exit(67) }
+    if simd.bits[Vec[f64, 2]](~hb) != 0u64 { os.exit(68) }
+    if simd.all[Vec[f64, 2]](~ha) || !simd.any[Vec[f64, 2]](~ha) { os.exit(69) }
+    // An integer vector of two lanes has the same two-byte mask, and it reduces the same.
+    let hc = simd.mask[Vec[i64, 2]](1u64)
+    if simd.bits[Vec[i64, 2]](~hc) != 2u64 { os.exit(58) }
+    if !simd.all[Vec[i64, 2]](hc | ~hc) { os.exit(59) }
     // Through a generic, where the vector is still `V` when the operator is checked.
     let r = axpy[Vec[f64, 2]](simd.splat[Vec[f64, 2]](2.0), simd.splat[Vec[f64, 2]](3.0), simd.splat[Vec[f64, 2]](1.0))
     if r.lanes[1] != 7.0 { os.exit(92) }
