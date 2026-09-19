@@ -14568,7 +14568,7 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let node = tree.nodes[node_index]
     if node.kind == .FieldExpr { ret resource_consume_field(c, g, tree, module_index, node_index) }
     if node.kind == .BracketPostfix {
-        let (slice_error, consumed_slice) = resource_consume_full_slice(c, g, tree, module_index, node_index)
+        let (consumed_slice, slice_error) = resource_consume_full_slice(c, g, tree, module_index, node_index)
         if consumed_slice { ret slice_error }
         ret resource_consume_element(c, g, tree, module_index, node_index)
     }
@@ -14655,25 +14655,25 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     ret ok
 }
 
-fn resource_consume_full_slice(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (err, bool) {
+fn resource_consume_full_slice(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
     let node = tree.nodes[node_index]
     var bracket: BracketInfo = zero
-    if read_bracket(c, tree, node, &bracket) != ok || !bracket.range || bracket.child_count == 0usize || bracket.child_count > 2usize { ret (ok, false) }
+    if read_bracket(c, tree, node, &bracket) != ok || !bracket.range || bracket.child_count == 0usize || bracket.child_count > 2usize { ret (false, ok) }
     let base = tree.nodes[bracket.base]
-    if base.kind != .NameExpr { ret (ok, false) }
+    if base.kind != .NameExpr { ret (false, ok) }
     let token = c.tokens[usize(base.token_start)]
-    if token.kind != .Identifier { ret (ok, false) }
+    if token.kind != .Identifier { ret (false, ok) }
     let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
-    if !found || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (ok, false) }
+    if !found || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (false, ok) }
     var first = 0usize
     if bracket.child_count == 2usize {
         var range_at = usize(base.token_end)
         while range_at < usize(node.token_end) && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
-        if range_at == usize(node.token_end) || usize(tree.nodes[bracket.first].token_start) > range_at { ret (ok, false) }
+        if range_at == usize(node.token_end) || usize(tree.nodes[bracket.first].token_start) > range_at { ret (false, ok) }
         let (lower, lower_constant) = resource_index_value(c, g, tree, module_index, bracket.first)
         if !lower_constant || lower > c.resources[local_index].fields.len {
             record_failure_related(c, module_index, node, .ResourcePartialMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
-            ret (ResourceViolation, true)
+            ret (true, ResourceViolation)
         }
         first = lower
     }
@@ -14683,7 +14683,7 @@ fn resource_consume_full_slice(c: *Checker, g: *graph.Graph, tree: *parse.Tree, 
         if field_owed(byte) && field_state(byte) != resource_owned {
             let acquired = resource_part_acquired(c, local_index, at)
             record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
-            ret (ResourceViolation, true)
+            ret (true, ResourceViolation)
         }
         at += 1usize
     }
@@ -14697,7 +14697,7 @@ fn resource_consume_full_slice(c: *Checker, g: *graph.Graph, tree: *parse.Tree, 
         at += 1usize
     }
     c.resources[local_index].acquired = usize(node.token_start)
-    ret (ok, true)
+    ret (true, ok)
 }
 
 // The arguments of a checked call that its callee consumes: moved. `resource_uses`

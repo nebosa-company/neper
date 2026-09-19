@@ -2453,6 +2453,14 @@ for conformance_case in 'reject safety_dynamic_array_read 1' 'reject safety_dyna
     [ "$conformance_status" -eq "$3" ]
     cmp -s "$test_build/conformance-$1-$2.jsonl" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s\n' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
 done
+# D721-D725: explicit ownership transfer and exhaustive cleanup for resource slices.
+for conformance_case in 'reject safety_owned_slice_leak 1' 'reject safety_owned_slice_partial 1' 'accept safety_owned_slice_sweep 0' 'accept safety_owned_slice_transfer 0' 'accept safety_owned_slice_offset_transfer 0'; do
+    set -- $conformance_case
+    conformance_status=0
+    $test_build/neper-self check-file "$conformance_root/$1/$2.e" "$repo" x64 linux --json > "$test_build/conformance-$1-$2.jsonl" || conformance_status=$?
+    [ "$conformance_status" -eq "$3" ]
+    cmp -s "$test_build/conformance-$1-$2.jsonl" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s\n' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
+done
 # A consuming dereference follows its lexical pointer alias to the pinned resource
 # (D610, H01).
 pointer_move_status=0
