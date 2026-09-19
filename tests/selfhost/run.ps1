@@ -3615,6 +3615,17 @@ $aggregateExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $aggregateExecutableWritten -ne 'executable written') { throw 'aggregate PE executable emission failed' }
 & $aggregateExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'aggregate layout, literal storage, or field access failed in the self-hosted PE executable' }
+# `@reorder` (D239): the opt-in alignment sort. The reordered struct is 16 bytes where
+# declaration order pads the same three fields to 24, and every field still reads and
+# writes through its own offset; a value of one crossing an FFI boundary is refused.
+$reorderExecutablePath = Join-Path $testBuild 'reorder-selfhost.exe'
+$reorderExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\reorder\src\main.e') $repo 'x64' 'windows' $reorderExecutablePath
+if ($LASTEXITCODE -ne 0 -or $reorderExecutableWritten -ne 'executable written') { throw '@reorder PE executable emission failed' }
+& $reorderExecutablePath
+if ($LASTEXITCODE -ne 0) { throw "@reorder did not pack the struct or did not keep its fields: exit $LASTEXITCODE" }
+Require-Fixture 'check/reorder_extern'
+$reorderExternOutput = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\reorder_extern\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($reorderExternOutput -join "`n") -notmatch 'main\.e:11:1: error\[E-TYPE-9999\]: @reorder is legal on a struct or a union that crosses no FFI boundary') { throw "a @reorder struct crossing an FFI boundary was not refused: $($reorderExternOutput -join "`n")" }
 $advancedExecutablePath = Join-Path $testBuild 'advanced-selfhost.exe'
 $advancedExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\advanced\src\main.e') $repo 'x64' 'windows' $advancedExecutablePath
 if ($LASTEXITCODE -ne 0 -or $advancedExecutableWritten -ne 'executable written') { throw 'advanced self-host PE executable emission failed' }

@@ -136,6 +136,9 @@ type DiagnosticKind = enum u8 {
     VariadicArgument,
     // A field the aggregate does not declare (D448, H09).
     FieldMissing,
+    // `@reorder` on something other than a struct or a union, or on a type that
+    // crosses an FFI boundary (D239).
+    ReorderBoundary,
 }
 
 type Kind = enum u8 {
@@ -324,6 +327,9 @@ type Aggregate = struct {
     // and whether a value holds a pointer (D354), the same way.
     affine_memo: u8,
     pointer_memo: u8,
+    // `@reorder` (D239): the fields are laid out by descending alignment instead of in
+    // declaration order, which `layout` does and nothing else needs to know about.
+    reorder: bool,
 }
 
 type AggregateField = struct {
@@ -706,6 +712,9 @@ type Checker = struct {
     // failure line needs its reporting function synthesized once the module is lowered.
     main_reports_failure: bool,
     has_simd: bool,
+    // Whether any aggregate asked for `@reorder` (D239). Nothing else pays for the
+    // boundary walk in a program that never writes one.
+    has_reorder: bool,
     checked_switch_count: usize,
     function_signature_count: usize,
     token_count: usize,
@@ -2393,18 +2402,28 @@ fn aggregate_declaration_shape(tree: *parse.Tree, node: syntax.Node) -> (usize, 
     ret (body_index, kind, generic, has_body)
 }
 
-fn register_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+fn register_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, node_index: usize) -> err {
     let (body_index, kind, generic, has_body) = aggregate_declaration_shape(tree, node)
     if !has_body { ret ok }
     if c.aggregate_count == c.aggregates.len { ret Capacity }
+    // `@reorder` (D239): an opt-in that lets the compiler sort the fields by descending
+    // alignment. An enum has no fields to sort and a tagged union's payload is one slot,
+    // so the attribute means nothing there and saying so beats laying out as asked.
+    let reorder = declaration_has_attribute(c, g, tree, module_index, node_index, "reorder")
+    if reorder && kind != .Struct && kind != .Union {
+        record_failure(c, module_index, node, .ReorderBoundary, "", "")
+        ret InvalidType
+    }
+    if reorder { c.has_reorder = true }
     let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
     let aggregate_index = c.aggregate_count
-    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: 0usize, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[usize(node.token_start)], resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
+    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: 0usize, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[usize(node.token_start)], resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
     // `resource` and its cleanup sit between the `=` and the body (D348).
     let (is_resource, cleanup) = resource_declaration(c, g.modules[module_index].text, node, tree.nodes[body_index])
     aggregate.resource = is_resource
     aggregate.cleanup = cleanup
+    aggregate.reorder = reorder
     c.aggregates[aggregate_index] = aggregate
     c.aggregate_count += 1usize
     let end = usize(node.first_child) + usize(node.child_count)
@@ -2576,7 +2595,7 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
 fn seed_target_enum(c: *Checker, name: str, members: []const str) -> err {
     if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + members.len > c.aggregate_fields.len { ret Capacity }
     let backing = make_type(.Integer, "u8", 0usize)
-    c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: 0usize, kind: .Enum, first_field: c.aggregate_field_count, field_count: members.len, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: backing, token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
+    c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: 0usize, kind: .Enum, first_field: c.aggregate_field_count, field_count: members.len, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: backing, token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
     var at = 0usize
     while at < members.len {
         c.aggregate_fields[c.aggregate_field_count + at] = AggregateField { name: members[at], ty: backing, enum_value: at, enum_negative: false, has_enum_value: true, token: zero }
@@ -2626,7 +2645,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
     if has_memory {
         if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + 2usize > c.aggregate_fields.len { ret Capacity }
         let usize_type = make_type(.Integer, "usize", memory_module)
-        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
         c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "used", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_fields[c.aggregate_field_count + 1usize] = AggregateField { name: "capacity", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_field_count += 2usize
@@ -2646,7 +2665,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
         var element = make_type(.TypeParameter, "T", atomic_module)
         element.element = parameter_index
         element.has_element = true
-        c.aggregates[c.aggregate_count] = Aggregate { name: "Atomic", module_index: atomic_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 1usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Atomic", module_index: atomic_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 1usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
         c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "value", ty: element, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_field_count += 1usize
         c.aggregate_count += 1usize
@@ -2688,7 +2707,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
             lanes.has_length = false
             var name = "Vec"
             if which == 1usize { name = "Mask" }
-            c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: simd_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 2usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
+            c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: simd_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 2usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
             c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "lanes", ty: lanes, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
             c.aggregate_field_count += 1usize
             c.aggregate_count += 1usize
@@ -2822,7 +2841,7 @@ fn collect_aggregate_pass(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, re
             let node = tree.nodes[node_index]
             if node.top_level && node.kind == .TypeDecl {
                 if register {
-                    try register_aggregate_declaration(c, r, g, &tree, module_index, node)
+                    try register_aggregate_declaration(c, r, g, &tree, module_index, node, node_index)
                 } else {
                     try collect_aggregate_declaration(c, r, g, &tree, module_index, node)
                 }
@@ -3780,6 +3799,26 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         if item.external && return_type.kind == .Err { ret InvalidType }
         if return_type.kind == .Err && return_index + 1usize != item.return_count { ret InvalidType }
         return_index += 1usize
+    }
+    // A `@reorder` aggregate has neper's layout, not C's, so it cannot cross an FFI
+    // boundary (D239): an `extern` signature, imported or not, or one carrying `@cc`.
+    // Refused at the crossing, where the mismatch would otherwise be a silent ABI break.
+    if c.has_reorder {
+        var crossed = false
+        var crossing_at = 0usize
+        while crossing_at < item.parameter_count {
+            if holds_reordered(c, c.parameters[item.first_parameter + crossing_at].ty, 0usize) { crossed = true }
+            crossing_at += 1usize
+        }
+        crossing_at = 0usize
+        while crossing_at < item.return_count {
+            if holds_reordered(c, c.return_types[item.first_return + crossing_at], 0usize) { crossed = true }
+            crossing_at += 1usize
+        }
+        if crossed && (item.external || declaration_has_attribute(c, g, tree, module_index, node_index, "cc")) {
+            record_failure(c, module_index, node, .ReorderBoundary, "", "")
+            ret InvalidType
+        }
     }
     let (borrow_names, borrow_count, has_borrow, borrow_error) = declaration_parameter_attributes(c, g, tree, module_index, node_index, "borrows")
     if borrow_error != ok || (has_borrow && borrow_count != 1usize) {
@@ -13215,7 +13254,7 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .TypeDecl { try register_aggregate_declaration(c, r, g, &tree, module_index, node) }
+        if node.top_level && node.kind == .TypeDecl { try register_aggregate_declaration(c, r, g, &tree, module_index, node, node_index) }
         node_index += 1usize
     }
     node_index = 1usize
@@ -13486,6 +13525,7 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .BindingUnknownNamed { ret "binding has an unknown named type" }
     if kind == .BorrowContract { ret "@borrows must name one borrowed pointer-bearing parameter of a function with a pointer-bearing result" }
     if kind == .NoEscapeContract { ret "@noescape must name borrowed pointer-bearing parameters and the body must not let them escape" }
+    if kind == .ReorderBoundary { ret "@reorder is legal on a struct or a union that crosses no FFI boundary: its layout is neper's, not C's" }
     ret "type checking failed"
 }
 
@@ -13913,6 +13953,28 @@ fn resource_commit_pins(c: *Checker) {
 
 // Whether a value of the type can carry a pointer: one, a slice, a function, an
 // aggregate or array holding any of them; a type parameter can be anything.
+// Whether a value of `ty` has a `@reorder` aggregate anywhere inside it (D239), which
+// is what makes it illegal at an FFI boundary. Free in a program that declares none.
+fn holds_reordered(c: *Checker, ty: Type, depth: usize) -> bool {
+    if !c.has_reorder || depth > 6usize { ret false }
+    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .Array {
+        if !ty.has_element || ty.element >= c.type_count { ret false }
+        ret holds_reordered(c, c.types[ty.element], depth + 1usize)
+    }
+    if ty.kind != .Named { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found { ret false }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.reorder { ret true }
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let field_index = aggregate.first_field + field_at
+        if field_index < c.aggregate_field_count && holds_reordered(c, c.aggregate_fields[field_index].ty, depth + 1usize) { ret true }
+        field_at += 1usize
+    }
+    ret false
+}
+
 fn holds_pointer(c: *Checker, ty: Type, depth: usize) -> bool {
     if depth > 6usize { ret true }
     if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .String || ty.kind == .Function || ty.kind == .TypeParameter { ret true }

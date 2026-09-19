@@ -13817,3 +13817,21 @@ single no-escape position with a count followed by ordered one-based parameter
 positions in both canonical signature bytes and function interfaces. Both host
 suites inspect `{1, 2}`, retain byte-identical self-host stages, validate 2,602
 records in 291 files and report zero static-gate breaches.
+
+## D746 -- `@reorder` is delivered as an alignment sort in the layout pass
+
+D239's opt-in is built. `@reorder` above a `type ... = struct` or `type ... = union`
+sets a flag on the aggregate, and `layout` places that struct's fields one alignment
+class at a time, highest first, with declaration order inside a class -- one
+deterministic function of the type, not a freedom that may be spent differently
+between versions. Nothing else changes: the declaration-order C layout stays the
+default, field offsets everywhere already route through `layout.field`, and the fields
+are still stored and reflected in declaration order.
+
+Two misuses are refused as E-TYPE-9999 rather than laid out as asked: `@reorder` on an
+enum or a tagged union, which have no fields to sort, and a reordered aggregate
+reaching the signature of an `extern` (imported or not) or a `@cc` function, where the
+callee reads C's offsets. The crossing walk is guarded by one checker flag, so a
+program that declares no `@reorder` pays nothing for it. D239's exclusions against
+`@packed`, `@align(N)` and `@gpu` have nothing to refuse yet: none of the three
+exists.

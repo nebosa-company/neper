@@ -3591,6 +3591,15 @@ aggregate_executable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$aggregate_executable_written" = 'executable written' ]
 chmod +x "$aggregate_executable_path"
 "$aggregate_executable_path"
+# `@reorder` (D239): the opt-in alignment sort. The reordered struct is 16 bytes where
+# declaration order pads the same three fields to 24, and every field still reads and
+# writes through its own offset; a value of one crossing an FFI boundary is refused.
+reorder_executable_path="$test_build/reorder-selfhost"
+reorder_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/reorder/src/main.e" "$repo" x64 linux "$reorder_executable_path")
+[ "$reorder_executable_written" = 'executable written' ]
+chmod +x "$reorder_executable_path"
+"$reorder_executable_path"
+check_protocol_diagnostic reorder_extern 'main.e:11:1: error[E-TYPE-9999]: @reorder is legal on a struct or a union that crosses no FFI boundary'
 advanced_executable_path="$test_build/advanced-selfhost"
 advanced_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/advanced/src/main.e" "$repo" x64 linux "$advanced_executable_path")
 [ "$advanced_executable_written" = 'executable written' ]

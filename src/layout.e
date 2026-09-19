@@ -51,6 +51,55 @@ fn aggregate_index(c: *check.Checker, ty: check.Type) -> (usize, bool) {
     ret (found_at, found)
 }
 
+// `@reorder` (D239): the fields sorted by descending alignment, declaration order
+// breaking ties, so the layout is one deterministic function of the type rather than a
+// freedom the compiler may spend differently between versions. Placed one alignment
+// class at a time, highest first; the answer is the running size and alignment before
+// the tail rounding, plus the offset of `name` when the struct declares it.
+// ponytail: one pass per distinct alignment, which is at most a handful for a struct.
+fn reordered_struct(c: *check.Checker, aggregate: check.Aggregate, name: str, depth: usize) -> (Info, Field, bool, err) {
+    var invalid: Info = zero
+    var wanted: Field = zero
+    var size = 0usize
+    var alignment = 1usize
+    var found = false
+    var placed = 0usize
+    var threshold = 18446744073709551615usize
+    while placed < aggregate.field_count {
+        var class = 0usize
+        var at = 0usize
+        while at < aggregate.field_count {
+            let field_index = aggregate.first_field + at
+            if field_index >= c.aggregate_field_count { ret (invalid, wanted, false, InvalidType) }
+            let (info, info_error) = type_info_depth(c, c.aggregate_fields[field_index].ty, depth + 1usize)
+            if info_error != ok { ret (invalid, wanted, false, info_error) }
+            if info.alignment < threshold && info.alignment > class { class = info.alignment }
+            at += 1usize
+        }
+        if class == 0usize { ret (invalid, wanted, false, InvalidType) }
+        at = 0usize
+        while at < aggregate.field_count {
+            let member = c.aggregate_fields[aggregate.first_field + at]
+            let (info, info_error) = type_info_depth(c, member.ty, depth + 1usize)
+            if info_error != ok { ret (invalid, wanted, false, info_error) }
+            if info.alignment == class {
+                let (start, start_error) = align_up(size, class)
+                if start_error != ok || start > 18446744073709551615usize - info.size { ret (invalid, wanted, false, Overflow) }
+                if check.same(member.name, name) {
+                    wanted = Field { offset: start, ty: member.ty }
+                    found = true
+                }
+                size = start + info.size
+                if class > alignment { alignment = class }
+                placed += 1usize
+            }
+            at += 1usize
+        }
+        threshold = class
+    }
+    ret (Info { size: size, alignment: alignment }, wanted, found, ok)
+}
+
 fn type_info_depth(c: *check.Checker, ty: check.Type, depth: usize) -> (Info, err) {
     var invalid: Info = zero
     let scalar = scalar_size(ty)
@@ -70,6 +119,15 @@ fn type_info_depth(c: *check.Checker, ty: check.Type, depth: usize) -> (Info, er
     if aggregate.kind == .Enum || ty.kind == .Tag {
         let (backing, backing_error) = type_info_depth(c, aggregate.backing_type, depth + 1usize)
         ret (backing, backing_error)
+    }
+    if aggregate.kind == .Struct && aggregate.reorder {
+        let (packed, ignored_field, ignored_found, packed_error) = reordered_struct(c, aggregate, "", depth)
+        if packed_error != ok { ret (invalid, packed_error) }
+        var packed_size = packed.size
+        if aggregate.field_count == 0usize { packed_size = 1usize }
+        let (packed_rounded, packed_rounded_error) = align_up(packed_size, packed.alignment)
+        if packed_rounded_error != ok { ret (invalid, packed_rounded_error) }
+        ret (Info { size: packed_rounded, alignment: packed.alignment }, ok)
     }
     var size = 0usize
     var alignment = 1usize
@@ -137,6 +195,12 @@ fn field(c: *check.Checker, ty: check.Type, name: str) -> (Field, err) {
     if !found { ret (invalid, InvalidType) }
     let aggregate = c.aggregates[index]
     if check.same(name, "tag") && aggregate.kind == .TaggedUnion { ret (Field { offset: 0usize, ty: aggregate.backing_type }, ok) }
+    if aggregate.kind == .Struct && aggregate.reorder {
+        let (ignored_info, wanted, found_wanted, packed_error) = reordered_struct(c, aggregate, name, 0usize)
+        if packed_error != ok { ret (invalid, packed_error) }
+        if !found_wanted { ret (invalid, InvalidType) }
+        ret (wanted, ok)
+    }
     var offset = 0usize
     var field_at = 0usize
     while field_at < aggregate.field_count {
