@@ -363,6 +363,10 @@ type Resource = struct {
     // whose every use reaches the target; the member's name for a struct local one
     // of whose fields holds `&x`, where only a use through that field does.
     points_to_field: str,
+    // ponytail: two inline aliases close D691 without per-local allocation; use a
+    // compact side table if H02 fixtures require three independent fields.
+    points_to_second: usize,
+    points_to_second_field: str,
     // A slice alias into a fixed array: the first array slot represented by index
     // zero, when the range's lower bound is comptime-known.
     slice_offset: usize,
@@ -5857,7 +5861,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     var no_fields: []u8 = zero
     var no_elements_acquired: []usize = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "", slice_offset: 0usize, slice_offset_known: false }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "", points_to_second: 0usize, points_to_second_field: "", slice_offset: 0usize, slice_offset_known: false }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -13765,6 +13769,8 @@ fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, local_index: usize, initializer_index: usize, has_initializer: bool) {
     c.resources[local_index].points_to = 0usize
     c.resources[local_index].points_to_field = ""
+    c.resources[local_index].points_to_second = 0usize
+    c.resources[local_index].points_to_second_field = ""
     c.resources[local_index].slice_offset = 0usize
     c.resources[local_index].slice_offset_known = false
     if c.locals[local_index].ty.kind == .Slice {
@@ -13780,6 +13786,11 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         if is_address && pointed != local_index {
             c.resources[local_index].points_to = pointed + 1usize
             c.resources[local_index].points_to_field = member
+            let (second, second_member, has_second) = literal_address_field_after(c, g, tree, module_index, initializer_index, member)
+            if has_second && second != local_index {
+                c.resources[local_index].points_to_second = second + 1usize
+                c.resources[local_index].points_to_second_field = second_member
+            }
         }
     }
     if c.locals[local_index].ty.kind == .Named && tree.nodes[initializer_index].kind == .NameExpr {
@@ -13870,8 +13881,13 @@ fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if token.kind != .Identifier { ret (0usize, false) }
     let (pointer_local, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
     if !found || c.resources[pointer_local].points_to == 0usize { ret (0usize, false) }
-    if c.resources[pointer_local].points_to_field.len != 0usize && (!has_member || !same(through_member, c.resources[pointer_local].points_to_field)) { ret (0usize, false) }
-    let pointed = c.resources[pointer_local].points_to - 1usize
+    var target = c.resources[pointer_local].points_to
+    let field = c.resources[pointer_local].points_to_field
+    if field.len != 0usize && (!has_member || !same(through_member, field)) {
+        if !has_member || c.resources[pointer_local].points_to_second == 0usize || !same(through_member, c.resources[pointer_local].points_to_second_field) { ret (0usize, false) }
+        target = c.resources[pointer_local].points_to_second
+    }
+    let pointed = target - 1usize
     if pointed >= c.local_count { ret (0usize, false) }
     ret (pointed, true)
 }
@@ -13879,6 +13895,12 @@ fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
 // The first field of a struct literal given `&x` of a local (D413): which local, and
 // the field's name.
 fn literal_address_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, literal_index: usize) -> (usize, str, bool) {
+    let (pointed, member, found) = literal_address_field_after(c, g, tree, module_index, literal_index, "")
+    ret (pointed, member, found)
+}
+
+// The first address under a top-level field other than `after`.
+fn literal_address_field_after(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, literal_index: usize, after: str) -> (usize, str, bool) {
     let literal = tree.nodes[literal_index]
     let text = g.modules[module_index].text
     let end = usize(literal.first_child) + usize(literal.child_count)
@@ -13891,11 +13913,14 @@ fn literal_address_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
                 let name_token = c.tokens[usize(item.token_start)]
                 let (value_index, has_value) = first_node_child(tree, item)
                 if name_token.kind == .Identifier && has_value {
-                    let (pointed, is_address) = address_argument_local(c, g, tree, module_index, value_index)
-                    if is_address { ret (pointed, text[name_token.start..name_token.end], true) }
-                    if tree.nodes[value_index].kind == .AggregateLiteral {
-                        let (nested, _, nested_address) = literal_address_field(c, g, tree, module_index, value_index)
-                        if nested_address { ret (nested, text[name_token.start..name_token.end], true) }
+                    let member = text[name_token.start..name_token.end]
+                    if after.len == 0usize || !same(member, after) {
+                        let (pointed, is_address) = address_argument_local(c, g, tree, module_index, value_index)
+                        if is_address { ret (pointed, member, true) }
+                        if tree.nodes[value_index].kind == .AggregateLiteral {
+                            let (nested, _, nested_address) = literal_address_field(c, g, tree, module_index, value_index)
+                            if nested_address { ret (nested, member, true) }
+                        }
                     }
                 }
             }

@@ -3627,7 +3627,8 @@ not add partial moves from a variant payload.
   A pointer local bound from `&x`, a slice local bound from a place of `x`
   (`x[a..b]`, `x.items`, `x` itself a slice), or a struct local given `&x` in a
   field `f` -- by its literal or by a store `s.f = &x` -- is `x` by another name
-  for both (D394, D395, D413), the struct through `f` alone: a read or a store
+  for both (D394, D395, D413), the struct through `f` alone. Two independently
+  borrowed fields retain separate targets rather than only the first (D691): a read or a store
   through it once `x` dangles is refused the same way, its `.len` excepted. A call
   receiving such an alias through a mutable pointer changes `x` and invalidates its
   views exactly as a call receiving `&x` does (D671). Copying that pointer local

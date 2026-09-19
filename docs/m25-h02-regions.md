@@ -59,6 +59,8 @@ through that field alone (D413), is `x` by another name (D393, D394), from the
 binding or the assignment that made it so until the next (D416): once `x` dangles, `*first`, `first.field` and `first[i]`, read
 or stored to, are refused as `x`'s own use is, naming `x`; `first.len` is not,
 for the reason `x.len` is not. A pointer from anywhere else is not followed.
+Two pointer-bearing fields in one aggregate retain distinct lexical targets (D691),
+so a use through the second field follows its own owner rather than the first's.
 
 ## 3. Views of containers
 
@@ -236,3 +238,7 @@ deferred reset is E-SAFETY-0018 without flattening or copying the nested value.
 **D690** preserves that identity when the pointer-bearing aggregate literal is
 assigned into a field of an existing outer aggregate. The outer local then carries
 the enclosed region pointer and cannot escape its deferred reset.
+
+**D691** retains a second independent pointer field in an aggregate literal. Alias
+resolution selects the target by the field used, so a post-reset use through the
+second field is E-SAFETY-0013 even when the first field points at live storage.

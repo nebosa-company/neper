@@ -13245,5 +13245,14 @@ The field-assignment path reuses D689's recursive literal walk and the existing
 single-target carrier fact. Arbitrary aggregate values and multiple pointer targets
 remain outside this bounded lexical rule.
 
+## D691 -- Two aggregate pointer fields retain distinct lexical targets
+
+An aggregate literal with addresses in two different top-level fields records both
+field-to-local identities. A use through either field resolves to its own target, so
+the second field cannot hide a use after its region reset behind the first field.
+
+The resource record gains one second inline slot rather than a heap-backed alias
+table. More than two independent pointer fields remain outside this bounded subset.
+
 The existing single-target literal walk becomes recursive and keeps the outer field
 as its access path. Multiple independent pointer fields remain a later H02 problem.
