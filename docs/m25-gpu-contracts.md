@@ -464,6 +464,9 @@ target satisfies the requirement everywhere.
 
 Every row names its oracle: **CPU** is the CPU build of the same kernel; **ref** is
 a correctly rounded software reference (mpmath, as `e.math` was measured, D147).
+The same 21 rows are serialized in `docs/m25-gpu-contracts.json`; its validator
+requires CPU, SPIR-V and PTX behavior, a result oracle/bound, exceptional behavior,
+width/layout, capabilities, subgroup dependence and nondeterminism for every row.
 
 | operation | CPU backend | `spv` | `ptx` | exact / bound | exceptional inputs | width / layout | capability | subgroup-dependent | nondeterministic |
 |---|---|---|---|---|---|---|---|---|---|

@@ -111,6 +111,49 @@ def validate(root=ROOT):
         actual = {item.get("id") for item in h22.get("fixtures", [])}
         if actual != required:
             errors.append("H22: cost/cache/staging fixture manifest is incomplete")
+
+    h23 = requirements.get("H23")
+    if h23 is not None:
+        matrix = h23.get("matrix", [])
+        required_rows = {"float_basic", "float_divide", "sqrt", "fma",
+                         "unfused_multiply_add", "min_max", "round", "exact_unary",
+                         "transcendentals", "rsqrt", "f16", "bf16", "denormal_preserve",
+                         "ftz", "integer", "usize", "integer_atomics",
+                         "subgroup_integer_reduce", "subgroup_float_reduce",
+                         "subgroup_collectives", "simd_reduce"}
+        row_ids = [row.get("id") for row in matrix]
+        if len(row_ids) != len(set(row_ids)) or set(row_ids) != required_rows:
+            errors.append("H23: numerical matrix rows are incomplete or duplicated")
+        required_fields = {"id", "operations", "backends", "result", "exceptional",
+                           "width_layout", "capabilities", "subgroup_dependent",
+                           "nondeterministic"}
+        for row in matrix:
+            row_id = row.get("id", "<missing>")
+            if set(row) != required_fields:
+                errors.append(f"H23: {row_id} has incomplete matrix fields")
+            if set(row.get("backends", {})) != {"cpu", "spv", "ptx"}:
+                errors.append(f"H23: {row_id} must define cpu/spv/ptx behavior")
+            if not row.get("result") or not row.get("exceptional") or not row.get("width_layout"):
+                errors.append(f"H23: {row_id} lacks an oracle, exceptional rule or layout")
+            if not isinstance(row.get("capabilities"), list):
+                errors.append(f"H23: {row_id} capabilities must be a list")
+            if not isinstance(row.get("subgroup_dependent"), bool):
+                errors.append(f"H23: {row_id} lacks subgroup dependence")
+            if not isinstance(row.get("nondeterministic"), bool):
+                errors.append(f"H23: {row_id} lacks nondeterminism status")
+        required_preconditions = {"device_floor", "kernel_capabilities",
+                                  "workgroup_and_shared_limits", "grid_and_buffer_limits",
+                                  "caps_bound", "subgroup_width"}
+        if set(h23.get("launch_preconditions", [])) != required_preconditions:
+            errors.append("H23: launch preconditions are incomplete")
+        required_fixtures = {"gpu_subgroup_width", "gpu_subgroup_partial",
+                             "gpu_subgroup_dependent", "gpu_num_denormal", "gpu_num_ftz",
+                             "gpu_num_rounding", "gpu_num_exceptional", "gpu_num_fma",
+                             "gpu_num_reduce", "gpu_num_usize", "gpu_cap_refused",
+                             "gpu_cap_bound"}
+        actual = {item.get("id") for item in h23.get("fixtures", [])}
+        if actual != required_fixtures:
+            errors.append("H23: numerical/capability fixture manifest is incomplete")
     return data, errors
 
 

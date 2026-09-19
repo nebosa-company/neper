@@ -15,7 +15,7 @@ class GpuContractTests(unittest.TestCase):
     def test_repository_contract(self):
         data, errors = CHECKER.validate(ROOT)
         self.assertEqual(errors, [])
-        self.assertEqual(list(data["requirements"]), ["H13", "H21", "H22"])
+        self.assertEqual(list(data["requirements"]), ["H13", "H21", "H22", "H23"])
 
     def test_release_checks_cannot_disappear(self):
         data, _ = CHECKER.validate(ROOT)
@@ -39,6 +39,18 @@ class GpuContractTests(unittest.TestCase):
         self.assertEqual(h22["staging"]["on_full"], "wait_oldest")
         self.assertIn("safety_policy", h22["cache_key"])
         self.assertIn("numerical_policy", h22["cache_key"])
+
+    def test_numerical_rows_name_every_backend_and_limit(self):
+        data, errors = CHECKER.validate(ROOT)
+        self.assertEqual(errors, [])
+        rows = data["requirements"]["H23"]["matrix"]
+        self.assertEqual(len(rows), 21)
+        for row in rows:
+            self.assertEqual(set(row["backends"]), {"cpu", "spv", "ptx"})
+            self.assertIsInstance(row["subgroup_dependent"], bool)
+            self.assertIsInstance(row["nondeterministic"], bool)
+        denormal = next(row for row in rows if row["id"] == "denormal_preserve")
+        self.assertIn("DenormPreserve", denormal["capabilities"])
 
 
 if __name__ == "__main__":

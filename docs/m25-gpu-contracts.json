@@ -185,6 +185,261 @@
           "expected": "a corrupt pipeline entry is rejected and rebuilt without replacing the last valid entry on failure"
         }
       ]
+    },
+    "H23": {
+      "design_status": "closed",
+      "runtime_status": "pending_m3",
+      "api_declarations": [
+        "type Cap = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }"
+      ],
+      "matrix": [
+        {
+          "id": "float_basic",
+          "operations": "+ - * on f32/f64",
+          "backends": { "cpu": "IEEE no contraction", "spv": "NoContraction", "ptx": "rn" },
+          "result": "exact",
+          "exceptional": "canonical NaN, signed zero and infinity follow IEEE",
+          "width_layout": "f64 requires Float64",
+          "capabilities": ["Float64:f64"],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "float_divide",
+          "operations": "/ on f32/f64",
+          "backends": { "cpu": "IEEE", "spv": "correctly rounded Fma sequence", "ptx": "div.rn" },
+          "result": "exact",
+          "exceptional": "x/0 is infinity and 0/0 is NaN",
+          "width_layout": "scalar width",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "sqrt",
+          "operations": "math.sqrt",
+          "backends": { "cpu": "sqrtss/sqrtsd", "spv": "correctly rounded sequence", "ptx": "sqrt.rn" },
+          "result": "exact",
+          "exceptional": "negative input is NaN",
+          "width_layout": "scalar width",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "fma",
+          "operations": "math.fma",
+          "backends": { "cpu": "hardware or exact software", "spv": "Fma and NoContraction", "ptx": "fma.rn" },
+          "result": "exact_one_rounding",
+          "exceptional": "IEEE",
+          "width_layout": "scalar width",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "unfused_multiply_add",
+          "operations": "a*b+c",
+          "backends": { "cpu": "two roundings", "spv": "two roundings", "ptx": "two roundings" },
+          "result": "exact_two_roundings",
+          "exceptional": "IEEE",
+          "width_layout": "scalar width",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "min_max",
+          "operations": "math.min math.max",
+          "backends": { "cpu": "IEEE minimum/maximum", "spv": "compare-select", "ptx": "compare-select" },
+          "result": "exact",
+          "exceptional": "one NaN gives NaN; min(-0,+0) is -0",
+          "width_layout": "scalar width",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "round",
+          "operations": "round",
+          "backends": { "cpu": "ties-even", "spv": "RoundEven", "ptx": "cvt.rni" },
+          "result": "exact",
+          "exceptional": "IEEE",
+          "width_layout": "scalar width",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "exact_unary",
+          "operations": "floor ceil trunc abs copysign",
+          "backends": { "cpu": "exact", "spv": "exact", "ptx": "exact" },
+          "result": "exact",
+          "exceptional": "IEEE",
+          "width_layout": "scalar width",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "transcendentals",
+          "operations": "sin cos tan asin acos atan atan2 exp exp2 log log2 log10 pow",
+          "backends": { "cpu": "software reference bound", "spv": "Vulkan precision table", "ptx": "CUDA precision table" },
+          "result": "bounded_2_ulp",
+          "exceptional": "domain behavior follows e.math",
+          "width_layout": "scalar width",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "rsqrt",
+          "operations": "math.rsqrt",
+          "backends": { "cpu": "software reference bound", "spv": "bounded", "ptx": "bounded" },
+          "result": "bounded_2_ulp",
+          "exceptional": "domain behavior follows e.math",
+          "width_layout": "scalar width",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "f16",
+          "operations": "f16 arithmetic",
+          "backends": { "cpu": "f32 then rounded", "spv": "Float16 operations", "ptx": "sm_53 or later" },
+          "result": "exact_f32_then_rne",
+          "exceptional": "IEEE",
+          "width_layout": "16-bit storage",
+          "capabilities": ["Float16", "Int16:storage"],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "bf16",
+          "operations": "bf16 arithmetic",
+          "backends": { "cpu": "f32 then rounded", "spv": "f32 then rounded", "ptx": "native at sm_80 or f32 then rounded" },
+          "result": "exact_f32_then_rne",
+          "exceptional": "IEEE",
+          "width_layout": "16-bit storage",
+          "capabilities": ["Int16"],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "denormal_preserve",
+          "operations": "denormal f32/f64",
+          "backends": { "cpu": "preserved", "spv": "DenormPreserve mode or refusal", "ptx": "preserved" },
+          "result": "exact",
+          "exceptional": "subnormal inputs and results remain subnormal",
+          "width_layout": "f64 mode when f64 is used",
+          "capabilities": ["DenormPreserve"],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "ftz",
+          "operations": "ftz kernel",
+          "backends": { "cpu": "FTZ and DAZ", "spv": "DenormFlushToZero", "ptx": "ftz" },
+          "result": "exact_flush",
+          "exceptional": "denormal results become signed zero",
+          "width_layout": "per kernel",
+          "capabilities": ["Ftz"],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "integer",
+          "operations": "integer + - * / at 8/16/32/64",
+          "backends": { "cpu": "two's complement", "spv": "operation width", "ptx": "operation width" },
+          "result": "exact",
+          "exceptional": "debug overflow/divide fault; release follows integer contract",
+          "width_layout": "8/16/32/64",
+          "capabilities": ["Int8:i8", "Int16:i16", "Int64:i64"],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "usize",
+          "operations": "usize arithmetic",
+          "backends": { "cpu": "64-bit", "spv": "32-bit", "ptx": "64-bit" },
+          "result": "exact_at_width",
+          "exceptional": "overflow may differ at 32 bits",
+          "width_layout": "not a storage type",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        },
+        {
+          "id": "integer_atomics",
+          "operations": "gpu.atomic_* on integers",
+          "backends": { "cpu": "sequential lid order", "spv": "hardware order", "ptx": "hardware order" },
+          "result": "exact_final_value",
+          "exceptional": "operation order is unspecified",
+          "width_layout": "64-bit requires Atomic64",
+          "capabilities": ["Atomic64:i64"],
+          "subgroup_dependent": false,
+          "nondeterministic": true
+        },
+        {
+          "id": "subgroup_integer_reduce",
+          "operations": "subgroup_add/min/max on integers",
+          "backends": { "cpu": "fixed tree at selected width", "spv": "hardware tree", "ptx": "hardware tree" },
+          "result": "exact_under_matching_width",
+          "exceptional": "inactive lanes contribute nothing",
+          "width_layout": "8/16/32/64 lanes",
+          "capabilities": ["Subgroup"],
+          "subgroup_dependent": true,
+          "nondeterministic": false
+        },
+        {
+          "id": "subgroup_float_reduce",
+          "operations": "subgroup_add/min/max on floats",
+          "backends": { "cpu": "fixed tree at selected width", "spv": "hardware order", "ptx": "hardware order" },
+          "result": "bounded_by_reduction_rounding",
+          "exceptional": "IEEE per lane",
+          "width_layout": "8/16/32/64 lanes",
+          "capabilities": ["Subgroup"],
+          "subgroup_dependent": true,
+          "nondeterministic": true
+        },
+        {
+          "id": "subgroup_collectives",
+          "operations": "subgroup_size lane ballot elect broadcast shuffle",
+          "backends": { "cpu": "selected width", "spv": "device width", "ptx": "32 lanes" },
+          "result": "exact_under_matching_width",
+          "exceptional": "inactive lanes are false or contribute nothing",
+          "width_layout": "ballot is u64; at most 64 lanes",
+          "capabilities": ["Subgroup", "Int64:ballot"],
+          "subgroup_dependent": true,
+          "nondeterministic": false
+        },
+        {
+          "id": "simd_reduce",
+          "operations": "simd.reduce_add",
+          "backends": { "cpu": "fixed tree", "spv": "fixed tree", "ptx": "fixed tree" },
+          "result": "exact_identical",
+          "exceptional": "scalar operation contract",
+          "width_layout": "N greater than 4 splits into four-lane vectors",
+          "capabilities": [],
+          "subgroup_dependent": false,
+          "nondeterministic": false
+        }
+      ],
+      "launch_preconditions": ["device_floor", "kernel_capabilities", "workgroup_and_shared_limits", "grid_and_buffer_limits", "caps_bound", "subgroup_width"],
+      "fixtures": [
+        { "id": "gpu_subgroup_width", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "matching widths 16/32/64 agree" },
+        { "id": "gpu_subgroup_partial", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "a partial final subgroup agrees at each matching width" },
+        { "id": "gpu_subgroup_dependent", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "different widths are expected to produce different results" },
+        { "id": "gpu_num_denormal", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "preserve under DenormPreserve and refuse without it" },
+        { "id": "gpu_num_ftz", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "denormals flush to signed zero" },
+        { "id": "gpu_num_rounding", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "ties-even and f16 halfway cases match" },
+        { "id": "gpu_num_exceptional", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "NaN, signed zero and division exceptional cases match the matrix" },
+        { "id": "gpu_num_fma", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "fma and unfused multiply-add differ by the expected ULP" },
+        { "id": "gpu_num_reduce", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "SIMD is identical and subgroup float reduction stays within its bound" },
+        { "id": "gpu_num_usize", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "SPIR-V 32-bit wrap differs by design from 64-bit CPU" },
+        { "id": "gpu_cap_refused", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "missing Float64 is Unsupported and names the kernel and capability" },
+        { "id": "gpu_cap_bound", "profiles": ["cpu", "vulkan"], "status": "pending_m3", "expected": "an inferred capability outside caps is E-GPU-0002 with a call chain" }
+      ]
     }
   }
 }

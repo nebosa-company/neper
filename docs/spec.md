@@ -3049,7 +3049,7 @@ type Grid    = struct { x: usize, y: usize, z: usize } // invocation counts
 type Id      = struct { x: u32, y: u32, z: u32 } // gpu.gid, gpu.lid, gpu.wgid (Kernels and workgroups, above)
 type FaultKind = enum u8 { Bounds, Null, Tag, Alignment, Overflow, DivideByZero }
 type FaultRecord = struct { kernel: u32, kind: FaultKind, site: u32, gid: Id }
-type Cap     = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }
+type Cap = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }
 type Scope   = enum u8 { Workgroup, Device }
 
 error NoDevice // no currently visible device matches the requested index or key
