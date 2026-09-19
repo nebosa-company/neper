@@ -15120,6 +15120,13 @@ fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
                 local_index = carried
                 is_resource = true
             }
+            if !is_resource && c.resources[carrier].points_to_second != 0usize {
+                let second = c.resources[carrier].points_to_second - 1usize
+                if second < c.local_count && c.resources[second].region != 0usize {
+                    local_index = second
+                    is_resource = true
+                }
+            }
         }
     }
     if !is_resource && tree.nodes[node_index].kind == .BracketPostfix {

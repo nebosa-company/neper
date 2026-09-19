@@ -3648,7 +3648,8 @@ not add partial moves from a variant payload.
   storage, copied through an aggregate pointer field, carried by that aggregate
   itself, nested inside aggregate literals or field assignments, or carried by a
   lexical copy or assignment of the aggregate (E-SAFETY-0018, D675, D680-D685,
-  D689-D690).
+  D689-D690). An aggregate whose second tracked field points into that region is the
+  same carrier escape (D692).
   Both checks are lexical and within one function: what is returned otherwise, stored,
   handed to a callback, an import or a thread, reached through any other pointer,
   or made by a cast is outside the rule, and `m25-h02-regions.md` says so.

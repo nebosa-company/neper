@@ -13254,5 +13254,14 @@ the second field cannot hide a use after its region reset behind the first field
 The resource record gains one second inline slot rather than a heap-backed alias
 table. More than two independent pointer fields remain outside this bounded subset.
 
+## D692 -- A carrier escape examines both aggregate pointer fields
+
+Returning an aggregate across a deferred reset examines both recorded pointer-field
+targets. A live first target cannot hide that the second target belongs to the region
+which is reset before delivery; the return is E-SAFETY-0018 against that owner.
+
+This extends the existing carrier check and diagnostic only. It adds no new escape
+kind or control-flow analysis.
+
 The existing single-target literal walk becomes recursive and keeps the outer field
 as its access path. Multiple independent pointer fields remain a later H02 problem.

@@ -242,3 +242,7 @@ the enclosed region pointer and cannot escape its deferred reset.
 **D691** retains a second independent pointer field in an aggregate literal. Alias
 resolution selects the target by the field used, so a post-reset use through the
 second field is E-SAFETY-0013 even when the first field points at live storage.
+
+**D692** extends the deferred-return boundary to the whole two-pointer carrier. If
+the first field names live storage but the second belongs to the deferred-reset
+region, returning the aggregate is E-SAFETY-0018 against that second owner.
