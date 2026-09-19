@@ -77,6 +77,7 @@ type DiagnosticKind = enum u8 {
     ResourceCopy,
     ResourceMovedWhileBorrowed,
     RegionReset,
+    RegionEscape,
     ViewMutated,
     ThreadFrameEscape,
     ThreadShared,
@@ -785,6 +786,7 @@ fn related_note(kind: DiagnosticKind) -> str {
     if kind == .ResourceBorrowConsumed { ret "borrowed here" }
     if kind == .ResourceMovedWhileBorrowed { ret "the pointer taken here" }
     if kind == .RegionReset { ret "the region reset here" }
+    if kind == .RegionEscape { ret "the deferred reset is registered here" }
     if kind == .ViewMutated { ret "the container changed here" }
     if kind == .ThreadFrameEscape { ret "the thread started here" }
     if kind == .ThreadShared { ret "lent to the thread started here" }
@@ -13005,6 +13007,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ResourceCopy { ret "E-SAFETY-0005" }
     if kind == .ResourceMovedWhileBorrowed { ret "E-SAFETY-0004" }
     if kind == .RegionReset { ret "E-SAFETY-0013" }
+    if kind == .RegionEscape { ret "E-SAFETY-0018" }
     if kind == .ViewMutated { ret "E-SAFETY-0014" }
     if kind == .ThreadFrameEscape { ret "E-SAFETY-0015" }
     if kind == .ThreadShared { ret "E-SAFETY-0016" }
@@ -13329,6 +13332,14 @@ fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         let mark_token = c.tokens[usize(tree.nodes[mark_argument].token_start)]
         let (mark_index, mark_found) = find_local(c, g.modules[module_index].text[mark_token.start..mark_token.end])
         if !mark_found || c.resources[mark_index].mark_arena.len == 0usize { ret }
+        // A deferred call runs at scope exit, not where it is registered (D675).
+        // Reuse otherwise-unused mark fields to remember that boundary without
+        // growing every Resource record.
+        if c.defer_depth != 0usize {
+            c.resources[mark_index].dangling = 3u8
+            c.resources[mark_index].lent_at = usize(node.token_start)
+            ret
+        }
         var at = 0usize
         while at < c.local_count {
             let region = c.resources[at].region
@@ -15014,6 +15025,18 @@ fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // its state but moved -- an unchecked one goes with the error it was bound beside.
 fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     if !any_affine_local(c) { ret ok }
+    let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+    if is_resource && c.resources[local_index].region != 0usize {
+        let region_mark = c.resources[local_index].region - 1usize
+        var mark_at = 0usize
+        while mark_at <= region_mark && mark_at < c.local_count {
+            if c.resources[mark_at].dangling == 3u8 && same(c.resources[mark_at].mark_arena, c.resources[region_mark].mark_arena) {
+                record_failure_related(c, module_index, tree.nodes[node_index], .RegionEscape, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[mark_at].lent_at), c.resources[mark_at].lent_at)
+                ret ResourceViolation
+            }
+            mark_at += 1usize
+        }
+    }
     c.resource_transfer = true
     let returned = resource_return_transfer(c, g, tree, module_index, node_index)
     c.resource_transfer = false

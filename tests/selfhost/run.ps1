@@ -2344,6 +2344,15 @@ foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('re
     if ((Get-Item -LiteralPath $conformanceStderr).Length -ne 0) { throw "check-file --json on $($case[0])/$($case[1]).e wrote to stderr" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
 }
+# D672-D675: alias-aware region/thread identity and deferred-reset timing.
+foreach ($case in @(@('reject', 'regions_pointer_chain', 1), @('reject', 'regions_arena_alias', 1), @('reject', 'safety_thread_context_alias', 1), @('accept', 'regions_deferred_after_alloc', 0), @('reject', 'regions_deferred_escape', 1))) {
+    $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
+    $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
+    $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
+    cmd /c "`"$compiler`" check-file `"$conformanceFixture`" `"$repo`" x64 windows --json > `"$conformanceActual`""
+    if ($LASTEXITCODE -ne $case[2]) { throw "check-file --json on $($case[0])/$($case[1]).e exited $LASTEXITCODE, not $($case[2])" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
+}
 # A consuming dereference follows its lexical pointer alias to the pinned resource
 # (D610, H01).
 $pointerMoveActual = Join-Path $testBuild 'conformance-reject-safety_pointer_move.jsonl'

@@ -48,6 +48,7 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-SAFETY-0015` | a thread over this frame's storage detached, handed on, returned or stored past it | spec §11 |
 | `E-SAFETY-0016` | storage lent to a running thread read or written before its join | spec §11 |
 | `E-SAFETY-0017` | `undef` of a type that admits only its members: `bool`, an enum, a tagged union, or a struct or array holding one (D475) | spec §11 |
+| `E-SAFETY-0018` | a region value returned across a deferred reset of that region (D675) | spec §11 |
 | `E-SAFETY-9999` | statically diagnosed safety-contract violation | spec §11 |
 | `E-MODULE-0001` | module is missing or defined by multiple roots | spec §2 |
 | `E-MODULE-0002` | import graph contains a cycle | spec §2 |

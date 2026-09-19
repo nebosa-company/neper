@@ -45,9 +45,9 @@ innermost live mark of that arena at its binding. A binding from a region value
 after it on the same arena) is **dangling** from that statement on. A dangling
 value cannot be read, passed, stored or returned (`E-SAFETY-0013` "used after its
 region was reset", naming the reset); it can be rebound. A `defer mem.reset(a, m)`
-ends the region at the block's exit, which is after every use in the block, and
-needs no rule. A region value that is returned before the reset is the caller's
-question, which this subset does not ask (section 5).
+ends the region at the block's exit, not where the defer is registered, so uses in
+the rest of the block remain valid. Returning one of those region values is refused
+with E-SAFETY-0018 because the reset runs before the caller receives it (D675).
 
 The arms of an `if` join as H01's states do: a value reset on one path and not the
 other is dangling-maybe, which no use accepts.
@@ -83,7 +83,8 @@ section 2; a view used as a `for` subject is a use.
 
 Stated so that no one reads the rules above as more than they are:
 
-- A region value or a view **returned** from the function: the caller sees an
+- A region value or a view **returned** from the function, except across a deferred
+  reset of its region (D675): the caller otherwise sees an
   ordinary slice. The signature does not say what it borrows; H02's borrow
   summaries across modules are later delivery (section 7).
 - **Stored** into a struct field, an array element, a global, or a container:
@@ -119,12 +120,14 @@ section 4's cases, and is not attempted here.
 |---|---|---|
 | E-SAFETY-0013 | a region value used after its region was reset | the reset, the use |
 | E-SAFETY-0014 | a view used after its container was mutated | the mutation, the use |
+| E-SAFETY-0018 | a region value returned across its deferred reset | the defer, the return |
 
 Fixtures under `tests/conformance`: a slice allocated after a mark and read after
 the reset (reject); a view of a list read after a push (reject); a value reset on
 one arm and read after the join (reject); the valid counterparts -- a scratch
 region reset after its last use, a view retaken after the push, a `defer`red
-reset, a view through `&const` -- in `accept/regions.e`. The compiler's own
+reset registered before or after allocation, a view through `&const` -- in the
+accept fixtures. A return across that deferred reset is rejected. The compiler's own
 `mark`/`reset` sites are the measurement of false positives (section 8).
 
 ## 7. Delivery
@@ -173,3 +176,8 @@ forms on both hosts.
 addressed, and pointer-alias spellings. A mark opened through `p = &arena` therefore
 owns allocations made through `&arena`, and reset through either spelling ends the
 same region with the existing E-SAFETY-0013 evidence.
+
+**D675** models a deferred reset at scope exit: registering it does not dangle
+already-bound region values, but returning such a value is E-SAFETY-0018 because
+the reset executes before delivery to the caller. Focused accept and reject fixtures
+pin both halves of that timing rule.

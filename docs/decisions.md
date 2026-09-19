@@ -13089,3 +13089,14 @@ E-SAFETY-0016, and the existing frame-escape rule is attached to the same storag
 The thread-binding pass reuses the local alias target already maintained by H02;
 it adds no concurrency-specific alias structure. The focused fixture pins the
 start-through-alias form and its lending provenance on both hosts.
+
+## D675 -- A deferred region reset takes effect at scope exit
+
+Registering `defer mem.reset(a, mark)` does not immediately invalidate region values;
+they remain usable through the rest of the scope. A value from that region cannot be
+returned, because the deferred reset runs before the caller can observe the result;
+that escape is E-SAFETY-0018 with the defer registration as related evidence.
+
+The mark records the pending boundary in existing resource fields. This avoids a new
+defer graph or larger resource records while covering the direct local return shape;
+aggregate and interprocedural escape summaries remain later H02 work.

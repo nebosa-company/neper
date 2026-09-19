@@ -2437,6 +2437,14 @@ for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_valu
     cmp -s "$conformance_actual" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
 ' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
 done
+# D672-D675: alias-aware region/thread identity and deferred-reset timing.
+for conformance_case in 'reject regions_pointer_chain 1' 'reject regions_arena_alias 1' 'reject safety_thread_context_alias 1' 'accept regions_deferred_after_alloc 0' 'reject regions_deferred_escape 1'; do
+    set -- $conformance_case
+    conformance_status=0
+    $test_build/neper-self check-file "$conformance_root/$1/$2.e" "$repo" x64 linux --json > "$test_build/conformance-$1-$2.jsonl" || conformance_status=$?
+    [ "$conformance_status" -eq "$3" ]
+    cmp -s "$test_build/conformance-$1-$2.jsonl" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s\n' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
+done
 # A consuming dereference follows its lexical pointer alias to the pinned resource
 # (D610, H01).
 pointer_move_status=0

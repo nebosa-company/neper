@@ -5730,6 +5730,13 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail2)
         ret write_all(file, ", so it cannot be used here")
     }
+    if checker.failure_kind == .RegionEscape {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` cannot leave the function because its region is reset by a deferred call at line ")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "; copy it to longer-lived storage or remove the deferred reset")
+    }
     if checker.failure_kind == .ViewMutated {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)
