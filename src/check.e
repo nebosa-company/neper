@@ -129,6 +129,7 @@ type DiagnosticKind = enum u8 {
     AtomicElement,
     AtomicOrdering,
     VectorShape,
+    MaskStorage,
     MetaShape,
     MetaFieldOwner,
     ExternWithoutImport,
@@ -1889,6 +1890,11 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         let (element_type, element_error) = type_from_node(c, r, g, tree, module_index, child)
         if element_error != ok { ret (invalid_type(), element_error) }
         if node.kind == .SliceType && element_type.kind == .Void { ret (invalid_type(), InvalidType) }
+        if node.kind == .SliceType {
+            if refuse_mask_storage(c, module_index, child, element_type, "a slice element may not hold one") { ret (invalid_type(), InvalidType) }
+        } else {
+            if refuse_mask_storage(c, module_index, child, element_type, "a pointer may not point at one") { ret (invalid_type(), InvalidType) }
+        }
         let (element_index, store_error) = store_type(c, element_type)
         if store_error != ok { ret (invalid_type(), store_error) }
         let (is_const, qualifier_error) = composite_const(c, node, child)
@@ -1925,6 +1931,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         let (element_type, element_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[element_index])
         if element_error != ok { ret (invalid_type(), element_error) }
         if element_type.kind == .Void { ret (invalid_type(), InvalidType) }
+        if refuse_mask_storage(c, module_index, tree.nodes[element_index], element_type, "an array element may not hold one") { ret (invalid_type(), InvalidType) }
         let (stored_element, store_error) = store_type(c, element_type)
         if store_error != ok { ret (invalid_type(), store_error) }
         var length = 0usize
@@ -2508,6 +2515,7 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
                     }
                 }
                 if field_type.kind == .Void && kind != .TaggedUnion && kind != .Enum { ret InvalidType }
+                if refuse_mask_storage(c, module_index, field_node, field_type, "a field may not hold one") { ret InvalidType }
                 var prior_at = 0usize
                 while prior_at < aggregate.field_count {
                     let prior = c.aggregate_fields[aggregate.first_field + prior_at]
@@ -2756,6 +2764,22 @@ fn is_vector_type(c: *Checker, ty: Type) -> bool {
 
 fn vector_pending(c: *Checker, ty: Type) -> bool {
     ret is_vector_type(c, ty) && c.aggregates[ty.element].generic
+}
+
+fn is_mask_type(c: *Checker, ty: Type) -> bool {
+    if !is_vector_type(c, ty) { ret false }
+    ret same(c.aggregates[ty.element].name, "Mask")
+}
+
+// Section 4: a `Mask[T, N]` is register-only. A mask is a lane predicate, and no target
+// agrees on what one is in memory, so the language gives it no storage form at all: it
+// is a local, a parameter, a return value or an intrinsic operand and nothing else, and
+// `simd.bits` is how one is written down. Every position that would store a value asks
+// this, and gets back the same sentence with the position named.
+fn refuse_mask_storage(c: *Checker, module_index: usize, node: syntax.Node, ty: Type, position: str) -> bool {
+    if !is_mask_type(c, ty) { ret false }
+    record_failure(c, module_index, node, .MaskStorage, position, "")
+    ret true
 }
 
 // The lane type of a concrete vector, for the operator table and for lowering.
@@ -6035,6 +6059,7 @@ fn collect_global_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
         record_failure(c, module_index, node, .NotAType, name, "")
         ret InvalidType
     }
+    if refuse_mask_storage(c, module_index, node, declared_type, "a module-scope `var` may not hold one") { ret InvalidType }
     var copied_expression = 0usize
     if has_expression {
         let (copied, expression_error) = copy_constant_expr(c, g, tree, module_index, expression_index)
@@ -7816,6 +7841,7 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
         ret (info, ok)
     }
     if query == .SizeOf || query == .AlignOf {
+        if refuse_mask_storage(c, module_index, tree.nodes[type_index], subject, "`mem.size_of` and `mem.align_of` have no answer for one") { ret (info, InvalidType) }
         info.subject = subject
         info.result = make_type(.Integer, "usize", target_module)
         ret (info, ok)
@@ -8076,6 +8102,7 @@ fn alloc_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     let (element, element_error) = comptime_type(c, g, tree, module_index, type_index)
     if element_error != ok { ret (info, element_error) }
     if element.kind == .Void || element.kind == .Other || element.kind == .Invalid { ret (info, InvalidType) }
+    if refuse_mask_storage(c, module_index, tree.nodes[type_index], element, "a slice element may not hold one") { ret (info, InvalidType) }
     let (stored_element, store_error) = store_type(c, element)
     if store_error != ok { ret (info, store_error) }
     var result = make_type(.Slice, "", target_module)
@@ -10759,6 +10786,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                 if mutable_error != ok { ret (invalid_type(), mutable_error) }
                 mutable = place_mutable
             }
+            if refuse_mask_storage(c, module_index, node, place_type, "a pointer may not point at one") { ret (invalid_type(), InvalidType) }
             let (element_index, store_error) = store_type(c, place_type)
             if store_error != ok { ret (invalid_type(), store_error) }
             var pointer = make_type(.Pointer, "", module_index)

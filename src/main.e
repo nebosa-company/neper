@@ -5891,6 +5891,11 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail)
         ret write_all(file, "[T, N]` is not in section 4's table: T is an integer or float primitive other than usize and isize, and N times its size is 16, 32 or 64 bytes")
     }
+    if checker.failure_kind == .MaskStorage {
+        try write_all(file, "`Mask[T, N]` is register-only (section 4): ")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "; a mask is a local, a parameter, a return value or an intrinsic operand, and `simd.bits(m)` is how one is stored")
+    }
     if checker.failure_kind == .AtomicOrdering {
         try write_all(file, "`atomic.")
         try write_all(file, checker.failure_detail)

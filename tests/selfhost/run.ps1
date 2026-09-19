@@ -3504,6 +3504,23 @@ foreach ($case in $atomicDiagnostics) {
         throw "atomic diagnostic for $($case[0]) is wrong: $($atomicOutput -join "`n")"
     }
 }
+# Section 4's register-only rule: a `Mask[T, N]` has no storage form, so every position
+# that would store one is refused while checking, each naming the position it is.
+$maskDiagnostics = @(
+    @('mask_field', 'main\.e:4:23: error\[E-TYPE-9999\]: `Mask\[T, N\]` is register-only \(section 4\): a field may not hold one'),
+    @('mask_array', 'main\.e:5:18: error\[E-TYPE-9999\]: `Mask\[T, N\]` is register-only \(section 4\): an array element may not hold one'),
+    @('mask_pointer', 'main\.e:4:14: error\[E-TYPE-9999\]: `Mask\[T, N\]` is register-only \(section 4\): a pointer may not point at one'),
+    @('mask_address', 'main\.e:6:13: error\[E-TYPE-9999\]: `Mask\[T, N\]` is register-only \(section 4\): a pointer may not point at one'),
+    @('mask_size_of', 'main\.e:6:29: error\[E-TYPE-9999\]: `Mask\[T, N\]` is register-only \(section 4\): `mem\.size_of` and `mem\.align_of` have no answer for one'),
+    @('mask_alloc', 'main\.e:6:31: error\[E-TYPE-9999\]: `Mask\[T, N\]` is register-only \(section 4\): a slice element may not hold one')
+)
+foreach ($case in $maskDiagnostics) {
+    Require-Fixture ("check/" + $case[0])
+    $maskOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($maskOutput -join "`n") -notmatch $case[1]) {
+        throw "mask diagnostic for $($case[0]) is wrong: $($maskOutput -join "`n")"
+    }
+}
 $atomicOpsPath = Join-Path $testBuild 'atomic-ops-selfhost.exe'
 $atomicOpsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\atomic_ops\src\main.e') $repo 'x64' 'windows' $atomicOpsPath
 if ($LASTEXITCODE -ne 0 -or $atomicOpsWritten -ne 'executable written') { throw 'atomic executable emission failed' }

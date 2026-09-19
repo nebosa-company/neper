@@ -13895,3 +13895,23 @@ rows, widget rows and hardening-track detail remain in their machine-readable so
 files instead of being duplicated into the page. The generated HTML has no scripts,
 remote fonts or other network dependencies.
 
+
+## D750 -- A mask is refused at every position that stores a value
+
+Section 4's register-only rule is a check, not a layout. `Mask[T, N]` remains the
+one-field struct the two builtins are seeded as, and nothing about lowering changes;
+what changes is that the positions section 4 forbids now say so. A field, an array
+element, a slice element, a pointee -- written as `*Mask` or taken with `&m` -- a
+module-scope `var`, and `mem.alloc`'s element type are each refused under the one
+kind `MaskStorage`, whose message names the position and points at `simd.bits(m)` as
+the way to store one. `mem.size_of` and `mem.align_of` are refused for the same
+reason: a mask has no size because no target agrees on one.
+
+The refusals sit where the `void` ones already sit, because those positions are
+exactly the storage positions. A local, a parameter, a return value and an intrinsic
+operand are untouched, so `e.simd` itself -- whose comparisons return masks and whose
+`select`, `any`, `all` and `bits` take them -- is unaffected.
+
+A module-scope `var` of any vector type was already refused before this, as the
+builtins are seeded after globals are collected; the guard is there for the rule
+rather than for a reachable message, so it carries no fixture.

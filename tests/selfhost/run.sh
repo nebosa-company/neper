@@ -3461,6 +3461,14 @@ check_protocol_diagnostic atomic_load_release 'main.e:8:34: error[E-MEM-9999]: `
 check_protocol_diagnostic atomic_store_acquire 'main.e:8:33: error[E-MEM-9999]: `atomic.store` may not take the ordering `.Acquire`'
 check_protocol_diagnostic atomic_cas_failure 'main.e:9:65: error[E-MEM-9999]: `atomic.cas` may not take the ordering `.SeqCst`'
 check_protocol_diagnostic atomic_element 'main.e:5:14: error[E-MEM-9999]: `Atomic[f64]` is not a type: an atomic holds an integer or a pointer'
+# Section 4's register-only rule: a `Mask[T, N]` has no storage form, so every position
+# that would store one is refused while checking, each naming the position it is.
+check_protocol_diagnostic mask_field 'main.e:4:23: error[E-TYPE-9999]: `Mask[T, N]` is register-only (section 4): a field may not hold one'
+check_protocol_diagnostic mask_array 'main.e:5:18: error[E-TYPE-9999]: `Mask[T, N]` is register-only (section 4): an array element may not hold one'
+check_protocol_diagnostic mask_pointer 'main.e:4:14: error[E-TYPE-9999]: `Mask[T, N]` is register-only (section 4): a pointer may not point at one'
+check_protocol_diagnostic mask_address 'main.e:6:13: error[E-TYPE-9999]: `Mask[T, N]` is register-only (section 4): a pointer may not point at one'
+check_protocol_diagnostic mask_size_of 'main.e:6:29: error[E-TYPE-9999]: `Mask[T, N]` is register-only (section 4): `mem.size_of` and `mem.align_of` have no answer for one'
+check_protocol_diagnostic mask_alloc 'main.e:6:31: error[E-TYPE-9999]: `Mask[T, N]` is register-only (section 4): a slice element may not hold one'
 atomic_ops_path="$test_build/atomic-ops-selfhost"
 atomic_ops_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/atomic_ops/src/main.e" "$repo" x64 linux "$atomic_ops_path")
 [ "$atomic_ops_written" = 'executable written' ]
