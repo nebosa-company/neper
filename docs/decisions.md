@@ -13835,3 +13835,43 @@ callee reads C's offsets. The crossing walk is guarded by one checker flag, so a
 program that declares no `@reorder` pays nothing for it. D239's exclusions against
 `@packed`, `@align(N)` and `@gpu` have nothing to refuse yet: none of the three
 exists.
+
+## D747 -- xxHash64 and FNV-1a from `e.algo.hash`
+
+D333 planned the compiler's four hashes back onto the library. Two of them land here.
+
+`src/artifact_hash.e` carried its own xxHash64 -- the tuned one, with the thirty-two
+bytes of a block read inline (D388) rather than a guarded two-result call per word --
+while `lib/e/algo/hash.e` had the same hash as a one-shot that drove the streaming
+form, copying every byte through a thirty-two byte buffer first. D333's rule is that
+the faster moves into the library rather than the slower surviving, so the library's
+one-shot is now the inline-load form and the compiler's `xxhash64` is the call. FNV-1a
+went the same way: the library's is a `u32` loop, the compiler's was a per-byte call
+returning `(usize, err)` and checking a range the type already fenced.
+
+What stays is what is the compiler's, not the hash's. `round` stays because
+`program_snapshot` folds each module's hash with it (D407) and the snapshot identity
+is a golden; `fnv1a32_step` stays because `qualified_error_value` folds
+module-dot-name a byte at a time (D6) with no string to hand the library. `rotate_left`
+and `xor` stay under those two. `read_u32`, `read_u64`, `merge_round` and three of the
+primes went with the body that used them.
+
+CRC-32C and SHA-256 do not move yet, and the reasons are different. The compiler's CRC
+is CRC-32C slice-by-8 with a zeroed checksum window and the SSE4.2 instruction under it
+(D320, D332); the library's `crc32` is IEEE, a bit at a time, and a portable
+`e.algo.hash` has no `e.os` to reach the instruction through -- D333's three-updates
+plan needs the table-driven `crc32c` written first. SHA-256 is blocked: the C bootstrap
+builds stage one from `bootstrap/neper.c` on every suite run, and it refuses
+`lib/e/crypto/hash.e` outright -- nineteen `E-TYPE-0002`s where a `u64` is shifted by a
+`u32`, which neper accepts and the bootstrap does not. That is the finding D333 asked
+for, and it puts the SHA-256 half behind the bootstrap's deletion (D208).
+
+The bootstrap does compile `lib/e/algo/hash.e`, which is why this half could land.
+`e.algo.hash` is `surface:"source"`, so nothing was added to it: the new one-shot
+inlines its rounds the way the streaming form already does rather than growing a
+helper the fence does not name. `artifact_hash.self_test` gains a seventy-seven byte
+vector -- two whole blocks, then an eight, a four and a one, so every branch of the
+moved form runs -- checked against the reference, and the one-shot was checked against
+the streaming form on the same input before either was trusted. The first draft failed
+that check: `word | ... | word *% prime2` binds the multiply to the last term alone.
+

@@ -33,10 +33,81 @@ fn fnv1a64(data: []const u8) -> u64 {
     ret hash
 }
 
+// The whole thirty-two-byte blocks read straight from `data` (D747), rather than
+// driving the streaming form, which copies every byte through its buffer first. The
+// compiler hashes every artifact it reads and writes with this, and tuned its own copy
+// to these inline loads (D388) before that copy became this call.
 fn xxhash64(data: []const u8, seed: u64) -> u64 {
-    var state = xxhash64_init(seed)
-    xxhash64_update(&state, data)
-    ret xxhash64_done(&state)
+    let prime1 = 11400714785074694791u64
+    let prime2 = 14029467366897019727u64
+    let prime3 = 1609587929392839161u64
+    let prime4 = 9650029242287828579u64
+    let prime5 = 2870177450012600261u64
+    var hash = 0u64
+    var at = 0usize
+    if data.len >= 32usize {
+        var lane1 = seed +% prime1 +% prime2
+        var lane2 = seed +% prime2
+        var lane3 = seed
+        var lane4 = seed -% prime1
+        while at + 32usize <= data.len {
+            let word1 = u64(data[at]) | (u64(data[at + 1usize]) << 8u64) | (u64(data[at + 2usize]) << 16u64) | (u64(data[at + 3usize]) << 24u64) | (u64(data[at + 4usize]) << 32u64) | (u64(data[at + 5usize]) << 40u64) | (u64(data[at + 6usize]) << 48u64) | (u64(data[at + 7usize]) << 56u64)
+            let word2 = u64(data[at + 8usize]) | (u64(data[at + 9usize]) << 8u64) | (u64(data[at + 10usize]) << 16u64) | (u64(data[at + 11usize]) << 24u64) | (u64(data[at + 12usize]) << 32u64) | (u64(data[at + 13usize]) << 40u64) | (u64(data[at + 14usize]) << 48u64) | (u64(data[at + 15usize]) << 56u64)
+            let word3 = u64(data[at + 16usize]) | (u64(data[at + 17usize]) << 8u64) | (u64(data[at + 18usize]) << 16u64) | (u64(data[at + 19usize]) << 24u64) | (u64(data[at + 20usize]) << 32u64) | (u64(data[at + 21usize]) << 40u64) | (u64(data[at + 22usize]) << 48u64) | (u64(data[at + 23usize]) << 56u64)
+            let word4 = u64(data[at + 24usize]) | (u64(data[at + 25usize]) << 8u64) | (u64(data[at + 26usize]) << 16u64) | (u64(data[at + 27usize]) << 24u64) | (u64(data[at + 28usize]) << 32u64) | (u64(data[at + 29usize]) << 40u64) | (u64(data[at + 30usize]) << 48u64) | (u64(data[at + 31usize]) << 56u64)
+            lane1 = lane1 +% word1 *% prime2
+            lane1 = ((lane1 << 31u64) | (lane1 >> 33u64)) *% prime1
+            lane2 = lane2 +% word2 *% prime2
+            lane2 = ((lane2 << 31u64) | (lane2 >> 33u64)) *% prime1
+            lane3 = lane3 +% word3 *% prime2
+            lane3 = ((lane3 << 31u64) | (lane3 >> 33u64)) *% prime1
+            lane4 = lane4 +% word4 *% prime2
+            lane4 = ((lane4 << 31u64) | (lane4 >> 33u64)) *% prime1
+            at += 32usize
+        }
+        hash = ((lane1 << 1u64) | (lane1 >> 63u64)) +% ((lane2 << 7u64) | (lane2 >> 57u64))
+        hash = hash +% ((lane3 << 12u64) | (lane3 >> 52u64)) +% ((lane4 << 18u64) | (lane4 >> 46u64))
+        var merged = lane1 *% prime2
+        merged = ((merged << 31u64) | (merged >> 33u64)) *% prime1
+        hash = (hash ^ merged) *% prime1 +% prime4
+        merged = lane2 *% prime2
+        merged = ((merged << 31u64) | (merged >> 33u64)) *% prime1
+        hash = (hash ^ merged) *% prime1 +% prime4
+        merged = lane3 *% prime2
+        merged = ((merged << 31u64) | (merged >> 33u64)) *% prime1
+        hash = (hash ^ merged) *% prime1 +% prime4
+        merged = lane4 *% prime2
+        merged = ((merged << 31u64) | (merged >> 33u64)) *% prime1
+        hash = (hash ^ merged) *% prime1 +% prime4
+    } else {
+        hash = seed +% prime5
+    }
+    hash = hash +% u64(data.len)
+    while at + 8usize <= data.len {
+        let word = u64(data[at]) | (u64(data[at + 1usize]) << 8u64) | (u64(data[at + 2usize]) << 16u64) | (u64(data[at + 3usize]) << 24u64) | (u64(data[at + 4usize]) << 32u64) | (u64(data[at + 5usize]) << 40u64) | (u64(data[at + 6usize]) << 48u64) | (u64(data[at + 7usize]) << 56u64)
+        var lane = word *% prime2
+        lane = ((lane << 31u64) | (lane >> 33u64)) *% prime1
+        hash = hash ^ lane
+        hash = ((hash << 27u64) | (hash >> 37u64)) *% prime1 +% prime4
+        at += 8usize
+    }
+    if at + 4usize <= data.len {
+        let tail = u64(data[at]) | (u64(data[at + 1usize]) << 8u64) | (u64(data[at + 2usize]) << 16u64) | (u64(data[at + 3usize]) << 24u64)
+        hash = hash ^ (tail *% prime1)
+        hash = ((hash << 23u64) | (hash >> 41u64)) *% prime2 +% prime3
+        at += 4usize
+    }
+    while at < data.len {
+        hash = hash ^ (u64(data[at]) *% prime5)
+        hash = ((hash << 11u64) | (hash >> 53u64)) *% prime1
+        at += 1usize
+    }
+    hash = hash ^ (hash >> 33u64)
+    hash = hash *% prime2
+    hash = hash ^ (hash >> 29u64)
+    hash = hash *% prime3
+    hash = hash ^ (hash >> 32u64)
+    ret hash
 }
 
 fn xxhash64_init(seed: u64) -> XxHash64 {

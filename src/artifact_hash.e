@@ -1,4 +1,5 @@
 // Deterministic hashes used by .em serialization and content folding.
+use e.algo.hash as algo_hash
 use e.mem
 use e.os
 use lex
@@ -8,9 +9,6 @@ error Capacity
 
 fn prime1() -> usize { ret 11400714785074694791usize }
 fn prime2() -> usize { ret 14029467366897019727usize }
-fn prime3() -> usize { ret 1609587929392839161usize }
-fn prime4() -> usize { ret 9650029242287828579usize }
-fn prime5() -> usize { ret 2870177450012600261usize }
 
 fn rotate_left(value: usize, count: usize) -> usize {
     let high = value << count
@@ -22,91 +20,16 @@ fn rotate_left(value: usize, count: usize) -> usize {
 // written went through it three hundred times a byte: minutes per module (D213).
 fn xor(a: usize, b: usize) -> usize { ret a ^ b }
 
-fn read_u32(bytes: []const u8, at: usize) -> (usize, err) {
-    if at + 4usize > bytes.len { ret (0usize, InvalidByte) }
-    var result = 0usize
-    var offset = 0usize
-    var multiplier = 1usize
-    while offset < 4usize {
-        result += usize(bytes[at + offset]) * multiplier
-        multiplier = multiplier * 256usize
-        offset += 1usize
-    }
-    ret (result, ok)
-}
-
-fn read_u64(bytes: []const u8, at: usize) -> (usize, err) {
-    if at + 8usize > bytes.len { ret (0usize, InvalidByte) }
-    let low = usize(bytes[at]) | (usize(bytes[at + 1usize]) << 8usize) | (usize(bytes[at + 2usize]) << 16usize) | (usize(bytes[at + 3usize]) << 24usize)
-    let high = usize(bytes[at + 4usize]) | (usize(bytes[at + 5usize]) << 8usize) | (usize(bytes[at + 6usize]) << 16usize) | (usize(bytes[at + 7usize]) << 24usize)
-    ret (low | (high << 32usize), ok)
-}
-
 fn round(accumulator: usize, lane: usize) -> usize {
     var result = accumulator +% lane *% prime2()
     result = rotate_left(result, 31usize)
     ret result *% prime1()
 }
 
-fn merge_round(accumulator: usize, lane: usize) -> usize {
-    var result = xor(accumulator, round(0usize, lane))
-    ret result *% prime1() +% prime4()
-}
-
+// xxHash64 and FNV-1a from `e.algo.hash` (D747): the tuned inline-load form this
+// file carried moved into the library, and what was a second copy of each is the call.
 fn xxhash64(bytes: []const u8) -> (usize, err) {
-    var hash = 0usize
-    var at = 0usize
-    if bytes.len >= 32usize {
-        var lane1: usize = prime1() +% prime2()
-        var lane2: usize = prime2()
-        var lane3: usize = 0usize
-        var lane4: usize = 0usize -% prime1()
-        // The four words read inline under the loop's slack (D388): thirty-two loads
-        // and no call, where each word was a two-result call with its own guard.
-        while at + 32usize <= bytes.len {
-            let word1 = usize(bytes[at + 0usize]) | (usize(bytes[at + 1usize]) << 8usize) | (usize(bytes[at + 2usize]) << 16usize) | (usize(bytes[at + 3usize]) << 24usize) | (usize(bytes[at + 4usize]) << 32usize) | (usize(bytes[at + 5usize]) << 40usize) | (usize(bytes[at + 6usize]) << 48usize) | (usize(bytes[at + 7usize]) << 56usize)
-            let word2 = usize(bytes[at + 8usize]) | (usize(bytes[at + 9usize]) << 8usize) | (usize(bytes[at + 10usize]) << 16usize) | (usize(bytes[at + 11usize]) << 24usize) | (usize(bytes[at + 12usize]) << 32usize) | (usize(bytes[at + 13usize]) << 40usize) | (usize(bytes[at + 14usize]) << 48usize) | (usize(bytes[at + 15usize]) << 56usize)
-            let word3 = usize(bytes[at + 16usize]) | (usize(bytes[at + 17usize]) << 8usize) | (usize(bytes[at + 18usize]) << 16usize) | (usize(bytes[at + 19usize]) << 24usize) | (usize(bytes[at + 20usize]) << 32usize) | (usize(bytes[at + 21usize]) << 40usize) | (usize(bytes[at + 22usize]) << 48usize) | (usize(bytes[at + 23usize]) << 56usize)
-            let word4 = usize(bytes[at + 24usize]) | (usize(bytes[at + 25usize]) << 8usize) | (usize(bytes[at + 26usize]) << 16usize) | (usize(bytes[at + 27usize]) << 24usize) | (usize(bytes[at + 28usize]) << 32usize) | (usize(bytes[at + 29usize]) << 40usize) | (usize(bytes[at + 30usize]) << 48usize) | (usize(bytes[at + 31usize]) << 56usize)
-            lane1 = round(lane1, word1)
-            lane2 = round(lane2, word2)
-            lane3 = round(lane3, word3)
-            lane4 = round(lane4, word4)
-            at += 32usize
-        }
-        hash = rotate_left(lane1, 1usize) +% rotate_left(lane2, 7usize) +% rotate_left(lane3, 12usize) +% rotate_left(lane4, 18usize)
-        hash = merge_round(hash, lane1)
-        hash = merge_round(hash, lane2)
-        hash = merge_round(hash, lane3)
-        hash = merge_round(hash, lane4)
-    } else {
-        hash = prime5()
-    }
-    hash = hash +% bytes.len
-    while at + 8usize <= bytes.len {
-        let word = usize(bytes[at + 0usize]) | (usize(bytes[at + 1usize]) << 8usize) | (usize(bytes[at + 2usize]) << 16usize) | (usize(bytes[at + 3usize]) << 24usize) | (usize(bytes[at + 4usize]) << 32usize) | (usize(bytes[at + 5usize]) << 40usize) | (usize(bytes[at + 6usize]) << 48usize) | (usize(bytes[at + 7usize]) << 56usize)
-        hash = xor(hash, round(0usize, word))
-        hash = rotate_left(hash, 27usize) *% prime1() +% prime4()
-        at += 8usize
-    }
-    if at + 4usize <= bytes.len {
-        let (word, word_error) = read_u32(bytes, at)
-        if word_error != ok { ret (0usize, word_error) }
-        hash = xor(hash, word *% prime1())
-        hash = rotate_left(hash, 23usize) *% prime2() +% prime3()
-        at += 4usize
-    }
-    while at < bytes.len {
-        hash = xor(hash, usize(bytes[at]) *% prime5())
-        hash = rotate_left(hash, 11usize) *% prime1()
-        at += 1usize
-    }
-    hash = xor(hash, hash >> 33usize)
-    hash = hash *% prime2()
-    hash = xor(hash, hash >> 29usize)
-    hash = hash *% prime3()
-    hash = xor(hash, hash >> 32usize)
-    ret (hash, ok)
+    ret (usize(algo_hash.xxhash64(bytes, 0u64)), ok)
 }
 
 // Table-driven (D224): the table is built per call, two thousand steps, against a
@@ -179,15 +102,7 @@ fn fnv1a32_step(hash: usize, value: usize) -> (usize, err) {
 }
 
 fn fnv1a32(bytes: []const u8) -> (usize, err) {
-    var hash = 2166136261usize
-    var at = 0usize
-    while at < bytes.len {
-        let (next, step_error) = fnv1a32_step(hash, usize(bytes[at]))
-        if step_error != ok { ret (0usize, step_error) }
-        hash = next
-        at += 1usize
-    }
-    ret (hash, ok)
+    ret (usize(algo_hash.fnv1a32(bytes)), ok)
 }
 
 fn qualified_error_value(module_name: str, error_name: str) -> (usize, err) {
@@ -371,6 +286,16 @@ fn self_test() -> err {
     var empty: [1]u8 = zero
     let (empty_hash, empty_error) = xxhash64(empty[0usize..0usize])
     if empty_error != ok || empty_hash != 17241709254077376921usize { ret InvalidByte }
+    // Seventy-seven bytes is two whole blocks, then an eight, a four and a one: every
+    // branch of the form that moved into `e.algo.hash` (D747), against the reference.
+    var spread: [77]u8 = zero
+    var spread_at = 0usize
+    while spread_at < 77usize {
+        spread[spread_at] = u8((spread_at * 7usize + 3usize) % 251usize)
+        spread_at += 1usize
+    }
+    let (spread_hash, spread_error) = xxhash64(spread[..])
+    if spread_error != ok || spread_hash != 18007575595249738181usize { ret InvalidByte }
     let digits = [9]u8{ 49u8, 50u8, 51u8, 52u8, 53u8, 54u8, 55u8, 56u8, 57u8 }
     let (checksum, checksum_error) = crc32c(digits[..], 0usize, 0usize)
     if checksum_error != ok || checksum != 3808858755usize { ret InvalidByte }
