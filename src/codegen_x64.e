@@ -577,8 +577,8 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
 }
 
 // Section 4's lane-wise operator as one packed SSE2 instruction over the whole
-// sixteen-byte vector, which `lower` asks for by emitting `VectorBinary` for the
-// shapes the baseline covers. The vectors stay in memory and xmm0 to xmm3 are borrowed
+// sixteen-byte vector -- two for `~`, which no unit has -- which `lower` asks for by
+// emitting `VectorBinary` for the shapes the baseline covers. The vectors stay in memory and xmm0 to xmm3 are borrowed
 // for the operation, as the scalar float path borrows xmm0 and xmm1: this is
 // instruction selection, not yet a vector register class.
 // ponytail: four scratch xmm registers per operation; a second register class in
@@ -586,17 +586,24 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
 fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
     if instruction.has_result || instruction.operand_count != 3usize { ret Unsupported }
     let lane = nir.vector_binary_lane(instruction.immediate)
-    let (mandatory, opcode, known) = packed_instruction(nir.vector_binary_operation(instruction.immediate), lane)
+    let operation = nir.vector_binary_operation(instruction.immediate)
+    let (mandatory, opcode, known) = packed_instruction(operation, lane)
     if !known || nir.vector_binary_lanes(instruction.immediate) == 0usize { ret Unsupported }
     let destination_value = builder.operands[instruction.first_operand]
     let left_value = builder.operands[instruction.first_operand + 1usize]
-    let right_value = builder.operands[instruction.first_operand + 2usize]
     let (left, left_error) = read_value(allocations, left_value, 10usize, output)
     if left_error != ok { ret left_error }
     try emit_x64.vector_load(output, 0usize, left)
-    let (right, right_error) = read_value(allocations, right_value, 10usize, output)
-    if right_error != ok { ret right_error }
-    try emit_x64.vector_load(output, 1usize, right)
+    if operation == 10usize {
+        // `~v` is a `pxor` against all ones, which `pcmpeqd` on a register against
+        // itself makes without reading the register or the image. Lowering repeats the
+        // one operand, so the third is the second and nothing is loaded for it.
+        try emit_x64.vector_op(output, 102usize, 1usize, 1usize, 118usize)
+    } else {
+        let (right, right_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
+        if right_error != ok { ret right_error }
+        try emit_x64.vector_load(output, 1usize, right)
+    }
     try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
     if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
     let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
@@ -635,6 +642,8 @@ fn packed_instruction(operation: usize, lane: usize) -> (usize, usize, bool) {
     if operation == 7usize { ret (102usize, 219usize, true) }
     if operation == 8usize { ret (102usize, 235usize, true) }
     if operation == 9usize { ret (102usize, 239usize, true) }
+    // `~` is the same `pxor`, against the all-ones register the caller builds.
+    if operation == 10usize { ret (102usize, 239usize, true) }
     ret (0usize, 0usize, false)
 }
 

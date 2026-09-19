@@ -13939,3 +13939,20 @@ itself marks the NaN lanes, `pcmpeqd` on a dead register makes all ones, and a
 left-then-right shift pair turns those into the quiet bit pattern for the width,
 which `pand`/`pandn`/`por` merges lane by lane. The cost is paid only on float
 lanes, where the scalar path paid it per lane instead.
+
+## D752 -- Packed `~` on a sixteen-byte integer vector
+
+`~v` joins D751's packed shapes when the vector is sixteen bytes of integer lanes.
+It is the only unary operator in section 4's table and no vector unit has a packed
+`not`, so it is two instructions rather than one: `pcmpeqd` on a scratch register
+against itself makes all ones without reading the register or the image, and `pxor`
+against that is the result. Both are already emitted -- the all-ones register is how
+D751 builds the canonical NaN -- so nothing new reaches `emit_x64` or the
+disassembler.
+
+`~` travels as `VectorBinary` with operation rank 10 and the one operand given as
+both the left and the right, so the instruction keeps the three operands every
+`VectorBinary` has and the back end skips the second load rather than the shape
+growing a unary case. `~` on a mask keeps the lane loop unconditionally: a
+`Mask[T, N]` is `[N]bool`, so its lanes are bytes of `0` and `1` whose `~` is each
+lane's `!` and not the bitwise not of sixteen bytes.

@@ -89,7 +89,9 @@ type Opcode = enum u8 {
 // `operation` is the rank below, `lane` the lane shape (0, 1, 2, 3 for an integer of
 // one, two, four or eight bytes; 4 for `f32`, 5 for `f64`), and `lanes` the count.
 // Operation ranks: 0 add, 1 subtract, 2 multiply, 3 divide -- all float -- then
-// 4 `+%`, 5 `-%`, 6 `*%`, 7 `&`, 8 `|`, 9 `^`.
+// 4 `+%`, 5 `-%`, 6 `*%`, 7 `&`, 8 `|`, 9 `^`, and 10 for the one unary form, `~`,
+// whose right operand is the left one again: no unit has a packed `not`, so the back
+// end makes the all-ones operand itself.
 fn vector_binary_immediate(operation: usize, lane: usize, lanes: usize) -> usize {
     ret operation * 4096usize + lane * 256usize + lanes
 }

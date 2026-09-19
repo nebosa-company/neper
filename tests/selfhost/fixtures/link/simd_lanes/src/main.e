@@ -220,6 +220,10 @@ fn operators() {
     if back.lanes[3] != 2i32 { os.exit(86) }
     let inv = ~y
     if inv.lanes[0] != -2i32 { os.exit(87) }
+    // `~` over a whole sixteen-byte vector: every lane distinct, so a packed form that
+    // covered only part of the vector would be caught at one end or the other.
+    let flipped = ~Vec[u8, 16]{ 0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8, 13u8, 14u8, 15u8 }
+    if flipped[0] != 255u8 || flipped[7] != 248u8 || flipped[15] != 240u8 { os.exit(99) }
     let p = simd.mask[Vec[i32, 4]](3u64)
     let q = simd.mask[Vec[i32, 4]](6u64)
     if simd.bits[Vec[i32, 4]](p & q) != 2u64 { os.exit(88) }

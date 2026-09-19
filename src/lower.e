@@ -5226,8 +5226,9 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 }
 // The lane-wise shapes one vector instruction covers: a sixteen-byte vector -- the
 // width SSE2 and NEON both have -- whose lane type and operator name a single packed
-// instruction on that baseline. Everything else keeps the lane loop below: the wider
-// widths, `f16`, the shifts, the masks, and `*%` on any lane but the sixteen-bit one,
+// instruction on that baseline, plus `~`, which is two. Everything else keeps the lane
+// loop below: the wider widths, `f16`, the shifts, the masks -- whose lanes are `bool`
+// and never sixteen bytes of them -- and `*%` on any lane but the sixteen-bit one,
 // which is the only packed multiply SSE2 has.
 // ponytail: the sixteen-byte baseline only; `--cpu` and wider widths widen this table.
 fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, bool) {
@@ -5257,6 +5258,7 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
         if opcode == .BitAnd { operation = 7usize }
         if opcode == .BitOr { operation = 8usize }
         if opcode == .BitXor { operation = 9usize }
+        if opcode == .BitNot { operation = 10usize }
     }
     if operation == 16usize { ret (0usize, false) }
     ret (nir.vector_binary_immediate(operation, lane_code, lanes), true)
@@ -5325,7 +5327,9 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
 }
 
 // `~v` on integer lanes is the bitwise not of each; on a mask it is each lane's `!`,
-// spelled the way `!` is lowered -- equal to `false`.
+// spelled the way `!` is lowered -- equal to `false`. A sixteen-byte integer vector
+// takes the packed form instead, which is `VectorBinary` with the one operand given
+// as both: `~` is the only unary operator in the table, and no vector unit has it.
 fn lower_vector_not(c: *check.Checker, node: syntax.Node, operand: usize, result_type: check.Type, builder: *nir.Builder) -> (usize, err) {
     let token = c.tokens[usize(node.token_start)]
     let (lanes, is_vector) = check.vector_lanes(c, result_type)
@@ -5335,6 +5339,18 @@ fn lower_vector_not(c: *check.Checker, node: syntax.Node, operand: usize, result
     if lane_info_error != ok { ret (0usize, lane_info_error) }
     let (stack, stack_error) = vector_slot(c, result_type, builder, token)
     if stack_error != ok { ret (0usize, stack_error) }
+    let (packed, is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, .BitNot)
+    if is_packed {
+        let (instruction, value, emit_error) = nir.emit(builder, .VectorBinary, result_type, false, packed, token)
+        if emit_error != ok { ret (0usize, emit_error) }
+        let stack_operand_error = nir.add_operand(builder, instruction, stack)
+        if stack_operand_error != ok { ret (0usize, stack_operand_error) }
+        let left_operand_error = nir.add_operand(builder, instruction, operand)
+        if left_operand_error != ok { ret (0usize, left_operand_error) }
+        let right_operand_error = nir.add_operand(builder, instruction, operand)
+        if right_operand_error != ok { ret (0usize, right_operand_error) }
+        ret (stack, ok)
+    }
     var at = 0usize
     while at < lanes.array_length {
         let offset = at * lane_info.size
