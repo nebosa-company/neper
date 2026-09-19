@@ -13251,8 +13251,11 @@ An aggregate literal with addresses in two different top-level fields records bo
 field-to-local identities. A use through either field resolves to its own target, so
 the second field cannot hide a use after its region reset behind the first field.
 
-The resource record gains one second inline slot rather than a heap-backed alias
-table. More than two independent pointer fields remain outside this bounded subset.
+A named aggregate cannot simultaneously use the slice-offset fact or be an arena
+mark, so those otherwise-unused fields hold its second target and field name. This
+keeps every `Resource` record at its existing size rather than taxing all locals or
+adding a side table. More than two independent pointer fields remain outside this
+bounded subset.
 
 ## D692 -- A carrier escape examines both aggregate pointer fields
 

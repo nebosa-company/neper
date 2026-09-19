@@ -363,12 +363,11 @@ type Resource = struct {
     // whose every use reaches the target; the member's name for a struct local one
     // of whose fields holds `&x`, where only a use through that field does.
     points_to_field: str,
-    // ponytail: two inline aliases close D691 without per-local allocation; use a
-    // compact side table if H02 fixtures require three independent fields.
-    points_to_second: usize,
-    points_to_second_field: str,
     // A slice alias into a fixed array: the first array slot represented by index
-    // zero, when the range's lower bound is comptime-known.
+    // zero, when the range's lower bound is comptime-known. For a named aggregate,
+    // these otherwise-unused fields instead hold its second alias target and tag;
+    // `mark_arena` holds that alias's field name. ponytail: use a compact side table
+    // if H02 fixtures require three independent fields.
     slice_offset: usize,
     slice_offset_known: bool,
     view: bool,
@@ -5861,7 +5860,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     var no_fields: []u8 = zero
     var no_elements_acquired: []usize = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "", points_to_second: 0usize, points_to_second_field: "", slice_offset: 0usize, slice_offset_known: false }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, elements_acquired: no_elements_acquired, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize, points_to_field: "", slice_offset: 0usize, slice_offset_known: false }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -13769,8 +13768,7 @@ fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, local_index: usize, initializer_index: usize, has_initializer: bool) {
     c.resources[local_index].points_to = 0usize
     c.resources[local_index].points_to_field = ""
-    c.resources[local_index].points_to_second = 0usize
-    c.resources[local_index].points_to_second_field = ""
+    if c.locals[local_index].ty.kind == .Named && c.resources[local_index].slice_offset_known { c.resources[local_index].mark_arena = "" }
     c.resources[local_index].slice_offset = 0usize
     c.resources[local_index].slice_offset_known = false
     if c.locals[local_index].ty.kind == .Slice {
@@ -13788,8 +13786,9 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
             c.resources[local_index].points_to_field = member
             let (second, second_member, has_second) = literal_address_field_after(c, g, tree, module_index, initializer_index, member)
             if has_second && second != local_index {
-                c.resources[local_index].points_to_second = second + 1usize
-                c.resources[local_index].points_to_second_field = second_member
+                c.resources[local_index].slice_offset = second + 1usize
+                c.resources[local_index].slice_offset_known = true
+                c.resources[local_index].mark_arena = second_member
             }
         }
     }
@@ -13799,8 +13798,11 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         if found && c.locals[source].ty.kind == .Named && c.resources[source].points_to != 0usize {
             c.resources[local_index].points_to = c.resources[source].points_to
             c.resources[local_index].points_to_field = c.resources[source].points_to_field
-            c.resources[local_index].points_to_second = c.resources[source].points_to_second
-            c.resources[local_index].points_to_second_field = c.resources[source].points_to_second_field
+            if c.resources[source].slice_offset_known {
+                c.resources[local_index].slice_offset = c.resources[source].slice_offset
+                c.resources[local_index].slice_offset_known = true
+                c.resources[local_index].mark_arena = c.resources[source].mark_arena
+            }
         }
     }
     if c.locals[local_index].ty.kind == .Pointer {
@@ -13883,13 +13885,13 @@ fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if token.kind != .Identifier { ret (0usize, false) }
     let (pointer_local, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
     if !found || c.resources[pointer_local].points_to == 0usize { ret (0usize, false) }
-    var target = c.resources[pointer_local].points_to
+    var alias = c.resources[pointer_local].points_to
     let field = c.resources[pointer_local].points_to_field
     if field.len != 0usize && (!has_member || !same(through_member, field)) {
-        if !has_member || c.resources[pointer_local].points_to_second == 0usize || !same(through_member, c.resources[pointer_local].points_to_second_field) { ret (0usize, false) }
-        target = c.resources[pointer_local].points_to_second
+        if !has_member || !c.resources[pointer_local].slice_offset_known || !same(through_member, c.resources[pointer_local].mark_arena) { ret (0usize, false) }
+        alias = c.resources[pointer_local].slice_offset
     }
-    let pointed = target - 1usize
+    let pointed = alias - 1usize
     if pointed >= c.local_count { ret (0usize, false) }
     ret (pointed, true)
 }
@@ -14256,7 +14258,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if has_initializer && tree.nodes[initializer_index].kind == .NameExpr {
         let source_token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
         let (source_local, source_found) = find_local(c, g.modules[module_index].text[source_token.start..source_token.end])
-        if source_found && c.resources[source_local].mark_arena.len != 0usize {
+        if source_found && c.resources[source_local].mark_arena.len != 0usize && !c.resources[source_local].slice_offset_known {
             c.resources[local_index].mark_arena = c.resources[source_local].mark_arena
             c.resources[local_index].points_to = source_local + 1usize
             if c.resources[source_local].points_to != 0usize { c.resources[local_index].points_to = c.resources[source_local].points_to }
@@ -14871,9 +14873,10 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                             c.resources[struct_local].points_to = pointed + 1usize
                             c.resources[struct_local].points_to_field = member
                         } else {
-                            if c.resources[struct_local].points_to_second == 0usize || same(member, c.resources[struct_local].points_to_second_field) {
-                                c.resources[struct_local].points_to_second = pointed + 1usize
-                                c.resources[struct_local].points_to_second_field = member
+                            if !c.resources[struct_local].slice_offset_known || same(member, c.resources[struct_local].mark_arena) {
+                                c.resources[struct_local].slice_offset = pointed + 1usize
+                                c.resources[struct_local].slice_offset_known = true
+                                c.resources[struct_local].mark_arena = member
                             }
                         }
                     }
@@ -15129,8 +15132,8 @@ fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
                 local_index = carried
                 is_resource = true
             }
-            if !is_resource && c.resources[carrier].points_to_second != 0usize {
-                let second = c.resources[carrier].points_to_second - 1usize
+            if !is_resource && c.resources[carrier].slice_offset_known {
+                let second = c.resources[carrier].slice_offset - 1usize
                 if second < c.local_count && c.resources[second].region != 0usize {
                     local_index = second
                     is_resource = true
