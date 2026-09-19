@@ -13887,3 +13887,11 @@ renderer validates and combines both files, so moving a record changes neither i
 score nor the generated readiness page. Requirements remain in their normative
 documents; the queue and ledger contain implementation status, not copied contracts.
 
+## D749 -- The readiness page is metrics only
+
+`docs/progress.html` renders only the four headline readiness percentages, their
+counts and their change from the preceding generation. Capability evidence, module
+rows, widget rows and hardening-track detail remain in their machine-readable source
+files instead of being duplicated into the page. The generated HTML has no scripts,
+remote fonts or other network dependencies.
+
