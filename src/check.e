@@ -247,8 +247,9 @@ type Function = struct {
     // `@import(LIB, SYM)` on an `extern fn`: the library to bind against and the name
     // to bind to, which is not the neper-side name -- D11 keeps those independent.
     // External functions store their import library and symbol here. Non-extern
-    // functions use those otherwise-empty slots for `@borrows` and `@noescape`
-    // parameter names; their checked public identities are positional.
+    // functions use those otherwise-empty slots for `@borrows` and the source
+    // spelling of `@noescape`'s parameter-name list; checked public identities
+    // are positional.
     import_library: str,
     import_symbol: str,
     intrinsic: bool,
@@ -3583,11 +3584,14 @@ fn declaration_import(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     ret ("", "", false)
 }
 
-// The single parameter named by a declaration contract. The summary is part of the
-// function declaration, so malformed or repeated summaries fail before bodies.
-fn declaration_parameter_attribute(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, attribute_name: str) -> (str, bool, err) {
+// The string parameters named by a declaration contract. The returned slice keeps
+// their quoted source spelling, so a multi-input summary needs no side allocation.
+// Malformed or repeated summaries fail before bodies.
+fn declaration_parameter_attributes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, attribute_name: str) -> (str, usize, bool, err) {
     let text = g.modules[module_index].text
-    var result = ""
+    var first_start = 0usize
+    var last_end = 0usize
+    var result_count = 0usize
     var found = false
     var at = node_index
     while at > 1usize {
@@ -3606,27 +3610,56 @@ fn declaration_parameter_attribute(c: *Checker, g: *graph.Graph, tree: *parse.Tr
             token_at += 1usize
         }
         if !same(name, attribute_name) { continue }
-        if found { ret ("", false, InvalidType) }
+        if found { ret ("", 0usize, false, InvalidType) }
+        found = true
         let child_end = usize(node.first_child) + usize(node.child_count)
         var child_at = usize(node.first_child)
-        var argument_index = 0usize
-        var argument_count = 0usize
         while child_at < child_end {
             if parse.child_is_node_at(tree, child_at) {
-                argument_index = parse.child_index_at(tree, child_at)
-                argument_count += 1usize
+                let argument = tree.nodes[parse.child_index_at(tree, child_at)]
+                if argument.kind != .LiteralExpr { ret ("", 0usize, false, InvalidType) }
+                let argument_token = usize(argument.token_start)
+                let (value, has_value) = attribute_string(c, text, argument_token)
+                if !has_value || value.len == 0usize { ret ("", 0usize, false, InvalidType) }
+                let token = c.tokens[argument_token]
+                if result_count == 0usize { first_start = token.start }
+                last_end = token.end
+                result_count += 1usize
             }
             child_at += 1usize
         }
-        if argument_count != 1usize { ret ("", false, InvalidType) }
-        let argument = tree.nodes[argument_index]
-        if argument.kind != .LiteralExpr { ret ("", false, InvalidType) }
-        let (value, has_value) = attribute_string(c, text, usize(argument.token_start))
-        if !has_value || value.len == 0usize { ret ("", false, InvalidType) }
-        result = value
-        found = true
     }
-    ret (result, found, ok)
+    if result_count == 0usize { ret ("", 0usize, found, ok) }
+    ret (text[first_start..last_end], result_count, found, ok)
+}
+
+fn contract_name_at(names: str, wanted: usize) -> (str, bool) {
+    var at = 0usize
+    var index = 0usize
+    while at < names.len {
+        while at < names.len && names[at] != 34u8 { at += 1usize }
+        if at == names.len { break }
+        let start = at + 1usize
+        at = start
+        while at < names.len && names[at] != 34u8 { at += 1usize }
+        if at == names.len { ret ("", false) }
+        if index == wanted { ret (names[start..at], true) }
+        index += 1usize
+        at += 1usize
+    }
+    ret ("", false)
+}
+
+fn contract_name_count(names: str, name: str) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while true {
+        let (candidate, found) = contract_name_at(names, at)
+        if !found { break }
+        if same(candidate, name) { count += 1usize }
+        at += 1usize
+    }
+    ret count
 }
 
 // Whether the attribute run above a declaration names `name`.
@@ -3748,12 +3781,18 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         if return_type.kind == .Err && return_index + 1usize != item.return_count { ret InvalidType }
         return_index += 1usize
     }
-    let (borrow_name, has_borrow, borrow_error) = declaration_parameter_attribute(c, g, tree, module_index, node_index, "borrows")
-    if borrow_error != ok {
+    let (borrow_names, borrow_count, has_borrow, borrow_error) = declaration_parameter_attributes(c, g, tree, module_index, node_index, "borrows")
+    if borrow_error != ok || (has_borrow && borrow_count != 1usize) {
         record_failure(c, module_index, node, .BorrowContract, "", "")
-        ret borrow_error
+        if borrow_error != ok { ret borrow_error }
+        ret InvalidType
     }
     if has_borrow {
+        let (borrow_name, has_borrow_name) = contract_name_at(borrow_names, 0usize)
+        if !has_borrow_name {
+            record_failure(c, module_index, node, .BorrowContract, "", "")
+            ret InvalidType
+        }
         var parameter_at = 0usize
         while parameter_at < item.parameter_count {
             let parameter = c.parameters[item.first_parameter + parameter_at]
@@ -3778,29 +3817,37 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
             ret InvalidType
         }
     }
-    let (noescape_name, has_noescape, noescape_error) = declaration_parameter_attribute(c, g, tree, module_index, node_index, "noescape")
-    if noescape_error != ok {
+    let (noescape_names, noescape_count, has_noescape, noescape_error) = declaration_parameter_attributes(c, g, tree, module_index, node_index, "noescape")
+    if noescape_error != ok || (has_noescape && noescape_count == 0usize) {
         record_failure(c, module_index, node, .NoEscapeContract, "", "")
-        ret noescape_error
+        if noescape_error != ok { ret noescape_error }
+        ret InvalidType
     }
     if has_noescape {
-        var parameter_at = 0usize
-        while parameter_at < item.parameter_count {
-            let parameter = c.parameters[item.first_parameter + parameter_at]
-            if same(parameter.name, noescape_name) {
-                if item.external || declaration_has_attribute(c, g, tree, module_index, node_index, "unsafe") || parameter.own || !holds_pointer(c, parameter.ty, 0usize) {
-                    record_failure(c, module_index, node, .NoEscapeContract, noescape_name, "")
-                    ret InvalidType
-                }
-                item.import_symbol = noescape_name
-                break
+        var name_at = 0usize
+        while name_at < noescape_count {
+            let (noescape_name, has_noescape_name) = contract_name_at(noescape_names, name_at)
+            if !has_noescape_name {
+                record_failure(c, module_index, node, .NoEscapeContract, "", "")
+                ret InvalidType
             }
-            parameter_at += 1usize
+            var valid = false
+            var parameter_at = 0usize
+            while parameter_at < item.parameter_count {
+                let parameter = c.parameters[item.first_parameter + parameter_at]
+                if same(parameter.name, noescape_name) {
+                    valid = !item.external && !declaration_has_attribute(c, g, tree, module_index, node_index, "unsafe") && !parameter.own && holds_pointer(c, parameter.ty, 0usize) && contract_name_count(noescape_names, noescape_name) == 1usize
+                    break
+                }
+                parameter_at += 1usize
+            }
+            if !valid {
+                record_failure(c, module_index, node, .NoEscapeContract, noescape_name, "")
+                ret InvalidType
+            }
+            name_at += 1usize
         }
-        if function_noescape_from(c, item) == 0usize {
-            record_failure(c, module_index, node, .NoEscapeContract, noescape_name, "")
-            ret InvalidType
-        }
+        item.import_symbol = noescape_names
     }
     // Section 5's closed table of what crosses the C ABI: a parameter or return of an
     // extern naming a type without a C mapping is refused here, at the declaration.
@@ -13435,7 +13482,7 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .AggregateMemberUnknown { ret "aggregate member has an unknown or unsized type" }
     if kind == .BindingUnknownNamed { ret "binding has an unknown named type" }
     if kind == .BorrowContract { ret "@borrows must name one borrowed pointer-bearing parameter of a function with a pointer-bearing result" }
-    if kind == .NoEscapeContract { ret "@noescape must name one borrowed pointer-bearing parameter and the body must not let it escape" }
+    if kind == .NoEscapeContract { ret "@noescape must name borrowed pointer-bearing parameters and the body must not let them escape" }
     ret "type checking failed"
 }
 
@@ -13577,14 +13624,21 @@ fn function_borrow_from(c: *Checker, function: Function) -> usize {
     ret 0usize
 }
 
-// The one-based parameter promised not to outlive an `@noescape` call. It uses the
-// second import string slot, which is otherwise empty on every non-extern function.
+fn function_noescape_at(c: *Checker, function: Function, position: usize) -> bool {
+    if function.external || position == 0usize || position > function.parameter_count || function.import_symbol.len == 0usize { ret false }
+    let parameter_index = function.first_parameter + position - 1usize
+    if parameter_index >= c.parameter_count { ret false }
+    ret contract_name_count(function.import_symbol, c.parameters[parameter_index].name) != 0usize
+}
+
+// The first one-based parameter promised not to outlive an `@noescape` call. The
+// complete quoted name list uses the second import string slot, otherwise empty on
+// every non-extern function.
 fn function_noescape_from(c: *Checker, function: Function) -> usize {
     if function.external || function.import_symbol.len == 0usize { ret 0usize }
     var at = 0usize
     while at < function.parameter_count {
-        let parameter_index = function.first_parameter + at
-        if parameter_index < c.parameter_count && same(c.parameters[parameter_index].name, function.import_symbol) { ret at + 1usize }
+        if function_noescape_at(c, function, at + 1usize) { ret at + 1usize }
         at += 1usize
     }
     ret 0usize
