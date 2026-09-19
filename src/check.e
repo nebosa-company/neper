@@ -11107,6 +11107,12 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                     ret ResourceViolation
                 }
             }
+            let noescape_from = function_noescape_from(c, function)
+            if noescape_from != 0usize && holds_pointer(c, expected, 0usize) && expression_borrows_from(c, g, tree, module_index, parse.child_index_at(tree, at), noescape_from - 1usize) {
+                let parameter = c.parameters[function.first_parameter + noescape_from - 1usize]
+                record_failure(c, module_index, tree.nodes[parse.child_index_at(tree, at)], .NoEscapeContract, parameter.name, "")
+                ret ResourceViolation
+            }
             try resource_return_value(c, g, tree, module_index, parse.child_index_at(tree, at))
             return_index += 1usize
         }
@@ -11189,6 +11195,46 @@ fn result_borrows_from(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if found && origin == parameter { ret true }
     let (carrier, has_carrier) = place_base_local(c, g, tree, module_index, node_index)
     ret has_carrier && carrier_borrows_from(c, carrier, parameter)
+}
+
+fn carrier_contains_borrow_from(c: *Checker, carrier: usize, parameter: usize) -> bool {
+    if carrier >= c.local_count { ret false }
+    if c.resources[carrier].points_to == parameter + 1usize { ret true }
+    if c.resources[carrier].slice_offset_known && c.resources[carrier].slice_offset == parameter + 1usize { ret true }
+    var at = 0usize
+    while at < c.resource_alias_count {
+        let alias = c.resource_aliases[at]
+        if alias.carrier == carrier && alias.pointed == parameter { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// Whether an expression retains the named input. Aggregate literals are walked
+// directly; named carriers use the same complete alias paths as result-borrow proof.
+fn expression_borrows_from(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, parameter: usize) -> bool {
+    let (origin, found) = result_borrow_origin(c, g, tree, module_index, node_index)
+    if found && origin == parameter { ret true }
+    let (carrier, has_carrier) = place_base_local(c, g, tree, module_index, node_index)
+    if has_carrier && carrier_contains_borrow_from(c, carrier, parameter) { ret true }
+    let node = tree.nodes[node_index]
+    if node.kind != .AggregateLiteral && node.kind != .GroupExpr { ret false }
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = tree.nodes[child_index]
+            if child.kind == .LiteralItem {
+                let (value_index, has_value) = first_node_child(tree, child)
+                if has_value && expression_borrows_from(c, g, tree, module_index, value_index, parameter) { ret true }
+            } else {
+                if node.kind == .GroupExpr && expression_borrows_from(c, g, tree, module_index, child_index, parameter) { ret true }
+            }
+        }
+        at += 1usize
+    }
+    ret false
 }
 
 fn check_children(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
@@ -13342,7 +13388,7 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .AggregateMemberUnknown { ret "aggregate member has an unknown or unsized type" }
     if kind == .BindingUnknownNamed { ret "binding has an unknown named type" }
     if kind == .BorrowContract { ret "@borrows must name one borrowed pointer-bearing parameter of a function with a pointer-bearing result" }
-    if kind == .NoEscapeContract { ret "@noescape must name one borrowed pointer-bearing parameter of a checked function" }
+    if kind == .NoEscapeContract { ret "@noescape must name one borrowed pointer-bearing parameter and the body must not let it escape" }
     ret "type checking failed"
 }
 
