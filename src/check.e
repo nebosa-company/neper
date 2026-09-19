@@ -187,6 +187,9 @@ type ComptimeKind = enum u8 {
     // of integer literals, kept as its spelling the way a `Str` is (`text`), decoded by
     // whoever needs the items; `ty` is the array type the literal wrote.
     Array,
+    // A function chosen in brackets is part of the specialization identity. Its
+    // value is the selected function index and `ty` is its checked signature.
+    Function,
 }
 
 // One name bound by an unrolled `for`, which the enclosing instantiation's contiguous
@@ -3341,8 +3344,6 @@ fn collect_comptime_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
             if saw_colon && token_kind != .Newline {
                 if token_kind == .KwType {
                     kind_found = true
-                } else {
-                    if token_kind == .KwFn { ret Unsupported }
                 }
                 break
             }
@@ -3386,6 +3387,11 @@ fn collect_comptime_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
     }
     if ty.kind == .Array && ty.has_element && ty.element < c.type_count && c.types[ty.element].kind == .Integer {
         c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Array, ty: ty }
+        c.comptime_parameter_count += 1usize
+        ret ok
+    }
+    if ty.kind == .Function {
+        c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Function, ty: ty }
         c.comptime_parameter_count += 1usize
         ret ok
     }
@@ -6421,6 +6427,41 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                         let bind_error = bind_text_argument(c, template_index, first_argument, generic.first_comptime + argument_position, spelling)
                         if bind_error != ok { ret (0usize, bind_error) }
                     } else {
+                    if parameter.kind == .Function {
+                        let argument_node = tree.nodes[node_index]
+                        var selected = c.function_count
+                        if argument_node.kind == .NameExpr {
+                            let argument_token = c.tokens[usize(argument_node.token_start)]
+                            let argument_name = g.modules[module_index].text[argument_token.start..argument_token.end]
+                            let (outer_index, has_outer) = active_comptime_parameter(c, argument_name)
+                            if has_outer && c.comptime_parameters[outer_index].kind == .Function {
+                                let (outer, has_argument) = active_argument(c, outer_index)
+                                if !has_argument { ret (0usize, MissingContext) }
+                                let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, outer.ty, outer.value, .Function)
+                                if bind_error != ok { ret (0usize, bind_error) }
+                            } else {
+                                let (found_index, found) = find_function(c, module_index, argument_name)
+                                if found { selected = found_index }
+                            }
+                        }
+                        if argument_node.kind == .FieldExpr {
+                            let (found_index, found) = find_qualified_function(c, g, tree, module_index, argument_node)
+                            if found { selected = found_index }
+                        }
+                        if selected < c.function_count {
+                            let chosen = c.functions[selected]
+                            if chosen.generic || chosen.intrinsic || chosen.external { ret (0usize, TypeMismatch) }
+                            let (chosen_type, chosen_error) = function_pointer_type(c, chosen, module_index)
+                            if chosen_error != ok { ret (0usize, chosen_error) }
+                            let (required_type, required_error) = substitute_type(c, template_index, first_argument, parameter.ty)
+                            if required_error != ok || !type_equal(c, chosen_type, required_type) { ret (0usize, TypeMismatch) }
+                            let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, chosen_type, selected, .Function)
+                            if bind_error != ok { ret (0usize, bind_error) }
+                        } else {
+                            let argument_index = first_argument + argument_position
+                            if !c.generic_arguments[argument_index].set { ret (0usize, UnknownCallable) }
+                        }
+                    } else {
                         let (value, value_error) = array_length_value(c, g, tree, module_index, node_index)
                         if value_error == ok {
                             let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, invalid_type(), value, .Integer)
@@ -6434,6 +6475,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                             c.generic_arguments[argument_index].symbolic = true
                             c.generic_arguments[argument_index].set = true
                         }
+                    }
                     }
                     }
                     }
@@ -8435,6 +8477,24 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         info.function.return_count = signature.return_count
                         has_function = true
                     } else {
+                    let (comptime_function, is_comptime_function) = active_comptime_parameter(c, name)
+                    if is_comptime_function && c.comptime_parameters[comptime_function].kind == .Function {
+                        var callable_type = c.comptime_parameters[comptime_function].ty
+                        let (bound_function, has_bound_function) = active_argument(c, comptime_function)
+                        if has_bound_function {
+                            if bound_function.value >= c.function_count { ret (info, UnknownCallable) }
+                            info.function = c.functions[bound_function.value]
+                        } else {
+                            let (signature, has_signature) = function_signature_of(c, callable_type)
+                            if !has_signature { ret (info, InvalidType) }
+                            info.indirect = true
+                            info.indirect_type = callable_type
+                            info.function.module_index = module_index
+                            info.function.parameter_count = signature.parameter_count
+                            info.function.return_count = signature.return_count
+                        }
+                        has_function = true
+                    } else {
                     // `T(x)` where `T` is this generic's own type parameter: a conversion to
                     // whatever `T` is bound to, the same one a written `u8(x)` is (D139 did this
                     // for a `Field`'s `.ty`; this is the type parameter itself). In the template
@@ -8480,6 +8540,7 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                             info.function = c.functions[found_index]
                         }
                         has_function = true
+                    }
                     }
                     }
                     }
@@ -10195,6 +10256,13 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         }
         let (parameter_index, parameter_found) = active_comptime_parameter(c, name)
         if parameter_found {
+            if c.comptime_parameters[parameter_index].kind == .Function {
+                var function_type = c.comptime_parameters[parameter_index].ty
+                let (argument, argument_found) = active_argument(c, parameter_index)
+                if argument_found { function_type = argument.ty }
+                let (contextual_function, function_context_error) = apply_context(c, function_type, expected)
+                ret (contextual_function, function_context_error)
+            }
             if c.comptime_parameters[parameter_index].kind == .Str {
                 let (text_type, text_context_error) = apply_context(c, make_type(.String, "str", module_index), expected)
                 ret (text_type, text_context_error)

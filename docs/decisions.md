@@ -13008,3 +13008,17 @@ syntax, a second resolution pass or a new inference mechanism. This closes the
 successful half of H06's dependent-requirement evidence while D666 covers the
 failed-signature half. The explain corpus pins both a declared `eq` requirement
 and the supplied enum rule, and the JSON schema requires the new field.
+
+## D668 -- Exact function-typed comptime parameters select strategies
+
+A generic may declare an exact function-typed comptime parameter, for example
+`F: fn(i64, i64) -> i64`, and select it with a function name in the bracketed
+argument list. The selected declaration is checked against that signature, is part
+of the specialization identity and becomes a direct call in the specialized body;
+there is no stored callback or runtime indirect call.
+
+This is H06's explicit-strategy path for callers whose behavior must differ from a
+type's implicit protocol. The focused fixture selects addition and subtraction for
+the same operand types and requires different answers, while `explain-file` names
+the selected qualified function in each instance's arguments. Artifact declaration
+records assign the function kind its own discriminator and retain its exact type.

@@ -647,6 +647,13 @@ $dataMapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $dataMapWritten -ne 'executable written') { throw 'e.data.map emission failed' }
 & $dataMapPath
 if ($LASTEXITCODE -ne 0) { throw "an e.data.map answer is wrong: exit $LASTEXITCODE" }
+# A function selected in brackets is a compile-time strategy and part of the
+# specialization identity: two choices make two direct-call bodies.
+$comptimeFunctionPath = Join-Path $testBuild 'comptime-function-strategy-selfhost.exe'
+$comptimeFunctionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_function_strategy\src\main.e') $repo 'x64' 'windows' $comptimeFunctionPath
+if ($LASTEXITCODE -ne 0 -or $comptimeFunctionWritten -ne 'executable written') { throw 'comptime function strategy emission failed' }
+& $comptimeFunctionPath
+if ($LASTEXITCODE -ne 0) { throw "a comptime function strategy answered wrongly: exit $LASTEXITCODE" }
 # `e.bytes`: numbers through bytes in both orders and every width, the bit operations, and
 # base64, base32 and base85 against the vectors their RFCs print, then every byte value round
 # tripped through each. One generic `load` serves every width because `size_of` folds for a

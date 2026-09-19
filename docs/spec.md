@@ -2213,15 +2213,16 @@ instantiation even when `N` is a `const` that could have been an index.
 A comptime parameter has a **kind**: `type` (`T: type`), an integer type (`N:
 usize`), `str` (`FMT: str`), `bool`, a fixed array of an integer type (`IDX: [N]u8`,
 which `simd.shuffle` takes, §4), a comptime-only struct value (`FIELD: Field`,
-Compile-time introspection below), or `fn` (`K: fn`). In a comptime position a
+Compile-time introspection below), or an exact function type (`F: fn(i64, i64) ->
+i64`). In a comptime position a
 function name is a value of kind `fn`, as a type name is a value of kind `type`. The
 parameter is bound at compile time and monomorphised per function; inside the body
-`K` is called like any function, and its concrete signature is visible after
-instantiation. A call involving `K` is checked then; incompatible arity, parameter or
-return use is an error at the instantiation site with the declaration site as a note. It is
+`F` is called like any function. The selected declaration must have exactly the
+parameter's signature; incompatible arity, parameter or return types are an error
+at the instantiation site. It is
 not a function pointer and forms none, which is why `gpu.launch[K]` (§10) can take a
 kernel where a pointer to device code is banned — and why any function, a device
-helper included, may declare a `K: fn` parameter of its own: it is monomorphisation,
+helper included, may declare a function parameter of its own: it is monomorphisation,
 not indirection. `neper-0` (roadmap) omits the `fn` kind along with packs.
 
 A type expression in a declaration may refer to earlier comptime parameters and to

@@ -3513,6 +3513,14 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             let (parameter_index, has_parameter) = check.active_comptime_parameter(c, name)
             if has_parameter {
                 let (argument, has_argument) = check.active_argument(c, parameter_index)
+                if has_argument && argument.kind == .Function {
+                    if argument.value >= c.function_count { ret (0usize, zero, check.UnknownCallable) }
+                    let callee = c.functions[argument.value]
+                    let (function_ref, function_ref_error) = nir.intern_function(builder, callee.owner_module_index, callee.name, callee.instance_id)
+                    if function_ref_error != ok { ret (0usize, argument.ty, function_ref_error) }
+                    let (instruction, result, emit_error) = nir.emit(builder, .FunctionAddress, argument.ty, true, function_ref, token)
+                    ret (result, argument.ty, emit_error)
+                }
                 if has_argument && argument.kind == .Str && !argument.symbolic {
                     let (text_value, text_type, text_error) = lower_comptime_text(c, g, tree, module_index, node_index, expected, argument.text, token, builder)
                     ret (text_value, text_type, text_error)

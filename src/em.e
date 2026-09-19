@@ -481,6 +481,7 @@ fn comptime_kind_id(kind: check.ComptimeKind) -> usize {
     if kind == .Field { ret 4usize }
     if kind == .Member { ret 5usize }
     if kind == .Array { ret 6usize }
+    if kind == .Function { ret 7usize }
     ret 0usize
 }
 
@@ -524,7 +525,7 @@ fn write_function_signature_canonical(c: *check.Checker, g: *graph.Graph, functi
         try binary.byte(output, kind)
         try binary.zeroes(output, 3usize)
         try canonical_text(output, parameter.name)
-        if parameter.kind == .Integer || parameter.kind == .Array { try write_type_canonical(c, g, parameter.ty, output) }
+        if parameter.kind == .Integer || parameter.kind == .Array || parameter.kind == .Function { try write_type_canonical(c, g, parameter.ty, output) }
         at += 1usize
     }
     try binary.little_u32(output, function.parameter_count)
@@ -582,7 +583,7 @@ fn write_aggregate_signature_canonical(c: *check.Checker, g: *graph.Graph, aggre
         try binary.byte(output, parameter_kind)
         try binary.zeroes(output, 3usize)
         try canonical_text(output, parameter.name)
-        if parameter.kind == .Integer || parameter.kind == .Array { try write_type_canonical(c, g, parameter.ty, output) }
+        if parameter.kind == .Integer || parameter.kind == .Array || parameter.kind == .Function { try write_type_canonical(c, g, parameter.ty, output) }
         at += 1usize
     }
     if aggregate.kind == .Enum || aggregate.kind == .TaggedUnion {
@@ -1400,7 +1401,7 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
         try binary.byte(output, kind)
         try binary.zeroes(output, 3usize)
         try binary.little_u32(output, parameter_name)
-        if parameter.kind == .Integer || parameter.kind == .Array { try write_type_indexed(c, g, table, parameter.ty, output) }
+        if parameter.kind == .Integer || parameter.kind == .Array || parameter.kind == .Function { try write_type_indexed(c, g, table, parameter.ty, output) }
         at += 1usize
     }
     try binary.little_u32(output, function.parameter_count)
@@ -1454,7 +1455,7 @@ fn write_aggregate_interface(c: *check.Checker, g: *graph.Graph, table: *StringT
         try binary.byte(output, parameter_kind)
         try binary.zeroes(output, 3usize)
         try binary.little_u32(output, parameter_name)
-        if parameter.kind == .Integer || parameter.kind == .Array { try write_type_indexed(c, g, table, parameter.ty, output) }
+        if parameter.kind == .Integer || parameter.kind == .Array || parameter.kind == .Function { try write_type_indexed(c, g, table, parameter.ty, output) }
         at += 1usize
     }
     if aggregate.kind == .Enum || aggregate.kind == .TaggedUnion {

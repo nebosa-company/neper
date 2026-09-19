@@ -2702,12 +2702,16 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
                 if argument.kind == .Type {
                     try quoted_type(&out, c, g, argument.ty)
                 } else {
+                    if argument.kind == .Function {
+                        try quoted_function(&out, c, g, argument.value)
+                    } else {
                     if argument.kind == .Integer {
                         try byte(&out, 34u8)
                         try decimal(&out, argument.value)
                         try byte(&out, 34u8)
                     } else {
                         try quoted(&out, argument.text)
+                    }
                     }
                 }
                 argument_at += 1usize

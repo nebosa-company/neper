@@ -302,7 +302,8 @@ the same way written once:
   `span`, the point where the call was checked, which for a template body is the
   template's site once per instance.
 - `instance` — a generic function instantiated: `template` (`module.name`),
-  `arguments` (each as a type spelling, a decimal, or a string literal as written),
+  `arguments` (each as a type spelling, a decimal, a string literal as written, or
+  the qualified function selected for a comptime strategy),
   `requirements` (D667, H06), every protocol dispatch checked while specializing
   that instance, with its `protocol`, concrete `receiver`, and declared or supplied
   `selected` strategy, and `span`, the call that first asked for it, in whichever

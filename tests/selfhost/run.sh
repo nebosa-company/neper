@@ -670,6 +670,12 @@ data_map_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$data_map_written" = 'executable written' ]
 chmod +x "$test_build/data-map-selfhost"
 "$test_build/data-map-selfhost"
+# A function selected in brackets is a compile-time strategy and part of the
+# specialization identity: two choices make two direct-call bodies.
+comptime_function_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/comptime_function_strategy/src/main.e" "$repo" x64 linux "$test_build/comptime-function-strategy-selfhost")
+[ "$comptime_function_written" = 'executable written' ]
+chmod +x "$test_build/comptime-function-strategy-selfhost"
+"$test_build/comptime-function-strategy-selfhost"
 # `e.bytes`: numbers through bytes in both orders and every width, the bit operations, and
 # base64, base32 and base85 against the vectors their RFCs print, then every byte value round
 # tripped through each. One generic `load` serves every width because `size_of` folds for a
