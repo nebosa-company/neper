@@ -3760,7 +3760,19 @@ is created by the view. Each diagnostic names the indexed slot and preserves tha
 acquisition or move site (D618). A runtime lower-bound slice retains its tracked
 fixed-array owner and indexes the conservative set of possible owner slots, including
 through a direct slice alias (D720). Slices without a tracked fixed-array owner remain
-outside this rule. `meta.fields[T]()` is empty when `T`
+outside this slot rule. An `own []T` parameter whose element type is affine is an
+owned resource slice in the callee; when `T` has a cleanup, the slice carries a
+collective obligation that must be discharged or transferred on every exit (D721).
+Consuming one element is a forbidden partial move unless it occurs in a proven
+exhaustive sweep (D722). The proven form is `i = 0; while i < slice.len { ...;
+i += 1 }`, with the same slice indexed by `i`; consuming its element discharges the
+collective obligation (D723). An unqualified `[]T` parameter remains borrowed.
+Passing a tracked fixed array as `array[..]` to an `own []T` parameter validates and
+moves every obligated slot into that collective obligation (D724).
+A comptime suffix `array[N..]` transfers exactly slots `N` through the end and leaves
+the earlier slots owned by the caller; a runtime lower bound is a forbidden partial
+move (D725).
+`meta.fields[T]()` is empty when `T`
 is a resource named by another module; its
 representation is not a reflective serialization surface. Format-codec rejection
 of an affine field in an otherwise plain aggregate begins at `meta.get`: returning

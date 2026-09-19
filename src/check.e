@@ -632,6 +632,7 @@ type Checker = struct {
     // sweep. Dynamic affine-array operations under it cover each slot once.
     resource_loop_index: [64]str,
     resource_loop_bound: [64]usize,
+    resource_loop_bound_local: [64]usize,
     resource_loop_sweep: [64]bool,
     resource_loop_swept_local: [64]usize,
     // The resource pass runs in the body sweep alone (D345): the lowering re-walks
@@ -11091,9 +11092,10 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
                     if c.loop_depth < c.loop_locals.len { c.loop_locals[c.loop_depth] = c.local_count }
                     if c.break_depth < c.break_locals.len { c.break_locals[c.break_depth] = c.local_count }
                     if c.loop_depth < c.resource_loop_sweep.len {
-                        let (index_name, bound, sweep) = resource_loop_fact(c, g, tree, module_index, node, condition_node, child)
+                        let (index_name, bound, bound_local, sweep) = resource_loop_fact(c, g, tree, module_index, node, condition_node, child)
                         c.resource_loop_index[c.loop_depth] = index_name
                         c.resource_loop_bound[c.loop_depth] = bound
+                        c.resource_loop_bound_local[c.loop_depth] = bound_local
                         c.resource_loop_sweep[c.loop_depth] = sweep
                         c.resource_loop_swept_local[c.loop_depth] = 0usize
                     }
@@ -12594,6 +12596,9 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
         let parameter = c.parameters[function.first_parameter + parameter_index]
         if parameter.ty.kind == .Other { ret Unsupported }
         try add_local(c, parameter.name, parameter.ty, false)
+        var parameter_kind = affine_kind(c, parameter.ty, 0usize)
+        if parameter.own && parameter_kind == 0u8 { parameter_kind = affine_slice_kind(c, parameter.ty) }
+        if parameter.own && parameter_kind != 0u8 { c.resources[c.local_count - 1usize].state = resource_owned }
         // An `own` parameter carries its obligation into the body (D345), field by
         // field for a struct (D348); a borrowed one is owned by the caller and owes
         // nothing here, its fields views.
@@ -12601,7 +12606,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
             c.resources[c.local_count - 1usize].acquired = usize(node.token_start)
             try resource_init_fields(c, c.local_count - 1usize, resource_owned)
             if parameter.own {
-                c.resources[c.local_count - 1usize].obligated = affine_kind(c, parameter.ty, 0usize) == 2u8
+                c.resources[c.local_count - 1usize].obligated = parameter_kind == 2u8
                 // The type's own cleanup discharges what it is given by raw means.
                 if resource_cleanup_of(c, parameter.ty, function) { c.resources[c.local_count - 1usize].obligated = false }
             } else {
@@ -13539,6 +13544,11 @@ fn affine_kind(c: *Checker, ty: Type, depth: usize) -> u8 {
     ret worst
 }
 
+fn affine_slice_kind(c: *Checker, ty: Type) -> u8 {
+    if ty.kind != .Slice || !ty.has_element || ty.element >= c.type_count { ret 0u8 }
+    ret affine_kind(c, c.types[ty.element], 0usize)
+}
+
 // Whether the type is a resource type itself -- a seeded handle or a declared
 // `resource` -- as against a struct that merely holds one.
 fn resource_type(c: *Checker, ty: Type) -> bool {
@@ -13702,27 +13712,34 @@ fn resource_index_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
 // Recognize the canonical exhaustive index loop used for fixed arrays. The
 // initializer must immediately precede the loop, and the body must contain one
 // `i += 1`; other writes to the induction local make it non-canonical.
-fn resource_loop_fact(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, loop_node: syntax.Node, condition_index: usize, body: syntax.Node) -> (str, usize, bool) {
+fn resource_loop_fact(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, loop_node: syntax.Node, condition_index: usize, body: syntax.Node) -> (str, usize, usize, bool) {
     let condition = tree.nodes[condition_index]
-    if condition.kind != .BinaryExpr || binary_operator(c, tree, condition) != .PunctLt { ret ("", 0usize, false) }
+    if condition.kind != .BinaryExpr || binary_operator(c, tree, condition) != .PunctLt { ret ("", 0usize, 0usize, false) }
     var children: [2]usize = zero
     var count = 0usize
     let child_end = usize(condition.first_child) + usize(condition.child_count)
     var child_at = usize(condition.first_child)
     while child_at < child_end {
         if parse.child_is_node_at(tree, child_at) {
-            if count == 2usize { ret ("", 0usize, false) }
+            if count == 2usize { ret ("", 0usize, 0usize, false) }
             children[count] = parse.child_index_at(tree, child_at)
             count += 1usize
         }
         child_at += 1usize
     }
-    if count != 2usize || tree.nodes[children[0usize]].kind != .NameExpr { ret ("", 0usize, false) }
+    if count != 2usize || tree.nodes[children[0usize]].kind != .NameExpr { ret ("", 0usize, 0usize, false) }
     let index_token = c.tokens[usize(tree.nodes[children[0usize]].token_start)]
-    if index_token.kind != .Identifier { ret ("", 0usize, false) }
+    if index_token.kind != .Identifier { ret ("", 0usize, 0usize, false) }
     let index_name = g.modules[module_index].text[index_token.start..index_token.end]
     let (bound_value, bound_constant) = resource_index_value(c, g, tree, module_index, children[1usize])
-    if !bound_constant { ret ("", 0usize, false) }
+    var bound_local = 0usize
+    if !bound_constant {
+        let right = tree.nodes[children[1usize]]
+        let (member, has_member) = field_expression_name(c, g.modules[module_index].text, tree, right)
+        var (local_index, has_local) = place_base_local(c, g, tree, module_index, children[1usize])
+        if !has_member || !same(member, "len") || !has_local { ret ("", 0usize, 0usize, false) }
+        bound_local = local_index + 1usize
+    }
 
     var token_at = 0usize
     let loop_start = usize(loop_node.token_start)
@@ -13743,7 +13760,7 @@ fn resource_loop_fact(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         }
         token_at += 1usize
     }
-    if !initialized_zero { ret ("", 0usize, false) }
+    if !initialized_zero { ret ("", 0usize, 0usize, false) }
 
     var increments = 0usize
     token_at = usize(body.token_start)
@@ -13753,27 +13770,40 @@ fn resource_loop_fact(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         if token.kind == .Identifier && same(g.modules[module_index].text[token.start..token.end], index_name) {
             let next = c.tokens[token_at + 1usize].kind
             if next == .PunctAddAssign {
-                if token_at + 2usize >= token_end { ret ("", 0usize, false) }
+                if token_at + 2usize >= token_end { ret ("", 0usize, 0usize, false) }
                 let step = c.tokens[token_at + 2usize]
                 let step_spelling = g.modules[module_index].text[step.start..step.end]
-                if step.kind != .Integer || step_spelling.len == 0usize || step_spelling[0usize] != 49u8 { ret ("", 0usize, false) }
+                if step.kind != .Integer || step_spelling.len == 0usize || step_spelling[0usize] != 49u8 { ret ("", 0usize, 0usize, false) }
                 increments += 1usize
             } else {
-                if next == .PunctAssign || next == .PunctSubAssign || next == .PunctMulAssign || next == .PunctDivAssign || next == .PunctRemAssign { ret ("", 0usize, false) }
+                if next == .PunctAssign || next == .PunctSubAssign || next == .PunctMulAssign || next == .PunctDivAssign || next == .PunctRemAssign { ret ("", 0usize, 0usize, false) }
             }
         }
         token_at += 1usize
     }
-    ret (index_name, bound_value, increments == 1usize)
+    ret (index_name, bound_value, bound_local, increments == 1usize)
 }
 
 fn resource_element_is_swept(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, first: usize, end: usize) -> bool {
     if c.loop_depth == 0usize || c.loop_depth > c.resource_loop_sweep.len { ret false }
     let loop_at = c.loop_depth - 1usize
-    if !c.resource_loop_sweep[loop_at] || first != 0usize || end != c.resource_loop_bound[loop_at] { ret false }
+    if !c.resource_loop_sweep[loop_at] || c.resource_loop_bound_local[loop_at] != 0usize || first != 0usize || end != c.resource_loop_bound[loop_at] { ret false }
     let node = tree.nodes[node_index]
     var bracket: BracketInfo = zero
     if read_bracket(c, tree, node, &bracket) != ok || bracket.range || bracket.child_count != 2usize { ret false }
+    let index = tree.nodes[bracket.first]
+    if index.kind != .NameExpr { ret false }
+    let token = c.tokens[usize(index.token_start)]
+    ret token.kind == .Identifier && same(g.modules[module_index].text[token.start..token.end], c.resource_loop_index[loop_at])
+}
+
+fn resource_owned_slice_is_swept(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, local_index: usize) -> bool {
+    if c.loop_depth == 0usize || c.loop_depth > c.resource_loop_sweep.len { ret false }
+    let loop_at = c.loop_depth - 1usize
+    if !c.resource_loop_sweep[loop_at] || c.resource_loop_bound_local[loop_at] != local_index + 1usize { ret false }
+    let node = tree.nodes[node_index]
+    var bracket: BracketInfo = zero
+    if read_bracket(c, tree, node, &bracket) != ok || bracket.range { ret false }
     let index = tree.nodes[bracket.first]
     if index.kind != .NameExpr { ret false }
     let token = c.tokens[usize(index.token_start)]
@@ -13819,6 +13849,20 @@ fn resource_element_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     let (local_index, first, end, found) = resource_element_candidates(c, g, tree, module_index, node_index)
     if !found || end != first + 1usize { ret (0usize, 0usize, false) }
     ret (local_index, first, true)
+}
+
+fn resource_owned_slice_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .BracketPostfix { ret (0usize, false) }
+    var bracket: BracketInfo = zero
+    if read_bracket(c, tree, node, &bracket) != ok || bracket.range { ret (0usize, false) }
+    let base = tree.nodes[bracket.base]
+    if base.kind != .NameExpr { ret (0usize, false) }
+    let token = c.tokens[usize(base.token_start)]
+    if token.kind != .Identifier { ret (0usize, false) }
+    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    if !found || c.locals[local_index].ty.kind != .Slice || c.resources[local_index].state == resource_plain || c.resources[local_index].borrowed { ret (0usize, false) }
+    ret (local_index, affine_slice_kind(c, c.locals[local_index].ty) != 0u8)
 }
 
 // `resource(cleanup)` between a type declaration's `=` and its body.
@@ -14523,7 +14567,11 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if !any_affine_local(c) { ret ok }
     let node = tree.nodes[node_index]
     if node.kind == .FieldExpr { ret resource_consume_field(c, g, tree, module_index, node_index) }
-    if node.kind == .BracketPostfix { ret resource_consume_element(c, g, tree, module_index, node_index) }
+    if node.kind == .BracketPostfix {
+        let (consumed_slice, slice_error) = resource_consume_full_slice(c, g, tree, module_index, node_index)
+        if consumed_slice { ret slice_error }
+        ret resource_consume_element(c, g, tree, module_index, node_index)
+    }
     var (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
     // `*p` where `p` was bound from `&f` is a move of `f`, not an unrelated
     // value (D610). The kept pointer pins `f`, so the ordinary rule below rejects
@@ -14605,6 +14653,51 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     resource_set_fields(c, local_index, resource_moved)
     record_explain_move(c, module_index, node, c.locals[local_index].name)
     ret ok
+}
+
+fn resource_consume_full_slice(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
+    let node = tree.nodes[node_index]
+    var bracket: BracketInfo = zero
+    if read_bracket(c, tree, node, &bracket) != ok || !bracket.range || bracket.child_count == 0usize || bracket.child_count > 2usize { ret (false, ok) }
+    let base = tree.nodes[bracket.base]
+    if base.kind != .NameExpr { ret (false, ok) }
+    let token = c.tokens[usize(base.token_start)]
+    if token.kind != .Identifier { ret (false, ok) }
+    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    if !found || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (false, ok) }
+    var first = 0usize
+    if bracket.child_count == 2usize {
+        var range_at = usize(base.token_end)
+        while range_at < usize(node.token_end) && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
+        if range_at == usize(node.token_end) || usize(tree.nodes[bracket.first].token_start) > range_at { ret (false, ok) }
+        let (lower, lower_constant) = resource_index_value(c, g, tree, module_index, bracket.first)
+        if !lower_constant || lower > c.resources[local_index].fields.len {
+            record_failure_related(c, module_index, node, .ResourcePartialMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+            ret (true, ResourceViolation)
+        }
+        first = lower
+    }
+    var at = first
+    while at < c.resources[local_index].fields.len {
+        let byte = c.resources[local_index].fields[at]
+        if field_owed(byte) && field_state(byte) != resource_owned {
+            let acquired = resource_part_acquired(c, local_index, at)
+            record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
+            ret (true, ResourceViolation)
+        }
+        at += 1usize
+    }
+    at = first
+    while at < c.resources[local_index].fields.len {
+        let byte = c.resources[local_index].fields[at]
+        if field_owed(byte) {
+            c.resources[local_index].fields[at] = field_with(resource_moved, true)
+            c.resources[local_index].elements_acquired[at] = usize(node.token_start)
+        }
+        at += 1usize
+    }
+    c.resources[local_index].acquired = usize(node.token_start)
+    ret (true, ok)
 }
 
 // The arguments of a checked call that its callee consumes: moved. `resource_uses`
@@ -15158,8 +15251,11 @@ fn resource_loop_check(c: *Checker, g: *graph.Graph, module_index: usize, node: 
     while at < c.local_count && cursor < before.len {
         // A view invalidated in the body is not consumed: its next use is the error.
         if c.resources[at].state != before[cursor] && before[cursor] == resource_owned && c.resources[at].dangling == 0u8 {
-            record_failure_related(c, module_index, node, .ResourceMovedInLoop, c.locals[at].name, line_detail(c, g, module_index, c.resources[at].acquired), c.resources[at].acquired)
-            ret ResourceViolation
+            let swept = c.loop_depth < c.resource_loop_swept_local.len && c.resource_loop_swept_local[c.loop_depth] == at + 1usize && c.resources[at].state == resource_moved
+            if !swept {
+                record_failure_related(c, module_index, node, .ResourceMovedInLoop, c.locals[at].name, line_detail(c, g, module_index, c.resources[at].acquired), c.resources[at].acquired)
+                ret ResourceViolation
+            }
         }
         cursor += 1usize
         var field_at = 0usize
@@ -15733,7 +15829,21 @@ fn resource_consume_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
 // index may move any candidate, so every owed candidate becomes maybe-moved.
 fn resource_consume_element(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     let (local_index, first, end, is_element) = resource_element_candidates(c, g, tree, module_index, node_index)
-    if !is_element { ret ok }
+    if !is_element {
+        let (slice_local, owned_slice) = resource_owned_slice_of(c, g, tree, module_index, node_index)
+        if owned_slice {
+            let node = tree.nodes[node_index]
+            if resource_owned_slice_is_swept(c, g, tree, module_index, node_index, slice_local) {
+                c.resources[slice_local].state = resource_moved
+                c.resources[slice_local].acquired = usize(node.token_start)
+                c.resource_loop_swept_local[c.loop_depth - 1usize] = slice_local + 1usize
+                ret ok
+            }
+            record_failure_related(c, module_index, node, .ResourcePartialMove, c.locals[slice_local].name, line_detail(c, g, module_index, c.resources[slice_local].acquired), c.resources[slice_local].acquired)
+            ret ResourceViolation
+        }
+        ret ok
+    }
     let node = tree.nodes[node_index]
     var at = first
     var owed = false

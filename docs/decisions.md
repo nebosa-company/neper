@@ -13559,3 +13559,51 @@ instead of falling back to an untracked view.
 A comptime lower bound still narrows the candidate range to its known suffix. A
 slice without a tracked fixed-array owner remains outside the lexical ownership
 subset; no heap or interprocedural backing-store inference is claimed.
+
+## D721 -- Owned resource-slice parameters carry one collective obligation
+
+An `own []T` parameter whose element type is affine enters the callee as an owned
+resource slice. When `T` has a cleanup, the slice carries one obligation: the body
+must drain or transfer all of its elements before every exit. A parameter without
+`own` remains a borrowed view and gains no obligation.
+
+The collective state is deliberately separate from fixed-array slot tracking. It
+gives an untracked slice a serializable signature contract without inventing a
+backing allocation or a hidden destructor.
+
+## D722 -- Owned resource slices reject partial element moves
+
+Consuming one element of an owned resource slice is E-SAFETY-0003 unless the
+operation is part of a proven exhaustive sweep. A runtime index cannot discharge
+the slice's collective obligation or identify which elements remain for an exit.
+
+Borrowed slices keep their existing view behavior. The rule applies only to the
+owned slice state introduced by D721.
+
+## D723 -- A zero-to-length sweep drains an owned resource slice
+
+The canonical `i = 0; while i < slice.len { consume(slice[i]); i += 1 }`
+discharges the owned slice's collective obligation. The induction variable must be
+initialized to zero, advance once by one, and index the same slice whose length is
+the loop bound.
+
+This is a bounded syntactic proof, not general relational range analysis. Any other
+single-element consume remains D722's partial move.
+
+## D724 -- Full fixed-array slices transfer every owned slot
+
+Passing `array[..]` to an `own []T` parameter validates every tracked affine slot,
+then moves every obligated slot into the callee's collective slice obligation. The
+caller can no longer use or transfer those slots, and its exit owes nothing for them.
+
+The transfer is explicit in the callee signature and the full-range spelling. An
+ordinary borrowed slice call does not enter this path.
+
+## D725 -- Constant-offset owned slices transfer one suffix
+
+Passing `array[N..]` to an `own []T` parameter, with a comptime `N`, moves exactly
+the tracked slots from `N` to the fixed-array end. Slots before `N` remain owned by
+the caller and retain their original cleanup obligations.
+
+A runtime lower bound cannot identify that partition and is rejected as a partial
+move. This keeps the rule finite and makes caller and callee obligations disjoint.

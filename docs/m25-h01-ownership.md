@@ -472,6 +472,27 @@ leaving the offset unknown. Indexing that slice or its direct alias queries ever
 possible owner slot through the same D716-D719 rules. A comptime lower bound still
 narrows the range; a slice with no tracked fixed-array owner remains untracked.
 
+**D721 follow-up.** An `own []T` parameter with affine elements is an owned slice in
+the callee. If `T` is obligated, the parameter carries one collective cleanup
+obligation; an ordinary `[]T` parameter remains a borrowed view. Element-level
+discharge is specified by the following increments.
+
+**D722 follow-up.** A consuming access to one element of an owned resource slice is
+E-SAFETY-0003. Without a proven exhaustive sweep, the checker cannot identify the
+remaining owners or discharge the slice's collective obligation.
+
+**D723 follow-up.** The canonical zero-to-`slice.len` unit-step loop is an exhaustive
+sweep. A consuming element access in that loop discharges the collective owned-slice
+obligation; other loop shapes remain partial moves.
+
+**D724 follow-up.** A full fixed-array slice passed to an `own []T` parameter moves
+every obligated slot into the callee's collective slice obligation. Each source slot
+retains the transfer site as provenance for later-use diagnostics.
+
+**D725 follow-up.** A comptime lower-bound slice passed to an `own []T` parameter
+moves exactly that suffix. Earlier slots remain the caller's obligations; a runtime
+lower bound is rejected because it cannot form two precise ownership partitions.
+
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
 returns a plain `Handle` view when callers need the platform value, so `File.raw`
