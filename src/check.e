@@ -6485,7 +6485,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     if c.generic_declaration && !function_arguments_concrete(c, template_index, first_argument) { ret (template_index, ok) }
     let (instance_index, instance_error) = instantiate_function(c, instance_owner(c, module_index), template_index, first_argument)
     if instance_error == ok {
-        record_explain_instance(c, module_index, call, template_index, first_argument, generic.comptime_count)
+        record_explain_instance(c, module_index, call, template_index, instance_index, first_argument, generic.comptime_count)
         note_instance_site(c, instance_index, module_index, call)
     }
     ret (instance_index, instance_error)
@@ -9086,7 +9086,9 @@ fn record_explain_dispatch(c: *Checker, module_index: usize, node: syntax.Node, 
     }
     var offset = 0usize
     if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
-    c.explains[c.explain_count] = Explain { kind: 1u8, module_index: module_index, offset: offset, protocol: protocol, receiver: receiver, function_index: function_index, found: found, builtin: builtin, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
+    var owner_instance = c.function_count
+    if c.active_owner_set { owner_instance = c.active_instance }
+    c.explains[c.explain_count] = Explain { kind: 1u8, module_index: module_index, offset: offset, protocol: protocol, receiver: receiver, function_index: function_index, found: found, builtin: builtin, template_index: owner_instance, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     if !found && builtin == .None {
         let (reason_kind, reason_name, reason_type) = dispatch_refusal(c, receiver, protocol)
         c.explains[c.explain_count].reason_kind = reason_kind
@@ -9184,7 +9186,7 @@ fn note_instance_site(c: *Checker, instance_index: usize, module_index: usize, n
     c.function_generics[instance_index].has_site = true
 }
 
-fn record_explain_instance(c: *Checker, module_index: usize, node: syntax.Node, template_index: usize, first_argument: usize, argument_count: usize) {
+fn record_explain_instance(c: *Checker, module_index: usize, node: syntax.Node, template_index: usize, instance_index: usize, first_argument: usize, argument_count: usize) {
     if c.explains.len == 0usize { ret }
     if c.explain_count >= c.explains.len {
         c.explain_overflow = true
@@ -9192,7 +9194,7 @@ fn record_explain_instance(c: *Checker, module_index: usize, node: syntax.Node, 
     }
     var offset = 0usize
     if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
-    c.explains[c.explain_count] = Explain { kind: 2u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: template_index, first_argument: first_argument, argument_count: argument_count, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
+    c.explains[c.explain_count] = Explain { kind: 2u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: instance_index, found: false, builtin: .None, template_index: template_index, first_argument: first_argument, argument_count: argument_count, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
     c.explain_count += 1usize
 }
 

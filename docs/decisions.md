@@ -12994,3 +12994,17 @@ comparison is exact rather than a prose approximation.
 This is query evidence for H06's dependent generic requirements. It changes no
 dispatch rule or source syntax, and the focused `protocol_signature` fixture pins the
 human and JSON forms through the self-hosted compiler.
+
+## D667 -- Generic instances expose their satisfied protocol requirements
+
+An `instance` in `explain-file --json` now carries a required `requirements`
+array. Each entry is a protocol dispatch performed while checking that concrete
+specialization: its protocol, concrete receiver and the declared function or
+supplied rule selected. Instances with no such dispatch carry an empty array.
+
+The checker associates a dispatch with the active instance by its existing
+specialization identity; the query joins those records without adding source
+syntax, a second resolution pass or a new inference mechanism. This closes the
+successful half of H06's dependent-requirement evidence while D666 covers the
+failed-signature half. The explain corpus pins both a declared `eq` requirement
+and the supplied enum rule, and the JSON schema requires the new field.

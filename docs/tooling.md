@@ -303,7 +303,10 @@ the same way written once:
   template's site once per instance.
 - `instance` — a generic function instantiated: `template` (`module.name`),
   `arguments` (each as a type spelling, a decimal, or a string literal as written),
-  and `span`, the call that first asked for it, in whichever module that was.
+  `requirements` (D667, H06), every protocol dispatch checked while specializing
+  that instance, with its `protocol`, concrete `receiver`, and declared or supplied
+  `selected` strategy, and `span`, the call that first asked for it, in whichever
+  module that was. An instance with no protocol requirement carries an empty array.
 - `discard` (D360, H07) — an `err` bound to `_`: `function` (`module.name` of the
   call whose error is dropped), `deferred` (true under `defer`), and `span`, the
   binding. Dropping an error is an explicit source choice, and this is where a

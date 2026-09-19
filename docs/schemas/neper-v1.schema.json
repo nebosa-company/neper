@@ -1301,6 +1301,7 @@
         "record",
         "template",
         "arguments",
+        "requirements",
         "span"
       ],
       "properties": {
@@ -1314,6 +1315,40 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["protocol", "receiver", "selected"],
+            "properties": {
+              "protocol": { "type": "string" },
+              "receiver": { "type": "string" },
+              "selected": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["kind", "function"],
+                    "properties": {
+                      "kind": { "const": "declared" },
+                      "function": { "type": "string" }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["kind", "rule"],
+                    "properties": {
+                      "kind": { "const": "supplied" },
+                      "rule": { "enum": ["cmp", "hash", "eq"] }
+                    }
+                  }
+                ]
+              }
+            }
           }
         },
         "span": {

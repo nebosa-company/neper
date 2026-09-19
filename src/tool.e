@@ -2588,6 +2588,19 @@ fn source_identity_of(g: *graph.Graph, path: str) -> (str, str) {
 // `failed` (D430): the program did not check; the records the checker made before it
 // stopped are written -- a dispatch that found nothing among them, with why -- and the
 // caller adds the diagnostic and the result.
+fn dispatch_selection(out: *Out, c: *check.Checker, g: *graph.Graph, e: check.Explain) -> err {
+    if e.found {
+        try text(out, "{\"kind\":\"declared\",\"function\":")
+        try quoted_function(out, c, g, e.function_index)
+        ret byte(out, 125u8)
+    }
+    try text(out, "{\"kind\":\"supplied\",\"rule\":")
+    if e.builtin == .Cmp { try text(out, "\"cmp\"") }
+    if e.builtin == .Hash { try text(out, "\"hash\"") }
+    if e.builtin == .Eq { try text(out, "\"eq\"") }
+    ret byte(out, 125u8)
+}
+
 fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
     if storage_error != ok { ret storage_error }
@@ -2627,9 +2640,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
             try quoted_type(&out, c, g, e.receiver)
             try text(&out, ",\"selected\":")
             if e.found {
-                try text(&out, "{\"kind\":\"declared\",\"function\":")
-                try quoted_function(&out, c, g, e.function_index)
-                try byte(&out, 125u8)
+                try dispatch_selection(&out, c, g, e)
             } else {
                 if e.builtin == .None {
                     // Why (D430, H06): the component the supplied rule refused, and a
@@ -2666,11 +2677,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
                     }
                     try text(&out, "]}")
                 } else {
-                    try text(&out, "{\"kind\":\"supplied\",\"rule\":")
-                    if e.builtin == .Cmp { try text(&out, "\"cmp\"") }
-                    if e.builtin == .Hash { try text(&out, "\"hash\"") }
-                    if e.builtin == .Eq { try text(&out, "\"eq\"") }
-                    try byte(&out, 125u8)
+                    try dispatch_selection(&out, c, g, e)
                 }
             }
         } else {
@@ -2704,6 +2711,25 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
                     }
                 }
                 argument_at += 1usize
+            }
+            try byte(&out, 93u8)
+            try text(&out, ",\"requirements\":[")
+            var requirement_at = 0usize
+            var requirement_count = 0usize
+            while requirement_at < c.explain_count {
+                let requirement = c.explains[requirement_at]
+                if requirement.kind == 1u8 && requirement.template_index == e.function_index && (requirement.found || requirement.builtin != .None) {
+                    if requirement_count != 0usize { try byte(&out, 44u8) }
+                    try text(&out, "{\"protocol\":")
+                    try quoted(&out, requirement.protocol)
+                    try text(&out, ",\"receiver\":")
+                    try quoted_type(&out, c, g, requirement.receiver)
+                    try text(&out, ",\"selected\":")
+                    try dispatch_selection(&out, c, g, requirement)
+                    try byte(&out, 125u8)
+                    requirement_count += 1usize
+                }
+                requirement_at += 1usize
             }
             try byte(&out, 93u8)
             }
