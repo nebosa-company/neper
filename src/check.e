@@ -13363,10 +13363,12 @@ fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
         if !has_argument { break }
         let parameter_index = info.function.first_parameter + argument_at
         if parameter_index < c.parameter_count && c.parameters[parameter_index].ty.kind == .Pointer && !c.parameters[parameter_index].ty.is_const {
-            var (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
+            // Prefer the lexical alias: `&ctx.target.field` mutates the storage
+            // behind `target`, not the aggregate carrying that pointer (D687).
+            var (container, is_address) = alias_target(c, g, tree, module_index, argument_index)
             // A pointer local bound from `&c` is the same mutable access to `c`.
             // Following it here closes the direct-alias hole in H02's view rule.
-            if !is_address { (container, is_address) = alias_target(c, g, tree, module_index, argument_index) }
+            if !is_address { (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index) }
             if is_address {
                 var at = 0usize
                 while at < c.local_count {

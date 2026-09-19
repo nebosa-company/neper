@@ -13208,3 +13208,13 @@ therefore E-SAFETY-0016.
 The thread-start path reuses the existing lexical aggregate alias and only falls
 back to the syntactic address base when no alias is known. No interprocedural points-
 to analysis is added.
+
+## D687 -- Mutable calls prefer the storage behind an aggregate pointer field
+
+When a mutable call takes an address through a tracked aggregate pointer field, the
+container identity is the local named by that pointer, not the aggregate that carries
+it. Existing views of that local are invalidated and their next use is E-SAFETY-0014.
+
+The mutation path reuses the same lexical alias fact as D671 and D686. It remains
+local, single-target and conservative; no callee-body or interprocedural analysis is
+introduced.

@@ -97,7 +97,9 @@ Stated so that no one reads the rules above as more than they are:
   guarantee, and an `@unsafe` function is where they belong when they matter.
 - A container mutation through a pointer alias (`let p = &l; list.push(p, x)`) is
   followed and invalidates `l`'s views (D671). Copying that pointer local preserves
-  the same target, so local pointer-copy chains are followed too (D672).
+  the same target, so local pointer-copy chains are followed too (D672). A mutable
+  call addressed through a tracked aggregate pointer field likewise mutates the
+  pointed-to local rather than the aggregate carrying that pointer (D687).
 - Non-lexical liveness: a view whose last use is before the mutation is still
   refused if it is used after. H02 asks to measure before inferring liveness; the
   measurement is in section 8.
@@ -217,3 +219,8 @@ the deferred reset is E-SAFETY-0018 as well.
 **D685** gives a direct local assignment the same semantics. Assigning the carrier
 into an existing local copies its lexical region identity, so returning the assigned
 local across the deferred reset is E-SAFETY-0018.
+
+**D687** resolves an addressed mutable call through a tracked aggregate pointer
+field before falling back to the syntactic address base. A mutation such as
+`mutate(&ctx.target.field)` therefore invalidates views of the local named by
+`target`, with the existing E-SAFETY-0014 evidence.
