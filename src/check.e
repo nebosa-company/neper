@@ -13177,6 +13177,18 @@ fn address_argument_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
     ret (base_local, is_place)
 }
 
+// The storage identity named by a call argument (D673): `x`, `&x`, and a local
+// pointer alias of `&x` all spell the same local for region matching.
+fn call_argument_storage_text(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, call: syntax.Node, position: usize) -> str {
+    let (argument_index, has_argument) = call_argument_node(tree, call, position)
+    if !has_argument { ret "" }
+    var (storage, found) = address_argument_local(c, g, tree, module_index, argument_index)
+    if !found { (storage, found) = alias_target(c, g, tree, module_index, argument_index) }
+    if !found { (storage, found) = place_base_local(c, g, tree, module_index, argument_index) }
+    if found && storage < c.local_count { ret c.locals[storage].name }
+    ret call_argument_text(c, g, tree, module_index, call, position)
+}
+
 // The local at the base of a place -- `x`, `x.f`, `x[i]`, `x[a..b]` and their
 // nestings -- when there is one (D395).
 fn place_base_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, inner_index: usize) -> (usize, bool) {
@@ -13257,7 +13269,7 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
     var arena_text = ""
     var allocates = call.mem_alloc
     if call.mem_alloc {
-        arena_text = call_argument_text(c, g, tree, module_index, source, 0usize)
+        arena_text = call_argument_storage_text(c, g, tree, module_index, source, 0usize)
     } else {
         var parameter_at = 0usize
         while parameter_at < call.function.parameter_count {
@@ -13265,7 +13277,7 @@ fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: us
             if parameter_index < c.parameter_count {
                 let parameter_type = c.parameters[parameter_index].ty
                 if parameter_type.kind == .Pointer && parameter_type.has_element && parameter_type.element < c.type_count && seeded_arena(c, c.types[parameter_type.element]) {
-                    arena_text = call_argument_text(c, g, tree, module_index, source, parameter_at)
+                    arena_text = call_argument_storage_text(c, g, tree, module_index, source, parameter_at)
                     allocates = true
                     break
                 }
@@ -14166,7 +14178,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         c.resources[local_index].state = resource_owned
         c.resources[local_index].view = true
         c.resources[local_index].acquired = usize(statement.token_start)
-        c.resources[local_index].mark_arena = call_argument_text(c, g, tree, module_index, tree.nodes[initializer_index], 0usize)
+        c.resources[local_index].mark_arena = call_argument_storage_text(c, g, tree, module_index, tree.nodes[initializer_index], 0usize)
         c.affine_answer_valid = false
         ret ok
     }

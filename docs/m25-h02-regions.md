@@ -168,3 +168,8 @@ bound from `&c` resolves to `c` before the view invalidation pass runs, and copi
 that pointer retain the same target. The same E-SAFETY-0014 and mutation provenance
 now cover direct aliases and local pointer-copy chains; focused fixtures pin both
 forms on both hosts.
+
+**D673** gives arena arguments the same local storage identity across their direct,
+addressed, and pointer-alias spellings. A mark opened through `p = &arena` therefore
+owns allocations made through `&arena`, and reset through either spelling ends the
+same region with the existing E-SAFETY-0013 evidence.

@@ -13069,3 +13069,13 @@ views of the originally addressed container just as the direct pointer does.
 The checker follows the existing `points_to` chain while recording the new alias;
 it adds no separate alias graph or effect system. The focused conformance fixture
 pins the copied-pointer form and its E-SAFETY-0014 evidence on both hosts.
+
+## D673 -- Region matching uses canonical local arena identity
+
+The checker canonicalizes an arena call argument to the local storage it names.
+Direct locals, `&local`, and local aliases of `&local` therefore identify the same
+arena when marks and allocations are paired.
+
+This replaces textual spelling comparison at the two binding sites without adding
+an arena graph or enlarging resource state. The focused fixture opens a mark through
+an alias, allocates through `&arena`, resets, and pins E-SAFETY-0013 on the use.
