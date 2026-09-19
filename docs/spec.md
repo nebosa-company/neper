@@ -3629,7 +3629,9 @@ not add partial moves from a variant payload.
   for both (D394, D395, D413), the struct through `f` alone: a read or a store
   through it once `x` dangles is refused the same way, its `.len` excepted. A call
   receiving such an alias through a mutable pointer changes `x` and invalidates its
-  views exactly as a call receiving `&x` does (D671). Both are lexical and within one function: what is returned, stored,
+  views exactly as a call receiving `&x` does (D671). Copying that pointer local
+  preserves the same target, so local pointer-copy chains are followed too (D672).
+  Both are lexical and within one function: what is returned, stored,
   handed to a callback, an import or a thread, reached through any other pointer,
   or made by a cast is outside the rule, and `m25-h02-regions.md` says so.
 - A thread started over the address of this frame's storage -- `os.thread_create`

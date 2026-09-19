@@ -13059,3 +13059,13 @@ structured evidence as the directly addressed form.
 This extends the existing local alias record instead of introducing an effect
 summary or a second container analysis. Pointer-copy chains remain a separate
 increment. The focused conformance fixture pins the direct alias on both hosts.
+
+## D672 -- Pointer copies retain their original local target
+
+Copying a local pointer alias preserves the underlying storage identity recorded
+for its source. A mutable call through `let copied = pointer` therefore invalidates
+views of the originally addressed container just as the direct pointer does.
+
+The checker follows the existing `points_to` chain while recording the new alias;
+it adds no separate alias graph or effect system. The focused conformance fixture
+pins the copied-pointer form and its E-SAFETY-0014 evidence on both hosts.

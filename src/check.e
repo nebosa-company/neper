@@ -13754,7 +13754,9 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         }
     }
     if c.locals[local_index].ty.kind == .Pointer {
-        let (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
+        var (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
+        // Copying a pointer local copies its borrow, not an unrelated identity.
+        if !is_address { (pointed, is_address) = alias_target(c, g, tree, module_index, initializer_index) }
         if is_address && pointed != local_index { c.resources[local_index].points_to = pointed + 1usize }
     }
     if c.locals[local_index].ty.kind == .Slice {
