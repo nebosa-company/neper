@@ -209,3 +209,7 @@ cannot be returned across the same deferred reset.
 **D683** applies the boundary to the aggregate carrier as well. Returning the local
 aggregate that holds `&scratch[i]` is E-SAFETY-0018; extracting its pointer first is
 not required for the checker to retain the region identity.
+
+**D684** preserves that identity across a direct lexical aggregate copy. If `copy`
+is bound from a local aggregate that carries `&scratch[i]`, returning `copy` across
+the deferred reset is E-SAFETY-0018 as well.

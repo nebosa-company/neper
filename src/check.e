@@ -13779,6 +13779,14 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
             c.resources[local_index].points_to_field = member
         }
     }
+    if c.locals[local_index].ty.kind == .Named && tree.nodes[initializer_index].kind == .NameExpr {
+        let token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
+        let (source, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+        if found && c.locals[source].ty.kind == .Named && c.resources[source].points_to != 0usize {
+            c.resources[local_index].points_to = c.resources[source].points_to
+            c.resources[local_index].points_to_field = c.resources[source].points_to_field
+        }
+    }
     if c.locals[local_index].ty.kind == .Pointer {
         var (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
         // Copying a pointer local copies its borrow, not an unrelated identity.

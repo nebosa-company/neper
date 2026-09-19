@@ -13179,3 +13179,12 @@ the return is E-SAFETY-0018 against the underlying region local.
 
 The checker reuses the aggregate's existing one-target lexical alias record. It does
 not recursively search arbitrary aggregate values or model later field stores.
+
+## D684 -- A direct aggregate copy preserves its pointer alias
+
+Copying a local aggregate copies the lexical alias recorded for its pointer field.
+Consequently, a copy of an aggregate that carries an address into region storage
+cannot be returned across that region's deferred reset.
+
+Only a direct local-to-local copy is covered. The rule does not infer identity
+through calls, control-flow merges or arbitrary field assignments.
