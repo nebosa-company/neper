@@ -262,3 +262,8 @@ target enters a sparse checker-side table. A post-reset use through that later f
 is therefore E-SAFETY-0013 without increasing every local's resource footprint.
 Nested aggregates still retain only the first address found below each top-level
 field; arbitrary nested pointer paths remain outside this lexical subset.
+
+**D697** includes those sparse aliases at the deferred-return boundary. Returning a
+whole aggregate whose third or later field points into the region reset before
+delivery is E-SAFETY-0018 against that field's owner, even when the first two fields
+point at live storage.

@@ -15244,6 +15244,17 @@ fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
                     is_resource = true
                 }
             }
+            // A third or later aggregate pointer field is retained in the sparse
+            // alias table and is the same carrier escape (D697).
+            var alias_at = 0usize
+            while !is_resource && alias_at < c.resource_alias_count {
+                let alias = c.resource_aliases[alias_at]
+                if alias.carrier == carrier && alias.pointed < c.local_count && c.resources[alias.pointed].region != 0usize {
+                    local_index = alias.pointed
+                    is_resource = true
+                }
+                alias_at += 1usize
+            }
         }
     }
     if !is_resource && tree.nodes[node_index].kind == .BracketPostfix {

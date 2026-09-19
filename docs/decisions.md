@@ -13310,3 +13310,13 @@ The first two identities keep using the existing inline resource storage. Only a
 third or later identity allocates an entry in a checker-side table, so ordinary
 locals and the `Resource` record do not grow. The table is scanned linearly until
 aggregate-heavy workloads demonstrate that an index is worth its permanent cost.
+
+## D697 -- Carrier escape checks sparse aggregate aliases
+
+Returning a whole aggregate across a deferred region reset examines its sparse
+third-and-later pointer-field identities as well as the two inline identities. A
+live first or second target cannot hide that a later field belongs to the region
+which is reset before delivery; the return is E-SAFETY-0018 against that owner.
+
+This extends the existing carrier scan and diagnostic only. It adds no new escape
+kind, summary or control-flow analysis.
