@@ -13170,3 +13170,12 @@ E-SAFETY-0018 against the underlying region local.
 
 This is deliberately lexical: it adds no interprocedural points-to analysis and
 does not infer aliases from arbitrary stores.
+
+## D683 -- An aggregate carrying a region pointer cannot escape its reset
+
+Returning a local aggregate initialized with an address into region storage is the
+same escape as returning that address. If the region is reset by a deferred call,
+the return is E-SAFETY-0018 against the underlying region local.
+
+The checker reuses the aggregate's existing one-target lexical alias record. It does
+not recursively search arbitrary aggregate values or model later field stores.

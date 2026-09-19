@@ -205,3 +205,7 @@ the defer registration as related evidence.
 **D682** follows that boundary through the existing lexical alias facts. A pointer
 copied from an aggregate field that holds `&scratch[i]` still names `scratch`, so it
 cannot be returned across the same deferred reset.
+
+**D683** applies the boundary to the aggregate carrier as well. Returning the local
+aggregate that holds `&scratch[i]` is E-SAFETY-0018; extracting its pointer first is
+not required for the checker to retain the region identity.

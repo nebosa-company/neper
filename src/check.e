@@ -15063,6 +15063,16 @@ fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         local_index = aliased
         is_resource = true
     }
+    if !has_alias {
+        let (carrier, has_carrier) = place_base_local(c, g, tree, module_index, node_index)
+        if has_carrier && c.resources[carrier].points_to != 0usize {
+            let carried = c.resources[carrier].points_to - 1usize
+            if carried < c.local_count && c.resources[carried].region != 0usize {
+                local_index = carried
+                is_resource = true
+            }
+        }
+    }
     if !is_resource && tree.nodes[node_index].kind == .BracketPostfix {
         var bracket: BracketInfo = zero
         if read_bracket(c, tree, tree.nodes[node_index], &bracket) == ok && bracket.range {
