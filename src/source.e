@@ -154,3 +154,47 @@ fn read_all(a: *mem.Arena, file: os.File) -> (str, err) {
     }
     ret (buffer[..used], ok)
 }
+
+// Whether the file at `path` is exactly `bytes` (D332): the size from a seek to its
+// end, the way `load` sizes its buffer, and only when that matches the bytes a chunk
+// at a time, stopping at the first that differs. A file that cannot be opened, cannot
+// seek, or reads short is not a match -- the caller writes, as it did before.
+fn matches(a: *mem.Arena, path: str, bytes: []const u8) -> bool {
+    let flags = os.OpenFlags{ read: true, write: false, create: false, truncate: false, append: false }
+    let (file, open_error) = os.open(a, path, flags)
+    if open_error != ok { ret false }
+    var equal = false
+    let (size, size_error) = os.seek(file, 0i64, .End)
+    if size_error == ok && usize(size) == bytes.len {
+        let (start, start_error) = os.seek(file, 0i64, .Start)
+        if start_error == ok { equal = same_bytes(a, file, bytes) }
+    }
+    let close_error = os.close(file)
+    if close_error != ok { ret false }
+    ret equal
+}
+
+fn same_bytes(a: *mem.Arena, file: os.File, bytes: []const u8) -> bool {
+    let checkpoint = mem.mark(a)
+    let (chunk, chunk_error) = mem.alloc[u8](a, 65536usize)
+    if chunk_error != ok { ret false }
+    var at = 0usize
+    var equal = true
+    while equal && at < bytes.len {
+        var wanted = bytes.len - at
+        if wanted > chunk.len { wanted = chunk.len }
+        let (count, read_error) = os.read(file, chunk[0usize..wanted])
+        if read_error != ok || count == 0usize {
+            equal = false
+        } else {
+            var i = 0usize
+            while i < count {
+                if chunk[i] != bytes[at + i] { equal = false }
+                i += 1usize
+            }
+            at += count
+        }
+    }
+    mem.reset(a, checkpoint)
+    ret equal
+}

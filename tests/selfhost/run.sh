@@ -2636,6 +2636,17 @@ manifest_again=$(sed -n 's/.*"artifacts":\[{"path":"build\/linux\/tests\/selfhos
 [ "$manifest_again" = "$manifest_artifact" ] || { printf '%s
 ' "the second build's manifest does not carry the first build's artifact hash" >&2; exit 1; }
 [ "$("$test_build/neper-self" compare-manifests "$test_build/manifest-first.json" "$repo/.neper/debug/build-manifest.json")" = "manifests agree" ] || { echo "the manifests of two builds of the same source differ" >&2; exit 1; }
+# The image's digest reused when the image is the one on disk (D332): a third build of
+# the same source into the same output finds its own bytes at the output path, skips the
+# write -- the file's mtime stays -- and takes the digest from the manifest that
+# recorded it, which is still the executable's.
+image_stamp=$(stat -c %y "$test_build/conformance-tools-build-again.out")
+(cd "$test_build" && ./neper-self emit-executable "$conformance_root/tools/build.e" "$repo" x64 linux "conformance-tools-build-again.out" > /dev/null)
+[ "$(stat -c %y "$test_build/conformance-tools-build-again.out")" = "$image_stamp" ] || { printf '%s
+' "a build whose image is already the file at the output path rewrote it" >&2; exit 1; }
+manifest_reused=$(sed -n 's/.*"artifacts":\[{"path":"build\/linux\/tests\/selfhost\/conformance-tools-build-again.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
+[ "$manifest_reused" = "$(sha256sum "$test_build/conformance-tools-build-again.out" | cut -c1-64)" ] || { printf '%s
+' "the digest reused from the previous manifest is not the image's" >&2; exit 1; }
 (cd "$test_build" && ./neper-self emit-executable "$conformance_root/tools/contract.e" "$repo" x64 linux "conformance-tools-compare-debug.out" > /dev/null)
 cp "$repo/.neper/debug/build-manifest.json" "$test_build/manifest-debug.json"
 (cd "$test_build" && ./neper-self emit-executable "$conformance_root/tools/contract.e" "$repo" x64 linux "conformance-tools-compare-release.out" --release > /dev/null)

@@ -71,6 +71,9 @@ type Build = struct {
     phase_count: usize,
     pools: [34]usize,
     image_bytes: usize,
+    // The image the build did not have to write (D332): it was already the file at the
+    // output path, so the write was skipped and the manifest reused its digest.
+    image_unchanged: bool,
     // What the build did rather than kept (D405, H14): the modules whose bodies were
     // checked, the modules lowered and the functions lowered in them; a warm build
     // over a stable cache does none of it.

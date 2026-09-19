@@ -6519,7 +6519,41 @@ fn manifest_artifact_path(a: *mem.Arena, project_root: str, named: str) -> (str,
     ret (relative[0usize..at], ok)
 }
 
-fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, unchecked: bool, artifact_path: str, packed: []const u8, reasons: []u8) -> err {
+// The digest this manifest recorded for `relative_path`, or "" when the manifest is
+// missing, unreadable or names another artifact (D332).
+fn manifest_previous_digest(a: *mem.Arena, manifest_path: str, relative_path: str) -> str {
+    if relative_path.len == 0usize { ret "" }
+    let (document, load_error) = graph.load_file(a, manifest_path)
+    if load_error != ok { ret "" }
+    let entry_at = manifest_key_at(document, "\"artifacts\":[{\"path\":\"")
+    if entry_at >= document.len { ret "" }
+    let entry = document[entry_at..document.len]
+    var end = 0usize
+    while end < entry.len && entry[end] != 34u8 { end += 1usize }
+    if !graph.same(entry[0usize..end], relative_path) { ret "" }
+    ret manifest_after(entry, "\"sha256\":\"")
+}
+
+// The index just past the first `key`, or the document's length when it is absent:
+// the key scan the manifest's other readers use (D255), not a JSON reader.
+fn manifest_key_at(document: str, key: str) -> usize {
+    var at = 0usize
+    while at + key.len <= document.len {
+        if graph.same(document[at..at + key.len], key) { ret at + key.len }
+        at += 1usize
+    }
+    ret document.len
+}
+
+// The string value after the first `key`, up to the next quote; "" when absent.
+fn manifest_after(document: str, key: str) -> str {
+    let from = manifest_key_at(document, key)
+    var end = from
+    while end < document.len && document[end] != 34u8 { end += 1usize }
+    ret document[from..end]
+}
+
+fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, unchecked: bool, artifact_path: str, packed: []const u8, reasons: []u8, image_unchanged: bool) -> err {
     var mode = "debug"
     if release_mode { mode = "release" }
     let (dot_dir, dot_error) = manifest_join(a, g.project.root, ".neper")
@@ -6529,14 +6563,22 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     let (manifest_path, path_error) = manifest_join(a, mode_dir, "build-manifest.json")
     if path_error != ok { ret path_error }
     let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
-    let (digest, digest_error) = manifest_sha256(a, packed)
-    if digest_error != ok { ret digest_error }
+    let (relative_path, relative_error) = manifest_artifact_path(a, g.project.root, artifact_path)
+    if relative_error != ok { ret relative_error }
+    // The image the build did not write is the one the last manifest hashed (D332):
+    // its digest is taken from there, and the ten-megabyte SHA-256 -- a third of a
+    // warm build -- is not run. Anything missing or naming another artifact hashes.
+    var digest = ""
+    if image_unchanged { digest = manifest_previous_digest(a, manifest_path, relative_path) }
+    if digest.len == 0usize {
+        let (fresh, fresh_error) = manifest_sha256(a, packed)
+        if fresh_error != ok { ret fresh_error }
+        digest = fresh
+    }
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
     out.bytes = storage
-    let (relative_path, relative_error) = manifest_artifact_path(a, g.project.root, artifact_path)
-    if relative_error != ok { ret relative_error }
     try manifest_write(a, &out, arch, os_name, g, mode, unchecked, relative_path, digest, reasons)
     try byte(&out, 10u8)
     // The file is opened once the text is ready (D345): every exit before this has

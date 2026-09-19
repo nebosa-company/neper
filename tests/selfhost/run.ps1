@@ -2540,6 +2540,16 @@ $manifestAgain = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifac
 if ($manifestAgain -ne $manifestArtifact) { throw "the second build's manifest does not carry the first build's artifact hash" }
 $compared = & $compiler compare-manifests $manifestFirst $manifestPath
 if ($LASTEXITCODE -ne 0 -or $compared -ne 'manifests agree') { throw "the manifests of two builds of the same source differ: $compared" }
+# The image's digest reused when the image is the one on disk (D332): a third build of
+# the same source into the same output finds its own bytes at the output path, skips the
+# write -- the file's mtime stays -- and takes the digest from the manifest that
+# recorded it, which is still the executable's.
+$imageStamp = (Get-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-build-again.out')).LastWriteTimeUtc.Ticks
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot 'tools\build.e')`" `"$repo`" x64 windows conformance-tools-build-again.out > nul"
+if ($LASTEXITCODE -ne 0) { throw "the third build of build.e exited $LASTEXITCODE" }
+if ((Get-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-build-again.out')).LastWriteTimeUtc.Ticks -ne $imageStamp) { throw 'a build whose image is already the file at the output path rewrote it' }
+$manifestReused = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"build/windows/tests/selfhost/conformance-tools-build-again.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
+if ($manifestReused -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build-again.out')).Hash.ToLower()) { throw "the digest reused from the previous manifest is not the image's" }
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot 'tools\contract.e')`" `"$repo`" x64 windows conformance-tools-compare-debug.out > nul"
 if ($LASTEXITCODE -ne 0) { throw "the debug build of contract.e exited $LASTEXITCODE" }
 $manifestDebug = Join-Path $testBuild 'manifest-debug.json'

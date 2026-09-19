@@ -10477,7 +10477,15 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 let (packed, packed_error) = mem.alloc[u8](a, executable.count)
                 if packed_error != ok { ret packed_error }
                 try emit_x64.pack(&executable, packed)
-                let save_error = save_executable(a, args[6usize], packed, args[5usize])
+                // The fastest hash of the image is none (D332): a build whose image is
+                // already the file at the output path writes nothing -- the file's mtime
+                // stays, so nothing watching the binary wakes -- and the manifest takes
+                // that file's digest from the manifest that recorded it. The answer rides
+                // `report.build` rather than a local: `dispatch` is at the bootstrap's
+                // 256-local ceiling.
+                report.build.image_unchanged = source.matches(a, args[6usize], packed)
+                var save_error = ok
+                if !report.build.image_unchanged { save_error = save_executable(a, args[6usize], packed, args[5usize]) }
                 if save_error != ok {
                     if !report.json { ret save_error }
                     try emit_command_diagnostic(&report, "E-CLI-9999", "the executable could not be written")
@@ -10511,7 +10519,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 var no_reasons: []u8 = zero
                 var reasons = no_reasons
                 if hot_load.on { reasons = hot_load.reason[0usize..loaded.count] }
-                try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, unchecked_build, args[6usize], packed, reasons)
+                try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, unchecked_build, args[6usize], packed, reasons, report.build.image_unchanged)
                 try report_phase(&report, "manifest")
                 report.build.wall_ms = (nptest_now() - report.build.started) / 1000000usize
                 report.build.image_bytes = packed.len
