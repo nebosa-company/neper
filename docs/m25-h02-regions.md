@@ -59,8 +59,9 @@ through that field alone (D413), is `x` by another name (D393, D394), from the
 binding or the assignment that made it so until the next (D416): once `x` dangles, `*first`, `first.field` and `first[i]`, read
 or stored to, are refused as `x`'s own use is, naming `x`; `first.len` is not,
 for the reason `x.len` is not. A pointer from anywhere else is not followed.
-Two pointer-bearing fields in one aggregate retain distinct lexical targets (D691),
-so a use through the second field follows its own owner rather than the first's.
+Top-level pointer-bearing fields in one aggregate retain distinct lexical targets
+(D691, D696), so a use through the third or any later field follows its own owner
+rather than either of the first two.
 
 ## 3. Views of containers
 
@@ -254,3 +255,10 @@ remains E-SAFETY-0018 against the owner named by its second field.
 **D694** keeps independently assigned pointer fields in separate alias slots. A
 later assignment to one sibling cannot erase the other sibling's region identity,
 so returning the carrier still reports E-SAFETY-0018 for that owner.
+
+**D696** removes the two-field ceiling for top-level aggregate aliases. The first
+two targets remain inline in the existing resource record; only a third or later
+target enters a sparse checker-side table. A post-reset use through that later field
+is therefore E-SAFETY-0013 without increasing every local's resource footprint.
+Nested aggregates still retain only the first address found below each top-level
+field; arbitrary nested pointer paths remain outside this lexical subset.

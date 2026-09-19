@@ -13296,5 +13296,17 @@ for it.
 This is executable concurrency evidence for the field-specific alias resolution
 introduced by D691. The thread-start path needs no separate alias representation.
 
-The existing single-target literal walk becomes recursive and keeps the outer field
-as its access path. Multiple independent pointer fields remain a later H02 problem.
+The existing literal walk keeps the outer field as its access path. At D695 the
+representation still retained only two independent pointer fields; D696 removes
+that top-level ceiling.
+
+## D696 -- Later aggregate pointer fields use a sparse alias table
+
+Every top-level pointer-bearing field in a named aggregate retains its own lexical
+field-to-local identity. A use through a third or later field therefore resolves to
+that field's owner and cannot evade E-SAFETY-0013 after the owner's region resets.
+
+The first two identities keep using the existing inline resource storage. Only a
+third or later identity allocates an entry in a checker-side table, so ordinary
+locals and the `Resource` record do not grow. The table is scanned linearly until
+aggregate-heavy workloads demonstrate that an index is worth its permanent cost.

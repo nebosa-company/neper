@@ -8061,6 +8061,9 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
     let (resources, resources_error) = mem.alloc[check.Resource](a, from.locals.len)
     if resources_error != ok { ret resources_error }
     into.resources = resources
+    var no_resource_aliases: []check.ResourceAlias = zero
+    into.resource_aliases = no_resource_aliases
+    into.resource_alias_count = 0usize
     into.local_count = 0usize
     let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, from.diagnostics.len)
     if diagnostics_error != ok { ret diagnostics_error }

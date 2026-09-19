@@ -388,6 +388,15 @@ type Resource = struct {
     lent_at: usize,
 }
 
+// Pointer-bearing fields past a named aggregate's two inline aliases (D696).
+// ponytail: this sparse table is scanned linearly because ordinary locals allocate
+// nothing; add per-local heads only if measured aggregate-heavy code needs them.
+type ResourceAlias = struct {
+    carrier: usize,
+    pointed: usize,
+    field: str,
+}
+
 type Alias = struct {
     name: str,
     module_index: usize,
@@ -593,6 +602,8 @@ type Checker = struct {
     tokens: []lex.Token,
     locals: []Local,
     resources: []Resource,
+    resource_aliases: []ResourceAlias,
+    resource_alias_count: usize,
     types: []Type,
     aliases: []Alias,
     constants: []Constant,
@@ -845,6 +856,9 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.tokens = tokens
     c.locals = locals
     c.resources = resources
+    var no_resource_aliases: []ResourceAlias = zero
+    c.resource_aliases = no_resource_aliases
+    c.resource_alias_count = 0usize
     c.types = types
     c.aliases = aliases
     c.constants = constants
@@ -12556,6 +12570,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
         return_index += 1usize
     }
     c.local_count = 0usize
+    c.resource_alias_count = 0usize
     c.block_depth = 0usize
     c.pins_live = 0usize
     c.affine_answer_valid = false
@@ -13760,17 +13775,115 @@ fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     ret (pointed, true)
 }
 
+fn clear_resource_aliases(c: *Checker, carrier: usize) {
+    var read = 0usize
+    var write = 0usize
+    while read < c.resource_alias_count {
+        if c.resource_aliases[read].carrier != carrier {
+            c.resource_aliases[write] = c.resource_aliases[read]
+            write += 1usize
+        }
+        read += 1usize
+    }
+    c.resource_alias_count = write
+}
+
+fn grow_resource_aliases(c: *Checker) -> err {
+    if c.resource_alias_count < c.resource_aliases.len { ret ok }
+    var capacity = 8usize
+    if c.resource_aliases.len != 0usize { capacity = c.resource_aliases.len * 2usize }
+    let (aliases, aliases_error) = mem.alloc[ResourceAlias](c.arena, capacity)
+    if aliases_error != ok { ret aliases_error }
+    var at = 0usize
+    while at < c.resource_alias_count {
+        aliases[at] = c.resource_aliases[at]
+        at += 1usize
+    }
+    c.resource_aliases = aliases
+    ret ok
+}
+
+fn set_resource_alias(c: *Checker, carrier: usize, field: str, pointed: usize) -> err {
+    if c.resources[carrier].points_to == 0usize || same(field, c.resources[carrier].points_to_field) {
+        c.resources[carrier].points_to = pointed + 1usize
+        c.resources[carrier].points_to_field = field
+        ret ok
+    }
+    if !c.resources[carrier].slice_offset_known || same(field, c.resources[carrier].mark_arena) {
+        c.resources[carrier].slice_offset = pointed + 1usize
+        c.resources[carrier].slice_offset_known = true
+        c.resources[carrier].mark_arena = field
+        ret ok
+    }
+    var at = 0usize
+    while at < c.resource_alias_count {
+        if c.resource_aliases[at].carrier == carrier && same(c.resource_aliases[at].field, field) {
+            c.resource_aliases[at].pointed = pointed
+            ret ok
+        }
+        at += 1usize
+    }
+    try grow_resource_aliases(c)
+    c.resource_aliases[c.resource_alias_count] = ResourceAlias { carrier: carrier, pointed: pointed, field: field }
+    c.resource_alias_count += 1usize
+    ret ok
+}
+
+fn resource_alias_target(c: *Checker, carrier: usize, field: str) -> (usize, bool) {
+    if c.resources[carrier].points_to != 0usize && same(field, c.resources[carrier].points_to_field) {
+        ret (c.resources[carrier].points_to - 1usize, true)
+    }
+    if c.resources[carrier].slice_offset_known && same(field, c.resources[carrier].mark_arena) {
+        ret (c.resources[carrier].slice_offset - 1usize, true)
+    }
+    var at = 0usize
+    while at < c.resource_alias_count {
+        let alias = c.resource_aliases[at]
+        if alias.carrier == carrier && same(alias.field, field) { ret (alias.pointed, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn record_literal_aliases(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, carrier: usize, literal_index: usize) -> err {
+    let literal = tree.nodes[literal_index]
+    let text = g.modules[module_index].text
+    let end = usize(literal.first_child) + usize(literal.child_count)
+    var at = usize(literal.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            let item = tree.nodes[parse.child_index_at(tree, at)]
+            if item.kind == .LiteralItem {
+                let name_token = c.tokens[usize(item.token_start)]
+                let (value_index, has_value) = first_node_child(tree, item)
+                if name_token.kind == .Identifier && has_value {
+                    var (pointed, found) = address_argument_local(c, g, tree, module_index, value_index)
+                    if !found && tree.nodes[value_index].kind == .AggregateLiteral {
+                        let (nested, _, nested_found) = literal_address_field(c, g, tree, module_index, value_index)
+                        pointed = nested
+                        found = nested_found
+                    }
+                    if found && pointed != carrier { try set_resource_alias(c, carrier, text[name_token.start..name_token.end], pointed) }
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 // What a local aliases after a binding or an assignment (D393, D395, D413, D416):
 // `&x` for a pointer, a place of `x` for a slice, a literal with `&x` in a field
 // for a struct; nothing otherwise, which also ends an alias the local had. And a
 // slice local rebound ends the aliases other slices held of its old storage: they
 // view what it viewed, not what it views now.
-fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, local_index: usize, initializer_index: usize, has_initializer: bool) {
+fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, local_index: usize, initializer_index: usize, has_initializer: bool) -> err {
     c.resources[local_index].points_to = 0usize
     c.resources[local_index].points_to_field = ""
     if c.locals[local_index].ty.kind == .Named && c.resources[local_index].slice_offset_known { c.resources[local_index].mark_arena = "" }
     c.resources[local_index].slice_offset = 0usize
     c.resources[local_index].slice_offset_known = false
+    clear_resource_aliases(c, local_index)
     if c.locals[local_index].ty.kind == .Slice {
         var other = 0usize
         while other < c.local_count {
@@ -13778,19 +13891,9 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
             other += 1usize
         }
     }
-    if !has_initializer { ret }
+    if !has_initializer { ret ok }
     if c.locals[local_index].ty.kind == .Named && tree.nodes[initializer_index].kind == .AggregateLiteral {
-        let (pointed, member, is_address) = literal_address_field(c, g, tree, module_index, initializer_index)
-        if is_address && pointed != local_index {
-            c.resources[local_index].points_to = pointed + 1usize
-            c.resources[local_index].points_to_field = member
-            let (second, second_member, has_second) = literal_address_field_after(c, g, tree, module_index, initializer_index, member)
-            if has_second && second != local_index {
-                c.resources[local_index].slice_offset = second + 1usize
-                c.resources[local_index].slice_offset_known = true
-                c.resources[local_index].mark_arena = second_member
-            }
-        }
+        try record_literal_aliases(c, g, tree, module_index, local_index, initializer_index)
     }
     if c.locals[local_index].ty.kind == .Named && tree.nodes[initializer_index].kind == .NameExpr {
         let token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
@@ -13859,6 +13962,7 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if c.resources[local_index].points_to != 0usize {
         record_explain_borrow(c, module_index, tree.nodes[initializer_index], c.locals[local_index].name, c.locals[c.resources[local_index].points_to - 1usize].name)
     }
+    ret ok
 }
 
 // The target of a place's pointer alias (D393): the base name, a local bound from
@@ -13885,13 +13989,14 @@ fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if token.kind != .Identifier { ret (0usize, false) }
     let (pointer_local, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
     if !found || c.resources[pointer_local].points_to == 0usize { ret (0usize, false) }
-    var alias = c.resources[pointer_local].points_to
     let field = c.resources[pointer_local].points_to_field
-    if field.len != 0usize && (!has_member || !same(through_member, field)) {
-        if !has_member || !c.resources[pointer_local].slice_offset_known || !same(through_member, c.resources[pointer_local].mark_arena) { ret (0usize, false) }
-        alias = c.resources[pointer_local].slice_offset
+    if field.len != 0usize && !has_member { ret (0usize, false) }
+    var pointed = c.resources[pointer_local].points_to - 1usize
+    if field.len != 0usize {
+        let (field_pointed, has_target) = resource_alias_target(c, pointer_local, through_member)
+        if !has_target { ret (0usize, false) }
+        pointed = field_pointed
     }
-    let pointed = alias - 1usize
     if pointed >= c.local_count { ret (0usize, false) }
     ret (pointed, true)
 }
@@ -14254,7 +14359,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     // same storage and is recorded the same way (D395); a struct literal with `&x` in
     // a field aliases `x` through that field (D413). An assignment records the same
     // (D416), in `resource_assign`.
-    record_alias(c, g, tree, module_index, local_index, initializer_index, has_initializer)
+    try record_alias(c, g, tree, module_index, local_index, initializer_index, has_initializer)
     if has_initializer && tree.nodes[initializer_index].kind == .NameExpr {
         let source_token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
         let (source_local, source_found) = find_local(c, g.modules[module_index].text[source_token.start..source_token.end])
@@ -14849,7 +14954,7 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     if place.kind == .NameExpr && c.tokens[usize(place.token_start)].kind == .Identifier {
         let place_token = c.tokens[usize(place.token_start)]
         let (assigned_local, found_assigned) = find_local(c, g.modules[module_index].text[place_token.start..place_token.end])
-        if found_assigned { record_alias(c, g, tree, module_index, assigned_local, initializer_index, true) }
+        if found_assigned { try record_alias(c, g, tree, module_index, assigned_local, initializer_index, true) }
     }
     // `s.p = &x` (D413): `s` aliases `x` through `p` from here.
     if place.kind == .FieldExpr {
