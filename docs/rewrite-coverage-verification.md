@@ -5,7 +5,7 @@ This is a capability inventory, not a claim that Neper can currently build these
 Generated/vendor trees, assets and duplicate `neper-*` worktrees are excluded.
 Individual files larger than 16 KiB are counted but omitted from text extraction as likely generated/minified artifacts.
 
-Scope: **36 repositories**, **34,170 source/UI files**, **234,629 extracted function/procedure prototypes**, and **7,436 unique UI/type names**.
+Scope: **37 repositories**, **34,344 source/UI files**, **235,343 extracted function/procedure prototypes**, and **7,454 unique UI/type names**.
 
 ## Conclusion
 
@@ -24,7 +24,7 @@ No repository is currently verified as a complete Neper rewrite. The exact-name 
 
 | Status | UI/type occurrences |
 | --- | ---: |
-| `missing/extension` | 8,417 |
+| `missing/extension` | 8,435 |
 | `module API (planned)` | 338 |
 | `planned P1` | 294 |
 | `planned P2` | 40 |
@@ -37,10 +37,10 @@ No repository is currently verified as a complete Neper rewrite. The exact-name 
 | --- | ---: | ---: | ---: | --- |
 | `nebosa` | 7,844 | 8,508 | 2,121 | React, Web |
 | `deepseek-harness` | 6,648 | 11,282 | 480 | React, Web |
-| `celvyx` | 5,359 | 146,173 | 3,013 | Flutter, GTK, SwiftUI, Web |
+| `celvyx` | 5,399 | 146,777 | 3,031 | Flutter, GTK, SwiftUI, Web |
 | `harness-bench` | 2,088 | 1,291 | 60 | Web |
 | `appdor` | 2,068 | 6,968 | 174 | Web |
-| `neper` | 1,569 | 4,091 | 0 | Android, Flutter, GTK, Qt, React, SwiftUI, VCL, Web |
+| `neper` | 1,703 | 4,201 | 0 | Android, Flutter, GTK, Qt, React, SwiftUI, VCL, Web |
 | `mtg.studio.src` | 1,433 | 8,528 | 461 | Android, Flutter, GTK, Pascal/VCL-like, VCL, Web |
 | `chit-chat` | 1,020 | 18,750 | 578 | Android, Flutter, GTK, Web |
 | `r.interpreter` | 1,008 | 4,940 | 67 | Web |
@@ -71,6 +71,7 @@ No repository is currently verified as a complete Neper rewrite. The exact-name 
 | `aut101` | 1 | 0 | 0 | unclassified |
 | `botanic-telegram` | 1 | 6 | 34 | Web |
 | `discord-delete-dm` | 0 | 0 | 0 | unclassified |
+| `jev-ai` | 0 | 0 | 0 | unclassified |
 
 ## Per-repository verification list
 
@@ -845,7 +846,7 @@ The complete file-to-prototype extraction is retained in the JSON inventory (`pr
 ### `celvyx`
 
 Frameworks: Flutter, GTK, SwiftUI, Web.
-Extracted 146,173 prototypes from 5,359 files.
+Extracted 146,777 prototypes from 5,399 files.
 
 UI/type names and Neper status:
 
@@ -1027,10 +1028,12 @@ UI/type names and Neper status:
 - `AutoTask` — missing/extension
 - `Automatic` — missing/extension
 - `AvroCursor` — missing/extension
+- `AvroWriter` — missing/extension
 - `Axes` — missing/extension
 - `AxisRange` — missing/extension
 - `AzureAccount` — missing/extension
 - `AzureBlobClient` — missing/extension
+- `AzureBlobDestinationExecutor` — missing/extension
 - `AzureTableClient` — missing/extension
 - `AzureTableSession` — missing/extension
 - `AzureToken` — missing/extension
@@ -1143,6 +1146,7 @@ UI/type names and Neper status:
 - `Builder` — module API (planned)
 - `BulkEndpoint` — missing/extension
 - `BulkFormat` — missing/extension
+- `BulkJobExecutor` — missing/extension
 - `BulkWrite` — missing/extension
 - `Burman` — missing/extension
 - `Button` — planned P1
@@ -1579,6 +1583,7 @@ UI/type names and Neper status:
 - `DbRows` — missing/extension
 - `DbSessionResolverHarness` — missing/extension
 - `DbTransportException` — missing/extension
+- `DbfDestinationExecutor` — missing/extension
 - `DcfAssumptions` — missing/extension
 - `Debit` — missing/extension
 - `DebtTranche` — missing/extension
@@ -1626,6 +1631,7 @@ UI/type names and Neper status:
 - `DialogHelpButton` — missing/extension
 - `DicomTag` — missing/extension
 - `DictionaryColumn` — missing/extension
+- `DiffSample` — missing/extension
 - `Difference` — missing/extension
 - `Directionality` — missing/extension
 - `Directory` — missing/extension
@@ -1643,6 +1649,7 @@ UI/type names and Neper status:
 - `Done` — missing/extension
 - `Down` — missing/extension
 - `DownstreamUsage` — missing/extension
+- `DpapiKeyStore` — missing/extension
 - `Drag` — missing/extension
 - `DriftPolicySet` — missing/extension
 - `DriverLine` — missing/extension
@@ -1781,6 +1788,7 @@ UI/type names and Neper status:
 - `FIB` — missing/extension
 - `FIELD` — missing/extension
 - `FIELDVALUE` — missing/extension
+- `FILE` — missing/extension
 - `FILTER` — missing/extension
 - `FILTERXML` — missing/extension
 - `FIND` — missing/extension
@@ -1790,6 +1798,7 @@ UI/type names and Neper status:
 - `FISHER` — missing/extension
 - `FISHERINV` — missing/extension
 - `FIXED` — missing/extension
+- `FLAGGED` — missing/extension
 - `FLAGS` — missing/extension
 - `FLOOR` — missing/extension
 - `FN` — missing/extension
@@ -1854,7 +1863,6 @@ UI/type names and Neper status:
 - `FixedWidthField` — missing/extension
 - `FixedWidthLayout` — missing/extension
 - `FixedWidthRuler` — missing/extension
-- `FlatTable` — missing/extension
 - `Flexible` — missing/extension
 - `Float64Column` — missing/extension
 - `Float64ColumnBuilder` — missing/extension
@@ -1949,9 +1957,6 @@ UI/type names and Neper status:
 - `FunctionCallNode` — missing/extension
 - `FunctionScreenTipController` — missing/extension
 - `FuzzyJoinExecutor` — missing/extension
-- `FuzzyJoinStep` — missing/extension
-- `FuzzyMatch` — missing/extension
-- `FuzzyTransform` — missing/extension
 - `FxAmount` — missing/extension
 - `G1` — missing/extension
 - `GAMMA` — missing/extension
@@ -1984,6 +1989,7 @@ UI/type names and Neper status:
 - `GatedNodeRegistry` — missing/extension
 - `Gates` — missing/extension
 - `GcmDirection` — missing/extension
+- `GcsDestinationExecutor` — missing/extension
 - `GeminiAdapter` — missing/extension
 - `General` — missing/extension
 - `GeneralTemplate` — missing/extension
@@ -2498,6 +2504,9 @@ UI/type names and Neper status:
 - `ModelTableSource` — missing/extension
 - `ModelTrace` — missing/extension
 - `Monday` — missing/extension
+- `MongoNotBuiltExecutor` — missing/extension
+- `MongoSession` — missing/extension
+- `MongoSourceExecutor` — missing/extension
 - `Month` — missing/extension
 - `Months` — missing/extension
 - `MouseRegion` — missing/extension
@@ -2633,6 +2642,7 @@ UI/type names and Neper status:
 - `OR` — missing/extension
 - `ORDER` — missing/extension
 - `OS` — missing/extension
+- `OSError` — missing/extension
 - `OUTER` — missing/extension
 - `OWN` — missing/extension
 - `ObjectId` — missing/extension
@@ -2771,6 +2781,7 @@ UI/type names and Neper status:
 - `ParsedFile` — missing/extension
 - `PartialEvaluationTipController` — missing/extension
 - `Passed` — missing/extension
+- `PassphraseKeyStore` — missing/extension
 - `PasteSourceExecutor` — missing/extension
 - `PasteSplitPreference` — missing/extension
 - `PastedRequest` — missing/extension
@@ -2796,6 +2807,7 @@ UI/type names and Neper status:
 - `Permutation` — missing/extension
 - `PersonName` — missing/extension
 - `PertTask` — missing/extension
+- `PgoutputReader` — missing/extension
 - `Phase` — missing/extension
 - `Phases` — missing/extension
 - `Phonetic` — missing/extension
@@ -2967,6 +2979,7 @@ UI/type names and Neper status:
 - `REPLACEB` — missing/extension
 - `REPT` — missing/extension
 - `RETURN` — missing/extension
+- `RHOB` — missing/extension
 - `RHS` — missing/extension
 - `RIGHT` — missing/extension
 - `RIGHTB` — missing/extension
@@ -3010,6 +3023,7 @@ UI/type names and Neper status:
 - `Ratio` — missing/extension
 - `RawImage` — missing/extension
 - `RawResponse` — missing/extension
+- `RdsColumn` — missing/extension
 - `RecalculationPass` — missing/extension
 - `Receives` — missing/extension
 - `RecentFile` — missing/extension
@@ -3103,6 +3117,7 @@ UI/type names and Neper status:
 - `RunAuditor` — missing/extension
 - `RunCache` — missing/extension
 - `RunCheckpoint` — missing/extension
+- `RunLogFolder` — missing/extension
 - `RunLogger` — missing/extension
 - `RunPlan` — missing/extension
 - `RunRecord` — missing/extension
@@ -3113,6 +3128,7 @@ UI/type names and Neper status:
 - `Runway` — missing/extension
 - `S1` — missing/extension
 - `S2` — missing/extension
+- `S3DestinationExecutor` — missing/extension
 - `S3SourceExecutor` — missing/extension
 - `S9` — missing/extension
 - `SAFETYSTOCK` — missing/extension
@@ -3161,6 +3177,7 @@ UI/type names and Neper status:
 - `SLOPE` — missing/extension
 - `SMALL` — missing/extension
 - `SMARTLOOKUP` — missing/extension
+- `SNAPPY` — missing/extension
 - `SNGL` — missing/extension
 - `SNRATIO` — missing/extension
 - `SOMME` — missing/extension
@@ -3192,6 +3209,7 @@ UI/type names and Neper status:
 - `STILL` — missing/extension
 - `STORE` — missing/extension
 - `STRING` — missing/extension
+- `STRINGS` — missing/extension
 - `SUBSTITUTE` — missing/extension
 - `SUBTOTAL` — missing/extension
 - `SUM` — missing/extension
@@ -3219,6 +3237,7 @@ UI/type names and Neper status:
 - `Salary` — missing/extension
 - `Sales` — missing/extension
 - `SalesforceField` — missing/extension
+- `SampleCoverage` — missing/extension
 - `Sampling` — missing/extension
 - `SavColumn` — missing/extension
 - `SavReader` — missing/extension
@@ -3386,7 +3405,6 @@ UI/type names and Neper status:
 - `StartScreenOptions` — missing/extension
 - `StartScreenPage` — missing/extension
 - `Started` — missing/extension
-- `StataMissing` — missing/extension
 - `State` — module API (planned)
 - `StateEdit` — missing/extension
 - `StateError` — missing/extension
@@ -3551,7 +3569,6 @@ UI/type names and Neper status:
 - `Threshold` — missing/extension
 - `ThresholdMonitor` — missing/extension
 - `ThresholdTally` — missing/extension
-- `ThriftCursor` — missing/extension
 - `ThrottlePolicy` — missing/extension
 - `TimeHighWaterMark` — missing/extension
 - `TimedRefreshClock` — missing/extension
@@ -3628,7 +3645,6 @@ UI/type names and Neper status:
 - `Unhide` — missing/extension
 - `Unicode` — missing/extension
 - `UnimplementedError` — missing/extension
-- `UnitConversion` — missing/extension
 - `Units` — missing/extension
 - `Unknown` — module API (planned)
 - `Unpivot` — missing/extension
@@ -3697,6 +3713,7 @@ UI/type names and Neper status:
 - `WRAPCOLS` — missing/extension
 - `WRAPROWS` — missing/extension
 - `Ward` — missing/extension
+- `WarehouseConnection` — missing/extension
 - `Warning` — missing/extension
 - `Warnings` — missing/extension
 - `WatchPolicy` — missing/extension
@@ -3764,6 +3781,8 @@ UI/type names and Neper status:
 - `Wq` — missing/extension
 - `Wrap` — planned P1
 - `WritePacing` — missing/extension
+- `WritePreview` — missing/extension
+- `WritePreviewDialog` — missing/extension
 - `Writes` — missing/extension
 - `X1` — missing/extension
 - `X4` — missing/extension
@@ -6019,6 +6038,16 @@ UI/type names and Neper status:
 - `title` — module API (planned)
 - `tr` — missing/extension
 - `wrap` — missing/extension
+
+The complete file-to-prototype extraction is retained in the JSON inventory (`prototypes_by_file`), alongside the unique prototype-name set.
+
+### `jev-ai`
+
+Frameworks: unclassified.
+Extracted 0 prototypes from 0 files.
+
+UI/type names and Neper status:
+
 
 The complete file-to-prototype extraction is retained in the JSON inventory (`prototypes_by_file`), alongside the unique prototype-name set.
 
@@ -8742,7 +8771,7 @@ The complete file-to-prototype extraction is retained in the JSON inventory (`pr
 ### `neper`
 
 Frameworks: Android, Flutter, GTK, Qt, React, SwiftUI, VCL, Web.
-Extracted 4,091 prototypes from 1,569 files.
+Extracted 4,201 prototypes from 1,703 files.
 
 UI/type names and Neper status:
 
