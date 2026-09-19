@@ -340,6 +340,8 @@ On Linux:
 - [`docs/tooling-v2-draft.md`](docs/tooling-v2-draft.md) — scheduled, non-normative agent-tooling successor design
 - [`docs/diagnostics.md`](docs/diagnostics.md) — stable diagnostic-code registry
 - [`docs/roadmap.md`](docs/roadmap.md) — implementation milestones
+- [`docs/work-queue.json`](docs/work-queue.json) — ordered unfinished compiler/tooling capabilities; the first item is the serial-session target
+- [`docs/work-done.jsonl`](docs/work-done.jsonl) — completed compiler/tooling capability ledger consumed by the progress renderer
 - [`docs/post-m2-llm-hardening.md`](docs/post-m2-llm-hardening.md) — post-M2 requirements split into the pre-M3 core gate, T2 tooling and E2 claim evaluation
 - [`docs/hardening-tracks.json`](docs/hardening-tracks.json) — authoritative machine-readable ownership and status for those tracks
 - [`docs/llm-hardening-recommendations.md`](docs/llm-hardening-recommendations.md) — prioritized R01–R16 recommendations for a language optimized for LLM processing end-to-end

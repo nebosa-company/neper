@@ -13875,3 +13875,15 @@ moved form runs -- checked against the reference, and the one-shot was checked a
 the streaming form on the same input before either was trusted. The first draft failed
 that check: `word | ... | word *% prime2` binds the multiply to the last term alone.
 
+## D748 -- Serial work is an ordered active queue
+
+Compiler and tooling readiness records no longer live in the progress renderer.
+`docs/work-queue.json` contains only unfinished records, in execution order; its
+first item is the sole capability offered to a fresh serial feature session. A
+partial capability stays first with updated evidence until it reaches score 1.
+
+Delivered records move to the append-only `docs/work-done.jsonl` ledger. The
+renderer validates and combines both files, so moving a record changes neither its
+score nor the generated readiness page. Requirements remain in their normative
+documents; the queue and ledger contain implementation status, not copied contracts.
+
