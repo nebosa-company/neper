@@ -52,6 +52,15 @@ class GpuContractTests(unittest.TestCase):
         denormal = next(row for row in rows if row["id"] == "denormal_preserve")
         self.assertIn("DenormPreserve", denormal["capabilities"])
 
+    def test_closure_is_design_only_and_runtime_evidence_stays_pending(self):
+        data, errors = CHECKER.validate(ROOT)
+        self.assertEqual(errors, [])
+        self.assertEqual(data["scope"], "m25_design_only")
+        self.assertTrue(all(item["runtime_status"] == "pending_m3"
+                            for item in data["requirements"].values()))
+        self.assertEqual(sum(len(item["fixtures"])
+                             for item in data["requirements"].values()), 32)
+
 
 if __name__ == "__main__":
     unittest.main()

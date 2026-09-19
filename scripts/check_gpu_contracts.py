@@ -17,11 +17,17 @@ def validate(root=ROOT):
     path = root / "docs/m25-gpu-contracts.json"
     data = json.loads(path.read_text(encoding="utf-8"))
     prose = (root / data.get("authority", "")).read_text(encoding="utf-8")
+    closure_path = root / data.get("closure", "")
+    closure = closure_path.read_text(encoding="utf-8") if closure_path.is_file() else ""
     api = (root / "docs/module-apis.md").read_text(encoding="utf-8")
     spec = (root / "docs/spec.md").read_text(encoding="utf-8")
 
     if data.get("schema") != "neper-m25-gpu-contracts-v1" or data.get("version") != 1:
         errors.append("unsupported GPU contract schema/version")
+    if data.get("scope") != "m25_design_only" or data.get("review_status") != "accepted":
+        errors.append("GPU design closure scope/review status is not frozen")
+    if not closure:
+        errors.append("GPU design closure record is missing")
     requirements = data.get("requirements", {})
     if not requirements:
         errors.append("GPU contract has no requirements")
@@ -154,6 +160,22 @@ def validate(root=ROOT):
         actual = {item.get("id") for item in h23.get("fixtures", [])}
         if actual != required_fixtures:
             errors.append("H23: numerical/capability fixture manifest is incomplete")
+    if set(requirements) == {"H13", "H21", "H22", "H23"}:
+        headings = ["Selected design", "Alternatives", "Normative changes",
+                    "Implementation and tests", "Compatibility", "Measurements",
+                    "Remaining limitations"]
+        for requirement in requirements:
+            start = closure.find(f"## {requirement} ")
+            end = closure.find("\n## ", start + 1)
+            section = closure[start:end if end >= 0 else None] if start >= 0 else ""
+            if not section:
+                errors.append(f"{requirement}: closure section is missing")
+            for heading in headings:
+                if f"### {heading}" not in section:
+                    errors.append(f"{requirement}: closure lacks {heading}")
+        fixture_count = sum(len(item.get("fixtures", [])) for item in requirements.values())
+        if fixture_count != 32:
+            errors.append(f"GPU closure must freeze exactly 32 fixtures, got {fixture_count}")
     return data, errors
 
 

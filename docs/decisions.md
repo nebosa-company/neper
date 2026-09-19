@@ -12958,3 +12958,26 @@ Linux release high-water from 2,988 to 2,989 MB; the opposite modes are unchange
 Windows images are unchanged. Linux debug/release images grow by 272/192 bytes, both
 well inside the five-percent image budget. These are exact eight-worker static cells,
 not timed measurements.
+
+## D664 -- The M2.5 GPU design gate is machine-checkable and closed
+
+H13, H21, H22 and H23 are closed for their M2.5 design scope, not for runtime
+delivery. D660 freezes the fault ABI and H01-H07 device mapping; D661 freezes
+past-only completion tokens and whole-buffer resource state; D662 freezes bounded
+staging, the two-clock timeline and complete pipeline-cache identity; D663 freezes
+the 21-row numerical/capability matrix. `m25-gpu-contracts.json` is the exact
+machine-readable contract and names 32 uniquely owned fixtures, all still
+`pending_m3`; `check_gpu_contracts.py` rejects missing API/spec declarations,
+states, fields, matrix obligations, closure sections or runtime overclaims.
+
+`m25-gpu-closure.md` records selected designs, alternatives, normative changes,
+implementation/test references, compatibility, measurements and remaining limits
+for each requirement. The planned `e.gpu` fence gains `FaultKind`/`FaultRecord`,
+`Token`, and `StagingLimits`/`queue_with`; because the module is not implemented,
+these freeze its M3 ABI without migrating a delivered caller or changing `.em`.
+The readiness rows therefore score the M2.5 design obligation as complete while
+continuing to say that CPU/Vulkan execution is M3 and PTX is M4.
+
+Both full self-host suites pass this closure. The fixed static gates judge four
+cells per host with zero breaches and unchanged values; the focused validator has
+six passing tests and reports four design contracts with 32 pending fixtures.

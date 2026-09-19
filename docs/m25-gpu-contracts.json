@@ -2,6 +2,9 @@
   "schema": "neper-m25-gpu-contracts-v1",
   "version": 1,
   "authority": "docs/m25-gpu-contracts.md",
+  "closure": "docs/m25-gpu-closure.md",
+  "scope": "m25_design_only",
+  "review_status": "accepted",
   "requirements": {
     "H13": {
       "design_status": "closed",

@@ -1,13 +1,13 @@
-# M2.5 stage B: H13, H21, H22, H23 -- the GPU contracts, frozen before M3
+# M2.5-core design: H13, H21, H22, H23 -- GPU contracts frozen before M3
 
 This is the design-only closure [`post-m2-llm-hardening.md`](post-m2-llm-hardening.md)
-sections 16, 24, 25 and 26 ask for: how the CPU contracts of H01-H09 map onto
+sections 16, 24, 25 and 26 ask for: how the CPU contracts of H01-H07 map onto
 devices, how host and device work compose, what an end-to-end launch costs and how
 its artifacts are cached, and which numerical claims of spec §10 and §11 survive
 review. Nothing here is a passing GPU runtime test. Every fixture named below is
 **runtime evidence pending**: it is written against the CPU backend
-(`gpu.open(a, .Cpu, 0)`) and a device in M3, and the readiness rows carry the
-design fraction only. The spec's `e.gpu` surface (§10, Host side; D37, D38, D39,
+(`gpu.open(a, .Cpu, 0)`) and a device in M3. The M2.5-core rows measure the
+frozen design obligation, never runtime delivery. The spec's `e.gpu` surface (§10, Host side; D37, D38, D39,
 D45, D83) is the base; where this document corrects the spec, the section says so
 and the spec was edited in the same commit (D367).
 
@@ -21,7 +21,7 @@ H01 and H02 hold across the boundary without a lifetime the checker cannot see.
 Everything that would break that (a pinned asynchronous transfer, H22) is a
 separate delivery with its own obligation.
 
-## 1. H13 -- the CPU/device mapping of H01-H09
+## 1. H13 -- the CPU/device mapping of H01-H07
 
 ### 1.1 Ownership and liveness (H01)
 
@@ -525,18 +525,19 @@ helpers down: `E-GPU-0002` with the chain).
 
 ## 5. What this closes and what it does not
 
-Closed, by design: every applicable H01-H09 requirement has a CPU/device mapping,
+Closed, by design: every applicable H01-H07 requirement has a CPU/device mapping,
 a type/ABI/error contract and a named positive/negative fixture (§1); the
 token, buffer-use, failure and discovery contracts with their state tables (§2);
 the timeline schema, cache-key matrix and staging model, and the list of what M3
 implements of them (§3); the two spec corrections and the matrix with its oracles
 (§4). No question here changes the CPU ownership or tooling contracts of D345-D365:
 the boundary is synchronous where the checker needs it to be, and the one
-additive extension is delivered by D613 before M3.
+additive extension is delivered by D613 before M3. The formal closure and all 32
+exact fixture obligations are `m25-gpu-closure.md` and
+`m25-gpu-contracts.json`.
 
 Not closed, and not claimed: any runtime evidence. The fixtures exist as names;
 the `gpu.Fault` error, the fault buffer, tokens, the staging pool, the timeline,
 the cache, `--subgroup-width`, `--gpu-inventory` and the `DenormPreserve`
-execution mode are M3 deliveries; the readiness rows for H13, H21, H22 and H23
-carry the design fraction and say "runtime evidence pending" until the device
-fixtures pass.
+execution mode are M3 deliveries. Every fixture remains `pending_m3` until the
+CPU/Vulkan implementation supplies evidence; PTX execution remains M4.
