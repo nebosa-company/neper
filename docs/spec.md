@@ -3045,6 +3045,8 @@ type Queue   = struct { state: *void } // one thread at a time
 type Buf[T: type] = struct { owner: u32, slot: u32, generation: u32, len: usize }
 type Grid    = struct { x: usize, y: usize, z: usize } // invocation counts
 type Id      = struct { x: u32, y: u32, z: u32 } // gpu.gid, gpu.lid, gpu.wgid (Kernels and workgroups, above)
+type FaultKind = enum u8 { Bounds, Null, Tag, Alignment, Overflow, DivideByZero }
+type FaultRecord = struct { kernel: u32, kind: FaultKind, site: u32, gid: Id }
 type Cap     = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }
 type Scope   = enum u8 { Workgroup, Device }
 
@@ -3056,6 +3058,7 @@ error TooLarge // a length or grid beyond a device limit; a download destination
 error Lost // the device or driver failed; every later call on it that returns an err returns Lost
 error WrongDevice // a queue and buffer/device do not share an owner
 error InvalidHandle // released, closed, joined or otherwise consumed handle
+error Fault // a retained device check failed; the queue exposes one FaultRecord
 ```
 
 `Device.state` and `Queue.state` point into the bookkeeping block allocated by

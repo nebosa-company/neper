@@ -2472,6 +2472,8 @@ type Queue = struct { state: *void }
 type Buf[T: type] = struct { owner: u32, slot: u32, generation: u32, len: usize }
 type Grid = struct { x: usize, y: usize, z: usize }
 type Id = struct { x: u32, y: u32, z: u32 }
+type FaultKind = enum u8 { Bounds, Null, Tag, Alignment, Overflow, DivideByZero }
+type FaultRecord = struct { kernel: u32, kind: FaultKind, site: u32, gid: Id }
 type Cap = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }
 type Scope = enum u8 { Workgroup, Device }
 error NoDevice
@@ -2482,6 +2484,7 @@ error TooLarge
 error Lost
 error WrongDevice
 error InvalidHandle
+error Fault
 
 fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err)
 fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo, err)

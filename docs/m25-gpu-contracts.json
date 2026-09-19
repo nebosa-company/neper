@@ -1,0 +1,45 @@
+{
+  "schema": "neper-m25-gpu-contracts-v1",
+  "version": 1,
+  "authority": "docs/m25-gpu-contracts.md",
+  "requirements": {
+    "H13": {
+      "design_status": "closed",
+      "runtime_status": "pending_m3",
+      "maps": ["H01", "H02", "H03", "H04", "H05", "H06", "H07"],
+      "api_declarations": [
+        "type FaultKind = enum u8 { Bounds, Null, Tag, Alignment, Overflow, DivideByZero }",
+        "type FaultRecord = struct { kernel: u32, kind: FaultKind, site: u32, gid: Id }",
+        "error Fault"
+      ],
+      "checks": {
+        "bounds": { "debug": "fault", "release": "fault", "unchecked": "off" },
+        "null": { "debug": "fault", "release": "fault", "unchecked": "off" },
+        "tag": { "debug": "fault", "release": "fault", "unchecked": "off" },
+        "alignment": { "debug": "fault", "release": "fault", "unchecked": "off" },
+        "overflow": { "debug": "fault", "release": "off", "unchecked": "off" },
+        "divide_by_zero": { "debug": "fault", "release": "off", "unchecked": "off" }
+      },
+      "fixtures": [
+        {
+          "id": "gpu_fault_bounds",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "Fault names the bounds site and invocation"
+        },
+        {
+          "id": "gpu_fault_unchecked",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "no fault record and options.checks is off"
+        },
+        {
+          "id": "gpu_fault_nocheck",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "no fault record and the nocheck site is inventoried"
+        }
+      ]
+    }
+  }
+}

@@ -116,7 +116,10 @@ in release CPU code (D355). The mapping:
 | `barrier` divergence | trap | none | -- (a hang; the CPU build is where it is found) | -- | -- |
 | `invalid` (stale `Buf` through `len`) | trap | trap | n/a (host-side) | n/a | none |
 
-A **fault record** is the device's trap: SPIR-V and PTX have no trap that reaches
+A **fault record** is the device's trap. Its frozen public shape is
+`FaultRecord { kernel: u32, kind: FaultKind, site: u32, gid: Id }`, where
+`FaultKind` is `Bounds`, `Null`, `Tag`, `Alignment`, `Overflow` or
+`DivideByZero`; `gpu.Fault` is the associated error. SPIR-V and PTX have no trap that reaches
 the host, so a failing check writes one record -- `{ kernel: u32, kind: u8, site:
 u32, gid: Id }` -- into a per-queue **fault buffer** with a device atomic
 compare-and-swap on its `count` (the first writer wins; later faults only count),
