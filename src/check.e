@@ -13963,10 +13963,10 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if (c.locals[local_index].ty.kind == .Named || c.locals[local_index].ty.kind == .Array) && tree.nodes[initializer_index].kind == .AggregateLiteral {
         try record_literal_aliases(c, g, tree, module_index, local_index, initializer_index)
     }
-    if c.locals[local_index].ty.kind == .Named && tree.nodes[initializer_index].kind == .NameExpr {
+    if (c.locals[local_index].ty.kind == .Named || c.locals[local_index].ty.kind == .Array) && tree.nodes[initializer_index].kind == .NameExpr {
         let token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
         let (source, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
-        if found && c.locals[source].ty.kind == .Named {
+        if found && (c.locals[source].ty.kind == .Named || c.locals[source].ty.kind == .Array) {
             if c.resources[source].points_to != 0usize {
                 c.resources[local_index].points_to = c.resources[source].points_to
                 c.resources[local_index].points_to_field = c.resources[source].points_to_field
@@ -13976,8 +13976,8 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
                     c.resources[local_index].mark_arena = c.resources[source].mark_arena
                 }
             }
-            // Preserve sparse top-level and nested identities across a lexical
-            // aggregate copy; stop at the old tail because appending grows this table.
+            // Preserve sparse field and element identities across a lexical carrier
+            // copy; stop at the old tail because appending grows this table.
             let source_alias_count = c.resource_alias_count
             var alias_at = 0usize
             while alias_at < source_alias_count {

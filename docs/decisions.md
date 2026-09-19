@@ -13421,3 +13421,12 @@ therefore produces E-SAFETY-0018 even when earlier elements point to live locals
 
 The existing carrier scan already covers the shared sparse path table. This decision
 adds executable boundary evidence rather than a second array-specific escape pass.
+
+## D708 -- Fixed-array copies preserve element alias paths
+
+Copying a fixed array to another local copies its inline and sparse comptime element
+identities. Returning that copy across a deferred reset therefore cannot erase the
+region owner stored in a later element.
+
+This widens the existing named-carrier copy branch to fixed arrays and reuses its
+bounded sparse-table snapshot; it adds no array-specific copy structure.

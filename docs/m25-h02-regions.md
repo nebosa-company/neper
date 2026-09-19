@@ -309,3 +309,7 @@ not grow every local's `Resource` record.
 reset boundary. Returning the whole array is E-SAFETY-0018 when any tracked element
 belongs to the region reset before delivery, including a third or later sparse
 element behind earlier pointers to live storage.
+
+**D708** preserves all inline and sparse element paths across a lexical fixed-array
+copy. Returning the copy across a deferred reset therefore remains E-SAFETY-0018
+against the actual element owner rather than losing the array's region identity.
