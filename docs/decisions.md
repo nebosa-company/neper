@@ -12894,3 +12894,17 @@ The `io_streams` fixture drives a deterministic sink that accepts two bytes and
 fails, then accepts the retry. Its capture must be `held`, not `heheld`, on Windows
 and Linux. The existing `write_all` surface remains the convenience form that drops
 the count when its caller has no recovery state to maintain.
+
+## D656 -- Detail-capable readers are an additive stream type
+
+`e.io.DetailReader` carries a callback that receives the caller's
+`os.ErrorDetail`. It is additive rather than changing `Reader` and every existing
+callback ABI. `file_detail_reader` reaches `os.read_detail` directly, while
+`slice_detail_reader` has no native provenance to manufacture. `read_detail`
+preserves exact positive progress paired with an error, and `read_exact_detail`
+returns the prefix filled before that error.
+
+End-of-stream follows the existing `End` result and is not a native failure. A
+successful callback leaves the caller's detail unchanged; a callback returning
+`(0, ok)` becomes `NoProgress` with explicit library provenance. The cross-host
+error-detail fixture proves the file adapter does not use ambient error state.

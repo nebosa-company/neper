@@ -1822,6 +1822,7 @@ See stdlib-hardening.md SL03 for operation-level completion/partial-progress rul
 
 ```neper
 type Reader = struct { ctx: *void, read: fn(*void, []u8) -> (usize, err) }
+type DetailReader = struct { ctx: *void, read: fn(*void, []u8, *os.ErrorDetail) -> (usize, err) }
 type Writer = struct { ctx: *void, write: fn(*void, []const u8) -> (usize, err), flush: fn(*void) -> err }
 type SliceReader = struct { data: []const u8, off: usize }
 type SliceWriter = struct { data: []u8, off: usize }
@@ -1838,10 +1839,13 @@ error TooSmall
 error NoProgress
 
 fn reader(ctx: *void, read_fn: fn(*void, []u8) -> (usize, err)) -> Reader
+fn detail_reader(ctx: *void, read_fn: fn(*void, []u8, *os.ErrorDetail) -> (usize, err)) -> DetailReader
 fn writer(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err)) -> Writer
 fn file_reader(file: *os.File) -> Reader
+fn file_detail_reader(file: *os.File) -> DetailReader
 fn file_writer(file: *os.File) -> Writer
 fn slice_reader(state: *SliceReader) -> Reader
+fn slice_detail_reader(state: *SliceReader) -> DetailReader
 fn slice_writer(state: *SliceWriter) -> Writer
 fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedReader, err)
 fn buffered_writer(a: *mem.Arena, sink: Writer, capacity: usize) -> (BufferedWriter, err)
@@ -1852,7 +1856,9 @@ fn tee_writer(state: *TeeWriter, left: Writer, right: Writer) -> Writer
 fn memory_writer(a: *mem.Arena, capacity: usize) -> (MemoryWriter, Writer, err)
 fn memory_bytes(w: *const MemoryWriter) -> []const u8
 fn read(r: *Reader, dst: []u8) -> (usize, err)
+fn read_detail(r: *DetailReader, dst: []u8, detail: *os.ErrorDetail) -> (usize, err)
 fn read_exact(r: *Reader, dst: []u8) -> err
+fn read_exact_detail(r: *DetailReader, dst: []u8, detail: *os.ErrorDetail) -> (usize, err)
 fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err)
 fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, err)
 fn write(w: *Writer, src: []const u8) -> (usize, err)
@@ -1867,9 +1873,11 @@ fn writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err)
 fn buffered_source(buffer: *BufferedReader) -> Reader
 fn buffered_sink(buffer: *BufferedWriter) -> Writer
 fn file_read(ctx: *void, dst: []u8) -> (usize, err)
+fn file_read_detail(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err)
 fn file_write(ctx: *void, src: []const u8) -> (usize, err)
 fn file_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err)
 fn slice_read(ctx: *void, dst: []u8) -> (usize, err)
+fn slice_read_detail(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err)
 fn slice_write(ctx: *void, src: []const u8) -> (usize, err)
 fn limited_read(ctx: *void, dst: []u8) -> (usize, err)
 fn counting_write(ctx: *void, src: []const u8) -> (usize, err)

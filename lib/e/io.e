@@ -18,6 +18,11 @@ type Reader = struct {
     read: fn(*void, []u8) -> (usize, err),
 }
 
+type DetailReader = struct {
+    ctx: *void,
+    read: fn(*void, []u8, *os.ErrorDetail) -> (usize, err),
+}
+
 type Writer = struct {
     ctx: *void,
     write: fn(*void, []const u8) -> (usize, err),
@@ -87,6 +92,10 @@ fn reader(ctx: *void, read_fn: fn(*void, []u8) -> (usize, err)) -> Reader {
     ret Reader { ctx: ctx, read: read_fn }
 }
 
+fn detail_reader(ctx: *void, read_fn: fn(*void, []u8, *os.ErrorDetail) -> (usize, err)) -> DetailReader {
+    ret DetailReader { ctx: ctx, read: read_fn }
+}
+
 fn writer(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err)) -> Writer {
     ret Writer { ctx: ctx, write: write_fn, flush: no_flush }
 }
@@ -108,6 +117,14 @@ fn file_read(ctx: *void, dst: []u8) -> (usize, err) {
     ret (count, ok)
 }
 
+fn file_read_detail(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err) {
+    var file = mem.cast[*os.File](ctx)
+    let (count, read_error) = os.read_detail(*file, dst, detail)
+    if read_error != ok { ret (count, read_error) }
+    if count == 0usize && dst.len != 0usize { ret (0usize, End) }
+    ret (count, ok)
+}
+
 fn file_write(ctx: *void, src: []const u8) -> (usize, err) {
     var file = mem.cast[*os.File](ctx)
     let (count, write_error) = os.write(*file, src)
@@ -122,6 +139,10 @@ fn file_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err) {
 
 fn file_reader(file: *os.File) -> Reader {
     ret Reader { ctx: mem.cast[*void](file), read: file_read }
+}
+
+fn file_detail_reader(file: *os.File) -> DetailReader {
+    ret DetailReader { ctx: mem.cast[*void](file), read: file_read_detail }
 }
 
 fn file_writer(file: *os.File) -> Writer {
@@ -146,6 +167,11 @@ fn slice_read(ctx: *void, dst: []u8) -> (usize, err) {
     ret (take, ok)
 }
 
+fn slice_read_detail(ctx: *void, dst: []u8, detail: *os.ErrorDetail) -> (usize, err) {
+    let (count, read_error) = slice_read(ctx, dst)
+    ret (count, read_error)
+}
+
 fn slice_write(ctx: *void, src: []const u8) -> (usize, err) {
     var state = mem.cast[*SliceWriter](ctx)
     if state.off >= state.data.len { ret (0usize, TooSmall) }
@@ -162,6 +188,10 @@ fn slice_write(ctx: *void, src: []const u8) -> (usize, err) {
 
 fn slice_reader(state: *SliceReader) -> Reader {
     ret Reader { ctx: mem.cast[*void](state), read: slice_read }
+}
+
+fn slice_detail_reader(state: *SliceReader) -> DetailReader {
+    ret DetailReader { ctx: mem.cast[*void](state), read: slice_read_detail }
 }
 
 fn slice_writer(state: *SliceWriter) -> Writer {
@@ -264,6 +294,30 @@ fn read(r: *Reader, dst: []u8) -> (usize, err) {
     // forever, so it is an error here rather than in every loop below.
     if count == 0usize { ret (0usize, NoProgress) }
     ret (count, ok)
+}
+
+fn read_detail(r: *DetailReader, dst: []u8, detail: *os.ErrorDetail) -> (usize, err) {
+    if dst.len == 0usize { ret (0usize, ok) }
+    let (count, read_error) = r.read(r.ctx, dst, detail)
+    if read_error != ok { ret (count, read_error) }
+    if count == 0usize {
+        detail.kind = .Invalid
+        detail.native_code = 0i32
+        detail.operation = "read"
+        detail.subject = "no progress"
+        ret (0usize, NoProgress)
+    }
+    ret (count, ok)
+}
+
+fn read_exact_detail(r: *DetailReader, dst: []u8, detail: *os.ErrorDetail) -> (usize, err) {
+    var filled = 0usize
+    while filled < dst.len {
+        let (count, read_error) = read_detail(r, dst[filled..], detail)
+        filled += count
+        if read_error != ok { ret (filled, read_error) }
+    }
+    ret (filled, ok)
 }
 
 fn read_exact(r: *Reader, dst: []u8) -> err {

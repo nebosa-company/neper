@@ -67,7 +67,9 @@ At the host boundary, `os.read_detail` and `os.write_detail` preserve the same c
 while copying native provenance directly into caller-owned data (D614); generic
 `e.io` callback propagation remains a separate adapter design problem. D655 first
 closes the partial-write half: buffered flushes discard the accepted prefix before
-returning an error, and expose the count through `write_all_progress`.
+returning an error, and expose the count through `write_all_progress`. D656 adds an
+additive `DetailReader` callback path so generic file reads carry the same
+caller-owned native provenance without changing the established `Reader` ABI.
 
 Acceptance: file -> buffer -> decompressor -> JSON stream using only public APIs;
 nested buffered sinks; short writes; data plus error; flush failure after a prefix;
