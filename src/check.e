@@ -246,9 +246,9 @@ type Function = struct {
     external: bool,
     // `@import(LIB, SYM)` on an `extern fn`: the library to bind against and the name
     // to bind to, which is not the neper-side name -- D11 keeps those independent.
-    // External functions store their import library here. Non-extern functions use
-    // the otherwise-empty slot for an `@borrows` parameter name; the checked public
-    // identity is still its position, computed by `function_borrow_from`.
+    // External functions store their import library and symbol here. Non-extern
+    // functions use those otherwise-empty slots for `@borrows` and `@noescape`
+    // parameter names; their checked public identities are positional.
     import_library: str,
     import_symbol: str,
     intrinsic: bool,

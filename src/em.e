@@ -111,7 +111,7 @@ type CodeRelocation = struct {
     symbol_index: usize,
 }
 
-fn format_version() -> usize { ret 12usize }
+fn format_version() -> usize { ret 13usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -550,6 +550,7 @@ fn write_function_signature_canonical(c: *check.Checker, g: *graph.Graph, functi
         at += 1usize
     }
     try binary.little_u32(output, check.function_borrow_from(c, function))
+    try binary.little_u32(output, check.function_noescape_from(c, function))
     ret ok
 }
 
@@ -1391,6 +1392,7 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     try binary.little_u64(output, signature)
     try binary.little_u64(output, body)
     try binary.little_u32(output, check.function_borrow_from(c, function))
+    try binary.little_u32(output, check.function_noescape_from(c, function))
     let generic = c.function_generics[function_index]
     try binary.little_u32(output, generic.comptime_count)
     var at = 0usize

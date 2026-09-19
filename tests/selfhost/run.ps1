@@ -2417,6 +2417,22 @@ if ($LASTEXITCODE -ne 0 -or $borrowSummaryWritten -ne 'compiled module written')
 $borrowSummaryBytes = [IO.File]::ReadAllBytes($borrowSummaryArtifact)
 $borrowSummaryInterface = [BitConverter]::ToUInt64($borrowSummaryBytes, 64)
 if ([BitConverter]::ToUInt32($borrowSummaryBytes, [int]$borrowSummaryInterface + 44) -ne 2) { throw 'the function interface did not serialize borrow_from=2' }
+# D736-D740: declared, proved, propagated and serialized no-escape inputs.
+foreach ($case in @(@('accept', 'regions_noescape_contract', 0), @('reject', 'regions_noescape_contract_name', 1), @('reject', 'regions_noescape_contract_return', 1), @('reject', 'regions_noescape_contract_global', 1), @('accept', 'regions_noescape_contract_forward', 0), @('reject', 'regions_noescape_contract_call', 1), @('reject', 'regions_noescape_contract_callback', 1), @('reject', 'regions_noescape_contract_thread', 1), @('accept', 'regions_noescape_contract_generic', 0), @('accept', 'regions_noescape_contract_artifact', 0))) {
+    $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
+    $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
+    $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
+    cmd /c "`"$compiler`" check-file `"$conformanceFixture`" `"$repo`" x64 windows --json > `"$conformanceActual`""
+    if ($LASTEXITCODE -ne $case[2]) { throw "check-file --json on $($case[0])/$($case[1]).e exited $LASTEXITCODE, not $($case[2])" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
+}
+$noescapeSummaryArtifact = Join-Path $testBuild 'noescape-summary.x64-windows.em'
+$noescapeSummaryWritten = & $compiler emit-em (Join-Path $conformanceRoot 'accept\regions_noescape_contract_artifact.e') $repo x64 windows $noescapeSummaryArtifact
+if ($LASTEXITCODE -ne 0 -or $noescapeSummaryWritten -ne 'compiled module written') { throw 'writing the noescape-summary artifact failed' }
+$noescapeSummaryBytes = [IO.File]::ReadAllBytes($noescapeSummaryArtifact)
+$noescapeSummaryInterface = [BitConverter]::ToUInt64($noescapeSummaryBytes, 64)
+if ([BitConverter]::ToUInt16($noescapeSummaryBytes, 4) -ne 13) { throw 'the noescape-summary artifact did not use format 13' }
+if ([BitConverter]::ToUInt32($noescapeSummaryBytes, [int]$noescapeSummaryInterface + 48) -ne 2) { throw 'the function interface did not serialize noescape_from=2' }
 # A consuming dereference follows its lexical pointer alias to the pinned resource
 # (D610, H01).
 $pointerMoveActual = Join-Path $testBuild 'conformance-reject-safety_pointer_move.jsonl'
@@ -4179,7 +4195,7 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 12 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 13 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 9) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'
