@@ -228,3 +228,7 @@ field before falling back to the syntactic address base. A mutation such as
 **D688** applies the same identity on the accessor side. A view returned by
 `view(&ctx.target.field)` belongs to the local named by `target`, so a later direct
 mutation of that local invalidates the view with E-SAFETY-0014.
+
+**D689** finds the first tracked address recursively inside nested aggregate
+literals. The outer carrier retains the region identity, so returning it across a
+deferred reset is E-SAFETY-0018 without flattening or copying the nested value.

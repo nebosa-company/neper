@@ -13893,6 +13893,10 @@ fn literal_address_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
                 if name_token.kind == .Identifier && has_value {
                     let (pointed, is_address) = address_argument_local(c, g, tree, module_index, value_index)
                     if is_address { ret (pointed, text[name_token.start..name_token.end], true) }
+                    if tree.nodes[value_index].kind == .AggregateLiteral {
+                        let (nested, _, nested_address) = literal_address_field(c, g, tree, module_index, value_index)
+                        if nested_address { ret (nested, text[name_token.start..name_token.end], true) }
+                    }
                 }
             }
         }

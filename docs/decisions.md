@@ -13227,3 +13227,13 @@ mutation of that local therefore invalidates the view with E-SAFETY-0014.
 
 Accessor detection and view binding use the existing lexical alias before the
 syntactic address base. This is the accessor half of D687 and adds no new analysis.
+
+## D689 -- Nested aggregate literals retain their enclosed region pointer
+
+The first tracked local address inside a nested aggregate literal gives the outer
+aggregate the same lexical region identity. Returning that outer carrier across a
+deferred reset is therefore E-SAFETY-0018, even when the pointer is below another
+aggregate field.
+
+The existing single-target literal walk becomes recursive and keeps the outer field
+as its access path. Multiple independent pointer fields remain a later H02 problem.
