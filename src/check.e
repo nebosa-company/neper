@@ -15237,6 +15237,20 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
 }
 
 fn resource_assign_inner(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, statement: syntax.Node, place_index: usize, initializer_index: usize, from_call: bool, call: CallInfo, tried: bool) -> err {
+    let (candidate_local, candidate_first, candidate_end, has_candidates) = resource_element_candidates(c, g, tree, module_index, place_index)
+    if has_candidates && candidate_end != candidate_first + 1usize {
+        var candidate_at = candidate_first
+        while candidate_at < candidate_end {
+            let old = c.resources[candidate_local].fields[candidate_at]
+            let old_state = field_state(old)
+            if old_state == resource_reserved || ((old_state == resource_owned || old_state == resource_maybe || old_state == resource_unchecked) && field_owed(old)) {
+                let acquired = resource_part_acquired(c, candidate_local, candidate_at)
+                record_failure_related(c, module_index, statement, .ResourceOverwrite, resource_field_name(c, candidate_local, candidate_at), line_detail(c, g, module_index, acquired), acquired)
+                ret ResourceViolation
+            }
+            candidate_at += 1usize
+        }
+    }
     let (element_local, element_at, is_element) = resource_element_of(c, g, tree, module_index, place_index)
     if is_element {
         let old = c.resources[element_local].fields[element_at]

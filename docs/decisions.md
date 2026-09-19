@@ -13517,3 +13517,13 @@ maybe-moved; a later read, move or exit cannot assume which slot remains owned.
 An exact one-slot range retains the ordinary moved or deferred-reserved state. The
 rule adds no relational index solver: uncertainty is represented by the existing
 branch-join state and the slot's move provenance.
+
+## D718 -- Runtime affine-array stores protect every candidate
+
+A store through a runtime index is rejected with E-SAFETY-0006 when any possible
+destination slot still owns, may own, has not checked, or has deferred an obligated
+resource. The store cannot choose a convenient empty sibling at compile time.
+
+The check scans the same bounded candidate range as reads and reports the first
+conflicting slot with its own acquisition provenance. Exact stores retain their
+existing one-slot overwrite rule.

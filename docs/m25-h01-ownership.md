@@ -384,8 +384,9 @@ follow-up. Cold wall, warm wall and image size are within their budgets
 (warm p50 96 ms against 82 ms is +17% at eight workers, +0% single-worker).
 
 **Remaining limitations** (each an obligation, none closed by this record):
-D616-D617 track comptime-indexed slots of fixed arrays, and D716-D717 check and
-transfer runtime candidate sets, but dynamic stores and runtime-offset
+D616-D617 track comptime-indexed slots of fixed arrays, D716-D717 check and
+transfer runtime candidate sets, and D718 protects candidate stores from
+overwrites, but new dynamic obligations and runtime-offset
 slices are not yet tracked; the generic containers take their element by `own` (D353), but none can hold an
 obligated resource yet: growth relocates elements and an insert can fail after
 taking the value, which the instance refuses -- the container with a failure story
@@ -450,6 +451,11 @@ own provenance. Dynamic ownership transfer and stores remain subsequent steps.
 slot to be consumable, then marks each possible obligated slot maybe-moved. A later
 operation therefore cannot double-consume the runtime-selected resource. Exact
 one-slot ranges still use the ordinary moved or deferred-reserved state.
+
+**D718 follow-up.** A runtime-indexed store checks every possible destination before
+writing. If any candidate still carries an owned, maybe-owned, unchecked or
+deferred obligation, the store is E-SAFETY-0006 against that slot and its acquisition
+site; an empty sibling cannot hide the possible overwrite.
 
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
