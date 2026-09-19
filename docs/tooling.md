@@ -330,6 +330,9 @@ program that does not check (D430) still answers the stream: the records the
 checker made before it stopped -- the dispatch that found nothing among them --
 then the diagnostic as `check-file --json` spells it and a result of exit 1; the
 E-NAME-9999 for a missing protocol names the foreign candidate too.
+When a same-module candidate has the wrong receiver signature, E-TYPE-0003 carries
+the complete requested and actual function types in both its message and its
+`expected`/`actual` fields (D666); a harness need not reconstruct the requirement.
 
 ### Context
 

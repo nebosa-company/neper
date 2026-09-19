@@ -986,6 +986,52 @@ fn function_pointer_type(c: *Checker, function: Function, module_index: usize) -
     ret (result, ok)
 }
 
+// The signature a protocol declaration was required to have when its first
+// parameter was wrong. The rest of the declaration stays unchanged, so the
+// diagnostic compares the exact requested and actual function types.
+fn protocol_expected_type(c: *Checker, function: Function, receiver: Type, module_index: usize) -> (Type, err) {
+    let first_parameter = c.type_count
+    let (stored_receiver, receiver_error) = store_type(c, receiver)
+    if receiver_error != ok { ret (invalid_type(), receiver_error) }
+    var at = 1usize
+    while at < function.parameter_count {
+        if function.first_parameter + at >= c.parameter_count { ret (invalid_type(), InvalidType) }
+        let (stored, store_error) = store_type(c, c.parameters[function.first_parameter + at].ty)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        at += 1usize
+    }
+    let first_return = c.type_count
+    at = 0usize
+    while at < function.return_count {
+        if function.first_return + at >= c.return_type_count { ret (invalid_type(), InvalidType) }
+        let (stored, store_error) = store_type(c, c.return_types[function.first_return + at])
+        if store_error != ok { ret (invalid_type(), store_error) }
+        at += 1usize
+    }
+    var signature: FunctionSignature = zero
+    signature.first_parameter = first_parameter
+    signature.parameter_count = function.parameter_count
+    if signature.parameter_count == 0usize { signature.parameter_count = 1usize }
+    signature.first_return = first_return
+    signature.return_count = function.return_count
+    let (signature_index, signature_error) = store_function_signature(c, signature)
+    if signature_error != ok { ret (invalid_type(), signature_error) }
+    var result = make_type(.Function, "", module_index)
+    result.element = signature_index
+    result.has_element = true
+    ret (result, ok)
+}
+
+fn record_protocol_signature_types(c: *Checker, function: Function, receiver: Type) -> err {
+    let (actual, actual_error) = function_pointer_type(c, function, function.module_index)
+    if actual_error != ok { ret actual_error }
+    let (expected, expected_error) = protocol_expected_type(c, function, receiver, function.module_index)
+    if expected_error != ok { ret expected_error }
+    c.failure_expected = expected
+    c.failure_actual = actual
+    ret ok
+}
+
 fn same(a: str, b: str) -> bool {
     if a.len != b.len { ret false }
     var i = 0usize
@@ -9440,12 +9486,6 @@ fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         function_index = instance_index
         function = c.functions[instance_index]
     }
-    // Rule 3: the first parameter is the receiver type, by value -- except for the iterator
-    // protocol, whose receiver is the iterator itself and advances, so it is a pointer to one.
-    if function.parameter_count == 0usize || function.first_parameter >= c.parameter_count {
-        record_failure(c, module_index, node, .ProtocolSignature, canonical.name, function.name)
-        ret (0usize, .None, InvalidType)
-    }
     var expected_receiver = canonical
     if same(protocol, "next") || same(protocol, "next_err") {
         let (stored_receiver, store_error) = store_type(c, canonical)
@@ -9454,7 +9494,17 @@ fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         expected_receiver.element = stored_receiver
         expected_receiver.has_element = true
     }
+    // Rule 3: the first parameter is the receiver type, by value -- except for the iterator
+    // protocol, whose receiver is the iterator itself and advances, so it is a pointer to one.
+    if function.parameter_count == 0usize || function.first_parameter >= c.parameter_count {
+        let signature_error = record_protocol_signature_types(c, function, expected_receiver)
+        if signature_error != ok { ret (0usize, .None, signature_error) }
+        record_failure(c, module_index, node, .ProtocolSignature, canonical.name, function.name)
+        ret (0usize, .None, InvalidType)
+    }
     if !type_equal(c, c.parameters[function.first_parameter].ty, expected_receiver) {
+        let signature_error = record_protocol_signature_types(c, function, expected_receiver)
+        if signature_error != ok { ret (0usize, .None, signature_error) }
         record_failure(c, module_index, node, .ProtocolSignature, canonical.name, function.name)
         ret (0usize, .None, InvalidType)
     }

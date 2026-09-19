@@ -5938,18 +5938,36 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     // and `actual` fields of the record.
     var expected_storage: [256]u8 = zero
     var actual_storage: [256]u8 = zero
-    let mismatch = checker.failure_kind == .InitializerType || checker.failure_kind == .ReturnType || (checker.failure_kind == .Generic && check_error == check.TypeMismatch)
+    let mismatch = checker.failure_kind == .InitializerType || checker.failure_kind == .ReturnType || checker.failure_kind == .ProtocolSignature || (checker.failure_kind == .Generic && check_error == check.TypeMismatch)
     if mismatch && checker.failure_expected.kind != .Invalid {
         var expected_out: tool.Out = zero
         expected_out.bytes = expected_storage[..]
-        try tool.type_text(&expected_out, checker, g, checker.failure_expected, 0usize)
+        if checker.failure_kind == .ProtocolSignature {
+            try tool.function_type_text(&expected_out, checker, g, checker.failure_expected)
+        } else {
+            try tool.type_text(&expected_out, checker, g, checker.failure_expected, 0usize)
+        }
         var actual_out: tool.Out = zero
         actual_out.bytes = actual_storage[..]
-        try tool.type_text(&actual_out, checker, g, checker.failure_actual, 0usize)
+        if checker.failure_kind == .ProtocolSignature {
+            try tool.function_type_text(&actual_out, checker, g, checker.failure_actual)
+        } else {
+            try tool.type_text(&actual_out, checker, g, checker.failure_actual, 0usize)
+        }
         report.expected_text = expected_storage[..expected_out.count]
         report.actual_text = actual_storage[..actual_out.count]
         // The return-type words stay as they are: tests/neper0 holds the bootstrap and
         // this front end to the same line, and the bootstrap spells no types.
+        if checker.failure_kind == .ProtocolSignature {
+            message.count = 0usize
+            try write_all(&message, "protocol `")
+            try write_all(&message, checker.failure_detail2)
+            try write_all(&message, "` requires `")
+            try write_all(&message, report.expected_text)
+            try write_all(&message, "`, found `")
+            try write_all(&message, report.actual_text)
+            try write_all(&message, "`")
+        } else {
         if checker.failure_kind != .ReturnType {
             message.count = 0usize
             try write_all(&message, "type mismatch: expected `")
@@ -5957,6 +5975,7 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
             try write_all(&message, "`, found `")
             try write_all(&message, report.actual_text)
             try write_all(&message, "`")
+        }
         }
     }
     report.related_token = checker.failure_related

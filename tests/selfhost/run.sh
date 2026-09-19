@@ -1296,7 +1296,7 @@ check_protocol_diagnostic() {
     esac
 }
 check_protocol_diagnostic protocol_missing 'main.e:4:9: error[E-NAME-9999]: no `cmp` protocol for `Point`; declare `fn point_cmp` in the module that declares the type'
-check_protocol_diagnostic protocol_signature 'main.e:6:9: error[E-TYPE-0003]: protocol `point_cmp` must take `Point` by value as its first parameter'
+check_protocol_diagnostic protocol_signature 'main.e:6:9: error[E-TYPE-0003]: protocol `point_cmp` requires `fn(main.Point, main.Point) -> i32`, found `fn(*main.Point, main.Point) -> i32`'
 check_protocol_diagnostic protocol_no_fallback 'main.e:6:9: error[E-NAME-9999]: no `cmp` protocol for `Pair`; declare `fn pair_cmp` in the module that declares the type'
 # `ret` and `try` each reported one message for four different mistakes, so a returned
 # value of the wrong type said "ret is not legal inside defer" in a file with no defer.

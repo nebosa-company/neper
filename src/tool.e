@@ -5732,6 +5732,36 @@ fn type_text(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type, dept
     ret text(out, ty.name)
 }
 
+// A function type with its complete checked signature. General type spellings keep
+// the compact `fn`; diagnostics that compare callable contracts use this form.
+fn function_type_text(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type) -> err {
+    let (signature, found) = check.function_signature_of(c, ty)
+    if !found { ret type_text(out, c, g, ty, 0usize) }
+    try text(out, "fn(")
+    var at = 0usize
+    while at < signature.parameter_count {
+        if at != 0usize { try text(out, ", ") }
+        let (parameter, has_parameter) = check.function_signature_parameter(c, signature, at)
+        if !has_parameter { ret check.InvalidType }
+        try type_text(out, c, g, parameter, 0usize)
+        at += 1usize
+    }
+    try byte(out, 41u8)
+    if signature.return_count == 0usize { ret ok }
+    try text(out, " -> ")
+    if signature.return_count > 1usize { try byte(out, 40u8) }
+    at = 0usize
+    while at < signature.return_count {
+        if at != 0usize { try text(out, ", ") }
+        let (return_ty, has_result) = check.function_signature_return(c, signature, at)
+        if !has_result { ret check.InvalidType }
+        try type_text(out, c, g, return_ty, 0usize)
+        at += 1usize
+    }
+    if signature.return_count > 1usize { try byte(out, 41u8) }
+    ret ok
+}
+
 // A type's name between backquotes inside a JSON string (D430): the spelling
 // `quoted_type` gives, without its quotes.
 fn quoted_type_inner(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type) -> err {

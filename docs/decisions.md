@@ -12981,3 +12981,16 @@ continuing to say that CPU/Vulkan execution is M3 and PTX is M4.
 Both full self-host suites pass this closure. The fixed static gates judge four
 cells per host with zero breaches and unchanged values; the focused validator has
 six passing tests and reports four design contracts with 32 pending fixtures.
+
+## D666 -- Protocol signature failures expose both checked contracts
+
+A protocol declaration with the right name and the wrong first parameter remains a
+hard error at the instantiation site. Its diagnostic now carries the complete
+requested and actual function types in the message and in the structured `expected`
+and `actual` fields. The requested type is the declaration's signature with the
+protocol receiver corrected; all other parameters and results are preserved, so the
+comparison is exact rather than a prose approximation.
+
+This is query evidence for H06's dependent generic requirements. It changes no
+dispatch rule or source syntax, and the focused `protocol_signature` fixture pins the
+human and JSON forms through the self-hosted compiler.
