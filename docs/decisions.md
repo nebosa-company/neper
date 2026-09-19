@@ -13956,3 +13956,23 @@ both the left and the right, so the instruction keeps the three operands every
 growing a unary case. `~` on a mask keeps the lane loop unconditionally: a
 `Mask[T, N]` is `[N]bool`, so its lanes are bytes of `0` and `1` whose `~` is each
 lane's `!` and not the bitwise not of sixteen bytes.
+
+## D753 -- Packed `& | ^` on a sixteen-lane mask
+
+A `Mask[T, N]` is `[N]bool`, so sixteen lanes are sixteen bytes of `0` and `1` -- the
+same sixteen bytes a `Vec[u8, 16]` is. `&`, `|` and `^` on those bytes are bitwise, and
+bitwise on `0` and `1` is `0` and `1` again, so the three join D751's table under the
+byte lane code and reach `pand`, `por` and `pxor` unchanged. Nothing new reaches the
+back end: the operation ranks and the lane code already existed, and what changed is
+which lane kind is allowed to name them.
+
+The sixteen lanes are not only a byte vector's: `Mask[i16, 16]` and `Mask[i32, 16]`
+belong to the thirty-two and sixty-four byte vectors, whose lanes still take the loop,
+so a mask reaches the packed form at three of the closed table's widths where its
+vector reaches it at one.
+
+`~` on a mask stays the lane loop D752 left it as, for the reason D752 gave: a packed
+`not` leaves `0xfe` in a lane whose `!` is `0`. Turning `0xff` back into `0x01` is a
+`pcmpeqb` against zero and a `psubb`, two more instructions and one more opcode in
+`emit_x64`, for the one operator of the four -- so the fixture checks `~` on the same
+sixteen-lane mask instead, to hold the exclusion in place rather than to prove a form.

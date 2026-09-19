@@ -230,6 +230,15 @@ fn operators() {
     if simd.bits[Vec[i32, 4]](p | q) != 7u64 { os.exit(89) }
     if simd.bits[Vec[i32, 4]](p ^ q) != 5u64 { os.exit(90) }
     if simd.bits[Vec[i32, 4]](~p) != 12u64 { os.exit(91) }
+    // Sixteen mask lanes are sixteen bytes, so `& | ^` take the byte lanes' packed form
+    // while `~` keeps the lane loop. The two patterns differ in every nibble, so a
+    // packed form that covered only part of the mask would be caught at one end.
+    let ma = simd.mask[Vec[u8, 16]](43981u64)
+    let mb = simd.mask[Vec[u8, 16]](61680u64)
+    if simd.bits[Vec[u8, 16]](ma & mb) != 41152u64 { os.exit(107) }
+    if simd.bits[Vec[u8, 16]](ma | mb) != 64509u64 { os.exit(108) }
+    if simd.bits[Vec[u8, 16]](ma ^ mb) != 23357u64 { os.exit(109) }
+    if simd.bits[Vec[u8, 16]](~ma) != 21554u64 { os.exit(114) }
     // Through a generic, where the vector is still `V` when the operator is checked.
     let r = axpy[Vec[f64, 2]](simd.splat[Vec[f64, 2]](2.0), simd.splat[Vec[f64, 2]](3.0), simd.splat[Vec[f64, 2]](1.0))
     if r.lanes[1] != 7.0 { os.exit(92) }
