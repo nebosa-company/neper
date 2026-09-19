@@ -317,26 +317,30 @@ fn sse(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, rm: usize, opc
 }
 
 // SSE2's packed forms, which operate on all sixteen bytes of a vector at once, or on
-// the register's low eight when the operand is a mask of eight lanes. A vector lives in
-// its stack slot, which is aligned to eight bytes and not to sixteen, so sixteen bytes
-// come in through `movups` -- the unaligned move, the one packed load that does not
-// fault on an eight-byte-aligned address -- and eight through `movlps`, which is a
-// quadword and never faults. `movlps` leaves the register's high half as it found it,
-// which no caller reads: only the low half is stored back, and the eight bytes it
-// leaves out are not the operand's to touch.
-fn vector_load(buffer: *Buffer, destination: usize, address: usize, half: bool) -> err {
-    if half { ret sse_memory(buffer, destination, address, 18usize) }
-    ret sse_memory(buffer, destination, address, 16usize)
+// the low half or quarter of the register when the operand is narrower -- a mask, which
+// is one byte per lane. A vector lives in its stack slot, which is aligned to eight
+// bytes and not to sixteen, so sixteen bytes come in through `movups` -- the unaligned
+// move, the one packed load that does not fault on an eight-byte-aligned address --
+// eight through `movlps`, a quadword, and four through `movd`, a doubleword; neither
+// narrow move faults. Each move touches exactly the operand's bytes: the narrow loads
+// leave the lanes above them as they found them or clear them, which no caller reads,
+// and the narrow stores write only the bytes the mask owns.
+fn vector_load(buffer: *Buffer, destination: usize, address: usize, bytes: usize) -> err {
+    if bytes == 4usize { ret sse_memory(buffer, 102usize, destination, address, 110usize) }
+    if bytes == 8usize { ret sse_memory(buffer, 0usize, destination, address, 18usize) }
+    ret sse_memory(buffer, 0usize, destination, address, 16usize)
 }
 
-fn vector_store(buffer: *Buffer, address: usize, source: usize, half: bool) -> err {
-    if half { ret sse_memory(buffer, source, address, 19usize) }
-    ret sse_memory(buffer, source, address, 17usize)
+fn vector_store(buffer: *Buffer, address: usize, source: usize, bytes: usize) -> err {
+    if bytes == 4usize { ret sse_memory(buffer, 102usize, source, address, 126usize) }
+    if bytes == 8usize { ret sse_memory(buffer, 0usize, source, address, 19usize) }
+    ret sse_memory(buffer, 0usize, source, address, 17usize)
 }
 
-fn sse_memory(buffer: *Buffer, reg: usize, address: usize, opcode: usize) -> err {
+fn sse_memory(buffer: *Buffer, mandatory: usize, reg: usize, address: usize, opcode: usize) -> err {
     try check_register(reg)
     try check_register(address)
+    if mandatory != 0usize { try byte(buffer, mandatory) }
     var extension = 0usize
     if reg >= 8usize { extension += 4usize }
     if address >= 8usize { extension += 1usize }

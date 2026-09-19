@@ -14032,3 +14032,35 @@ loop. The `link/simd_lanes` fixture checks `& | ^ ~` over two alternating patter
 eight lanes, over both a sixteen-byte vector's mask and a thirty-two-byte vector's, and
 checks that a flipped lane still reduces as a mask lane, in both suites. The masks of
 four lanes and fewer keep the loop; a doubleword move would be the same shape again.
+
+## D756 -- The packed forms reach a four-lane mask
+
+D755 takes the packed forms down to eight bytes -- an eight-lane mask, the register's
+low half -- and leaves the narrower masks on the lane loop for want of a move. Four
+lanes are four bytes, and `movd` is that move: `66 0f 6e` loads a doubleword into the
+low lanes and `66 0f 7e` stores one back, with the same modrm the wider moves use. So
+the gate in `lower` and in `codegen_x64` admits four bytes on a mask the way it admits
+eight, `vector_load` and `vector_store` take the operand's byte count instead of a
+`half`, and `sse_memory` grew a mandatory prefix, which `movd` is the first of these
+moves to need.
+
+Nothing else changes. `pand`, `por`, `pxor`, `pcmpeqb` and `psubb` are lane-wise and
+read no lane they are not given, so the four instructions D753 and D754 select answer
+four lanes exactly as they answer sixteen; the loads clear or leave the lanes above the
+operand, which no caller reads, and the store writes only the four bytes the mask owns.
+`movd` needs no alignment, and the disassembler already decodes `6e` and `7e` -- the
+forms that move between a general register and an xmm one -- so a memory operand there
+prints without a new case.
+
+A four-lane mask comes from a sixteen-byte vector of four-byte lanes and from a
+thirty-two-byte vector of eight-byte ones, so `Mask[i32, 4]` and `Mask[f64, 4]` are
+both packed while only the first of their vectors is. The `link/simd_lanes` fixture
+checks `& | ^ ~` over two patterns that agree in two lanes and differ in the other two
+-- so a form reaching past the four bytes or short of them is caught at an end, and a
+swapped lane in the middle -- and that a flipped lane still reduces as a mask lane, in
+both suites.
+
+The mask of two lanes keeps the loop: a word move into a vector register is `pinsrw`,
+which reads a lane index and is not the same shape, and `Mask[i64, 2]` is the only
+mask the closed table gives two lanes to. The thirty-two- and sixty-four-lane masks
+keep it too, for the width their vectors keep it for.

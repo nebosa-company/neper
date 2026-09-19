@@ -262,6 +262,23 @@ fn operators() {
     let wb = simd.mask[Vec[f32, 8]](90u64)
     if simd.bits[Vec[f32, 8]](wa ^ wb) != 238u64 { os.exit(124) }
     if simd.bits[Vec[f32, 8]](~(wa & wb)) != 239u64 { os.exit(125) }
+    // Four mask lanes are four bytes, the register's low quarter, and take the same
+    // instructions over a doubleword move. The two patterns overlap in two lanes and
+    // differ in the other two, so a packed form reaching past the four bytes, or short
+    // of them, is caught at one end and a swapped lane in the middle.
+    let qa = simd.mask[Vec[f64, 4]](11u64)
+    let qb = simd.mask[Vec[f64, 4]](13u64)
+    if simd.bits[Vec[f64, 4]](qa & qb) != 9u64 { os.exit(42) }
+    if simd.bits[Vec[f64, 4]](qa | qb) != 15u64 { os.exit(43) }
+    if simd.bits[Vec[f64, 4]](qa ^ qb) != 6u64 { os.exit(44) }
+    if simd.bits[Vec[f64, 4]](~qa) != 4u64 { os.exit(45) }
+    if simd.bits[Vec[f64, 4]](~qb) != 2u64 { os.exit(46) }
+    if simd.all[Vec[f64, 4]](~qa) || !simd.any[Vec[f64, 4]](~qa) { os.exit(47) }
+    // The mask of a sixteen-byte vector is four bytes too, and reduces the same.
+    let qc = simd.mask[Vec[i32, 4]](11u64)
+    let qd = simd.mask[Vec[i32, 4]](13u64)
+    if simd.bits[Vec[i32, 4]](~(qc & qd)) != 6u64 { os.exit(48) }
+    if !simd.all[Vec[i32, 4]](qc | ~qc) { os.exit(49) }
     // Through a generic, where the vector is still `V` when the operator is checked.
     let r = axpy[Vec[f64, 2]](simd.splat[Vec[f64, 2]](2.0), simd.splat[Vec[f64, 2]](3.0), simd.splat[Vec[f64, 2]](1.0))
     if r.lanes[1] != 7.0 { os.exit(92) }
