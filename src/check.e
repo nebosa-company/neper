@@ -14567,7 +14567,11 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if !any_affine_local(c) { ret ok }
     let node = tree.nodes[node_index]
     if node.kind == .FieldExpr { ret resource_consume_field(c, g, tree, module_index, node_index) }
-    if node.kind == .BracketPostfix { ret resource_consume_element(c, g, tree, module_index, node_index) }
+    if node.kind == .BracketPostfix {
+        let (slice_error, consumed_slice) = resource_consume_full_slice(c, g, tree, module_index, node_index)
+        if consumed_slice { ret slice_error }
+        ret resource_consume_element(c, g, tree, module_index, node_index)
+    }
     var (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
     // `*p` where `p` was bound from `&f` is a move of `f`, not an unrelated
     // value (D610). The kept pointer pins `f`, so the ordinary rule below rejects
@@ -14649,6 +14653,39 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     resource_set_fields(c, local_index, resource_moved)
     record_explain_move(c, module_index, node, c.locals[local_index].name)
     ret ok
+}
+
+fn resource_consume_full_slice(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (err, bool) {
+    let node = tree.nodes[node_index]
+    var bracket: BracketInfo = zero
+    if read_bracket(c, tree, node, &bracket) != ok || !bracket.range || bracket.child_count != 1usize { ret (ok, false) }
+    let base = tree.nodes[bracket.base]
+    if base.kind != .NameExpr { ret (ok, false) }
+    let token = c.tokens[usize(base.token_start)]
+    if token.kind != .Identifier { ret (ok, false) }
+    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    if !found || c.locals[local_index].ty.kind != .Array || c.resources[local_index].fields.len == 0usize { ret (ok, false) }
+    var at = 0usize
+    while at < c.resources[local_index].fields.len {
+        let byte = c.resources[local_index].fields[at]
+        if field_owed(byte) && field_state(byte) != resource_owned {
+            let acquired = resource_part_acquired(c, local_index, at)
+            record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, acquired), acquired)
+            ret (ResourceViolation, true)
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < c.resources[local_index].fields.len {
+        let byte = c.resources[local_index].fields[at]
+        if field_owed(byte) {
+            c.resources[local_index].fields[at] = field_with(resource_moved, true)
+            c.resources[local_index].elements_acquired[at] = usize(node.token_start)
+        }
+        at += 1usize
+    }
+    c.resources[local_index].acquired = usize(node.token_start)
+    ret (ok, true)
 }
 
 // The arguments of a checked call that its callee consumes: moved. `resource_uses`

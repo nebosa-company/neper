@@ -3767,6 +3767,8 @@ Consuming one element is a forbidden partial move unless it occurs in a proven
 exhaustive sweep (D722). The proven form is `i = 0; while i < slice.len { ...;
 i += 1 }`, with the same slice indexed by `i`; consuming its element discharges the
 collective obligation (D723). An unqualified `[]T` parameter remains borrowed.
+Passing a tracked fixed array as `array[..]` to an `own []T` parameter validates and
+moves every obligated slot into that collective obligation (D724).
 `meta.fields[T]()` is empty when `T`
 is a resource named by another module; its
 representation is not a reflective serialization surface. Format-codec rejection

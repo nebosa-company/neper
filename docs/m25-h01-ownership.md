@@ -485,6 +485,10 @@ remaining owners or discharge the slice's collective obligation.
 sweep. A consuming element access in that loop discharges the collective owned-slice
 obligation; other loop shapes remain partial moves.
 
+**D724 follow-up.** A full fixed-array slice passed to an `own []T` parameter moves
+every obligated slot into the callee's collective slice obligation. Each source slot
+retains the transfer site as provenance for later-use diagnostics.
+
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
 returns a plain `Handle` view when callers need the platform value, so `File.raw`

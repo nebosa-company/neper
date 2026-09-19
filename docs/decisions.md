@@ -13589,3 +13589,12 @@ the loop bound.
 
 This is a bounded syntactic proof, not general relational range analysis. Any other
 single-element consume remains D722's partial move.
+
+## D724 -- Full fixed-array slices transfer every owned slot
+
+Passing `array[..]` to an `own []T` parameter validates every tracked affine slot,
+then moves every obligated slot into the callee's collective slice obligation. The
+caller can no longer use or transfer those slots, and its exit owes nothing for them.
+
+The transfer is explicit in the callee signature and the full-range spelling. An
+ordinary borrowed slice call does not enter this path.
