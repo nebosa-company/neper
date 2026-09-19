@@ -40,6 +40,95 @@
           "expected": "no fault record and the nocheck site is inventoried"
         }
       ]
+    },
+    "H21": {
+      "design_status": "closed",
+      "runtime_status": "pending_m3",
+      "api_declarations": [
+        "type Token = struct { owner: u32, queue: u32, serial: u64 }",
+        "fn token(q: *Queue) -> (Token, err)",
+        "fn wait_for(q: *Queue, dependency: Token) -> err",
+        "fn done(token_value: Token) -> (bool, err)",
+        "fn wait(token_value: Token) -> err"
+      ],
+      "token_states": ["queued", "running", "complete", "lost", "stale"],
+      "errors": ["Unsupported", "TooLarge", "OutOfMemory", "Fault", "Lost", "InvalidHandle", "WrongDevice"],
+      "tracking": "whole_buffer",
+      "cancellation": "not_in_v1",
+      "fixtures": [
+        {
+          "id": "gpu_devices_cpu",
+          "profiles": ["cpu"],
+          "status": "pending_m3",
+          "expected": "one supported CPU record with the exact CPU key"
+        },
+        {
+          "id": "gpu_devices_mock_dup",
+          "profiles": ["vulkan"],
+          "status": "pending_m3",
+          "expected": "duplicate exact keys make open_id return AmbiguousDevice"
+        },
+        {
+          "id": "gpu_devices_mock_invalid",
+          "profiles": ["vulkan"],
+          "status": "pending_m3",
+          "expected": "an invalid key is excluded from open_id but its index remains selectable"
+        },
+        {
+          "id": "gpu_two_queues_ordered",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "a token wait makes q1 writes visible to q2"
+        },
+        {
+          "id": "gpu_two_queues_race",
+          "profiles": ["vulkan"],
+          "status": "pending_m3",
+          "expected": "the unordered program remains explicitly undefined"
+        },
+        {
+          "id": "gpu_chain_transfers",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "submission order determines the downloaded chain"
+        },
+        {
+          "id": "gpu_early_release",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "release waits for outstanding uses on every queue"
+        },
+        {
+          "id": "gpu_range_overlap",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "the later same-queue write wins under whole-buffer tracking"
+        },
+        {
+          "id": "gpu_failed_launch",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "a refused launch leaves the earlier write submitted and advances no new token"
+        },
+        {
+          "id": "gpu_stale_token",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "using a token after device close returns InvalidHandle"
+        },
+        {
+          "id": "gpu_device_lost",
+          "profiles": ["vulkan"],
+          "status": "pending_m3",
+          "expected": "loss reaches wait, consuming release and close as Lost"
+        },
+        {
+          "id": "gpu_wrong_device_token",
+          "profiles": ["cpu", "vulkan"],
+          "status": "pending_m3",
+          "expected": "cross-device wait_for returns WrongDevice"
+        }
+      ]
     }
   }
 }

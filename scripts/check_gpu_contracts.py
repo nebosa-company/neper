@@ -65,6 +65,25 @@ def validate(root=ROOT):
     for name in ("bounds", "null", "tag", "alignment"):
         if checks.get(name, {}).get("release") != "fault":
             errors.append(f"H13: {name} must remain checked in release")
+
+    allowed = ["H13", "H21", "H22", "H23"]
+    if list(requirements) != [item for item in allowed if item in requirements]:
+        errors.append("GPU requirements must appear in H13/H21/H22/H23 order")
+    h21 = requirements.get("H21")
+    if h21 is not None:
+        if h21.get("token_states") != ["queued", "running", "complete", "lost", "stale"]:
+            errors.append("H21: token state machine is incomplete or reordered")
+        if h21.get("tracking") != "whole_buffer":
+            errors.append("H21: the first implementation must freeze whole-buffer tracking")
+        if h21.get("cancellation") != "not_in_v1":
+            errors.append("H21: cancellation cannot be implied by the v1 token contract")
+        required = {"gpu_two_queues_ordered", "gpu_two_queues_race", "gpu_chain_transfers",
+                    "gpu_early_release", "gpu_range_overlap", "gpu_failed_launch",
+                    "gpu_stale_token", "gpu_device_lost", "gpu_wrong_device_token",
+                    "gpu_devices_cpu", "gpu_devices_mock_dup", "gpu_devices_mock_invalid"}
+        actual = {item.get("id") for item in h21.get("fixtures", [])}
+        if actual != required:
+            errors.append("H21: dependency/discovery fixture manifest is incomplete")
     return data, errors
 
 

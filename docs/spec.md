@@ -3043,6 +3043,7 @@ type DeviceInfo = struct {
 type Device  = struct { state: *void } // usable from any thread
 type Queue   = struct { state: *void } // one thread at a time
 type Buf[T: type] = struct { owner: u32, slot: u32, generation: u32, len: usize }
+type Token = struct { owner: u32, queue: u32, serial: u64 }
 type Grid    = struct { x: usize, y: usize, z: usize } // invocation counts
 type Id      = struct { x: u32, y: u32, z: u32 } // gpu.gid, gpu.lid, gpu.wgid (Kernels and workgroups, above)
 type FaultKind = enum u8 { Bounds, Null, Tag, Alignment, Overflow, DivideByZero }
@@ -3082,6 +3083,10 @@ their contents remain module-owned invariants.
 | `fn len[T: type](b: Buf[T]) -> usize` | The element count `alloc` or `upload` gave it; use through a released or stale handle is an `invalid` check. |
 | `fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err` | A **synchronous** copy of `src` into driver-owned staging memory, then an in-order transfer to `dst[off..]` enqueued on `q`. Returns when `src` has been read. It checks `off <= len` and `src.len <= len-off`, without overflowing; failure is `TooLarge`. |
 | `fn launch[K: fn](q: *Queue, g: Grid, args: ...) -> err` | Enqueues kernel `K` over `g` with `args`; returns once queued. |
+| `fn token(q: *Queue) -> (Token, err)` | Returns the token for the last submission on `q`, or serial zero when the queue is empty. A token names past work only. |
+| `fn wait_for(q: *Queue, dependency: Token) -> err` | Orders future submissions on `q` after `dependency`. A token from another device is `WrongDevice`; lost or stale work is `Lost` or `InvalidHandle`. |
+| `fn done(token_value: Token) -> (bool, err)` | Polls one submission without blocking. Completion covers every earlier serial on that queue and device-scope visibility. |
+| `fn wait(token_value: Token) -> err` | Waits for one submission and its predecessors, not unrelated later work or another queue. |
 | `fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err` | Validates ownership, liveness and destination length before waiting; then waits for every earlier submission on `q` and copies `gpu.len(src)` elements into `dst`. A small destination is `TooLarge` without blocking. |
 | `fn sync(q: *Queue) -> err` | Blocks until every submission on `q` has completed. |
 | `fn release[T: type](q: *Queue, b: Buf[T]) -> err` | Consumes the logical handle and enqueues release behind earlier submissions. A stale copy is `InvalidHandle`, a queue from another device is `WrongDevice`, and device loss is `Lost`. |

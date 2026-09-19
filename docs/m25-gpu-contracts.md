@@ -219,10 +219,13 @@ A **token** names one submission on one queue:
 ```
 type Token = struct { owner: u32, queue: u32, serial: u64 }
 fn token(q: *Queue) -> (Token, err)             // the last submission on q; serial 0 when none
-fn wait_for(q: *Queue, t: Token) -> err         // device-side: later submissions on q run after t completes
-fn done(t: Token) -> (bool, err)                // host poll, no blocking
-fn wait(t: Token) -> err                        // host wait for t alone, not the whole queue
+fn wait_for(q: *Queue, dependency: Token) -> err // device-side: later submissions on q run after it completes
+fn done(token_value: Token) -> (bool, err)       // host poll, no blocking
+fn wait(token_value: Token) -> err               // host wait for it alone, not the whole queue
 ```
+
+These declarations are now the exact planned `e.gpu` API fence rather than prose
+shorthand; `docs/m25-gpu-contracts.json` mirrors the state and fixture contracts.
 
 `serial` counts submissions on `queue` from 1; a token is therefore always in the
 past of its queue, and **a dependency graph over tokens cannot contain a cycle**:

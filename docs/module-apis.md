@@ -2470,6 +2470,7 @@ type DeviceInfo = struct {
 type Device = struct { state: *void }
 type Queue = struct { state: *void }
 type Buf[T: type] = struct { owner: u32, slot: u32, generation: u32, len: usize }
+type Token = struct { owner: u32, queue: u32, serial: u64 }
 type Grid = struct { x: usize, y: usize, z: usize }
 type Id = struct { x: u32, y: u32, z: u32 }
 type FaultKind = enum u8 { Bounds, Null, Tag, Alignment, Overflow, DivideByZero }
@@ -2498,6 +2499,10 @@ fn upload[T: type](q: *Queue, src: []const T) -> (Buf[T], err)
 fn len[T: type](buf: Buf[T]) -> usize
 fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err
 fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err
+fn token(q: *Queue) -> (Token, err)
+fn wait_for(q: *Queue, dependency: Token) -> err
+fn done(token_value: Token) -> (bool, err)
+fn wait(token_value: Token) -> err
 fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err
 fn sync(q: *Queue) -> err
 fn release[T: type](q: *Queue, buf: Buf[T]) -> err
