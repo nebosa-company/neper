@@ -13330,3 +13330,12 @@ across a deferred region reset therefore cannot erase a later field's region own
 Copy propagation snapshots the sparse table's old tail before appending destination
 entries. That keeps the operation finite without a second table or temporary
 allocation.
+
+## D699 -- Pointer-field assignment upserts sparse aliases
+
+Assigning an address to a named aggregate field uses the same field-aware insertion
+as an aggregate literal. A third or later field receives a sparse identity, and a
+later assignment to that field updates it without erasing either inline sibling.
+
+This replaces the assignment path's duplicate two-slot logic with the shared helper;
+it adds no new representation or analysis.

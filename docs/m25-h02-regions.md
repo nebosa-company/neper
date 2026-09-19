@@ -272,3 +272,8 @@ point at live storage.
 lexical copy therefore preserves a third or later field's region identity, and
 returning the copy across the deferred reset remains E-SAFETY-0018 against that
 field's owner.
+
+**D699** routes separate pointer-field assignments through the same alias insertion
+used by aggregate literals. Assigning a third or later field therefore inserts or
+updates its sparse identity without erasing either inline sibling, so a deferred
+return remains E-SAFETY-0018 against its region owner.

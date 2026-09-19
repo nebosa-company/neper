@@ -14983,16 +14983,7 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                     }
                     let (member, has_member) = field_expression_name(c, g.modules[module_index].text, tree, place)
                     if is_address && has_member && pointed != struct_local {
-                        if c.resources[struct_local].points_to == 0usize || same(member, c.resources[struct_local].points_to_field) {
-                            c.resources[struct_local].points_to = pointed + 1usize
-                            c.resources[struct_local].points_to_field = member
-                        } else {
-                            if !c.resources[struct_local].slice_offset_known || same(member, c.resources[struct_local].mark_arena) {
-                                c.resources[struct_local].slice_offset = pointed + 1usize
-                                c.resources[struct_local].slice_offset_known = true
-                                c.resources[struct_local].mark_arena = member
-                            }
-                        }
+                        try set_resource_alias(c, struct_local, member, pointed)
                     }
                 }
             }
