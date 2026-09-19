@@ -13079,3 +13079,13 @@ arena when marks and allocations are paired.
 This replaces textual spelling comparison at the two binding sites without adding
 an arena graph or enlarging resource state. The focused fixture opens a mark through
 an alias, allocates through `&arena`, resets, and pins E-SAFETY-0013 on the use.
+
+## D674 -- Thread starts follow local context pointer aliases
+
+A thread context passed as a local pointer alias of `&x` borrows and lends `x`, the
+same as a call that spells `&x` directly. Parent access before the join is therefore
+E-SAFETY-0016, and the existing frame-escape rule is attached to the same storage.
+
+The thread-binding pass reuses the local alias target already maintained by H02;
+it adds no concurrency-specific alias structure. The focused fixture pins the
+start-through-alias form and its lending provenance on both hosts.

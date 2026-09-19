@@ -50,6 +50,10 @@ The rule is per statement: a statement that joins and reads in one expression is
 refused, since the uses are checked before the moves; the join is written as its
 own statement, which the one fixture that did otherwise now does.
 
+A thread context passed through a local pointer alias of `&x` identifies and lends
+the same `x` (D674). The stack-escape and pre-join access rules therefore do not
+depend on whether the start call spells the context directly or through that alias.
+
 ## 4. Locks, guards and atomics
 
 The first half (D379): a lock held as a value. `sync.guard(&m)` takes the mutex
@@ -108,7 +112,8 @@ atomics through addresses while workers run, joins by element.
 
 ## 7. Implementation record
 
-**D357** delivered section 2; **D365** section 3 and this document; **D379**
+**D357** delivered section 2; **D365** section 3 and this document; **D674**
+extended section 3 to thread starts through local pointer aliases; **D379**
 section 4's first half (`sync.Guard`, the fixtures `sync_guard` and
 `reject/safety_guard_leak`). The compiler's own crews pass as written under
 all three. Not delivered: section 4's second half, section 5's cases, the

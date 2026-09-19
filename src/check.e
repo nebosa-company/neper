@@ -14213,7 +14213,10 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             while true {
                 let (argument_index, has_argument) = call_argument_node(tree, tree.nodes[initializer_index], argument_at)
                 if !has_argument { break }
-                let (pointed, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
+                var (pointed, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
+                // Starting through a pointer alias lends the aliased storage just
+                // as spelling `&x` at the call does (D674).
+                if !is_address { (pointed, is_address) = alias_target(c, g, tree, module_index, argument_index) }
                 if is_address && c.resources[local_index].frame_borrow == 0usize && c.locals[pointed].ty.kind != .Slice && c.locals[pointed].ty.kind != .Pointer { c.resources[local_index].frame_borrow = pointed + 1usize }
                 // What the thread was given is its until the join (D365): the parent
                 // neither reads nor writes it, except through an address, which is how

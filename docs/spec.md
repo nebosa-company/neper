@@ -3642,7 +3642,9 @@ not add partial moves from a variant payload.
   stored into storage declared after `x` (which dies first); detached, handed to
   an `own` parameter, returned or stored elsewhere it would outlive what it reads
   (`E-SAFETY-0015`, D357). A thread over arena storage does as it likes.
-- What a thread was given is lent to it until the join (D365): from the start to
+- What a thread was given is lent to it until the join (D365): the context may be
+  written as `&x` or as a local pointer alias of `&x`, and both lend `x` (D674).
+  From the start to
   the join of that thread local, the parent neither reads nor writes `x` -- a value
   read, a store, a move -- (`E-SAFETY-0016`); it may take `&x` or `&x.field` again,
   which is how an atomic, a lock or a second thread reaches it. The lending ends at
