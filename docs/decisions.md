@@ -13487,3 +13487,13 @@ so parent access to any of them before the join is E-SAFETY-0016.
 
 Thread escape tracking retains one representative frame borrow, while the existing
 per-local lend state records every candidate. Exact-index contexts are unchanged.
+
+## D715 -- Runtime element candidates compose with nested aggregate paths
+
+A runtime-indexed fixed-array segment below named aggregate fields retains the
+candidate owners recorded at that complete path. A dangling later element remains
+visible and produces E-SAFETY-0013 rather than being hidden by an earlier live
+element or by the outer aggregate.
+
+Wildcard query segments participate in the existing longest-prefix path match;
+there is no flattened nested-array representation or special traversal.

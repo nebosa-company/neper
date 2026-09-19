@@ -3662,7 +3662,8 @@ not add partial moves from a variant payload.
   is rejected if any candidate dangles (D711); it does not choose an arbitrary
   owner for operations that require one exact identity. Returning such a pointer
   across a deferred reset checks the same candidate set and rejects when any
-  matching owner belongs to that region (D712). An
+  matching owner belongs to that region (D712). Runtime element candidates compose
+  with the complete paths of nested aggregate fields (D715). An
   aggregate whose second or later tracked field points into that region is the same
   carrier escape, including when it has only nested pointer paths (D692, D697,
   D702), and copying that aggregate or assigning its pointer fields separately

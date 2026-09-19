@@ -334,3 +334,7 @@ reset region, and unrelated carrier paths are not substituted for the selection.
 **D713** applies the set to mutable pointer calls. Because a runtime index may
 select any matching container, the call invalidates the live views of every
 candidate and later use retains the ordinary E-SAFETY-0014 mutation provenance.
+
+**D715** composes runtime element selection with complete nested aggregate paths.
+The wildcard segment matches only aliases at that longest path, so a dangling
+later element cannot hide behind a live sibling or an unrelated outer field.
