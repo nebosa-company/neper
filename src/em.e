@@ -111,7 +111,7 @@ type CodeRelocation = struct {
     symbol_index: usize,
 }
 
-fn format_version() -> usize { ret 13usize }
+fn format_version() -> usize { ret 14usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -550,7 +550,13 @@ fn write_function_signature_canonical(c: *check.Checker, g: *graph.Graph, functi
         at += 1usize
     }
     try binary.little_u32(output, check.function_borrow_from(c, function))
-    try binary.little_u32(output, check.function_noescape_from(c, function))
+    let noescape_count = check.function_noescape_count(c, function)
+    try binary.little_u32(output, noescape_count)
+    at = 0usize
+    while at < noescape_count {
+        try binary.little_u32(output, check.function_noescape_position_at(c, function, at))
+        at += 1usize
+    }
     ret ok
 }
 
@@ -1392,7 +1398,13 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     try binary.little_u64(output, signature)
     try binary.little_u64(output, body)
     try binary.little_u32(output, check.function_borrow_from(c, function))
-    try binary.little_u32(output, check.function_noescape_from(c, function))
+    let noescape_count = check.function_noescape_count(c, function)
+    try binary.little_u32(output, noescape_count)
+    var noescape_at = 0usize
+    while noescape_at < noescape_count {
+        try binary.little_u32(output, check.function_noescape_position_at(c, function, noescape_at))
+        noescape_at += 1usize
+    }
     let generic = c.function_generics[function_index]
     try binary.little_u32(output, generic.comptime_count)
     var at = 0usize

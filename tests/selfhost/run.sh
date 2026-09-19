@@ -2505,7 +2505,7 @@ borrow_summary_artifact="$test_build/borrow-summary.x64-linux.em"
 borrow_summary_interface=$(od -An -tu8 -j64 -N8 "$borrow_summary_artifact" | tr -d ' ')
 [ "$(od -An -tu4 -j$((borrow_summary_interface + 44)) -N4 "$borrow_summary_artifact" | tr -d ' ')" = '2' ]
 # D736-D740: declared, proved, propagated and serialized no-escape inputs.
-for conformance_case in 'accept regions_noescape_contract 0' 'reject regions_noescape_contract_name 1' 'accept regions_noescape_multi_contract 0' 'reject regions_noescape_multi_contract_duplicate 1' 'reject regions_noescape_contract_return 1' 'reject regions_noescape_multi_return 1' 'reject regions_noescape_contract_global 1' 'reject regions_noescape_multi_global 1' 'accept regions_noescape_contract_forward 0' 'accept regions_noescape_multi_forward 0' 'reject regions_noescape_contract_call 1' 'reject regions_noescape_multi_call 1' 'reject regions_noescape_contract_callback 1' 'reject regions_noescape_contract_thread 1' 'accept regions_noescape_contract_generic 0' 'accept regions_noescape_contract_artifact 0'; do
+for conformance_case in 'accept regions_noescape_contract 0' 'reject regions_noescape_contract_name 1' 'accept regions_noescape_multi_contract 0' 'reject regions_noescape_multi_contract_duplicate 1' 'reject regions_noescape_contract_return 1' 'reject regions_noescape_multi_return 1' 'reject regions_noescape_contract_global 1' 'reject regions_noescape_multi_global 1' 'accept regions_noescape_contract_forward 0' 'accept regions_noescape_multi_forward 0' 'reject regions_noescape_contract_call 1' 'reject regions_noescape_multi_call 1' 'reject regions_noescape_contract_callback 1' 'reject regions_noescape_contract_thread 1' 'accept regions_noescape_contract_generic 0' 'accept regions_noescape_contract_artifact 0' 'accept regions_noescape_multi_artifact 0'; do
     set -- $conformance_case
     conformance_status=0
     $test_build/neper-self check-file "$conformance_root/$1/$2.e" "$repo" x64 linux --json > "$test_build/conformance-$1-$2.jsonl" || conformance_status=$?
@@ -2515,8 +2515,15 @@ done
 noescape_summary_artifact="$test_build/noescape-summary.x64-linux.em"
 [ "$($test_build/neper-self emit-em "$conformance_root/accept/regions_noescape_contract_artifact.e" "$repo" x64 linux "$noescape_summary_artifact")" = 'compiled module written' ]
 noescape_summary_interface=$(od -An -tu8 -j64 -N8 "$noescape_summary_artifact" | tr -d ' ')
-[ "$(od -An -tu2 -j4 -N2 "$noescape_summary_artifact" | tr -d ' ')" = '13' ]
-[ "$(od -An -tu4 -j$((noescape_summary_interface + 48)) -N4 "$noescape_summary_artifact" | tr -d ' ')" = '2' ]
+[ "$(od -An -tu2 -j4 -N2 "$noescape_summary_artifact" | tr -d ' ')" = '14' ]
+[ "$(od -An -tu4 -j$((noescape_summary_interface + 48)) -N4 "$noescape_summary_artifact" | tr -d ' ')" = '1' ]
+[ "$(od -An -tu4 -j$((noescape_summary_interface + 52)) -N4 "$noescape_summary_artifact" | tr -d ' ')" = '2' ]
+noescape_multi_artifact="$test_build/noescape-multi.x64-linux.em"
+[ "$($test_build/neper-self emit-em "$conformance_root/accept/regions_noescape_multi_artifact.e" "$repo" x64 linux "$noescape_multi_artifact")" = 'compiled module written' ]
+noescape_multi_interface=$(od -An -tu8 -j64 -N8 "$noescape_multi_artifact" | tr -d ' ')
+[ "$(od -An -tu4 -j$((noescape_multi_interface + 48)) -N4 "$noescape_multi_artifact" | tr -d ' ')" = '2' ]
+[ "$(od -An -tu4 -j$((noescape_multi_interface + 52)) -N4 "$noescape_multi_artifact" | tr -d ' ')" = '1' ]
+[ "$(od -An -tu4 -j$((noescape_multi_interface + 56)) -N4 "$noescape_multi_artifact" | tr -d ' ')" = '2' ]
 # A consuming dereference follows its lexical pointer alias to the pinned resource
 # (D610, H01).
 pointer_move_status=0
@@ -4142,7 +4149,7 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '13' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '14' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '9' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]

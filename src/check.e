@@ -13638,10 +13638,27 @@ fn function_noescape_at(c: *Checker, function: Function, position: usize) -> boo
 // complete quoted name list uses the second import string slot, otherwise empty on
 // every non-extern function.
 fn function_noescape_from(c: *Checker, function: Function) -> usize {
-    if function.external || function.import_symbol.len == 0usize { ret 0usize }
+    ret function_noescape_position_at(c, function, 0usize)
+}
+
+fn function_noescape_count(c: *Checker, function: Function) -> usize {
+    var count = 0usize
     var at = 0usize
     while at < function.parameter_count {
-        if function_noescape_at(c, function, at + 1usize) { ret at + 1usize }
+        if function_noescape_at(c, function, at + 1usize) { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn function_noescape_position_at(c: *Checker, function: Function, wanted: usize) -> usize {
+    var found = 0usize
+    var at = 0usize
+    while at < function.parameter_count {
+        if function_noescape_at(c, function, at + 1usize) {
+            if found == wanted { ret at + 1usize }
+            found += 1usize
+        }
         at += 1usize
     }
     ret 0usize
