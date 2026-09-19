@@ -13160,3 +13160,13 @@ E-SAFETY-0018 when the deferred reset runs before delivery to the caller.
 
 The checker resolves the operand's existing base place and reuses D675's diagnostic;
 no general expression-lifetime graph is added.
+
+## D682 -- Aggregate pointer aliases retain a deferred-reset boundary
+
+A pointer copied from a field of a local aggregate that was initialized with an
+address into region storage cannot escape a deferred reset of that storage. The
+return check follows the aggregate's existing lexical alias fact and reports
+E-SAFETY-0018 against the underlying region local.
+
+This is deliberately lexical: it adds no interprocedural points-to analysis and
+does not infer aliases from arbitrary stores.

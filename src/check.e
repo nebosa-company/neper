@@ -15055,8 +15055,14 @@ fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // A returned value that names a resource local: moved out to the caller, whatever
 // its state but moved -- an unchecked one goes with the error it was bound beside.
 fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
-    if !any_affine_local(c) { ret ok }
     var (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
+    // A pointer copied out of an aggregate field still names the region local
+    // recorded by that aggregate's alias fact (D682).
+    let (aliased, has_alias) = alias_target(c, g, tree, module_index, node_index)
+    if has_alias && c.resources[aliased].region != 0usize {
+        local_index = aliased
+        is_resource = true
+    }
     if !is_resource && tree.nodes[node_index].kind == .BracketPostfix {
         var bracket: BracketInfo = zero
         if read_bracket(c, tree, tree.nodes[node_index], &bracket) == ok && bracket.range {
@@ -15071,6 +15077,7 @@ fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
             if is_resource { is_resource = c.resources[local_index].region != 0usize }
         }
     }
+    if !is_resource && !any_affine_local(c) { ret ok }
     if is_resource && c.resources[local_index].region != 0usize {
         let region_mark = c.resources[local_index].region - 1usize
         var mark_at = 0usize

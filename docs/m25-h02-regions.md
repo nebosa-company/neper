@@ -201,3 +201,7 @@ reason as returning `scratch`: the deferred reset runs before the caller sees ei
 **D681** applies the same boundary to a pointer formed from region storage at the
 return site. Returning `&scratch[i]` across the deferred reset is E-SAFETY-0018 with
 the defer registration as related evidence.
+
+**D682** follows that boundary through the existing lexical alias facts. A pointer
+copied from an aggregate field that holds `&scratch[i]` still names `scratch`, so it
+cannot be returned across the same deferred reset.

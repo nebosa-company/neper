@@ -3641,7 +3641,8 @@ not add partial moves from a variant payload.
   uses before that exit remain valid, while returning a value from the region is
   refused because the reset precedes delivery to the caller; a derived slice has the
   same restriction as its region local, as does a pointer made with `&` from that
-  storage (E-SAFETY-0018, D675, D680-D681).
+  storage or copied through an aggregate pointer field (E-SAFETY-0018, D675,
+  D680-D682).
   Both checks are lexical and within one function: what is returned otherwise, stored,
   handed to a callback, an import or a thread, reached through any other pointer,
   or made by a cast is outside the rule, and `m25-h02-regions.md` says so.
