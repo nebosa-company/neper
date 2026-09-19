@@ -13559,3 +13559,14 @@ instead of falling back to an untracked view.
 A comptime lower bound still narrows the candidate range to its known suffix. A
 slice without a tracked fixed-array owner remains outside the lexical ownership
 subset; no heap or interprocedural backing-store inference is claimed.
+
+## D721 -- Owned resource-slice parameters carry one collective obligation
+
+An `own []T` parameter whose element type is affine enters the callee as an owned
+resource slice. When `T` has a cleanup, the slice carries one obligation: the body
+must drain or transfer all of its elements before every exit. A parameter without
+`own` remains a borrowed view and gains no obligation.
+
+The collective state is deliberately separate from fixed-array slot tracking. It
+gives an untracked slice a serializable signature contract without inventing a
+backing allocation or a hidden destructor.

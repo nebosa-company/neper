@@ -12594,6 +12594,9 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
         let parameter = c.parameters[function.first_parameter + parameter_index]
         if parameter.ty.kind == .Other { ret Unsupported }
         try add_local(c, parameter.name, parameter.ty, false)
+        var parameter_kind = affine_kind(c, parameter.ty, 0usize)
+        if parameter.own && parameter_kind == 0u8 { parameter_kind = affine_slice_kind(c, parameter.ty) }
+        if parameter.own && parameter_kind != 0u8 { c.resources[c.local_count - 1usize].state = resource_owned }
         // An `own` parameter carries its obligation into the body (D345), field by
         // field for a struct (D348); a borrowed one is owned by the caller and owes
         // nothing here, its fields views.
@@ -12601,7 +12604,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
             c.resources[c.local_count - 1usize].acquired = usize(node.token_start)
             try resource_init_fields(c, c.local_count - 1usize, resource_owned)
             if parameter.own {
-                c.resources[c.local_count - 1usize].obligated = affine_kind(c, parameter.ty, 0usize) == 2u8
+                c.resources[c.local_count - 1usize].obligated = parameter_kind == 2u8
                 // The type's own cleanup discharges what it is given by raw means.
                 if resource_cleanup_of(c, parameter.ty, function) { c.resources[c.local_count - 1usize].obligated = false }
             } else {
@@ -13537,6 +13540,11 @@ fn affine_kind(c: *Checker, ty: Type, depth: usize) -> u8 {
     // Remembered once the signatures are collected, when every field's type is known.
     if c.signatures_ready { c.aggregates[memo_index].affine_memo = worst + 1u8 }
     ret worst
+}
+
+fn affine_slice_kind(c: *Checker, ty: Type) -> u8 {
+    if ty.kind != .Slice || !ty.has_element || ty.element >= c.type_count { ret 0u8 }
+    ret affine_kind(c, c.types[ty.element], 0usize)
 }
 
 // Whether the type is a resource type itself -- a seeded handle or a declared

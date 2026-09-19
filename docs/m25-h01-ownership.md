@@ -472,6 +472,11 @@ leaving the offset unknown. Indexing that slice or its direct alias queries ever
 possible owner slot through the same D716-D719 rules. A comptime lower bound still
 narrows the range; a slice with no tracked fixed-array owner remains untracked.
 
+**D721 follow-up.** An `own []T` parameter with affine elements is an owned slice in
+the callee. If `T` is obligated, the parameter carries one collective cleanup
+obligation; an ordinary `[]T` parameter remains a borrowed view. Element-level
+discharge is specified by the following increments.
+
 **D624 follow-up.** The seeded handles no longer expose their representation fields
 to checked code outside `e.os`. The fixed `file_handle` and `socket_handle` surface
 returns a plain `Handle` view when callers need the platform value, so `File.raw`
