@@ -729,9 +729,9 @@ type Checker = struct {
     active_owner_set: bool,
     // The instance whose body is being checked (D543), for the request chain.
     active_instance: usize,
-    // The one-based `@noescape` parameter of the body currently being checked.
-    // Zero outside that body, including the lowering walk.
-    active_noescape: usize,
+    // The quoted `@noescape` parameter list of the body currently being checked.
+    // Empty outside that body, including the lowering walk.
+    active_noescape: str,
     generic_declaration: bool,
     loop_depth: usize,
     break_depth: usize,
@@ -906,7 +906,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.active_arguments = false
     c.active_owner_module = 0usize
     c.active_owner_set = false
-    c.active_noescape = 0usize
+    c.active_noescape = ""
     c.generic_declaration = false
     c.loop_depth = 0usize
     c.break_depth = 0usize
@@ -8645,18 +8645,21 @@ fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // the cache holds is no longer about this scope.
 fn begin_call_scope(c: *Checker) {
     c.call_generation += 1usize
-    c.active_noescape = 0usize
+    c.active_noescape = ""
 }
 
 fn check_noescape_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, info: CallInfo, child_index: usize, child_position: usize, parameter_type: Type) -> err {
-    if c.active_noescape == 0usize || !holds_pointer(c, parameter_type, 0usize) { ret ok }
-    let local = c.active_noescape - 1usize
-    if !expression_borrows_from(c, g, tree, module_index, child_index, local) { ret ok }
-    if !info.indirect && !info.thread_create && function_noescape_from(c, info.function) == child_position { ret ok }
-    var name = ""
-    if local < c.local_count { name = c.locals[local].name }
-    record_failure(c, module_index, tree.nodes[child_index], .NoEscapeContract, name, "")
-    ret ResourceViolation
+    if c.active_noescape.len == 0usize || !holds_pointer(c, parameter_type, 0usize) { ret ok }
+    var local = 0usize
+    while local < c.local_count {
+        if contract_name_count(c.active_noescape, c.locals[local].name) != 0usize && expression_borrows_from(c, g, tree, module_index, child_index, local) {
+            if !info.indirect && !info.thread_create && function_noescape_at(c, info.function, child_position) { ret ok }
+            record_failure(c, module_index, tree.nodes[child_index], .NoEscapeContract, c.locals[local].name, "")
+            ret ResourceViolation
+        }
+        local += 1usize
+    }
+    ret ok
 }
 
 fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
@@ -12935,7 +12938,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     c.block_depth = 0usize
     c.pins_live = 0usize
     c.affine_answer_valid = false
-    c.active_noescape = function_noescape_from(c, function)
+    c.active_noescape = function.import_symbol
     c.body_returns_err = function.return_count == 1usize && c.return_types[function.first_return].kind == .Err
     var parameter_index = 0usize
     while parameter_index < function.parameter_count {
