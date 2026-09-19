@@ -13954,16 +13954,18 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if c.locals[local_index].ty.kind == .Named && tree.nodes[initializer_index].kind == .NameExpr {
         let token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
         let (source, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
-        if found && c.locals[source].ty.kind == .Named && c.resources[source].points_to != 0usize {
-            c.resources[local_index].points_to = c.resources[source].points_to
-            c.resources[local_index].points_to_field = c.resources[source].points_to_field
-            if c.resources[source].slice_offset_known {
-                c.resources[local_index].slice_offset = c.resources[source].slice_offset
-                c.resources[local_index].slice_offset_known = true
-                c.resources[local_index].mark_arena = c.resources[source].mark_arena
+        if found && c.locals[source].ty.kind == .Named {
+            if c.resources[source].points_to != 0usize {
+                c.resources[local_index].points_to = c.resources[source].points_to
+                c.resources[local_index].points_to_field = c.resources[source].points_to_field
+                if c.resources[source].slice_offset_known {
+                    c.resources[local_index].slice_offset = c.resources[source].slice_offset
+                    c.resources[local_index].slice_offset_known = true
+                    c.resources[local_index].mark_arena = c.resources[source].mark_arena
+                }
             }
-            // Preserve third-and-later field identities across a lexical aggregate
-            // copy; stop at the old tail because appending grows this same table.
+            // Preserve sparse top-level and nested identities across a lexical
+            // aggregate copy; stop at the old tail because appending grows this table.
             let source_alias_count = c.resource_alias_count
             var alias_at = 0usize
             while alias_at < source_alias_count {

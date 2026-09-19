@@ -13371,3 +13371,12 @@ than escaping because the inline slots are empty.
 
 This removes an inline-presence gate from the existing carrier scan; it introduces
 no new representation or control-flow analysis.
+
+## D703 -- Aggregate copies preserve nested-only alias paths
+
+Copying a named aggregate propagates its sparse nested field paths even when no
+top-level inline alias exists. Returning the copy across a deferred region reset
+therefore cannot erase the region identity of a later recursively nested pointer.
+
+The existing copy branch now conditions only the inline-slot copy on inline state;
+its sparse-table pass is independently authoritative.

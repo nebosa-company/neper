@@ -287,3 +287,7 @@ only in the sparse side table, leaving the per-local `Resource` record unchanged
 **D702** lets a sparse nested path establish a carrier escape without requiring any
 top-level inline alias. Returning an aggregate whose later nested pointer belongs to
 the deferred-reset region is therefore E-SAFETY-0018 against that actual owner.
+
+**D703** copies sparse nested paths even when the source aggregate has no inline
+alias. Returning the lexical copy across the deferred reset therefore remains
+E-SAFETY-0018 against the later nested pointer's region owner.
