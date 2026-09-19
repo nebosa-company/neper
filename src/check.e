@@ -79,6 +79,7 @@ type DiagnosticKind = enum u8 {
     RegionReset,
     RegionEscape,
     BorrowContract,
+    NoEscapeContract,
     ViewMutated,
     ThreadFrameEscape,
     ThreadShared,
@@ -3578,9 +3579,9 @@ fn declaration_import(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     ret ("", "", false)
 }
 
-// The single parameter named by `@borrows("parameter")`. The summary is part of
-// the function declaration, so malformed or repeated summaries fail before bodies.
-fn declaration_borrow(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (str, bool, err) {
+// The single parameter named by a declaration contract. The summary is part of the
+// function declaration, so malformed or repeated summaries fail before bodies.
+fn declaration_parameter_attribute(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, attribute_name: str) -> (str, bool, err) {
     let text = g.modules[module_index].text
     var result = ""
     var found = false
@@ -3600,7 +3601,7 @@ fn declaration_borrow(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
             }
             token_at += 1usize
         }
-        if !same(name, "borrows") { continue }
+        if !same(name, attribute_name) { continue }
         if found { ret ("", false, InvalidType) }
         let child_end = usize(node.first_child) + usize(node.child_count)
         var child_at = usize(node.first_child)
@@ -3743,7 +3744,7 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         if return_type.kind == .Err && return_index + 1usize != item.return_count { ret InvalidType }
         return_index += 1usize
     }
-    let (borrow_name, has_borrow, borrow_error) = declaration_borrow(c, g, tree, module_index, node_index)
+    let (borrow_name, has_borrow, borrow_error) = declaration_parameter_attribute(c, g, tree, module_index, node_index, "borrows")
     if borrow_error != ok {
         record_failure(c, module_index, node, .BorrowContract, "", "")
         ret borrow_error
@@ -3770,6 +3771,30 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         }
         if function_borrow_from(c, item) == 0usize || !pointer_result {
             record_failure(c, module_index, node, .BorrowContract, borrow_name, "")
+            ret InvalidType
+        }
+    }
+    let (noescape_name, has_noescape, noescape_error) = declaration_parameter_attribute(c, g, tree, module_index, node_index, "noescape")
+    if noescape_error != ok {
+        record_failure(c, module_index, node, .NoEscapeContract, "", "")
+        ret noescape_error
+    }
+    if has_noescape {
+        var parameter_at = 0usize
+        while parameter_at < item.parameter_count {
+            let parameter = c.parameters[item.first_parameter + parameter_at]
+            if same(parameter.name, noescape_name) {
+                if item.external || declaration_has_attribute(c, g, tree, module_index, node_index, "unsafe") || parameter.own || !holds_pointer(c, parameter.ty, 0usize) {
+                    record_failure(c, module_index, node, .NoEscapeContract, noescape_name, "")
+                    ret InvalidType
+                }
+                item.import_symbol = noescape_name
+                break
+            }
+            parameter_at += 1usize
+        }
+        if function_noescape_from(c, item) == 0usize {
+            record_failure(c, module_index, node, .NoEscapeContract, noescape_name, "")
             ret InvalidType
         }
     }
@@ -6442,6 +6467,7 @@ fn instantiate_function(c: *Checker, owner_module_index: usize, template_index: 
     instance.return_count = template.return_count
     instance.generic = !function_arguments_concrete(c, template_index, first_argument)
     instance.import_library = template.import_library
+    instance.import_symbol = template.import_symbol
     var generic: FunctionGeneric = zero
     generic.first_comptime = c.function_generics[template_index].first_comptime
     generic.comptime_count = c.function_generics[template_index].comptime_count
@@ -13226,6 +13252,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .RegionReset { ret "E-SAFETY-0013" }
     if kind == .RegionEscape { ret "E-SAFETY-0018" }
     if kind == .BorrowContract { ret "E-SAFETY-0019" }
+    if kind == .NoEscapeContract { ret "E-SAFETY-0020" }
     if kind == .ViewMutated { ret "E-SAFETY-0014" }
     if kind == .ThreadFrameEscape { ret "E-SAFETY-0015" }
     if kind == .ThreadShared { ret "E-SAFETY-0016" }
@@ -13315,6 +13342,7 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .AggregateMemberUnknown { ret "aggregate member has an unknown or unsized type" }
     if kind == .BindingUnknownNamed { ret "binding has an unknown named type" }
     if kind == .BorrowContract { ret "@borrows must name one borrowed pointer-bearing parameter of a function with a pointer-bearing result" }
+    if kind == .NoEscapeContract { ret "@noescape must name one borrowed pointer-bearing parameter of a checked function" }
     ret "type checking failed"
 }
 
@@ -13451,6 +13479,19 @@ fn function_borrow_from(c: *Checker, function: Function) -> usize {
     while at < function.parameter_count {
         let parameter_index = function.first_parameter + at
         if parameter_index < c.parameter_count && same(c.parameters[parameter_index].name, function.import_library) { ret at + 1usize }
+        at += 1usize
+    }
+    ret 0usize
+}
+
+// The one-based parameter promised not to outlive an `@noescape` call. It uses the
+// second import string slot, which is otherwise empty on every non-extern function.
+fn function_noescape_from(c: *Checker, function: Function) -> usize {
+    if function.external || function.import_symbol.len == 0usize { ret 0usize }
+    var at = 0usize
+    while at < function.parameter_count {
+        let parameter_index = function.first_parameter + at
+        if parameter_index < c.parameter_count && same(c.parameters[parameter_index].name, function.import_symbol) { ret at + 1usize }
         at += 1usize
     }
     ret 0usize
