@@ -1541,6 +1541,13 @@ type PollInterest = struct { readable: bool, writable: bool }
 type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
 type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
+type Window = struct { raw: usize }
+type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool }
+type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focused: bool, visible: bool }
+type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
+type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
+type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
+type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
 error NotFound
 error Denied
 error Exists
@@ -1642,6 +1649,19 @@ fn dlsym[F: type](a: *mem.Arena, l: Lib, sym: str) -> (F, err)
 fn dlclose(l: own Lib) -> err
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err)
+fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err)
+fn window_close(w: Window) -> err
+fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err)
+fn window_metrics(w: Window) -> (WindowMetrics, err)
+fn window_title(w: Window, value: str) -> err
+fn window_visible(w: Window, value: bool) -> err
+fn window_cursor(w: Window, shape: CursorShape) -> err
+fn window_capture(w: Window, on: bool) -> err
+fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err
+fn window_native(w: Window) -> (usize, usize, err)
+fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err)
+fn clipboard_text(a: *mem.Arena) -> (str, err)
+fn set_clipboard_text(value: str) -> err
 fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err)
 fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err)
 fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail) -> (File, err)

@@ -28,9 +28,9 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Spec sections
 
-- `docs/spec.md:3991` 12. Compiled modules (`.em`)
-  - `docs/spec.md:4013` Contents
-  - `docs/spec.md:4057` Incremental rebuilds
+- `docs/spec.md:4026` 12. Compiled modules (`.em`)
+  - `docs/spec.md:4048` Contents
+  - `docs/spec.md:4092` Incremental rebuilds
 
 ## Decisions to read first
 

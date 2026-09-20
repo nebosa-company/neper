@@ -33,7 +33,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 ## Code anchors
 
 - `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `src/resolve.e`×2†, `lib/e/gpu.e`×1, `lib/e/gpu/tensor.e`×1, `scripts/check_module_plan.py`×1, `src/nir.e`×1†, `tests/conformance/tools/batch.txt`×1
-- `Device`: `lib/e/gpu.e`×35, `lib/e/os.windows.e`×1‡
+- `Device`: `lib/e/gpu.e`×35, `lib/e/os.windows.e`×2‡
 - `Queue`: `lib/e/gpu.e`×35, `lib/e/concurrent/queue.e`×13, `lib/e/data/queue.e`×11, `lib/e/gpu/tensor.e`×5, `src/check.e`×3‡
 - `upload`: `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2, `lib/e/gfx/image.e`×1
 - `download`: `lib/e/gpu.e`×4, `lib/e/gpu/tensor.e`×3

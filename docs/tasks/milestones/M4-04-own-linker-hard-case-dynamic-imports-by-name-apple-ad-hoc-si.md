@@ -19,15 +19,15 @@ Predecessor: queue item C084 (`docs/tasks/compiler/`) delivers the M1 debug subs
 
 ## Spec sections
 
-- `docs/spec.md:4147` 13. Toolchain
-  - `docs/spec.md:4262` Diagnostics
-  - `docs/spec.md:4281` Program entry
-  - `docs/spec.md:4321` Testing
-  - `docs/spec.md:4485` Linking
-  - `docs/spec.md:4553` Target CPU levels
-  - `docs/spec.md:4610` Debug information
-  - `docs/spec.md:4704` Editor integration
-  - `docs/spec.md:4730` Standard library
+- `docs/spec.md:4182` 13. Toolchain
+  - `docs/spec.md:4297` Diagnostics
+  - `docs/spec.md:4316` Program entry
+  - `docs/spec.md:4356` Testing
+  - `docs/spec.md:4520` Linking
+  - `docs/spec.md:4588` Target CPU levels
+  - `docs/spec.md:4645` Debug information
+  - `docs/spec.md:4739` Editor integration
+  - `docs/spec.md:4765` Standard library
 
 ## Decisions to read first
 
@@ -35,7 +35,7 @@ Predecessor: queue item C084 (`docs/tasks/compiler/`) delivers the M1 debug subs
 
 ## Code anchors
 
-- `.dll`: `lib/e/os.windows.e`×79‡, `src/link_pe.e`×2, `tests/conformance/tools/manifest_unsafe/src/main.e`×1
+- `.dll`: `lib/e/os.windows.e`×116‡, `src/link_pe.e`×2, `tests/conformance/tools/manifest_unsafe/src/main.e`×1
 - nearest existing implementation: `src/link_pe.e`, `src/link_elf.e`, `src/em_link.e`†, `src/object_coff.e` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

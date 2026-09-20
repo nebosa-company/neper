@@ -2032,7 +2032,6 @@
     "e.ui.window"
    ],
    "blocked_by": [
-    "native-window-api",
     "native-accessibility-api"
    ]
   },
@@ -2064,9 +2063,7 @@
     "e.gfx.geometry",
     "e.ui.window"
    ],
-   "blocked_by": [
-    "native-window-api"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.ui.layout",
@@ -2141,9 +2138,7 @@
     "e.gfx.geometry",
     "e.gfx.scene"
    ],
-   "blocked_by": [
-    "native-window-api"
-   ]
+   "blocked_by": []
   }
  ],
  "packages": [

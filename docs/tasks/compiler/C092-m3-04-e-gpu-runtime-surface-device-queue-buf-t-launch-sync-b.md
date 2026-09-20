@@ -48,7 +48,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `last_fault`: `lib/e/gpu.e`×3
 - `Image`: `lib/e/gfx/image.e`×10, `lib/e/gpu.e`×9, `scripts/build-docs-pdf.py`×7, `lib/e/fmt/png.e`×6, `lib/e/fmt/webp.e`×5†, `lib/e/fmt/jpeg.e`×3†, `scripts/audit_repo_coverage.py`×1
 - `open_target`: `lib/e/gpu.e`×1
-- `presented`: `lib/e/gpu.e`×4, `lib/e/os.linux.e`×1†, `lib/e/os.windows.e`×1‡, `src/check.e`×1‡
+- `presented`: `lib/e/gpu.e`×4, `lib/e/os.linux.e`×1‡, `lib/e/os.windows.e`×1‡, `src/check.e`×1‡
 - `resize`: `lib/e/gpu.e`×1
 
 ## Verification

@@ -3170,3 +3170,567 @@ fn rename(a: *mem.Arena, src: str, dst: str) -> err {
     mem.reset(a, checkpoint)
     ret call_error
 }
+
+// ------------------------------------------------------------------ windows (D795)
+//
+// The native window primitives `e.ui.window` and `e.ui.input` are written over: a
+// top-level window per `window_open`, one class for all of them, the thread's message
+// queue pumped by `window_poll` into a ring of `WindowEvent`s the window procedure
+// fills, a software present of a BGRA8 image through GDI, the cursor, pointer capture,
+// the clipboard's text and the primary monitor. Scale is the window's DPI in per
+// cent of 96. IME composition is not delivered yet: text arrives per WM_CHAR, a
+// surrogate pair joined.
+// ponytail: the primary monitor only; EnumDisplayMonitors when a second one matters.
+
+type Window = struct { raw: usize }
+type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool }
+type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focused: bool, visible: bool }
+type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
+type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
+type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
+type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
+
+// WNDCLASSEXW, MSG, RECT and BITMAPINFOHEADER as user32 and gdi32 lay them out.
+type WindowClass = struct { size: u32, style: u32, procedure: fn(usize, u32, usize, isize) -> isize, class_extra: i32, window_extra: i32, instance: usize, icon: usize, cursor: usize, background: usize, menu_name: usize, class_name: *const u16, small_icon: usize }
+type WindowMessage = struct { window: usize, message: u32, padding: u32, wparam: usize, lparam: isize, time: u32, x: i32, y: i32, padding2: u32 }
+type WindowRect = struct { left: i32, top: i32, right: i32, bottom: i32 }
+type BitmapInfo = struct { size: u32, width: i32, height: i32, planes: u16, bit_count: u16, compression: u32, image_size: u32, x_ppm: i32, y_ppm: i32, colours_used: u32, colours_important: u32 }
+
+const WINDOW_RING: usize = 256usize
+const WINDOW_TABLE: usize = 16usize
+
+var window_events: [256]WindowEvent = zero
+var window_event_head: usize = 0usize
+var window_event_count: usize = 0usize
+var window_handles: [16]usize = zero
+var window_cursors: [16]CursorShape = zero
+var window_class_atom: u16 = 0u16
+var window_class_name: [16]u16 = zero
+var window_pending_surrogate: u32 = 0u32
+
+@import("user32.dll", "RegisterClassExW")
+extern fn raw_register_class(class: *const WindowClass) -> u16
+
+@import("user32.dll", "CreateWindowExW")
+extern fn raw_create_window(ex_style: u32, class_name: *const u16, title: *const u16, style: u32, x: i32, y: i32, width: i32, height: i32, parent: usize, menu: usize, instance: usize, parameter: usize) -> usize
+
+@import("user32.dll", "DestroyWindow")
+extern fn raw_destroy_window(window: usize) -> i32
+
+@import("user32.dll", "ShowWindow")
+extern fn raw_show_window(window: usize, command: i32) -> i32
+
+@import("user32.dll", "PeekMessageW")
+extern fn raw_peek_message(message: *WindowMessage, window: usize, first: u32, last: u32, remove: u32) -> i32
+
+@import("user32.dll", "TranslateMessage")
+extern fn raw_translate_message(message: *const WindowMessage) -> i32
+
+@import("user32.dll", "DispatchMessageW")
+extern fn raw_dispatch_message(message: *const WindowMessage) -> isize
+
+@import("user32.dll", "DefWindowProcW")
+extern fn raw_default_procedure(window: usize, message: u32, wparam: usize, lparam: isize) -> isize
+
+@import("user32.dll", "MsgWaitForMultipleObjects")
+extern fn raw_message_wait(count: u32, handles: usize, wait_all: i32, milliseconds: u32, wake_mask: u32) -> u32
+
+@import("user32.dll", "GetClientRect")
+extern fn raw_client_rect(window: usize, rect: *WindowRect) -> i32
+
+@import("user32.dll", "AdjustWindowRectEx")
+extern fn raw_adjust_window_rect(rect: *WindowRect, style: u32, menu: i32, ex_style: u32) -> i32
+
+@import("user32.dll", "SetWindowTextW")
+extern fn raw_set_window_text(window: usize, text: *const u16) -> i32
+
+@import("user32.dll", "LoadCursorW")
+extern fn raw_load_cursor(instance: usize, name: usize) -> usize
+
+@import("user32.dll", "SetCursor")
+extern fn raw_set_cursor(cursor: usize) -> usize
+
+@import("user32.dll", "SetCapture")
+extern fn raw_set_capture(window: usize) -> usize
+
+@import("user32.dll", "ReleaseCapture")
+extern fn raw_release_capture() -> i32
+
+@import("user32.dll", "GetDC")
+extern fn raw_get_dc(window: usize) -> usize
+
+@import("user32.dll", "ReleaseDC")
+extern fn raw_release_dc(window: usize, dc: usize) -> i32
+
+@import("user32.dll", "GetDpiForWindow")
+extern fn raw_dpi_for_window(window: usize) -> u32
+
+@import("user32.dll", "GetDpiForSystem")
+extern fn raw_dpi_for_system() -> u32
+
+@import("user32.dll", "SetProcessDpiAwarenessContext")
+extern fn raw_set_dpi_awareness(context: isize) -> i32
+
+@import("user32.dll", "GetForegroundWindow")
+extern fn raw_foreground_window() -> usize
+
+@import("user32.dll", "IsWindowVisible")
+extern fn raw_is_window_visible(window: usize) -> i32
+
+@import("user32.dll", "GetKeyState")
+extern fn raw_key_state(key: i32) -> i16
+
+@import("user32.dll", "GetSystemMetrics")
+extern fn raw_system_metrics(index: i32) -> i32
+
+@import("user32.dll", "OpenClipboard")
+extern fn raw_open_clipboard(owner: usize) -> i32
+
+@import("user32.dll", "CloseClipboard")
+extern fn raw_close_clipboard() -> i32
+
+@import("user32.dll", "EmptyClipboard")
+extern fn raw_empty_clipboard() -> i32
+
+@import("user32.dll", "GetClipboardData")
+extern fn raw_clipboard_data(format: u32) -> usize
+
+@import("user32.dll", "SetClipboardData")
+extern fn raw_set_clipboard_data(format: u32, handle: usize) -> usize
+
+@import("kernel32.dll", "GlobalAlloc")
+extern fn raw_global_alloc(flags: u32, bytes: usize) -> usize
+
+@import("kernel32.dll", "GlobalLock")
+extern fn raw_global_lock(handle: usize) -> *u16
+
+@import("kernel32.dll", "lstrlenW")
+extern fn raw_wide_length(text: *const u16) -> i32
+
+@import("kernel32.dll", "GlobalUnlock")
+extern fn raw_global_unlock(handle: usize) -> i32
+
+@import("kernel32.dll", "GlobalFree")
+extern fn raw_global_free(handle: usize) -> usize
+
+@import("kernel32.dll", "GetModuleHandleW")
+extern fn raw_module_handle(name: usize) -> usize
+
+@import("gdi32.dll", "SetDIBitsToDevice")
+extern fn raw_set_dib_bits(dc: usize, x: i32, y: i32, width: u32, height: u32, source_x: i32, source_y: i32, first_scan: u32, scan_count: u32, bits: *const u8, info: *const BitmapInfo, usage: u32) -> i32
+
+const WS_OVERLAPPEDWINDOW: u32 = 13565952u32
+const WS_OVERLAPPED_FIXED: u32 = 13238272u32
+const WS_VISIBLE: u32 = 268435456u32
+const CW_USEDEFAULT: i32 = -2147483648i32
+const SW_SHOW: i32 = 5i32
+const SW_HIDE: i32 = 0i32
+const PM_REMOVE: u32 = 1u32
+const QS_ALLINPUT: u32 = 1279u32
+const CF_UNICODETEXT: u32 = 13u32
+const GMEM_MOVEABLE_ZEROED: u32 = 66u32
+const CS_OWNDC: u32 = 32u32
+const DPI_AWARENESS_PER_MONITOR_V2: isize = -4isize
+
+fn window_slot(handle: usize) -> usize {
+    var at = 0usize
+    while at < WINDOW_TABLE {
+        if window_handles[at] == handle { ret at }
+        at += 1usize
+    }
+    ret WINDOW_TABLE
+}
+
+fn window_push(event: WindowEvent) {
+    if window_event_count >= WINDOW_RING { ret }
+    window_events[(window_event_head + window_event_count) % WINDOW_RING] = event
+    window_event_count += 1usize
+}
+
+fn window_modifiers() -> u8 {
+    var bits = 0u8
+    if raw_key_state(16i32) < 0i16 { bits = bits | 1u8 }
+    if raw_key_state(17i32) < 0i16 { bits = bits | 2u8 }
+    if raw_key_state(18i32) < 0i16 { bits = bits | 4u8 }
+    if raw_key_state(91i32) < 0i16 || raw_key_state(92i32) < 0i16 { bits = bits | 8u8 }
+    if raw_key_state(20i32) & 1i16 != 0i16 { bits = bits | 16u8 }
+    if raw_key_state(144i32) & 1i16 != 0i16 { bits = bits | 32u8 }
+    ret bits
+}
+
+fn window_pointer(kind: WindowEventKind, handle: usize, lparam: isize, button: u8) -> WindowEvent {
+    var event: WindowEvent = zero
+    event.kind = kind
+    event.window = Window { raw: handle }
+    let bits = mem.bitcast[usize](lparam)
+    event.x = i32(mem.bitcast[i16](u16(bits & 65535usize)))
+    event.y = i32(mem.bitcast[i16](u16((bits >> 16usize) & 65535usize)))
+    event.button = button
+    event.modifiers = window_modifiers()
+    ret event
+}
+
+fn window_cursor_handle(shape: CursorShape) -> usize {
+    var name = 32512usize
+    if shape == .Text { name = 32513usize }
+    if shape == .Hand { name = 32649usize }
+    if shape == .Crosshair { name = 32515usize }
+    if shape == .ResizeHorizontal { name = 32644usize }
+    if shape == .ResizeVertical { name = 32645usize }
+    if shape == .Hidden { ret 0usize }
+    ret raw_load_cursor(0usize, name)
+}
+
+// The window procedure: every message becomes an event in the ring, or goes to the
+// default. Closing is the program's decision, so WM_CLOSE only reports.
+@cc(c)
+fn window_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) -> isize {
+    var event: WindowEvent = zero
+    event.window = Window { raw: handle }
+    event.modifiers = window_modifiers()
+    if message == 16u32 {
+        event.kind = .Close
+        window_push(event)
+        ret 0isize
+    }
+    if message == 5u32 {
+        event.kind = .Resize
+        let size_bits = mem.bitcast[usize](lparam)
+        event.width = u32(size_bits & 65535usize)
+        event.height = u32((size_bits >> 16usize) & 65535usize)
+        window_push(event)
+        ret 0isize
+    }
+    if message == 7u32 {
+        event.kind = .Focus
+        window_push(event)
+        ret 0isize
+    }
+    if message == 8u32 {
+        event.kind = .Blur
+        window_push(event)
+        ret 0isize
+    }
+    if message == 15u32 {
+        event.kind = .Paint
+        window_push(event)
+        ret raw_default_procedure(handle, message, wparam, lparam)
+    }
+    if message == 512u32 {
+        window_push(window_pointer(.PointerMove, handle, lparam, 0u8))
+        ret 0isize
+    }
+    if message == 513u32 || message == 516u32 || message == 519u32 || message == 523u32 {
+        var button = 0u8
+        if message == 516u32 { button = 1u8 }
+        if message == 519u32 { button = 2u8 }
+        if message == 523u32 { button = 2u8 + u8((wparam >> 16usize) & 3usize) }
+        window_push(window_pointer(.PointerDown, handle, lparam, button))
+        ret 0isize
+    }
+    if message == 514u32 || message == 517u32 || message == 520u32 || message == 524u32 {
+        var button = 0u8
+        if message == 517u32 { button = 1u8 }
+        if message == 520u32 { button = 2u8 }
+        if message == 524u32 { button = 2u8 + u8((wparam >> 16usize) & 3usize) }
+        window_push(window_pointer(.PointerUp, handle, lparam, button))
+        ret 0isize
+    }
+    if message == 522u32 {
+        var scroll = window_pointer(.Scroll, handle, lparam, 0u8)
+        scroll.delta = i32(mem.bitcast[i16](u16((wparam >> 16usize) & 65535usize)))
+        window_push(scroll)
+        ret 0isize
+    }
+    if message == 256u32 || message == 260u32 || message == 257u32 || message == 261u32 {
+        event.kind = .KeyDown
+        if message == 257u32 || message == 261u32 { event.kind = .KeyUp }
+        event.key = u32(wparam & 255usize)
+        event.repeat = ((mem.bitcast[usize](lparam) >> 30usize) & 1usize) != 0usize
+        window_push(event)
+        if message == 260u32 || message == 261u32 { ret raw_default_procedure(handle, message, wparam, lparam) }
+        ret 0isize
+    }
+    if message == 258u32 {
+        let unit = u32(wparam & 65535usize)
+        if unit >= 55296u32 && unit < 56320u32 {
+            window_pending_surrogate = unit
+            ret 0isize
+        }
+        event.kind = .Text
+        event.codepoint = unit
+        if unit >= 56320u32 && unit < 57344u32 && window_pending_surrogate != 0u32 {
+            event.codepoint = 65536u32 + ((window_pending_surrogate - 55296u32) << 10u32) + (unit - 56320u32)
+        }
+        window_pending_surrogate = 0u32
+        window_push(event)
+        ret 0isize
+    }
+    if message == 32u32 {
+        if (mem.bitcast[usize](lparam) & 65535usize) == 1usize {
+            let slot = window_slot(handle)
+            var shape: CursorShape = .Arrow
+            if slot < WINDOW_TABLE { shape = window_cursors[slot] }
+            let set = raw_set_cursor(window_cursor_handle(shape))
+            ret 1isize
+        }
+        ret raw_default_procedure(handle, message, wparam, lparam)
+    }
+    ret raw_default_procedure(handle, message, wparam, lparam)
+}
+
+fn window_register() -> err {
+    if window_class_atom != 0u16 { ret ok }
+    let aware = raw_set_dpi_awareness(DPI_AWARENESS_PER_MONITOR_V2)
+    let name = "neper.window"
+    var at = 0usize
+    while at < name.len {
+        window_class_name[at] = u16(name[at])
+        at += 1usize
+    }
+    window_class_name[name.len] = 0u16
+    var class: WindowClass = zero
+    class.size = 80u32
+    class.style = CS_OWNDC
+    class.procedure = window_procedure
+    class.instance = raw_module_handle(0usize)
+    class.cursor = raw_load_cursor(0usize, 32512usize)
+    class.class_name = &window_class_name[0usize]
+    let atom = raw_register_class(&class)
+    if atom == 0u16 { ret from_last_error() }
+    window_class_atom = atom
+    ret ok
+}
+
+fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
+    var none: Window = zero
+    if options.width == 0u32 || options.height == 0u32 || options.width > 16384u32 || options.height > 16384u32 { ret (none, Unsupported) }
+    let register_error = window_register()
+    if register_error != ok { ret (none, register_error) }
+    let slot = window_slot(0usize)
+    if slot >= WINDOW_TABLE { ret (none, OutOfMemory) }
+    let checkpoint = mem.mark(a)
+    let (title, title_error) = widen(a, options.title)
+    if title_error != ok {
+        mem.reset(a, checkpoint)
+        ret (none, title_error)
+    }
+    var style = WS_OVERLAPPED_FIXED
+    if options.resizable { style = WS_OVERLAPPEDWINDOW }
+    if options.visible { style = style | WS_VISIBLE }
+    // The size asked for is the client's; the frame is added around it.
+    var rect = WindowRect { left: 0i32, top: 0i32, right: i32(options.width), bottom: i32(options.height) }
+    let adjusted = raw_adjust_window_rect(&rect, style, 0i32, 0u32)
+    let handle = raw_create_window(0u32, &window_class_name[0usize], &title[0usize], style, CW_USEDEFAULT, CW_USEDEFAULT, rect.right - rect.left, rect.bottom - rect.top, 0usize, 0usize, raw_module_handle(0usize), 0usize)
+    mem.reset(a, checkpoint)
+    if handle == 0usize { ret (none, from_last_error()) }
+    window_handles[slot] = handle
+    window_cursors[slot] = .Arrow
+    ret (Window { raw: handle }, ok)
+}
+
+fn window_close(w: Window) -> err {
+    let slot = window_slot(w.raw)
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    window_handles[slot] = 0usize
+    // Its events are dropped with it: a Close for a window that is gone is noise.
+    var kept = 0usize
+    var at = 0usize
+    while at < window_event_count {
+        let event = window_events[(window_event_head + at) % WINDOW_RING]
+        if event.window.raw != w.raw {
+            window_events[(window_event_head + kept) % WINDOW_RING] = event
+            kept += 1usize
+        }
+        at += 1usize
+    }
+    window_event_count = kept
+    if raw_destroy_window(w.raw) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
+// The next event of any window on this thread: the ring first, then the message
+// queue pumped once, waiting up to `timeout_ns` for something to arrive when both
+// are empty. `false` with `ok` is "nothing yet".
+fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
+    var none: WindowEvent = zero
+    if window_event_count == 0usize {
+        if timeout_ns > 0i64 {
+            var milliseconds = u32(timeout_ns / 1000000i64)
+            if timeout_ns % 1000000i64 != 0i64 { milliseconds += 1u32 }
+            let woke = raw_message_wait(0u32, 0usize, 0i32, milliseconds, QS_ALLINPUT)
+        }
+        var message: WindowMessage = zero
+        while raw_peek_message(&message, 0usize, 0u32, 0u32, PM_REMOVE) != 0i32 {
+            let translated = raw_translate_message(&message)
+            let dispatched = raw_dispatch_message(&message)
+        }
+    }
+    if window_event_count == 0usize { ret (none, false, ok) }
+    let event = window_events[window_event_head]
+    window_event_head = (window_event_head + 1usize) % WINDOW_RING
+    window_event_count = window_event_count - 1usize
+    ret (event, true, ok)
+}
+
+fn window_metrics(w: Window) -> (WindowMetrics, err) {
+    var metrics: WindowMetrics = zero
+    if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret (metrics, NotFound) }
+    var rect: WindowRect = zero
+    if raw_client_rect(w.raw, &rect) == 0i32 { ret (metrics, from_last_error()) }
+    metrics.width = u32(rect.right - rect.left)
+    metrics.height = u32(rect.bottom - rect.top)
+    metrics.scale_percent = raw_dpi_for_window(w.raw) * 100u32 / 96u32
+    metrics.focused = raw_foreground_window() == w.raw
+    metrics.visible = raw_is_window_visible(w.raw) != 0i32
+    ret (metrics, ok)
+}
+
+fn window_title(w: Window, value: str) -> err {
+    if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret NotFound }
+    var storage: [4096]u8 = zero
+    var scratch = mem.arena_from(storage[..])
+    let (title, title_error) = widen(&scratch, value)
+    if title_error != ok { ret title_error }
+    if raw_set_window_text(w.raw, &title[0usize]) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
+fn window_visible(w: Window, value: bool) -> err {
+    if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret NotFound }
+    var command = SW_HIDE
+    if value { command = SW_SHOW }
+    let shown = raw_show_window(w.raw, command)
+    ret ok
+}
+
+fn window_cursor(w: Window, shape: CursorShape) -> err {
+    let slot = window_slot(w.raw)
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    window_cursors[slot] = shape
+    let set = raw_set_cursor(window_cursor_handle(shape))
+    ret ok
+}
+
+fn window_capture(w: Window, on: bool) -> err {
+    if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret NotFound }
+    if on {
+        let previous = raw_set_capture(w.raw)
+        ret ok
+    }
+    let released = raw_release_capture()
+    ret ok
+}
+
+// `pixels` is `width * height` BGRA8 pixels, row-major from the top, drawn at the
+// client's origin; rows past the client are clipped by the device.
+fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret NotFound }
+    if width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
+    let dc = raw_get_dc(w.raw)
+    if dc == 0usize { ret from_last_error() }
+    var info: BitmapInfo = zero
+    info.size = 40u32
+    info.width = i32(width)
+    info.height = 0i32 - i32(height)
+    info.planes = 1u16
+    info.bit_count = 32u16
+    let lines = raw_set_dib_bits(dc, 0i32, 0i32, width, height, 0i32, 0i32, 0u32, height, mem.cast[*const u8](&pixels[0usize]), &info, 0u32)
+    let released = raw_release_dc(w.raw, dc)
+    // Zero lines with no error is a window nothing of which is showing.
+    if lines == 0i32 && raw_last_error() != 0u32 { ret from_last_error() }
+    ret ok
+}
+
+// The handle and its module, for a `gpu.Surface` of kind `.Win32`.
+fn window_native(w: Window) -> (usize, usize, err) {
+    if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret (0usize, 0usize, NotFound) }
+    ret (w.raw, raw_module_handle(0usize), ok)
+}
+
+fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
+    var nothing: []const MonitorInfo = zero
+    if limit == 0usize { ret (nothing, Unsupported) }
+    let (found, found_error) = mem.alloc[MonitorInfo](a, 1usize)
+    if found_error != ok { ret (nothing, OutOfMemory) }
+    found[0usize] = MonitorInfo { x: 0i32, y: 0i32, width: u32(raw_system_metrics(0i32)), height: u32(raw_system_metrics(1i32)), scale_percent: raw_dpi_for_system() * 100u32 / 96u32, primary: true }
+    ret (found[0usize..1usize], ok)
+}
+
+// The clipboard is one lock for the whole desktop, and another process holds it for
+// the instant of its own read or write; a refusal is retried over a bounded wait
+// before it is answered, as every clipboard client does.
+fn clipboard_open() -> err {
+    var attempt = 0usize
+    while true {
+        if raw_open_clipboard(0usize) != 0i32 { ret ok }
+        let failure = from_last_error()
+        if attempt == 10usize { ret failure }
+        raw_sleep(10u32)
+        attempt += 1usize
+    }
+    ret Failed
+}
+
+// The clipboard's text, or an empty string when it holds none.
+fn clipboard_text(a: *mem.Arena) -> (str, err) {
+    let open_error = clipboard_open()
+    if open_error != ok { ret ("", open_error) }
+    let handle = raw_clipboard_data(CF_UNICODETEXT)
+    if handle == 0usize {
+        let closed = raw_close_clipboard()
+        ret ("", ok)
+    }
+    let units = raw_global_lock(handle)
+    if mem.address_of(units) == 0usize {
+        let closed = raw_close_clipboard()
+        ret ("", Failed)
+    }
+    let count = usize(raw_wide_length(units))
+    var text = ""
+    var text_error = ok
+    if count != 0usize {
+        let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+        if bytes_error != ok {
+            text_error = OutOfMemory
+        } else {
+            touch(&bytes[0usize], count * 3usize)
+            let converted = raw_narrow(CP_UTF8, 0u32, units, i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+            if converted <= 0i32 { text_error = Failed } else { text = bytes[0usize..usize(converted)] }
+        }
+    }
+    let unlocked = raw_global_unlock(handle)
+    let closed = raw_close_clipboard()
+    ret (text, text_error)
+}
+
+fn set_clipboard_text(value: str) -> err {
+    var storage: [65536]u8 = zero
+    var scratch = mem.arena_from(storage[..])
+    let (units, units_error) = widen(&scratch, value)
+    if units_error != ok { ret units_error }
+    var count = 0usize
+    while units[count] != 0u16 { count += 1usize }
+    let handle = raw_global_alloc(GMEM_MOVEABLE_ZEROED, (count + 1usize) * 2usize)
+    if handle == 0usize { ret OutOfMemory }
+    let locked = raw_global_lock(handle)
+    if mem.address_of(locked) == 0usize {
+        let freed = raw_global_free(handle)
+        ret Failed
+    }
+    // Widened a second time, straight into the block; its last unit stays zero.
+    if count != 0usize {
+        let written = raw_widen(CP_UTF8, 0u32, &value[0usize], i32(value.len), locked, i32(count))
+    }
+    let unlocked = raw_global_unlock(handle)
+    let open_error = clipboard_open()
+    if open_error != ok {
+        let freed = raw_global_free(handle)
+        ret open_error
+    }
+    let emptied = raw_empty_clipboard()
+    let set = raw_set_clipboard_data(CF_UNICODETEXT, handle)
+    let closed = raw_close_clipboard()
+    if set == 0usize { ret Failed }
+    ret ok
+}

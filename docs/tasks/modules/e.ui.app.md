@@ -4,7 +4,7 @@
 |---|---|
 | file to create | `lib/e/ui/app.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
-| blocked by | `native-window-api`, `native-accessibility-api` |
+| blocked by | `native-accessibility-api` |
 | unmet dependencies | `e.gfx.scene`, `e.ui.accessibility`, `e.ui.animation`, `e.ui.input`, `e.ui.widget`, `e.ui.window` |
 
 ## Definition of done

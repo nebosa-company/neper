@@ -19,7 +19,7 @@ Predecessor: queue item C084 (`docs/tasks/compiler/`) delivers the M1 debug subs
 
 ## Code anchors
 
-- nearest existing implementation: `lib/e/proc.e`, `lib/e/os.windows.e`‡, `lib/e/os.linux.e`†, `src/disasm_x64.e`† († over 40 KB, ‡ over 120 KB — read by region)
+- nearest existing implementation: `lib/e/proc.e`, `lib/e/os.windows.e`‡, `lib/e/os.linux.e`‡, `src/disasm_x64.e`† († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session
 

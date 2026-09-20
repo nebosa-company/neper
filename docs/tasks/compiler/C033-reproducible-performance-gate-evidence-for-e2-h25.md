@@ -97,7 +97,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `m2-baseline.md`: `benchmarks/baseline/render.py`×2, `benchmarks/baseline/gate.py`×1, `benchmarks/baseline/measure.py`×1
 - `benchmarks/baseline/gate.py`: `benchmarks/baseline/gate.py`×1
 - `os.touch`: `src/runtime_pe_x64.asm`×2†, `src/check.e`×1‡
-- `e.os`: `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×118, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×117, `src/resolve.e`×36†, `lib/e/os.linux.e`×8†, `src/check.e`×8‡, `lib/e/fs.e`×7, `lib/e/proc.e`×6, `tests/conformance/tools/context_moves.x64-linux.expected.jsonl`×6
+- `e.os`: `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×118, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×117, `src/resolve.e`×36†, `lib/e/os.linux.e`×8‡, `src/check.e`×8‡, `lib/e/fs.e`×7, `lib/e/proc.e`×6, `tests/conformance/tools/context_moves.x64-linux.expected.jsonl`×6
 - `benchmarks/baseline/static.py`: `benchmarks/baseline/static.py`×1
 - `gate.py`: `benchmarks/baseline/gate.py`×1, `benchmarks/baseline/static.py`×1
 

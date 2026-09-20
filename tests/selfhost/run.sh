@@ -1568,6 +1568,13 @@ gpu_present_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/gpu-present-selfhost"
 gpu_present_output=$("$test_build/gpu-present-selfhost")
 [ "$gpu_present_output" = 'gpu present ok' ]
+# The native window primitives (D795): declared on Linux and answering Unsupported
+# at window_open until the X11 connection lands.
+os_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_window/src/main.e" "$repo" x64 linux "$test_build/os-window-selfhost")
+[ "$os_window_written" = 'executable written' ]
+chmod +x "$test_build/os-window-selfhost"
+os_window_output=$("$test_build/os-window-selfhost")
+[ "$os_window_output" = 'os window unsupported' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

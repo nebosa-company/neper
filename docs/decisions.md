@@ -15117,3 +15117,44 @@ lintable from text: the program-wide resolution of a module-scope function
 name that collided for `put` and `hex_digit` while `same` is declared in
 seven modules without harm, and a bare enum member as a call argument in
 the enum's own module, which needs the types.
+
+## D795 — The native window primitives in `e.os`; `native-window-api` on Windows
+
+`docs/ui-framework.md` held `e.ui.window`, `e.ui.input` and `e.ui.app` behind
+`native-window-api`: reviewed `e.os` primitives for windows, monitors, event
+delivery, clipboard, cursor, pointer capture and IME, since a UI module never
+declares a platform `extern` of its own. The primitives are now in the
+fence, fourteen functions and seven types under "Windows" in section 5's
+`e.os` table, written per target as the rest of `e.os` is. `window_open`
+makes a top-level window at a client size, hidden or shown; `window_poll`
+pumps the thread's message queue once into a ring the window procedure
+fills and answers the next `WindowEvent` of any window -- close, resize,
+focus, blur, pointer move/down/up, scroll, key down/up, text, paint -- with
+the pointer position in client pixels, the button, the virtual key, the
+modifier bits and a code point for text; `window_present` draws a BGRA8
+image at the client's origin through GDI, which is how the CPU backend and
+a software renderer show a frame without a driver; `window_native` hands
+out the handle and module for a `gpu.Surface` of kind `.Win32` (D791);
+`window_metrics` carries the client size, the DPI as a percentage of 96,
+focus and visibility; the cursor, capture, title and visibility are one
+call each; `monitors` answers the primary display; `clipboard_text` and
+`set_clipboard_text` move UTF-8 through `CF_UNICODETEXT`. A closed or
+foreign handle is `NotFound`, the nine errors being the fence's. The window
+procedure is a `@cc(c)` neper function: for integer-class parameters the
+neper convention is the host's, so `user32` calls it as it calls any
+procedure, and it writes the ring rather than deciding anything -- closing
+is the program's call, which is why WM_CLOSE only reports.
+
+Linux declares the same fourteen and answers `Unsupported` at `window_open`
+until the X11 connection over the display socket lands, the next increment
+of this blocker; the fixture `link/os_window` prints "os window
+unsupported" there and runs the whole surface on Windows, with the window
+hidden but for the second in which it shows to collect its first events.
+Not in this: IME composition -- text arrives per WM_CHAR with a surrogate
+pair joined, and `composition_rect` waits on `imm32` -- and a second monitor,
+which `EnumDisplayMonitors` adds when one matters. One thing the fixture
+learned: `OpenClipboard` answers access denied in a session without an
+interactive window station -- this sandboxed runner, a service -- for every
+process alike, so `clipboard_text` retries over a bounded wait and answers
+`Denied`, which the fixture accepts as the desktop's answer. `e.ui.window`,
+`e.ui.input` and `e.ui.app` are unblocked on the Windows host.

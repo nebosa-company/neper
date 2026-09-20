@@ -1401,6 +1401,41 @@ error Unsupported
 | `fn last_error_detail(operation: str, subject: str) -> ErrorDetail` | copies the classified `errno` / `GetLastError` after this thread's most recent failed `os.*` call and borrows the two caller strings |
 | `fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err)` | renders the platform message for `native_code` into `a` |
 
+**Windows** (D795). The native window primitives `e.ui.window` and `e.ui.input`
+are written over, per target like the rest of this surface: a top-level window per
+`window_open`, its events through one `window_poll` for the thread, a software
+present of a BGRA8 image, the cursor, pointer capture, the primary monitor and the
+clipboard's text. `WindowEvent` carries the pointer position in client pixels, the
+button (0 primary, 1 secondary, 2 middle, 3 back, 4 forward), the host's virtual
+key, the modifier bits (1 shift, 2 control, 4 alt, 8 meta, 16 caps lock, 32 num
+lock), a scroll delta in 120ths of a notch and a code point for text. A host without
+windows -- Linux until its X11 connection lands -- answers `Unsupported` at
+`window_open`. IME composition is not delivered yet.
+
+```
+type Window = struct { raw: usize }
+type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool }
+type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focused: bool, visible: bool }
+type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
+type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
+type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
+type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
+```
+
+| `fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err)` | a top-level window with a client area of the size asked, hidden unless `visible`; `Unsupported` where the host has no windows or the size is zero or past 16384 |
+| `fn window_close(w: Window) -> err` | destroys the window and drops its queued events; a closed or foreign handle is `NotFound` |
+| `fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err)` | the next event of any window on this thread: the thread's message queue is pumped once, after waiting up to `timeout_ns` when nothing is queued; `false` is nothing yet |
+| `fn window_metrics(w: Window) -> (WindowMetrics, err)` | client size in physical pixels, the DPI as a percentage of 96, focus and visibility |
+| `fn window_title(w: Window, value: str) -> err` |  |
+| `fn window_visible(w: Window, value: bool) -> err` | shows or hides |
+| `fn window_cursor(w: Window, shape: CursorShape) -> err` | the cursor over the client area |
+| `fn window_capture(w: Window, on: bool) -> err` | pointer capture: every pointer event goes to this window until released |
+| `fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err` | draws `width * height` BGRA8 pixels, row-major from the top, at the client's origin through the host's software path; a short `pixels` is `Unsupported` |
+| `fn window_native(w: Window) -> (usize, usize, err)` | the native handle and its context, for a `gpu.Surface` (section 10, Presentation) |
+| `fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err)` | the displays, the primary first, into `a`; zero `limit` is `Unsupported` |
+| `fn clipboard_text(a: *mem.Arena) -> (str, err)` | the clipboard's text as UTF-8 into `a`, empty when it holds none |
+| `fn set_clipboard_text(value: str) -> err` | replaces the clipboard's contents with `value` |
+
 Every failing call returns one of the nine errors above after mapping the platform
 code; `Failed` is the catch-all, and `last_error_detail` gives an explicit portable
 classification plus the raw code when the mapping is not enough. This list is the v1

@@ -2809,3 +2809,74 @@ fn rename(a: *mem.Arena, src: str, dst: str) -> err {
     mem.reset(a, checkpoint)
     ret from_errno(result)
 }
+
+// ------------------------------------------------------------------ windows (D795)
+//
+// The native window primitives, declared here as the fence declares them and
+// answering `Unsupported`: the X11 connection over the display socket is the next
+// increment, and until it lands a Linux program learns at `window_open` that there
+// is no window to be had, not at the first event.
+
+type Window = struct { raw: usize }
+type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool }
+type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focused: bool, visible: bool }
+type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
+type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
+type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
+type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
+
+fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
+    var none: Window = zero
+    ret (none, Unsupported)
+}
+
+fn window_close(w: Window) -> err {
+    ret NotFound
+}
+
+fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
+    var none: WindowEvent = zero
+    ret (none, false, Unsupported)
+}
+
+fn window_metrics(w: Window) -> (WindowMetrics, err) {
+    var none: WindowMetrics = zero
+    ret (none, NotFound)
+}
+
+fn window_title(w: Window, value: str) -> err {
+    ret NotFound
+}
+
+fn window_visible(w: Window, value: bool) -> err {
+    ret NotFound
+}
+
+fn window_cursor(w: Window, shape: CursorShape) -> err {
+    ret NotFound
+}
+
+fn window_capture(w: Window, on: bool) -> err {
+    ret NotFound
+}
+
+fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
+    ret NotFound
+}
+
+fn window_native(w: Window) -> (usize, usize, err) {
+    ret (0usize, 0usize, NotFound)
+}
+
+fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
+    var nothing: []const MonitorInfo = zero
+    ret (nothing, Unsupported)
+}
+
+fn clipboard_text(a: *mem.Arena) -> (str, err) {
+    ret ("", Unsupported)
+}
+
+fn set_clipboard_text(value: str) -> err {
+    ret Unsupported
+}

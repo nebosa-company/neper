@@ -228,7 +228,9 @@ and tested with each platform's assistive APIs.
 The proposal records four blockers instead of weakening the platform-boundary rule:
 
 - `native-window-api`: reviewed `e.os` primitives for windows, monitors, event
-  delivery, clipboard, cursor, pointer capture and IME;
+  delivery, clipboard, cursor, pointer capture and IME -- delivered on Windows (D795,
+  spec section 5 "Windows"), Linux answering `Unsupported` until its X11 connection
+  lands, IME composition not yet;
 - `gpu-presentation-api`: `e.gpu` support for presentation targets, textures, render
   passes, blending, synchronization, resize and device-loss recovery -- delivered as
   images, targets and frames over kernels (D791, spec section 10 "Presentation");

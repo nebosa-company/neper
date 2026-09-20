@@ -20,6 +20,7 @@
 - `.idata`: `src/link_pe.e`×2
 - `project.yaml`: `src/main.e`×5‡, `src/assets.e`×4, `lib/e/asset.e`×1
 - `CURSOR`: `src/main.e`×1‡
+- `BITMAP`: `lib/e/os.windows.e`×1‡
 - `RCDATA`: `lib/e/fmt/html.e`×2†
 - `LANGUAGE`: `benchmarks/llm_edit/hard_context.py`×5
 - `.cur`: `src/parse.e`×201†, `src/tool.e`×43‡, `src/lower.e`×30‡, `src/nir.e`×25†, `src/main.e`×10‡, `lib/e/fmt/lzw.e`×6, `scripts/build-docs-pdf.py`×4, `lib/e/text/locale.e`×2

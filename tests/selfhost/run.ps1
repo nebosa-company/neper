@@ -1630,6 +1630,14 @@ $gpuPresentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gpuPresentWritten -ne 'executable written') { throw 'gpu_present emission failed' }
 $gpuPresentOutput = & $gpuPresentPath
 if ($LASTEXITCODE -ne 0 -or $gpuPresentOutput -ne 'gpu present ok') { throw "presentation answered wrongly: exit $LASTEXITCODE" }
+# The native window primitives (D795): a hidden window's metrics, title, cursor,
+# present, a second shown for its first events, capture, the primary monitor, the
+# clipboard's text, and a closed handle stale.
+$osWindowPath = Join-Path $testBuild 'os-window-selfhost.exe'
+$osWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_window\src\main.e') $repo 'x64' 'windows' $osWindowPath
+if ($LASTEXITCODE -ne 0 -or $osWindowWritten -ne 'executable written') { throw 'os_window emission failed' }
+$osWindowOutput = & $osWindowPath
+if ($LASTEXITCODE -ne 0 -or $osWindowOutput -ne 'os window ok') { throw "the window primitives answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
