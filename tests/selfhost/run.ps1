@@ -1606,6 +1606,16 @@ $formatGenericWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $formatGenericWritten -ne 'executable written') { throw 'format_generic emission failed' }
 $formatGenericOutput = & $formatGenericPath
 if ($LASTEXITCODE -ne 0 -or ($formatGenericOutput -join "`n") -ne 'n=42;m=-7;x=2.5;format generic ok') { throw "a formatter in a cross-module generic answered wrongly: $($formatGenericOutput -join "`n")" }
+# The fault buffer (D785): a kernel's failed bounds check is a record `sync` and
+# `download` answer as `Fault` once, the invocation gone and the others finished;
+# a `@nocheck` block carries no check and no record.
+foreach ($faultCase in @(@('gpu_fault_bounds', 'gpu fault ok'), @('gpu_fault_nocheck', 'gpu nocheck ok'))) {
+    $faultPath = Join-Path $testBuild ($faultCase[0] + '-selfhost.exe')
+    $faultWritten = & $compiler emit-executable (Join-Path $PSScriptRoot ('fixtures\link\' + $faultCase[0] + '\src\main.e')) $repo 'x64' 'windows' $faultPath
+    if ($LASTEXITCODE -ne 0 -or $faultWritten -ne 'executable written') { throw "$($faultCase[0]) emission failed" }
+    $faultOutput = & $faultPath
+    if ($LASTEXITCODE -ne 0 -or $faultOutput -ne $faultCase[1]) { throw "$($faultCase[0]) answered wrongly: exit $LASTEXITCODE" }
+}
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

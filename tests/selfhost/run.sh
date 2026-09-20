@@ -1540,6 +1540,18 @@ format_generic_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/format-generic-selfhost"
 format_generic_output=$("$test_build/format-generic-selfhost")
 [ "$format_generic_output" = 'n=42;m=-7;x=2.5;format generic ok' ]
+# The fault buffer (D785): a kernel's failed bounds check is a record `sync` and
+# `download` answer as `Fault` once, the invocation gone and the others finished;
+# a `@nocheck` block carries no check and no record.
+for fault_case in 'gpu_fault_bounds:gpu fault ok' 'gpu_fault_nocheck:gpu nocheck ok'; do
+    fault_name=${fault_case%%:*}
+    fault_expected=${fault_case#*:}
+    fault_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/$fault_name/src/main.e" "$repo" x64 linux "$test_build/$fault_name-selfhost")
+    [ "$fault_written" = 'executable written' ]
+    chmod +x "$test_build/$fault_name-selfhost"
+    fault_output=$("$test_build/$fault_name-selfhost")
+    [ "$fault_output" = "$fault_expected" ]
+done
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

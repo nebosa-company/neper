@@ -31,8 +31,17 @@
 //
 // Not here yet: the subgroup builtins, `Atomic` slices, a barrier in a helper a
 // kernel calls (only the kernel's own body is cut); `.Vulkan` and `.Cuda` answer
-// `Unsupported`, as a backend the build did not embed does; the fault buffer,
-// since the CPU build's checks trap where they fire.
+// `Unsupported`, as a backend the build did not embed does.
+//
+// The fault buffer (contract section 1.3, D785): a check failing in a kernel's CPU
+// build calls `fault`, which writes the queue's one record if none is written yet
+// and counts; the invocation is marked faulted and gone. The next `sync` or
+// `download` on the queue answers `Fault` once, keeps the record for `last_fault`,
+// and clears the count, so the queue keeps accepting work. On the CPU the buffer is
+// the queue's own state reached through `launch_queue`, since a launch runs on the
+// calling thread; a device gets it as one more argument slot. The CPU build keeps
+// its traps for overflow, divide, shift, narrow and slice bounds -- the checks a
+// release device build has no record for either.
 
 use e.mem
 use e.os
@@ -89,7 +98,7 @@ type DeviceState = struct {
     queues: u32,
 }
 
-type QueueState = struct { device: *DeviceState, index: u32, serial: u64 }
+type QueueState = struct { device: *DeviceState, index: u32, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
 // The invocation ids of the launch on the calling thread.
 var gid: Id = zero
@@ -104,6 +113,7 @@ var open_count: usize = 0usize
 var launch_size: [3]usize = zero
 var launch_groups: [3]usize = zero
 var launch_active: bool = zero
+var launch_queue: *QueueState = zero
 
 fn cpu_capabilities(a: *mem.Arena) -> ([]const Cap, err) {
     let (caps, caps_error) = mem.alloc[Cap](a, 5usize)
@@ -233,7 +243,7 @@ fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err) {
     if usize(state.queues) >= MAX_QUEUES { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[QueueState](state.arena, 1usize)
     if states_error != ok { ret (zero, states_error) }
-    states[0usize] = QueueState { device: state, index: state.queues, serial: 0u64 }
+    states[0usize] = QueueState { device: state, index: state.queues, serial: 0u64, fault_count: 0u32, fault: zero, last: zero, has_last: false }
     state.queues += 1u32
     let (handles, handles_error) = mem.alloc[Queue](state.arena, 1usize)
     if handles_error != ok { ret (zero, handles_error) }
@@ -360,9 +370,41 @@ fn wait(token_value: Token) -> err {
     ret ok
 }
 
+// The queue's fault, reported once: `Fault`, the record kept for `last_fault`.
+fn report_fault(state: *QueueState) -> err {
+    if state.fault_count == 0u32 { ret ok }
+    state.last = state.fault
+    state.has_last = true
+    state.fault_count = 0u32
+    ret Fault
+}
+
+// The record behind the last `Fault` this queue answered; `false` before one.
+fn last_fault(q: *Queue) -> (FaultRecord, bool) {
+    let (state, state_error) = queue_state(q)
+    if state_error != ok || !state.has_last { ret (zero, false) }
+    ret (state.last, true)
+}
+
+// Called from a kernel's fault path (D785): `kind` is the `FaultKind` value.
+fn fault(kind: u32, site: u32) {
+    if !launch_active { ret }
+    let state = launch_queue
+    state.fault_count += 1u32
+    if state.fault_count != 1u32 { ret }
+    var fault_kind: FaultKind = .Bounds
+    if kind == 1u32 { fault_kind = .Null }
+    if kind == 2u32 { fault_kind = .Tag }
+    if kind == 3u32 { fault_kind = .Alignment }
+    if kind == 4u32 { fault_kind = .Overflow }
+    if kind == 5u32 { fault_kind = .DivideByZero }
+    state.fault = FaultRecord { kernel: u32(state.serial), kind: fault_kind, site: site, gid: gid }
+}
+
 fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    try report_fault(state)
     let (slot, slot_error) = slot_of(state, src.owner, src.slot, src.generation)
     if slot_error != ok { ret slot_error }
     let buffer = state.device.buffers[slot]
@@ -373,8 +415,9 @@ fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err {
 }
 
 fn sync(q: *Queue) -> err {
-    let (_, state_error) = queue_state(q)
-    ret state_error
+    let (state, state_error) = queue_state(q)
+    if state_error != ok { ret state_error }
+    ret report_fault(state)
 }
 
 fn release[T: type](q: *Queue, buf: Buf[T]) -> err {
@@ -405,6 +448,8 @@ fn grid3(x: usize, y: usize, z: usize) -> Grid {
 // ------------------------------------------------------------------ the launch
 
 const DONE: usize = 4294967295usize
+// A faulted invocation's mark: gone, and not divergence.
+const FAULTED: usize = 4294967294usize
 
 // Workgroups along one axis: the invocation count divided by the workgroup size,
 // rounded up; zero invocations is zero workgroups.
@@ -568,6 +613,7 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     launch_groups[1usize] = gy
     launch_groups[2usize] = gz
     launch_active = true
+    launch_queue = state
     var group = 0usize
     let group_count = gx * gy * gz
     while group < group_count {
@@ -586,7 +632,8 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
             var local = 0usize
             while local < per_group {
                 let frame_at = base + local * bytes_per_frame
-                if frame_pc(frames, frame_at) != DONE {
+                let pc = frame_pc(frames, frame_at)
+                if pc != DONE && pc != FAULTED {
                     any_active = true
                     set_ids(group, local)
                     step(ctx, &frames[frame_at], &shared_storage[shared_base])
@@ -601,7 +648,7 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
             local = 0usize
             while local < per_group {
                 let reached = frame_pc(frames, base + local * bytes_per_frame)
-                if reached != DONE {
+                if reached != DONE && reached != FAULTED {
                     if waiting_at == DONE {
                         waiting_at = reached
                         waiting_local = local

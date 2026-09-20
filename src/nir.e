@@ -328,6 +328,9 @@ type Builder = struct {
     // resumes at; the dispatch at the entry branches to them by the frame's `pc`.
     kernel_barriers: usize,
     kernel_resume: []usize,
+    // `e.gpu.fault`, the function a failed check in a kernel calls instead of
+    // trapping (D785); a function reference, interned by lowering.
+    frame_fault: usize,
     // Bounds proofs (D356, H03): the `while i < x.len` loops open around the point
     // being lowered, innermost last -- the index and the slice by name, the first
     // token in the body that assigns the index, and whether the proof holds at all

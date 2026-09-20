@@ -359,9 +359,7 @@ fn emit_enum_check(c: *check.Checker, converted: usize, source: usize, ty: check
     try append_text(storage[..], &write_at, suffix)
     let (message, message_error) = nir.intern_string(builder, storage[..])
     if message_error != ok { ret message_error }
-    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, trap_kind, ty.module_index), false, message + 1usize, token)
-    if trap_error != ok { ret trap_error }
-    try nir.add_operand(builder, trap_instruction, source)
+    try emit_check_trap(builder, trap_kind, ty.module_index, message, source, token)
     let after_block = builder.block_count
     let (after_index, after_error) = nir.begin_block(builder)
     if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
@@ -424,9 +422,7 @@ fn emit_tag_check(c: *check.Checker, base: usize, base_type: check.Type, field_n
     try append_text(storage[..], &write_at, middle)
     let (message, message_error) = nir.intern_string(builder, storage[..])
     if message_error != ok { ret message_error }
-    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "tag", subject.module_index), false, message + 1usize, token)
-    if trap_error != ok { ret trap_error }
-    try nir.add_operand(builder, trap_instruction, tag)
+    try emit_check_trap(builder, "tag", subject.module_index, message, tag, token)
     let (after_index, after_error) = nir.begin_block(builder)
     if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
     ret ok
@@ -514,9 +510,7 @@ fn emit_align_check(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, ar
     try append_text(storage[..], &write_at, ": ")
     let (message, message_error) = nir.intern_string(builder, storage[..write_at])
     if message_error != ok { ret message_error }
-    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "align", module_index), false, message + 1usize, token)
-    if trap_error != ok { ret trap_error }
-    try nir.add_operand(builder, trap_instruction, address)
+    try emit_check_trap(builder, "align", module_index, message, address, token)
     let (after_index, after_error) = nir.begin_block(builder)
     if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
     ret ok
@@ -557,8 +551,12 @@ fn emit_null_check(c: *check.Checker, pointer: usize, pointer_type: check.Type, 
     }
     let (message, message_error) = nir.intern_string(builder, storage[..write_at])
     if message_error != ok { ret message_error }
-    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "null", pointer_type.module_index), false, message + 1usize, token)
-    if trap_error != ok { ret trap_error }
+    if builder.frame_mode {
+        try emit_kernel_fault(builder, pointer_type.module_index, 1usize, token)
+    } else {
+        let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "null", pointer_type.module_index), false, message + 1usize, token)
+        if trap_error != ok { ret trap_error }
+    }
     let (after_index, after_error) = nir.begin_block(builder)
     if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
     ret ok
@@ -600,9 +598,7 @@ fn emit_bool_check(c: *check.Checker, source: usize, source_type: check.Type, in
     if trap_block_error != ok || trap_index != trap_block { ret nir.InvalidControlFlow }
     let (message, message_error) = nir.intern_string(builder, "no bool has value ")
     if message_error != ok { ret message_error }
-    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "invalid", into.module_index), false, message + 1usize, token)
-    if trap_error != ok { ret trap_error }
-    try nir.add_operand(builder, trap_instruction, bits)
+    try emit_check_trap(builder, "invalid", into.module_index, message, bits, token)
     let (after_index, after_error) = nir.begin_block(builder)
     if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
     ret ok
@@ -3169,6 +3165,12 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     if !builder.nocheck && base_type.kind == .Array && proof_by_width(c, g, tree, module_index, children[1usize], base_type.array_length) {
         builder.nocheck = true
         builder.bounds_elided += 1usize
+    }
+    // In a kernel's CPU build the check is a fault record (D785), made here.
+    if !builder.nocheck && builder.frame_mode {
+        let bounds_error = emit_kernel_bounds(builder, module_index, index, length, c.tokens[usize(node.token_start)])
+        if bounds_error != ok { ret (0usize, element_type, bounds_error) }
+        builder.nocheck = true
     }
     let (address_instruction, address, address_error) = nir.emit(builder, .IndexAddress, element_type, true, element_info.size, c.tokens[usize(node.token_start)])
     builder.nocheck = was_nocheck
@@ -6355,6 +6357,14 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         let (resume_blocks, resume_blocks_error) = mem.alloc[usize](c.arena, 64usize)
         if resume_blocks_error != ok { ret resume_blocks_error }
         try nir.begin_frame(builder, frame_value, frame_values, frame_instructions, resume_blocks, c.tokens[usize(node.token_start)])
+        let (gpu_module, found_gpu) = graph.find_module(g, "e.gpu")
+        if !found_gpu { ret FunctionNotFound }
+        let (fault_index, found_fault) = check.find_function(c, gpu_module, "fault")
+        if !found_fault { ret FunctionNotFound }
+        let fault_function = c.functions[fault_index]
+        let (fault_ref, fault_ref_error) = nir.intern_function(builder, fault_function.owner_module_index, fault_function.name, fault_function.instance_id)
+        if fault_ref_error != ok { ret fault_ref_error }
+        builder.frame_fault = fault_ref
     }
     var parameter_at = 0usize
     while parameter_at < function.parameter_count {
@@ -6545,6 +6555,65 @@ fn emit_kernel_pc_store(builder: *nir.Builder, module_index: usize, value: usize
 // An invocation that returns writes the done mark, which the scheduler reads.
 fn emit_kernel_done(builder: *nir.Builder, token: lex.Token) -> err {
     ret emit_kernel_pc_store(builder, 0usize, KERNEL_DONE, token)
+}
+
+// A faulted invocation's mark: gone like a returned one, but excused from the
+// divergence check, since it is not one that returned before a barrier.
+const KERNEL_FAULTED: usize = 4294967294usize
+
+// A failed check in a kernel's CPU build is a fault record, not a trap (contract
+// section 1.3, D785): `e.gpu.fault(kind, line)` writes it to the queue's fault
+// buffer, the invocation writes its faulted mark and returns. `kind` is the
+// `FaultKind` member's value: 0 bounds, 1 null, 2 tag, 3 alignment.
+fn emit_kernel_fault(builder: *nir.Builder, module_index: usize, kind: usize, token: lex.Token) -> err {
+    let u32_type = check.make_type(.Integer, "u32", module_index)
+    let (kind_instruction, kind_value, kind_error) = nir.emit(builder, .ConstInteger, u32_type, true, kind, token)
+    if kind_error != ok { ret kind_error }
+    let site = nir.site_of(builder, token)
+    let (site_instruction, site_value, site_error) = nir.emit(builder, .ConstInteger, u32_type, true, site.line, token)
+    if site_error != ok { ret site_error }
+    let (call_instruction, call_ignored, call_error) = nir.emit(builder, .Call, zero, false, builder.frame_fault, token)
+    if call_error != ok { ret call_error }
+    try nir.add_operand(builder, call_instruction, kind_value)
+    try nir.add_operand(builder, call_instruction, site_value)
+    try emit_kernel_pc_store(builder, module_index, KERNEL_FAULTED, token)
+    let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
+    ret return_error
+}
+
+// A check's `.Trap` of section 11's `kind` row carrying `operand`, or the fault
+// record in a kernel's CPU build. `enum` and `invalid` fault as `Tag`: bytes that
+// name no member.
+fn emit_check_trap(builder: *nir.Builder, kind: str, module_index: usize, message: usize, operand: usize, token: lex.Token) -> err {
+    if builder.frame_mode {
+        var fault_kind = 2usize
+        if check.same(kind, "null") { fault_kind = 1usize }
+        if check.same(kind, "align") { fault_kind = 3usize }
+        ret emit_kernel_fault(builder, module_index, fault_kind, token)
+    }
+    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, kind, module_index), false, message + 1usize, token)
+    if trap_error != ok { ret trap_error }
+    ret nir.add_operand(builder, trap_instruction, operand)
+}
+
+// `x[i]` in a kernel's CPU build: the bounds check the CPU pays in the instruction
+// itself, as a compare and a branch to the fault path, the instruction unchecked.
+fn emit_kernel_bounds(builder: *nir.Builder, module_index: usize, index: usize, length: usize, token: lex.Token) -> err {
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (inside, inside_error) = emit_supplied_compare(builder, .Less, boolean, index, length, token)
+    if inside_error != ok { ret inside_error }
+    let fault_block = builder.block_count
+    let after_block = builder.block_count + 1usize
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, inside)
+    try nir.set_branch_targets(builder, decision, after_block, fault_block)
+    let (fault_index, fault_block_error) = nir.begin_block(builder)
+    if fault_block_error != ok || fault_index != fault_block { ret nir.InvalidControlFlow }
+    try emit_kernel_fault(builder, module_index, 0usize, token)
+    let (after_index, after_error) = nir.begin_block(builder)
+    if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
+    ret ok
 }
 
 // `gpu.barrier()`: the cut. The frame's `pc` becomes this barrier's number, the

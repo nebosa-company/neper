@@ -2508,6 +2508,7 @@ fn done(token_value: Token) -> (bool, err)
 fn wait(token_value: Token) -> err
 fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err
 fn sync(q: *Queue) -> err
+fn last_fault(q: *Queue) -> (FaultRecord, bool)
 fn release[T: type](q: *Queue, buf: Buf[T]) -> err
 fn grid1(x: usize) -> Grid
 fn grid2(x: usize, y: usize) -> Grid
@@ -2523,7 +2524,9 @@ falls back. `key_valid == false` means stable-key selection is unavailable, not 
 a fabricated index/name hash may substitute. `info` copies the opening-time descriptor
 of the selected device. Memory is reported capacity, not free or reserved storage.
 Every queue/buffer belongs to one open device, including when two opens address the
-same GPU. These additions are planned for M3 CPU/Vulkan, with CUDA in M4; they do not
+same GPU. A check failing in a kernel writes the queue's one `FaultRecord` and ends
+that invocation; the next `sync` or `download` answers `Fault` once and `last_fault`
+answers the record behind the last `Fault` the queue reported (D785). These additions are planned for M3 CPU/Vulkan, with CUDA in M4; they do not
 claim implementation or an optimized production CPU fallback.
 
 The device-only intrinsics are exactly `gid`, `lid`, `wgid`, `barrier`,

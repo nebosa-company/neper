@@ -14894,3 +14894,35 @@ own and answers `err`, or `(str, err)` for `format`, from `call_return`; the
 instance's expansion is owned by `instance_owner`, the module that
 instantiated it. `printf` and `format` in a generic of another module are
 pinned by `link/format_generic` over three element types.
+
+## D785 — The fault buffer and `gpu.Fault` on the CPU backend
+
+The CPU build of a kernel trapped where a check failed, which is the host's
+answer and not the device's: contract section 1.3 wants a fault record, the
+invocation gone, the other invocations finished, and the queue saying so.
+Now, in a kernel's CPU build (`frame_mode`), the checks lowering makes --
+tag, alignment, null, and the `enum`/`invalid` byte checks -- call
+`e.gpu.fault(kind, line)` instead of emitting a `.Trap`, write the frame's
+`pc` as `FAULTED` (`4294967294`) and return; `x[i]` gets the same treatment
+by an explicit compare-and-branch before an unchecked `IndexAddress`, since
+the bounds check otherwise lives in the code generator. `e.gpu.fault` writes
+the queue's one `FaultRecord` -- the launch's serial as `kernel`, the kind,
+the line as `site`, the invocation's `gid` -- when the count is zero and
+counts every fault after. The scheduler skips a faulted frame and excuses it
+from the divergence check, since it did not return before a barrier: it is
+gone. The next `sync` or `download` on the queue answers `Fault` once,
+keeps the record for `fn last_fault(q: *Queue) -> (FaultRecord, bool)` --
+the fence's addition, the record being the error's detail -- and clears the
+count, so the queue keeps accepting work. On the CPU the fault buffer is
+the queue's own state reached through a `launch_queue` global, since a
+launch runs on the calling thread; the "one more slot in the argument
+block" the contract describes is the device backend's shape of the same
+thing. `@nocheck` carries no check and no record, as before.
+
+Not converted, by design: overflow, divide, shift, narrow and slice-bounds
+checks live in the code generator and still trap in a kernel's CPU build;
+the release device build carries no record for the first four either, and a
+slice in a kernel is rare enough to wait for the day it faults. `site` is
+the line; the column and the file are the kernel's, which the record's
+`kernel` names by launch serial. Fixtures: `link/gpu_fault_bounds`,
+`link/gpu_fault_nocheck`; `gpu_fault_unchecked` waits on `--unchecked`.
