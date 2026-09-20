@@ -1434,6 +1434,13 @@ asset_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 chmod +x "$test_build/asset-selfhost"
 asset_output=$("$test_build/asset-selfhost")
 [ "$asset_output" = 'asset ok' ]
+# The build manifest lists every declared asset (D792): sorted by name, with the
+# project-relative path, media type, attributes, size and SHA-256.
+asset_manifest=$(cat "$repo/tests/selfhost/fixtures/link/asset/.neper/debug/build-manifest.json")
+case "$asset_manifest" in
+    *'"assets":[{"name":"bytes/all@1x","source":{"root":"project","path":"assets/all.bin"},"media_type":"application/octet-stream","attributes":[{"name":"base","value":"bytes/all"},{"name":"scale","value":"1"}],"size":256,"sha256":"40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"},{"name":"bytes/empty",'*'{"name":"text/hello","source":{"root":"project","path":"assets/hello.txt"},"media_type":"text/plain","attributes":[{"name":"base","value":"text/hello"},{"name":"locale","value":""},{"name":"theme","value":"any"}],"size":18,"sha256":"30d428be3e8f02a9e56e7d2363a421eb0f883382216df0c6c9c34e639d7ac9b0"}]'*) ;;
+    *) printf '%s\n' "the build manifest does not list the declared assets: $asset_manifest" >&2; exit 1 ;;
+esac
 asset_empty_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/asset_empty/src/main.e" "$repo" x64 linux "$test_build/asset-empty-selfhost")
 [ "$asset_empty_written" = 'executable written' ]
 chmod +x "$test_build/asset-empty-selfhost"

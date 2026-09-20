@@ -235,7 +235,9 @@ The proposal records four blockers instead of weakening the platform-boundary ru
 - `native-accessibility-api`: reviewed publication and action bridges for Windows,
   Linux and macOS accessibility systems.
 - `embedded-asset-linking`: canonical manifest ingestion, incremental hashing,
-  read-only executable sections and linker-generated `e.asset` registry symbols.
+  read-only executable sections and linker-generated `e.asset` registry symbols --
+  delivered as the generated registry module (D777) and the manifest's `assets`
+  entries (D792); incremental hashing is declined under the four-megabyte ceiling.
 
 These primitives must be specified in `spec.md` and added to the exact `e.os` and
 `e.gpu` catalogues before the blocked modules can move from proposal to

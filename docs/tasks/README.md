@@ -195,7 +195,7 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 | [`tooling/T011-info.md`](tooling/T011-info.md) | info | score 0.95, queue #41 |
 | [`tooling/T012-v1-schema-validation-of-emitted-records.md`](tooling/T012-v1-schema-validation-of-emitted-records.md) | v1 schema validation of emitted records | score 0.90, queue #42 |
 | [`tooling/T013-stable-diagnostic-codes-from-diagnostics-md.md`](tooling/T013-stable-diagnostic-codes-from-diagnostics-md.md) | Stable diagnostic codes from diagnostics.md | score 0.85, queue #43 |
-| [`tooling/T014-build-manifest-with-versions-and-sha-256.md`](tooling/T014-build-manifest-with-versions-and-sha-256.md) | Build manifest with versions and SHA-256 | score 0.90, queue #44 |
+| [`tooling/T014-build-manifest-with-versions-and-sha-256.md`](tooling/T014-build-manifest-with-versions-and-sha-256.md) | Build manifest with versions and SHA-256 | score 0.95, queue #44 |
 | [`tooling/T015-generated-source-maps.md`](tooling/T015-generated-source-maps.md) | Generated source maps | score 0.72, queue #45 |
 | [`tooling/T016-conformance-corpus-accept-reject-format-tokens-parse-tools.md`](tooling/T016-conformance-corpus-accept-reject-format-tokens-parse-tools.md) | Conformance corpus accept/reject/format/tokens/parse/tools | score 0.90, queue #46 |
 | [`tooling/T021-compiler-hashes-from-the-library.md`](tooling/T021-compiler-hashes-from-the-library.md) | Compiler hashes from the library | score 0.40, queue #47 |
@@ -210,7 +210,7 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 | [`modules/e.ui.accessibility.md`](modules/e.ui.accessibility.md) | layer 6, later | 11/11 missing; blocked by native-accessibility-api; needs e.ui.widget, e.ui.window |
 | [`modules/e.ui.animation.md`](modules/e.ui.animation.md) | layer 6, later | 7/7 missing; needs e.ui.widget |
 | [`modules/e.ui.app.md`](modules/e.ui.app.md) | layer 6, later | 10/10 missing; blocked by native-window-api, native-accessibility-api; needs e.gfx.scene, e.ui.accessibility, e.ui.animation, e.ui.input, e.ui.widget, e.ui.window |
-| [`modules/e.ui.asset.md`](modules/e.ui.asset.md) | layer 6, later | 15/15 missing; blocked by embedded-asset-linking; needs e.gfx.scene |
+| [`modules/e.ui.asset.md`](modules/e.ui.asset.md) | layer 6, later | 15/15 missing; needs e.gfx.scene |
 | [`modules/e.ui.input.md`](modules/e.ui.input.md) | layer 6, later | 20/20 missing; blocked by native-window-api; needs e.ui.window |
 | [`modules/e.ui.testing.md`](modules/e.ui.testing.md) | layer 6, later | 13/13 missing; needs e.gfx.scene, e.ui.input, e.ui.widget |
 | [`modules/e.ui.widget.md`](modules/e.ui.widget.md) | layer 6, later | 35/35 missing; needs e.gfx.scene, e.ui.input, e.ui.window |

@@ -118,7 +118,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `.len`: `src/main.e`×533‡, `src/check.e`×326‡, `src/tool.e`×308‡, `src/em.e`×158‡, `lib/e/fmt/json.e`×131†, `lib/e/net/tls.e`×116†, `lib/e/os.linux.e`×106†, `src/lower.e`×98‡
+- `.len`: `src/main.e`×533‡, `src/check.e`×326‡, `src/tool.e`×309‡, `src/em.e`×158‡, `lib/e/fmt/json.e`×131†, `lib/e/net/tls.e`×116†, `lib/e/os.linux.e`×106†, `src/lower.e`×98‡
 - `mem.reset`: `lib/e/os.windows.e`×68‡, `lib/e/os.linux.e`×49†, `lib/e/fmt/json.e`×26†, `lib/e/net/http.e`×26†, `lib/e/io.e`×17, `lib/e/fs.e`×14, `lib/e/grep.e`×10, `lib/e/net/ws.e`×7
 - `context_moves.ends`: `tests/conformance/tools/context_moves.x64-linux.expected.jsonl`×1, `tests/conformance/tools/context_moves.x64-windows.expected.jsonl`×1
 - `Resource`: `src/check.e`×144‡, `src/main.e`×16‡

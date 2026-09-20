@@ -17,6 +17,7 @@ use disasm_x64
 use em
 use check
 use layout
+use assets
 
 error Capacity
 error InvalidSource
@@ -5826,6 +5827,49 @@ fn quoted_function(out: *Out, c: *check.Checker, g: *graph.Graph, function_index
     ret byte(out, 34u8)
 }
 
+// The project's declared assets (D792): one line each, sorted by name as the
+// registry is, with the project-relative path, the media type, the attributes,
+// the size and the SHA-256 -- the identity `e.asset` carries, in the manifest.
+fn manifest_assets(a: *mem.Arena, out: *Out, g: *graph.Graph) -> err {
+    if !g.project.has_sources { ret ok }
+    let checkpoint = mem.mark(a)
+    let (entries, entries_error) = mem.alloc[assets.Entry](a, 256usize)
+    if entries_error != ok { ret entries_error }
+    var manifest_len = 0usize
+    let (count, collect_error) = assets.asset_collect(a, g.project.root, entries, &manifest_len)
+    if collect_error != ok { ret collect_error }
+    var at = 0usize
+    while at < count {
+        let e = &entries[at]
+        if at != 0usize { try byte(out, 44u8) }
+        try text(out, "{\"name\":")
+        try quoted(out, e.name)
+        try text(out, ",\"source\":")
+        try manifest_identity(out, "project", e.path)
+        try text(out, ",\"media_type\":")
+        try quoted(out, e.media_type)
+        try text(out, ",\"attributes\":[")
+        var k = 0usize
+        while k < e.attribute_count {
+            if k != 0usize { try byte(out, 44u8) }
+            try text(out, "{\"name\":")
+            try quoted(out, e.attribute_names[k])
+            try text(out, ",\"value\":")
+            try quoted(out, e.attribute_values[k])
+            try byte(out, 125u8)
+            k += 1usize
+        }
+        try text(out, "],\"size\":")
+        try decimal(out, e.bytes.len)
+        try text(out, ",\"sha256\":\"")
+        try text(out, e.hex[0usize..64usize])
+        try text(out, "\"}")
+        at += 1usize
+    }
+    mem.reset(a, checkpoint)
+    ret ok
+}
+
 fn manifest_identity(out: *Out, root: str, relative: str) -> err {
     try text(out, "{\"root\":\"")
     try text(out, root)
@@ -6230,7 +6274,9 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         try byte(out, 125u8)
         at += 1usize
     }
-    try text(out, "],\"libraries\":[],\"assets\":[],\"artifacts\":[")
+    try text(out, "],\"libraries\":[],\"assets\":[")
+    try manifest_assets(a, out, g)
+    try text(out, "],\"artifacts\":[")
     if artifact_path.len != 0usize {
         try text(out, "{\"path\":")
         try quoted(out, artifact_path)

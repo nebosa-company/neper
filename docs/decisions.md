@@ -15066,3 +15066,20 @@ per-pixel tolerance the proposal already asks for between the two. A
 sampled texture is a bilinear read in the kernel; a glyph atlas is an
 image the shaper writes. `e.gfx.scene` is unblocked; `e.ui.window` and
 `e.ui.app` wait on `native-window-api`, which fills the `Surface`.
+
+## D792 — The build manifest lists every declared asset
+
+D777 left the manifest's `assets` array empty, the generated `e.asset` module's
+own SHA-256 line carrying the identity. The schema had the shape all along --
+`name`, `source`, `media_type`, `attributes`, `size`, `sha256` -- and the
+manifest is where H19's "what went into this build" is answered, so it is
+filled: one entry per declared asset, sorted by logical name as the registry
+is, the path project-relative under root `project`, the attributes as
+name/value pairs in declaration order, the size and the file's SHA-256. The
+reading the overlay already does is the reading the manifest uses
+(`asset_collect`), so the two cannot disagree. Incremental hashing stays
+undone on purpose: every declared file is read and hashed on every load, and
+the ceiling of four megabytes in all (D777) bounds that at the cost of hashing
+the compiler's own sources, which every build pays already; a cache would
+carry invalidation rules for a saving under the warm build's noise. Pinned in
+both suites against the asset fixture's manifest.

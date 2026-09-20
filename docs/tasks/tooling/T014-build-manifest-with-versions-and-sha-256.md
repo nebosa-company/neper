@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | category | tooling / Tooling |
-| score | 0.90 of 1 |
+| score | 0.95 of 1 |
 | queue position | 44 of 49 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
@@ -24,13 +24,13 @@ S0 generated-code benchmark has been rerun with no unexplained regression.
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> `build-manifest-file PATH ROOT ARCH OS --json` (D238): the canonical `neper-build-manifest` object -- schema, version, tool and language versions, grammar revision, target, mode, root module, and one `inputs` entry per source module carrying its source identifier and the real SHA-256 of its bytes (ported into artifact_hash.e over the byte-per-slot representation, checked against the RFC 6234 `abc` vector and python hashlib); tests/conformance/tools/manifest.e pins it per host. A build writes the same object to `.neper/<mode>/build-manifest.json` under the project root with `mode` from `--release` and `artifacts` carrying the executable as named, `kind` executable, the target and the SHA-256 of the bytes written (D254), making the directory when it is missing (D287). Every input carries section 2's real identity (D265): `project-src` or `project-lib` with its path under that root, `toolchain-lib` for a module under the toolchain's lib, and the operand by its basename otherwise; and every module but the root is a `dependencies` entry with `interface_sha256` -- the source with every function body left out, so an edit inside a body moves only `body_sha256` -- and `body_sha256`, the whole file; tests/conformance/tools/manifest_project pins a two-module project per host. The artifact's path is project-relative as section 7 says (D293): the executable as named, made absolute under the current directory, then spelled from the project root with `/` separators, or kept absolute when it lies outside the project; both suites read the corpus build's artifact by that spelling. The `unsafe` inventory and `options.checks` (D355)
+> `build-manifest-file PATH ROOT ARCH OS --json` (D238): the canonical `neper-build-manifest` object -- schema, version, tool and language versions, grammar revision, target, mode, root module, and one `inputs` entry per source module carrying its source identifier and the real SHA-256 of its bytes (ported into artifact_hash.e over the byte-per-slot representation, checked against the RFC 6234 `abc` vector and python hashlib); tests/conformance/tools/manifest.e pins it per host. A build writes the same object to `.neper/<mode>/build-manifest.json` under the project root with `mode` from `--release` and `artifacts` carrying the executable as named, `kind` executable, the target and the SHA-256 of the bytes written (D254), making the directory when it is missing (D287). Every input carries section 2's real identity (D265): `project-src` or `project-lib` with its path under that root, `toolchain-lib` for a module under the toolchain's lib, and the operand by its basename otherwise; and every module but the root is a `dependencies` entry with `interface_sha256` -- the source with every function body left out, so an edit inside a body moves only `body_sha256` -- and `body_sha256`, the whole file; tests/conformance/tools/manifest_project pins a two-module project per host. The artifact's path is project-relative as section 7 says (D293): the executable as named, made absolute under the current directory, then spelled from the project root with `/` separators, or kept absolute when it lies outside the project; both suites read the corpus build's artifact by that spelling. The `unsafe` inventory and `options.checks` (D355). Every declared asset as an `assets` entry with its project-relative path, media type, attributes, size and SHA-256 (D792)
 
 ## Remaining work
 
 The queue's own gap clause, split into checklist lines. Each line is one session's target.
 
-- [ ] libraries and assets
+- [ ] libraries
 
 ## Decisions to read first
 
@@ -42,6 +42,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 - `D287` — `os.mkdir` joins the fixed surface, as a bootstrap intrinsic only (`docs/decisions.md:5635`)
 - `D293` — An artifact's manifest path is project-relative (`docs/decisions.md:5762`)
 - `D355` — A release build is a checked build, and every unsafe boundary is listed (`docs/decisions.md:7776`)
+- `D792` — The build manifest lists every declared asset (`docs/decisions.md:15070`)
 
 ## Code anchors
 

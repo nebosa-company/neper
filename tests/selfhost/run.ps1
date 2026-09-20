@@ -1527,6 +1527,10 @@ $assetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $assetWritten -ne 'executable written') { throw 'asset emission failed' }
 $assetOutput = & $assetPath
 if ($LASTEXITCODE -ne 0 -or $assetOutput -ne 'asset ok') { throw "an e.asset registry lookup answered wrongly: exit $LASTEXITCODE" }
+# The build manifest lists every declared asset (D792): sorted by name, with the
+# project-relative path, media type, attributes, size and SHA-256.
+$assetManifest = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'fixtures\link\asset\.neper\debug\build-manifest.json'))
+if ($assetManifest -notmatch '"assets":\[\{"name":"bytes/all@1x","source":\{"root":"project","path":"assets/all.bin"\},"media_type":"application/octet-stream","attributes":\[\{"name":"base","value":"bytes/all"\},\{"name":"scale","value":"1"\}\],"size":256,"sha256":"40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"\},\{"name":"bytes/empty",.*\{"name":"text/hello","source":\{"root":"project","path":"assets/hello.txt"\},"media_type":"text/plain","attributes":\[\{"name":"base","value":"text/hello"\},\{"name":"locale","value":""\},\{"name":"theme","value":"any"\}\],"size":18,"sha256":"30d428be3e8f02a9e56e7d2363a421eb0f883382216df0c6c9c34e639d7ac9b0"\}\]') { throw "the build manifest does not list the declared assets: $assetManifest" }
 $assetEmptyPath = Join-Path $testBuild 'asset-empty-selfhost.exe'
 $assetEmptyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\asset_empty\src\main.e') $repo 'x64' 'windows' $assetEmptyPath
 if ($LASTEXITCODE -ne 0 -or $assetEmptyWritten -ne 'executable written') { throw 'asset_empty emission failed' }

@@ -448,24 +448,46 @@ fn asset_generate_into(o: *Out, entries: []Entry, count: usize, attributes: usiz
 
 // The overlay for `lib/e/asset.e` when the project at `root` declares assets: the
 // generated text, or nothing when there is no manifest or no `assets:` key.
-fn asset_overlay(a: *mem.Arena, root: str, overlay_paths: []str, overlay_texts: []str, overlay_count: *usize) -> err {
-    if root.len == 0usize { ret ok }
+// The project's declared assets, sorted by name, each file read and hashed; zero
+// entries when the project has no manifest or declares none. The build manifest
+// lists them from here too (D792), so one reading serves both.
+fn asset_collect(a: *mem.Arena, root: str, entries: []Entry, manifest_len: *usize) -> (usize, err) {
+    *manifest_len = 0usize
+    if root.len == 0usize { ret (0usize, ok) }
     let (manifest_path, manifest_path_error) = asset_join(a, root, "project.yaml")
-    if manifest_path_error != ok { ret manifest_path_error }
-    let checkpoint = mem.mark(a)
+    if manifest_path_error != ok { ret (0usize, manifest_path_error) }
     let (manifest, manifest_error) = source.load(a, manifest_path)
-    if manifest_error != ok {
-        mem.reset(a, checkpoint)
-        ret ok
-    }
+    if manifest_error != ok { ret (0usize, ok) }
+    *manifest_len = manifest.len
+    let (count, parse_error) = parse_manifest(a, manifest, entries)
+    if parse_error != ok { ret (0usize, parse_error) }
+    if count == 0usize { ret (0usize, ok) }
+    let load_error = asset_load(a, root, entries, count)
+    if load_error != ok { ret (0usize, load_error) }
+    ret (count, ok)
+}
+
+fn asset_overlay(a: *mem.Arena, root: str, overlay_paths: []str, overlay_texts: []str, overlay_count: *usize) -> err {
+    let checkpoint = mem.mark(a)
     let (entries, entries_error) = mem.alloc[Entry](a, MAX_ASSETS)
     if entries_error != ok { ret entries_error }
-    let (count, parse_error) = parse_manifest(a, manifest, entries)
-    if parse_error != ok { ret parse_error }
+    var manifest_len = 0usize
+    let (count, collect_error) = asset_collect(a, root, entries, &manifest_len)
+    if collect_error != ok { ret collect_error }
     if count == 0usize {
         mem.reset(a, checkpoint)
         ret ok
     }
+    let (text, generate_error) = asset_generate(a, entries, count, manifest_len)
+    if generate_error != ok { ret generate_error }
+    if *overlay_count >= overlay_paths.len { ret AssetTooLarge }
+    overlay_paths[*overlay_count] = "lib/e/asset.e"
+    overlay_texts[*overlay_count] = text
+    *overlay_count += 1usize
+    ret ok
+}
+
+fn asset_load(a: *mem.Arena, root: str, entries: []Entry, count: usize) -> err {
     // Sorted by logical name; then every file read and hashed.
     var i = 1usize
     while i < count {
@@ -495,11 +517,5 @@ fn asset_overlay(a: *mem.Arena, root: str, overlay_paths: []str, overlay_texts: 
         entries[i].hex = hex
         i += 1usize
     }
-    let (text, generate_error) = asset_generate(a, entries, count, manifest.len)
-    if generate_error != ok { ret generate_error }
-    if *overlay_count >= overlay_paths.len { ret AssetTooLarge }
-    overlay_paths[*overlay_count] = "lib/e/asset.e"
-    overlay_texts[*overlay_count] = text
-    *overlay_count += 1usize
     ret ok
 }

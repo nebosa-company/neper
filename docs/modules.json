@@ -2049,9 +2049,7 @@
     "e.gfx.scene",
     "e.text.shape"
    ],
-   "blocked_by": [
-    "embedded-asset-linking"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.ui.input",
