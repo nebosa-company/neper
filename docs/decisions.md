@@ -14317,3 +14317,33 @@ chunk is caught, in debug and in release, on both hosts.
 
 That leaves the lane loop to `f16` alone, which this baseline cannot multiply at
 any width: `f16` arithmetic is F16C or AVX-512, behind the `--cpu` level.
+
+## D765 -- `--cpu x64-v3`: the packed forms over ymm
+
+Section 13's instruction levels reach the build: `--cpu x64-v1`, the SSE2
+baseline a build takes without the flag, `x64-v2`, and `x64-v3`, under which
+the packed lowering takes thirty-two bytes as one chunk and the emitter writes
+every packed instruction in its VEX.256 form. The selection tables gain no
+second column: the emitter's `Buffer` carries a `vex` flag the code generator
+sets around one thirty-two-byte operation, the SSE encoder writes the
+three-byte VEX prefix in its place -- the legacy destination as VEX's first
+source, the moves and the shuffle with that field unused (spelled as register
+0, whose inverted field is all ones, the one spelling the unit takes there),
+the shifts by an immediate with the destination in it -- and the bracket closes
+with `vzeroupper`, so the scalar float path's legacy forms pay no transition.
+The three synthesized multiplies hold on ymm as they are: `pshufd`, the
+unpacks and `packuswb` work within each hundred-and-twenty-eight-bit half,
+which is exactly the lane order each form wants.
+
+The level is a build option like the inlining cap: the identity's top byte
+carries the cap in its low six bits now -- a cap past 62 counts as 62 -- and
+the level less one above them, so a warm build at another level rebuilds every
+module as `options-changed` rather than linking the other level's code; the
+manifest's `options.cpu` names it, `compare-manifests` holds it, `info` lists
+the three levels, and a level the build does not have is a usage error. The
+default stays `x64-v1` where the spec names `x64-v3`: every image the suites
+pin, the static gate among them, is the baseline's, and the default moves when
+the level's coverage does. The `link/simd_lanes` fixture runs under
+`--cpu x64-v3` in debug and release on both hosts. The first encoding of an
+unused vvvv as register 15 faulted on the first load; the corrected one is
+checked byte by byte against the unit.

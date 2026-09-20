@@ -588,7 +588,7 @@ plan are plain, so a harness edits the original and re-plans.
 
 `neper compare-manifests A B [--json]` (D482) holds two build manifests against
 each other by what identifies a build -- `target`, `mode`, `root_module`,
-`tool_version`, `options.checks`, every input by path and hash, every dependency
+`tool_version`, `options.checks`, `options.cpu`, every input by path and hash, every dependency
 by module and both hashes, every artifact by kind, target and hash but not its
 path -- and prints one line per difference and `manifests agree` (exit 0) or
 `manifests differ (N)` (exit 1); with `--json`, a `difference` record each
@@ -726,7 +726,8 @@ must carry an Inventory section and have the same target and build mode. The
 manifest has empty `inputs`, `dependencies`, `libraries` and `assets`, hashes
 each named artifact into `artifacts`, concatenates their stored unsafe records,
 and derives `mode` and `options.checks` from the artifacts (`off` for an
-unchecked image, `retained` otherwise).
+unchecked image, `retained` otherwise); `options.cpu` is the level the build was
+given, `x64-v1` when none was (D765).
 
 `incremental` (D363, H14) is what an
 `--incremental` build decided per module, in graph order -- `decision` `kept` or
@@ -741,7 +742,8 @@ text's otherwise, the artifact carrying both, so a collision is a source change)
 `no-artifact`, `invalid-artifact` (a file that failed its checksum or layout
 validation, rebuilt like a missing one), `compiler-changed` (written by another
 compiler executable, D398), `options-changed` (written by this compiler under
-another `--inline-cap`, which rides in the identity's top byte, D431) -- empty for
+another `--inline-cap` or `--cpu`, which ride in the identity's top byte, D431,
+D765) -- empty for
 a build that read no artifacts; an artifact whose recorded imports close a cycle
 -- naming a module that imports it, which no source can spell -- is `invalid-artifact`
 too (D472, H24): a kept module's imports are read from its artifact, so such an
@@ -877,6 +879,16 @@ Every `E-SAFETY-*` diagnostic carries `symbol` (D545, H18): the name in its
 message's backticks -- the resource local, the view, or the resource type whose
 cleanup or fields the rule is about -- so a harness reads the subject as a field,
 as D514's name facts and D401's `expected`/`actual` are read.
+
+`--cpu LEVEL` (D765, spec section 13) on a build selects the instruction level:
+`x64-v1`, the SSE2 baseline every build takes without the flag; `x64-v2`; and
+`x64-v3`, whose AVX2 lowers every thirty-two-byte vector operation as one
+instruction over a ymm register -- the same packed selection in its VEX form -- where
+the baseline takes two. The level rides in the build identity beside `--inline-cap`,
+so a warm build at another level rebuilds every module as `options-changed`, and the
+manifest's `options.cpu` names it; a level the build does not have is a usage error.
+`info` lists the levels under `cpu_levels`. The image is the level's: run on a
+machine without it, it faults at the first such instruction.
 
 `--fault-cancel N` (D540, H16) on a build makes the deadline pass at the Nth
 statement checked or lowered, so a suite can see a cancellation inside a function

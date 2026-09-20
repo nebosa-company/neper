@@ -596,7 +596,11 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
     // move carries. r11 is the general register the two-byte move borrows, the scratch
     // no value is ever allocated to.
     let bytes = nir.vector_binary_lanes(instruction.immediate) * packed_lane_size(lane)
-    if !known || (bytes != 16usize && bytes != 8usize && bytes != 4usize && bytes != 2usize) { ret Unsupported }
+    // Thirty-two bytes is a ymm register under `--cpu x64-v3` (D765): the same
+    // selection, the emitter writing every instruction in its VEX.256 form.
+    let ymm = bytes == 32usize && builder.cpu_level >= 3usize
+    if !known || (bytes != 16usize && bytes != 8usize && bytes != 4usize && bytes != 2usize && !ymm) { ret Unsupported }
+    output.vex = ymm
     let destination_value = builder.operands[instruction.first_operand]
     let left_value = builder.operands[instruction.first_operand + 1usize]
     let (left, left_error) = read_value(allocations, left_value, 10usize, output)
@@ -698,7 +702,15 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
     if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
     let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
     if destination_error != ok { ret destination_error }
-    ret emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+    try emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+    ret vex_done(output)
+}
+
+// The VEX bracket closed (D765): the legacy forms again, and the upper halves cleared.
+fn vex_done(output: *emit_x64.Buffer) -> err {
+    if !output.vex { ret ok }
+    output.vex = false
+    ret emit_x64.vzeroupper(output)
 }
 
 // A lane-wise shift by one scalar count as one packed instruction. A count the compiler
@@ -715,8 +727,10 @@ fn select_vector_shift(builder: *nir.Builder, current: nir.Function, instruction
     let operation = nir.vector_binary_operation(instruction.immediate)
     let count = nir.vector_binary_count(instruction.immediate)
     let bytes = nir.vector_binary_lanes(instruction.immediate) * packed_lane_size(lane)
-    if bytes != 16usize || lane == 0usize || lane > 3usize { ret Unsupported }
+    let ymm = bytes == 32usize && builder.cpu_level >= 3usize
+    if (bytes != 16usize && !ymm) || lane == 0usize || lane > 3usize { ret Unsupported }
     if operation == 14usize && lane == 3usize { ret Unsupported }
+    output.vex = ymm
     let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
     if left_error != ok { ret left_error }
     try emit_x64.vector_load(output, 0usize, left, bytes, 11usize)
@@ -746,7 +760,8 @@ fn select_vector_shift(builder: *nir.Builder, current: nir.Function, instruction
     }
     let (destination, destination_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
     if destination_error != ok { ret destination_error }
-    ret emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+    try emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
+    ret vex_done(output)
 }
 
 // The byte width of one lane, by the lane code the immediate carries: an integer of

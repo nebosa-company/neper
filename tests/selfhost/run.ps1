@@ -742,6 +742,18 @@ $simdLanesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $simdLanesWritten -ne 'executable written') { throw 'simd_lanes emission failed' }
 & $simdLanesPath
 if ($LASTEXITCODE -ne 0) { throw "an e.simd check failed: exit $LASTEXITCODE" }
+# The same fixture under `--cpu x64-v3` (D765): every thirty-two-byte vector is one
+# AVX2 instruction over a ymm register, the VEX forms of the same selection, in debug
+# and in release; the suite's hosts have AVX2. The manifest names the level.
+foreach ($avxMode in @(@('debug', @()), @('release', @('--release')))) {
+    $avxPath = Join-Path $testBuild "simd-lanes-v3-$($avxMode[0]).exe"
+    $avxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_lanes\src\main.e') $repo 'x64' 'windows' $avxPath --cpu x64-v3 @($avxMode[1])
+    if ($LASTEXITCODE -ne 0 -or $avxWritten -ne 'executable written') { throw "simd_lanes emission under --cpu x64-v3 failed ($($avxMode[0]))" }
+    & $avxPath
+    if ($LASTEXITCODE -ne 0) { throw "an e.simd check failed under --cpu x64-v3 ($($avxMode[0])): exit $LASTEXITCODE" }
+}
+& $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_lanes\src\main.e') $repo 'x64' 'windows' (Join-Path $testBuild 'simd-lanes-v9.exe') --cpu x64-v9 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) { throw 'a level the build does not have was accepted' }
 # A module-scope `var` is storage: a function that writes and another that reads agree, and each
 # global keeps its own width. Never wired when it was written (849fa5b), and on Windows it did not
 # link until D150 -- a global's index was bounded against the function references.

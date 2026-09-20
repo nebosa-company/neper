@@ -5238,7 +5238,14 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // below, since their right operand is one scalar count and not a vector. The second return is how many
 // sixteen-byte chunks the operands are.
 // ponytail: the sixteen-byte baseline only; `--cpu` widens this table to AVX.
-fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, usize, bool) {
+// The bytes one packed instruction covers (D765): sixteen on the baseline, thirty-two
+// under `--cpu x64-v3`, whose AVX2 forms take a whole ymm register.
+fn packed_chunk_bytes(builder: *nir.Builder) -> usize {
+    if builder.cpu_level >= 3usize { ret 32usize }
+    ret 16usize
+}
+
+fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode, chunk_bytes: usize) -> (usize, usize, bool) {
     // Sixteen bytes is a whole register, thirty-two and sixty-four are two and four of
     // them, and a mask is the only operand the closed table gives a narrower width to,
     // since a `Vec` is sixteen bytes or more: eight bytes for eight lanes, four for
@@ -5252,7 +5259,7 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
     let packable = bytes == 16usize || wide || (narrow && mask_lanes)
     if !packable { ret (0usize, 0usize, false) }
     var chunks = 1usize
-    if wide { chunks = bytes / 16usize }
+    if wide { chunks = bytes / chunk_bytes }
     var lane_code = 16usize
     if lane.kind == .Float {
         if lane_size == 4usize { lane_code = 4usize }
@@ -5299,7 +5306,7 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
 // it does not, and the baseline's other form reads it from the low quadword of a second
 // register, with section 11's `shift` check -- the count is below the lane's width --
 // and its release-mode masking ahead of it where a scalar shift has them too.
-fn vector_packed_shift(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode, count: usize, count_known: bool) -> (usize, usize, bool) {
+fn vector_packed_shift(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode, count: usize, count_known: bool, chunk_bytes: usize) -> (usize, usize, bool) {
     if lane.kind != .Integer || lane_size == 1usize { ret (0usize, 0usize, false) }
     let bytes = lanes * lane_size
     if bytes != 16usize && bytes != 32usize && bytes != 64usize { ret (0usize, 0usize, false) }
@@ -5315,7 +5322,8 @@ fn vector_packed_shift(lane: check.Type, lanes: usize, lane_size: usize, opcode:
     var lane_code = 1usize
     if lane_size == 4usize { lane_code = 2usize }
     if lane_size == 8usize { lane_code = 3usize }
-    let chunks = bytes / 16usize
+    var chunks = 1usize
+    if bytes > 16usize { chunks = bytes / chunk_bytes }
     // A count the width does not admit is no constant the instruction can carry: it
     // takes the register form, whose check traps on it the way the lane loop's did.
     if count_known && count < lane_size * 8usize { ret (nir.vector_shift_immediate(operation, lane_code, lanes / chunks, count), chunks, true) }
@@ -5340,9 +5348,10 @@ fn constant_lowered(builder: *nir.Builder, value: usize) -> (usize, bool) {
 // address per chunk.
 fn emit_packed_vector(c: *check.Checker, result_type: check.Type, packed: usize, chunks: usize, stack: usize, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
     let shifting = nir.vector_binary_operation(packed) >= 12usize
+    let chunk_bytes = packed_chunk_bytes(builder)
     var chunk = 0usize
     while chunk < chunks {
-        let offset = chunk * 16usize
+        let offset = chunk * chunk_bytes
         var destination = stack
         var left_chunk = left
         var right_chunk = right
@@ -5409,12 +5418,12 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     var chunks = 0usize
     var is_packed = false
     if shifting {
-        let (shift_packed, shift_chunks, shift_is_packed) = vector_packed_shift(lane, lanes.array_length, lane_info.size, opcode, count, count_known)
+        let (shift_packed, shift_chunks, shift_is_packed) = vector_packed_shift(lane, lanes.array_length, lane_info.size, opcode, count, count_known, packed_chunk_bytes(builder))
         packed = shift_packed
         chunks = shift_chunks
         is_packed = shift_is_packed
     } else {
-        let (binary_packed, binary_chunks, binary_is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, opcode)
+        let (binary_packed, binary_chunks, binary_is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, opcode, packed_chunk_bytes(builder))
         packed = binary_packed
         chunks = binary_chunks
         is_packed = binary_is_packed
@@ -5461,7 +5470,7 @@ fn lower_vector_not(c: *check.Checker, node: syntax.Node, operand: usize, result
     if lane_info_error != ok { ret (0usize, lane_info_error) }
     let (stack, stack_error) = vector_slot(c, result_type, builder, token)
     if stack_error != ok { ret (0usize, stack_error) }
-    let (packed, chunks, is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, .BitNot)
+    let (packed, chunks, is_packed) = vector_packed_immediate(lane, lanes.array_length, lane_info.size, .BitNot, packed_chunk_bytes(builder))
     if is_packed {
         let packed_error = emit_packed_vector(c, result_type, packed, chunks, stack, operand, operand, builder, token)
         if packed_error != ok { ret (0usize, packed_error) }

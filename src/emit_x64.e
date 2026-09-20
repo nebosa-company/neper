@@ -10,6 +10,13 @@ error InvalidRegister
 type Buffer = struct {
     bytes: []u8,
     count: usize,
+    // The VEX.256 forms (D765, `--cpu x64-v3`): while set, every packed instruction
+    // below goes out as its AVX2 form over ymm registers, the same opcode under the
+    // three-byte VEX prefix, so the selection tables need no second column. The
+    // caller sets it around one thirty-two-byte operation and clears it after the
+    // store, with `vzeroupper` so the scalar float path's legacy SSE pays no
+    // transition.
+    vex: bool,
 }
 
 fn init(buffer: *Buffer, bytes: []u8) -> err {
@@ -305,6 +312,22 @@ fn normalize_integer(buffer: *Buffer, destination: usize, source: usize, width: 
 fn sse(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, rm: usize, opcode: usize) -> err {
     try check_register(reg)
     try check_register(rm)
+    if buffer.vex {
+        // The legacy two-operand form's destination is VEX's first source too, except
+        // for the moves and the shuffle, which read one operand and leave vvvv unused --
+        // spelled as register 0, whose inverted field is all ones, the one spelling
+        // the unit accepts there -- and the shifts by an immediate, whose register
+        // field is the opcode's extension and whose destination therefore rides in
+        // vvvv (the NDD form).
+        var first = reg
+        if opcode == 40usize || opcode == 112usize || opcode == 110usize || opcode == 126usize || opcode == 16usize || opcode == 17usize { first = 0usize }
+        if opcode == 113usize || opcode == 114usize || opcode == 115usize { first = rm }
+        // `vmovq` and `vmovd` are the one pair that refuse a 256-bit length.
+        let full = opcode != 110usize && opcode != 126usize
+        try vex_prefix(buffer, mandatory, wide, reg, first, rm, full)
+        try byte(buffer, opcode)
+        ret modrm(buffer, reg, rm)
+    }
     if mandatory != 0usize { try byte(buffer, mandatory) }
     var extension = 0usize
     if wide { extension += 8usize }
@@ -352,6 +375,12 @@ fn vector_store(buffer: *Buffer, address: usize, source: usize, bytes: usize, sc
 fn sse_memory(buffer: *Buffer, mandatory: usize, reg: usize, address: usize, opcode: usize) -> err {
     try check_register(reg)
     try check_register(address)
+    if buffer.vex {
+        // A load or a store reads one operand, so vvvv is unused: all ones inverted.
+        try vex_prefix(buffer, mandatory, false, reg, 0usize, address, true)
+        try byte(buffer, opcode)
+        ret memory_modrm(buffer, reg, address)
+    }
     if mandatory != 0usize { try byte(buffer, mandatory) }
     var extension = 0usize
     if reg >= 8usize { extension += 4usize }
@@ -360,6 +389,34 @@ fn sse_memory(buffer: *Buffer, mandatory: usize, reg: usize, address: usize, opc
     try byte(buffer, 15usize)
     try byte(buffer, opcode)
     ret memory_modrm(buffer, reg, address)
+}
+
+// The three-byte VEX prefix (D765) over the 0F opcode map: C4, then the inverted
+// REX bits with the map, then W, the inverted first source, the length and the
+// mandatory prefix as the two-bit `pp`. Every packed instruction this emitter names is
+// in the 0F map, so the map is the one constant.
+fn vex_prefix(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, first: usize, rm: usize, full: bool) -> err {
+    var pp = 0usize
+    if mandatory == 102usize { pp = 1usize }
+    if mandatory == 243usize { pp = 2usize }
+    if mandatory == 242usize { pp = 3usize }
+    var second = 1usize + 64usize
+    if reg < 8usize { second += 128usize }
+    if rm < 8usize { second += 32usize }
+    var third = (15usize - first) * 8usize + pp
+    if wide { third += 128usize }
+    if full { third += 4usize }
+    try byte(buffer, 196usize)
+    try byte(buffer, second)
+    ret byte(buffer, third)
+}
+
+// `vzeroupper` (D765): the upper halves of every ymm register cleared, so the legacy
+// SSE forms that follow pay no transition.
+fn vzeroupper(buffer: *Buffer) -> err {
+    try byte(buffer, 197usize)
+    try byte(buffer, 248usize)
+    ret byte(buffer, 119usize)
 }
 
 // One packed operation between two xmm registers: the mandatory prefix and the opcode

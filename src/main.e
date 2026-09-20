@@ -771,7 +771,28 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--overlay")
+    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write") || same(flag, "--fault-cancel") || same(flag, "--overlay") || same(flag, "--cpu")
+}
+
+// `--cpu LEVEL` (D765): section 13's x64 levels, `x64-v1` the SSE2 baseline the build
+// takes without the flag, `x64-v2` and `x64-v3`, whose AVX2 the packed lowering
+// selects. The level is a number here, 1 to 3; 0 is a spelling that is no level.
+fn cpu_level_of(spelling: str) -> usize {
+    if same(spelling, "x64-v1") { ret 1usize }
+    if same(spelling, "x64-v2") { ret 2usize }
+    if same(spelling, "x64-v3") { ret 3usize }
+    ret 0usize
+}
+
+fn cpu_level_flag(args: []str) -> usize {
+    var at = 7usize
+    while at < args.len {
+        if same(args[at], "--") { ret 1usize }
+        if same(args[at], "--cpu") && at + 1usize < args.len { ret cpu_level_of(args[at + 1usize]) }
+        if takes_value(args[at]) { at += 1usize }
+        at += 1usize
+    }
+    ret 1usize
 }
 
 // `--overlay PATH=FILE` (D502, H15), any number of times: the module at PATH -- as
@@ -849,8 +870,10 @@ fn flags_known(args: []str) -> bool {
             if !size_ok { ret false }
             at += 1usize
         } else {
-            if same(args[at], "--project") || same(args[at], "--overlay") {
+            if same(args[at], "--project") || same(args[at], "--overlay") || same(args[at], "--cpu") {
                 if at + 1usize >= args.len { ret false }
+                // A level the build does not have is no build (D765).
+                if same(args[at], "--cpu") && cpu_level_of(args[at + 1usize]) == 0usize { ret false }
                 at += 1usize
             } else {
                 // `-j N` (D331): a worker count from one up; `--inline-cap N` (D348): a
@@ -4835,6 +4858,7 @@ fn compare_manifests_command(a: *mem.Arena, args: []str) -> err {
     try compare_scalar(&out, &differences, "root_module", json_str_after(left, "\"root_module\":\""), json_str_after(right, "\"root_module\":\""))
     try compare_scalar(&out, &differences, "tool_version", json_str_after(left, "\"tool_version\":\""), json_str_after(right, "\"tool_version\":\""))
     try compare_scalar(&out, &differences, "options.checks", json_str_after(left, "\"checks\":\""), json_str_after(right, "\"checks\":\""))
+    try compare_scalar(&out, &differences, "options.cpu", json_str_after(left, "\"cpu\":\""), json_str_after(right, "\"cpu\":\""))
     try compare_entries(a, &out, &differences, "input", json_array_after(left, "\"inputs\":["), json_array_after(right, "\"inputs\":["), "\"path\":\"", "\"sha256\":\"", "")
     try compare_entries(a, &out, &differences, "dependency", json_array_after(left, "\"dependencies\":["), json_array_after(right, "\"dependencies\":["), "\"module\":\"", "\"interface_sha256\":\"", "\"body_sha256\":\"")
     try compare_artifacts(a, &out, &differences, json_array_after(left, "\"artifacts\":["), json_array_after(right, "\"artifacts\":["))
@@ -6622,11 +6646,15 @@ fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str, 
     let (self_crc, self_crc_error) = artifact_hash.crc32c(self_bytes, 0usize, 0usize)
     if self_crc_error != ok { ret }
     // The options that change what the compiler writes ride in the top byte (D431,
-    // H15): `--inline-cap N` as N + 1, zero without the flag, so a warm build under
-    // another cap rebuilds every module as `options-changed`; a cap past 254 counts
-    // as 254, the caps a measurement uses being small.
+    // H15): `--inline-cap N` as N + 1 in the low six bits, zero without the flag, so
+    // a warm build under another cap rebuilds every module as `options-changed`; a
+    // cap past 62 counts as 62, the caps a measurement uses being small. The two bits
+    // above carry the instruction level less one (D765), so a build at another level
+    // rebuilds every module the same way rather than linking the other level's code.
     var options = inline_cap_flag(args)
-    if options > 255usize { options = 255usize }
+    if options > 63usize { options = 63usize }
+    options += (cpu_level_flag(args) - 1usize) * 64usize
+    loaded.cpu_level = cpu_level_flag(args)
     loaded.compiler_identity = ((self_crc | (self_bytes.len << 32usize)) & OPTIONS_MASK) | (options << 56usize)
 }
 
@@ -7877,10 +7905,12 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
     let arena_bytes = builder.arena_bytes
     let release = builder.release
     let nocheck = builder.nocheck
+    let cpu_level = builder.cpu_level
     *builder = program.builder
     builder.arena_bytes = arena_bytes
     builder.release = release
     builder.nocheck = nocheck
+    builder.cpu_level = cpu_level
     code.machine = program.machine
     code.function_offsets = program.function_offsets
     code.relocations = program.relocations
@@ -8269,6 +8299,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
     w.builder.release = program.release
     w.builder.nocheck = program.nocheck
     w.builder.arena_bytes = program.arena_bytes
+    w.builder.cpu_level = program.cpu_level
     // The lowering's explanations (D453): the cost of every generic instance.
     w.builder.explain = program.explain
     w.builder.explain_json = program.explain_json
@@ -8330,6 +8361,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
         w.oracle.nocheck = false
         w.oracle.release = true
         w.oracle.inline_cap = program.inline_cap
+        w.oracle.cpu_level = program.cpu_level
         w.oracle.explain = program.explain
         w.oracle.explain_json = program.explain_json
         let (oracle_inlined, oracle_inlined_error) = mem.alloc[nir.InlinedRef](a, sized(1024usize, oracle_bytes, 64usize))
@@ -8343,6 +8375,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
         w.second.nocheck = false
         w.second.release = true
         w.second.inline_cap = program.inline_cap
+        w.second.cpu_level = program.cpu_level
         w.second.explain = program.explain
         w.second.explain_json = program.explain_json
         w.second.oracle = &w.oracle
@@ -10130,8 +10163,10 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // What the workers copy the build mode from until the program builder exists.
         var early_builder: nir.Builder = zero
         // The cap and the explanations (D348) ride the builder the oracles copy from.
+        early_builder.cpu_level = 1usize
         if trailing_flags {
             early_builder.inline_cap = inline_cap_flag(args)
+            early_builder.cpu_level = cpu_level_flag(args)
             early_builder.explain = has_flag(args, "--explain")
             early_builder.explain_json = report.json
         }
@@ -10157,6 +10192,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if release_build && !with_crew {
             try init_first_oracle(a, &first_oracle, &first_signatures, &checker, &loaded)
             first_oracle.inline_cap = early_builder.inline_cap
+            first_oracle.cpu_level = early_builder.cpu_level
             first_oracle.explain = early_builder.explain
             first_oracle.explain_json = early_builder.explain_json
         }
@@ -10228,6 +10264,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         builder.nocheck = unchecked_build
         builder.release = release_build
         builder.arena_bytes = arena_flag(args)
+        builder.cpu_level = early_builder.cpu_level
         var oracle: nir.Builder = zero
         var oracle_signatures: nir.Signatures = zero
         let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
@@ -10281,6 +10318,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize, loaded.total_bytes)
             oracle.nocheck = false
             oracle.release = true
+            oracle.cpu_level = early_builder.cpu_level
             oracle.oracle = &first_oracle
             oracle.oracle_signatures = &first_signatures
             oracle.has_oracle = true
@@ -10360,6 +10398,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 while mode_at <= generous_slot() {
                     if mode_at < crew.count || (mode_at == generous_slot() && crew.generous_made) {
                         crew.workers[mode_at].builder.release = builder.release
+                        crew.workers[mode_at].builder.cpu_level = builder.cpu_level
                         crew.workers[mode_at].builder.nocheck = builder.nocheck
                         crew.workers[mode_at].builder.arena_bytes = builder.arena_bytes
                     }

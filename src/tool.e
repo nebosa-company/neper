@@ -231,9 +231,9 @@ fn info_json(a: *mem.Arena, host: str) -> err {
     try header(&out, "info")
     try text(&out, "{\"record\":\"info\",\"tool_version\":\"0.1.0\",\"language_profiles\":[{\"language_version\":\"0.1\",\"grammar_revision\":3,\"stream_version\":1,\"experimental\":false}],\"commands\":[\"build\",\"check\",\"dis\",\"fmt\",\"index\",\"info\",\"parse\",\"run\",\"test\",\"tokens\"],\"host_target\":")
     try quoted(&out, host)
-    // ponytail: the emitter selects nothing above SSE2 and SIMD lowers as lane loops (D148),
-    // so x64-v1 is the one level this build honours; list the others when `--cpu` exists.
-    try text(&out, ",\"build_targets\":[\"x64-linux\",\"x64-windows\"],\"cpu_levels\":[\"x64-v1\"],\"features\":[\"tls\"],\"tls\":{\"versions\":[\"1.3\"],\"cipher_suites\":[\"TLS_AES_128_GCM_SHA256\"],\"key_exchange\":[\"X25519\"],\"signature_algorithms\":[\"Ed25519\",\"ECDSA_P256_SHA256\"],\"certificate_format\":\"X.509 concatenated DER\",\"certificate_message_limit\":16384,\"chain_depth\":8,\"key_schedule\":\"HKDF-SHA256\",\"entropy_minimum_bytes_per_handshake\":64}}")
+    // The levels `--cpu` takes (D765): x64-v3's AVX2 selects the thirty-two-byte
+    // packed forms; x64-v2 selects nothing the baseline does not yet.
+    try text(&out, ",\"build_targets\":[\"x64-linux\",\"x64-windows\"],\"cpu_levels\":[\"x64-v1\",\"x64-v2\",\"x64-v3\"],\"features\":[\"tls\"],\"tls\":{\"versions\":[\"1.3\"],\"cipher_suites\":[\"TLS_AES_128_GCM_SHA256\"],\"key_exchange\":[\"X25519\"],\"signature_algorithms\":[\"Ed25519\",\"ECDSA_P256_SHA256\"],\"certificate_format\":\"X.509 concatenated DER\",\"certificate_message_limit\":16384,\"chain_depth\":8,\"key_schedule\":\"HKDF-SHA256\",\"entropy_minimum_bytes_per_handshake\":64}}")
     try flush(&out)
     try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{}}")
     ret flush(&out)
@@ -1658,6 +1658,12 @@ fn inlined_range(out: *Out, g: *graph.Graph, callee: check.Function, range_start
     try text(out, ",\"line\":")
     try decimal(out, line)
     ret byte(out, 125u8)
+}
+
+// The graph's instruction level, the baseline when none was given (D765).
+fn cpu_level_or_baseline(g: *graph.Graph) -> usize {
+    if g.cpu_level == 0usize { ret 1usize }
+    ret g.cpu_level
 }
 
 // docs/tooling.md section 6's canonical layout, the deterministic local rules (D234):
@@ -5970,7 +5976,8 @@ fn artifact_manifest_json(a: *mem.Arena, paths: []str, artifacts: [][]const u8) 
     }
     try text(&out, "],\"incremental\":[],\"options\":{\"checks\":\"")
     if mode == 2usize { try text(&out, "off") } else { try text(&out, "retained") }
-    try text(&out, "\"},\"work\":{\"bodies_checked\":0,\"modules_lowered\":0,\"functions_lowered\":0,\"declarations_checked\":0}}")
+    // No build was run, so no level was given: the baseline (D765).
+    try text(&out, "\",\"cpu\":\"x64-v1\"},\"work\":{\"bodies_checked\":0,\"modules_lowered\":0,\"functions_lowered\":0,\"declarations_checked\":0}}")
     ret flush(&out)
 }
 
@@ -6293,7 +6300,11 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         try byte(out, 125u8)
         reason_at += 1usize
     }
-    if unchecked { try text(out, "],\"options\":{\"checks\":\"off\"}") } else { try text(out, "],\"options\":{\"checks\":\"retained\"}") }
+    if unchecked { try text(out, "],\"options\":{\"checks\":\"off\"") } else { try text(out, "],\"options\":{\"checks\":\"retained\"") }
+    // The instruction level (D765): what the image's packed code was selected for.
+    try text(out, ",\"cpu\":\"x64-v")
+    try decimal(out, cpu_level_or_baseline(g))
+    try text(out, "\"}")
     // What the build did rather than kept (D405, H14): a warm build over a stable
     // cache checks no body and lowers nothing, and the manifest says so.
     try text(out, ",\"work\":{\"bodies_checked\":")

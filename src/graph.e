@@ -228,6 +228,8 @@ type Graph = struct {
     // whether the image depends on it.
     jobs: usize,
     perturb: bool,
+    // The instruction level the build was given (D765), for the manifest's `options`.
+    cpu_level: usize,
     // What every worker arena of every phase committed, summed (D339).
     worker_bytes: usize,
 }

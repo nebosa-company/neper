@@ -756,6 +756,18 @@ simd_lanes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$simd_lanes_written" = 'executable written' ]
 chmod +x "$test_build/simd-lanes-selfhost"
 "$test_build/simd-lanes-selfhost"
+# The same fixture under --cpu x64-v3 (D765): one AVX2 instruction per thirty-two-byte vector, debug and release.
+for avx_mode in "debug" "release --release"; do
+    set -- $avx_mode
+    avx_name="$1"
+    shift
+    [ "$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/simd_lanes/src/main.e" "$repo" x64 linux "$test_build/simd-lanes-v3-$avx_name" --cpu x64-v3 "$@")" = 'executable written' ]
+    chmod +x "$test_build/simd-lanes-v3-$avx_name"
+    "$test_build/simd-lanes-v3-$avx_name"
+done
+avx_bad=0
+"$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/simd_lanes/src/main.e" "$repo" x64 linux "$test_build/simd-lanes-v9" --cpu x64-v9 > /dev/null 2>&1 || avx_bad=$?
+[ "$avx_bad" -ne 0 ]
 # A module-scope `var` is storage: a function that writes and another that reads agree, and each
 # global keeps its own width. Never wired when it was written (849fa5b), and on Windows it did not
 # link until D150 -- a global's index was bounded against the function references.
