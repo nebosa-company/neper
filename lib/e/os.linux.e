@@ -1256,7 +1256,8 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
         if milliseconds == 0isize { milliseconds = 1isize }
     }
     var raw: [64]RawPollEvent = zero
-    let ready = syscall(SYS_EPOLL_WAIT, state.epoll, mem.address_of(&raw[0usize]), capacity, usize(milliseconds), 0usize, 0usize)
+    // The kernel reads the timeout as an int, so -1 crosses as all ones, not as a narrowing.
+    let ready = syscall(SYS_EPOLL_WAIT, state.epoll, mem.address_of(&raw[0usize]), capacity, mem.bitcast[usize](milliseconds), 0usize, 0usize)
     if ready < 0isize { ret (0usize, from_errno(ready)) }
     var produced = 0usize
     var at = 0usize

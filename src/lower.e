@@ -3702,6 +3702,19 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         ret (slice, slice_type, slice_error)
     }
     if node.kind == .BracketPostfix {
+        // `name[Args]` as a value (D772): a pointer to the instance the brackets name.
+        let (instance_index, is_generic_value, instance_error) = check.bracket_generic_value(c, g, tree, module_index, node)
+        if is_generic_value {
+            if instance_error != ok { ret (0usize, zero, instance_error) }
+            let callee = c.functions[instance_index]
+            let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+            if type_error != ok { ret (0usize, result_type, type_error) }
+            if result_type.kind != .Function { ret (0usize, result_type, check.Unsupported) }
+            let (function_ref, function_ref_error) = nir.intern_function(builder, callee.owner_module_index, callee.name, callee.instance_id)
+            if function_ref_error != ok { ret (0usize, result_type, function_ref_error) }
+            let (instruction, result, emit_error) = nir.emit(builder, .FunctionAddress, result_type, true, function_ref, c.tokens[usize(node.token_start)])
+            ret (result, result_type, emit_error)
+        }
         let (result, result_type, result_error) = lower_index(c, g, tree, module_index, node_index, expected, builder, bindings, binding_count)
         ret (result, result_type, result_error)
     }

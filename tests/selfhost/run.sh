@@ -1071,6 +1071,24 @@ text_normalize_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$text_normalize_written" = 'executable written' ]
 chmod +x "$test_build/text-normalize-selfhost"
 "$test_build/text-normalize-selfhost"
+# `e.text.regex` (D768): Pike-VM matching, leftmost-first preference, captures, the three options and `$n` replacement.
+text_regex_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_regex/src/main.e" "$repo" x64 linux "$test_build/text-regex-selfhost")
+[ "$text_regex_written" = 'executable written' ]
+chmod +x "$test_build/text-regex-selfhost"
+text_regex_output=$("$test_build/text-regex-selfhost")
+[ "$text_regex_output" = 'text regex ok' ]
+# `e.text.shape` (D769): cmap, GSUB single and ligature lookups, feature ranges, GPOS pair kerning and legacy `kern` over a synthetic font.
+text_shape_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_shape/src/main.e" "$repo" x64 linux "$test_build/text-shape-selfhost")
+[ "$text_shape_written" = 'executable written' ]
+chmod +x "$test_build/text-shape-selfhost"
+text_shape_output=$("$test_build/text-shape-selfhost")
+[ "$text_shape_output" = 'text shape ok' ]
+# `e.text.locale` (D771): tags, grouped numbers, currency layout, LDML dates, natural comparison and Turkic case over the built-in CLDR subset and a loaded database.
+text_locale_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_locale/src/main.e" "$repo" x64 linux "$test_build/text-locale-selfhost")
+[ "$text_locale_written" = 'executable written' ]
+chmod +x "$test_build/text-locale-selfhost"
+text_locale_output=$("$test_build/text-locale-selfhost")
+[ "$text_locale_output" = 'text locale ok' ]
 # One function of 3000 checks (D302): wider than the old small NIR tier and than codegen's old per-function block table.
 capacity_wide_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/capacity_wide/src/main.e" "$repo" x64 linux "$test_build/capacity-wide-selfhost")
 [ "$capacity_wide_written" = 'executable written' ]
@@ -1091,6 +1109,24 @@ async_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$async_written" = 'executable written' ]
 chmod +x "$test_build/async-selfhost"
 "$test_build/async-selfhost"
+# `generic_value` (D772): a generic function instantiated by name stands as a value, a typed trampoline behind a `*void` callback.
+generic_value_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_value/src/main.e" "$repo" x64 linux "$test_build/generic-value-selfhost")
+[ "$generic_value_written" = 'executable written' ]
+chmod +x "$test_build/generic-value-selfhost"
+generic_value_output=$("$test_build/generic-value-selfhost")
+[ "$generic_value_output" = 'generic value ok' ]
+# `e.task` (D772): a bounded pool over the trampoline instances -- tasks, futures, failure, cancellation, bounded waits, wait_any, a full ring, parallel_for, close.
+task_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/task_pool/src/main.e" "$repo" x64 linux "$test_build/task-pool-selfhost")
+[ "$task_pool_written" = 'executable written' ]
+chmod +x "$test_build/task-pool-selfhost"
+task_pool_output=$("$test_build/task-pool-selfhost")
+[ "$task_pool_output" = 'task pool ok' ]
+# `e.async.io` (D773): connect and accept through the loop, callback read and write, progress, wait_any, cancellation, an expired deadline, take's refusals.
+async_io_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/async_io/src/main.e" "$repo" x64 linux "$test_build/async-io-selfhost")
+[ "$async_io_written" = 'executable written' ]
+chmod +x "$test_build/async-io-selfhost"
+async_io_output=$("$test_build/async-io-selfhost")
+[ "$async_io_output" = 'async io ok' ]
 # `e.fmt.mail`: addresses, lists, dates against email.utils, a message with a folded header, encoded words.
 fmt_mail_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_mail/src/main.e" "$repo" x64 linux "$test_build/fmt-mail-selfhost")
 [ "$fmt_mail_written" = 'executable written' ]
@@ -1327,6 +1363,12 @@ wav_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$wav_written" = 'executable written' ]
 chmod +x "$test_build/fmt-wav-selfhost"
 "$test_build/fmt-wav-selfhost"
+# `e.fmt.mp3` (D770): Layer III against minimp3 -- three LAME streams whole, chunked and after a seek, within two LSB.
+mp3_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_mp3/src/main.e" "$repo" x64 linux "$test_build/fmt-mp3-selfhost")
+[ "$mp3_written" = 'executable written' ]
+chmod +x "$test_build/fmt-mp3-selfhost"
+mp3_output=$("$test_build/fmt-mp3-selfhost")
+[ "$mp3_output" = 'fmt mp3 ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

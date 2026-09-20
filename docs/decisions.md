@@ -14390,3 +14390,136 @@ still cooling, a voice that is not playing. The draft the local model left read
 `remaining` as a budget of triggers and set `cooldown` to a constant 1, and kept
 a private `spatial_gain` helper, which `check_module_surfaces.py` refuses in a
 `surface:"source"` module; both are gone.
+
+## D768 — `e.text.regex` is a Pike VM, and a module with helpers lands at `partial`
+
+`lib/e/text/regex.e` compiles a pattern into an arena -- a small AST, then a
+program of `Char`, `Any`, `Class`, `Split`, `Jmp`, `Save`, the four assertions and
+`Done` -- and runs it as a Pike VM: two thread lists with a capture row per thread,
+visit marks per generation, an explicit closure stack, all allocated by `compile`
+so `is_match` and `find` allocate nothing. Time is linear in text times program;
+`(a*)*b` over forty `a`s is a fixture case, not a hazard. The syntax is regular
+only, as the fence says: classes with `\d \w \s` and their negations, the anchors
+`^ $ \b \B`, greedy and lazy repeats up to `{1000}`, groups and alternation; the
+match is leftmost and, among those, the one a backtracker finds first, which is
+what the `a|ab` fixtures pin. `TooComplex` bounds the program at 16384
+instructions, a repeat at 1000 and nesting at 64. `replace_all` expands `$0`..`$9`
+and `$$`, and skips an empty match right after a previous match (`x*` over `xa`
+is `-a-`). Non-ASCII text is read as scalars, so `.` and a class never split a
+character; `\w \d \s \b` are ASCII, as most engines have them.
+
+The row lands at `surface:"partial"`, not `"source"`: `check_module_surfaces.py`
+holds an exact-surface module to its fence and nothing else, because the language
+has no visibility and every helper is public. Seventy-five delivered modules --
+`e.audio.mixer` with its `clip_i32` among them -- sit at `partial` for that reason,
+and `source` is for the helper-free ones like `e.audio.spatial`. The task files'
+"moves to `source`" reads as "delivered" for a module that needs helpers; the
+counts `render_progress.py` reports come from the source either way. `parse-file`
+has a token cap of its own (it refuses `os.windows.e` and `fmt/html.e` too), so the
+runner block emits the fixture rather than parsing the module.
+
+## D769 — `e.text.shape` reads OpenType tables directly, in em units
+
+`lib/e/text/shape.e` is a shaper over the caller's font bytes with no font
+discovery, cache or file access: `cmap` (formats 4 and 12, the fullest Unicode
+subtable preferred), GSUB single and ligature lookups reached through an extension
+where the font uses one, `hmtx` advances, GPOS pair adjustment (both formats, any
+value record) or a format 0 `kern` table when there is no GPOS. Other lookup
+types -- contextual, mark attachment -- are skipped rather than refused, so a run
+is right for every glyph they would not have touched; `Unsupported` is a `cmap`
+with nothing usable. Features are CLDR-like defaults (`ccmp locl rlig liga clig`
+and `kern`) plus the script's required feature, and a `Feature` in the options
+turns a tag on over a byte range or off; the script falls back to `DFLT` and a
+four-byte `language` selects a LangSys. Advances and offsets are the font unit
+over `unitsPerEm`, because `e.text.layout`'s fence carries `size` beside the run
+and scales once. Every table read is bounds-checked and answers zero past the
+end, so a malformed font misleads a shaping but never traps; `validate_font` is
+the guard that demands the directory and the five tables. The fixture builds a
+font byte by byte -- cmap, a ligature, a `smcp` single substitution, `A`/`V`
+kerning -- so the checks are exact glyph ids and advances, not a real font's
+opinion.
+
+## D770 — `e.fmt.mp3` is minimp3 in neper, with a `state` field on the fence
+
+`lib/e/fmt/mp3.e` ports minimp3 (lieff, CC0) for Layer III of MPEG-1, MPEG-2 and
+MPEG-2.5: sync, side information, scalefactors, Huffman with its multi-level
+tables, requantisation, mid/side and intensity stereo, reordering, alias
+reduction, the 36- and 12-point IMDCTs and the polyphase synthesis. Layers I and
+II and free format are `Unsupported`. The tables are minimp3's, emitted as byte
+strings by the fixture's `reference.py`; the synthesis window is stored as 32-bit
+values because three of its entries exceed 16 bits, which the first packing lost
+and the first differential diagnosis found. The reference is minimp3 built
+locally (`refdec.c`) over three LAME streams -- mono 44.1k, joint stereo, mono
+22.05k LSF -- and the fixture pins every sample within two LSB whole, in
+thousand-frame chunks and after a seek; minimp3 and ffmpeg agree within one.
+
+The fence's `Decoder` gains `state: *void`. A decoder has state the fence had no
+room for -- the bit reservoir, the IMDCT overlap and the synthesis filter's window
+-- and rebuilding it by decoding two frames before every output frame would triple
+the work for no gain; `docs/module-apis.md` carries the field now, the way D766
+amended a fence that could not be implemented as written. `seek` restarts two
+frames before the target for the overlap and the synthesis state and a kilobyte
+further back for the reservoir; a frame whose reservoir reaches before the start
+decodes as silence rather than being dropped, so `granule` counts one PCM frame
+per stream frame and `frames` is exact.
+
+## D771 — `e.text.locale` carries a CLDR 47 subset in its own text format
+
+`lib/e/text/locale.e` holds en, en-GB, de, fr, es, it, pt, ja and tr as `locale`
+blocks of `key value` lines -- separators, grouping and the Spanish minimum
+grouping, currency patterns and symbols, month and day names, the four LDML date
+styles and the glue between date and time, a `parent` that copies an earlier
+block, a `turkic` case flag -- and `load` takes the same format from a caller.
+Numbers are integer-built; `format_f64` scales through an i64 and refuses past it,
+which the header says. Currency quantises the decimal to the ISO 4217 minor units
+half away from zero and reads the coefficient's limbs, because `e.str` is not a
+dependency and `decimal.format` needs its builder. Comparison is case-insensitive
+natural order with code-point order as the tie-break; accent tailoring waits for
+a UCA beside `e.text.collate`. Case mapping is Unicode's simple mapping with the
+Turkish and Azeri dotted and dotless i and `ß` to `SS`.
+
+## D772 — A generic function instantiated by name stands as a value
+
+`call[Ctx]` in a value position is a pointer to that instance, typed as its
+signature. The checker binds the bracket's comptime arguments as a call would
+(`bind_bracket_arguments`, split out of `specialize_call`), demands every one be
+written -- there are no runtime arguments to infer from -- and instantiates
+(`specialize_value`); lowering emits `FunctionAddress` with the instance's id,
+which the inliner and the dead-function walk already understood. Before this the
+checker answered `Unsupported`, and nothing in the language could put a typed
+function behind a `*void` callback: `mem.cast` targets only pointers and
+`mem.bitcast` refuses callables on purpose, so a worker that runs work of many
+types had no way to call it. `link/generic_value` pins the feature alone.
+
+`e.task` is what needed it. A pool record holds `run_job[Ctx]` as
+`fn(*void, *const Cancel) -> err` and the typed context and function inline, and
+a worker runs any record without knowing its type; futures and `parallel_for`
+ranges are the same trick with their own trampolines. The pool is a ring of
+`queue_capacity` records and `workers` threads from the arena at `pool` and
+nothing after: a full ring refuses with `Invalid` rather than growing or
+blocking, `parallel_for` runs a range on the calling thread when it cannot queue
+it, and a handle is done with once waited, its record going back to the ring.
+Cancellation is `e.cancel`'s token, checked before a record is taken and handed
+to the work that runs.
+
+## D773 — `e.async.io` drives blocking callbacks at `wait` and sockets on the loop
+
+An `io.Reader` or `io.Writer` is a callback no poller can watch, so a `read` or
+`write` operation holds it and runs it when the operation is driven -- by `wait`
+or `wait_any` on the calling thread -- which is the "keep resources pinned until
+it ends" the fence allows for an uncancellable callback; the control's token and
+deadline are checked before it runs, so a cancellation or a passed deadline
+before the drive wins as `Cancelled` or `TimedOut`. `accept` and `connect` put the
+socket in non-blocking mode and register it under the record's address as the
+token; `wait` polls the loop, hands each event to the operation it names and
+ignores the rest, which a level-triggered poller reports again. `take` hands the
+accepted socket out as `T` through `meta.kind[T]`, whose branches D138 folds, so
+the resource moves rather than being copied through a cast the checker refuses;
+`e.meta` joins the row's dependencies for it. `e.task`, which the row names, is
+not used: nothing here needs a second thread, and a pool that ran callbacks would
+have to be created somewhere the fence gives no arena for.
+
+The first Linux run of `link/async_io` found `os.poller_wait` trapping on an
+unbounded wait: `usize(milliseconds)` narrowed the `-1` epoll takes for "no
+limit" under the checked conversion, which no earlier fixture had asked for. The
+timeout now crosses by `mem.bitcast[usize]`, since the kernel reads it as an int.

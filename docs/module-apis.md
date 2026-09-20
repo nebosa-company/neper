@@ -4041,7 +4041,7 @@ fn encode(a: *mem.Arena, src: audio.Frames) -> ([]u8, err)
 ### `e.fmt.mp3`
 
 ```neper
-type Decoder = struct { bytes: []const u8, at: usize, format: audio.Format, frames: usize, granule: usize }
+type Decoder = struct { bytes: []const u8, at: usize, format: audio.Format, frames: usize, granule: usize, state: *void }
 error Invalid
 error Unsupported
 

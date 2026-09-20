@@ -6633,29 +6633,19 @@ fn bracket_function(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     ret (0usize, Unsupported)
 }
 
-fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, call: syntax.Node, receiver: syntax.Node, template_index: usize) -> (usize, err) {
-    if template_index >= c.signature_function_count { ret (0usize, UnknownCallable) }
-    let template = c.functions[template_index]
+// The comptime arguments written in a `name[...]` receiver, bound into the slots at
+// `first_argument`; shared by a call and by the name standing as a value (D772).
+fn bind_bracket_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node, template_index: usize, first_argument: usize) -> err {
     let generic = c.function_generics[template_index]
-    if !template.generic || generic.comptime_count == 0usize { ret (0usize, Unsupported) }
-    if c.generic_argument_count + generic.comptime_count > c.generic_arguments.len { ret (0usize, Capacity) }
-    let first_argument = c.generic_argument_count
-    var at = 0usize
-    while at < generic.comptime_count {
-        let parameter = c.comptime_parameters[generic.first_comptime + at]
-        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, text: "", expression: 0usize, owner: 0usize, symbolic: false, set: false }
-        c.generic_argument_count += 1usize
-        at += 1usize
-    }
     if receiver.kind == .BracketPostfix {
         let end = usize(receiver.first_child) + usize(receiver.child_count)
         var child_position = 0usize
-        at = usize(receiver.first_child)
+        var at = usize(receiver.first_child)
         while at < end {
             if parse.child_is_node_at(tree, at) {
                 if child_position > 0usize {
                     let argument_position = child_position - 1usize
-                    if argument_position >= generic.comptime_count { ret (0usize, ArgumentCount) }
+                    if argument_position >= generic.comptime_count { ret ArgumentCount }
                     let parameter = c.comptime_parameters[generic.first_comptime + argument_position]
                     let node_index = parse.child_index_at(tree, at)
                     if parameter.kind == .Field || parameter.kind == .Member {
@@ -6663,33 +6653,33 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                         // `meta.fields`, so the argument is always a name that already holds
                         // one -- a loop's binding, or this caller's own parameter.
                         let argument_node = tree.nodes[node_index]
-                        if argument_node.kind != .NameExpr { ret (0usize, TypeMismatch) }
+                        if argument_node.kind != .NameExpr { ret TypeMismatch }
                         let argument_token = c.tokens[usize(argument_node.token_start)]
-                        if argument_token.kind != .Identifier { ret (0usize, TypeMismatch) }
+                        if argument_token.kind != .Identifier { ret TypeMismatch }
                         let (bound, found_bound) = find_comptime_binding(c, g.modules[module_index].text[argument_token.start..argument_token.end])
-                        if !found_bound || bound.kind != parameter.kind { ret (0usize, TypeMismatch) }
+                        if !found_bound || bound.kind != parameter.kind { ret TypeMismatch }
                         let argument_index = first_argument + argument_position
                         c.generic_arguments[argument_index] = bound
                         c.generic_arguments[argument_index].set = true
                     } else {
                     if parameter.kind == .Type {
                         let (ty, type_error) = comptime_type(c, g, tree, module_index, node_index)
-                        if type_error != ok { ret (0usize, type_error) }
+                        if type_error != ok { ret type_error }
                         let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, ty, 0usize, .Type)
-                        if bind_error != ok { ret (0usize, bind_error) }
+                        if bind_error != ok { ret bind_error }
                     } else {
                     if parameter.kind == .Array {
                         let bind_error = bind_array_argument(c, g, tree, module_index, template_index, first_argument, generic.first_comptime + argument_position, node_index)
-                        if bind_error != ok { ret (0usize, bind_error) }
+                        if bind_error != ok { ret bind_error }
                     } else {
                     if parameter.kind == .Str {
                         let argument_node = tree.nodes[node_index]
-                        if argument_node.kind != .LiteralExpr { ret (0usize, TypeMismatch) }
+                        if argument_node.kind != .LiteralExpr { ret TypeMismatch }
                         let literal = c.tokens[usize(argument_node.token_start)]
-                        if literal.kind != .String && literal.kind != .RawString { ret (0usize, TypeMismatch) }
+                        if literal.kind != .String && literal.kind != .RawString { ret TypeMismatch }
                         let spelling = g.modules[module_index].text[literal.start..literal.end]
                         let bind_error = bind_text_argument(c, template_index, first_argument, generic.first_comptime + argument_position, spelling)
-                        if bind_error != ok { ret (0usize, bind_error) }
+                        if bind_error != ok { ret bind_error }
                     } else {
                     if parameter.kind == .Function {
                         let argument_node = tree.nodes[node_index]
@@ -6702,9 +6692,9 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                                 let (outer, has_argument) = active_argument(c, outer_index)
                                 if has_argument {
                                     let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, outer.ty, outer.value, .Function)
-                                    if bind_error != ok { ret (0usize, bind_error) }
+                                    if bind_error != ok { ret bind_error }
                                 } else {
-                                    if !c.generic_declaration { ret (0usize, MissingContext) }
+                                    if !c.generic_declaration { ret MissingContext }
                                     let argument_index = first_argument + argument_position
                                     c.generic_arguments[argument_index].kind = .Function
                                     c.generic_arguments[argument_index].ty = c.comptime_parameters[outer_index].ty
@@ -6723,26 +6713,26 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                         }
                         if selected < c.function_count {
                             let chosen = c.functions[selected]
-                            if chosen.generic || chosen.intrinsic || chosen.external { ret (0usize, TypeMismatch) }
+                            if chosen.generic || chosen.intrinsic || chosen.external { ret TypeMismatch }
                             let (chosen_type, chosen_error) = function_pointer_type(c, chosen, module_index)
-                            if chosen_error != ok { ret (0usize, chosen_error) }
+                            if chosen_error != ok { ret chosen_error }
                             let (required_type, required_error) = substitute_type(c, template_index, first_argument, parameter.ty)
-                            if required_error != ok || !type_equal(c, chosen_type, required_type) { ret (0usize, TypeMismatch) }
+                            if required_error != ok || !type_equal(c, chosen_type, required_type) { ret TypeMismatch }
                             let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, chosen_type, selected, .Function)
-                            if bind_error != ok { ret (0usize, bind_error) }
+                            if bind_error != ok { ret bind_error }
                         } else {
                             let argument_index = first_argument + argument_position
-                            if !c.generic_arguments[argument_index].set { ret (0usize, UnknownCallable) }
+                            if !c.generic_arguments[argument_index].set { ret UnknownCallable }
                         }
                     } else {
                         let (value, value_error) = array_length_value(c, g, tree, module_index, node_index)
                         if value_error == ok {
                             let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, invalid_type(), value, .Integer)
-                            if bind_error != ok { ret (0usize, bind_error) }
+                            if bind_error != ok { ret bind_error }
                         } else {
-                            if !c.generic_declaration { ret (0usize, InvalidType) }
+                            if !c.generic_declaration { ret InvalidType }
                             let (expression, expression_error) = copy_constant_expr(c, g, tree, module_index, node_index)
-                            if expression_error != ok { ret (0usize, InvalidType) }
+                            if expression_error != ok { ret InvalidType }
                             let argument_index = first_argument + argument_position
                             c.generic_arguments[argument_index].expression = expression
                             c.generic_arguments[argument_index].symbolic = true
@@ -6759,6 +6749,25 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
             at += 1usize
         }
     }
+    ret ok
+}
+
+fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, call: syntax.Node, receiver: syntax.Node, template_index: usize) -> (usize, err) {
+    if template_index >= c.signature_function_count { ret (0usize, UnknownCallable) }
+    let template = c.functions[template_index]
+    let generic = c.function_generics[template_index]
+    if !template.generic || generic.comptime_count == 0usize { ret (0usize, Unsupported) }
+    if c.generic_argument_count + generic.comptime_count > c.generic_arguments.len { ret (0usize, Capacity) }
+    let first_argument = c.generic_argument_count
+    var at = 0usize
+    while at < generic.comptime_count {
+        let parameter = c.comptime_parameters[generic.first_comptime + at]
+        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, text: "", expression: 0usize, owner: 0usize, symbolic: false, set: false }
+        c.generic_argument_count += 1usize
+        at += 1usize
+    }
+    let bind_error = bind_bracket_arguments(c, g, tree, module_index, receiver, template_index, first_argument)
+    if bind_error != ok { ret (0usize, bind_error) }
     var runtime_count = 0usize
     let call_end = usize(call.first_child) + usize(call.child_count)
     at = usize(call.first_child)
@@ -10321,8 +10330,64 @@ fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
     ret (false, Unsupported)
 }
 
+// `name[Args]` standing as a value (D772): every comptime parameter is written out,
+// the instance is made as a call would make it, and the value is a pointer to it.
+fn specialize_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node, template_index: usize) -> (usize, err) {
+    if template_index >= c.signature_function_count { ret (0usize, UnknownCallable) }
+    let template = c.functions[template_index]
+    let generic = c.function_generics[template_index]
+    if !template.generic || generic.comptime_count == 0usize { ret (0usize, Unsupported) }
+    if c.generic_argument_count + generic.comptime_count > c.generic_arguments.len { ret (0usize, Capacity) }
+    let first_argument = c.generic_argument_count
+    var at = 0usize
+    while at < generic.comptime_count {
+        let parameter = c.comptime_parameters[generic.first_comptime + at]
+        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, text: "", expression: 0usize, owner: 0usize, symbolic: false, set: false }
+        c.generic_argument_count += 1usize
+        at += 1usize
+    }
+    let bind_error = bind_bracket_arguments(c, g, tree, module_index, receiver, template_index, first_argument)
+    if bind_error != ok { ret (0usize, bind_error) }
+    at = 0usize
+    while at < generic.comptime_count {
+        if !c.generic_arguments[first_argument + at].set {
+            let parameter = c.comptime_parameters[generic.first_comptime + at]
+            record_failure(c, module_index, receiver, .GenericInference, parameter.name, "")
+            ret (0usize, MissingContext)
+        }
+        at += 1usize
+    }
+    if c.generic_declaration && !function_arguments_concrete(c, template_index, first_argument) { ret (template_index, ok) }
+    let (instance_index, instance_error) = instantiate_function(c, instance_owner(c, module_index), template_index, first_argument)
+    if instance_error == ok {
+        record_explain_instance(c, module_index, receiver, template_index, instance_index, first_argument, generic.comptime_count)
+        note_instance_site(c, instance_index, module_index, receiver)
+    }
+    ret (instance_index, instance_error)
+}
+
+// A bracket expression whose base names a generic function: the instance it stands
+// for, or `found` false when the brackets index a value instead.
+fn bracket_generic_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (usize, bool, err) {
+    if node.kind != .BracketPostfix || contains_token(c, usize(node.token_start), usize(node.token_end), .PunctRange) { ret (0usize, false, ok) }
+    let (function_index, function_error) = bracket_function(c, g, tree, module_index, node)
+    if function_error != ok || function_index >= c.function_count || !c.functions[function_index].generic { ret (0usize, false, ok) }
+    let (instance_index, instance_error) = specialize_value(c, g, tree, module_index, node, function_index)
+    ret (instance_index, true, instance_error)
+}
+
 fn check_bracket_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, expected: Type) -> (Type, err) {
     var bracket: BracketInfo = zero
+    let (instance_index, is_generic_value, instance_error) = bracket_generic_value(c, g, tree, module_index, node)
+    if is_generic_value {
+        if instance_error != ok { ret (invalid_type(), instance_error) }
+        let callee = c.functions[instance_index]
+        let (pointer_type, pointer_error) = function_pointer_type(c, callee, module_index)
+        if pointer_error != ok { ret (invalid_type(), pointer_error) }
+        record_explain_value(c, module_index, node, instance_index)
+        let (result_type, context_error) = apply_context(c, pointer_type, expected)
+        ret (result_type, context_error)
+    }
     let bracket_error = read_bracket(c, tree, node, &bracket)
     if bracket_error != ok { ret (invalid_type(), bracket_error) }
     let (base, base_error) = check_expr(c, g, tree, module_index, bracket.base, invalid_type())

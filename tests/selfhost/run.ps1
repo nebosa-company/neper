@@ -1117,6 +1117,24 @@ $textNormalizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $textNormalizeWritten -ne 'executable written') { throw 'text_normalize emission failed' }
 & $textNormalizePath
 if ($LASTEXITCODE -ne 0) { throw "a text_normalize check failed: exit $LASTEXITCODE" }
+# `e.text.regex` (D768): Pike-VM matching, leftmost-first preference, captures, the three options and `$n` replacement.
+$textRegexPath = Join-Path $testBuild 'text-regex-selfhost.exe'
+$textRegexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/text_regex/src/main.e') $repo 'x64' 'windows' $textRegexPath
+if ($LASTEXITCODE -ne 0 -or $textRegexWritten -ne 'executable written') { throw 'text_regex emission failed' }
+$textRegexOutput = & $textRegexPath
+if ($LASTEXITCODE -ne 0 -or $textRegexOutput -ne 'text regex ok') { throw "a text_regex check failed: exit $LASTEXITCODE" }
+# `e.text.shape` (D769): cmap, GSUB single and ligature lookups, feature ranges, GPOS pair kerning and legacy `kern` over a synthetic font.
+$textShapePath = Join-Path $testBuild 'text-shape-selfhost.exe'
+$textShapeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/text_shape/src/main.e') $repo 'x64' 'windows' $textShapePath
+if ($LASTEXITCODE -ne 0 -or $textShapeWritten -ne 'executable written') { throw 'text_shape emission failed' }
+$textShapeOutput = & $textShapePath
+if ($LASTEXITCODE -ne 0 -or $textShapeOutput -ne 'text shape ok') { throw "a text_shape check failed: exit $LASTEXITCODE" }
+# `e.text.locale` (D771): tags, grouped numbers, currency layout, LDML dates, natural comparison and Turkic case over the built-in CLDR subset and a loaded database.
+$textLocalePath = Join-Path $testBuild 'text-locale-selfhost.exe'
+$textLocaleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/text_locale/src/main.e') $repo 'x64' 'windows' $textLocalePath
+if ($LASTEXITCODE -ne 0 -or $textLocaleWritten -ne 'executable written') { throw 'text_locale emission failed' }
+$textLocaleOutput = & $textLocalePath
+if ($LASTEXITCODE -ne 0 -or $textLocaleOutput -ne 'text locale ok') { throw "a text_locale check failed: exit $LASTEXITCODE" }
 # One function of 3000 checks (D302): wider than the old small NIR tier and than codegen's old per-function block table.
 $capacityWidePath = Join-Path $testBuild 'capacity-wide-selfhost.exe'
 $capacityWideWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/capacity_wide/src/main.e') $repo 'x64' 'windows' $capacityWidePath
@@ -1141,6 +1159,24 @@ $asyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $asyncWritten -ne 'executable written') { throw 'async emission failed' }
 & $asyncPath
 if ($LASTEXITCODE -ne 0) { throw "a async check failed: exit $LASTEXITCODE" }
+# `generic_value` (D772): a generic function instantiated by name stands as a value, a typed trampoline behind a `*void` callback.
+$genericValuePath = Join-Path $testBuild 'generic-value-selfhost.exe'
+$genericValueWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/generic_value/src/main.e') $repo 'x64' 'windows' $genericValuePath
+if ($LASTEXITCODE -ne 0 -or $genericValueWritten -ne 'executable written') { throw 'generic_value emission failed' }
+$genericValueOutput = & $genericValuePath
+if ($LASTEXITCODE -ne 0 -or $genericValueOutput -ne 'generic value ok') { throw "a generic_value check failed: exit $LASTEXITCODE" }
+# `e.task` (D772): a bounded pool over the trampoline instances -- tasks, futures, failure, cancellation, bounded waits, wait_any, a full ring, parallel_for, close.
+$taskPoolPath = Join-Path $testBuild 'task-pool-selfhost.exe'
+$taskPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/task_pool/src/main.e') $repo 'x64' 'windows' $taskPoolPath
+if ($LASTEXITCODE -ne 0 -or $taskPoolWritten -ne 'executable written') { throw 'task_pool emission failed' }
+$taskPoolOutput = & $taskPoolPath
+if ($LASTEXITCODE -ne 0 -or $taskPoolOutput -ne 'task pool ok') { throw "a task_pool check failed: exit $LASTEXITCODE" }
+# `e.async.io` (D773): connect and accept through the loop, callback read and write, progress, wait_any, cancellation, an expired deadline, take's refusals.
+$asyncIoPath = Join-Path $testBuild 'async-io-selfhost.exe'
+$asyncIoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/async_io/src/main.e') $repo 'x64' 'windows' $asyncIoPath
+if ($LASTEXITCODE -ne 0 -or $asyncIoWritten -ne 'executable written') { throw 'async_io emission failed' }
+$asyncIoOutput = & $asyncIoPath
+if ($LASTEXITCODE -ne 0 -or $asyncIoOutput -ne 'async io ok') { throw "a async_io check failed: exit $LASTEXITCODE" }
 # `e.fmt.mail`: addresses, lists, dates against email.utils, a message with a folded header, encoded words.
 $fmtMailPath = Join-Path $testBuild 'fmt-mail-selfhost.exe'
 $fmtMailWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_mail\src\main.e') $repo 'x64' 'windows' $fmtMailPath
@@ -1420,6 +1456,12 @@ $wavWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\lin
 if ($LASTEXITCODE -ne 0 -or $wavWritten -ne 'executable written') { throw 'e.fmt.wav emission failed' }
 & $wavPath
 if ($LASTEXITCODE -ne 0) { throw "an e.fmt.wav open, decode, seek or encode answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.mp3` (D770): Layer III against minimp3 -- three LAME streams whole, chunked and after a seek, within two LSB.
+$mp3Path = Join-Path $testBuild 'fmt-mp3-selfhost.exe'
+$mp3Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/fmt_mp3/src/main.e') $repo 'x64' 'windows' $mp3Path
+if ($LASTEXITCODE -ne 0 -or $mp3Written -ne 'executable written') { throw 'e.fmt.mp3 emission failed' }
+$mp3Output = & $mp3Path
+if ($LASTEXITCODE -ne 0 -or $mp3Output -ne 'fmt mp3 ok') { throw "an e.fmt.mp3 decode, seek or refusal answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

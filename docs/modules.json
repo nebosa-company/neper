@@ -424,7 +424,7 @@
   {
    "name": "e.async.io",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -432,6 +432,7 @@
     "e.cancel",
     "e.io",
     "e.mem",
+    "e.meta",
     "e.os",
     "e.task",
     "e.time"
@@ -986,7 +987,7 @@
   {
    "name": "e.fmt.mp3",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1735,7 +1736,7 @@
   {
    "name": "e.task",
    "layer": 4,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1858,7 +1859,7 @@
   {
    "name": "e.text.locale",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1886,7 +1887,7 @@
   {
    "name": "e.text.regex",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1899,7 +1900,7 @@
   {
    "name": "e.text.shape",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [

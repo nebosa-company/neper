@@ -5,7 +5,7 @@
 | file to create | `lib/e/text/layout.e` |
 | plan row | layer 2, surface `planned`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
-| unmet dependencies | `e.gfx.geometry`, `e.text.shape` |
+| unmet dependencies | `e.gfx.geometry` |
 
 ## Definition of done
 
@@ -21,7 +21,7 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 |---|---|---|---|
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.gfx.geometry` | planned | missing | 2 |
-| `e.text.shape` | planned | missing | 2 |
+| `e.text.shape` | partial | `lib/e/text/shape.e` | 2 |
 | `e.text.unicode` | partial | `lib/e/text/unicode.e` | 2 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 2 may depend on layers [0, 1, 2].
@@ -75,10 +75,11 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `lib/e/text/collate.e`
 - `lib/e/text/encoding.e`
 - `lib/e/text/io.e`
+- `lib/e/text/locale.e`
 - `lib/e/text/normalize.e`‡
+- `lib/e/text/regex.e`
+- `lib/e/text/shape.e`
 - `lib/e/text/template.e`
-- `lib/e/text/unicode.e`‡
-- `lib/e/text/utf8.e`
 
 ## Verification
 

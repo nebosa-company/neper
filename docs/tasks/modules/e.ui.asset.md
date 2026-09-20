@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/asset.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | `embedded-asset-linking` |
-| unmet dependencies | `e.asset`, `e.gfx.image`, `e.gfx.scene`, `e.text.shape` |
+| unmet dependencies | `e.asset`, `e.gfx.image`, `e.gfx.scene` |
 
 ## Definition of done
 
@@ -25,7 +25,7 @@ Blockers named in the plan must be resolved first; a blocked module is not eligi
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.gfx.image` | planned | missing | 2 |
 | `e.gfx.scene` | planned | missing | 6 |
-| `e.text.shape` | planned | missing | 2 |
+| `e.text.shape` | partial | `lib/e/text/shape.e` | 2 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].
 
