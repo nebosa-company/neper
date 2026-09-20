@@ -127,12 +127,15 @@ def edit(path: str, old: str, new: str) -> str:
     return "edited %s" % path
 
 
+BASH = r"C:\Program Files\Git\bin\bash.exe"
+
+
 def run(command: str, timeout_seconds: int = 900) -> str:
-    """Run a PowerShell command in the repository root; output capped at 8 KB. git commit/add/reset/checkout and recursive deletes are refused."""
+    """Run a POSIX shell command (Git Bash: `&&`, `2>/dev/null`, `ls`, `grep` all work) in the repository root; output capped at 8 KB. A .ps1 script runs as `powershell -ExecutionPolicy Bypass -File the.ps1`. git commit/add/reset/checkout and recursive deletes are refused."""
     if FORBIDDEN_CMD.search(command):
         return "Error: refused; the driver commits and reverts, not the agent."
     try:
-        code, out = sh(["powershell", "-NoProfile", "-Command", command], timeout=min(timeout_seconds, 3600))
+        code, out = sh([BASH, "-lc", command], timeout=min(timeout_seconds, 3600))
     except subprocess.TimeoutExpired:
         return "Error: timed out after %d s" % timeout_seconds
     if len(out) > 8192:
@@ -146,6 +149,11 @@ def prompt_for(task_file):
     card = (ROOT / "docs" / "llm-neper-card.md").read_text(encoding="utf-8")
     system = ("You are implementing one feature of the neper compiler and library, alone, in a git checkout at %s.\n"
               "Follow the README and the task file exactly. Tools: read_lines, search, edit, run. Never read a file over 120 KB whole.\n"
+              "`run` is a POSIX shell (Git Bash), not PowerShell: `&&`, `2>/dev/null`, `ls`, `grep` work; a `.ps1` script runs as "
+              "`powershell -ExecutionPolicy Bypass -File the.ps1`; the README's `& x` spellings are PowerShell, drop the `&`.\n"
+              "Budget: read only what the task file names (its dependencies, one sibling module, one sibling fixture and that fixture's "
+              "two runner blocks), then WRITE. Reading past the fifth round without an edit is the failure mode to avoid; you can read "
+              "more later when a build error asks for it.\n"
               "Do not commit, add, reset or checkout; the driver does. Reply with a line starting DONE when the task file's "
               "fixture passes on this host with the self-hosted compiler, or BLOCKED: <reason> when you cannot proceed.\n\n"
               "=== docs/tasks/README.md ===\n%s\n\n=== docs/llm-neper-card.md ===\n%s") % (ROOT.as_posix(), readme, card)
