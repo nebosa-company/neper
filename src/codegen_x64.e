@@ -627,9 +627,34 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         if right_error != ok { ret right_error }
         try emit_x64.vector_load(output, 1usize, right, bytes, 11usize)
     }
-    // The two widths the baseline has no one multiply for and builds out of `pmuludq`
-    // instead; every other operation is the single instruction in the `else`.
-    let synthesized = operation == 6usize && lane >= 2usize
+    // The three widths the baseline has no one multiply for and builds out of
+    // `pmuludq` or `pmullw` instead; every other operation is the single instruction
+    // in the `else`.
+    let synthesized = operation == 6usize && lane != 1usize
+    if operation == 6usize && lane == 0usize {
+        // A byte lane's product is `pmullw`'s on words, since 257 is 1 modulo 256:
+        // a byte unpacked against itself is that byte times 257, the product of two
+        // such words has the wanted byte as its low byte, and the high byte is dropped
+        // when the words are packed back. So the low eight lanes of each operand are
+        // unpacked against themselves into xmm2 and xmm3 and multiplied, the high
+        // eight in place and multiplied, every word masked to its low byte -- the
+        // mask is all ones shifted right by eight, made without a constant -- and
+        // `packuswb` puts the sixteen bytes back in order. Fourteen instructions.
+        try emit_x64.vector_op(output, 0usize, 2usize, 0usize, 40usize)
+        try emit_x64.vector_op(output, 102usize, 2usize, 2usize, 96usize)
+        try emit_x64.vector_op(output, 0usize, 3usize, 1usize, 40usize)
+        try emit_x64.vector_op(output, 102usize, 3usize, 3usize, 96usize)
+        try emit_x64.vector_op(output, mandatory, 2usize, 3usize, opcode)
+        try emit_x64.vector_op(output, 102usize, 0usize, 0usize, 104usize)
+        try emit_x64.vector_op(output, 102usize, 1usize, 1usize, 104usize)
+        try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
+        try emit_x64.vector_op(output, 102usize, 3usize, 3usize, 117usize)
+        try emit_x64.vector_shift(output, 2usize, 3usize, 8usize, 113usize)
+        try emit_x64.vector_op(output, 102usize, 2usize, 3usize, 219usize)
+        try emit_x64.vector_op(output, 102usize, 0usize, 3usize, 219usize)
+        try emit_x64.vector_op(output, 102usize, 2usize, 0usize, 103usize)
+        try emit_x64.vector_op(output, 0usize, 0usize, 2usize, 40usize)
+    }
     if operation == 6usize && lane == 3usize {
         // A sixty-four-bit product's low half is the low halves multiplied plus the two
         // cross products shifted up thirty-two -- the high halves multiplied land
@@ -760,7 +785,8 @@ fn packed_instruction(operation: usize, lane: usize) -> (usize, usize, bool) {
         if lane == 2usize { ret (102usize, 250usize, true) }
         ret (102usize, 251usize, true)
     }
-    if operation == 6usize && lane == 1usize { ret (102usize, 213usize, true) }
+    // `pmullw`: the sixteen-bit multiply, and what the byte form is built out of.
+    if operation == 6usize && lane <= 1usize { ret (102usize, 213usize, true) }
     // Neither the thirty-two- nor the sixty-four-bit lane has one multiply on this
     // baseline: `pmuludq` is the instruction the caller builds both forms out of.
     if operation == 6usize && lane >= 2usize { ret (102usize, 244usize, true) }

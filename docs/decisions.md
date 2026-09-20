@@ -14294,3 +14294,26 @@ caught, in debug and in release, on both hosts.
 
 That leaves the lane loop to `f16` and to `*%` on a byte lane, for which the
 baseline has no multiply at any width to build from.
+
+## D764 -- The packed multiply on byte lanes
+
+`*%` on `u8` and `i8` lanes leaves the lane loop too. SSE2 has no byte multiply
+at all, but 257 is 1 modulo 256: a byte unpacked against itself (`punpcklbw` of
+a register with itself) is that byte times 257 as a word, the product of two such
+words is the wanted product times 257 squared, and its low byte is the wanted
+byte. So the form is fourteen instructions: the low eight lanes of each operand
+copied and unpacked against themselves into xmm2 and xmm3 and multiplied by
+`pmullw`, the high eight unpacked in place and multiplied, every word masked to
+its low byte by `pand` against all ones shifted right by eight -- `pcmpeqw` of a
+register with itself, then `psrlw`, so no constant is read from the image -- and
+`packuswb` putting the sixteen bytes back in lane order. The allocator gains
+nothing and the sign is nothing to the low byte, so `i8` and `u8` select alike.
+
+The `link/simd_lanes` fixture multiplies sixteen distinct `u8` lanes with
+products above 255 in most, sixteen `i8` lanes by `-2` including `-128`, and
+thirty-two `u8` lanes across two chunks with a lane written in each, so a form
+that mixed lanes between the halves, kept a high byte, or covered only the first
+chunk is caught, in debug and in release, on both hosts.
+
+That leaves the lane loop to `f16` alone, which this baseline cannot multiply at
+any width: `f16` arithmetic is F16C or AVX-512, behind the `--cpu` level.

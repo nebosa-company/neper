@@ -294,6 +294,31 @@ fn operators() {
     let xe = xd *% simd.splat[Vec[u64, 4]](4294967298u64)
     if xe[0] != 18446744069414584318u64 || xe[1] != 12884901894u64 { os.exit(169) }
     if xe[2] != 12884901894u64 || xe[3] != 8589934592u64 { os.exit(170) }
+    // Byte lanes are the fourth form: `pmullw` over the bytes unpacked against
+    // themselves, since 257 is 1 modulo 256, and the words packed back. Sixteen
+    // distinct lanes, products above 255 in most, a signed one crossing zero.
+    var ya = simd.splat[Vec[u8, 16]](3u8)
+    ya[0] = 255u8
+    ya[1] = 16u8
+    ya[7] = 100u8
+    ya[8] = 2u8
+    ya[15] = 129u8
+    var yb = simd.splat[Vec[u8, 16]](7u8)
+    yb[0] = 255u8
+    yb[1] = 17u8
+    yb[7] = 3u8
+    yb[15] = 2u8
+    let yc = ya *% yb
+    if yc[0] != 1u8 || yc[1] != 16u8 || yc[2] != 21u8 || yc[7] != 44u8 { os.exit(171) }
+    if yc[8] != 14u8 || yc[14] != 21u8 || yc[15] != 2u8 { os.exit(172) }
+    let yd = Vec[i8, 16]{ -3i8, 7i8, 100i8, -128i8, 1i8, 2i8, 3i8, 4i8, 5i8, 6i8, 7i8, 8i8, 9i8, 10i8, 11i8, 12i8 } *% simd.splat[Vec[i8, 16]](-2i8)
+    if yd[0] != 6i8 || yd[1] != -14i8 || yd[2] != 56i8 || yd[3] != 0i8 || yd[15] != -24i8 { os.exit(173) }
+    // Thirty-two bytes are two chunks of the same fourteen instructions.
+    var ye = simd.splat[Vec[u8, 32]](5u8)
+    ye[16] = 51u8
+    ye[31] = 200u8
+    let yf = ye *% simd.splat[Vec[u8, 32]](5u8)
+    if yf[0] != 25u8 || yf[16] != 255u8 || yf[31] != 232u8 { os.exit(174) }
     // Sixty-four bytes are four chunks, with a lane of its own in each.
     var ka = simd.splat[Vec[u8, 64]](9u8)
     ka[0] = 1u8
