@@ -21,7 +21,6 @@ The normative design is `docs/pacman.md`; the `packageManifest` shape is already
 
 ## Code anchors
 
-- `project.yaml`: `scripts/render_tasks.py`×1†
 - nearest existing implementation: `docs/pacman.md`, `src/project.e`, `src/source.e`, `docs/schemas/neper-v1.schema.json`†, `lib/e/fmt/yaml.e`, `lib/e/crypto` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

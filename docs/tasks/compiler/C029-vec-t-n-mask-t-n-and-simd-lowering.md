@@ -70,7 +70,6 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `mem.size_of`: `lib/e/bytes.e`×10, `lib/e/algo/deflate.e`×5, `lib/e/fmt/zstd.e`×5†, `lib/e/math.e`×5†, `lib/e/fmt/gzip.e`×4, `lib/e/fmt/lzw.e`×4, `lib/e/fmt/zlib.e`×4, `lib/e/fmt/bzip2.e`×3
 - `mem.align_of`: `src/check.e`×1‡
 - `simd.bits`: `src/check.e`×1‡, `src/main.e`×1‡
-- `link/simd_lanes`: `scripts/render_tasks.py`×1†
 - `pcmpeqd`: `src/codegen_x64.e`×1‡, `src/disasm_x64.e`×1†
 - `pxor`: `src/codegen_x64.e`×3‡, `src/disasm_x64.e`×1†, `src/lower.e`×1‡
 - `VectorBinary`: `src/lower.e`×3‡, `src/codegen_x64.e`×2‡, `src/em.e`×1‡, `src/nir.e`×1†

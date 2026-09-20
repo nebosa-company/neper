@@ -50,7 +50,6 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
 - `module.function`: `src/tool.e`×6‡, `src/em_link.e`×2†, `src/lower.e`×2‡, `src/nir.e`×2†, `src/check.e`×1‡, `src/codegen_x64.e`×1‡
-- `.nepersym`: `scripts/render_tasks.py`×1†
 
 ## Verification
 

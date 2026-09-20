@@ -145,7 +145,7 @@ def anchors(text, limit_tokens=24, limit_files=8):
         hits = []
         for line in proc.stdout.splitlines():
             path, _, n = line.rpartition(":")
-            if path and not path.startswith("benchmarks/tokens/"):
+            if path and not path.startswith(("benchmarks/tokens/", "scripts/render_tasks.py", "scripts/bonsai_driver.py")):
                 hits.append((path.replace("\\", "/"), int(n)))
         hits.sort(key=lambda h: -h[1])
         specific = any(c in tok for c in "._-/") or tok[:1].isupper()

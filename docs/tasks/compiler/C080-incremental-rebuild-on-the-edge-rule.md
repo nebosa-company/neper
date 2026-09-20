@@ -56,7 +56,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `rebuilt`: `src/main.e`×14‡, `src/tool.e`×3‡, `lib/e/data/slot_map.e`×1, `lib/e/fmt/json.e`×1†, `lib/e/fmt/uri.e`×1, `scripts/render_tasks.py`×1†, `src/artifact_hash.e`×1, `src/em_link.e`×1†
+- `rebuilt`: `src/main.e`×14‡, `src/tool.e`×3‡, `lib/e/data/slot_map.e`×1, `lib/e/fmt/json.e`×1†, `lib/e/fmt/uri.e`×1, `src/artifact_hash.e`×1, `src/em_link.e`×1†, `src/graph.e`×1†
 
 ## Existing fixtures
 
