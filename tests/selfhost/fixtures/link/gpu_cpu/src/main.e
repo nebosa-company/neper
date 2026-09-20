@@ -4,7 +4,7 @@
 // workgroup ids, `write` at an offset and `download` round-trip, tokens and waits
 // answer, and the refusals hold: a stale handle after `release`, a short download,
 // a write past the end, a token from another device, a second backend, a wrong
-// index, a closed device.
+// index, a closed device. `len`, `download` and `release` infer T from the Buf (D783).
 
 use e.gpu
 use e.io
@@ -67,7 +67,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     let (dx, dx_error) = gpu.upload[f32](q, x[0..])
-    if dx_error != ok || gpu.len[f32](dx) != 1000usize { os.exit(11i32) }
+    // `gpu.len(dx)`: T inferred from the Buf (D783).
+    if dx_error != ok || gpu.len(dx) != 1000usize { os.exit(11i32) }
     let (dy, dy_error) = gpu.upload[f32](q, y[0..])
     if dy_error != ok { os.exit(12i32) }
     let (before, before_error) = gpu.token(q)
@@ -79,7 +80,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (finished, done_error) = gpu.done(after)
     if done_error != ok || !finished || gpu.wait(after) != ok || gpu.wait_for(q, after) != ok { os.exit(16i32) }
     var result: [1000]f32 = zero
-    if gpu.download[f32](q, dy, result[0..]) != ok { os.exit(17i32) }
+    if gpu.download(q, dy, result[0..]) != ok { os.exit(17i32) }
     i = 0usize
     while i < 1000usize {
         if !near(result[i], 2.0 * f32(i) + 1.0) { os.exit(18i32) }
@@ -112,7 +113,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if seen[0] != 0u32 || seen[255] != ((1u32 << 24u32) | (1u32 << 16u32) | (7u32 << 8u32) | 7u32) { os.exit(31i32) }
 
     // Release: the handle is stale afterwards, and its slot is reused.
-    if gpu.release[u32](q, tile) != ok { os.exit(32i32) }
+    if gpu.release(q, tile) != ok { os.exit(32i32) }
     if gpu.download[u32](q, tile, seen[0..]) != gpu.InvalidHandle { os.exit(33i32) }
     if gpu.release[u32](q, tile) != gpu.InvalidHandle { os.exit(34i32) }
     let (again, again_error) = gpu.alloc[u32](q, 4usize)

@@ -6587,6 +6587,26 @@ fn infer_comptime_type(c: *Checker, function_index: usize, first_argument: usize
         if formal.element >= c.type_count || actual.element >= c.type_count { ret InvalidType }
         ret infer_comptime_type(c, function_index, first_argument, c.types[formal.element], c.types[actual.element])
     }
+    // An instance of a generic aggregate against another of the same template (D783):
+    // `gpu.release(q, dx)` with `dx: Buf[f32]` binds `T` from the argument's own
+    // argument, position by position, as a slice binds it from its element.
+    if formal.kind == .Named && actual.kind == .Named && formal.has_element && actual.has_element {
+        if formal.element >= c.aggregate_count || actual.element >= c.aggregate_count { ret ok }
+        let formal_aggregate = c.aggregates[formal.element]
+        let actual_aggregate = c.aggregates[actual.element]
+        if !formal_aggregate.instance || !actual_aggregate.instance || formal_aggregate.template_index != actual_aggregate.template_index { ret ok }
+        if formal_aggregate.template_index >= c.aggregate_count { ret ok }
+        let template = c.aggregates[formal_aggregate.template_index]
+        var at = 0usize
+        while at < template.comptime_count {
+            let formal_argument = c.generic_arguments[formal_aggregate.first_argument + at]
+            let actual_argument = c.generic_arguments[actual_aggregate.first_argument + at]
+            if formal_argument.kind == .Type && actual_argument.kind == .Type && actual_argument.set && !actual_argument.symbolic {
+                try infer_comptime_type(c, function_index, first_argument, formal_argument.ty, actual_argument.ty)
+            }
+            at += 1usize
+        }
+    }
     ret ok
 }
 

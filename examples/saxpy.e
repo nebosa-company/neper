@@ -23,11 +23,11 @@ fn run(q: *gpu.Queue, a: f32, x: []const f32, y: []f32) -> err {
     // free to reuse. The device-side transfer is queued in order behind it.
     let (dx, dx_error) = gpu.upload[f32](q, x)
     if dx_error != ok { ret dx_error }
-    defer let _ = gpu.release[f32](q, dx) // queued behind everything below: safe to defer
+    defer let _ = gpu.release(q, dx) // queued behind everything below: safe to defer; T is dx's
 
     let (dy, dy_error) = gpu.upload[f32](q, y)
     if dy_error != ok { ret dy_error }
-    defer let _ = gpu.release[f32](q, dy)
+    defer let _ = gpu.release(q, dy)
 
     // The kernel is a comptime argument, so the trailing arguments are checked
     // against saxpy's parameter list at compile time. grid1 counts invocations;
@@ -35,7 +35,7 @@ fn run(q: *gpu.Queue, a: f32, x: []const f32, y: []f32) -> err {
     try gpu.launch[saxpy](q, gpu.grid1(x.len), u32(x.len), a, dx, dy)
 
     // download waits for everything queued before it on q, then copies back.
-    try gpu.download[f32](q, dy, y)
+    try gpu.download(q, dy, y)
     ret ok
 }
 

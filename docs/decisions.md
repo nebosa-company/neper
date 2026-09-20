@@ -14869,3 +14869,15 @@ side to write. At run time it is a `ConstBool`. `e.gpu.tensor` picks its
 
 Not in this: `if meta.signed[T]() && ...` -- an `&&` over a folded question
 stays a run-time condition, and both arms are checked.
+
+## D783 — A generic aggregate argument infers its template's parameters
+
+`gpu.release(q, dx)` with `dx: gpu.Buf[f32]` could not infer `T`: inference
+walked pointers, slices and arrays down to a type parameter, but an instance of
+a generic aggregate -- `Buf[T]` in the signature against `Buf[f32]` at the call
+-- was opaque to it. It now recognises two instances of one template and
+infers position by position from the actual's arguments, so `gpu.len(dx)`,
+`gpu.download(q, dy, y)` and `gpu.release(q, dx)` are spelled as the section 10
+example always wrote them; the example drops its brackets. A symbolic actual
+argument -- a template body naming `Buf[T]` of its own `T` -- binds nothing,
+as a slice of a type parameter binds nothing.
