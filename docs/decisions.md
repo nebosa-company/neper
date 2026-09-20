@@ -14271,3 +14271,26 @@ chunk is caught in both suites.
 
 That leaves the lane loop to `f16` and to `*%` on a byte or a sixty-four-bit lane, which
 are the widths this baseline really has nothing for.
+
+## D763 -- The packed multiply on sixty-four-bit lanes
+
+`*%` on `i64` and `u64` lanes leaves the lane loop for the last of the three
+multiplies SSE2 builds out of `pmuludq`. A sixty-four-bit product's low half is
+the low halves' product plus both cross products moved up thirty-two bits; the
+high halves' product lands entirely above the lane and never enters it. So the
+form is ten instructions: each operand copied and shifted right by thirty-two
+(`psrlq`) to bring its high half down, each of those multiplied by the other
+operand as given (`pmuludq` reads exactly the low halves), the two cross products
+added (`paddq`) and shifted left by thirty-two (`psllq`), the low halves
+multiplied, and the sum. xmm2 and xmm3 are the scratch the float path
+canonicalises its NaN lanes in, which an integer lane never reaches, and the
+allocator gains nothing. The wrap the operator promises is every add's own.
+
+The `link/simd_lanes` fixture multiplies two `i64` lanes whose every half is
+nonzero -- 2^32+1 by 2^32+3, whose product crosses 2^64 -- and four `u64` lanes
+across two chunks with 2^64-1 and 2^32 among them, so a form that dropped a cross
+product, took the high halves' product, or covered only the first chunk is
+caught, in debug and in release, on both hosts.
+
+That leaves the lane loop to `f16` and to `*%` on a byte lane, for which the
+baseline has no multiply at any width to build from.

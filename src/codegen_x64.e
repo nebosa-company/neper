@@ -577,8 +577,8 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
 }
 
 // Section 4's lane-wise operator as one packed SSE2 instruction over the whole
-// sixteen-byte vector -- three for `~`, which no unit has, and seven for `*%` on
-// thirty-two-bit lanes, which this baseline has not -- which `lower` asks for by
+// sixteen-byte vector -- three for `~`, which no unit has, and seven and ten for `*%`
+// on thirty-two- and sixty-four-bit lanes, which this baseline has not -- which `lower` asks for by
 // emitting `VectorBinary` for the shapes the baseline covers. The vectors stay in memory and xmm0 to xmm3 are borrowed
 // for the operation, as the scalar float path borrows xmm0 and xmm1: this is
 // instruction selection, not yet a vector register class.
@@ -627,6 +627,27 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         if right_error != ok { ret right_error }
         try emit_x64.vector_load(output, 1usize, right, bytes, 11usize)
     }
+    // The two widths the baseline has no one multiply for and builds out of `pmuludq`
+    // instead; every other operation is the single instruction in the `else`.
+    let synthesized = operation == 6usize && lane >= 2usize
+    if operation == 6usize && lane == 3usize {
+        // A sixty-four-bit product's low half is the low halves multiplied plus the two
+        // cross products shifted up thirty-two -- the high halves multiplied land
+        // entirely above the lane and never enter it. That is three `pmuludq`s, which
+        // multiply exactly the low halves, and a shift to put the crossed pair back
+        // where they belong. xmm2 and xmm3 hold the shifted operands, the scratch the
+        // float path canonicalises its NaN lanes in and an integer lane never reaches.
+        try emit_x64.vector_op(output, 0usize, 2usize, 0usize, 40usize)
+        try emit_x64.vector_shift(output, 2usize, 2usize, 32usize, 115usize)
+        try emit_x64.vector_op(output, mandatory, 2usize, 1usize, opcode)
+        try emit_x64.vector_op(output, 0usize, 3usize, 1usize, 40usize)
+        try emit_x64.vector_shift(output, 2usize, 3usize, 32usize, 115usize)
+        try emit_x64.vector_op(output, mandatory, 3usize, 0usize, opcode)
+        try emit_x64.vector_op(output, 102usize, 2usize, 3usize, 212usize)
+        try emit_x64.vector_shift(output, 6usize, 2usize, 32usize, 115usize)
+        try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
+        try emit_x64.vector_op(output, 102usize, 0usize, 2usize, 212usize)
+    }
     if operation == 6usize && lane == 2usize {
         // SSE2 has no packed thirty-two-bit multiply -- `pmulld` is SSE4.1 -- but it
         // has `pmuludq`, which multiplies the low half of each sixty-four-bit lane into
@@ -645,7 +666,8 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         try emit_x64.vector_shuffle(output, 0usize, 0usize, 8usize)
         try emit_x64.vector_shuffle(output, 2usize, 2usize, 8usize)
         try emit_x64.vector_op(output, 102usize, 0usize, 2usize, 98usize)
-    } else {
+    }
+    if !synthesized {
         try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
     }
     if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
@@ -739,9 +761,9 @@ fn packed_instruction(operation: usize, lane: usize) -> (usize, usize, bool) {
         ret (102usize, 251usize, true)
     }
     if operation == 6usize && lane == 1usize { ret (102usize, 213usize, true) }
-    // Thirty-two-bit lanes have no one multiply on this baseline: `pmuludq` is the
-    // instruction the caller's seven-instruction form is built out of.
-    if operation == 6usize && lane == 2usize { ret (102usize, 244usize, true) }
+    // Neither the thirty-two- nor the sixty-four-bit lane has one multiply on this
+    // baseline: `pmuludq` is the instruction the caller builds both forms out of.
+    if operation == 6usize && lane >= 2usize { ret (102usize, 244usize, true) }
     if operation == 7usize { ret (102usize, 219usize, true) }
     if operation == 8usize { ret (102usize, 235usize, true) }
     if operation == 9usize { ret (102usize, 239usize, true) }

@@ -5232,9 +5232,9 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // one byte per lane, so its sixteen lanes are sixteen bytes, its eight the register's
 // low half, its four the low quarter and its two the low eighth, and its thirty-two or
 // sixty-four whole registers' worth again.
-// Everything else keeps the lane loop below: `f16`, and `*%` on a byte or a
-// sixty-four-bit lane -- the sixteen-bit one is the only packed multiply SSE2 has, and
-// the thirty-two-bit one is the only other width the back end builds out of it. The shifts have their own table
+// Everything else keeps the lane loop below: `f16`, and `*%` on a byte lane -- the
+// sixteen-bit one is the only packed multiply SSE2 has, and the thirty-two- and
+// sixty-four-bit ones are the widths the back end builds out of it. The shifts have their own table
 // below, since their right operand is one scalar count and not a vector. The second return is how many
 // sixteen-byte chunks the operands are.
 // ponytail: the sixteen-byte baseline only; `--cpu` widens this table to AVX.
@@ -5280,7 +5280,7 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
         if !mask_lanes {
             if opcode == .AddWrap { operation = 4usize }
             if opcode == .SubtractWrap { operation = 5usize }
-            if opcode == .MultiplyWrap && (lane_size == 2usize || lane_size == 4usize) { operation = 6usize }
+            if opcode == .MultiplyWrap && lane_size >= 2usize { operation = 6usize }
             if opcode == .BitNot { operation = 10usize }
         }
         if mask_lanes && opcode == .BitNot { operation = 11usize }

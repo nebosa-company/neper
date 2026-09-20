@@ -279,6 +279,21 @@ fn operators() {
     let le = ld *% simd.splat[Vec[u32, 8]](65538u32)
     if le[0] != 4294901758u32 || le[3] != 131076u32 { os.exit(166) }
     if le[4] != 131072u32 || le[7] != 196614u32 { os.exit(167) }
+    // Sixty-four-bit lanes are the third form the baseline has no one multiply for:
+    // three `pmuludq`s and a shift, the low halves' product plus both cross products
+    // moved up thirty-two. Every operand has a high half that is not zero, so a form
+    // that dropped a cross product, or took the high halves' product, is caught.
+    let xa = Vec[i64, 2]{ 4294967297i64, -3i64 }
+    let xb = Vec[i64, 2]{ 4294967299i64, 7i64 }
+    let xc = xa *% xb
+    if xc[0] != 17179869187i64 || xc[1] != -21i64 { os.exit(168) }
+    // Thirty-two bytes are two chunks of the same ten instructions.
+    var xd = simd.splat[Vec[u64, 4]](3u64)
+    xd[0] = 18446744073709551615u64
+    xd[3] = 4294967296u64
+    let xe = xd *% simd.splat[Vec[u64, 4]](4294967298u64)
+    if xe[0] != 18446744069414584318u64 || xe[1] != 12884901894u64 { os.exit(169) }
+    if xe[2] != 12884901894u64 || xe[3] != 8589934592u64 { os.exit(170) }
     // Sixty-four bytes are four chunks, with a lane of its own in each.
     var ka = simd.splat[Vec[u8, 64]](9u8)
     ka[0] = 1u8
