@@ -422,10 +422,16 @@ fn shifts() {
     // lane admits.
     let za = Vec[i32, 4]{ -1i32, 2i32, 3i32, 4i32 }
     if (za << 0u32)[0] != -1i32 || (za >> 31u32)[0] != -1i32 || (za >> 31u32)[3] != 0i32 { os.exit(155) }
-    // A count the compiler does not know keeps the lane loop, with the check that traps
-    // on a count the width does not admit, and answers the same.
+    // A count the compiler does not know is packed too: it rides in the low quadword of
+    // a second register, with the check that traps on a count the width does not admit
+    // ahead of it, and every lane answers what a written-out count answers.
     let n = u32(za[1])
-    if (za << n)[1] != 8i32 { os.exit(156) }
+    if (za << n)[1] != 8i32 || (za >> n)[0] != -1i32 || (za >> n)[3] != 1i32 { os.exit(156) }
+    if (wa << n)[0] != 4i16 || (wa >> n)[1] != -1i16 || (ua >> n)[0] != 16383u16 { os.exit(160) }
+    // Sixty-four-bit lanes shift left and right unsigned by a register count as well; the
+    // signed right shift is the shape with no instruction, so it stays the lane loop.
+    if (qa << n)[1] != 4u64 || (qa >> n)[0] != 4611686018427387903u64 { os.exit(161) }
+    if (sa << n)[0] != -64i64 || (sa >> n)[0] != -4i64 { os.exit(162) }
     // Byte lanes have no packed shift at all, so they keep the lane loop too.
     let ba = Vec[u8, 16]{ 1u8, 2u8, 4u8, 8u8, 16u8, 32u8, 64u8, 128u8, 255u8, 3u8, 5u8, 9u8, 17u8, 33u8, 65u8, 129u8 }
     if (ba >> 1u32)[8] != 127u8 || (ba << 1u32)[7] != 0u8 { os.exit(157) }
@@ -439,6 +445,9 @@ fn shifts() {
     if ws[0] != -4i32 || ws[3] != 1i32 || ws[4] != 32i32 || ws[7] != -1i32 { os.exit(158) }
     let wsl = wd << 4u32
     if wsl[0] != -128i32 || wsl[3] != 48i32 || wsl[4] != 1024i32 || wsl[7] != -16i32 { os.exit(159) }
+    // The register count is loaded once per chunk, so the second chunk shifts by it too.
+    let wsn = wd << n
+    if wsn[0] != -32i32 || wsn[3] != 12i32 || wsn[4] != 256i32 || wsn[7] != -4i32 { os.exit(163) }
 }
 
 fn first_two[V: type](v: V) -> f64 {

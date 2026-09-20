@@ -5234,7 +5234,7 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // sixty-four whole registers' worth again.
 // Everything else keeps the lane loop below: `f16` and `*%` on any lane but the
 // sixteen-bit one, the only packed multiply SSE2 has. The shifts have their own table
-// below, since their count is in the instruction. The second return is how many
+// below, since their right operand is one scalar count and not a vector. The second return is how many
 // sixteen-byte chunks the operands are.
 // ponytail: the sixteen-byte baseline only; `--cpu` widens this table to AVX.
 fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode) -> (usize, usize, bool) {
@@ -5293,16 +5293,13 @@ fn vector_packed_immediate(lane: check.Type, lanes: usize, lane_size: usize, opc
 
 // The shifts one packed instruction covers: SSE2 shifts sixteen-, thirty-two- and
 // sixty-four-bit lanes by a count and a byte lane not at all, and its arithmetic right
-// shift stops at thirty-two bits -- there is no `psraq`. The count is inside the
-// instruction rather than in a register, so it has to be one the compiler knows, and it
-// has to be below the lane's width, which is what section 11's `shift` requires of it
-// anyway: a count that is neither keeps the lane loop, and with it the check that traps
-// on a count the width does not admit.
-// ponytail: a constant count only; a count in a register is `psllw xmm, xmm` and one
-// scalar check ahead of it.
+// shift stops at thirty-two bits -- there is no `psraq`. The count is one scalar for
+// every lane either way: the compiler knows it, and it rides inside the instruction, or
+// it does not, and the baseline's other form reads it from the low quadword of a second
+// register, with section 11's `shift` check -- the count is below the lane's width --
+// and its release-mode masking ahead of it where a scalar shift has them too.
 fn vector_packed_shift(lane: check.Type, lanes: usize, lane_size: usize, opcode: nir.Opcode, count: usize, count_known: bool) -> (usize, usize, bool) {
-    if !count_known || lane.kind != .Integer || lane_size == 1usize { ret (0usize, 0usize, false) }
-    if count >= lane_size * 8usize { ret (0usize, 0usize, false) }
+    if lane.kind != .Integer || lane_size == 1usize { ret (0usize, 0usize, false) }
     let bytes = lanes * lane_size
     if bytes != 16usize && bytes != 32usize && bytes != 64usize { ret (0usize, 0usize, false) }
     let signed = lane.name.len != 0usize && lane.name[0usize] == 105u8
@@ -5318,7 +5315,10 @@ fn vector_packed_shift(lane: check.Type, lanes: usize, lane_size: usize, opcode:
     if lane_size == 4usize { lane_code = 2usize }
     if lane_size == 8usize { lane_code = 3usize }
     let chunks = bytes / 16usize
-    ret (nir.vector_shift_immediate(operation, lane_code, lanes / chunks, count), chunks, true)
+    // A count the width does not admit is no constant the instruction can carry: it
+    // takes the register form, whose check traps on it the way the lane loop's did.
+    if count_known && count < lane_size * 8usize { ret (nir.vector_shift_immediate(operation, lane_code, lanes / chunks, count), chunks, true) }
+    ret (nir.vector_shift_register_immediate(operation, lane_code, lanes / chunks), chunks, true)
 }
 
 // The constant a value just lowered is, if it is one: a shift count that folded to a

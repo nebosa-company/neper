@@ -1425,7 +1425,8 @@ case "$unreachable_bare" in
 esac
 "$unreachable_path" none
 # The arithmetic rows that trap in every mode: division by zero, the remainder by zero,
-# the minimum divided by -1, and a shift count past the width, each with its record.
+# the minimum divided by -1, and a shift count past the width -- scalar and over a
+# vector's lanes, which is the same check -- each with its record.
 arithmetic_path="$test_build/trap-arithmetic-selfhost"
 arithmetic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_arithmetic/src/main.e" "$repo" x64 linux "$arithmetic_path")
 [ "$arithmetic_written" = 'executable written' ]
@@ -1457,6 +1458,13 @@ arithmetic_output=$("$arithmetic_path" shift 2>&1) || arithmetic_status=$?
 case "$arithmetic_output" in
     *'main.e:27:17: trap[shift]: shift by 40 on a width of 32'*) ;;
     *) printf '%s\n' "the shift case did not trap as section 11 says: $arithmetic_output" >&2; exit 1 ;;
+esac
+arithmetic_status=0
+arithmetic_output=$("$arithmetic_path" vshift 2>&1) || arithmetic_status=$?
+[ "$arithmetic_status" -eq 134 ]
+case "$arithmetic_output" in
+    *'main.e:32:18: trap[shift]: shift by 40 on a width of 32'*) ;;
+    *) printf '%s\n' "the vector shift case did not trap as section 11 says: $arithmetic_output" >&2; exit 1 ;;
 esac
 "$arithmetic_path" none
 # The `enum` row, which traps in every mode: `Kind(x)` naming no member, unsigned and

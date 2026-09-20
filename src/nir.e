@@ -102,14 +102,24 @@ fn vector_binary_immediate(operation: usize, lane: usize, lanes: usize) -> usize
 
 // A packed shift by a constant count: the baseline encodes the count in the
 // instruction, so it rides above the three fields the other operations use, where every
-// immediate written before it is zero.
+// immediate written before it is zero. A count is below the lane's width, so six bits
+// hold it and the bit above them is free for the form that has no count to carry.
 fn vector_shift_immediate(operation: usize, lane: usize, lanes: usize, count: usize) -> usize {
     ret count * 65536usize + vector_binary_immediate(operation, lane, lanes)
 }
 
+// A packed shift whose count is not one the compiler knows: the count is the third
+// operand, a scalar in a register, and the bit above the count field says to read it
+// there. The count field itself is empty.
+fn vector_shift_register_immediate(operation: usize, lane: usize, lanes: usize) -> usize {
+    ret 4194304usize + vector_binary_immediate(operation, lane, lanes)
+}
+
 fn vector_binary_operation(immediate: usize) -> usize { ret immediate / 4096usize % 16usize }
 
-fn vector_binary_count(immediate: usize) -> usize { ret immediate / 65536usize }
+fn vector_binary_count(immediate: usize) -> usize { ret immediate / 65536usize % 64usize }
+
+fn vector_shift_in_register(immediate: usize) -> bool { ret immediate / 4194304usize % 2usize == 1usize }
 
 fn vector_binary_lane(immediate: usize) -> usize { ret immediate / 256usize % 16usize }
 

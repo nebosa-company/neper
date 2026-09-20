@@ -583,11 +583,11 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
 // instruction selection, not yet a vector register class.
 // ponytail: four scratch xmm registers per operation; a second register class in
 // `regalloc` keeps a vector live across operations and drops the two moves.
-fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer, context: *FunctionContext) -> err {
     if instruction.has_result || instruction.operand_count != 3usize { ret Unsupported }
     let lane = nir.vector_binary_lane(instruction.immediate)
     let operation = nir.vector_binary_operation(instruction.immediate)
-    if operation >= 12usize { ret select_vector_shift(builder, instruction, allocations, output) }
+    if operation >= 12usize { ret select_vector_shift(builder, current, instruction, allocations, output, context) }
     let (mandatory, opcode, known) = packed_instruction(operation, lane)
     // Sixteen bytes is a whole register; eight, four and two -- the masks of eight, of
     // four and of two lanes, the only narrower operands the closed table has -- are its
@@ -633,26 +633,49 @@ fn select_vector_binary(builder: *nir.Builder, instruction: nir.Instruction, all
     ret emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
 }
 
-// A lane-wise shift by a constant count as one packed instruction. The count is inside
-// the instruction, so the only operand loaded is the vector: the lane width picks the
-// opcode -- `psllw` and its two relatives 0x71, the thirty-two-bit ones 0x72, the
-// sixty-four-bit ones 0x73 -- and the modrm register field says which of the three the
-// shift is. Lowering admits only a count below the lane's width, so nothing here has to
-// answer a count that the baseline would turn into zero rather than trap on.
-fn select_vector_shift(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+// A lane-wise shift by one scalar count as one packed instruction. A count the compiler
+// knows is inside the instruction, so the only operand loaded is the vector: the lane
+// width picks the opcode -- `psllw` and its two relatives 0x71, the thirty-two-bit ones
+// 0x72, the sixty-four-bit ones 0x73 -- and the modrm register field says which of the
+// three the shift is. Any other count is the register form, whose count is the low
+// quadword of a second vector register: r10 carries it there, the scratch no value is
+// allocated to, and the scalar shift's own check and mask are emitted over r10 first,
+// so a count the width does not admit traps with the same record and, in release, is
+// masked the way section 11 says rather than left to the unit's own answer of zero.
+fn select_vector_shift(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer, context: *FunctionContext) -> err {
     let lane = nir.vector_binary_lane(instruction.immediate)
     let operation = nir.vector_binary_operation(instruction.immediate)
     let count = nir.vector_binary_count(instruction.immediate)
     let bytes = nir.vector_binary_lanes(instruction.immediate) * packed_lane_size(lane)
     if bytes != 16usize || lane == 0usize || lane > 3usize { ret Unsupported }
     if operation == 14usize && lane == 3usize { ret Unsupported }
-    var extension = 6usize
-    if operation == 13usize { extension = 2usize }
-    if operation == 14usize { extension = 4usize }
     let (left, left_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 10usize, output)
     if left_error != ok { ret left_error }
     try emit_x64.vector_load(output, 0usize, left, bytes, 11usize)
-    try emit_x64.vector_shift(output, extension, 0usize, count, 112usize + lane)
+    if nir.vector_shift_in_register(instruction.immediate) {
+        let width = packed_lane_size(lane) * 8usize
+        let (given, given_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 10usize, output)
+        if given_error != ok { ret given_error }
+        if given != 10usize { try emit_x64.mov_register(output, 10usize, given) }
+        if !instruction.nocheck && !builder.release {
+            try emit_x64.mov_immediate(output, 11usize, width)
+            try emit_checked(builder, current, instruction.site, instruction.path, 2usize, "shift", "shift by ", " on a width of ", "", 10usize, 11usize, context)
+        }
+        try emit_x64.and_immediate8(output, 10usize, width - 1usize)
+        try emit_x64.move_to_float(output, 1usize, 10usize, true)
+        // `psllw`/`psrlw`/`psraw` by a register are 0xf1, 0xd1 and 0xe1, and the wider
+        // lanes are the next opcode each, so the lane code picks one of the three the
+        // way it picks the modrm extension of the immediate form.
+        var opcode = 240usize
+        if operation == 13usize { opcode = 208usize }
+        if operation == 14usize { opcode = 224usize }
+        try emit_x64.vector_op(output, 102usize, 0usize, 1usize, opcode + lane)
+    } else {
+        var extension = 6usize
+        if operation == 13usize { extension = 2usize }
+        if operation == 14usize { extension = 4usize }
+        try emit_x64.vector_shift(output, extension, 0usize, count, 112usize + lane)
+    }
     let (destination, destination_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
     if destination_error != ok { ret destination_error }
     ret emit_x64.vector_store(output, destination, 0usize, bytes, 11usize)
@@ -2602,7 +2625,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     try emit_x64.function_epilogue(output)
                 } else {
                     if instruction.opcode == .VectorBinary {
-                        try select_vector_binary(builder, instruction, allocations, output)
+                        try select_vector_binary(builder, current, instruction, allocations, output, context)
                     } else {
                         ret Unsupported
                     }

@@ -1,10 +1,10 @@
 // Section 11's arithmetic rows that trap in every mode, each with its record: `zero`
 // divides by zero, `rem` takes a remainder by zero, `min` divides the minimum by -1 --
-// the one quotient two's complement cannot hold, which x64 raises `#DE` for and the
-// check reports before it can -- and `shift` shifts by a count past the width. The
-// operands come from the argument count so nothing folds; a signed operand prints
-// signed. Anything else runs the same operators in range and exits 0.
+// the quotient two's complement cannot hold, which the check reports before x64 can --
+// `shift` shifts by a count past the width and `vshift` a vector's lanes by one. The
+// operands come from the argument count so nothing folds; a signed operand prints signed.
 use e.mem
+use e.simd
 use e.str
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -26,6 +26,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if str.eq(mode, "shift") {
         let s = 1u32 << (u32(n) + 40u32)
         if s == 3u32 { ret ok }
+    }
+    if str.eq(mode, "vshift") {
+        let v = Vec[i32, 4]{ 1i32, 2i32, 3i32, 4i32 }
+        let s = (v << (u32(n) + 40u32))[0]
+        if s == 3i32 { ret ok }
     }
     let fine = 100i32 / (n + 4i32) + i32(8u32 >> u32(n + 1i32))
     if fine == 99i32 { ret ok }

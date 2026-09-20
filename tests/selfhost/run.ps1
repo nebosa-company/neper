@@ -1531,7 +1531,8 @@ if ($LASTEXITCODE -ne 134 -or ($unreachableBare -join "`n") -notmatch 'main\.e:2
 & $unreachablePath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the unreachable fixture trapped on its ordinary path' }
 # The arithmetic rows that trap in every mode: division by zero, the remainder by zero,
-# the minimum divided by -1, and a shift count past the width, each with its record.
+# the minimum divided by -1, and a shift count past the width -- scalar and over a
+# vector's lanes, which is the same check -- each with its record.
 $arithmeticPath = Join-Path $testBuild 'trap-arithmetic-selfhost.exe'
 $arithmeticWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_arithmetic\src\main.e') $repo 'x64' 'windows' $arithmeticPath
 if ($LASTEXITCODE -ne 0 -or $arithmeticWritten -ne 'executable written') { throw 'arithmetic trap fixture executable emission failed' }
@@ -1543,6 +1544,8 @@ $arithmeticOutput = & $arithmeticPath min 2>&1
 if ($LASTEXITCODE -ne 134 -or ($arithmeticOutput -join "`n") -notmatch 'main\.e:23:17: trap\[divide\]: -2147483648 / -1 overflows') { throw "the min case did not trap as section 11 says: exit $LASTEXITCODE, $($arithmeticOutput -join "`n")" }
 $arithmeticOutput = & $arithmeticPath shift 2>&1
 if ($LASTEXITCODE -ne 134 -or ($arithmeticOutput -join "`n") -notmatch 'main\.e:27:17: trap\[shift\]: shift by 40 on a width of 32') { throw "the shift case did not trap as section 11 says: exit $LASTEXITCODE, $($arithmeticOutput -join "`n")" }
+$arithmeticOutput = & $arithmeticPath vshift 2>&1
+if ($LASTEXITCODE -ne 134 -or ($arithmeticOutput -join "`n") -notmatch 'main\.e:32:18: trap\[shift\]: shift by 40 on a width of 32') { throw "the vector shift case did not trap as section 11 says: exit $LASTEXITCODE, $($arithmeticOutput -join "`n")" }
 & $arithmeticPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the arithmetic trap fixture trapped on its in-range path' }
 # The `enum` row, which traps in every mode: `Kind(x)` naming no member, unsigned and

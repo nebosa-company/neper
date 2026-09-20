@@ -14194,3 +14194,43 @@ scalar shift at all -- and the fixture's own image now carries all three opcodes
 That leaves the lane loop to `f16` and to `*%` on any lane but the sixteen-bit one,
 which are the shapes the baseline has no instruction for, and to a shift by a count in a
 register, which it does have one for: `psllw xmm, xmm` with the check ahead of it.
+
+## D761 -- The packed shift by a count in a register
+
+D760 left the shift whose count the compiler does not know on the scalar lane loop. The
+baseline has an instruction for it: `psllw`/`psrlw`/`psraw` take the count in the low
+quadword of a second register rather than in a byte of the encoding, and the wider lanes
+are the next opcode each, the way the lane code picks the modrm extension of the
+immediate form. So the shape the loop was left for is one instruction too, and the only
+reason to keep the loop is a form the baseline is missing.
+
+The immediate that rides the `VectorBinary` already carries the count in a six-bit field
+above the operation. A bit above that field says the count is not there -- it is the
+third operand, a scalar the register allocator has kept live because the constant form
+named it too. Lowering takes that path whenever the count is unknown *or* is one the
+width does not admit, so a written-out `x << 40u32` on a thirty-two-bit lane is no longer
+a constant the instruction has to carry: it is a register whose check traps on it,
+reporting what the lane loop reported.
+
+Section 11 says a count at or past the width traps in debug and is masked to the width
+less one in release. Both happen here and in that order: the count is read into `r10`, a
+`cmp` against the width guards a trap that names the count and the width, and an
+`and r10, width - 1` runs in every mode before the `movq` into `xmm1`. `r10` and `r11`
+are the two registers the allocator never hands out, so the check needs no spill -- the
+scalar path's own helper could not be reused, as it shifts through `rcx`, which is a
+register something else may be holding.
+
+A signed sixty-four-bit right shift stays on the lane loop, since there is no `psraq` to
+select. A thirty-two- or sixty-four-byte vector reloads, checks and moves the count once
+per sixteen-byte chunk, because the back end only ever sees one chunk at a time: a
+handful of instructions repeated two or four times, against a loop over every lane.
+
+The `link/simd_lanes` fixture shifts all three widths by a variable in both directions,
+signed and unsigned, and checks that the second chunk of a thirty-two-byte vector shifts
+by the same count as the first; `link/trap_arithmetic` gains a `vshift` mode, so both
+suites read the vector trap's own line, column and message. Hoisting the constants out of
+`codegen_x64.e` broke the byte-equality proof on the way: the metamorphic pass names a
+hoisted literal by a decimal counter right-justified into the literal's own width, so the
+hundred-and-first name for a three-character literal is a character wider and moves a
+column that a trap message bakes into the image. The counter is written in base
+thirty-six now, which gives the shortest literal more than a thousand names.
