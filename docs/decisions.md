@@ -15099,3 +15099,21 @@ can or should hide it, since a caller that needs the name settled has
 the stat over at most fifty ten-millisecond waits through `os.wait_u32` on a
 private word, and counts the answer it settles on. The library is untouched;
 a thirty-minute rerun for a ten-millisecond window is what this removes.
+
+## D794 — A linter for the bootstrap's rules over `src/`
+
+The C bootstrap compiles `src/` under a narrower language than neper-self,
+and each of its rules has cost an hour of a session at the end of a
+ten-minute build: `else if`, `-=`, `>= CONST {` read as an aggregate
+literal, `try` in a function answering a tuple, a local named `target`,
+`shared` or `when`, and an array field of an indexed slice element read
+without a pointer to the element. `scripts/lint_bootstrap.py` reads the
+sources as text -- comments and string literals blanked -- and reports the
+first five as findings that fail the run; the sixth it cannot tell from a
+slice field indexed the same way, so it is a soft note, listed and counted
+under `--strict`, with sixty-one such lines in the tree today and none of
+them the bug. Both suites run it right after the stage-1 build. Not
+lintable from text: the program-wide resolution of a module-scope function
+name that collided for `put` and `hex_digit` while `same` is declared in
+seven modules without harm, and a bare enum member as a call argument in
+the enum's own module, which needs the types.

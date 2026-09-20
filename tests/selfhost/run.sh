@@ -25,6 +25,8 @@ mkdir -p "$test_build"
 # commit limit will bear.
 $neper build "$repo/src/main.e" --arena 1g --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
 python3 "$repo/scripts/check_module_surfaces.py" --compiler "$test_build/neper-self" --arch x64 --os linux
+# The bootstrap's rules for `src/` (D794), before the next ten-minute build finds one.
+python3 "$repo/scripts/lint_bootstrap.py" "$repo/src"
 # Every bootstrap frame has to cover the temporaries its statements allocate. A
 # frame sized by guess rather than by measurement lets a deep statement address
 # below rsp, into the outgoing argument area and past the stack pointer.
