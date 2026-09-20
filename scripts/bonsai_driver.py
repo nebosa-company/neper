@@ -208,6 +208,9 @@ def session_openai(task_file, args, log):
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     deadline = time.time() + args.session_minutes * 60
     restarts = {}
+    cut_off = 0
+    since_edit = 0
+    thinking = open(str(log.name).replace(".log", ".thinking.log"), "a", encoding="utf-8")
     rnd = -1
     while rnd + 1 < args.rounds:
         rnd += 1
@@ -215,11 +218,12 @@ def session_openai(task_file, args, log):
             log.write("\n!!! session exceeded %d minutes\n" % args.session_minutes)
             return "error"
         body = json.dumps({"model": args.model, "messages": messages, "tools": TOOL_SCHEMAS, "temperature": 0.6, "top_p": 0.95,
-                           "max_tokens": 8192}).encode("utf-8")
+                           "max_tokens": args.max_tokens}).encode("utf-8")
         req = urllib.request.Request(args.endpoint.rstrip("/") + "/chat/completions", data=body, headers={"Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=3600) as resp:
-                reply = json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]
+                choice = json.loads(resp.read().decode("utf-8"))["choices"][0]
+                reply = choice["message"]
         except Exception as e:
             # The fork's server dies on a bad allocation now and then; the conversation is
             # ours, so restart it and ask the same round again rather than lose the session.
@@ -229,13 +233,28 @@ def session_openai(task_file, args, log):
                 rnd -= 1  # ask the same round again
                 continue
             return "error"
-        reply.pop("reasoning_content", None)  # thinking is not fed back; it only bloats the context
-        messages.append(reply)
+        # Thinking is not fed back (it only bloats the context) but it is kept beside the
+        # transcript, so a stalled session can be read.
+        thinking.write("\n=== round %d ===\n%s\n" % (rnd, reply.pop("reasoning_content", None) or ""))
+        thinking.flush()
         text = reply.get("content") or ""
-        log.write("\n=== round %d ===\n%s\n" % (rnd, text))
         calls = reply.get("tool_calls") or []
+        if choice.get("finish_reason") == "length" and not calls:
+            # The reply ran out of tokens before its tool call: the whole budget went to
+            # deliberation. Ask again, once or twice, with the deliberation named as the fault.
+            cut_off += 1
+            log.write("\n=== round %d === (cut off at %d tokens, retry %d)\n" % (rnd, args.max_tokens, cut_off))
+            if cut_off > 2:
+                return "error"
+            messages.append({"role": "user", "content": "Your reply was cut off at the token limit before any tool call. "
+                             "Reply again: decide in a few sentences, then make the tool call. Write the file in two or three "
+                             "`edit` calls if it is long."})
+            continue
+        messages.append(reply)
+        log.write("\n=== round %d ===\n%s\n" % (rnd, text))
         if not calls:
             return "done" if text.lstrip().startswith("DONE") else "blocked"
+        since_edit = 0 if any(c["function"]["name"] == "edit" for c in calls) else since_edit + 1
         for call in calls:
             fn = call["function"]
             try:
@@ -243,6 +262,8 @@ def session_openai(task_file, args, log):
                 result = TOOLS[fn["name"]](**kwargs) if fn["name"] in TOOLS else "Error: unknown tool " + fn["name"]
             except Exception as e:
                 result = "Error: %s: %s" % (type(e).__name__, e)
+            if since_edit >= 5:
+                result = str(result) + "\n\n[driver: %d rounds without an edit. You have read enough; create the file now with `edit`.]" % since_edit
             log.write("\n--- %s(%s) ---\n%s\n" % (fn["name"], (fn.get("arguments") or "")[:300], str(result)[:2000]))
             log.flush()
             messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": str(result)})
@@ -322,6 +343,7 @@ def main():
     ap.add_argument("--model", default="prism-ml/bonsai-27b")
     ap.add_argument("--endpoint", default="", help="OpenAI-compatible base URL, e.g. http://localhost:8080/v1 (llama-server); omit for the LM Studio SDK")
     ap.add_argument("--server-cmd", default="", help="command that starts the server behind --endpoint; used to (re)start it when it is down")
+    ap.add_argument("--max-tokens", type=int, default=16384, help="reply cap per round; thinking counts against it, so pair it with the server's --reasoning-budget")
     ap.add_argument("--kind", choices=["modules", "queue", "all"], default="modules")
     ap.add_argument("--max-tasks", type=int, default=1)
     ap.add_argument("--rounds", type=int, default=60)

@@ -844,7 +844,7 @@ Bonsai needs PrismML's llama.cpp fork (LM Studio's stock runtime crashes on its 
 Measured on an RTX 3080 Laptop GPU (16 GB): loads in 11 s, 330 tok/s prompt, 37 tok/s generation at a 128K context with an 8-bit KV cache (12 GB VRAM). The fork's RAM prompt cache crashes the server on the second request, so it is disabled below. CPU-only on an Iris Xe box runs but at about 1 tok/s, unusable for sessions.
 
 ```powershell
-D:/tools/prism-llama-cu12/llama-server.exe -m D:/tools/models/Ternary-Bonsai-2-27B-PQ2_0.gguf -c 131072 -ngl 99 -np 1 -fa on -ctk q8_0 -ctv q8_0 --cache-ram 0 --slot-prompt-similarity 0 --cache-reuse 0 --jinja --port 8080
+D:/tools/prism-llama-cu12/llama-server.exe -m D:/tools/models/Ternary-Bonsai-2-27B-PQ2_0.gguf -c 131072 -ngl 99 -np 1 -b 512 -ub 512 -fa on -ctk q8_0 -ctv q8_0 --ctx-checkpoints 2 --no-mmap --reasoning-budget 6144 --cache-ram 0 --slot-prompt-similarity 0 --cache-reuse 0 --jinja --port 8080
 python scripts/bonsai_driver.py --endpoint http://localhost:8080/v1 --dry-run --kind all   # which task would run
 python scripts/bonsai_driver.py --endpoint http://localhost:8080/v1 --kind modules --max-tasks 3
 python scripts/bonsai_driver.py --endpoint http://localhost:8080/v1 --kind queue           # the queue head's first unchecked line
