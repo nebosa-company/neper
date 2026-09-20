@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Back end |
 | score | 0.00 of 1 |
-| queue position | 35 of 55 (only position 1 is eligible for the next session; see README) |
+| queue position | 34 of 54 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done

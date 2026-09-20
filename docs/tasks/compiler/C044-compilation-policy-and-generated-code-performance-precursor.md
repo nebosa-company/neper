@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.55 of 1 |
-| queue position | 8 of 55 (only position 1 is eligible for the next session; see README) |
+| queue position | 7 of 54 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -56,6 +56,7 @@ The queue's own gap clause, split into checklist lines. Each line is one session
 - [ ] serialized alias facts
 - [ ] the cap against the GP workloads
 - [ ] any vectorizer (reported unavailable)
+- [ ] the vector register class whose ABI is section 5's xmm convention for `Vec`/`Mask` (D786)
 
 Notes:
 
@@ -73,6 +74,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 - `D369` — A check policy is a build identity: `--unchecked` artifacts carry their own mode (`docs/decisions.md:8128`)
 - `D408` — Inlining decisions are records of the build stream (`docs/decisions.md:9093`)
 - `D450` — Register pressure is a `--stats` row (`docs/decisions.md:9855`)
+- `D786` — `Vec`/`Mask` cross a call by copied storage until there is a vector register class (`docs/decisions.md:14930`)
 
 ## Code anchors
 
@@ -80,6 +82,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `unchecked`: `src/em.e`×36‡, `src/main.e`×27‡, `src/check.e`×23‡, `src/tool.e`×11‡, `src/codegen_x64.e`×1‡, `src/lower.e`×1‡, `tests/conformance/reject/safety_unchecked.expected.jsonl`×1
 - `inline-cap`: `src/main.e`×6‡, `src/lower.e`×2‡, `src/nir.e`×1†
+- `Mask`: `lib/e/simd.e`×22, `src/check.e`×15‡, `src/layout.e`×2, `src/main.e`×2‡, `benchmarks/metamorphic/rename_symbols.py`×1, `scripts/check_module_plan.py`×1, `src/resolve.e`×1†
 
 ## Verification
 

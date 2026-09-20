@@ -1098,6 +1098,10 @@ vector is a register class, passed in vector registers at any width, never by hi
 reference, and returned in them up to the per-target budget (Multiple return
 values, below); `Mask[T, N]` (§4), which has no size, is passed and returned as the
 `Vec[T, N]` it masks.
+On the x64 back end as built, which has no vector register class yet, a vector
+crosses a neper call as copied storage and returns through the slot; nothing a
+program can observe differs, and the register convention arrives with the class
+(D786).
 
 Function pointers exist on the CPU: `fn(i32) -> i32` is a type. They are banned in
 the GPU profile.

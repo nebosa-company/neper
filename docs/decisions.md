@@ -14926,3 +14926,24 @@ slice in a kernel is rare enough to wait for the day it faults. `site` is
 the line; the column and the file are the kernel's, which the record's
 `kernel` names by launch serial. Fixtures: `link/gpu_fault_bounds`,
 `link/gpu_fault_nocheck`; `gpu_fault_unchecked` waits on `--unchecked`.
+
+## D786 — `Vec`/`Mask` cross a call by copied storage until there is a vector register class
+
+Section 5 says a `Vec[T, N]` is passed and returned in vector registers, and
+C029's last clause was that convention. The x64 back end has no vector
+register class: a scalar float lives in a general register as raw bits and
+borrows `xmm0`/`xmm1` for the operation, and a packed vector operation
+borrows `xmm0`–`xmm3` around a memory operand (D751). Loading a vector into
+`xmm` at the call and storing it into a frame slot on entry would be the
+same copy the by-address convention makes today, in a different register,
+with nothing a program can observe -- the convention holds between neper
+functions only, an `extern` never takes a vector by value, and no tuple or
+layout is named -- and no speed to gain until a vector stays in a register
+between two operations. So: on this back end a `Vec[T, N]`, and the
+`Mask[T, N]` it stands for, crosses a neper call as copied storage, the way
+an aggregate over the size rule does, and returns through the slot; the
+`xmm` convention is the ABI of the vector register class, which is C044's
+generated-code work and arrives with it. Section 5's text stands as the
+target; this row records the deviation and where it ends. C029 is closed on
+that: every lowering, every packed form, every refusal and the CPU levels are
+in, and the fixtures pin them on both hosts.

@@ -28,20 +28,20 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Spec sections
 
-- `docs/spec.md:2624` 10. The GPU profile
-  - `docs/spec.md:2642` Platforms
-  - `docs/spec.md:2683` What runs where
-  - `docs/spec.md:2705` Restrictions inside `@gpu`
-  - `docs/spec.md:2725` Kernels and workgroups
-  - `docs/spec.md:2786` Device types and slices
-  - `docs/spec.md:2877` Shared memory
-  - `docs/spec.md:2912` Barriers, memory ordering and atomics
-  - `docs/spec.md:2960` Subgroups
-  - `docs/spec.md:2995` Capabilities
-  - `docs/spec.md:3044` Host side
-  - `docs/spec.md:3143` Device discovery and selection
-  - `docs/spec.md:3287` Queues and synchronisation
-  - `docs/spec.md:3378` CPU execution model
+- `docs/spec.md:2628` 10. The GPU profile
+  - `docs/spec.md:2646` Platforms
+  - `docs/spec.md:2687` What runs where
+  - `docs/spec.md:2709` Restrictions inside `@gpu`
+  - `docs/spec.md:2729` Kernels and workgroups
+  - `docs/spec.md:2790` Device types and slices
+  - `docs/spec.md:2881` Shared memory
+  - `docs/spec.md:2916` Barriers, memory ordering and atomics
+  - `docs/spec.md:2964` Subgroups
+  - `docs/spec.md:2999` Capabilities
+  - `docs/spec.md:3048` Host side
+  - `docs/spec.md:3147` Device discovery and selection
+  - `docs/spec.md:3291` Queues and synchronisation
+  - `docs/spec.md:3382` CPU execution model
 
 ## Decisions to read first
 

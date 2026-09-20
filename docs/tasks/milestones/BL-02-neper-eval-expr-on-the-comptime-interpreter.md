@@ -12,11 +12,11 @@
 
 ## Spec sections
 
-- `docs/spec.md:2170` 9. Compile-time parameters
-  - `docs/spec.md:2262` Compile-time evaluation
-  - `docs/spec.md:2334` Protocols
-  - `docs/spec.md:2464` Compile-time introspection
-  - `docs/spec.md:2586` Argument packs
+- `docs/spec.md:2174` 9. Compile-time parameters
+  - `docs/spec.md:2266` Compile-time evaluation
+  - `docs/spec.md:2338` Protocols
+  - `docs/spec.md:2468` Compile-time introspection
+  - `docs/spec.md:2590` Argument packs
 
 ## Decisions to read first
 
