@@ -261,6 +261,24 @@ fn operators() {
     ja[8] = -4i16
     let jb = ja *% simd.splat[Vec[i16, 16]](7i16)
     if jb[0] != 2100i16 || jb[7] != 21i16 || jb[8] != -28i16 || jb[15] != 21i16 { os.exit(145) }
+    // Thirty-two-bit lanes are the other packed multiply, which the baseline has no one
+    // instruction for: two multiplies of half the lanes each and the shuffles that
+    // bring the other half down and put the four answers back in order. Every lane is
+    // distinct and each product needs its high half dropped, so a form that lost a
+    // lane, or answered them out of order, is caught.
+    let la = Vec[i32, 4]{ 2147483647i32, -3i32, 65536i32, 5i32 }
+    let lb = Vec[i32, 4]{ 3i32, 7i32, 65538i32, -1i32 }
+    let lc = la *% lb
+    if lc[0] != 2147483645i32 || lc[1] != -21i32 { os.exit(164) }
+    if lc[2] != 131072i32 || lc[3] != -5i32 { os.exit(165) }
+    // Thirty-two bytes are two chunks of the same seven instructions.
+    var ld = simd.splat[Vec[u32, 8]](2u32)
+    ld[0] = 4294967295u32
+    ld[4] = 65536u32
+    ld[7] = 3u32
+    let le = ld *% simd.splat[Vec[u32, 8]](65538u32)
+    if le[0] != 4294901758u32 || le[3] != 131076u32 { os.exit(166) }
+    if le[4] != 131072u32 || le[7] != 196614u32 { os.exit(167) }
     // Sixty-four bytes are four chunks, with a lane of its own in each.
     var ka = simd.splat[Vec[u8, 64]](9u8)
     ka[0] = 1u8

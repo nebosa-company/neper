@@ -14234,3 +14234,40 @@ hoisted literal by a decimal counter right-justified into the literal's own widt
 hundred-and-first name for a three-character literal is a character wider and moves a
 column that a trap message bakes into the image. The counter is written in base
 thirty-six now, which gives the shortest literal more than a thousand names.
+
+## D762 -- The packed multiply on thirty-two-bit lanes
+
+D751 packed `*%` on sixteen-bit lanes and left every other width on the scalar lane
+loop, because `pmullw` is the only packed multiply SSE2 has: `pmulld` is SSE4.1 and the
+byte and sixty-four-bit widths have no instruction on any baseline. That reading was one
+instruction short. SSE2 also has `pmuludq`, which multiplies the low thirty-two bits of
+each sixty-four-bit lane into the whole lane, and `*%` wants a lane's low thirty-two bits
+-- which are the same bits whichever width the product was taken at. So the thirty-two-bit
+multiply is not missing, it is spelled out of the one instruction the unit does have.
+
+Two `pmuludq`s cover four lanes: one on the operands as they are, whose low halves are
+lanes 0 and 2, and one on each operand shuffled by `0xb1`, which brings lanes 1 and 3
+down into those halves. Each answer is the low doubleword of a quadword product, so
+`pshufd` by `0x08` gathers the two of each pair into a low quadword and `punpckldq`
+interleaves the two quadwords into the four lanes in their own order. Seven instructions
+against a loop of four loads, four multiplies and four stores, and nothing new in the
+allocator: the shuffles use xmm2 and xmm3, the scratch the float path canonicalises its
+NaN lanes in and an integer lane never reaches.
+
+The sign of the lane does not enter it. A product's low half is the same for `i32` and
+`u32` -- the wrapping forms are the only arithmetic an integer vector has, and wrapping
+is exactly what taking the low half is -- so `Vec[i32, 4]` and `Vec[u32, 4]` select the
+same seven instructions, and a thirty-two- or sixty-four-byte vector is those seven once
+per sixteen-byte chunk, which the chunk loop already gives without a word in the back end.
+
+`pshufd` is the one new opcode, and it is a move rather than a permute of its
+destination, so a lane may be named twice or not at all -- which is what `0x08` does,
+naming lanes 0 and 2 and dropping the halves nothing reads.
+
+The `link/simd_lanes` fixture multiplies four distinct `i32` lanes, each of whose
+products needs its high half dropped, and eight `u32` lanes with a lane written in each
+chunk, so a form that lost a lane, answered them out of order, or covered only the first
+chunk is caught in both suites.
+
+That leaves the lane loop to `f16` and to `*%` on a byte or a sixty-four-bit lane, which
+are the widths this baseline really has nothing for.

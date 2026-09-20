@@ -383,6 +383,14 @@ fn vector_shift(buffer: *Buffer, extension: usize, destination: usize, count: us
     ret byte(buffer, count)
 }
 
+// `pshufd`: the four thirty-two-bit lanes of the source in whatever order the
+// immediate's four two-bit fields name, lane 0 lowest. It is a move and not a permute
+// of the destination, so a lane may be named more than once or not at all.
+fn vector_shuffle(buffer: *Buffer, destination: usize, source: usize, selector: usize) -> err {
+    try sse(buffer, 102usize, false, destination, source, 112usize)
+    ret byte(buffer, selector)
+}
+
 // `movq`/`movd` in both directions: the bits move, nothing is converted.
 fn move_to_float(buffer: *Buffer, destination: usize, source: usize, wide: bool) -> err {
     ret sse(buffer, 102usize, wide, destination, source, 110usize)

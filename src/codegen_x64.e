@@ -577,7 +577,8 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
 }
 
 // Section 4's lane-wise operator as one packed SSE2 instruction over the whole
-// sixteen-byte vector -- three for `~`, which no unit has -- which `lower` asks for by
+// sixteen-byte vector -- three for `~`, which no unit has, and seven for `*%` on
+// thirty-two-bit lanes, which this baseline has not -- which `lower` asks for by
 // emitting `VectorBinary` for the shapes the baseline covers. The vectors stay in memory and xmm0 to xmm3 are borrowed
 // for the operation, as the scalar float path borrows xmm0 and xmm1: this is
 // instruction selection, not yet a vector register class.
@@ -626,7 +627,27 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
         if right_error != ok { ret right_error }
         try emit_x64.vector_load(output, 1usize, right, bytes, 11usize)
     }
-    try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
+    if operation == 6usize && lane == 2usize {
+        // SSE2 has no packed thirty-two-bit multiply -- `pmulld` is SSE4.1 -- but it
+        // has `pmuludq`, which multiplies the low half of each sixty-four-bit lane into
+        // the whole lane. Two of those cover all four lanes: one on the operands as
+        // given, whose low halves are lanes 0 and 2, and one on each shuffled by 0xb1,
+        // which brings lanes 1 and 3 down into those halves. A lane's low thirty-two
+        // bits are the same whichever width the product was taken at, so the wanted
+        // answer is the low doubleword of each product: 0x08 gathers the two of each
+        // pair into a low quadword and `punpckldq` interleaves those into the four
+        // lanes in order. xmm2 and xmm3 are the scratch the float path canonicalises
+        // its NaN lanes in, which an integer lane never reaches.
+        try emit_x64.vector_shuffle(output, 2usize, 0usize, 177usize)
+        try emit_x64.vector_shuffle(output, 3usize, 1usize, 177usize)
+        try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
+        try emit_x64.vector_op(output, mandatory, 2usize, 3usize, opcode)
+        try emit_x64.vector_shuffle(output, 0usize, 0usize, 8usize)
+        try emit_x64.vector_shuffle(output, 2usize, 2usize, 8usize)
+        try emit_x64.vector_op(output, 102usize, 0usize, 2usize, 98usize)
+    } else {
+        try emit_x64.vector_op(output, mandatory, 0usize, 1usize, opcode)
+    }
     if lane >= 4usize { try canonicalize_packed_nan(lane == 5usize, output) }
     let (destination, destination_error) = read_value(allocations, destination_value, 10usize, output)
     if destination_error != ok { ret destination_error }
@@ -718,6 +739,9 @@ fn packed_instruction(operation: usize, lane: usize) -> (usize, usize, bool) {
         ret (102usize, 251usize, true)
     }
     if operation == 6usize && lane == 1usize { ret (102usize, 213usize, true) }
+    // Thirty-two-bit lanes have no one multiply on this baseline: `pmuludq` is the
+    // instruction the caller's seven-instruction form is built out of.
+    if operation == 6usize && lane == 2usize { ret (102usize, 244usize, true) }
     if operation == 7usize { ret (102usize, 219usize, true) }
     if operation == 8usize { ret (102usize, 235usize, true) }
     if operation == 9usize { ret (102usize, 239usize, true) }
