@@ -39,9 +39,10 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
   - `docs/spec.md:2964` Subgroups
   - `docs/spec.md:2999` Capabilities
   - `docs/spec.md:3048` Host side
-  - `docs/spec.md:3147` Device discovery and selection
-  - `docs/spec.md:3291` Queues and synchronisation
-  - `docs/spec.md:3382` CPU execution model
+  - `docs/spec.md:3147` Presentation
+  - `docs/spec.md:3196` Device discovery and selection
+  - `docs/spec.md:3340` Queues and synchronisation
+  - `docs/spec.md:3431` CPU execution model
 
 ## Decisions to read first
 

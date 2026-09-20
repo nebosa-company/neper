@@ -230,7 +230,8 @@ The proposal records four blockers instead of weakening the platform-boundary ru
 - `native-window-api`: reviewed `e.os` primitives for windows, monitors, event
   delivery, clipboard, cursor, pointer capture and IME;
 - `gpu-presentation-api`: `e.gpu` support for presentation targets, textures, render
-  passes, blending, synchronization, resize and device-loss recovery;
+  passes, blending, synchronization, resize and device-loss recovery -- delivered as
+  images, targets and frames over kernels (D791, spec section 10 "Presentation");
 - `native-accessibility-api`: reviewed publication and action bridges for Windows,
   Linux and macOS accessibility systems.
 - `embedded-asset-linking`: canonical manifest ingestion, incremental hashing,

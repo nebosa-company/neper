@@ -1616,6 +1616,13 @@ foreach ($faultCase in @(@('gpu_fault_bounds', 'gpu fault ok'), @('gpu_fault_noc
     $faultOutput = & $faultPath
     if ($LASTEXITCODE -ne 0 -or $faultOutput -ne $faultCase[1]) { throw "$($faultCase[0]) answered wrongly: exit $LASTEXITCODE" }
 }
+# Presentation (D791): images a kernel writes, an offscreen target's frames acquired,
+# presented and read back as the snapshot, resize, and the refusals.
+$gpuPresentPath = Join-Path $testBuild 'gpu-present-selfhost.exe'
+$gpuPresentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_present\src\main.e') $repo 'x64' 'windows' $gpuPresentPath
+if ($LASTEXITCODE -ne 0 -or $gpuPresentWritten -ne 'executable written') { throw 'gpu_present emission failed' }
+$gpuPresentOutput = & $gpuPresentPath
+if ($LASTEXITCODE -ne 0 -or $gpuPresentOutput -ne 'gpu present ok') { throw "presentation answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -2479,6 +2479,12 @@ type FaultKind = enum u8 { Bounds, Null, Tag, Alignment, Overflow, DivideByZero 
 type FaultRecord = struct { kernel: u32, kind: FaultKind, site: u32, gid: Id }
 type Cap = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }
 type Scope = enum u8 { Workgroup, Device }
+type Format = enum u8 { Rgba8, Bgra8 }
+type Image = struct { data: Buf[u32], width: u32, height: u32, format: Format }
+type SurfaceKind = enum u8 { Offscreen, Win32, X11, Wayland, Cocoa }
+type Surface = struct { kind: SurfaceKind, handle: *void, context: *void }
+type Target = struct { state: *void }
+type Frame = struct { image: Image, serial: u64 }
 error NoDevice
 error AmbiguousDevice
 error Unsupported
@@ -2488,6 +2494,7 @@ error Lost
 error WrongDevice
 error InvalidHandle
 error Fault
+error Outdated
 
 fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err)
 fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo, err)
@@ -2513,7 +2520,23 @@ fn release[T: type](q: *Queue, buf: Buf[T]) -> err
 fn grid1(x: usize) -> Grid
 fn grid2(x: usize, y: usize) -> Grid
 fn grid3(x: usize, y: usize, z: usize) -> Grid
+fn image(q: *Queue, width: u32, height: u32, format: Format) -> (Image, err)
+fn write_image(q: *Queue, dst: Image, x: u32, y: u32, width: u32, height: u32, src: []const u32) -> err
+fn read_image(q: *Queue, src: Image, dst: []u32) -> err
+fn release_image(q: *Queue, img: Image) -> err
+fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: Format) -> (*Target, err)
+fn extent(t: *Target) -> (u32, u32)
+fn resize(t: *Target, width: u32, height: u32) -> err
+fn acquire(t: *Target) -> (Frame, err)
+fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err)
+fn presented(t: *Target) -> (Image, err)
+fn close_target(t: *Target) -> err
 ```
+
+Presentation (spec section 10, D791) is images over kernels: an `Image` is a `Buf[u32]`
+of packed pixels a kernel writes, a `Target` presents frames to an offscreen pair on
+every backend or to a native `Surface` on a driver backend, and there is no
+fixed-function pipeline.
 
 Discovery/selection is specified in [spec §10](spec.md#device-discovery-and-selection).
 `devices` is a bounded, caller-arena-owned snapshot, including copied names and

@@ -70,6 +70,16 @@ type Id = struct { x: u32, y: u32, z: u32 }
 type FaultKind = enum u8 { Bounds, Null, Tag, Alignment, Overflow, DivideByZero }
 type FaultRecord = struct { kernel: u32, kind: FaultKind, site: u32, gid: Id }
 type Cap = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }
+// Presentation (spec section 10, D791): an image is a device buffer of packed
+// 32-bit pixels with a width, a height and a channel order; a target is what a
+// frame is presented to -- an offscreen pair of images on every backend, a native
+// surface on a driver backend -- and a frame is the image the next present shows.
+type Format = enum u8 { Rgba8, Bgra8 }
+type Image = struct { data: Buf[u32], width: u32, height: u32, format: Format }
+type SurfaceKind = enum u8 { Offscreen, Win32, X11, Wayland, Cocoa }
+type Surface = struct { kind: SurfaceKind, handle: *void, context: *void }
+type Target = struct { state: *void }
+type Frame = struct { image: Image, serial: u64 }
 type Scope = enum u8 { Workgroup, Device }
 error NoDevice
 error AmbiguousDevice
@@ -80,6 +90,7 @@ error Lost
 error WrongDevice
 error InvalidHandle
 error Fault
+error Outdated
 
 const MAX_BUFFERS: usize = 4096usize
 const MAX_DEVICES: usize = 16usize
@@ -99,6 +110,19 @@ type DeviceState = struct {
 }
 
 type QueueState = struct { device: *DeviceState, index: u32, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
+
+// An offscreen target: two images, the front one presented, the back one acquired.
+type TargetState = struct {
+    queue: *QueueState,
+    images: [2]Image,
+    front: usize,
+    width: u32,
+    height: u32,
+    format: Format,
+    serial: u64,
+    acquired: bool,
+    closed: bool,
+}
 
 // The invocation ids of the launch on the calling thread.
 var gid: Id = zero
@@ -443,6 +467,146 @@ fn grid2(x: usize, y: usize) -> Grid {
 
 fn grid3(x: usize, y: usize, z: usize) -> Grid {
     ret Grid { x: x, y: y, z: z }
+}
+
+// ------------------------------------------------------------ presentation
+
+const MAX_IMAGE_SIDE: u32 = 16384u32
+
+fn image(q: *Queue, width: u32, height: u32, format: Format) -> (Image, err) {
+    if width == 0u32 || height == 0u32 || width > MAX_IMAGE_SIDE || height > MAX_IMAGE_SIDE { ret (zero, TooLarge) }
+    let (data, data_error) = alloc[u32](q, usize(width) * usize(height))
+    if data_error != ok { ret (zero, data_error) }
+    ret (Image { data: data, width: width, height: height, format: format }, ok)
+}
+
+// `src` is `width * height` pixels, row-major and tightly packed, written at (x, y).
+fn write_image(q: *Queue, dst: Image, x: u32, y: u32, width: u32, height: u32, src: []const u32) -> err {
+    if x > dst.width || width > dst.width - x || y > dst.height || height > dst.height - y { ret TooLarge }
+    if src.len != usize(width) * usize(height) { ret TooLarge }
+    var row = 0usize
+    while row < usize(height) {
+        let at = (usize(y) + row) * usize(dst.width) + usize(x)
+        try write[u32](q, dst.data, at, src[row * usize(width)..(row + 1usize) * usize(width)])
+        row += 1usize
+    }
+    ret ok
+}
+
+fn read_image(q: *Queue, src: Image, dst: []u32) -> err {
+    ret download[u32](q, src.data, dst)
+}
+
+fn release_image(q: *Queue, img: Image) -> err {
+    ret release[u32](q, img.data)
+}
+
+fn target_state(t: *Target) -> (*TargetState, err) {
+    let state = mem.cast[*TargetState](t.state)
+    if mem.address_of(state) == 0usize || state.closed { ret (zero, InvalidHandle) }
+    let (_, queue_error) = queue_state_of(state.queue)
+    if queue_error != ok { ret (state, queue_error) }
+    ret (state, ok)
+}
+
+fn queue_state_of(state: *QueueState) -> (*QueueState, err) {
+    if state.device.closed { ret (state, InvalidHandle) }
+    ret (state, ok)
+}
+
+fn target_images(state: *TargetState, width: u32, height: u32) -> err {
+    var handle = Queue { state: mem.cast[*void](state.queue) }
+    let (front, front_error) = image(&handle, width, height, state.format)
+    if front_error != ok { ret front_error }
+    let (back, back_error) = image(&handle, width, height, state.format)
+    if back_error != ok {
+        let abandoned = release_image(&handle, front)
+        ret back_error
+    }
+    state.images[0usize] = front
+    state.images[1usize] = back
+    state.width = width
+    state.height = height
+    ret ok
+}
+
+// A native surface needs a driver backend; the CPU device presents offscreen only.
+fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: Format) -> (*Target, err) {
+    let (state, state_error) = queue_state(q)
+    if state_error != ok { ret (zero, state_error) }
+    if surface.kind != .Offscreen { ret (zero, Unsupported) }
+    let (states, states_error) = mem.alloc[TargetState](state.device.arena, 1usize)
+    if states_error != ok { ret (zero, states_error) }
+    states[0usize] = TargetState { queue: state, images: zero, front: 0usize, width: 0u32, height: 0u32, format: format, serial: 0u64, acquired: false, closed: false }
+    let images_error = target_images(&states[0usize], width, height)
+    if images_error != ok { ret (zero, images_error) }
+    let (handles, handles_error) = mem.alloc[Target](state.device.arena, 1usize)
+    if handles_error != ok { ret (zero, handles_error) }
+    handles[0usize] = Target { state: mem.cast[*void](&states[0usize]) }
+    ret (&handles[0usize], ok)
+}
+
+fn extent(t: *Target) -> (u32, u32) {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret (0u32, 0u32) }
+    ret (state.width, state.height)
+}
+
+// The images are remade at the new size; an acquired frame is dropped.
+fn resize(t: *Target, width: u32, height: u32) -> err {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret state_error }
+    var handle = Queue { state: mem.cast[*void](state.queue) }
+    try release_image(&handle, state.images[0usize])
+    try release_image(&handle, state.images[1usize])
+    state.acquired = false
+    ret target_images(state, width, height)
+}
+
+// The back image, to draw the next frame into; one frame in flight, so a second
+// acquire before its present is `InvalidHandle`.
+fn acquire(t: *Target) -> (Frame, err) {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret (zero, state_error) }
+    if state.acquired { ret (zero, InvalidHandle) }
+    state.acquired = true
+    ret (Frame { image: state.images[1usize - state.front], serial: state.serial }, ok)
+}
+
+// Orders the present behind every submission on `q`, swaps the images, and answers
+// the token of the work it waited for. A frame that is not the acquired one is stale.
+fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err) {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret (zero, state_error) }
+    let (presenter, presenter_error) = queue_state(q)
+    if presenter_error != ok { ret (zero, presenter_error) }
+    if presenter.device.owner != state.queue.device.owner { ret (zero, WrongDevice) }
+    if !state.acquired || frame.serial != state.serial { ret (zero, InvalidHandle) }
+    let sync_error = sync(q)
+    if sync_error != ok { ret (zero, sync_error) }
+    state.front = 1usize - state.front
+    state.serial += 1u64
+    state.acquired = false
+    let (shown, token_error) = token(q)
+    ret (shown, token_error)
+}
+
+// The last presented image, for a snapshot; a native surface has none to answer.
+fn presented(t: *Target) -> (Image, err) {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret (zero, state_error) }
+    if state.serial == 0u64 { ret (zero, InvalidHandle) }
+    ret (state.images[state.front], ok)
+}
+
+fn close_target(t: *Target) -> err {
+    let (state, state_error) = target_state(t)
+    if state_error != ok { ret state_error }
+    var handle = Queue { state: mem.cast[*void](state.queue) }
+    try release_image(&handle, state.images[0usize])
+    try release_image(&handle, state.images[1usize])
+    state.closed = true
+    ret ok
 }
 
 // ------------------------------------------------------------------ the launch

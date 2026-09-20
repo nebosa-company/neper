@@ -171,7 +171,7 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 | [`compiler/C089-m3-01-gpu-profile-enforcement-device-types-address-spaces-sh.md`](compiler/C089-m3-01-gpu-profile-enforcement-device-types-address-spaces-sh.md) | M3-01: @gpu profile enforcement, device types, address spaces, shared var | score 0.45, queue #22 |
 | [`compiler/C090-m3-02-spir-v-emitter-on-the-vulkan-1-2-floor-and-the-vulkan.md`](compiler/C090-m3-02-spir-v-emitter-on-the-vulkan-1-2-floor-and-the-vulkan.md) | M3-02: SPIR-V emitter on the Vulkan 1.2 floor and the Vulkan compute runtime | score 0.00, queue #23 |
 | [`compiler/C091-m3-03-cpu-backend-workgroup-by-workgroup-launch-with-barrier.md`](compiler/C091-m3-03-cpu-backend-workgroup-by-workgroup-launch-with-barrier.md) | M3-03: CPU backend, workgroup-by-workgroup launch with barrier loop-fission | score 0.65, queue #24 |
-| [`compiler/C092-m3-04-e-gpu-runtime-surface-device-queue-buf-t-launch-sync-b.md`](compiler/C092-m3-04-e-gpu-runtime-surface-device-queue-buf-t-launch-sync-b.md) | M3-04: e.gpu runtime surface: Device, Queue, Buf[T], launch, sync, barrier | score 0.75, queue #25 |
+| [`compiler/C092-m3-04-e-gpu-runtime-surface-device-queue-buf-t-launch-sync-b.md`](compiler/C092-m3-04-e-gpu-runtime-surface-device-queue-buf-t-launch-sync-b.md) | M3-04: e.gpu runtime surface: Device, Queue, Buf[T], launch, sync, barrier | score 0.80, queue #25 |
 | [`compiler/C093-m3-05-device-selection-devices-deviceinfo-devicekind-devicek.md`](compiler/C093-m3-05-device-selection-devices-deviceinfo-devicekind-devicek.md) | M3-05: device selection: devices, DeviceInfo/DeviceKind/DeviceKey, open_id, info | score 0.40, queue #26 |
 | [`compiler/C094-m3-06-device-callable-inference-into-the-kernel-owning-modul.md`](compiler/C094-m3-06-device-callable-inference-into-the-kernel-owning-modul.md) | M3-06: device-callable inference into the kernel-owning module's .em | score 0.00, queue #27 |
 | [`compiler/C095-m3-07-gpu-floating-point-no-contraction-math-fma-only-denorm.md`](compiler/C095-m3-07-gpu-floating-point-no-contraction-math-fma-only-denorm.md) | M3-07: GPU floating point: no contraction, math.fma only, denormals, ftz | score 0.00, queue #28 |
@@ -206,15 +206,15 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 
 | file | title | status |
 |---|---|---|
-| [`modules/e.gfx.scene.md`](modules/e.gfx.scene.md) | layer 6, later | 29/29 missing; blocked by gpu-presentation-api |
+| [`modules/e.gfx.scene.md`](modules/e.gfx.scene.md) | layer 6, later | 29/29 missing |
 | [`modules/e.ui.accessibility.md`](modules/e.ui.accessibility.md) | layer 6, later | 11/11 missing; blocked by native-accessibility-api; needs e.ui.widget, e.ui.window |
 | [`modules/e.ui.animation.md`](modules/e.ui.animation.md) | layer 6, later | 7/7 missing; needs e.ui.widget |
-| [`modules/e.ui.app.md`](modules/e.ui.app.md) | layer 6, later | 10/10 missing; blocked by native-window-api, gpu-presentation-api, native-accessibility-api; needs e.gfx.scene, e.ui.accessibility, e.ui.animation, e.ui.input, e.ui.widget, e.ui.window |
+| [`modules/e.ui.app.md`](modules/e.ui.app.md) | layer 6, later | 10/10 missing; blocked by native-window-api, native-accessibility-api; needs e.gfx.scene, e.ui.accessibility, e.ui.animation, e.ui.input, e.ui.widget, e.ui.window |
 | [`modules/e.ui.asset.md`](modules/e.ui.asset.md) | layer 6, later | 15/15 missing; blocked by embedded-asset-linking; needs e.gfx.scene |
 | [`modules/e.ui.input.md`](modules/e.ui.input.md) | layer 6, later | 20/20 missing; blocked by native-window-api; needs e.ui.window |
 | [`modules/e.ui.testing.md`](modules/e.ui.testing.md) | layer 6, later | 13/13 missing; needs e.gfx.scene, e.ui.input, e.ui.widget |
 | [`modules/e.ui.widget.md`](modules/e.ui.widget.md) | layer 6, later | 35/35 missing; needs e.gfx.scene, e.ui.input, e.ui.window |
-| [`modules/e.ui.window.md`](modules/e.ui.window.md) | layer 6, later | 19/19 missing; blocked by native-window-api, gpu-presentation-api; needs e.gfx.scene |
+| [`modules/e.ui.window.md`](modules/e.ui.window.md) | layer 6, later | 19/19 missing; blocked by native-window-api; needs e.gfx.scene |
 
 ### UI and host integration (plan order)
 

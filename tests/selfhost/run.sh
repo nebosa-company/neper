@@ -1552,6 +1552,13 @@ for fault_case in 'gpu_fault_bounds:gpu fault ok' 'gpu_fault_nocheck:gpu nocheck
     fault_output=$("$test_build/$fault_name-selfhost")
     [ "$fault_output" = "$fault_expected" ]
 done
+# Presentation (D791): images a kernel writes, an offscreen target's frames acquired,
+# presented and read back as the snapshot, resize, and the refusals.
+gpu_present_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_present/src/main.e" "$repo" x64 linux "$test_build/gpu-present-selfhost")
+[ "$gpu_present_written" = 'executable written' ]
+chmod +x "$test_build/gpu-present-selfhost"
+gpu_present_output=$("$test_build/gpu-present-selfhost")
+[ "$gpu_present_output" = 'gpu present ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

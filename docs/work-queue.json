@@ -273,10 +273,10 @@
       "group": "Back end",
       "order": 92,
       "title": "M3-04: e.gpu runtime surface: Device, Queue, Buf[T], launch, sync, barrier",
-      "score": 0.75,
+      "score": 0.8,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "`e.gpu` at `surface: partial`: `open`/`close`/`has`/`info`, `queue` and `queue_with`, `Buf[T]` as a generation-checked handle into a per-device table, `alloc`/`upload`/`write`/`download`/`release`/`len`, tokens with `done`/`wait`/`wait_for`, `sync`, `grid1/2/3`, and `gpu.launch[K]` as the third argument-pack intrinsic: the pack is checked against the kernel's parameters (`Buf[T]` for a device slice, a value of the parameter's type otherwise) and expands into a generated launcher per calling module, kernel and argument shape (D778). `gpu.barrier()` is the third device intrinsic recognised, legal only in a kernel's own body, lowered as the cut of the CPU build (D780). The fault buffer (D785): a failed tag, alignment, null, enum or bounds check in a kernel's CPU build writes the queue's one `FaultRecord` and ends the invocation, `sync`/`download` answer `Fault` once, `last_fault` answers the record. Not yet: `[]Atomic[T]` parameters, `gpu.memory_barrier`, staging pools that do anything, a lock on the device block."
+      "evidence": "`e.gpu` at `surface: partial`: `open`/`close`/`has`/`info`, `queue` and `queue_with`, `Buf[T]` as a generation-checked handle into a per-device table, `alloc`/`upload`/`write`/`download`/`release`/`len`, tokens with `done`/`wait`/`wait_for`, `sync`, `grid1/2/3`, and `gpu.launch[K]` as the third argument-pack intrinsic: the pack is checked against the kernel's parameters (`Buf[T]` for a device slice, a value of the parameter's type otherwise) and expands into a generated launcher per calling module, kernel and argument shape (D778). `gpu.barrier()` is the third device intrinsic recognised, legal only in a kernel's own body, lowered as the cut of the CPU build (D780). The fault buffer (D785): a failed tag, alignment, null, enum or bounds check in a kernel's CPU build writes the queue's one `FaultRecord` and ends the invocation, `sync`/`download` answer `Fault` once, `last_fault` answers the record. Presentation (D791): `Image`, `open_target`, `acquire`, `present`, `presented`, `resize` and `close_target`, offscreen on the CPU device. Not yet: `[]Atomic[T]` parameters, `gpu.memory_barrier`, staging pools that do anything, a lock on the device block."
     },
     {
       "id": "C093",

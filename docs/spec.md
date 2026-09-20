@@ -3144,6 +3144,55 @@ Everything after the grid is the argument pack (§9), matched positionally again
 Arity, types and address spaces are all checked at the call site; nothing about a
 launch is discovered on the device.
 
+### Presentation
+
+There is no fixed-function graphics pipeline in neper: no vertex or fragment stage,
+no rasteriser state, no blend unit. A frame is drawn by kernels writing pixels into
+an **image**, and presentation is what shows an image on a surface. That keeps the
+device model one thing -- kernels over device memory -- and makes a software
+renderer on `.Cpu` and a compute renderer on a driver backend the same program.
+
+```
+type Format = enum u8 { Rgba8, Bgra8 } // the channel order of a packed 32-bit pixel
+type Image = struct { data: Buf[u32], width: u32, height: u32, format: Format }
+type SurfaceKind = enum u8 { Offscreen, Win32, X11, Wayland, Cocoa }
+type Surface = struct { kind: SurfaceKind, handle: *void, context: *void }
+type Target = struct { state: *void } // one thread at a time, its queue's
+type Frame = struct { image: Image, serial: u64 }
+
+error Outdated // the surface no longer matches the target's extent; resize, then acquire again
+```
+
+An `Image` is a `Buf[u32]` of `width * height` pixels, row-major, `(x, y)` at
+`y * width + x`, each pixel four 8-bit channels in the `Format`'s order with the
+first channel in the low byte. It is device memory like any buffer: a kernel takes
+`image.data` as `[]u32`, writes what it computes, and blending, anti-aliasing and
+sampling are that kernel's arithmetic. A `Surface` names what a target presents
+to: `.Offscreen` is a pair of images the program reads back, on every backend; the
+other kinds carry a native window handle and its context (`HWND` and `HINSTANCE`,
+an X11 window and its connection, a `wl_surface` and its display, an `NSView` and
+nothing) obtained through `e.os`, and a driver backend presents to them through a
+swapchain. `.Cpu` presents offscreen only.
+
+| Function | Semantics |
+|---|---|
+| `fn image(q: *Queue, width: u32, height: u32, format: Format) -> (Image, err)` | `width * height` pixels of device memory, contents unspecified; a zero side or one over 16384 is `TooLarge`. |
+| `fn write_image(q: *Queue, dst: Image, x: u32, y: u32, width: u32, height: u32, src: []const u32) -> err` | Writes a tightly packed `width * height` block of `src` at `(x, y)`, as `write` does per row; a block past an edge or a `src` of another length is `TooLarge`. |
+| `fn read_image(q: *Queue, src: Image, dst: []u32) -> err` | `download` of the pixels; `dst` holds at least `width * height`. |
+| `fn release_image(q: *Queue, img: Image) -> err` | `release` of the pixels; the handle is stale afterwards. |
+| `fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: Format) -> (*Target, err)` | A presentation target on `q`'s device at the extent: two images for `.Offscreen`, a swapchain of at least two for a native surface. A surface kind the backend cannot present to is `Unsupported`; the bookkeeping block comes from the device's arena. |
+| `fn extent(t: *Target) -> (u32, u32)` | The current width and height; `(0, 0)` for a closed target. |
+| `fn resize(t: *Target, width: u32, height: u32) -> err` | Remakes the images at the new extent; the old ones are stale and an acquired frame is dropped. On a native surface this is the answer to `Outdated`. |
+| `fn acquire(t: *Target) -> (Frame, err)` | The image the next present shows, with the serial that present will carry. One frame is in flight: a second acquire before its present is `InvalidHandle`. A native surface whose extent changed is `Outdated`. |
+| `fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err)` | Orders the present behind every submission on `q`, shows `frame.image`, and answers the token of the work it waited for. A frame that is not the acquired one, or one from before a resize, is `InvalidHandle`; a queue of another device is `WrongDevice`; device loss is `Lost`. |
+| `fn presented(t: *Target) -> (Image, err)` | The last presented image, for a snapshot or a readback test; `InvalidHandle` before the first present, `Unsupported` on a native surface. |
+| `fn close_target(t: *Target) -> err` | Releases the images; a repeated close is `InvalidHandle`. Closing the device closes its targets. |
+
+Device loss holds as for every handle: after `Lost` every later call on the target
+is `Lost`, and recovery is closing the target and the device and opening again. A
+renderer keeps its scene in host memory and its images as things it can remake,
+which is what `resize` and `Lost` both ask of it.
+
 ### Device discovery and selection
 
 This is an extension of the planned M3 `e.gpu` surface, not an implemented feature

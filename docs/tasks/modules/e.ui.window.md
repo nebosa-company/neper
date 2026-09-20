@@ -4,7 +4,7 @@
 |---|---|
 | file to create | `lib/e/ui/window.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
-| blocked by | `native-window-api`, `gpu-presentation-api` |
+| blocked by | `native-window-api` |
 | unmet dependencies | `e.gfx.scene` |
 
 ## Definition of done

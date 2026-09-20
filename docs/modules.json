@@ -1442,9 +1442,7 @@
     "e.gfx.paint",
     "e.text.layout"
    ],
-   "blocked_by": [
-    "gpu-presentation-api"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.gpu",
@@ -2035,7 +2033,6 @@
    ],
    "blocked_by": [
     "native-window-api",
-    "gpu-presentation-api",
     "native-accessibility-api"
    ]
   },
@@ -2147,8 +2144,7 @@
     "e.gfx.scene"
    ],
    "blocked_by": [
-    "native-window-api",
-    "gpu-presentation-api"
+    "native-window-api"
    ]
   }
  ],

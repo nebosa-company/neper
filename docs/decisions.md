@@ -15035,3 +15035,34 @@ C062 closes with it: the merged error table serves `main`'s failure line
 `err` value, so the trap protocol has nothing further to read from it.
 C065 closes: every section 11 row traps as the table says, in debug and
 release, with its backtrace, and the test root's channel is the one above.
+
+## D791 — Presentation is images, targets and frames over kernels; `gpu-presentation-api` delivered
+
+`docs/ui-framework.md` held `e.gfx.scene`, `e.ui.window` and `e.ui.app` behind
+`gpu-presentation-api`: "presentation targets, textures, render passes,
+blending, synchronization, resize and device-loss recovery" in `e.gpu`. The
+list reads like a graphics API's, and section 10 has no graphics pipeline --
+no vertex or fragment stage, no rasteriser, no blend state -- and adding one
+would be a second device model beside kernels, with its own shading
+language, its own resource binding and its own bugs. The delivered API
+takes the other reading: a **texture** is an `Image`, a `Buf[u32]` of packed
+pixels with a width, a height and a channel order that a kernel writes as
+`[]u32`; a **render pass** is a kernel over an image; **blending** is that
+kernel's arithmetic; a **presentation target** is `open_target` over a
+`Surface` -- `.Offscreen` on every backend, a native window handle and
+context from `e.os` on a driver backend -- with `acquire` handing out the
+next `Frame`, `present` showing it behind the queue's work and answering
+the token it waited for, `presented` the snapshot, `resize` the answer to
+`Outdated`, and device loss the `Lost` every handle already has.
+`e.gpu` gains `Format`, `Image`, `SurfaceKind`, `Surface`, `Target`,
+`Frame`, `Outdated`, and eleven functions, in the spec's section 10 under
+"Presentation" and in the fence; the CPU backend implements all of it as a
+pair of images per target, pinned by `link/gpu_present` on both hosts.
+
+The consequence for the UI proposal: `e.gfx.scene`'s CPU reference renderer
+is a set of kernels that tessellate and rasterise into an `Image`, run by
+the CPU backend today and by a driver backend when one exists, with the
+per-pixel tolerance the proposal already asks for between the two. A
+sampled texture is a bilinear read in the kernel; a glyph atlas is an
+image the shaper writes. `e.gfx.scene` is unblocked; `e.ui.window` and
+`e.ui.app` wait on `native-window-api`, which fills the `Surface`.
