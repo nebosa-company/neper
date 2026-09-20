@@ -3641,6 +3641,10 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                     ret (result, result_type, emit_error)
                 }
             }
+            // Another module's `var` (D778): its address, loaded when it fits a register,
+            // exactly as the unqualified read above.
+            let (global_value, global_type, has_global, global_error) = lower_qualified_global(c, target_module, qualified_name, c.tokens[usize(node.token_start)], builder)
+            if has_global { ret (global_value, global_type, global_error) }
             let (member_value, member_type, member_error) = lower_member(c, g, tree, module_index, node_index, expected, builder)
             if member_error == ok { ret (member_value, member_type, ok) }
             ret (0usize, zero, check.Unsupported)
@@ -6393,7 +6397,7 @@ fn pending_instance(c: *check.Checker, owner_module_index: usize) -> (usize, boo
     var at = c.signature_function_count
     while at < c.function_count {
         let generic = c.function_generics[at]
-        if generic.instance && !generic.formatter && !generic.lowered && !c.functions[at].generic && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }
+        if generic.instance && !generic.formatter && !generic.launcher && !generic.lowered && !c.functions[at].generic && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }
         at += 1usize
     }
     ret (0usize, false)
@@ -7103,11 +7107,223 @@ fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: us
     ret nir.end_function(builder)
 }
 
+// Another module's `var` read by its qualified name (D778): the address, loaded when
+// the value fits a register, as the unqualified read does. In a function of its own
+// so `lower_expression` stays under the bootstrap's local ceiling.
+fn lower_qualified_global(c: *check.Checker, target_module: usize, name: str, token: lex.Token, builder: *nir.Builder) -> (usize, check.Type, bool, err) {
+    let (global_index, has_global) = check.find_global(c, target_module, name)
+    if !has_global { ret (0usize, zero, false, ok) }
+    let (address, address_type, address_error) = global_address(c, global_index, builder, token)
+    if address_error != ok { ret (0usize, address_type, true, address_error) }
+    let value_type = c.globals[global_index].ty
+    if aggregate_value(c, value_type) { ret (address, value_type, true, ok) }
+    let (info, info_error) = layout.type_info(c, value_type)
+    if info_error != ok { ret (0usize, value_type, true, info_error) }
+    let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, value_type, true, info.size, token)
+    if load_error != ok { ret (0usize, value_type, true, load_error) }
+    let operand_error = nir.add_operand(builder, load_instruction, address)
+    if operand_error != ok { ret (0usize, value_type, true, operand_error) }
+    ret (loaded, value_type, true, ok)
+}
+
+// A `u32` field of the `Buf` at `base`, read through `layout.field`.
+fn launcher_buf_field(c: *check.Checker, buf_type: check.Type, base: usize, name: str, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (field, field_error) = layout.field(c, buf_type, name)
+    if field_error != ok { ret (0usize, field_error) }
+    let (info, info_error) = layout.type_info(c, field.ty)
+    if info_error != ok { ret (0usize, info_error) }
+    let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, field.ty, true, field.offset, token)
+    if address_error != ok { ret (0usize, address_error) }
+    let base_error = nir.add_operand(builder, address_instruction, base)
+    if base_error != ok { ret (0usize, base_error) }
+    let (load_instruction, value, load_error) = nir.emit(builder, .Load, field.ty, true, info.size, token)
+    if load_error != ok { ret (0usize, load_error) }
+    let operand_error = nir.add_operand(builder, load_instruction, address)
+    if operand_error != ok { ret (0usize, operand_error) }
+    ret (value, ok)
+}
+
+// `gpu.launch[K](q, grid, args...)` on the CPU backend (spec section 10, D778). The
+// generated body is what a launch is there: `launch_begin` checks the queue and the
+// grid against the kernel's workgroup size and answers the invocation count; every
+// `Buf` argument becomes the slice over its storage that `launch_view` answers; then
+// one loop runs every invocation in `gid` order, `launch_invocation` setting
+// `gpu.gid`, `gpu.lid` and `gpu.wgid` before the kernel is called with the pack;
+// `launch_end` records the submission and answers what the launch answers.
+fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usize, instance_index: usize, builder: *nir.Builder, signatures: *nir.Signatures) -> err {
+    if instance_index >= c.function_count { ret FunctionNotFound }
+    let instance = c.functions[instance_index]
+    let generic = c.function_generics[instance_index]
+    if !generic.launcher || generic.template_index >= c.function_count { ret check.Unsupported }
+    let kernel = c.functions[generic.template_index]
+    if instance.parameter_count > 18usize || instance.parameter_count != 2usize + kernel.parameter_count { ret check.ArgumentCount }
+    var token: lex.Token = zero
+    c.failure_module = module_index
+    c.failure_name = instance.name
+    c.failure_has_token = false
+    let (nir_function, begin_error) = nir.begin_function(builder, instance.owner_module_index, instance.name, instance.instance_id)
+    if begin_error != ok { ret begin_error }
+    builder.functions[nir_function].path = g.modules[instance.module_index].spelling
+    builder.functions[nir_function].module_name = g.modules[instance.owner_module_index].name
+    builder.current_path = g.modules[instance.module_index].spelling
+    builder.current_text = g.modules[instance.module_index].text
+    builder.current_lines = g.modules[instance.module_index].lines
+    builder.site_line = 0usize
+    try nir.begin_signature(builder, nir_function, signatures)
+    var signature_at = 0usize
+    while signature_at < instance.parameter_count {
+        try nir.add_parameter_type(builder, nir_function, signatures, c.parameters[instance.first_parameter + signature_at].ty)
+        signature_at += 1usize
+    }
+    try nir.add_return_type(builder, nir_function, signatures, c.return_types[instance.first_return])
+    let (entry, block_error) = nir.begin_block(builder)
+    if block_error != ok { ret block_error }
+    var parameters: [18]usize = zero
+    var parameter_at = 0usize
+    while parameter_at < instance.parameter_count {
+        let parameter = c.parameters[instance.first_parameter + parameter_at]
+        let (instruction, result, parameter_error) = nir.emit(builder, .Parameter, parameter.ty, true, parameter_at, token)
+        if parameter_error != ok { ret parameter_error }
+        parameters[parameter_at] = result
+        parameter_at += 1usize
+    }
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    // launch_begin(q, grid, x, y, z) -> (count, err)
+    var dims: [3]usize = zero
+    dims[0usize] = (usize(kernel.gpu_size) & 1023usize) + 1usize
+    dims[1usize] = ((usize(kernel.gpu_size) >> 10usize) & 1023usize) + 1usize
+    dims[2usize] = ((usize(kernel.gpu_size) >> 20usize) & 1023usize) + 1usize
+    var begin_arguments: [5]usize = zero
+    begin_arguments[0usize] = parameters[0usize]
+    begin_arguments[1usize] = parameters[1usize]
+    var dim_at = 0usize
+    while dim_at < 3usize {
+        let (dim_instruction, dim_value, dim_error) = nir.emit(builder, .ConstInteger, usize_type, true, dims[dim_at], token)
+        if dim_error != ok { ret dim_error }
+        begin_arguments[2usize + dim_at] = dim_value
+        dim_at += 1usize
+    }
+    var begin_results: CallResults = zero
+    try emit_library_call(c, g, "e.gpu", "launch_begin", begin_arguments[..], 5usize, builder, token, &begin_results)
+    if begin_results.count != 2usize { ret check.ArgumentCount }
+    try emit_formatter_guard(c, module_index, instance, 0usize, begin_results.values[1usize], false, builder, token)
+    let count = begin_results.values[0usize]
+    // Every Buf argument as the slice the kernel parameter wants.
+    var kernel_arguments: [16]usize = zero
+    var argument_at = 0usize
+    while argument_at < kernel.parameter_count {
+        let parameter_type = c.parameters[kernel.first_parameter + argument_at].ty
+        let supplied_type = c.parameters[instance.first_parameter + 2usize + argument_at].ty
+        let supplied = parameters[2usize + argument_at]
+        if parameter_type.kind == .Slice {
+            let (owner, owner_error) = launcher_buf_field(c, supplied_type, supplied, "owner", builder, token)
+            if owner_error != ok { ret owner_error }
+            let (slot, slot_error) = launcher_buf_field(c, supplied_type, supplied, "slot", builder, token)
+            if slot_error != ok { ret slot_error }
+            let (generation, generation_error) = launcher_buf_field(c, supplied_type, supplied, "generation", builder, token)
+            if generation_error != ok { ret generation_error }
+            var view_arguments: [4]usize = zero
+            view_arguments[0usize] = parameters[0usize]
+            view_arguments[1usize] = owner
+            view_arguments[2usize] = slot
+            view_arguments[3usize] = generation
+            var view_results: CallResults = zero
+            try emit_library_call(c, g, "e.gpu", "launch_view", view_arguments[..], 4usize, builder, token, &view_results)
+            if view_results.count != 3usize { ret check.ArgumentCount }
+            try emit_formatter_guard(c, module_index, instance, 0usize, view_results.values[2usize], false, builder, token)
+            // A slice value is the address of a {pointer, length} pair (`emit_mem_view`).
+            let (slice_instruction, slice, slice_error) = nir.emit(builder, .Stack, parameter_type, true, 2usize, token)
+            if slice_error != ok { ret slice_error }
+            let (data_store_instruction, data_store_ignored, data_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+            if data_store_error != ok { ret data_store_error }
+            try nir.add_operand(builder, data_store_instruction, slice)
+            try nir.add_operand(builder, data_store_instruction, view_results.values[0usize])
+            let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, usize_type, true, 8usize, token)
+            if length_address_error != ok { ret length_address_error }
+            try nir.add_operand(builder, length_address_instruction, slice)
+            let (length_store_instruction, length_store_ignored, length_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+            if length_store_error != ok { ret length_store_error }
+            try nir.add_operand(builder, length_store_instruction, length_address)
+            try nir.add_operand(builder, length_store_instruction, view_results.values[1usize])
+            kernel_arguments[argument_at] = slice
+        } else {
+            kernel_arguments[argument_at] = supplied
+        }
+        argument_at += 1usize
+    }
+    // The invocation loop.
+    let (counter_slot_instruction, counter_slot, counter_slot_error) = nir.emit(builder, .Stack, usize_type, true, 0usize, token)
+    if counter_slot_error != ok { ret counter_slot_error }
+    let (start_instruction, start, start_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
+    if start_error != ok { ret start_error }
+    let (start_store_instruction, start_store_ignored, start_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if start_store_error != ok { ret start_store_error }
+    try nir.add_operand(builder, start_store_instruction, counter_slot)
+    try nir.add_operand(builder, start_store_instruction, start)
+    let (entry_branch, entry_branch_error) = emit_branch(builder, token)
+    if entry_branch_error != ok { ret entry_branch_error }
+    let condition_block = builder.block_count
+    let (condition_index, condition_error) = nir.begin_block(builder)
+    if condition_error != ok || condition_index != condition_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, entry_branch, condition_block, 0usize)
+    let (condition_load_instruction, condition_counter, condition_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if condition_load_error != ok { ret condition_load_error }
+    try nir.add_operand(builder, condition_load_instruction, counter_slot)
+    let (has_next, has_next_error) = emit_supplied_compare(builder, .Less, boolean, condition_counter, count, token)
+    if has_next_error != ok { ret has_next_error }
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, has_next)
+    let body_block = builder.block_count
+    let (body_index, body_error) = nir.begin_block(builder)
+    if body_error != ok || body_index != body_block { ret nir.InvalidControlFlow }
+    let (body_load_instruction, body_counter, body_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if body_load_error != ok { ret body_load_error }
+    try nir.add_operand(builder, body_load_instruction, counter_slot)
+    var invocation_arguments: [1]usize = zero
+    invocation_arguments[0usize] = body_counter
+    var invocation_results: CallResults = zero
+    try emit_library_call(c, g, "e.gpu", "launch_invocation", invocation_arguments[..], 1usize, builder, token, &invocation_results)
+    var kernel_call: check.CallInfo = zero
+    kernel_call.cast = check.invalid_type()
+    kernel_call.alloc_return = check.invalid_type()
+    kernel_call.alloc_arena = check.invalid_type()
+    kernel_call.function = kernel
+    var kernel_results: CallResults = zero
+    try emit_call_results(c, kernel_call, 0usize, kernel_arguments[..], kernel.parameter_count, builder, token, &kernel_results)
+    let (one_instruction, one, one_error) = nir.emit(builder, .ConstInteger, usize_type, true, 1usize, token)
+    if one_error != ok { ret one_error }
+    let (add_instruction, incremented, add_error) = nir.emit(builder, .Add, usize_type, true, 0usize, token)
+    if add_error != ok { ret add_error }
+    try nir.add_operand(builder, add_instruction, body_counter)
+    try nir.add_operand(builder, add_instruction, one)
+    let (increment_store_instruction, increment_store_ignored, increment_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if increment_store_error != ok { ret increment_store_error }
+    try nir.add_operand(builder, increment_store_instruction, counter_slot)
+    try nir.add_operand(builder, increment_store_instruction, incremented)
+    let (back_edge, back_edge_error) = emit_branch(builder, token)
+    if back_edge_error != ok { ret back_edge_error }
+    try nir.set_branch_targets(builder, back_edge, condition_block, 0usize)
+    let exit_block = builder.block_count
+    let (exit_index, exit_error) = nir.begin_block(builder)
+    if exit_error != ok || exit_index != exit_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, decision, body_block, exit_block)
+    // launch_end(q) -> err, which is the launch's answer.
+    var end_arguments: [1]usize = zero
+    end_arguments[0usize] = parameters[0usize]
+    var end_results: CallResults = zero
+    try emit_library_call(c, g, "e.gpu", "launch_end", end_arguments[..], 1usize, builder, token, &end_results)
+    if end_results.count != 1usize { ret check.ArgumentCount }
+    try emit_formatter_return(c, module_index, instance, 0usize, 0usize, end_results.values[0usize], false, builder, token)
+    ret nir.end_function(builder)
+}
+
 fn pending_formatter(c: *check.Checker, owner_module_index: usize) -> (usize, bool) {
     var at = c.signature_function_count
     while at < c.function_count {
         let generic = c.function_generics[at]
-        if generic.formatter && !generic.lowered && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }
+        if (generic.formatter || generic.launcher) && !generic.lowered && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }
         at += 1usize
     }
     ret (0usize, false)
@@ -7125,7 +7341,11 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
         let (formatter, found_formatter) = pending_formatter(c, module_index)
         if found_formatter {
             c.function_generics[formatter].lowered = true
-            try lower_formatter_instance(c, g, module_index, formatter, builder, signatures)
+            if c.function_generics[formatter].launcher {
+                try lower_launcher_instance(c, g, module_index, formatter, builder, signatures)
+            } else {
+                try lower_formatter_instance(c, g, module_index, formatter, builder, signatures)
+            }
             continue
         }
         let (first, found) = pending_instance(c, module_index)
@@ -7139,7 +7359,7 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
         let end = c.function_count
         while at < end {
             let generic = c.function_generics[at]
-            if generic.instance && !generic.lowered && !c.functions[at].generic && c.functions[at].owner_module_index == module_index && c.functions[generic.template_index].module_index == template_module {
+            if generic.instance && !generic.formatter && !generic.launcher && !generic.lowered && !c.functions[at].generic && c.functions[at].owner_module_index == module_index && c.functions[generic.template_index].module_index == template_module {
                 c.function_generics[at].lowered = true
                 c.active_owner_module = module_index
                 c.active_owner_set = true

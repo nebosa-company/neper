@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/window.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | `native-window-api`, `gpu-presentation-api` |
-| unmet dependencies | `e.gpu`, `e.gfx.scene` |
+| unmet dependencies | `e.gfx.scene` |
 
 ## Definition of done
 
@@ -21,7 +21,7 @@ Blockers named in the plan must be resolved first; a blocked module is not eligi
 
 | dependency | surface | source file | layer |
 |---|---|---|---|
-| `e.gpu` | spec | missing | 5 |
+| `e.gpu` | partial | `lib/e/gpu.e` | 5 |
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.os` | spec | `lib/e/os.e` | 3 |
 | `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |

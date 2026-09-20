@@ -21,11 +21,13 @@ fn saxpy(n: u32, a: f32, x: []const f32, y: []f32) {
 fn run(q: *gpu.Queue, a: f32, x: []const f32, y: []f32) -> err {
     // upload copies x into driver-owned staging before it returns, so x is
     // free to reuse. The device-side transfer is queued in order behind it.
-    let dx = try gpu.upload[f32](q, x)
-    defer gpu.release(q, dx) // queued behind everything below: safe to defer
+    let (dx, dx_error) = gpu.upload[f32](q, x)
+    if dx_error != ok { ret dx_error }
+    defer let _ = gpu.release[f32](q, dx) // queued behind everything below: safe to defer
 
-    let dy = try gpu.upload[f32](q, y)
-    defer gpu.release(q, dy)
+    let (dy, dy_error) = gpu.upload[f32](q, y)
+    if dy_error != ok { ret dy_error }
+    defer let _ = gpu.release[f32](q, dy)
 
     // The kernel is a comptime argument, so the trailing arguments are checked
     // against saxpy's parameter list at compile time. grid1 counts invocations;
@@ -61,23 +63,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // .Cpu always exists at index 0: the same kernel, run on this thread one
     // workgroup at a time, steppable in any debugger.
     fill(x[0..], y[0..])
-    let cpu = try gpu.open(a, .Cpu, 0)
-    defer gpu.close(cpu)
-    let cq = try gpu.queue(cpu)
+    let (cpu, cpu_error) = gpu.open(a, .Cpu, 0)
+    if cpu_error != ok { ret cpu_error }
+    defer let _ = gpu.close(cpu)
+    let (cq, cq_error) = gpu.queue(cpu)
+    if cq_error != ok { ret cq_error }
     try run(cq, 2.0, x[0..], y[0..])
     try io.printf["cpu    checksum {}\n"](checksum(y[0..]))
 
     // A Vulkan device may be absent; NoDevice is an ordinary outcome here, not
     // a failure. Anything else is.
     let (dev, e) = gpu.open(a, .Vulkan, 0)
-    if e == gpu.NoDevice {
+    if e == gpu.NoDevice || e == gpu.Unsupported { // absent, or a backend this build did not embed
         ret ok
     }
     if e != ok {
         ret e
     }
-    defer gpu.close(dev)
-    let q = try gpu.queue(dev)
+    defer let _ = gpu.close(dev)
+    let (q, q_error) = gpu.queue(dev)
+    if q_error != ok { ret q_error }
     fill(x[0..], y[0..])
     try run(q, 2.0, x[0..], y[0..])
     try io.printf["vulkan checksum {}\n"](checksum(y[0..]))

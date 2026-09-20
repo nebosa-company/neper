@@ -5862,6 +5862,18 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail)
         ret write_all(file, "` is an extern fn with no `@import(LIBRARY, SYMBOL)`, so there is nothing to bind it to")
     }
+    if checker.failure_kind == .GpuAttribute {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` carries `@gpu` without a usable workgroup size: one to three positive integer literals whose product is at most 1024, on a function that is not extern")
+    }
+    if checker.failure_kind == .GpuLaunch {
+        if checker.failure_detail.len == 0usize { ret write_all(file, checker.failure_detail2) }
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` ")
+        ret write_all(file, checker.failure_detail2)
+    }
     if checker.failure_kind == .ExternType {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)

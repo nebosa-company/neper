@@ -1536,6 +1536,26 @@ $assetInvalidOutput = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 1 -or ($assetInvalidOutput -join "`n") -notmatch 'project\.yaml:1:1: error\[E-MODULE-9999\]: `project\.yaml` has an `assets:` entry the loader does not accept') {
     throw 'an asset manifest entry with an unknown key was not rejected at the manifest'
 }
+# `e.gpu` on the CPU backend (D778): the device, queues, buffers, `gpu.launch[K]` over
+# a 1-D and a 2-D kernel with the ids, tokens and every refusal; `examples/saxpy.e`
+# prints the CPU checksum; a kernel called directly, a bare `@gpu` and a host slice
+# in a launch pack are refused at the call.
+$gpuCpuPath = Join-Path $testBuild 'gpu-cpu-selfhost.exe'
+$gpuCpuWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_cpu\src\main.e') $repo 'x64' 'windows' $gpuCpuPath
+if ($LASTEXITCODE -ne 0 -or $gpuCpuWritten -ne 'executable written') { throw 'gpu_cpu emission failed' }
+$gpuCpuOutput = & $gpuCpuPath
+if ($LASTEXITCODE -ne 0 -or $gpuCpuOutput -ne 'gpu cpu ok') { throw "an e.gpu device, buffer, launch or refusal answered wrongly: exit $LASTEXITCODE" }
+$saxpyPath = Join-Path $testBuild 'saxpy-selfhost.exe'
+$saxpyWritten = & $compiler emit-executable (Join-Path $repo 'examples\saxpy.e') $repo 'x64' 'windows' $saxpyPath
+if ($LASTEXITCODE -ne 0 -or $saxpyWritten -ne 'executable written') { throw 'examples/saxpy.e emission failed' }
+$saxpyOutput = & $saxpyPath
+if ($LASTEXITCODE -ne 0 -or ($saxpyOutput -join "`n") -ne 'cpu    checksum 16777216') { throw "examples/saxpy.e answered wrongly: $($saxpyOutput -join "`n")" }
+$gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-TYPE-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
+$gpuBare = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_bare_attribute\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($gpuBare -join "`n") -notmatch 'main\.e:4:1: error\[E-TYPE-9999\]: `fill` carries `@gpu` without a usable workgroup size') { throw "a bare @gpu was not refused: $($gpuBare -join "`n")" }
+$gpuArgument = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_launch_argument\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($gpuArgument -join "`n") -notmatch 'main\.e:9:9: error\[E-TYPE-9999\]: `fill` takes a device slice at this position') { throw "a host slice in a launch pack was not refused: $($gpuArgument -join "`n")" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

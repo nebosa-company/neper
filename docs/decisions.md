@@ -14674,3 +14674,62 @@ aggregate literal, so a limit is bound to a local before the comparison; and an
 array field of an indexed slice element (`entries[i].names[k]`) is misaddressed,
 while the same field through a pointer to the element is not. The bootstrap has
 no `-=` and no `else if` either.
+
+## D778 — M3 opens with `e.gpu` on the CPU backend and `gpu.launch` as the third pack intrinsic
+
+The last module rows all wait on M3, so M3 starts here, split into the queue rows
+the milestone page asks for -- C089 to C096, one per M3 bullet, with truthful
+scores -- and its first slice is the one every later slice needs: the `e.gpu`
+runtime over the CPU device, and `gpu.launch[K]`, which C060 had recorded as the
+one argument pack that did not expand.
+
+`@gpu(X, Y, Z)` is read at signature collection (`declaration_gpu`): one to three
+positive integer literals whose product is at most 1024, on a non-extern
+function; a bare `@gpu`, a zero, a fourth axis, an overflow or an option is
+refused under `GpuAttribute`. A kernel called anywhere but through `gpu.launch`
+is refused under `GpuLaunch`, since its ids mean nothing there. `gpu.launch[K]`
+is recognised the way `printf[FMT]` is: the brackets name a function this module
+can see (`find_function` or the qualified lookup), which must carry `@gpu`, take
+no comptime parameters and return nothing; the call's first two arguments must be
+a `*gpu.Queue` and a `gpu.Grid`; the pack is matched positionally against the
+kernel's parameters -- a `gpu.Buf[T]` for a `[]T` or `[]const T` (the element
+read off the `Buf` instance's argument), a value of the parameter's own type for
+a device storage type, an untyped literal taking it -- and the call becomes a
+launcher instance, one per calling module, kernel and argument shape, whose body
+lowering generates: `launch_begin(q, grid, X, Y, Z)` for the invocation count,
+`launch_view` for every `Buf` (the address and count of its storage, made into
+the slice the kernel wants as `emit_mem_view` does), then a counter loop that
+calls `launch_invocation(i)` and the kernel, then `launch_end`. No source is
+rewritten and no data is relocated; the launcher is NIR like a formatter's.
+
+`e.gpu` lands at `surface: partial`: the fence exactly plus the module-scope
+`gid`, `lid`, `wgid` a kernel reads as `gpu.gid.x` -- which needed one language
+gap closed: a module-scope `var` of another module, visible by the resolver's
+rules, was `Unsupported` to the checker and to lowering; it is now read by its
+qualified name as the unqualified read is, loaded when it fits a register --
+and the four launch helpers. The device is one bookkeeping block from the
+caller's arena (a `DeviceState`, a 4096-slot handle table, its queues); every
+`Buf[T]` is `mem.alloc[T]` from that arena with its bytes kept as the arena view
+the allocation left at the top, so `write` and `download` are byte copies
+through an `Arena` laid over the host slice; handles carry a generation a
+release bumps; tokens are the queue's serial and every wait answers at once,
+because a launch has run to completion before `gpu.launch` returns. Workgroups
+run in workgroup-id order and invocations in local-id order, x fastest, on the
+calling thread; a zero axis is a no-op; more than 65535 workgroups on an axis is
+`TooLarge`. `examples/saxpy.e` prints `cpu    checksum 16777216` and treats a
+backend the build did not embed (`Unsupported`) like an absent device, and its
+`defer` and `try` spellings now follow the language as it is.
+
+The static performance gate budgets sc500k's arena high-water at zero, and the
+first build breached it by 8 MB in each mode: sixteen bytes on every `Function`
+and `FunctionGeneric` record. The workgroup size is therefore packed into one
+`u32` -- `(x - 1) | (y - 1) << 10 | (z - 1) << 20`, since each axis is at most
+1024 -- beside a `gpu` flag in the padding after `variadic`, and a launcher
+instance keeps its kernel in `template_index` with a `launcher` flag in the
+padding after `formatter`; both records keep their size and the gate reads
+`2285 -> 2285 MB`.
+
+Not yet, and named on the queue rows: the barrier state machine, `shared var`,
+subgroups, `[]Atomic[T]` parameters, the fault buffer, a lock on the device
+block, Vulkan and CUDA, stable device keys, and the type-argument inference the
+example once assumed (`gpu.release(q, dx)` is `gpu.release[f32](q, dx)`).

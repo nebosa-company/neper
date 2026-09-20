@@ -140,6 +140,10 @@ type DiagnosticKind = enum u8 {
     // `@reorder` on something other than a struct or a union, or on a type that
     // crosses an FFI boundary (D239).
     ReorderBoundary,
+    // `@gpu` without a usable workgroup size, or a kernel called outside `gpu.launch`
+    // (D778): the detail is the function, the second detail says what was wrong.
+    GpuAttribute,
+    GpuLaunch,
 }
 
 type Kind = enum u8 {
@@ -260,6 +264,13 @@ type Function = struct {
     // A trailing `...` on an `extern fn`: section 5's C variadic. The declared
     // parameters are the ones counted; every argument past them crosses as its own type.
     variadic: bool,
+    // `@gpu(X, Y, Z)` (spec section 10, D778): a kernel and its workgroup size, which
+    // `gpu.launch` needs to cut the grid into workgroups; an omitted axis is 1. The
+    // three axes, each at most 1024, are packed as (x - 1) | (y - 1) << 10 | (z - 1)
+    // << 20 so the record keeps its size: sc500k's function table is arena the
+    // static gate budgets at zero.
+    gpu: bool,
+    gpu_size: u32,
 }
 
 type FunctionGeneric = struct {
@@ -273,6 +284,10 @@ type FunctionGeneric = struct {
     // A formatter instance has no source: its body is generated from the format
     // string, which is why it carries the string rather than a template index.
     formatter: bool,
+    // A `gpu.launch[K]` expansion (D778): no source either; its body runs the grid on
+    // the CPU backend and calls the kernel `template_index` names. In the padding
+    // after `formatter`, so the record keeps its size.
+    launcher: bool,
     formatter_spelling: str,
     // `push_err` writes a name the library cannot see: the merged error table is
     // program-wide and exists only once every module is known.
@@ -3737,6 +3752,72 @@ fn declaration_has_attribute(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
     ret false
 }
 
+// The `@gpu(X, Y, Z)` above a declaration (spec section 10, D778): whether the
+// attribute is there, and its dimensions when they are one to three positive integer
+// literals whose product is at most 1024 -- `valid` is false for a bare `@gpu`, a
+// fourth axis, a zero, an overflow or an option the CPU backend does not take yet.
+fn declaration_gpu(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, usize, bool, bool) {
+    let text = g.modules[module_index].text
+    var dims: [3]usize = zero
+    dims[0usize] = 1usize
+    dims[1usize] = 1usize
+    dims[2usize] = 1usize
+    var at = node_index
+    while at > 1usize {
+        at = at - 1usize
+        let node = tree.nodes[at]
+        if !node.top_level { continue }
+        if node.kind != .Attribute { ret (0usize, 0usize, 0usize, false, false) }
+        var name = ""
+        var token_at = usize(node.token_start)
+        while token_at < usize(node.token_end) && token_at < c.token_count {
+            let token = c.tokens[token_at]
+            if token.kind == .Identifier {
+                name = text[token.start..token.end]
+                break
+            }
+            token_at += 1usize
+        }
+        if !same(name, "gpu") { continue }
+        var count = 0usize
+        var valid = true
+        let child_end = usize(node.first_child) + usize(node.child_count)
+        var child_at = usize(node.first_child)
+        while child_at < child_end {
+            if parse.child_is_node_at(tree, child_at) {
+                let argument = tree.nodes[parse.child_index_at(tree, child_at)]
+                var value = 0usize
+                var is_literal = false
+                if argument.kind == .LiteralExpr {
+                    let literal = c.tokens[usize(argument.token_start)]
+                    if literal.kind == .Integer {
+                        is_literal = true
+                        var digit_at = literal.start
+                        while digit_at < literal.end {
+                            let digit = text[digit_at]
+                            if digit < 48u8 || digit > 57u8 {
+                                is_literal = false
+                                break
+                            }
+                            if value > 429496729usize { valid = false }
+                            value = value * 10usize + usize(digit - 48u8)
+                            digit_at += 1usize
+                        }
+                    }
+                }
+                if !is_literal || value == 0usize || count >= 3usize { valid = false }
+                if valid { dims[count] = value }
+                count += 1usize
+            }
+            child_at += 1usize
+        }
+        if count == 0usize { valid = false }
+        if valid && dims[0usize] * dims[1usize] * dims[2usize] > 1024usize { valid = false }
+        ret (dims[0usize], dims[1usize], dims[2usize], true, valid)
+    }
+    ret (0usize, 0usize, 0usize, false, false)
+}
+
 fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, node_index: usize) -> err {
     if c.function_count == c.functions.len { ret Capacity }
     let (name, name_error) = function_name(c, g.modules[module_index].text, node)
@@ -3752,6 +3833,15 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     item.first_parameter = c.parameter_count
     item.first_return = c.return_type_count
     item.external = node.kind == .ExternDecl
+    let (gpu_x, gpu_y, gpu_z, is_gpu, gpu_valid) = declaration_gpu(c, g, tree, module_index, node_index)
+    if is_gpu {
+        if !gpu_valid || item.external {
+            record_failure(c, module_index, node, .GpuAttribute, name, "")
+            ret InvalidType
+        }
+        item.gpu = true
+        item.gpu_size = u32((gpu_x - 1usize) | ((gpu_y - 1usize) << 10usize) | ((gpu_z - 1usize) << 20usize))
+    }
     if item.external {
         let (library, symbol, has_import) = declaration_import(c, g, tree, module_index, node_index)
         if has_import {
@@ -4225,6 +4315,7 @@ fn intrinsic_signature(module: str, name: str) -> str {
         if same(name, "fence") { ret "fn fence(o: Ordering)" }
     }
     if same(module, "e.io") && same(name, "printf") { ret "fn printf[FMT: str](args: ...) -> err" }
+    if same(module, "e.gpu") && same(name, "launch") { ret "fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err" }
     if same(module, "e.str") {
         if same(name, "format") { ret "fn format[FMT: str](a: *mem.Arena, args: ...) -> (str, err)" }
         if same(name, "push_err") { ret "fn push_err(b: *Builder, v: err) -> err" }
@@ -6869,6 +6960,10 @@ type CallInfo = struct {
     formatter_arena: bool,
     formatter_verbs: usize,
     formatter_spelling: str,
+    // `gpu.launch[K](q, grid, args...)` (D778): the pack is checked against the
+    // kernel's parameters and the call becomes a generated launcher instance.
+    launcher: bool,
+    launcher_kernel: usize,
     protocol_pending: bool,
     protocol_builtin: ProtocolBuiltin,
     protocol_type: Type,
@@ -8197,6 +8292,168 @@ fn formatter_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     ret (info, ok)
 }
 
+// `gpu.launch[K](q, grid, args...)` (spec section 10, D778): the kernel is named in
+// the brackets, so the trailing pack can be checked against its parameter list here.
+// The receiver matches when it is `gpu.launch[...]` on `e.gpu`; the kernel must be a
+// function this module can name that carries `@gpu`.
+type LauncherInfo = struct { matched: bool, function: Function, kernel: usize }
+
+fn launcher_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, receiver: syntax.Node) -> (LauncherInfo, err) {
+    var info: LauncherInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = usize(receiver.first_child) + usize(receiver.child_count)
+    var at = usize(receiver.first_child)
+    var child_count = 0usize
+    var base_index = 0usize
+    var kernel_index = 0usize
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            if child_count == 0usize {
+                base_index = parse.child_index_at(tree, at)
+            } else {
+                kernel_index = parse.child_index_at(tree, at)
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member { ret (info, ok) }
+    if !same(g.modules[target_module].name, "e.gpu") || !same(member, "launch") { ret (info, ok) }
+    info.matched = true
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let kernel_node = tree.nodes[kernel_index]
+    var selected = c.function_count
+    if kernel_node.kind == .NameExpr {
+        let kernel_token = c.tokens[usize(kernel_node.token_start)]
+        let kernel_name = g.modules[module_index].text[kernel_token.start..kernel_token.end]
+        let (found_index, found) = find_function(c, module_index, kernel_name)
+        if found { selected = found_index }
+    }
+    if kernel_node.kind == .FieldExpr {
+        let (found_index, found) = find_qualified_function(c, g, tree, module_index, kernel_node)
+        if found { selected = found_index }
+    }
+    if selected >= c.function_count {
+        record_failure(c, module_index, node, .GpuLaunch, "", "the brackets of `gpu.launch` name no function this module can see")
+        ret (info, UnknownCallable)
+    }
+    let kernel = c.functions[selected]
+    if !kernel.gpu {
+        record_failure(c, module_index, node, .GpuLaunch, kernel.name, "is not a kernel: `gpu.launch` takes an `@gpu` function")
+        ret (info, TypeMismatch)
+    }
+    if kernel.generic || kernel.external || kernel.return_count != 0usize {
+        record_failure(c, module_index, node, .GpuLaunch, kernel.name, "is a kernel with comptime parameters or a return, which section 10 does not allow")
+        ret (info, TypeMismatch)
+    }
+    var function: Function = zero
+    function.name = member
+    function.module_index = target_module
+    function.parameter_count = 2usize + kernel.parameter_count
+    function.return_count = 1usize
+    function.intrinsic = true
+    info.function = function
+    info.kernel = selected
+    ret (info, ok)
+}
+
+// The element type of a `gpu.Buf[T]` value, when `supplied` is one.
+fn buf_element_type(c: *Checker, g: *graph.Graph, supplied: Type) -> (Type, bool) {
+    if supplied.kind != .Named || !same(supplied.name, "Buf") || !supplied.has_element { ret (invalid_type(), false) }
+    if supplied.module_index >= g.count || !same(g.modules[supplied.module_index].name, "e.gpu") { ret (invalid_type(), false) }
+    if supplied.element >= c.aggregate_count { ret (invalid_type(), false) }
+    let instance = c.aggregates[supplied.element]
+    if !instance.instance || instance.first_argument >= c.generic_arguments.len { ret (invalid_type(), false) }
+    let argument = c.generic_arguments[instance.first_argument]
+    if argument.kind != .Type { ret (invalid_type(), false) }
+    ret (argument.ty, true)
+}
+
+// One argument of a launch pack against the kernel parameter at its position (spec
+// section 10's table): a `Buf[T]` for a `[]T` or `[]const T`, a value of the
+// parameter's own type otherwise, an untyped literal taking that type.
+fn check_launch_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, child_index: usize, kernel: Function, position: usize) -> (Type, err) {
+    let parameter = c.parameters[kernel.first_parameter + position].ty
+    if parameter.kind == .Slice {
+        let (supplied, supplied_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+        if supplied_error != ok { ret (invalid_type(), supplied_error) }
+        let (element, is_buf) = buf_element_type(c, g, supplied)
+        if !is_buf || !parameter.has_element || parameter.element >= c.type_count || !type_equal(c, element, c.types[parameter.element]) {
+            record_failure(c, module_index, node, .GpuLaunch, kernel.name, "takes a device slice at this position, so the argument has to be a `gpu.Buf` of its element type")
+            ret (invalid_type(), TypeMismatch)
+        }
+        ret (supplied, ok)
+    }
+    if parameter.kind != .Integer && parameter.kind != .Float && parameter.kind != .Bool && parameter.kind != .Named && parameter.kind != .Err {
+        record_failure(c, module_index, node, .GpuLaunch, kernel.name, "has a parameter that is not a device storage type or a device slice")
+        ret (invalid_type(), TypeMismatch)
+    }
+    let (supplied, supplied_error) = check_expr(c, g, tree, module_index, child_index, parameter)
+    if supplied_error != ok { ret (invalid_type(), supplied_error) }
+    if !type_equal(c, supplied, parameter) {
+        record_failure(c, module_index, node, .GpuLaunch, kernel.name, "takes a value of another type at this position")
+        ret (invalid_type(), mismatch(c, parameter, supplied))
+    }
+    ret (parameter, ok)
+}
+
+fn launcher_instance_matches(c: *Checker, candidate: usize, owner_module_index: usize, target_module: usize, kernel: usize, argument_types: []const Type) -> bool {
+    let generic = c.function_generics[candidate]
+    if !generic.launcher || generic.template_index != kernel { ret false }
+    let function = c.functions[candidate]
+    if function.owner_module_index != owner_module_index || function.module_index != target_module { ret false }
+    if function.parameter_count != argument_types.len { ret false }
+    var at = 0usize
+    while at < argument_types.len {
+        if !type_equal(c, c.parameters[function.first_parameter + at].ty, argument_types[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// The launch as a function of its own, one per calling module, kernel and argument
+// shape, the way a formatter expansion is: its body is generated at lowering.
+fn launcher_instance(c: *Checker, owner_module_index: usize, target_module: usize, kernel: usize, argument_types: []const Type) -> (usize, err) {
+    var at = c.signature_function_count
+    while at < c.function_count {
+        if launcher_instance_matches(c, at, owner_module_index, target_module, kernel, argument_types) { ret (at, ok) }
+        at += 1usize
+    }
+    if c.function_count == c.functions.len { ret (0usize, Capacity) }
+    if c.parameter_count + argument_types.len > c.parameters.len { ret (0usize, Capacity) }
+    var instance: Function = zero
+    instance.name = "launch"
+    instance.module_index = target_module
+    instance.owner_module_index = owner_module_index
+    instance.instance_id = owner_instance_count(c, owner_module_index, "launch") + 1usize
+    instance.first_parameter = c.parameter_count
+    instance.parameter_count = argument_types.len
+    instance.first_return = c.return_type_count
+    instance.return_count = 1usize
+    var fill = 0usize
+    while fill < argument_types.len {
+        c.parameters[c.parameter_count] = Parameter { name: "", ty: argument_types[fill], own: false }
+        c.parameter_count += 1usize
+        fill += 1usize
+    }
+    let error_error = store_return_type(c, make_type(.Err, "err", target_module))
+    if error_error != ok { ret (0usize, error_error) }
+    var generic: FunctionGeneric = zero
+    generic.instance = true
+    generic.checked = true
+    generic.launcher = true
+    generic.template_index = kernel
+    let index = c.function_count
+    c.functions[index] = instance
+    c.function_generics[index] = generic
+    c.function_count += 1usize
+    ret (index, ok)
+}
+
 fn formatter_instance_matches(c: *Checker, candidate: usize, owner_module_index: usize, target_module: usize, member: str, spelling: str, argument_types: []const Type) -> bool {
     let generic = c.function_generics[candidate]
     if !generic.formatter || !same(generic.formatter_spelling, spelling) { ret false }
@@ -8913,6 +9170,13 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                             info.cast = root.target
                             info.math_sqrt = true
                         } else {
+                        let (launcher, launcher_error) = launcher_info(c, g, tree, module_index, node, receiver)
+                        if launcher_error != ok { ret (info, launcher_error) }
+                        if launcher.matched {
+                            info.function = launcher.function
+                            info.launcher = true
+                            info.launcher_kernel = launcher.kernel
+                        } else {
                         let (formatter, formatter_error) = formatter_info(c, g, tree, module_index, receiver)
                         if formatter_error != ok { ret (info, formatter_error) }
                         if formatter.matched {
@@ -8927,6 +9191,7 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                             let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, template_index)
                             if specialize_error != ok { ret (info, specialize_error) }
                             info.function = c.functions[specialized_index]
+                        }
                         }
                         }
                         }
@@ -9143,6 +9408,41 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         at += 1usize
                         continue
                     }
+                    if info.launcher {
+                        let kernel = c.functions[info.launcher_kernel]
+                        var supplied = invalid_type()
+                        if child_position == 1usize {
+                            let (queue, queue_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                            if queue_error != ok { ret (info, queue_error) }
+                            var is_queue = queue.kind == .Pointer && queue.has_element && queue.element < c.type_count
+                            if is_queue { is_queue = c.types[queue.element].kind == .Named && same(c.types[queue.element].name, "Queue") }
+                            if !is_queue {
+                                record_failure(c, module_index, node, .GpuLaunch, kernel.name, "is launched on something other than a `*gpu.Queue`")
+                                ret (info, TypeMismatch)
+                            }
+                            supplied = queue
+                        } else {
+                        if child_position == 2usize {
+                            let (grid, grid_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                            if grid_error != ok { ret (info, grid_error) }
+                            if grid.kind != .Named || !same(grid.name, "Grid") {
+                                record_failure(c, module_index, node, .GpuLaunch, kernel.name, "is launched over something other than a `gpu.Grid`")
+                                ret (info, TypeMismatch)
+                            }
+                            supplied = grid
+                        } else {
+                            if child_position - 3usize >= kernel.parameter_count { ret (info, ArgumentCount) }
+                            let (argument_type, argument_error) = check_launch_argument(c, g, tree, module_index, node, child_index, kernel, child_position - 3usize)
+                            if argument_error != ok { ret (info, argument_error) }
+                            supplied = argument_type
+                        }
+                        }
+                        if child_position - 1usize >= formatter_types.len { ret (info, Capacity) }
+                        formatter_types[child_position - 1usize] = supplied
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
                     if info.formatter {
                         var verb_position = child_position - 1usize
                         if info.formatter_arena {
@@ -9295,6 +9595,18 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if instance_error != ok { ret (info, instance_error) }
         info.function = c.functions[instance_index]
         ret (info, ok)
+    }
+    if info.launcher {
+        let (instance_index, instance_error) = launcher_instance(c, module_index, function.module_index, info.launcher_kernel, formatter_types[0usize..function.parameter_count])
+        if instance_error != ok { ret (info, instance_error) }
+        info.function = c.functions[instance_index]
+        ret (info, ok)
+    }
+    // A kernel's only caller is `gpu.launch` (spec section 10): outside a launch its
+    // ids and barriers mean nothing.
+    if function.gpu {
+        record_failure(c, module_index, node, .GpuLaunch, function.name, "is a kernel and can only be run through `gpu.launch`")
+        ret (info, InvalidType)
     }
     if function.generic && !c.generic_declaration { ret (info, Unsupported) }
     // An `extern fn` reaches the loader through `@import`, and nothing else can bind
@@ -10746,6 +11058,13 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                 record_explain_value(c, module_index, node, intrinsic_function)
                 let (result_type, context_error) = apply_context(c, pointer_type, expected)
                 ret (result_type, context_error)
+            }
+            // A module-scope `var` of another module, read where its name is visible
+            // (D778): `gpu.gid` is one, which a kernel reads as `gpu.gid.x`.
+            let (global_index, global_found) = find_global(c, target_module, member)
+            if global_found {
+                let (global_type, context_error) = apply_context(c, c.globals[global_index].ty, expected)
+                ret (global_type, context_error)
             }
             ret (invalid_type(), Unsupported)
         }

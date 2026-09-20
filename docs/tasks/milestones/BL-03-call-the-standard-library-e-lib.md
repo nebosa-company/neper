@@ -23,7 +23,7 @@
 
 - `e.lib`: `src/nir.e`×5†, `src/em.e`×2‡, `src/lower.e`×2‡, `src/em_link.e`×1†
 - `stdlib-hardening.md`: `benchmarks/llm_edit/README.md`×1, `lib/e/cancel.e`×1
-- `lib/e`: `scripts/build-bootstrap.sh`×4, `scripts/render_progress.py`×3, `lib/e/os.linux.e`×2†, `lib/e/os.windows.e`×2‡, `scripts/check_module_surfaces.py`×2, `src/check.e`×2‡, `lib/e/data/iter.e`×1, `lib/e/fs.e`×1
+- `lib/e`: `src/assets.e`×6, `scripts/build-bootstrap.sh`×4, `scripts/render_progress.py`×3, `lib/e/os.linux.e`×2†, `lib/e/os.windows.e`×2‡, `scripts/check_module_surfaces.py`×2, `src/check.e`×2‡, `lib/e/data/iter.e`×1
 - `modules.md`: `lib/e/os.linux.e`×1†, `lib/e/os.windows.e`×1‡, `scripts/build-docs-pdf.py`×1
 - `module-apis.md`: `scripts/check_module_surfaces.py`×5, `scripts/render_module_apis.py`×3, `scripts/render_progress.py`×2, `scripts/audit_repo_coverage.py`×1, `scripts/build-docs-pdf.py`×1, `scripts/check_gpu_contracts.py`×1, `src/check.e`×1‡
 - `tooling.md`: `src/main.e`×3‡, `src/tool.e`×3‡, `scripts/build-docs-pdf.py`×1

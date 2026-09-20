@@ -5,7 +5,7 @@
 | file to create | `lib/e/gpu/tensor.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
-| unmet dependencies | `e.gpu` |
+| unmet dependencies | none — every dependency has source |
 
 ## Definition of done
 
@@ -20,7 +20,7 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 | dependency | surface | source file | layer |
 |---|---|---|---|
 | `e.algo.linalg.tensor` | partial | `lib/e/algo/linalg/tensor.e` | 2 |
-| `e.gpu` | spec | missing | 5 |
+| `e.gpu` | partial | `lib/e/gpu.e` | 5 |
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].

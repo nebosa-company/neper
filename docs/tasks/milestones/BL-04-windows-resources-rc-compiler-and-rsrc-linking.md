@@ -16,13 +16,13 @@
 
 ## Code anchors
 
-- `.text`: `src/check.e`×115‡, `src/tool.e`×51‡, `src/main.e`×41‡, `src/lower.e`×37‡, `lib/e/text/io.e`×28, `src/em.e`×15‡, `src/graph.e`×13†, `src/resolve.e`×13†
+- `.text`: `src/check.e`×117‡, `src/tool.e`×51‡, `src/main.e`×41‡, `src/lower.e`×38‡, `lib/e/text/io.e`×28, `src/em.e`×15‡, `src/graph.e`×13†, `src/resolve.e`×13†
 - `.idata`: `src/link_pe.e`×2
-- `project.yaml`: `src/main.e`×5‡
+- `project.yaml`: `src/main.e`×5‡, `src/assets.e`×4, `lib/e/asset.e`×1
 - `CURSOR`: `src/main.e`×1‡
 - `RCDATA`: `lib/e/fmt/html.e`×2†
 - `LANGUAGE`: `benchmarks/llm_edit/hard_context.py`×5
-- `.cur`: `src/parse.e`×201†, `src/tool.e`×43‡, `src/lower.e`×27‡, `src/nir.e`×25†, `src/main.e`×10‡, `lib/e/fmt/lzw.e`×6, `scripts/build-docs-pdf.py`×4, `lib/e/text/locale.e`×2
+- `.cur`: `src/parse.e`×201†, `src/tool.e`×43‡, `src/lower.e`×30‡, `src/nir.e`×25†, `src/main.e`×10‡, `lib/e/fmt/lzw.e`×6, `scripts/build-docs-pdf.py`×4, `lib/e/text/locale.e`×2
 - nearest existing implementation: `src/link_pe.e`, `src/object_coff.e`, `src/main.e`‡ († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

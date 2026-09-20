@@ -1447,6 +1447,35 @@ case "$asset_invalid_output" in
     *'project.yaml:1:1: error[E-MODULE-9999]: `project.yaml` has an `assets:` entry the loader does not accept'*) ;;
     *) printf '%s\n' 'an asset manifest entry with an unknown key was not rejected at the manifest' >&2; exit 1 ;;
 esac
+# `e.gpu` on the CPU backend (D778): the device, queues, buffers, `gpu.launch[K]` over
+# a 1-D and a 2-D kernel with the ids, tokens and every refusal; `examples/saxpy.e`
+# prints the CPU checksum; a kernel called directly, a bare `@gpu` and a host slice
+# in a launch pack are refused at the call.
+gpu_cpu_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_cpu/src/main.e" "$repo" x64 linux "$test_build/gpu-cpu-selfhost")
+[ "$gpu_cpu_written" = 'executable written' ]
+chmod +x "$test_build/gpu-cpu-selfhost"
+gpu_cpu_output=$("$test_build/gpu-cpu-selfhost")
+[ "$gpu_cpu_output" = 'gpu cpu ok' ]
+saxpy_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" x64 linux "$test_build/saxpy-selfhost")
+[ "$saxpy_written" = 'executable written' ]
+chmod +x "$test_build/saxpy-selfhost"
+saxpy_output=$("$test_build/saxpy-selfhost")
+[ "$saxpy_output" = 'cpu    checksum 16777216' ]
+gpu_direct=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_direct_call/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$gpu_direct" in
+    *'main.e:9:5: error[E-TYPE-9999]: `fill` is a kernel and can only be run through `gpu.launch`'*) ;;
+    *) printf '%s\n' "a direct kernel call was not refused: $gpu_direct" >&2; exit 1 ;;
+esac
+gpu_bare=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_bare_attribute/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$gpu_bare" in
+    *'main.e:4:1: error[E-TYPE-9999]: `fill` carries `@gpu` without a usable workgroup size'*) ;;
+    *) printf '%s\n' "a bare @gpu was not refused: $gpu_bare" >&2; exit 1 ;;
+esac
+gpu_argument=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_launch_argument/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$gpu_argument" in
+    *'main.e:9:9: error[E-TYPE-9999]: `fill` takes a device slice at this position'*) ;;
+    *) printf '%s\n' "a host slice in a launch pack was not refused: $gpu_argument" >&2; exit 1 ;;
+esac
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.97 of 1 |
-| queue position | 1 of 47 (only position 1 is eligible for the next session; see README) |
+| queue position | 1 of 55 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -81,7 +81,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `pinsrw`: `src/emit_x64.e`×1†
 - `pextrw`: `src/emit_x64.e`×1†
 - `movq`: `src/emit_x64.e`×3†, `src/disasm_x64.e`×1†
-- `FieldAddress`: `src/lower.e`×28‡, `src/codegen_x64.e`×4‡, `src/em.e`×1‡, `src/nir.e`×1†
+- `FieldAddress`: `src/lower.e`×30‡, `src/codegen_x64.e`×4‡, `src/em.e`×1‡, `src/nir.e`×1†
 - `psllw`: `src/codegen_x64.e`×2‡, `src/emit_x64.e`×1†
 - `psrlw`: `src/codegen_x64.e`×1‡, `src/emit_x64.e`×1†
 - `psraw`: `src/codegen_x64.e`×1‡, `src/emit_x64.e`×1†

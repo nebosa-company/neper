@@ -1,9 +1,9 @@
-# e.gpu — 47 of 47 declarations missing
+# e.gpu — 46 of 47 declarations missing
 
 | field | value |
 |---|---|
 | file to create | `lib/e/gpu.e` |
-| plan row | layer 5, surface `spec`, milestone M3, schedule `scheduled` |
+| plan row | layer 5, surface `partial`, milestone M3, schedule `scheduled` |
 | blocked by | nothing recorded in `modules.json` |
 | unmet dependencies | none — every dependency has source |
 
@@ -142,7 +142,6 @@ atomic family specified by spec §10.
 - [ ] `upload`
 - [ ] `len`
 - [ ] `write`
-- [ ] `launch`
 - [ ] `token`
 - [ ] `wait_for`
 - [ ] `done`
@@ -167,6 +166,7 @@ Read each line in context; they carry obligations (cancellation, bounded buffers
 
 Delivered modules beside this one — copy their idioms (arena parameter first, `(value, err)` returns, no hidden allocation, `error` names as declared):
 
+- `lib/e/asset.e`
 - `lib/e/async.e`
 - `lib/e/atomic.e`
 - `lib/e/audio.e`
@@ -174,14 +174,13 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `lib/e/cancel.e`
 - `lib/e/channel.e`
 - `lib/e/cli.e`
-- `lib/e/db.e`
 
 ## Verification
 
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/gpu.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/gpu/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 47.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 46.
 
 ## Session procedure
 

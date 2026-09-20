@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.95 of 1 |
-| queue position | 19 of 47 (only position 1 is eligible for the next session; see README) |
+| queue position | 19 of 55 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -60,6 +60,12 @@ Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.m
 Notes:
 
 - The evidence names no gap clause; the remaining line is the third pack intrinsic: `gpu.launch` must expand a comptime pack the way the two others do. The other two are the reference implementation — find them with `rg -n 'pack' src/check.e src/lower.e`.
+
+## Code anchors
+
+Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
+
+- `gpu.launch`: `src/check.e`×10‡, `src/lower.e`×1‡
 
 ## Existing fixtures
 

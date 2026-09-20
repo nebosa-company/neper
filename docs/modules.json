@@ -1449,7 +1449,7 @@
   {
    "name": "e.gpu",
    "layer": 5,
-   "surface": "spec",
+   "surface": "partial",
    "milestone": "M3",
    "schedule": "scheduled",
    "direct_dependencies": [
