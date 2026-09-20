@@ -257,13 +257,22 @@ def session_openai(task_file, args, log):
         since_edit = 0 if any(c["function"]["name"] == "edit" for c in calls) else since_edit + 1
         for call in calls:
             fn = call["function"]
+            if since_edit > args.read_budget and fn["name"] != "edit" and not touched_paths():
+                # Five sessions read for ten to fourteen rounds and wrote nothing; an advisory
+                # nudge changed nothing. Past the budget the only tool that answers is `edit`
+                # until a file exists, after which reading is allowed again (build errors).
+                result = ("Error: read budget exhausted (%d rounds without an edit). Only `edit` answers until a file exists. "
+                          "Create the module file now from what you have read; a build error will let you read again." % since_edit)
+                log.write("\n--- %s refused (read budget) ---\n" % fn["name"])
+                messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": result})
+                continue
             try:
                 kwargs = json.loads(fn.get("arguments") or "{}")
                 result = TOOLS[fn["name"]](**kwargs) if fn["name"] in TOOLS else "Error: unknown tool " + fn["name"]
             except Exception as e:
                 result = "Error: %s: %s" % (type(e).__name__, e)
-            if since_edit >= 5:
-                result = str(result) + "\n\n[driver: %d rounds without an edit. You have read enough; create the file now with `edit`.]" % since_edit
+            if since_edit >= args.read_budget - 1:
+                result = str(result) + "\n\n[driver: %d rounds without an edit; after %d only `edit` will answer. Create the file now.]" % (since_edit, args.read_budget)
             log.write("\n--- %s(%s) ---\n%s\n" % (fn["name"], (fn.get("arguments") or "")[:300], str(result)[:2000]))
             log.flush()
             messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": str(result)})
@@ -343,6 +352,7 @@ def main():
     ap.add_argument("--model", default="prism-ml/bonsai-27b")
     ap.add_argument("--endpoint", default="", help="OpenAI-compatible base URL, e.g. http://localhost:8080/v1 (llama-server); omit for the LM Studio SDK")
     ap.add_argument("--server-cmd", default="", help="command that starts the server behind --endpoint; used to (re)start it when it is down")
+    ap.add_argument("--read-budget", type=int, default=6, help="rounds without an edit after which only `edit` answers, until a file exists")
     ap.add_argument("--max-tokens", type=int, default=16384, help="reply cap per round; thinking counts against it, so pair it with the server's --reasoning-budget")
     ap.add_argument("--kind", choices=["modules", "queue", "all"], default="modules")
     ap.add_argument("--max-tasks", type=int, default=1)
