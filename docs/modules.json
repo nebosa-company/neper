@@ -916,7 +916,7 @@
   {
    "name": "e.fmt.jpeg",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -925,9 +925,7 @@
     "e.mem",
     "e.gfx.image"
    ],
-   "blocked_by": [
-    "image-codec-conformance"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.fmt.json",
@@ -1045,7 +1043,7 @@
   {
    "name": "e.fmt.png",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1055,9 +1053,7 @@
     "e.mem",
     "e.gfx.image"
    ],
-   "blocked_by": [
-    "image-codec-conformance"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.fmt.protobuf",
@@ -1125,7 +1121,7 @@
   {
    "name": "e.fmt.webp",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1134,9 +1130,7 @@
     "e.mem",
     "e.gfx.image"
    ],
-   "blocked_by": [
-    "image-codec-conformance"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.fmt.xml",
@@ -1403,21 +1397,19 @@
   {
    "name": "e.gfx.geometry",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
     "e.math",
     "e.mem"
    ],
-   "blocked_by": [
-    "image-codec-conformance"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.gfx.image",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1425,22 +1417,18 @@
     "e.gfx.geometry",
     "e.gfx.paint"
    ],
-   "blocked_by": [
-    "image-codec-conformance"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.gfx.paint",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
     "e.gfx.geometry"
    ],
-   "blocked_by": [
-    "image-codec-conformance"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.gfx.scene",
@@ -1765,7 +1753,7 @@
   {
    "name": "e.test.coverage",
    "layer": 5,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1773,14 +1761,12 @@
     "e.mem",
     "e.test"
    ],
-   "blocked_by": [
-    "compiler-coverage-instrumentation"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.test.fuzz",
    "layer": 5,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1789,9 +1775,7 @@
     "e.test",
     "e.time"
    ],
-   "blocked_by": [
-    "compiler-fuzz-harness"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.test.support",
@@ -1845,7 +1829,7 @@
   {
    "name": "e.text.layout",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -2093,7 +2077,7 @@
   {
    "name": "e.ui.layout",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -2105,7 +2089,7 @@
   {
    "name": "e.ui.style",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [

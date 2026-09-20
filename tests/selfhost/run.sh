@@ -1369,6 +1369,62 @@ mp3_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 chmod +x "$test_build/fmt-mp3-selfhost"
 mp3_output=$("$test_build/fmt-mp3-selfhost")
 [ "$mp3_output" = 'fmt mp3 ok' ]
+# `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.image` (D774): rectangles, transforms and a bounded path
+# builder; sRGB, premultiplication and brush validation; images sized, cleared, blitted with clipping.
+gfx_core_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_core/src/main.e" "$repo" x64 linux "$test_build/gfx-core-selfhost")
+[ "$gfx_core_written" = 'executable written' ]
+chmod +x "$test_build/gfx-core-selfhost"
+gfx_core_output=$("$test_build/gfx-core-selfhost")
+[ "$gfx_core_output" = 'gfx core ok' ]
+# `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
+# through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
+fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")
+[ "$fmt_png_written" = 'executable written' ]
+chmod +x "$test_build/fmt-png-selfhost"
+fmt_png_output=$("$test_build/fmt-png-selfhost")
+[ "$fmt_png_output" = 'fmt png ok' ]
+# `e.fmt.jpeg` (D774): baseline 4:4:4 and 4:2:0, progressive, greyscale and restart intervals within
+# a few steps of libjpeg; a baseline encode decoded back within libjpeg's own error.
+fmt_jpeg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_jpeg/src/main.e" "$repo" x64 linux "$test_build/fmt-jpeg-selfhost")
+[ "$fmt_jpeg_written" = 'executable written' ]
+chmod +x "$test_build/fmt-jpeg-selfhost"
+fmt_jpeg_output=$("$test_build/fmt-jpeg-selfhost")
+[ "$fmt_jpeg_output" = 'fmt jpeg ok' ]
+# `e.fmt.webp` (D774): VP8L decoded exactly and VP8 with ALPH within a few steps of libwebp, an
+# animation inspected and decoded first-frame-only, an exact lossless encode libwebp reads back.
+fmt_webp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_webp/src/main.e" "$repo" x64 linux "$test_build/fmt-webp-selfhost")
+[ "$fmt_webp_written" = 'executable written' ]
+chmod +x "$test_build/fmt-webp-selfhost"
+fmt_webp_output=$("$test_build/fmt-webp-selfhost")
+[ "$fmt_webp_output" = 'fmt webp ok' ]
+# `e.text.layout` (D775): paragraphs over two synthetic fonts -- wrapping, alignment, justification,
+# fallback and two-level bidi, a line budget with an ellipsis, hit testing, carets and selections.
+text_layout_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_layout/src/main.e" "$repo" x64 linux "$test_build/text-layout-selfhost")
+[ "$text_layout_written" = 'executable written' ]
+chmod +x "$test_build/text-layout-selfhost"
+text_layout_output=$("$test_build/text-layout-selfhost")
+[ "$text_layout_output" = 'text layout ok' ]
+# `e.ui.style`, `e.ui.layout` (D775): style defaults and validation; flex growth, shrinking, every
+# alignment, unbounded limits; grid tracks fixed, auto and flexible with gaps; Invalid and Overflow.
+ui_core_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_core/src/main.e" "$repo" x64 linux "$test_build/ui-core-selfhost")
+[ "$ui_core_written" = 'executable written' ]
+chmod +x "$test_build/ui-core-selfhost"
+ui_core_output=$("$test_build/ui-core-selfhost")
+[ "$ui_core_output" = 'ui core ok' ]
+# `e.test.fuzz` (D776): deterministic mutation from the seed finds a two-byte failure twice alike,
+# minimization lands on those two bytes, budgets and deadlines stop, corpus and bound refusals.
+test_fuzz_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_fuzz/src/main.e" "$repo" x64 linux "$test_build/test-fuzz-selfhost")
+[ "$test_fuzz_written" = 'executable written' ]
+chmod +x "$test_build/test-fuzz-selfhost"
+test_fuzz_output=$("$test_build/test-fuzz-selfhost")
+[ "$test_fuzz_output" = 'test fuzz ok' ]
+# `e.test.coverage` (D776): hits through the instrumentation entry, snapshot, reset, merge sorted
+# by file and region with a duplicate refused, and the JSON shape.
+test_coverage_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_coverage/src/main.e" "$repo" x64 linux "$test_build/test-coverage-selfhost")
+[ "$test_coverage_written" = 'executable written' ]
+chmod +x "$test_build/test-coverage-selfhost"
+test_coverage_output=$("$test_build/test-coverage-selfhost")
+[ "$test_coverage_output" = 'test coverage ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

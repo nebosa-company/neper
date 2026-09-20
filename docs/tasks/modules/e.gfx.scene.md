@@ -5,7 +5,7 @@
 | file to create | `lib/e/gfx/scene.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | `gpu-presentation-api` |
-| unmet dependencies | `e.gpu`, `e.gfx.geometry`, `e.gfx.image`, `e.gfx.paint`, `e.text.layout` |
+| unmet dependencies | `e.gpu` |
 
 ## Definition of done
 
@@ -23,10 +23,10 @@ Blockers named in the plan must be resolved first; a blocked module is not eligi
 |---|---|---|---|
 | `e.gpu` | spec | missing | 5 |
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
-| `e.gfx.geometry` | planned | missing | 2 |
-| `e.gfx.image` | planned | missing | 2 |
-| `e.gfx.paint` | planned | missing | 2 |
-| `e.text.layout` | planned | missing | 2 |
+| `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |
+| `e.gfx.image` | partial | `lib/e/gfx/image.e` | 2 |
+| `e.gfx.paint` | partial | `lib/e/gfx/paint.e` | 2 |
+| `e.text.layout` | partial | `lib/e/text/layout.e` | 2 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].
 

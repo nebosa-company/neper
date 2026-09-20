@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/gfx/geometry.e` |
-| plan row | layer 2, surface `planned`, milestone none, schedule `later` |
-| blocked by | `image-codec-conformance` |
+| plan row | layer 2, surface `partial`, milestone none, schedule `later` |
+| blocked by | nothing recorded in `modules.json` |
 | unmet dependencies | none — every dependency has source |
 
 ## Definition of done
@@ -14,8 +14,6 @@ Implement **exactly** the public fence below in `lib/e/gfx/geometry.e`; nothing 
 Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 
 > **Stable pure images and codecs:** deliver extended `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.image`, `e.fmt.png`, `e.fmt.jpeg` and `e.fmt.webp` as one compatibility cohort under `image-codec-conformance` (D84). Test independent decoders, pixel/stride/alpha contracts and hostile inputs. This wave requires no GPU/window or GP-15 UI gate.
-
-Blockers named in the plan must be resolved first; a blocked module is not eligible. Search `docs/roadmap.md` and `docs/decisions.md` for each blocker id.
 
 ## Dependencies
 

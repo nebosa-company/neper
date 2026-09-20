@@ -14523,3 +14523,112 @@ The first Linux run of `link/async_io` found `os.poller_wait` trapping on an
 unbounded wait: `usize(milliseconds)` narrowed the `-1` epoll takes for "no
 limit" under the checked conversion, which no earlier fixture had asked for. The
 timeout now crosses by `mem.bitcast[usize]`, since the kernel reads it as an int.
+
+## D774 — The image cohort lands as one wave and lifts `image-codec-conformance`
+
+`image-codec-conformance` (D84, SL10) asks for one coordinated delivery of
+`e.gfx.geometry`, `e.gfx.paint`, `e.gfx.image`, `e.fmt.png`, `e.fmt.jpeg` and
+`e.fmt.webp` with independent decoder vectors, pixel/stride/alpha contracts and
+hostile inputs; it names no missing capability, so delivering the six together
+with that evidence lifts it. All six land at `surface: partial`: each keeps
+private helpers the fence does not name, which the language cannot hide.
+
+`e.gfx.geometry` builds a path in an arena-held `BuilderState` behind the fence's
+`*void`, refusing `append` past the capacity with `TooLarge`; `rect` clamps
+negative extents to empty and `contains` is half-open. `e.gfx.paint` converts sRGB
+with a Newton root (`y^5 = x^2`, from `y = 1`, since starting at `y = x` diverges
+to NaN and the float narrowing traps) and validates a `Brush` by its union tag.
+`e.gfx.image` sizes images against `MAX_PIXELS = 2^30`, zeroes what it allocates,
+clears through the same sRGB path and half-float bits, and blits with clipping.
+
+`e.fmt.png` decodes every colour type and depth, `tRNS` and Adam7 through
+`e.algo.deflate` over arena storage and encodes filter `None` in 32 KB `IDAT`s;
+`inspect` stops at the first `IDAT`. Ten Pillow (libpng) vectors decode
+byte-identically and Pillow reads the encoder's output back identically.
+`e.fmt.jpeg` decodes baseline and progressive Huffman streams with restart
+markers, a float IDCT and triangle chroma upsampling, and encodes baseline
+4:4:4; six libjpeg vectors land within 3 (4:4:4), 6 (4:2:0, progressive) and 2
+(greyscale) steps, and a round trip lands within libjpeg's own error on the same
+image (24 at quality 95, 110 at 50, against 18 and 98). `e.fmt.webp` decodes
+VP8L (all four transforms, the colour cache, meta prefix codes, LZ77 with the
+distance map) exactly, a VP8 key frame (RFC 6386: segments, token trees, the
+exact WHT/IDCT, all intra modes with the frame-edge rules, both loop filters)
+plus `ALPH` within 8 steps of libwebp through BT.601, counts `ANMF` frames for
+`inspect`, decodes an animation only under `first_frame_only`, and encodes
+lossless VP8L with flat eight-bit codes and no transforms -- exact, and libwebp
+reads it back identically. Lossy WebP encoding is `Unsupported`, as the fence
+allows. Three tag constants (`VP8X`, `ANMF`, and PNG's `IDAT`/`IEND` before them)
+were wrong by hand and found by the vectors; compute chunk tags, never type them.
+
+The cohort lifts the last gate on `e.text.layout`, `e.ui.style` and `e.ui.layout`.
+
+## D775 — `e.text.layout`, `e.ui.style` and `e.ui.layout` land behind the image cohort
+
+With D774 their dependencies have source, so the three land at `surface: partial`
+(each keeps helpers the fence does not name).
+
+`e.text.layout` splits the source at newlines, gives each character a direction
+(strong right-to-left in the Hebrew, Arabic, Syriac, Thaana, NKo, Samaritan and
+Mandaic blocks and their presentation forms; neutrals from matching strong
+neighbours, else the paragraph, whose direction is its first strong character)
+and a font (the first `Style.fonts` entry whose `cmap` maps it, asked by shaping
+one character; none is `MissingGlyph`), shapes each maximal (direction, font)
+span once, cuts lines at word or character opportunities against the width with
+whitespace hanging past the end, and places each line's sliced runs after the
+two-level reordering (runs against the paragraph direction reverse as a group;
+a right-to-left paragraph reverses the line first). `hhea` gives ascent and
+descent, or 0.8 and 0.2 of the size when a font carries none; `line_height`
+above zero centres the natural line in it. `Justify` widens the spaces of every
+line but a paragraph's last; `max_lines` with `ellipsis` drops characters from
+the last line until the ellipsis fits and appends it as a run whose clusters all
+name the line's end, so hit testing and carets treat it as the end. Carets are
+zero-width rects; a caret at a soft wrap sits at the next line's start; a
+selection is one rect per line between the two carets. What it is not: UAX #9
+embeddings, isolates and nested levels; UAX #14 beyond whitespace; a cmap lookup
+on the shaping fence (each character costs one shaping per font tried).
+
+`e.ui.style` is values and one guard: every length finite, padding and bounds
+non-negative, a margin may be negative, a `Px` minimum never above a `Px` maximum,
+opacity in `[0, 1]`, the brush as `paint.validate` sees it. `e.ui.layout` takes an
+unbounded maximum as IEEE infinity (`mem.bitcast[f32]` of the pattern, since no
+literal spells it) and only ever distributes bounded space: under a finite
+maximum flex factors share the shortfall and every child shrinks in proportion
+to its desired size over it, under an unbounded one children keep their desired
+size and the container hugs them or its minimum; `main` places the leftover
+when nothing flexes; `Baseline` places like `Start` since a `Child` carries no
+baseline. Grid tracks resolve fixed, then auto (the widest child in row-major
+cells), then flexible over what a bounded limit leaves after the gaps; a
+flexible track under an unbounded limit with no minimum is zero. Gaps past the
+bound, fixed tracks past it and more children than cells are `Overflow`.
+
+## D776 — `e.test.fuzz` and `e.test.coverage` deliver their runtime halves
+
+`compiler-fuzz-harness` and `compiler-coverage-instrumentation` name the
+toolchain's halves: `neper test --fuzz` (corpus persistence, subprocess
+isolation, reproduction commands) and the compiler's region instrumentation.
+Both fences already draw that line themselves, so the library halves land at
+`surface: partial` and the two rows drop the gates; the toolchain work stays in
+the tooling stream and targets the contracts recorded here.
+
+`e.test.fuzz`: `run` feeds the corpus as given, then candidates mutated from a
+PCG seeded by the base entry's `seed` and the candidate index (flip, set, insert,
+delete, duplicate, splice; one to four per candidate), so a failing `Input`'s
+seed and the corpus reproduce it; `max_input` 0 means 4096, `max_runs` 0 no
+bound, a zero `deadline` none, and a run with neither bound is `Limit`. The one
+candidate buffer is reused; only a failing input is copied into the arena.
+`minimize` is delta debugging (halves down to single bytes, then bytes toward 0
+and `a`) repeated until a pass changes nothing, answering the best so far with
+`Limit` when the deadline passes. No coverage feedback yet: a candidate reaching
+new regions joining the corpus is what the instrumentation will enable.
+
+`e.test.coverage`: the instrumentation contract is `hit(file_id, region_id)` on
+a module-scope table of 4096 counters (a 1 MB table was past the emitter's data
+capacity; 64 KB is not), first-seen order, further pairs dropped. `snapshot`
+copies the live counters (`TooLarge` for a short destination), `reset` zeroes
+counts and keeps pairs, `merge` sums by (file, region) sorted by file then
+region and refuses a report naming a pair twice, `write_json` writes
+`{"counters":[{"file":F,"region":R,"hits":H},...]}`.
+
+What remains planned is gated for real: `e.asset` on linker-generated registry
+symbols, `e.gpu.tensor` and `e.gfx.scene` on M3 `e.gpu`, and the `e.ui.*` chain on
+the native window, presentation and accessibility designs.

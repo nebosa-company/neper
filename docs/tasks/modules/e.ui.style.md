@@ -3,9 +3,9 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/ui/style.e` |
-| plan row | layer 2, surface `planned`, milestone none, schedule `later` |
+| plan row | layer 2, surface `partial`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
-| unmet dependencies | `e.gfx.paint` |
+| unmet dependencies | none — every dependency has source |
 
 ## Definition of done
 
@@ -19,7 +19,7 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 
 | dependency | surface | source file | layer |
 |---|---|---|---|
-| `e.gfx.paint` | planned | missing | 2 |
+| `e.gfx.paint` | partial | `lib/e/gfx/paint.e` | 2 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 2 may depend on layers [0, 1, 2].
 

@@ -4,7 +4,7 @@
 |---|---|
 | phase | P0 — Contracts and reference theme |
 | module | `e.ui.style` |
-| module surface | `planned`, layer 2, deps `e.gfx.paint` |
+| module surface | `partial`, layer 2, deps `e.gfx.paint` |
 | blocked by | `e.gfx.scene`, `e.text.layout`, `e.ui.input` |
 | delivered | 0 of 4 |
 

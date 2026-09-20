@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/widget.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
-| unmet dependencies | `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.text.layout`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.window` |
+| unmet dependencies | `e.gfx.scene`, `e.ui.input`, `e.ui.window` |
 
 ## Definition of done
 
@@ -21,13 +21,13 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 |---|---|---|---|
 | `e.data.slot_map` | partial | `lib/e/data/slot_map.e` | 2 |
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
-| `e.gfx.geometry` | planned | missing | 2 |
-| `e.gfx.paint` | planned | missing | 2 |
+| `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |
+| `e.gfx.paint` | partial | `lib/e/gfx/paint.e` | 2 |
 | `e.gfx.scene` | planned | missing | 6 |
-| `e.text.layout` | planned | missing | 2 |
+| `e.text.layout` | partial | `lib/e/text/layout.e` | 2 |
 | `e.ui.input` | planned | missing | 6 |
-| `e.ui.layout` | planned | missing | 2 |
-| `e.ui.style` | planned | missing | 2 |
+| `e.ui.layout` | partial | `lib/e/ui/layout.e` | 2 |
+| `e.ui.style` | partial | `lib/e/ui/style.e` | 2 |
 | `e.ui.window` | planned | missing | 6 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].

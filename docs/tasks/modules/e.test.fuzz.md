@@ -3,8 +3,8 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/test/fuzz.e` |
-| plan row | layer 5, surface `planned`, milestone none, schedule `later` |
-| blocked by | `compiler-fuzz-harness` |
+| plan row | layer 5, surface `partial`, milestone none, schedule `later` |
+| blocked by | nothing recorded in `modules.json` |
 | unmet dependencies | none — every dependency has source |
 
 ## Definition of done
@@ -14,8 +14,6 @@ Implement **exactly** the public fence below in `lib/e/test/fuzz.e`; nothing mor
 Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 
 > **Extended host and application services:** `e.text.io`, `e.task`, `e.time.calendar`, `e.tz`, `e.fs.mmap`, `e.fs.watch`, `e.concurrent.queue`, `e.concurrent.map`, `e.debug`, `e.metrics`, `e.log`, `e.cli`, `e.async`, `e.async.io`, `e.net`, `e.net.tls`, `e.net.http`, `e.net.ws`, `e.db`, `e.test.support`, `e.test.coverage` and `e.test.fuzz`. These build over the M1/M2 platform boundary and must demonstrate cancellation, backpressure, bounded buffers, partial I/O, deterministic shutdown and no hidden allocation or entropy. They unlock the GP-04 service workload.
-
-Blockers named in the plan must be resolved first; a blocked module is not eligible. Search `docs/roadmap.md` and `docs/decisions.md` for each blocker id.
 
 ## Dependencies
 

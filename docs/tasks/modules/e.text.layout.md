@@ -3,9 +3,9 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/text/layout.e` |
-| plan row | layer 2, surface `planned`, milestone none, schedule `later` |
+| plan row | layer 2, surface `partial`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
-| unmet dependencies | `e.gfx.geometry` |
+| unmet dependencies | none — every dependency has source |
 
 ## Definition of done
 
@@ -20,7 +20,7 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 | dependency | surface | source file | layer |
 |---|---|---|---|
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
-| `e.gfx.geometry` | planned | missing | 2 |
+| `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |
 | `e.text.shape` | partial | `lib/e/text/shape.e` | 2 |
 | `e.text.unicode` | partial | `lib/e/text/unicode.e` | 2 |
 

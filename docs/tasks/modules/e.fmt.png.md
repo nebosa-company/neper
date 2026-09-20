@@ -3,9 +3,9 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/fmt/png.e` |
-| plan row | layer 6, surface `planned`, milestone none, schedule `later` |
-| blocked by | `image-codec-conformance` |
-| unmet dependencies | `e.gfx.image` |
+| plan row | layer 6, surface `partial`, milestone none, schedule `later` |
+| blocked by | nothing recorded in `modules.json` |
+| unmet dependencies | none — every dependency has source |
 
 ## Definition of done
 
@@ -15,8 +15,6 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 
 > **Interchange formats:** `e.fmt.uri`, `e.fmt.mime`, `e.fmt.asn1`, `e.fmt.pem`, `e.fmt.multipart`, `e.fmt.mail`, `e.fmt.quoted_printable`, `e.fmt.gzip`, `e.fmt.zstd`, `e.fmt.bzip2`, `e.fmt.lzw`, `e.fmt.zlib`, `e.fmt.zip`, `e.fmt.tar`, `e.fmt.yaml`, `e.fmt.xml`, `e.fmt.html`, `e.fmt.png`, `e.fmt.jpeg`, `e.fmt.webp`, `e.fmt.bson`, `e.fmt.msgpack` and `e.fmt.protobuf`, plus `e.text.template` and its context-safe `e.fmt.html.template` specialization. These consume caller-provided slices/readers and writers, never open resources themselves, and require malformed, streaming, bounds and round-trip corpora in addition to API equality. `e.fmt.html` additionally runs the pinned html5lib tokenizer and tree-construction fixtures for the WHATWG behavior frozen by that toolchain release.
 
-Blockers named in the plan must be resolved first; a blocked module is not eligible. Search `docs/roadmap.md` and `docs/decisions.md` for each blocker id.
-
 ## Dependencies
 
 | dependency | surface | source file | layer |
@@ -25,7 +23,7 @@ Blockers named in the plan must be resolved first; a blocked module is not eligi
 | `e.bytes` | partial | `lib/e/bytes.e` | 1 |
 | `e.io` | source | `lib/e/io.e` | 4 |
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
-| `e.gfx.image` | planned | missing | 2 |
+| `e.gfx.image` | partial | `lib/e/gfx/image.e` | 2 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].
 

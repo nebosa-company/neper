@@ -204,29 +204,29 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 
 | file | title | status |
 |---|---|---|
-| [`modules/e.gfx.geometry.md`](modules/e.gfx.geometry.md) | layer 2, later | 29/29 missing; blocked by image-codec-conformance |
-| [`modules/e.gfx.image.md`](modules/e.gfx.image.md) | layer 2, later | 13/13 missing; blocked by image-codec-conformance; needs e.gfx.geometry, e.gfx.paint |
-| [`modules/e.gfx.paint.md`](modules/e.gfx.paint.md) | layer 2, later | 14/14 missing; blocked by image-codec-conformance; needs e.gfx.geometry |
-| [`modules/e.text.layout.md`](modules/e.text.layout.md) | layer 2, later | 15/15 missing; needs e.gfx.geometry |
-| [`modules/e.ui.layout.md`](modules/e.ui.layout.md) | layer 2, later | 14/14 missing; needs e.gfx.geometry |
-| [`modules/e.ui.style.md`](modules/e.ui.style.md) | layer 2, later | 9/9 missing; needs e.gfx.paint |
+| [`modules/e.gfx.geometry.md`](modules/e.gfx.geometry.md) | layer 2, later | 29/29 missing |
+| [`modules/e.gfx.image.md`](modules/e.gfx.image.md) | layer 2, later | 13/13 missing |
+| [`modules/e.gfx.paint.md`](modules/e.gfx.paint.md) | layer 2, later | 14/14 missing |
+| [`modules/e.text.layout.md`](modules/e.text.layout.md) | layer 2, later | 15/15 missing |
+| [`modules/e.ui.layout.md`](modules/e.ui.layout.md) | layer 2, later | 14/14 missing |
+| [`modules/e.ui.style.md`](modules/e.ui.style.md) | layer 2, later | 9/9 missing |
 | [`modules/e.asset.md`](modules/e.asset.md) | layer 5, later | 6/6 missing; blocked by embedded-asset-linking |
 | [`modules/e.gpu.md`](modules/e.gpu.md) | layer 5, M3 | 47/47 missing |
-| [`modules/e.test.coverage.md`](modules/e.test.coverage.md) | layer 5, later | 8/8 missing; blocked by compiler-coverage-instrumentation |
-| [`modules/e.test.fuzz.md`](modules/e.test.fuzz.md) | layer 5, later | 8/8 missing; blocked by compiler-fuzz-harness |
-| [`modules/e.fmt.jpeg.md`](modules/e.fmt.jpeg.md) | layer 6, later | 8/8 missing; blocked by image-codec-conformance; needs e.gfx.image |
-| [`modules/e.fmt.png.md`](modules/e.fmt.png.md) | layer 6, later | 9/9 missing; blocked by image-codec-conformance; needs e.gfx.image |
-| [`modules/e.fmt.webp.md`](modules/e.fmt.webp.md) | layer 6, later | 8/8 missing; blocked by image-codec-conformance; needs e.gfx.image |
-| [`modules/e.gfx.scene.md`](modules/e.gfx.scene.md) | layer 6, later | 29/29 missing; blocked by gpu-presentation-api; needs e.gpu, e.gfx.geometry, e.gfx.image, e.gfx.paint, e.text.layout |
+| [`modules/e.test.coverage.md`](modules/e.test.coverage.md) | layer 5, later | 8/8 missing |
+| [`modules/e.test.fuzz.md`](modules/e.test.fuzz.md) | layer 5, later | 8/8 missing |
+| [`modules/e.fmt.jpeg.md`](modules/e.fmt.jpeg.md) | layer 6, later | 8/8 missing |
+| [`modules/e.fmt.png.md`](modules/e.fmt.png.md) | layer 6, later | 9/9 missing |
+| [`modules/e.fmt.webp.md`](modules/e.fmt.webp.md) | layer 6, later | 8/8 missing |
+| [`modules/e.gfx.scene.md`](modules/e.gfx.scene.md) | layer 6, later | 29/29 missing; blocked by gpu-presentation-api; needs e.gpu |
 | [`modules/e.gpu.tensor.md`](modules/e.gpu.tensor.md) | layer 6, later | 7/7 missing; needs e.gpu |
-| [`modules/e.ui.accessibility.md`](modules/e.ui.accessibility.md) | layer 6, later | 11/11 missing; blocked by native-accessibility-api; needs e.gfx.geometry, e.ui.widget, e.ui.window |
+| [`modules/e.ui.accessibility.md`](modules/e.ui.accessibility.md) | layer 6, later | 11/11 missing; blocked by native-accessibility-api; needs e.ui.widget, e.ui.window |
 | [`modules/e.ui.animation.md`](modules/e.ui.animation.md) | layer 6, later | 7/7 missing; needs e.ui.widget |
 | [`modules/e.ui.app.md`](modules/e.ui.app.md) | layer 6, later | 10/10 missing; blocked by native-window-api, gpu-presentation-api, native-accessibility-api; needs e.gpu, e.gfx.scene, e.ui.accessibility, e.ui.animation, e.ui.input, e.ui.widget, e.ui.window |
-| [`modules/e.ui.asset.md`](modules/e.ui.asset.md) | layer 6, later | 15/15 missing; blocked by embedded-asset-linking; needs e.asset, e.gfx.image, e.gfx.scene |
-| [`modules/e.ui.input.md`](modules/e.ui.input.md) | layer 6, later | 20/20 missing; blocked by native-window-api; needs e.gfx.geometry, e.ui.window |
-| [`modules/e.ui.testing.md`](modules/e.ui.testing.md) | layer 6, later | 13/13 missing; needs e.gfx.image, e.gfx.scene, e.ui.input, e.ui.widget |
-| [`modules/e.ui.widget.md`](modules/e.ui.widget.md) | layer 6, later | 35/35 missing; needs e.gfx.geometry, e.gfx.paint, e.gfx.scene, e.text.layout, e.ui.input, e.ui.layout, e.ui.style, e.ui.window |
-| [`modules/e.ui.window.md`](modules/e.ui.window.md) | layer 6, later | 19/19 missing; blocked by native-window-api, gpu-presentation-api; needs e.gpu, e.gfx.geometry, e.gfx.scene |
+| [`modules/e.ui.asset.md`](modules/e.ui.asset.md) | layer 6, later | 15/15 missing; blocked by embedded-asset-linking; needs e.asset, e.gfx.scene |
+| [`modules/e.ui.input.md`](modules/e.ui.input.md) | layer 6, later | 20/20 missing; blocked by native-window-api; needs e.ui.window |
+| [`modules/e.ui.testing.md`](modules/e.ui.testing.md) | layer 6, later | 13/13 missing; needs e.gfx.scene, e.ui.input, e.ui.widget |
+| [`modules/e.ui.widget.md`](modules/e.ui.widget.md) | layer 6, later | 35/35 missing; needs e.gfx.scene, e.ui.input, e.ui.window |
+| [`modules/e.ui.window.md`](modules/e.ui.window.md) | layer 6, later | 19/19 missing; blocked by native-window-api, gpu-presentation-api; needs e.gpu, e.gfx.scene |
 
 ### UI and host integration (plan order)
 

@@ -1462,6 +1462,62 @@ $mp3Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/lin
 if ($LASTEXITCODE -ne 0 -or $mp3Written -ne 'executable written') { throw 'e.fmt.mp3 emission failed' }
 $mp3Output = & $mp3Path
 if ($LASTEXITCODE -ne 0 -or $mp3Output -ne 'fmt mp3 ok') { throw "an e.fmt.mp3 decode, seek or refusal answered wrongly: exit $LASTEXITCODE" }
+# `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.image` (D774): rectangles, transforms and a bounded path
+# builder; sRGB, premultiplication and brush validation; images sized, cleared, blitted with clipping.
+$gfxCorePath = Join-Path $testBuild 'gfx-core-selfhost.exe'
+$gfxCoreWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_core\src\main.e') $repo 'x64' 'windows' $gfxCorePath
+if ($LASTEXITCODE -ne 0 -or $gfxCoreWritten -ne 'executable written') { throw 'gfx_core emission failed' }
+$gfxCoreOutput = & $gfxCorePath
+if ($LASTEXITCODE -ne 0 -or $gfxCoreOutput -ne 'gfx core ok') { throw "an e.gfx.geometry, e.gfx.paint or e.gfx.image answer was wrong: exit $LASTEXITCODE" }
+# `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
+# through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
+$fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'
+$fmtPngWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_png\src\main.e') $repo 'x64' 'windows' $fmtPngPath
+if ($LASTEXITCODE -ne 0 -or $fmtPngWritten -ne 'executable written') { throw 'fmt_png emission failed' }
+$fmtPngOutput = & $fmtPngPath
+if ($LASTEXITCODE -ne 0 -or $fmtPngOutput -ne 'fmt png ok') { throw "an e.fmt.png decode, encode or refusal answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.jpeg` (D774): baseline 4:4:4 and 4:2:0, progressive, greyscale and restart intervals within
+# a few steps of libjpeg; a baseline encode decoded back within libjpeg's own error.
+$fmtJpegPath = Join-Path $testBuild 'fmt-jpeg-selfhost.exe'
+$fmtJpegWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_jpeg\src\main.e') $repo 'x64' 'windows' $fmtJpegPath
+if ($LASTEXITCODE -ne 0 -or $fmtJpegWritten -ne 'executable written') { throw 'fmt_jpeg emission failed' }
+$fmtJpegOutput = & $fmtJpegPath
+if ($LASTEXITCODE -ne 0 -or $fmtJpegOutput -ne 'fmt jpeg ok') { throw "an e.fmt.jpeg decode, encode or refusal answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.webp` (D774): VP8L decoded exactly and VP8 with ALPH within a few steps of libwebp, an
+# animation inspected and decoded first-frame-only, an exact lossless encode libwebp reads back.
+$fmtWebpPath = Join-Path $testBuild 'fmt-webp-selfhost.exe'
+$fmtWebpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_webp\src\main.e') $repo 'x64' 'windows' $fmtWebpPath
+if ($LASTEXITCODE -ne 0 -or $fmtWebpWritten -ne 'executable written') { throw 'fmt_webp emission failed' }
+$fmtWebpOutput = & $fmtWebpPath
+if ($LASTEXITCODE -ne 0 -or $fmtWebpOutput -ne 'fmt webp ok') { throw "an e.fmt.webp inspect, decode, encode or refusal answered wrongly: exit $LASTEXITCODE" }
+# `e.text.layout` (D775): paragraphs over two synthetic fonts -- wrapping, alignment, justification,
+# fallback and two-level bidi, a line budget with an ellipsis, hit testing, carets and selections.
+$textLayoutPath = Join-Path $testBuild 'text-layout-selfhost.exe'
+$textLayoutWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_layout\src\main.e') $repo 'x64' 'windows' $textLayoutPath
+if ($LASTEXITCODE -ne 0 -or $textLayoutWritten -ne 'executable written') { throw 'text_layout emission failed' }
+$textLayoutOutput = & $textLayoutPath
+if ($LASTEXITCODE -ne 0 -or $textLayoutOutput -ne 'text layout ok') { throw "an e.text.layout line, caret, hit test or refusal answered wrongly: exit $LASTEXITCODE" }
+# `e.ui.style`, `e.ui.layout` (D775): style defaults and validation; flex growth, shrinking, every
+# alignment, unbounded limits; grid tracks fixed, auto and flexible with gaps; Invalid and Overflow.
+$uiCorePath = Join-Path $testBuild 'ui-core-selfhost.exe'
+$uiCoreWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_core\src\main.e') $repo 'x64' 'windows' $uiCorePath
+if ($LASTEXITCODE -ne 0 -or $uiCoreWritten -ne 'executable written') { throw 'ui_core emission failed' }
+$uiCoreOutput = & $uiCorePath
+if ($LASTEXITCODE -ne 0 -or $uiCoreOutput -ne 'ui core ok') { throw "an e.ui.style or e.ui.layout answer was wrong: exit $LASTEXITCODE" }
+# `e.test.fuzz` (D776): deterministic mutation from the seed finds a two-byte failure twice alike,
+# minimization lands on those two bytes, budgets and deadlines stop, corpus and bound refusals.
+$testFuzzPath = Join-Path $testBuild 'test-fuzz-selfhost.exe'
+$testFuzzWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_fuzz\src\main.e') $repo 'x64' 'windows' $testFuzzPath
+if ($LASTEXITCODE -ne 0 -or $testFuzzWritten -ne 'executable written') { throw 'test_fuzz emission failed' }
+$testFuzzOutput = & $testFuzzPath
+if ($LASTEXITCODE -ne 0 -or $testFuzzOutput -ne 'test fuzz ok') { throw "an e.test.fuzz run, minimization or refusal answered wrongly: exit $LASTEXITCODE" }
+# `e.test.coverage` (D776): hits through the instrumentation entry, snapshot, reset, merge sorted
+# by file and region with a duplicate refused, and the JSON shape.
+$testCoveragePath = Join-Path $testBuild 'test-coverage-selfhost.exe'
+$testCoverageWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_coverage\src\main.e') $repo 'x64' 'windows' $testCoveragePath
+if ($LASTEXITCODE -ne 0 -or $testCoverageWritten -ne 'executable written') { throw 'test_coverage emission failed' }
+$testCoverageOutput = & $testCoveragePath
+if ($LASTEXITCODE -ne 0 -or $testCoverageOutput -ne 'test coverage ok') { throw "an e.test.coverage snapshot, merge or JSON answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
