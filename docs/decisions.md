@@ -14347,3 +14347,15 @@ the level's coverage does. The `link/simd_lanes` fixture runs under
 `--cpu x64-v3` in debug and release on both hosts. The first encoding of an
 unused vvvv as register 15 faulted on the first load; the corrected one is
 checked byte by byte against the unit.
+
+## D766 — `e.audio.spatial` draws from `*rand.Pcg64`, the game modules' generator
+
+The frozen `e.audio.spatial` fence spelled `trigger`'s generator as `*rand.State`,
+a type `e.algo.rand` has never declared: the module exports the concrete
+generators `Pcg64`, `Xoshiro256` and `Mt19937`, and nothing in `lib/e` names a
+`rand.State`. The fence now says `*rand.Pcg64` with `rand.pcg64_bounded` picking
+the variant, which is what `e.game.particle` and `e.game.ai` already take, so a
+game that positions its sounds threads one generator through both. Found by the
+first local-model session on the module, which spent three rounds searching for
+the type; a fence that names what does not exist is a fence a session cannot
+implement, so the amendment precedes any source.

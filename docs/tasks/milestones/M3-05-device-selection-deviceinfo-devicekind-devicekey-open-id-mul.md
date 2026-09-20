@@ -53,7 +53,11 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Code anchors
 
-- `devices`: `scripts/check_gpu_contracts.py`×1
+- `devices`: `scripts/check_gpu_contracts.py`×1, `scripts/render_tasks.py`×1†
+- `DeviceInfo`: `scripts/render_tasks.py`×1†
+- `DeviceKind`: `scripts/render_tasks.py`×1†
+- `DeviceKey`: `scripts/render_tasks.py`×1†
+- `open_id`: `scripts/render_tasks.py`×1†
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

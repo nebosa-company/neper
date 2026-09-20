@@ -32,10 +32,10 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Code anchors
 
-- `e.gpu`: `scripts/check_module_plan.py`×1, `tests/conformance/tools/batch.txt`×1, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×1, `tests/conformance/tools/batch.x64-windows.expected.jsonl`×1, `tests/conformance/tools/catalog_unavailable.expected.jsonl`×1
-- `Device`: `lib/e/os.windows.e`×1‡
-- `Queue`: `lib/e/concurrent/queue.e`×13, `lib/e/data/queue.e`×11
-- `module-apis.md`: `scripts/check_module_surfaces.py`×5, `scripts/render_module_apis.py`×3, `scripts/render_progress.py`×2, `scripts/audit_repo_coverage.py`×1, `scripts/build-docs-pdf.py`×1, `scripts/check_gpu_contracts.py`×1, `src/check.e`×1‡
+- `e.gpu`: `scripts/render_tasks.py`×2†, `scripts/check_module_plan.py`×1, `tests/conformance/tools/batch.txt`×1, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×1, `tests/conformance/tools/batch.x64-windows.expected.jsonl`×1, `tests/conformance/tools/catalog_unavailable.expected.jsonl`×1
+- `Device`: `scripts/render_tasks.py`×3†, `lib/e/os.windows.e`×1‡
+- `Queue`: `lib/e/concurrent/queue.e`×13, `lib/e/data/queue.e`×11, `scripts/render_tasks.py`×1†
+- `module-apis.md`: `scripts/render_tasks.py`×7†, `scripts/check_module_surfaces.py`×5, `scripts/render_module_apis.py`×3, `scripts/render_progress.py`×2, `scripts/audit_repo_coverage.py`×1, `scripts/build-docs-pdf.py`×1, `scripts/check_gpu_contracts.py`×1, `src/check.e`×1‡
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

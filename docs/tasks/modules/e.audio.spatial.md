@@ -36,7 +36,7 @@ error Unknown
 fn pan(l: Listener, s: Source) -> i32
 fn attenuate(l: Listener, s: Source) -> i32
 fn place(m: *mixer.Mixer, voice: usize, l: Listener, s: Source) -> err
-fn trigger(m: *mixer.Mixer, c: *Cue, variants: []const audio.Frames, state: *rand.State, l: Listener, s: Source) -> (usize, err)
+fn trigger(m: *mixer.Mixer, c: *Cue, variants: []const audio.Frames, state: *rand.Pcg64, l: Listener, s: Source) -> (usize, err)
 fn step_cues(cues: []Cue) -> err
 ```
 

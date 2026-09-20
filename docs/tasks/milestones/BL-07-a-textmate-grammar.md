@@ -12,8 +12,8 @@
 
 ## Code anchors
 
-- `grammar.ebnf`: `scripts/render_card.py`×5, `scripts/build-docs-pdf.py`×1, `src/tool.e`×1‡
-- `render_progress.py`: `scripts/render_progress.py`×2
+- `grammar.ebnf`: `scripts/render_card.py`×5, `scripts/render_tasks.py`×2†, `scripts/build-docs-pdf.py`×1, `src/tool.e`×1‡
+- `render_progress.py`: `scripts/render_tasks.py`×7†, `scripts/render_progress.py`×2, `scripts/bonsai_driver.py`×1
 - nearest existing implementation: `docs/grammar.ebnf`, `scripts/render_card.py`, `tests/conformance/tokens` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

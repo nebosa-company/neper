@@ -61,6 +61,12 @@ Notes:
 
 - The evidence names no gap clause; the remaining line is the third pack intrinsic: `gpu.launch` must expand a comptime pack the way the two others do. The other two are the reference implementation — find them with `rg -n 'pack' src/check.e src/lower.e`.
 
+## Code anchors
+
+Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
+
+- `gpu.launch`: `scripts/render_tasks.py`×1†
+
 ## Existing fixtures
 
 - `tests/selfhost/fixtures/link/comptime_str`
