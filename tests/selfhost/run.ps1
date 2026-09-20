@@ -1580,6 +1580,18 @@ $gpuDivergenceOutput = & $gpuDivergencePath 2>&1
 if ($LASTEXITCODE -ne 134 -or ($gpuDivergenceOutput -join "`n") -notmatch 'trap\[barrier\]: invocation \(2, 0, 0\) of workgroup \(0, 0, 0\) returned before barrier 1 that invocation \(0, 0, 0\)') { throw "a divergent workgroup did not trap as barrier: exit $LASTEXITCODE, $($gpuDivergenceOutput -join "`n")" }
 $gpuOutside = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_barrier_outside\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-TYPE-9999\]: `gpu\.barrier\(\)` is written outside a kernel') { throw "a barrier outside a kernel was not refused: $($gpuOutside -join "`n")" }
+# `shared var` on the CPU backend (D781): the spec's block sum through workgroup memory
+# over three workgroups, a struct-typed shared var, the 0xCD fill before the publishing
+# barrier; a shared var outside a kernel and one with an initialiser are refused.
+$gpuSharedPath = Join-Path $testBuild 'gpu-shared-selfhost.exe'
+$gpuSharedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_shared\src\main.e') $repo 'x64' 'windows' $gpuSharedPath
+if ($LASTEXITCODE -ne 0 -or $gpuSharedWritten -ne 'executable written') { throw 'gpu_shared emission failed' }
+$gpuSharedOutput = & $gpuSharedPath
+if ($LASTEXITCODE -ne 0 -or $gpuSharedOutput -ne 'gpu shared ok') { throw "a kernel with shared memory answered wrongly: exit $LASTEXITCODE" }
+$gpuSharedOutside = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_shared_outside\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($gpuSharedOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-TYPE-9999\]: `shared var` is legal only directly in a kernel') { throw "a shared var outside a kernel was not refused: $($gpuSharedOutside -join "`n")" }
+$gpuSharedInit = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_shared_initializer\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($gpuSharedInit -join "`n") -notmatch 'main\.e:5:5: error\[E-TYPE-9999\]: `tile` is a `shared var` with an initialiser') { throw "a shared var with an initialiser was not refused: $($gpuSharedInit -join "`n")" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

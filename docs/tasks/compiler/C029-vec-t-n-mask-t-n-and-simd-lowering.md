@@ -81,7 +81,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `pinsrw`: `src/emit_x64.e`×1†
 - `pextrw`: `src/emit_x64.e`×1†
 - `movq`: `src/emit_x64.e`×3†, `src/disasm_x64.e`×1†
-- `FieldAddress`: `src/lower.e`×33‡, `src/codegen_x64.e`×4‡, `src/nir.e`×3†, `src/em.e`×1‡
+- `FieldAddress`: `src/lower.e`×35‡, `src/codegen_x64.e`×4‡, `src/nir.e`×3†, `src/em.e`×1‡
 - `psllw`: `src/codegen_x64.e`×2‡, `src/emit_x64.e`×1†
 - `psrlw`: `src/codegen_x64.e`×1‡, `src/emit_x64.e`×1†
 - `psraw`: `src/codegen_x64.e`×1‡, `src/emit_x64.e`×1†

@@ -6165,6 +6165,7 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     if node.kind == .ReturnStmt { ret lower_return(c, g, tree, module_index, function, node, builder, bindings, *binding_count, defers) }
     if node.kind == .TryStmt { ret lower_try(c, g, tree, module_index, function, node, builder, bindings, *binding_count, defers) }
     if node.kind == .BindingStmt { ret lower_binding(c, g, tree, module_index, node, builder, bindings, binding_count) }
+    if node.kind == .SharedVarStmt { ret lower_shared_var_statement(c, g, tree, module_index, node, builder, bindings, *binding_count) }
     if node.kind == .AssignmentStmt { ret lower_assignment(c, g, tree, module_index, node, builder, bindings, *binding_count) }
     if node.kind == .CallStmt { ret lower_call_statement(c, g, tree, module_index, node, builder, bindings, *binding_count) }
     if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }
@@ -6295,7 +6296,10 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     builder.site_line = 0usize
     try nir.begin_signature(builder, nir_function, signatures)
     let kernel_pointer_type = check.make_type(.Pointer, "", module_index)
-    if function.gpu { try nir.add_parameter_type(builder, nir_function, signatures, kernel_pointer_type) }
+    if function.gpu {
+        try nir.add_parameter_type(builder, nir_function, signatures, kernel_pointer_type)
+        try nir.add_parameter_type(builder, nir_function, signatures, kernel_pointer_type)
+    }
     var signature_parameter_at = 0usize
     while signature_parameter_at < function.parameter_count {
         try nir.add_parameter_type(builder, nir_function, signatures, c.parameters[function.first_parameter + signature_parameter_at].ty)
@@ -6334,10 +6338,14 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     // block after the barrier `pc` names.
     var kernel_dispatch_branch = 0usize
     var kernel_body_block = 0usize
+    var shared_base = 0usize
     if function.gpu {
         let (frame_parameter, frame_value, frame_parameter_error) = nir.emit(builder, .Parameter, kernel_pointer_type, true, 0usize, c.tokens[usize(node.token_start)])
         if frame_parameter_error != ok { ret frame_parameter_error }
-        hidden_parameters = 1usize
+        let (shared_parameter, shared_value, shared_parameter_error) = nir.emit(builder, .Parameter, kernel_pointer_type, true, 1usize, c.tokens[usize(node.token_start)])
+        if shared_parameter_error != ok { ret shared_parameter_error }
+        shared_base = shared_value
+        hidden_parameters = 2usize
         let (frame_values, frame_values_error) = mem.alloc[usize](c.arena, 128usize)
         if frame_values_error != ok { ret frame_values_error }
         let (frame_instructions, frame_instructions_error) = mem.alloc[usize](c.arena, 128usize)
@@ -6355,7 +6363,14 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         try check.add_local(c, parameter.name, parameter.ty, false)
         parameter_at += 1usize
     }
+    var shared_total = 0usize
     if function.gpu {
+        // The workgroup's `shared var`s (D781): their offsets in the shared block and
+        // their addresses, made here in the entry block so a use after a barrier is
+        // dominated; the statement itself binds the name when it is reached.
+        let (shared_bytes, shared_error) = lower_shared_vars(c, g, tree, module_index, node, shared_base, builder, bindings, &binding_count)
+        if shared_error != ok { ret shared_error }
+        shared_total = shared_bytes
         // Every parameter is in the entry block, which dominates the resumes; the
         // dispatch comes after them.
         let (dispatch_branch, dispatch_branch_error) = emit_branch(builder, c.tokens[usize(node.token_start)])
@@ -6393,8 +6408,112 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     let end_error = nir.end_function(builder)
     if end_error != ok { ret end_error }
     c.local_count = local_checkpoint
-    if function.gpu { try emit_kernel_frame_size(c, g, module_index, function, builder, signatures, c.tokens[usize(node.token_start)]) }
+    if function.gpu {
+        try emit_kernel_size(c, g, module_index, function, "$frame", builder.frame_offset, builder, signatures, c.tokens[usize(node.token_start)])
+        try emit_kernel_size(c, g, module_index, function, "$shared", shared_total, builder, signatures, c.tokens[usize(node.token_start)])
+    }
     ret ok
+}
+
+// Every `shared var` statement directly in the kernel's body: its storage offset,
+// aligned to its type, and a binding whose value is the address in the shared block
+// -- added now, so its `FieldAddress` sits in the entry block, but named with a
+// marker until the statement is reached, which is what keeps a use above the
+// declaration the compile error the checker made it. Answers the block's size.
+fn lower_shared_vars(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function_node: syntax.Node, shared_base: usize, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> (usize, err) {
+    var total = 0usize
+    let function_end = usize(function_node.first_child) + usize(function_node.child_count)
+    var function_at = usize(function_node.first_child)
+    while function_at < function_end {
+        if parse.child_is_node_at(tree, function_at) {
+            let body = tree.nodes[parse.child_index_at(tree, function_at)]
+            if body.kind == .Block {
+                let body_end = usize(body.first_child) + usize(body.child_count)
+                var body_at = usize(body.first_child)
+                while body_at < body_end {
+                    if parse.child_is_node_at(tree, body_at) {
+                        let statement_index = parse.child_index_at(tree, body_at)
+                        let statement = tree.nodes[statement_index]
+                        if statement.kind == .SharedVarStmt {
+                            let (type_index, has_type) = check.first_node_child(tree, statement)
+                            if !has_type { ret (0usize, parse.InvalidSyntax) }
+                            let (declared, type_error) = check.type_from_node(c, c.resolver, g, tree, module_index, tree.nodes[type_index])
+                            if type_error != ok { ret (0usize, type_error) }
+                            let (info, info_error) = layout.type_info(c, declared)
+                            if info_error != ok { ret (0usize, info_error) }
+                            var alignment = info.alignment
+                            if alignment < 1usize { alignment = 1usize }
+                            let offset = (total + alignment - 1usize) / alignment * alignment
+                            total = offset + info.size
+                            let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, declared, true, offset, c.tokens[usize(statement.token_start)])
+                            if address_error != ok { ret (0usize, address_error) }
+                            let operand_error = nir.add_operand(builder, address_instruction, shared_base)
+                            if operand_error != ok { ret (0usize, operand_error) }
+                            // Bound under the statement's first token as a marker; the
+                            // statement renames it when reached.
+                            let (marker, marker_error) = shared_marker_name(c, usize(statement.token_start))
+                            if marker_error != ok { ret (0usize, marker_error) }
+                            let binding_error = add_binding(bindings, binding_count, Binding { name: marker, ty: declared, value: address, address: true })
+                            if binding_error != ok { ret (0usize, binding_error) }
+                        }
+                    }
+                    body_at += 1usize
+                }
+            }
+        }
+        function_at += 1usize
+    }
+    ret (total, ok)
+}
+
+// A name no source can spell: `$shared` and the statement's first token index.
+fn shared_marker_name(c: *check.Checker, statement_index: usize) -> (str, err) {
+    let (storage, storage_error) = mem.alloc[u8](c.arena, 28usize)
+    if storage_error != ok { ret ("", storage_error) }
+    let prefix = "$shared"
+    var at = 0usize
+    while at < prefix.len {
+        storage[at] = prefix[at]
+        at += 1usize
+    }
+    var digits: [20]u8 = zero
+    var n = 0usize
+    var rest = statement_index
+    if rest == 0usize {
+        digits[0usize] = 48u8
+        n = 1usize
+    }
+    while rest > 0usize {
+        digits[n] = u8(48usize + rest % 10usize)
+        rest = rest / 10usize
+        n += 1usize
+    }
+    while n > 0usize {
+        n = n - 1usize
+        storage[at] = digits[n]
+        at += 1usize
+    }
+    ret (storage[..at], ok)
+}
+
+// The statement, when reached: the marker binding takes the declared name.
+fn lower_shared_var_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
+    if !builder.frame_mode { ret check.Unsupported }
+    let (name, name_error) = check.shared_var_name(c, g.modules[module_index].text, node)
+    if name_error != ok { ret name_error }
+    let (marker, marker_error) = shared_marker_name(c, usize(node.token_start))
+    if marker_error != ok { ret marker_error }
+    var at = 0usize
+    while at < binding_count {
+        if check.same(bindings[at].name, marker) {
+            bindings[at].name = name
+            // The checker is asked again per expression while lowering: it needs the
+            // local too.
+            ret check.add_local(c, name, bindings[at].ty, true)
+        }
+        at += 1usize
+    }
+    ret check.Unsupported
 }
 
 const KERNEL_DONE: usize = 4294967295usize
@@ -6477,11 +6596,11 @@ fn emit_kernel_dispatch(c: *check.Checker, module_index: usize, entry_branch: us
     ret nir.set_branch_targets(builder, start_branch, body_block, 0usize)
 }
 
-// `K$frame() -> usize`: the kernel's frame size, a function beside the kernel so a
-// launcher in another build -- one that reads this module from its artifact -- can
-// ask for it.
-fn emit_kernel_frame_size(c: *check.Checker, g: *graph.Graph, module_index: usize, function: check.Function, builder: *nir.Builder, signatures: *nir.Signatures, token: lex.Token) -> err {
-    let (name, name_error) = kernel_frame_name(c, function.name)
+// `K$frame() -> usize` and `K$shared() -> usize`: the kernel's frame and shared
+// sizes, functions beside the kernel so a launcher in another build -- one that
+// reads this module from its artifact -- can ask for them.
+fn emit_kernel_size(c: *check.Checker, g: *graph.Graph, module_index: usize, function: check.Function, suffix: str, size_value: usize, builder: *nir.Builder, signatures: *nir.Signatures, token: lex.Token) -> err {
+    let (name, name_error) = kernel_companion_name(c, function.name, suffix)
     if name_error != ok { ret name_error }
     let usize_type = check.make_type(.Integer, "usize", module_index)
     let (nir_function, begin_error) = nir.begin_function(builder, function.owner_module_index, name, function.instance_id)
@@ -6492,7 +6611,7 @@ fn emit_kernel_frame_size(c: *check.Checker, g: *graph.Graph, module_index: usiz
     try nir.add_return_type(builder, nir_function, signatures, usize_type)
     let (entry, block_error) = nir.begin_block(builder)
     if block_error != ok { ret block_error }
-    let (size_instruction, size, size_error) = nir.emit(builder, .ConstInteger, usize_type, true, builder.frame_offset, token)
+    let (size_instruction, size, size_error) = nir.emit(builder, .ConstInteger, usize_type, true, size_value, token)
     if size_error != ok { ret size_error }
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, usize_type, false, 0usize, token)
     if return_error != ok { ret return_error }
@@ -6500,15 +6619,14 @@ fn emit_kernel_frame_size(c: *check.Checker, g: *graph.Graph, module_index: usiz
     ret nir.end_function(builder)
 }
 
-fn kernel_frame_name(c: *check.Checker, kernel: str) -> (str, err) {
-    let (storage, storage_error) = mem.alloc[u8](c.arena, kernel.len + 6usize)
+fn kernel_companion_name(c: *check.Checker, kernel: str, suffix: str) -> (str, err) {
+    let (storage, storage_error) = mem.alloc[u8](c.arena, kernel.len + suffix.len)
     if storage_error != ok { ret ("", storage_error) }
     var at = 0usize
     while at < kernel.len {
         storage[at] = kernel[at]
         at += 1usize
     }
-    let suffix = "$frame"
     var i = 0usize
     while i < suffix.len {
         storage[at] = suffix[i]
@@ -7420,38 +7538,22 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
         }
         argument_at += 1usize
     }
-    // The kernel's frame size, from the function lowered beside it.
-    let (frame_name, frame_name_error) = kernel_frame_name(c, kernel.name)
-    if frame_name_error != ok { ret frame_name_error }
-    var frame_function: check.Function = zero
-    frame_function.name = frame_name
-    frame_function.module_index = kernel.module_index
-    frame_function.owner_module_index = kernel.owner_module_index
-    frame_function.instance_id = kernel.instance_id
-    frame_function.return_count = 1usize
-    frame_function.first_return = c.return_type_count
-    let return_store_error = check.store_return_type(c, usize_type)
-    if return_store_error != ok { ret return_store_error }
-    var frame_call: check.CallInfo = zero
-    frame_call.cast = check.invalid_type()
-    frame_call.alloc_return = check.invalid_type()
-    frame_call.alloc_arena = check.invalid_type()
-    frame_call.function = frame_function
-    var frame_results: CallResults = zero
-    var no_arguments: [1]usize = zero
-    try emit_call_results(c, frame_call, 0usize, no_arguments[0usize..0usize], 0usize, builder, token, &frame_results)
-    if frame_results.count != 1usize { ret check.ArgumentCount }
+    // The kernel's frame and shared sizes, from the functions lowered beside it.
+    let (frame_bytes, frame_bytes_error) = emit_kernel_size_call(c, kernel, "$frame", usize_type, builder, token)
+    if frame_bytes_error != ok { ret frame_bytes_error }
+    let (shared_bytes, shared_bytes_error) = emit_kernel_size_call(c, kernel, "$shared", usize_type, builder, token)
+    if shared_bytes_error != ok { ret shared_bytes_error }
     // The step as a value.
     let (step_ref, step_ref_error) = nir.intern_function(builder, instance.owner_module_index, "launch$step", instance.instance_id)
     if step_ref_error != ok { ret step_ref_error }
     let (step_instruction, step_value, step_error) = nir.emit(builder, .FunctionAddress, pointer_type, true, step_ref, token)
     if step_error != ok { ret step_error }
-    // launch_run(q, grid, x, y, z, frame_bytes, step, ctx) -> err
+    // launch_run(q, grid, x, y, z, frame_bytes, shared_bytes, step, ctx) -> err
     var dims: [3]usize = zero
     dims[0usize] = (usize(kernel.gpu_size) & 1023usize) + 1usize
     dims[1usize] = ((usize(kernel.gpu_size) >> 10usize) & 1023usize) + 1usize
     dims[2usize] = ((usize(kernel.gpu_size) >> 20usize) & 1023usize) + 1usize
-    var run_arguments: [8]usize = zero
+    var run_arguments: [9]usize = zero
     run_arguments[0usize] = parameters[0usize]
     run_arguments[1usize] = parameters[1usize]
     var dim_at = 0usize
@@ -7461,18 +7563,45 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
         run_arguments[2usize + dim_at] = dim_value
         dim_at += 1usize
     }
-    run_arguments[5usize] = frame_results.values[0usize]
-    run_arguments[6usize] = step_value
-    run_arguments[7usize] = block
+    run_arguments[5usize] = frame_bytes
+    run_arguments[6usize] = shared_bytes
+    run_arguments[7usize] = step_value
+    run_arguments[8usize] = block
     var run_results: CallResults = zero
-    try emit_library_call(c, g, "e.gpu", "launch_run", run_arguments[..], 8usize, builder, token, &run_results)
+    try emit_library_call(c, g, "e.gpu", "launch_run", run_arguments[..], 9usize, builder, token, &run_results)
     if run_results.count != 1usize { ret check.ArgumentCount }
     try emit_formatter_return(c, module_index, instance, 0usize, 0usize, run_results.values[0usize], false, builder, token)
     ret nir.end_function(builder)
 }
 
-// `launch$step(ctx: *void, frame: *u8)`: the kernel's arguments from the block,
-// then the kernel's CPU build for one invocation.
+// A call of `K$frame()` or `K$shared()`, answering its value.
+fn emit_kernel_size_call(c: *check.Checker, kernel: check.Function, suffix: str, usize_type: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (name, name_error) = kernel_companion_name(c, kernel.name, suffix)
+    if name_error != ok { ret (0usize, name_error) }
+    var size_function: check.Function = zero
+    size_function.name = name
+    size_function.module_index = kernel.module_index
+    size_function.owner_module_index = kernel.owner_module_index
+    size_function.instance_id = kernel.instance_id
+    size_function.return_count = 1usize
+    size_function.first_return = c.return_type_count
+    let return_store_error = check.store_return_type(c, usize_type)
+    if return_store_error != ok { ret (0usize, return_store_error) }
+    var size_call: check.CallInfo = zero
+    size_call.cast = check.invalid_type()
+    size_call.alloc_return = check.invalid_type()
+    size_call.alloc_arena = check.invalid_type()
+    size_call.function = size_function
+    var size_results: CallResults = zero
+    var no_arguments: [1]usize = zero
+    let call_error = emit_call_results(c, size_call, 0usize, no_arguments[0usize..0usize], 0usize, builder, token, &size_results)
+    if call_error != ok { ret (0usize, call_error) }
+    if size_results.count != 1usize { ret (0usize, check.ArgumentCount) }
+    ret (size_results.values[0usize], ok)
+}
+
+// `launch$step(ctx: *void, frame: *u8, shared: *u8)`: the kernel's arguments from
+// the block, then the kernel's CPU build for one invocation.
 fn lower_launch_step(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, kernel: check.Function, builder: *nir.Builder, signatures: *nir.Signatures, token: lex.Token) -> err {
     let pointer_type = check.make_type(.Pointer, "", module_index)
     let (nir_function, begin_error) = nir.begin_function(builder, instance.owner_module_index, "launch$step", instance.instance_id)
@@ -7482,14 +7611,18 @@ fn lower_launch_step(c: *check.Checker, g: *graph.Graph, module_index: usize, in
     try nir.begin_signature(builder, nir_function, signatures)
     try nir.add_parameter_type(builder, nir_function, signatures, pointer_type)
     try nir.add_parameter_type(builder, nir_function, signatures, pointer_type)
+    try nir.add_parameter_type(builder, nir_function, signatures, pointer_type)
     let (entry, block_error) = nir.begin_block(builder)
     if block_error != ok { ret block_error }
     let (ctx_instruction, ctx, ctx_error) = nir.emit(builder, .Parameter, pointer_type, true, 0usize, token)
     if ctx_error != ok { ret ctx_error }
     let (frame_instruction, frame, frame_error) = nir.emit(builder, .Parameter, pointer_type, true, 1usize, token)
     if frame_error != ok { ret frame_error }
-    var kernel_arguments: [17]usize = zero
+    let (shared_instruction, shared_block, shared_error) = nir.emit(builder, .Parameter, pointer_type, true, 2usize, token)
+    if shared_error != ok { ret shared_error }
+    var kernel_arguments: [18]usize = zero
     kernel_arguments[0usize] = frame
+    kernel_arguments[1usize] = shared_block
     var argument_at = 0usize
     while argument_at < kernel.parameter_count {
         let parameter_type = c.parameters[kernel.first_parameter + argument_at].ty
@@ -7497,14 +7630,14 @@ fn lower_launch_step(c: *check.Checker, g: *graph.Graph, module_index: usize, in
         if slot_error != ok { ret slot_error }
         try nir.add_operand(builder, slot_instruction, ctx)
         if aggregate_value(c, parameter_type) {
-            kernel_arguments[1usize + argument_at] = slot
+            kernel_arguments[2usize + argument_at] = slot
         } else {
             let (info, info_error) = layout.type_info(c, parameter_type)
             if info_error != ok { ret info_error }
             let (load_instruction, value, load_error) = nir.emit(builder, .Load, parameter_type, true, info.size, token)
             if load_error != ok { ret load_error }
             try nir.add_operand(builder, load_instruction, slot)
-            kernel_arguments[1usize + argument_at] = value
+            kernel_arguments[2usize + argument_at] = value
         }
         argument_at += 1usize
     }
@@ -7514,7 +7647,7 @@ fn lower_launch_step(c: *check.Checker, g: *graph.Graph, module_index: usize, in
     kernel_call.alloc_arena = check.invalid_type()
     kernel_call.function = kernel
     var kernel_results: CallResults = zero
-    try emit_call_results(c, kernel_call, 0usize, kernel_arguments[..], 1usize + kernel.parameter_count, builder, token, &kernel_results)
+    try emit_call_results(c, kernel_call, 0usize, kernel_arguments[..], 2usize + kernel.parameter_count, builder, token, &kernel_results)
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
     if return_error != ok { ret return_error }
     ret nir.end_function(builder)

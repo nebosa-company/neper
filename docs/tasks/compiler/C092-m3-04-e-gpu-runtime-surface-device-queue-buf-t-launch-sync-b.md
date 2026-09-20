@@ -40,7 +40,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `upload`: `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2, `lib/e/gfx/image.e`×1
 - `download`: `lib/e/gpu/tensor.e`×3, `lib/e/gpu.e`×2
 - `wait_for`: `lib/e/task.e`×4, `lib/e/sync.e`×3, `lib/e/concurrent/queue.e`×2, `lib/e/os.windows.e`×2‡, `lib/e/gpu.e`×1
-- `gpu.barrier`: `src/check.e`×4‡, `lib/e/gpu.e`×1, `src/lower.e`×1‡
+- `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1, `src/lower.e`×1‡
 
 ## Verification
 

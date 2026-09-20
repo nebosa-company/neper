@@ -761,12 +761,18 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_thread_create") { ret ("", false) }
     if same(name, "neper_os_thread_join") { ret ("thread_join", true) }
     if same(name, "neper_os_thread_detach") { ret ("thread_detach", true) }
-    // A kernel's `K$frame` (D780) is generated beside the kernel and has no
-    // declaration of its own: the dependency it stands for is the kernel's.
+    // A kernel's `K$frame` and `K$shared` (D780, D781) are generated beside the
+    // kernel and have no declaration of their own: the dependency they stand for
+    // is the kernel's.
     let suffix = "$frame"
     if name.len > suffix.len {
         let tail = name[name.len - suffix.len..name.len]
         if same(tail, suffix) { ret (name[0usize..name.len - suffix.len], true) }
+    }
+    let shared_suffix = "$shared"
+    if name.len > shared_suffix.len {
+        let shared_tail = name[name.len - shared_suffix.len..name.len]
+        if same(shared_tail, shared_suffix) { ret (name[0usize..name.len - shared_suffix.len], true) }
     }
     ret (name, true)
 }

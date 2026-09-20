@@ -1508,6 +1508,24 @@ case "$gpu_outside" in
     *'main.e:4:5: error[E-TYPE-9999]: `gpu.barrier()` is written outside a kernel'*) ;;
     *) printf '%s\n' "a barrier outside a kernel was not refused: $gpu_outside" >&2; exit 1 ;;
 esac
+# `shared var` on the CPU backend (D781): the spec's block sum through workgroup memory
+# over three workgroups, a struct-typed shared var, the 0xCD fill before the publishing
+# barrier; a shared var outside a kernel and one with an initialiser are refused.
+gpu_shared_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_shared/src/main.e" "$repo" x64 linux "$test_build/gpu-shared-selfhost")
+[ "$gpu_shared_written" = 'executable written' ]
+chmod +x "$test_build/gpu-shared-selfhost"
+gpu_shared_output=$("$test_build/gpu-shared-selfhost")
+[ "$gpu_shared_output" = 'gpu shared ok' ]
+gpu_shared_outside=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_shared_outside/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$gpu_shared_outside" in
+    *'main.e:4:5: error[E-TYPE-9999]: `shared var` is legal only directly in a kernel'*) ;;
+    *) printf '%s\n' "a shared var outside a kernel was not refused: $gpu_shared_outside" >&2; exit 1 ;;
+esac
+gpu_shared_init=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_shared_initializer/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$gpu_shared_init" in
+    *'main.e:5:5: error[E-TYPE-9999]: `tile` is a `shared var` with an initialiser'*) ;;
+    *) printf '%s\n' "a shared var with an initialiser was not refused: $gpu_shared_init" >&2; exit 1 ;;
+esac
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

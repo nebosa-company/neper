@@ -14818,3 +14818,36 @@ a constant past `i64`, are both refused -- the opcode is bound to a typed local
 and the done mark is `u32` max. And the builder's tables live in the arena, not
 in the `Builder`: 2 KB more in that record overflowed a worker's stack under
 `neper build`, which copies a builder onto it, while `emit-executable` did not.
+
+## D781 — `shared var` on the CPU backend: the workgroup's block, addressed in the entry
+
+`shared var name: T` (spec section 10) already parsed and resolved; it now checks
+and lowers. The checker admits it directly in a kernel's own body (block depth
+one, `function.gpu`), with a device storage type -- a pointer, slice, string,
+bool or function is refused -- and without an initialiser, which the parser
+accepts and section 10 forbids, since no single invocation could run it. The
+name is a mutable local from that line on.
+
+On the CPU build a kernel takes a second hidden parameter after its frame: the
+workgroup's shared block. Before the body is lowered, a pass over the body's
+direct statements assigns every `shared var` its offset in that block, aligned
+to its type, and makes its address -- `FieldAddress` over the block base -- in
+the entry block, for the same reason a frame word's is made there: a use after
+a barrier is dominated by nothing later. The binding is added then under a
+marker name (`$shared` and the statement's first token index) and takes its
+declared name when the statement is reached, so a use above the declaration
+stays the compile error the checker made it. `K$shared() -> usize` stands
+beside `K$frame()`, the launcher asks both, and `launch_run` allocates one
+block per launch (48 KB is the ceiling every desktop part has; more is
+`TooLarge`), fills it with `0xCD` before each workgroup -- always, not only in
+debug builds, since the library cannot yet ask which build it is in -- and hands
+it to every step. `[]shared T` and `*shared T` parse and are erased, as the
+section says the CPU build does.
+
+The fixture is the section's block sum: a 64-wide tile filled by every
+invocation, a barrier, a tree reduction across barriers with a `while` around
+them, over three workgroups; a struct-typed shared var published by invocation
+0 after the barrier the others wrote under; and a read before the publishing
+barrier that sees `0xCD`. Not yet: the shared total in the Interface entry
+and its check against the device's limit at launch, a helper that takes a
+`[]shared T` and is thereby device-only, `Atomic[T]` shared vars.

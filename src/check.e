@@ -13130,6 +13130,59 @@ fn statement_tick(c: *Checker) -> err {
     ret ok
 }
 
+// `shared var name: T` (spec section 10, D781): directly in a kernel's body, with a
+// device storage type and no initialiser; the name is a mutable local from here on,
+// its storage the workgroup's.
+fn check_shared_var(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
+    if !function.gpu || c.block_depth != 1usize {
+        record_failure(c, module_index, node, .GpuLaunch, "", "`shared var` is legal only directly in a kernel's own body, where the workgroup it belongs to exists")
+        ret InvalidType
+    }
+    let (name, name_error) = shared_var_name(c, g.modules[module_index].text, node)
+    if name_error != ok { ret name_error }
+    var type_node_index = 0usize
+    var has_type_node = false
+    var has_initializer = false
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            if !has_type_node {
+                type_node_index = parse.child_index_at(tree, at)
+                has_type_node = true
+            } else {
+                has_initializer = true
+            }
+        }
+        at += 1usize
+    }
+    if has_initializer || contains_token(c, usize(node.token_start), usize(node.token_end), .PunctAssign) {
+        record_failure(c, module_index, node, .GpuLaunch, name, "is a `shared var` with an initialiser, which no single invocation could run: write it, then `gpu.barrier()`")
+        ret InvalidType
+    }
+    if !has_type_node { ret parse.InvalidSyntax }
+    let (declared, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_node_index])
+    if type_error != ok { ret type_error }
+    if declared.kind == .Pointer || declared.kind == .Slice || declared.kind == .String || declared.kind == .Function || declared.kind == .Bool || declared.kind == .Void {
+        record_failure(c, module_index, node, .GpuLaunch, name, "is a `shared var` of a type that is not device storage: no pointer, slice, string, bool or function lives in a workgroup's memory")
+        ret InvalidType
+    }
+    ret add_local(c, name, declared, true)
+}
+
+// The identifier after `shared var`.
+fn shared_var_name(c: *Checker, text: str, node: syntax.Node) -> (str, err) {
+    var at = usize(node.token_start)
+    var saw_var = false
+    while at < usize(node.token_end) && at < c.token_count {
+        let token = c.tokens[at]
+        if token.kind == .KwVar { saw_var = true }
+        if saw_var && token.kind == .Identifier { ret (text[token.start..token.end], ok) }
+        at += 1usize
+    }
+    ret ("", parse.InvalidSyntax)
+}
+
 fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, function: Function) -> err {
     try statement_tick(c)
     let node = tree.nodes[node_index]
@@ -13139,6 +13192,7 @@ fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tre
         try resource_uses(c, g, tree, module_index, node_index, node.kind == .AssignmentStmt)
     }
     if node.kind == .BindingStmt { ret check_binding(c, r, g, tree, module_index, node, function) }
+    if node.kind == .SharedVarStmt { ret check_shared_var(c, r, g, tree, module_index, node, function) }
     if node.kind == .ReturnStmt { ret check_return(c, g, tree, module_index, node, function) }
     if node.kind == .IfStmt || node.kind == .WhileStmt { ret check_condition_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .WhenStmt { ret check_when_statement(c, r, g, tree, module_index, node, function) }

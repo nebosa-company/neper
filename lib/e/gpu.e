@@ -26,10 +26,13 @@
 // block either; add one when a second thread opens a queue. A launch's frames are
 // arena until the device closes; reusing them across launches is the upgrade.
 //
-// Not here yet: `shared var`, the subgroup builtins, `Atomic` slices, a barrier in
-// a helper a kernel calls (only the kernel's own body is cut); `.Vulkan` and
-// `.Cuda` answer `Unsupported`, as a backend the build did not embed does; the
-// fault buffer, since the CPU build's checks trap where they fire.
+// A kernel's `shared var`s live in one block per launch, handed to every step,
+// filled with 0xCD before each workgroup (D781).
+//
+// Not here yet: the subgroup builtins, `Atomic` slices, a barrier in a helper a
+// kernel calls (only the kernel's own body is cut); `.Vulkan` and `.Cuda` answer
+// `Unsupported`, as a backend the build did not embed does; the fault buffer,
+// since the CPU build's checks trap where they fire.
 
 use e.mem
 use e.os
@@ -526,7 +529,7 @@ fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local
 // size `(x, y, z)`, one frame of `frame_bytes` per invocation of a workgroup, and
 // `step(ctx, frame)` run for every invocation in local-id order, round after round,
 // until all have returned -- each round ending at one barrier for all of them.
-fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, step: fn(ctx: *void, frame: *u8), ctx: *void) -> err {
+fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(ctx: *void, frame: *u8, workgroup: *u8), ctx: *void) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
     if launch_active { ret Unsupported }
@@ -547,6 +550,17 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     var base = 0usize
     let misalign = mem.address_of(&frames[0usize]) % 16usize
     if misalign != 0usize { base = 16usize - misalign }
+    // The workgroup's shared memory (section 10): 48 KB is every desktop part's
+    // limit; filled with 0xCD before every workgroup, so a read before the barrier
+    // that publishes it is recognisable.
+    if shared_bytes > 49152usize { ret TooLarge }
+    var shared_size = shared_bytes
+    if shared_size < 16usize { shared_size = 16usize }
+    let (shared_storage, shared_error) = mem.alloc[u8](state.device.arena, shared_size + 16usize)
+    if shared_error != ok { ret shared_error }
+    var shared_base = 0usize
+    let shared_misalign = mem.address_of(&shared_storage[0usize]) % 16usize
+    if shared_misalign != 0usize { shared_base = 16usize - shared_misalign }
     launch_size[0usize] = x
     launch_size[1usize] = y
     launch_size[2usize] = z
@@ -562,6 +576,11 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
             frames[base + i] = 0u8
             i += 1usize
         }
+        i = 0usize
+        while i < shared_size {
+            shared_storage[shared_base + i] = 205u8
+            i += 1usize
+        }
         while true {
             var any_active = false
             var local = 0usize
@@ -570,7 +589,7 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
                 if frame_pc(frames, frame_at) != DONE {
                     any_active = true
                     set_ids(group, local)
-                    step(ctx, &frames[frame_at])
+                    step(ctx, &frames[frame_at], &shared_storage[shared_base])
                 }
                 local += 1usize
             }
