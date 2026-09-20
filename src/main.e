@@ -2,6 +2,7 @@ use e.io
 use e.mem
 use e.os
 use artifact_hash
+use assets
 use binary
 use check
 use decimal
@@ -6806,6 +6807,19 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
         } else {
             try print_parse_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_reserved_name, loaded.failure_too_deep)
         }
+        try finish_report(report)
+        os.exit(1i32)
+    }
+    // The project's asset manifest (D777): what `project.yaml` declares that the
+    // loader cannot take is reported at the manifest under E-MODULE-9999.
+    if load_error == assets.InvalidManifest || load_error == assets.AssetMissing || load_error == assets.AssetTooLarge {
+        var message = "`project.yaml` has an `assets:` entry the loader does not accept: a name, `path`, `media_type` and `attributes` are what an entry may carry"
+        if load_error == assets.AssetMissing { message = "`project.yaml` declares an asset whose file cannot be read" }
+        if load_error == assets.AssetTooLarge { message = "`project.yaml` declares more assets, attributes or bytes than the registry holds" }
+        let (manifest_path, manifest_path_error) = tool.manifest_join(a, loaded.project.root, "project.yaml")
+        if manifest_path_error != ok { ret manifest_path_error }
+        var no_token: lex.Token = zero
+        try emit_diagnostic(report, manifest_path, "", no_lines[0usize..0usize], no_token, false, "E-MODULE-9999", message)
         try finish_report(report)
         os.exit(1i32)
     }

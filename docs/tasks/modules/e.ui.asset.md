@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/asset.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | `embedded-asset-linking` |
-| unmet dependencies | `e.asset`, `e.gfx.scene` |
+| unmet dependencies | `e.gfx.scene` |
 
 ## Definition of done
 
@@ -21,7 +21,7 @@ Blockers named in the plan must be resolved first; a blocked module is not eligi
 
 | dependency | surface | source file | layer |
 |---|---|---|---|
-| `e.asset` | planned | missing | 5 |
+| `e.asset` | source | `lib/e/asset.e` | 5 |
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.gfx.image` | partial | `lib/e/gfx/image.e` | 2 |
 | `e.gfx.scene` | planned | missing | 6 |
@@ -85,6 +85,13 @@ No image codec, filesystem lookup or unbounded global cache is hidden here.
 Read each line in context; they carry obligations (cancellation, bounded buffers, no hidden allocation, standard vectors) that the fence alone does not spell out.
 
 - `docs/ui-framework.md:76` `e.ui.asset` groups physical entries by their `base` attribute and deterministically
+
+## Style references
+
+Delivered modules beside this one — copy their idioms (arena parameter first, `(value, err)` returns, no hidden allocation, `error` names as declared):
+
+- `lib/e/ui/layout.e`
+- `lib/e/ui/style.e`
 
 ## Verification
 

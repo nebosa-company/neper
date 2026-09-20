@@ -108,6 +108,14 @@ Read each line in context; they carry obligations (cancellation, bounded buffers
 
 - `docs/ui-framework.md:187` clips; malformed nesting is `Invalid`. `e.gfx.scene` validates the whole list before
 
+## Style references
+
+Delivered modules beside this one — copy their idioms (arena parameter first, `(value, err)` returns, no hidden allocation, `error` names as declared):
+
+- `lib/e/gfx/geometry.e`
+- `lib/e/gfx/image.e`
+- `lib/e/gfx/paint.e`
+
 ## Verification
 
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/gfx/scene.e` prints `parse file ok`.

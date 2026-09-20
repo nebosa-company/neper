@@ -14632,3 +14632,45 @@ region and refuses a report naming a pair twice, `write_json` writes
 What remains planned is gated for real: `e.asset` on linker-generated registry
 symbols, `e.gpu.tensor` and `e.gfx.scene` on M3 `e.gpu`, and the `e.ui.*` chain on
 the native window, presentation and accessibility designs.
+
+## D777 — `e.asset` lands on a compiler-generated registry; `embedded-asset-linking` is met
+
+D80 fixed the design: root `project.yaml` asset declarations become a sorted,
+immutable, linker-generated registry behind `e.asset`, part of the build
+identity. The gate named four pieces -- manifest ingestion, hashing, read-only
+embedding, generated registry symbols -- and this toolchain has a shape for each
+that needs no data relocation: the image carries no absolute pointers in data
+(every literal is reached RIP-relative), so a registry of pointers cannot be
+data and is instead **generated source**. When `graph.begin` discovers the
+project, `assets.asset_overlay` reads `<root>/project.yaml`, takes the `assets:`
+mapping in pacman's subset (a logical name at two spaces; `path`, an optional
+`media_type` defaulting to `application/octet-stream`, optional `attributes` as
+a flow mapping or a nested one at six spaces; plain or double-quoted scalars),
+reads every file, hashes it with the compiler's SHA-256, sorts the entries by
+name and generates `e.asset`'s text -- the fence of `lib/e/asset.e` over string
+literals for bytes, names and types, a `[32]u8` literal per digest, and an
+attribute table filled once (a `var` array, since a global initialiser is
+integers only) -- as an overlay on `lib/e/asset.e`, the mechanism D502 gave
+editors. The generated text is the module's text to every hash the toolchain
+keeps, so a changed asset rebuilds `e.asset` and changes the build identity as
+D80 asks, and a lookup is a function returning literals: allocation-free,
+executable-backed, process-lifetime. `lib/e/asset.e` itself is the empty
+registry and lands at `surface: source` -- the fence exactly.
+
+Refusals are reported at the manifest under `E-MODULE-9999`: an entry with a
+key outside the subset, a duplicate name or attribute, a missing `path`; a file
+that cannot be read; more than 256 entries, 16 attributes on one, or 4 MB in all
+(four source bytes per asset byte is the cost of the literal spelling, and the
+lexer's ceiling is what bounds it). Not yet: a build-manifest line per asset
+file (the module's own SHA-256 line already carries the identity), incremental
+hashing (every declared file is read on every load), compressed or
+package-provided assets.
+
+Writing it in the compiler found three bootstrap facts worth keeping: a
+function name shared with another compiler module (`put`, `hex_digit`) is
+resolved program-wide by the bootstrap, so a call can land in the wrong module
+-- every helper here carries an `asset_` prefix; `>= CONST {` is read as an
+aggregate literal, so a limit is bound to a local before the comparison; and an
+array field of an indexed slice element (`entries[i].names[k]`) is misaddressed,
+while the same field through a pointer to the element is not. The bootstrap has
+no `-=` and no `else if` either.

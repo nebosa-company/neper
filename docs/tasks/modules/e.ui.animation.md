@@ -50,6 +50,13 @@ Animation state is explicit. Sampling never reads a clock; the application suppl
 - [ ] `restart`
 - [ ] `request`
 
+## Style references
+
+Delivered modules beside this one — copy their idioms (arena parameter first, `(value, err)` returns, no hidden allocation, `error` names as declared):
+
+- `lib/e/ui/layout.e`
+- `lib/e/ui/style.e`
+
 ## Verification
 
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/ui/animation.e` prints `parse file ok`.

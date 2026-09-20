@@ -18,6 +18,7 @@
 
 - `.text`: `src/check.e`×115‡, `src/tool.e`×51‡, `src/main.e`×41‡, `src/lower.e`×37‡, `lib/e/text/io.e`×28, `src/em.e`×15‡, `src/graph.e`×13†, `src/resolve.e`×13†
 - `.idata`: `src/link_pe.e`×2
+- `project.yaml`: `src/main.e`×5‡
 - `CURSOR`: `src/main.e`×1‡
 - `RCDATA`: `lib/e/fmt/html.e`×2†
 - `LANGUAGE`: `benchmarks/llm_edit/hard_context.py`×5

@@ -1425,6 +1425,28 @@ test_coverage_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/test-coverage-selfhost"
 test_coverage_output=$("$test_build/test-coverage-selfhost")
 [ "$test_coverage_output" = 'test coverage ok' ]
+# `e.asset` (D777): the fixture project's `project.yaml` assets become the registry --
+# sorted, hashed, typed, attributed -- through the compiler-generated overlay; a project
+# without a manifest has the empty registry; a manifest entry the loader does not accept
+# is reported at the manifest under E-MODULE-9999.
+asset_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/asset/src/main.e" "$repo" x64 linux "$test_build/asset-selfhost")
+[ "$asset_written" = 'executable written' ]
+chmod +x "$test_build/asset-selfhost"
+asset_output=$("$test_build/asset-selfhost")
+[ "$asset_output" = 'asset ok' ]
+asset_empty_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/asset_empty/src/main.e" "$repo" x64 linux "$test_build/asset-empty-selfhost")
+[ "$asset_empty_written" = 'executable written' ]
+chmod +x "$test_build/asset-empty-selfhost"
+asset_empty_output=$("$test_build/asset-empty-selfhost")
+[ "$asset_empty_output" = 'asset empty ok' ]
+if asset_invalid_output=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/asset_invalid/src/main.e" "$repo" x64 linux "$test_build/asset-invalid-selfhost" 2>&1); then
+    printf '%s\n' 'an asset manifest entry with an unknown key unexpectedly compiled' >&2
+    exit 1
+fi
+case "$asset_invalid_output" in
+    *'project.yaml:1:1: error[E-MODULE-9999]: `project.yaml` has an `assets:` entry the loader does not accept'*) ;;
+    *) printf '%s\n' 'an asset manifest entry with an unknown key was not rejected at the manifest' >&2; exit 1 ;;
+esac
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

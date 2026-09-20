@@ -1,0 +1,18 @@
+schema: neper-project-1
+name: asset_fixture
+version: 0.1.0
+language: "0.1"
+
+# Three assets, declared out of name order; the registry sorts them.
+assets:
+  text/hello:
+    path: assets/hello.txt
+    media_type: text/plain
+    attributes: {base: text/hello, locale: "", theme: any}
+  "bytes/all@1x":
+    path: assets/all.bin
+    attributes:
+      base: bytes/all
+      scale: "1"
+  bytes/empty:
+    path: assets/empty.bin

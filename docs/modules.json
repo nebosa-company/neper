@@ -400,13 +400,11 @@
   {
    "name": "e.asset",
    "layer": 5,
-   "surface": "planned",
+   "surface": "source",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
-   "blocked_by": [
-    "embedded-asset-linking"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.async",

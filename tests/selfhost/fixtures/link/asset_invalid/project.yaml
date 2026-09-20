@@ -1,0 +1,10 @@
+schema: neper-project-1
+name: bad
+version: 0.1.0
+language: "0.1"
+
+# An entry with a key the manifest subset does not have.
+assets:
+  broken:
+    path: src/main.e
+    colour: red

@@ -2,6 +2,7 @@
 
 use e.mem
 use e.os
+use assets
 use lex
 use parse
 use project
@@ -901,6 +902,8 @@ fn begin(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: st
     let (root_name, name_error) = project.module_name(a, discovered, root_path)
     if name_error != ok { ret name_error }
     g.project = discovered
+    // The project's declared assets become `e.asset`'s text (D777), as an overlay.
+    if discovered.has_sources { try assets.asset_overlay(a, discovered.root, g.overlay_paths, g.overlay_texts, &g.overlay_count) }
     g.toolchain_root = toolchain_root
     g.arch = arch
     g.os = host_os
