@@ -4319,6 +4319,7 @@ fn intrinsic_signature(module: str, name: str) -> str {
     if same(module, "e.io") && same(name, "printf") { ret "fn printf[FMT: str](args: ...) -> err" }
     if same(module, "e.gpu") && same(name, "launch") { ret "fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err" }
     if same(module, "e.gpu") && same(name, "barrier") { ret "fn barrier()" }
+    if same(module, "e.meta") && same(name, "signed") { ret "fn signed[T: type]() -> bool" }
     if same(module, "e.str") {
         if same(name, "format") { ret "fn format[FMT: str](a: *mem.Arena, args: ...) -> (str, err)" }
         if same(name, "push_err") { ret "fn push_err(b: *Builder, v: err) -> err" }
@@ -7033,6 +7034,9 @@ type MetaQuery = enum u8 {
     TypeName,
     SizeOf,
     AlignOf,
+    // `meta.signed[T]()` (D782): whether an integer is signed (a float is), which
+    // `kind` folds both integer signs into one answer of.
+    Signed,
 }
 
 type MetaInfo = struct {
@@ -7921,6 +7925,7 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
         if same(member, "kind") { query = .Kind }
         if same(member, "array_len") { query = .ArrayLen }
         if same(member, "type_name") { query = .TypeName }
+        if same(member, "signed") { query = .Signed }
     }
     // `e.mem`'s two layout questions come here rather than to a path of their own: a
     // type goes in, a number comes out, and nothing survives to run time. What is
@@ -7956,6 +7961,17 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
         let (value, value_error) = meta_kind_value(c, subject)
         if value_error != ok { ret (info, value_error) }
         info.value = value
+        ret (info, ok)
+    }
+    if query == .Signed {
+        info.result = make_type(.Bool, "bool", target_module)
+        if subject.kind == .TypeParameter { ret (info, ok) }
+        if subject.kind == .Float || subject.kind == .UntypedFloat || subject.kind == .UntypedInteger {
+            info.value = 1usize
+            ret (info, ok)
+        }
+        if subject.kind != .Integer { ret (info, InvalidType) }
+        if !unsigned_integer_type(subject) { info.value = 1usize }
         ret (info, ok)
     }
     if query == .ArrayLen {
@@ -8007,7 +8023,7 @@ fn meta_constant(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         if size == 0usize { ret (0usize, invalid_type(), false) }
         ret (size, info.result, true)
     }
-    if info.query != .Kind && info.query != .ArrayLen { ret (0usize, invalid_type(), false) }
+    if info.query != .Kind && info.query != .ArrayLen && info.query != .Signed { ret (0usize, invalid_type(), false) }
     ret (info.value, info.result, true)
 }
 
@@ -8068,6 +8084,19 @@ fn compared_constant(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // interpreter this compiler does not have.
 fn comptime_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, bool) {
     let node = tree.nodes[node_index]
+    // A `bool` question standing alone, or negated: `if meta.signed[T]() {` (D782).
+    if node.kind == .CallExpr {
+        let (value, value_type, known) = meta_constant(c, g, tree, module_index, node_index)
+        if known && value_type.kind == .Bool { ret (value != 0usize, true) }
+        ret (false, false)
+    }
+    if node.kind == .UnaryExpr && c.tokens[usize(node.token_start)].kind == .PunctBang {
+        let (inner, has_inner) = first_node_child(tree, node)
+        if !has_inner || tree.nodes[inner].kind != .CallExpr { ret (false, false) }
+        let (value, value_type, known) = meta_constant(c, g, tree, module_index, inner)
+        if known && value_type.kind == .Bool { ret (value == 0usize, true) }
+        ret (false, false)
+    }
     if node.kind != .BinaryExpr { ret (false, false) }
     let op = binary_operator(c, tree, node)
     if op != .PunctEqEq && op != .PunctBangEq {

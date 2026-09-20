@@ -37,7 +37,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
 - `.Cpu`: `lib/e/gpu.e`×6
-- `gpu.gid`: `lib/e/gpu/tensor.e`×12, `lib/e/gpu.e`×1, `src/check.e`×1‡
+- `gpu.gid`: `lib/e/gpu/tensor.e`×18, `lib/e/gpu.e`×1, `src/check.e`×1‡
 - `FieldAddress`: `src/lower.e`×35‡, `src/codegen_x64.e`×4‡, `src/nir.e`×3†, `src/em.e`×1‡
 - `Stack`: `src/lower.e`×35‡, `lib/e/data/stack.e`×11, `src/codegen_x64.e`×9‡, `src/regalloc.e`×7, `src/nir.e`×4†, `lib/e/debug.e`×1, `lib/e/ui/style.e`×1, `src/em.e`×1‡
 - `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1, `src/lower.e`×1‡

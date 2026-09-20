@@ -1592,6 +1592,13 @@ $gpuSharedOutside = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixt
 if ($LASTEXITCODE -ne 1 -or ($gpuSharedOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-TYPE-9999\]: `shared var` is legal only directly in a kernel') { throw "a shared var outside a kernel was not refused: $($gpuSharedOutside -join "`n")" }
 $gpuSharedInit = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_shared_initializer\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuSharedInit -join "`n") -notmatch 'main\.e:5:5: error\[E-TYPE-9999\]: `tile` is a `shared var` with an initialiser') { throw "a shared var with an initialiser was not refused: $($gpuSharedInit -join "`n")" }
+# `meta.signed[T]()` (D782): folded like `meta.kind`, a bare or negated bool question
+# settles an `if`; `link/gpu_tensor` reaches the unsigned kernels through it.
+$metaSignedPath = Join-Path $testBuild 'meta-signed-selfhost.exe'
+$metaSignedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\meta_signed\src\main.e') $repo 'x64' 'windows' $metaSignedPath
+if ($LASTEXITCODE -ne 0 -or $metaSignedWritten -ne 'executable written') { throw 'meta_signed emission failed' }
+$metaSignedOutput = & $metaSignedPath
+if ($LASTEXITCODE -ne 0 -or $metaSignedOutput -ne 'meta signed ok') { throw "meta.signed answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -117,6 +117,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if doubled_view_error != ok || tensor.download[i64](q, long, doubled_host) != ok { os.exit(30i32) }
     if doubled[0] != 2i64 || doubled[1] != -4i64 || doubled[2] != 6000000000i64 { os.exit(31i32) }
 
+    // A u32 matmul reaches the unsigned kernel (D782): [[1, 2], [3, 4]] squared.
+    var small_storage: [4]u32 = [4]u32{ 1u32, 2u32, 3u32, 4u32 }
+    let (small_host, small_view_error) = linalg_tensor.contiguous[u32](a, small_storage[0..], shape_2x2[0..])
+    if small_view_error != ok { os.exit(50i32) }
+    let (small, small_error) = tensor.upload[u32](a, q, linalg_tensor.as_const[u32](small_host))
+    if small_error != ok { os.exit(51i32) }
+    let (squared, squared_error) = tensor.upload[u32](a, q, linalg_tensor.as_const[u32](small_host))
+    if squared_error != ok { os.exit(52i32) }
+    if tensor.matmul[u32](q, squared, small, small) != ok { os.exit(53i32) }
+    var squared_storage: [4]u32 = zero
+    let (squared_host, squared_view_error) = linalg_tensor.contiguous[u32](a, squared_storage[0..], shape_2x2[0..])
+    if squared_view_error != ok || tensor.download[u32](q, squared, squared_host) != ok { os.exit(54i32) }
+    if squared_storage[0] != 7u32 || squared_storage[1] != 10u32 || squared_storage[2] != 15u32 || squared_storage[3] != 22u32 { os.exit(55i32) }
+    if tensor.add[u32](q, squared, small, small) != ok { os.exit(56i32) }
+    if tensor.download[u32](q, squared, squared_host) != ok || squared_storage[3] != 8u32 { os.exit(57i32) }
+
     // Shape refusals: add over different shapes, matmul over disagreeing extents,
     // download into a strided or a differently shaped view, an empty shape.
     if tensor.add[f32](q, sum, x, z) != tensor.Shape { os.exit(32i32) }

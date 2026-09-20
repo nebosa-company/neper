@@ -4,11 +4,10 @@
 // host copy from `a`, then one `gpu.upload`; `download` is one `gpu.download` into a
 // host view that is row-major contiguous (`Shape` otherwise: there is no arena here
 // to gather through); `add` and `matmul` are launches of the kernels below, one per
-// element type -- `f32`, `f64`, `i32`, `i64` -- chosen at compile time by
-// `meta.kind[T]` and `mem.size_of[T]` (the two questions D138 folds), since a kernel
-// takes no comptime parameter; a narrower integer or a float of another width is
-// `gpu.Unsupported`, and an unsigned `T` does not compile, since no folded question
-// tells signedness apart -- its `Buf` reaches the signed kernel's pack check. Every operation is one
+// element type -- `f32`, `f64`, `i32`, `i64`, `u32`, `u64` -- chosen at compile time
+// by `meta.kind[T]`, `mem.size_of[T]` and `meta.signed[T]` (the questions D138 and
+// D782 fold), since a kernel takes no comptime parameter; a narrower integer or a
+// float of another width is `gpu.Unsupported`. Every operation is one
 // queue submission and nothing here opens a device. A float add or multiply-add is
 // one IEEE operation each, never fused, so the CPU build and a device agree bit for
 // bit (section 11).
@@ -49,6 +48,20 @@ fn add_i32(n: u32, x: []const i32, y: []const i32, dst: []i32) {
 
 @gpu(256)
 fn add_i64(n: u32, x: []const i64, y: []const i64, dst: []i64) {
+    let i = gpu.gid.x
+    if i >= n { ret }
+    dst[usize(i)] = x[usize(i)] + y[usize(i)]
+}
+
+@gpu(256)
+fn add_u32(n: u32, x: []const u32, y: []const u32, dst: []u32) {
+    let i = gpu.gid.x
+    if i >= n { ret }
+    dst[usize(i)] = x[usize(i)] + y[usize(i)]
+}
+
+@gpu(256)
+fn add_u64(n: u32, x: []const u64, y: []const u64, dst: []u64) {
     let i = gpu.gid.x
     if i >= n { ret }
     dst[usize(i)] = x[usize(i)] + y[usize(i)]
@@ -104,6 +117,34 @@ fn matmul_i64(m: u32, n: u32, k: u32, x: []const i64, y: []const i64, dst: []i64
     let r = gpu.gid.y
     if c >= n || r >= m { ret }
     var total = 0i64
+    var t = 0usize
+    while t < usize(k) {
+        total = total + x[usize(r) * usize(k) + t] * y[t * usize(n) + usize(c)]
+        t += 1usize
+    }
+    dst[usize(r) * usize(n) + usize(c)] = total
+}
+
+@gpu(16, 16)
+fn matmul_u32(m: u32, n: u32, k: u32, x: []const u32, y: []const u32, dst: []u32) {
+    let c = gpu.gid.x
+    let r = gpu.gid.y
+    if c >= n || r >= m { ret }
+    var total = 0u32
+    var t = 0usize
+    while t < usize(k) {
+        total = total + x[usize(r) * usize(k) + t] * y[t * usize(n) + usize(c)]
+        t += 1usize
+    }
+    dst[usize(r) * usize(n) + usize(c)] = total
+}
+
+@gpu(16, 16)
+fn matmul_u64(m: u32, n: u32, k: u32, x: []const u64, y: []const u64, dst: []u64) {
+    let c = gpu.gid.x
+    let r = gpu.gid.y
+    if c >= n || r >= m { ret }
+    var total = 0u64
     var t = 0usize
     while t < usize(k) {
         total = total + x[usize(r) * usize(k) + t] * y[t * usize(n) + usize(c)]
@@ -191,13 +232,25 @@ fn add[T: type](queue: *gpu.Queue, dst: Tensor[T], x: Tensor[T], y: Tensor[T]) -
         }
     } else {
         if meta.kind[T]() == .Int {
-            if mem.size_of[T]() == 4usize {
-                ret gpu.launch[add_i32](queue, grid, n, x.data, y.data, dst.data)
-            } else {
-                if mem.size_of[T]() == 8usize {
-                    ret gpu.launch[add_i64](queue, grid, n, x.data, y.data, dst.data)
+            if meta.signed[T]() {
+                if mem.size_of[T]() == 4usize {
+                    ret gpu.launch[add_i32](queue, grid, n, x.data, y.data, dst.data)
                 } else {
-                    ret gpu.Unsupported
+                    if mem.size_of[T]() == 8usize {
+                        ret gpu.launch[add_i64](queue, grid, n, x.data, y.data, dst.data)
+                    } else {
+                        ret gpu.Unsupported
+                    }
+                }
+            } else {
+                if mem.size_of[T]() == 4usize {
+                    ret gpu.launch[add_u32](queue, grid, n, x.data, y.data, dst.data)
+                } else {
+                    if mem.size_of[T]() == 8usize {
+                        ret gpu.launch[add_u64](queue, grid, n, x.data, y.data, dst.data)
+                    } else {
+                        ret gpu.Unsupported
+                    }
                 }
             }
         } else {
@@ -226,13 +279,25 @@ fn matmul[T: type](queue: *gpu.Queue, dst: Tensor[T], x: Tensor[T], y: Tensor[T]
         }
     } else {
         if meta.kind[T]() == .Int {
-            if mem.size_of[T]() == 4usize {
-                ret gpu.launch[matmul_i32](queue, grid, m, n, k, x.data, y.data, dst.data)
-            } else {
-                if mem.size_of[T]() == 8usize {
-                    ret gpu.launch[matmul_i64](queue, grid, m, n, k, x.data, y.data, dst.data)
+            if meta.signed[T]() {
+                if mem.size_of[T]() == 4usize {
+                    ret gpu.launch[matmul_i32](queue, grid, m, n, k, x.data, y.data, dst.data)
                 } else {
-                    ret gpu.Unsupported
+                    if mem.size_of[T]() == 8usize {
+                        ret gpu.launch[matmul_i64](queue, grid, m, n, k, x.data, y.data, dst.data)
+                    } else {
+                        ret gpu.Unsupported
+                    }
+                }
+            } else {
+                if mem.size_of[T]() == 4usize {
+                    ret gpu.launch[matmul_u32](queue, grid, m, n, k, x.data, y.data, dst.data)
+                } else {
+                    if mem.size_of[T]() == 8usize {
+                        ret gpu.launch[matmul_u64](queue, grid, m, n, k, x.data, y.data, dst.data)
+                    } else {
+                        ret gpu.Unsupported
+                    }
                 }
             }
         } else {

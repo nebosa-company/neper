@@ -1526,6 +1526,13 @@ case "$gpu_shared_init" in
     *'main.e:5:5: error[E-TYPE-9999]: `tile` is a `shared var` with an initialiser'*) ;;
     *) printf '%s\n' "a shared var with an initialiser was not refused: $gpu_shared_init" >&2; exit 1 ;;
 esac
+# `meta.signed[T]()` (D782): folded like `meta.kind`, a bare or negated bool question
+# settles an `if`; `link/gpu_tensor` reaches the unsigned kernels through it.
+meta_signed_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/meta_signed/src/main.e" "$repo" x64 linux "$test_build/meta-signed-selfhost")
+[ "$meta_signed_written" = 'executable written' ]
+chmod +x "$test_build/meta-signed-selfhost"
+meta_signed_output=$("$test_build/meta-signed-selfhost")
+[ "$meta_signed_output" = 'meta signed ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

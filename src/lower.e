@@ -270,7 +270,9 @@ fn emit_reflection(c: *check.Checker, call: check.CallInfo, builder: *nir.Builde
         results.values[0usize] = layout_value
         ret ok
     }
-    let (value_instruction, value, value_error) = nir.emit(builder, .ConstInteger, call.meta_result, true, call.meta_value, token)
+    var constant: nir.Opcode = .ConstInteger
+    if call.meta_query == .Signed { constant = .ConstBool }
+    let (value_instruction, value, value_error) = nir.emit(builder, constant, call.meta_result, true, call.meta_value, token)
     if value_error != ok { ret value_error }
     results.values[0usize] = value
     ret ok

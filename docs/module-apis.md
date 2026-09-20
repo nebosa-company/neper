@@ -74,6 +74,7 @@ fn fields[T: type]() -> []const Field
 fn members[E: type]() -> []const Member
 fn type_name[T: type]() -> str
 fn kind[T: type]() -> TypeKind
+fn signed[T: type]() -> bool
 fn element_type[T: type]() -> type
 fn array_len[T: type]() -> usize
 fn backing_type[E: type]() -> type

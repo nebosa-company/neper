@@ -14851,3 +14851,21 @@ them, over three workgroups; a struct-typed shared var published by invocation
 barrier that sees `0xCD`. Not yet: the shared total in the Interface entry
 and its check against the device's limit at launch, a helper that takes a
 `[]shared T` and is thereby device-only, `Atomic[T]` shared vars.
+
+## D782 — `meta.signed[T]()` joins the folded questions
+
+`meta.kind[T]()` answers `.Int` for every integer, so a generic could not choose
+between a signed and an unsigned instance at compile time, and D779's tensor
+module refused unsigned element types at the pack check of the signed kernel.
+`e.meta` gains `fn signed[T: type]() -> bool`: `true` for a signed integer and
+for a float, `false` for an unsigned integer including `usize`, no answer for
+anything else. It is seeded as an intrinsic, deferred in a template body as
+`kind` is, folded by `meta_constant` as `kind` and `array_len` are, and a
+`bool` question standing alone or negated -- `if meta.signed[T]() {`,
+`if !meta.signed[T]() {` -- now settles an `if` as the `==` form does, since
+the D138 rule wanted a `meta` question on one side and a bool has no other
+side to write. At run time it is a `ConstBool`. `e.gpu.tensor` picks its
+`u32`/`u64` kernels through it and the fence gains the function.
+
+Not in this: `if meta.signed[T]() && ...` -- an `&&` over a folded question
+stays a run-time condition, and both arms are checked.

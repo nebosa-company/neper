@@ -67,7 +67,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `shuffle`: `src/codegen_x64.e`×5‡, `benchmarks/metamorphic/metamorphic.py`×4, `lib/e/simd.e`×2, `src/emit_x64.e`×2†, `src/check.e`×1‡
 - `mem.alloc`: `src/main.e`×243‡, `src/tool.e`×79‡, `src/em_link.e`×49†, `lib/e/fmt/json.e`×26†, `src/check.e`×24‡, `lib/e/os.windows.e`×23‡, `lib/e/algo/graph.e`×22, `lib/e/fmt/webp.e`×18†
-- `mem.size_of`: `lib/e/bytes.e`×10, `lib/e/gpu/tensor.e`×9, `lib/e/algo/deflate.e`×5, `lib/e/fmt/zstd.e`×5†, `lib/e/math.e`×5†, `lib/e/fmt/gzip.e`×4, `lib/e/fmt/lzw.e`×4, `lib/e/fmt/zlib.e`×4
+- `mem.size_of`: `lib/e/gpu/tensor.e`×13, `lib/e/bytes.e`×10, `lib/e/algo/deflate.e`×5, `lib/e/fmt/zstd.e`×5†, `lib/e/math.e`×5†, `lib/e/fmt/gzip.e`×4, `lib/e/fmt/lzw.e`×4, `lib/e/fmt/zlib.e`×4
 - `mem.align_of`: `src/check.e`×1‡
 - `simd.bits`: `src/check.e`×1‡, `src/main.e`×1‡
 - `pcmpeqd`: `src/codegen_x64.e`×1‡, `src/disasm_x64.e`×1†
