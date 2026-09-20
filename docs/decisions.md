@@ -14962,3 +14962,47 @@ three intrinsics; the bare `...` stays legal on an `extern fn` as section
 name. `check/argument_pack` pins the message and position in both suites.
 With `gpu.launch` expanding (D778) the three packs all expand, and the row
 C060 -- comptime `str` parameters and the packs -- is complete.
+
+## D788 — The inlining cap stays within a module too; C079 closes
+
+Section 12 says the forty-instruction cap is the edge rule's: it confines
+body edges to leaf helpers across a `.em` boundary, and within one module
+there is none, the module being one unit of recompilation anyway. The
+oracle applies one cap to every candidate, so a same-module call to a body
+over forty instructions is a call. C079's last clause read that as a gap;
+it is not one the section mandates -- "no cap" is a freedom the edge rule
+grants, and the same sentence lets a heuristic inline less -- and D348's
+measurement already covered it: the cap was varied at 0/20/40/80/160 on the
+compiler compiling 500k lines with the one oracle, so the wider caps
+uncapped same-module calls too, and past forty bought nothing while the
+image grew. A third oracle level (a copy three deep) is the same
+measurement's answer at a different axis: the second level's copies are
+leaves of at most forty instructions holding copies of the same, and what
+a third would add is copies of those, under the same cap, for the same
+nothing. Both stay as they are; C079 closes with the oracle, its two
+levels, the cap and `--explain` as built.
+
+## D789 — A one-function edit rebuilds in milliseconds on both hosts; C080 closes
+
+The roadmap's M2 line, "a one-function edit rebuilds in milliseconds on
+Linux and Windows", measured today with a release-built compiler building
+itself (73k lines, 37 modules, eight workers) over a private copy of the
+tree through `emit-executable --release --incremental`, wall clock around
+the process:
+
+| build | Windows | Linux (WSL) |
+|---|---|---|
+| cold, no artifacts | 650 ms | 664 ms |
+| warm, nothing changed | 103 ms | 100 ms |
+| one-function body edit in `decimal.e` (11 functions lowered) | 280 ms | 100 ms |
+| one-function body edit in `lower.e` (17k lines, 195 functions lowered) | 456 ms | 389 ms |
+
+The module is the unit: an edit in the largest module lowers that module's
+195 functions and nothing else, and the image is the cold build's byte for
+byte (D319). A warm build still reads every artifact's declarations to
+decide the keep set -- 29 declarations checked with nothing changed, 1,674
+when `lower.e`, which everything past the front end imports, changes -- and
+that is what the hundred milliseconds are; a keep set decided from a digest
+alone, without the declarations, is the roadmap's later saving and not
+this row's. C080 closes on these numbers, the fixtures of D205–D324, and
+the hot build.
