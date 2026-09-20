@@ -168,13 +168,41 @@ TOOL_SCHEMAS = [
 ]
 
 
+def endpoint_up(args):
+    import urllib.request
+    try:
+        with urllib.request.urlopen(args.endpoint.rstrip("/") + "/models", timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def restart_server(args, log):
+    """Kill any llama-server, relaunch --server-cmd, wait until /v1/models answers."""
+    if not args.server_cmd:
+        return False
+    subprocess.run(["taskkill", "/F", "/IM", "llama-server.exe"], capture_output=True)
+    time.sleep(2)
+    subprocess.Popen(args.server_cmd, shell=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=open(LOGS / "llama-server.log", "a"))
+    for _ in range(60):
+        time.sleep(3)
+        if endpoint_up(args):
+            log.write("\n=== server restarted ===\n")
+            return True
+    log.write("\n!!! server did not come up after restart\n")
+    return False
+
+
 def session_openai(task_file, args, log):
     """The same session over an OpenAI-compatible /v1/chat/completions (llama-server, LM Studio's server)."""
     import urllib.request
     system, user = prompt_for(task_file)
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     deadline = time.time() + args.session_minutes * 60
-    for rnd in range(args.rounds):
+    restarts = {}
+    rnd = -1
+    while rnd + 1 < args.rounds:
+        rnd += 1
         if time.time() > deadline:
             log.write("\n!!! session exceeded %d minutes\n" % args.session_minutes)
             return "error"
@@ -185,7 +213,13 @@ def session_openai(task_file, args, log):
             with urllib.request.urlopen(req, timeout=3600) as resp:
                 reply = json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]
         except Exception as e:
+            # The fork's server dies on a bad allocation now and then; the conversation is
+            # ours, so restart it and ask the same round again rather than lose the session.
             log.write("\n!!! %s: %s\n" % (type(e).__name__, e))
+            if restarts.get("n", 0) < 2 and restart_server(args, log):
+                restarts["n"] = restarts.get("n", 0) + 1
+                rnd -= 1  # ask the same round again
+                continue
             return "error"
         reply.pop("reasoning_content", None)  # thinking is not fed back; it only bloats the context
         messages.append(reply)
@@ -279,6 +313,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="prism-ml/bonsai-27b")
     ap.add_argument("--endpoint", default="", help="OpenAI-compatible base URL, e.g. http://localhost:8080/v1 (llama-server); omit for the LM Studio SDK")
+    ap.add_argument("--server-cmd", default="", help="command that starts the server behind --endpoint; used to (re)start it when it is down")
     ap.add_argument("--kind", choices=["modules", "queue", "all"], default="modules")
     ap.add_argument("--max-tasks", type=int, default=1)
     ap.add_argument("--rounds", type=int, default=60)
@@ -304,6 +339,10 @@ def main():
             break
         if touched_paths():
             sys.exit("working tree is not clean; another session's edits would be committed or reverted - stop.")
+        if args.endpoint and not endpoint_up(args):
+            with open(LOGS / "driver.log", "a", encoding="utf-8") as boot:
+                if not restart_server(args, boot):
+                    sys.exit("endpoint %s is down and --server-cmd did not bring it up" % args.endpoint)
         if model is None and not args.endpoint:
             if lms is None:
                 sys.exit("pip install lmstudio, or pass --endpoint")
