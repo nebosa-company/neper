@@ -34,9 +34,12 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `e.gpu`: `src/check.e`×4‡, `src/lower.e`×4‡, `scripts/check_module_plan.py`×1, `src/resolve.e`×1†, `tests/conformance/tools/batch.txt`×1, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×1, `tests/conformance/tools/batch.x64-windows.expected.jsonl`×1, `tests/conformance/tools/catalog_unavailable.expected.jsonl`×1
-- `upload`: `lib/e/gfx/image.e`×1
-- `wait_for`: `lib/e/task.e`×4, `lib/e/sync.e`×3, `lib/e/concurrent/queue.e`×2, `lib/e/os.windows.e`×2‡
+- `e.gpu`: `src/check.e`×4‡, `src/lower.e`×4‡, `lib/e/gpu.e`×1, `scripts/check_module_plan.py`×1, `src/resolve.e`×1†, `tests/conformance/tools/batch.txt`×1, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×1, `tests/conformance/tools/batch.x64-windows.expected.jsonl`×1
+- `queue_with`: `lib/e/gpu.e`×2
+- `upload`: `lib/e/gpu.e`×2, `lib/e/gfx/image.e`×1
+- `download`: `lib/e/gpu.e`×2
+- `wait_for`: `lib/e/task.e`×4, `lib/e/sync.e`×3, `lib/e/concurrent/queue.e`×2, `lib/e/os.windows.e`×2‡, `lib/e/gpu.e`×1
+- `gpu.barrier`: `lib/e/gpu.e`×1
 
 ## Verification
 

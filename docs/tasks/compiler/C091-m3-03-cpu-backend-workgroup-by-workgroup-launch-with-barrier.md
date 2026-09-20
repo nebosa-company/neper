@@ -34,7 +34,8 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `gpu.gid`: `src/check.e`×1‡, `src/lower.e`×1‡
+- `.Cpu`: `lib/e/gpu.e`×6
+- `gpu.gid`: `lib/e/gpu.e`×1, `src/check.e`×1‡, `src/lower.e`×1‡
 - `gpu.lid`: `src/lower.e`×1‡
 - `gpu.wgid`: `src/lower.e`×1‡
 

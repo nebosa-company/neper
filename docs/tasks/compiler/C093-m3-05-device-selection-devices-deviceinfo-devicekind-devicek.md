@@ -33,8 +33,12 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `devices`: `scripts/check_gpu_contracts.py`×1
+- `devices`: `lib/e/gpu.e`×7, `scripts/check_gpu_contracts.py`×1
+- `.Cpu`: `lib/e/gpu.e`×6
+- `NoDevice`: `lib/e/gpu.e`×3
 - `Unsupported`: `src/codegen_x64.e`×104‡, `src/check.e`×72‡, `src/lower.e`×51‡, `lib/e/crypto/x509.e`×17, `lib/e/net/tls.e`×14†, `lib/e/fmt/jpeg.e`×12†, `lib/e/os.windows.e`×10‡, `lib/e/net/http.e`×9†
+- `open_id`: `lib/e/gpu.e`×1
+- `AmbiguousDevice`: `lib/e/gpu.e`×1
 
 ## Verification
 

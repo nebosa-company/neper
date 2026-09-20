@@ -14733,3 +14733,32 @@ Not yet, and named on the queue rows: the barrier state machine, `shared var`,
 subgroups, `[]Atomic[T]` parameters, the fault buffer, a lock on the device
 block, Vulkan and CUDA, stable device keys, and the type-argument inference the
 example once assumed (`gpu.release(q, dx)` is `gpu.release[f32](q, dx)`).
+
+## D779 — `e.gpu.tensor` over the CPU device: kernels per element type, chosen by folded questions
+
+With `e.gpu` on disk the row's last dependency is met, and the module lands at
+`surface: partial`. A `Tensor[T]` is a `gpu.Buf[T]` holding a row-major contiguous
+copy of the host view with shape and strides in the caller's arena: `upload`
+gathers a strided view into that order through a host copy from `a` and one
+`gpu.upload`; `download` is one `gpu.download` into a host view that is row-major
+contiguous, `Shape` otherwise, since the fence gives it no arena to gather
+through. `add` and `matmul` are launches: a kernel takes no comptime parameter,
+so there is one kernel per element type -- `f32`, `f64`, `i32`, `i64` -- and the
+generic picks it with `meta.kind[T]()` and `mem.size_of[T]()`, the two questions
+D138 folds, every arm an `if`/`else` so the arm `T` cannot reach is not the
+instance's code at all. A float of another width or a narrower integer is
+`gpu.Unsupported`; an unsigned `T` does not compile, because no folded question
+tells signedness apart and its `Buf` reaches the signed kernel's pack check. The
+float multiply and add are one IEEE operation each, never fused, as section 11
+requires for CPU-device agreement. `matmul` is one invocation per output element
+over 16x16 workgroups, no tiling; `e.meta` joins the row's dependencies.
+
+Two compiler facts came out of it. A launch inside a template body is checked
+with `T` symbolic: the pack check accepts a `Buf` whose element is still a type
+parameter, no launcher is made for the template, and the call answers `err`
+without one; the concrete instance's check makes the launcher. And a launcher
+made while an instance body is checked belongs to the module that instantiated
+it -- `instance_owner`, as `instantiate_function` already does -- not to the
+template's module, whose artifact was written before the instance existed; a
+launcher or formatter instance is also no template dependency of its owner's
+artifact, since its `template_index` names a kernel or nothing.

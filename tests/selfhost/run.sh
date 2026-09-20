@@ -1476,6 +1476,14 @@ case "$gpu_argument" in
     *'main.e:9:9: error[E-TYPE-9999]: `fill` takes a device slice at this position'*) ;;
     *) printf '%s\n' "a host slice in a launch pack was not refused: $gpu_argument" >&2; exit 1 ;;
 esac
+# `e.gpu.tensor` (D779): a strided host view uploaded contiguous, `add` and `matmul` as
+# launches agreeing with the host tensor module and the plain formula, an i64 kernel,
+# every `Shape` refusal, a released tensor stale.
+gpu_tensor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_tensor/src/main.e" "$repo" x64 linux "$test_build/gpu-tensor-selfhost")
+[ "$gpu_tensor_written" = 'executable written' ]
+chmod +x "$test_build/gpu-tensor-selfhost"
+gpu_tensor_output=$("$test_build/gpu-tensor-selfhost")
+[ "$gpu_tensor_output" = 'gpu tensor ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

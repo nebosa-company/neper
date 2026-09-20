@@ -83,7 +83,6 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `docs/schemas/neper-v1.schema.json`: `scripts/validate_stream.py`×2
 - `captured_complete`: `src/main.e`×2‡, `tests/conformance/tools/run.expected.jsonl`×1, `tests/conformance/tools/run_args.expected.jsonl`×1, `tests/conformance/tools/run_flood.expected.jsonl`×1, `tests/conformance/tools/run_trap.expected.jsonl`×1
-- `progress`: `lib/e/fmt/jpeg.e`×10†, `scripts/render_progress.py`×7, `src/main.e`×7‡, `lib/e/io.e`×6, `src/lower.e`×5‡, `src/nir.e`×4†, `lib/e/async/io.e`×2, `benchmarks/protocol_strategies/measure.py`×1
 - `index-file`: `src/main.e`×9‡, `benchmarks/metamorphic/metamorphic.py`×2, `benchmarks/metamorphic/rename_locals.py`×1, `benchmarks/metamorphic/rename_symbols.py`×1, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/check_module_surfaces.py`×1, `src/check.e`×1‡, `src/tool.e`×1‡
 - `dis-file`: `src/main.e`×7‡, `tests/conformance/tools/dis_inlined.e`×1
 - `build-manifest-file`: `src/main.e`×2‡, `src/tool.e`×1‡

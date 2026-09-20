@@ -53,7 +53,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Code anchors
 
-- `barrier`: `tests/conformance/parse/barrier.expected.jsonl`×35, `src/parse.e`×22†, `src/main.e`×13‡, `lib/e/sync.e`×4, `src/tool.e`×4‡, `src/graph.e`×3†, `src/check.e`×1‡, `tests/conformance/reject/barrier.expected.jsonl`×1
+- `barrier`: `tests/conformance/parse/barrier.expected.jsonl`×35, `src/parse.e`×22†, `src/main.e`×13‡, `lib/e/sync.e`×4, `src/tool.e`×4‡, `src/graph.e`×3†, `lib/e/gpu.e`×2, `src/check.e`×1‡
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

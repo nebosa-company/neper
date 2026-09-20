@@ -8382,6 +8382,9 @@ fn check_launch_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         let (supplied, supplied_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
         if supplied_error != ok { ret (invalid_type(), supplied_error) }
         let (element, is_buf) = buf_element_type(c, g, supplied)
+        // In a template body the element may still be a type parameter; the instance
+        // settles it, and the dead arm of a folded `meta` question never gets here.
+        if is_buf && c.generic_declaration && type_shape_unknown(element) { ret (supplied, ok) }
         if !is_buf || !parameter.has_element || parameter.element >= c.type_count || !type_equal(c, element, c.types[parameter.element]) {
             record_failure(c, module_index, node, .GpuLaunch, kernel.name, "takes a device slice at this position, so the argument has to be a `gpu.Buf` of its element type")
             ret (invalid_type(), TypeMismatch)
@@ -9597,7 +9600,12 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         ret (info, ok)
     }
     if info.launcher {
-        let (instance_index, instance_error) = launcher_instance(c, module_index, function.module_index, info.launcher_kernel, formatter_types[0usize..function.parameter_count])
+        // A template body is checked with `T` still symbolic: no launcher is made for
+        // it, since nothing could lower one; the concrete instance's check makes it.
+        if c.generic_declaration { ret (info, ok) }
+        // Owned where the instance being checked is owned (D778): a launch inside a
+        // template body instantiated from another module is that module's code.
+        let (instance_index, instance_error) = launcher_instance(c, instance_owner(c, module_index), function.module_index, info.launcher_kernel, formatter_types[0usize..function.parameter_count])
         if instance_error != ok { ret (info, instance_error) }
         info.function = c.functions[instance_index]
         ret (info, ok)
@@ -10220,6 +10228,11 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
     if call.protocol_builtin == .Eq {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (make_type(.Bool, "bool", call.protocol_type.module_index), ok)
+    }
+    // A launch answers `err` (D778); in a template body no instance carries it yet.
+    if call.launcher && call.function.intrinsic {
+        if index != 0usize { ret (invalid_type(), InvalidType) }
+        ret (make_type(.Err, "err", call.function.module_index), ok)
     }
     if call.protocol_pending {
         if index != 0usize { ret (invalid_type(), InvalidType) }

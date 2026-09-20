@@ -1556,6 +1556,14 @@ $gpuBare = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\chec
 if ($LASTEXITCODE -ne 1 -or ($gpuBare -join "`n") -notmatch 'main\.e:4:1: error\[E-TYPE-9999\]: `fill` carries `@gpu` without a usable workgroup size') { throw "a bare @gpu was not refused: $($gpuBare -join "`n")" }
 $gpuArgument = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_launch_argument\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuArgument -join "`n") -notmatch 'main\.e:9:9: error\[E-TYPE-9999\]: `fill` takes a device slice at this position') { throw "a host slice in a launch pack was not refused: $($gpuArgument -join "`n")" }
+# `e.gpu.tensor` (D779): a strided host view uploaded contiguous, `add` and `matmul` as
+# launches agreeing with the host tensor module and the plain formula, an i64 kernel,
+# every `Shape` refusal, a released tensor stale.
+$gpuTensorPath = Join-Path $testBuild 'gpu-tensor-selfhost.exe'
+$gpuTensorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_tensor\src\main.e') $repo 'x64' 'windows' $gpuTensorPath
+if ($LASTEXITCODE -ne 0 -or $gpuTensorWritten -ne 'executable written') { throw 'gpu_tensor emission failed' }
+$gpuTensorOutput = & $gpuTensorPath
+if ($LASTEXITCODE -ne 0 -or $gpuTensorOutput -ne 'gpu tensor ok') { throw "an e.gpu.tensor upload, launch, download or refusal answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

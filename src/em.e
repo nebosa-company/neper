@@ -1960,6 +1960,9 @@ fn owned_template_dependency(c: *check.Checker, module_index: usize, at: usize) 
     let generic = c.function_generics[at]
     if !generic.instance || c.functions[at].generic { ret (0usize, false) }
     if c.functions[at].owner_module_index != module_index { ret (0usize, false) }
+    // A generated body (a formatter's, a launcher's) has no template to depend on
+    // (D778): a launcher's `template_index` names its kernel, which is ordinary code.
+    if generic.formatter || generic.launcher { ret (0usize, false) }
     let template_index = generic.template_index
     if template_index >= c.function_count || c.functions[template_index].module_index == module_index { ret (0usize, false) }
     let (first, end) = span_of(c, span_instances(), module_index)

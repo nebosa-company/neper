@@ -1461,13 +1461,14 @@
   {
    "name": "e.gpu.tensor",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.linalg.tensor",
     "e.gpu",
-    "e.mem"
+    "e.mem",
+    "e.meta"
    ],
    "blocked_by": []
   },
