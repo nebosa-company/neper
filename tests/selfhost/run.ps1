@@ -1396,6 +1396,24 @@ $audioMixerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $audioMixerWritten -ne 'executable written') { throw 'e.audio.mixer emission failed' }
 & $audioMixerPath
 if ($LASTEXITCODE -ne 0) { throw "an e.audio.mixer lifecycle, mix or resample answered wrongly: exit $LASTEXITCODE" }
+# `e.audio.spatial` (D767) pins integer pan at the four bearings, linear attenuation over a
+# source's range, gain-only placement on a live voice, and cues that draw a variant from the
+# caller's generator and respect their cooldown.
+$audioSpatialSurface = Get-Content (Join-Path $repo 'lib\e\audio\spatial.e') |
+    Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
+    ForEach-Object {
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.audio.spatial contains an unreadable public declaration' }
+        $Matches[1]
+    }
+$expectedAudioSpatialSurface = @('Listener', 'Source', 'Cue', 'Unknown', 'pan', 'attenuate', 'place', 'trigger', 'step_cues')
+if (($audioSpatialSurface -join "`n") -ne ($expectedAudioSpatialSurface -join "`n")) { throw 'e.audio.spatial public declarations differ from module-apis.md' }
+$audioSpatialParsed = & $compiler parse-file (Join-Path $repo 'lib\e\audio\spatial.e')
+if ($LASTEXITCODE -ne 0 -or $audioSpatialParsed -ne 'parse file ok') { throw 'e.audio.spatial failed CLI parsing' }
+$audioSpatialPath = Join-Path $testBuild 'audio-spatial-selfhost.exe'
+$audioSpatialWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audio_spatial\src\main.e') $repo 'x64' 'windows' $audioSpatialPath
+if ($LASTEXITCODE -ne 0 -or $audioSpatialWritten -ne 'executable written') { throw 'e.audio.spatial emission failed' }
+$audioSpatialOutput = & $audioSpatialPath
+if ($LASTEXITCODE -ne 0 -or $audioSpatialOutput -ne 'audio spatial ok') { throw "an e.audio.spatial pan, attenuation, placement or cue answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.wav` pins bounded PCM RIFF parsing, streaming decode, seek and exact encoding.
 $wavPath = Join-Path $testBuild 'fmt-wav-selfhost.exe'
 $wavWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_wav\src\main.e') $repo 'x64' 'windows' $wavPath

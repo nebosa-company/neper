@@ -1301,6 +1301,27 @@ audio_mixer_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$audio_mixer_written" = 'executable written' ]
 chmod +x "$test_build/audio-mixer-selfhost"
 "$test_build/audio-mixer-selfhost"
+# `e.audio.spatial` (D767) pins integer pan at the four bearings, linear attenuation over a
+# source's range, gain-only placement on a live voice, and cues that draw a variant from the
+# caller's generator and respect their cooldown.
+audio_spatial_surface=$(grep -E '^(type|fn|error|const|var) ' "$repo/lib/e/audio/spatial.e" | sed -E 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/')
+expected_audio_spatial_surface='Listener
+Source
+Cue
+Unknown
+pan
+attenuate
+place
+trigger
+step_cues'
+[ "$audio_spatial_surface" = "$expected_audio_spatial_surface" ]
+audio_spatial_parsed=$($test_build/neper-self parse-file "$repo/lib/e/audio/spatial.e")
+[ "$audio_spatial_parsed" = 'parse file ok' ]
+audio_spatial_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audio_spatial/src/main.e" "$repo" x64 linux "$test_build/audio-spatial-selfhost")
+[ "$audio_spatial_written" = 'executable written' ]
+chmod +x "$test_build/audio-spatial-selfhost"
+audio_spatial_output=$("$test_build/audio-spatial-selfhost")
+[ "$audio_spatial_output" = 'audio spatial ok' ]
 # `e.fmt.wav` pins bounded PCM RIFF parsing, streaming decode, seek and exact encoding.
 wav_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_wav/src/main.e" "$repo" x64 linux "$test_build/fmt-wav-selfhost")
 [ "$wav_written" = 'executable written' ]

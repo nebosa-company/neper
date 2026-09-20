@@ -14359,3 +14359,34 @@ game that positions its sounds threads one generator through both. Found by the
 first local-model session on the module, which spent three rounds searching for
 the type; a fence that names what does not exist is a fence a session cannot
 implement, so the amendment precedes any source.
+
+## D767 — `e.audio.spatial` places a gain; the pan stays with the caller
+
+The fence's own comment has a source become "a gain and a pan on a mixer
+voice", but `mixer.Voice` carries one `gain` and nothing else positional, and
+`mix_into` sums every voice into every output channel alike. Giving the voice a
+`pan` would amend `e.audio.mixer`'s frozen fence and teach `mix_into` a stereo
+law, which is a mixer decision with its own row, not a side effect of the module
+above it. So `place` and `trigger` apply only the gain -- `s.gain` scaled by the
+linear attenuation, and the cue's `gain` over that -- through `mixer.set_gain`
+and `mixer.play`, and `pan` stays a pure query the caller routes as its output
+is laid out. When the mixer grows a per-voice pan, `place` gains one assignment
+and nothing else moves.
+
+The pan is the sine of the bearing relative to `facing`: exact at the four
+quarter turns because `fixed.sin` and `fixed.atan2` are, positive a quarter turn
+past `facing` in the direction angles grow -- the listener's right with y down,
+as on a screen. Attenuation is `ONE` inside `min_distance`, 0 beyond
+`max_distance`, and `ONE - t` between, which is what `fixed.lerp(ONE, 0, t)`
+computes without the extra multiply; a range that is inside out is full or
+silent, never divided by.
+
+A `Cue`'s `cooldown` is the number of `step_cues` ticks it refuses to fire again
+after firing, `remaining` the count still to serve; a refused trigger draws
+nothing from the generator, so a replay that refuses the same triggers picks the
+same variants. The fence has one error, so `Unknown` covers every reason a cue or
+voice cannot play as asked: an empty window, a window past the table, a cue
+still cooling, a voice that is not playing. The draft the local model left read
+`remaining` as a budget of triggers and set `cooldown` to a constant 1, and kept
+a private `spatial_gain` helper, which `check_module_surfaces.py` refuses in a
+`surface:"source"` module; both are gone.

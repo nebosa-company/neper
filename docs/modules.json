@@ -473,7 +473,7 @@
   {
    "name": "e.audio.spatial",
    "layer": 2,
-   "surface": "planned",
+   "surface": "source",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
