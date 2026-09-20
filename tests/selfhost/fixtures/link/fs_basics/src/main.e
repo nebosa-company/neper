@@ -132,6 +132,22 @@ fn attack_root(race: *RootRace) {
     atomic.store(&race.stop, 1u32, .Release)
 }
 
+// A `stat` right after a replace on Windows can meet the name while a scanner holds
+// the replaced file open, and answer a sharing refusal that clears within
+// milliseconds (D793); the check is what the replace left, not the scanner's timing,
+// so the stat is retried over a bounded wait before it counts.
+fn stat_settled(a: *mem.Arena, path_text: str) -> (fs.Entry, err) {
+    var attempt = 0usize
+    while true {
+        let (entry, stat_error) = fs.stat(a, path_text)
+        if stat_error == ok || attempt == 50usize { ret (entry, stat_error) }
+        var pause: Atomic[u32] = zero
+        let waited = os.wait_u32(&pause, 0u32, 10000000i64)
+        attempt += 1usize
+    }
+    ret (zero, fs.NotFound)
+}
+
 fn main(a: *mem.Arena) -> err {
     clear(a)
     clear_root_race(a)
@@ -411,7 +427,7 @@ fn main(a: *mem.Arena) -> err {
 
     // Over something that is there, and on the disk before it returns.
     if fs.replace(a, "np-fs/landed.txt", "np-fs/one.txt", durably) != ok { os.exit(227i32) }
-    let (swapped, swapped_error) = fs.stat(a, "np-fs/one.txt")
+    let (swapped, swapped_error) = stat_settled(a, "np-fs/one.txt")
     if swapped_error != ok { os.exit(228i32) }
     if swapped.size != 3u64 { os.exit(229i32) }
     let (landed_gone, landed_gone_error) = fs.exists(a, "np-fs/landed.txt")

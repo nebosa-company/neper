@@ -15083,3 +15083,19 @@ the ceiling of four megabytes in all (D777) bounds that at the cost of hashing
 the compiler's own sources, which every build pays already; a cache would
 carry invalidation rules for a saving under the warm build's noise. Pinned in
 both suites against the asset fixture's manifest.
+
+## D793 — The fixture waits out the scanner after a durable replace
+
+`link/fs_basics` stopped a Windows suite run at its check 228 -- a `stat` of
+`one.txt` failing right after `fs.replace` had put `landed.txt` over it with
+`MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH` and answered `ok` -- and
+passed when rerun alone. The replace is right: the name was there, with the
+new bytes, a moment later. What the stat met was a scanner holding the
+replaced file open for the instant between the rename and its release, which
+`GetFileAttributesExW` reports as a sharing refusal; Defender does this to a
+file that has just been written on a checked drive, and nothing in `e.fs`
+can or should hide it, since a caller that needs the name settled has
+`fs.stat` to ask again. So the fixture asks again: `stat_settled` retries
+the stat over at most fifty ten-millisecond waits through `os.wait_u32` on a
+private word, and counts the answer it settles on. The library is untouched;
+a thirty-minute rerun for a ten-millisecond window is what this removes.
