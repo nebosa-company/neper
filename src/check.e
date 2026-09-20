@@ -752,6 +752,8 @@ type Checker = struct {
     active_arguments: bool,
     active_owner_module: usize,
     active_owner_set: bool,
+    // The body being checked carries `@gpu` (D780): where `gpu.barrier()` is legal.
+    body_is_kernel: bool,
     // The instance whose body is being checked (D543), for the request chain.
     active_instance: usize,
     // The quoted `@noescape` parameter list of the body currently being checked.
@@ -4316,6 +4318,7 @@ fn intrinsic_signature(module: str, name: str) -> str {
     }
     if same(module, "e.io") && same(name, "printf") { ret "fn printf[FMT: str](args: ...) -> err" }
     if same(module, "e.gpu") && same(name, "launch") { ret "fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err" }
+    if same(module, "e.gpu") && same(name, "barrier") { ret "fn barrier()" }
     if same(module, "e.str") {
         if same(name, "format") { ret "fn format[FMT: str](a: *mem.Arena, args: ...) -> (str, err)" }
         if same(name, "push_err") { ret "fn push_err(b: *Builder, v: err) -> err" }
@@ -6964,6 +6967,8 @@ type CallInfo = struct {
     // kernel's parameters and the call becomes a generated launcher instance.
     launcher: bool,
     launcher_kernel: usize,
+    // `gpu.barrier()` (D780): a cut in the kernel's CPU build, lowered in place.
+    gpu_barrier: bool,
     protocol_pending: bool,
     protocol_builtin: ProtocolBuiltin,
     protocol_type: Type,
@@ -7319,6 +7324,29 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 // direction none of that applies to -- nothing comes back, and the `usize` is a number
 // with no way to be dereferenced -- and it is what an operating system interface needs,
 // because a system call takes a buffer as an integer.
+// `gpu.barrier()` (spec section 10, D780): legal only directly in a kernel's body,
+// where the CPU build cuts it into a resumable step; a helper a kernel reaches
+// cannot carry one yet, since its frame is not the invocation's.
+fn barrier_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, receiver: syntax.Node) -> (CastInfo, err) {
+    var info: CastInfo = zero
+    if receiver.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, receiver)
+    if !found_member || !same(g.modules[target_module].name, "e.gpu") || !same(member, "barrier") { ret (info, ok) }
+    info.matched = true
+    if !c.body_is_kernel {
+        record_failure(c, module_index, node, .GpuLaunch, "", "`gpu.barrier()` is written outside a kernel's own body, where no workgroup exists to synchronise")
+        ret (info, InvalidType)
+    }
+    var function: Function = zero
+    function.name = "barrier"
+    function.module_index = target_module
+    function.parameter_count = 0usize
+    function.return_count = 0usize
+    function.intrinsic = true
+    info.function = function
+    ret (info, ok)
+}
+
 fn address_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (CastInfo, err) {
     var info: CastInfo = zero
     if receiver.kind != .FieldExpr { ret (info, ok) }
@@ -9233,6 +9261,13 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                             info.cast = bound.ty
                             info.is_cast = true
                         } else {
+                        let (barrier, barrier_error) = barrier_info(c, g, tree, module_index, node, receiver)
+                        if barrier_error != ok { ret (info, barrier_error) }
+                        if barrier.matched {
+                            info.function = barrier.function
+                            info.gpu_barrier = true
+                            has_function = true
+                        } else {
                         let (address, address_error) = address_info(c, g, tree, module_index, receiver)
                         if address_error != ok { ret (info, address_error) }
                         if address.matched {
@@ -9296,6 +9331,7 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                                 info.function.return_count = signature.return_count
                             }
                             has_function = true
+                        }
                         }
                         }
                         }
@@ -13404,6 +13440,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     c.affine_answer_valid = false
     c.active_noescape = function.import_symbol
     c.body_returns_err = function.return_count == 1usize && c.return_types[function.first_return].kind == .Err
+    c.body_is_kernel = function.gpu
     var parameter_index = 0usize
     while parameter_index < function.parameter_count {
         let parameter = c.parameters[function.first_parameter + parameter_index]

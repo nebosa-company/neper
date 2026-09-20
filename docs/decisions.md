@@ -14762,3 +14762,59 @@ it -- `instance_owner`, as `instantiate_function` already does -- not to the
 template's module, whose artifact was written before the instance existed; a
 launcher or formatter instance is also no template dependency of its owner's
 artifact, since its `template_index` names a kernel or nothing.
+
+## D780 — The CPU build of a kernel is a resumable step; `gpu.barrier()` is its cut
+
+Spec section 10's CPU execution model asks for barrier loop-fission: one host
+thread runs a whole workgroup, every invocation advanced to its next barrier
+before any goes past it, with a resumable state machine per invocation and a
+program-counter slot. This is that, built from what the NIR already has rather
+than a new pass over it.
+
+**The frame.** A kernel's CPU build takes the invocation's frame as parameter 0
+and keeps every local in it: with the builder in frame mode, a `Stack` answers
+a word of the frame instead of a slot of the machine stack. The words' addresses
+are made once in the entry block -- 128 `FieldAddress` instructions over the
+frame base, so a frame is at most 1 KB plus eight bytes of `pc` -- because the
+block a barrier resumes at is reached from the entry's dispatch alone and
+dominates nothing lowered before it; a slot address made where the `let` was
+would be refused by the verifier at the first use after the barrier, and it
+was. Every `let` in a kernel is a slot for the same reason: an SSA value does
+not survive the cut. Parameters do, since a step passes them again.
+
+**The cut.** `gpu.barrier()`, recognised as the third device intrinsic and legal
+only directly in a kernel's body (`body_is_kernel`, set for the check and again
+for lowering, which asks the checker per call), stores the barrier's number in
+`pc`, returns, and begins the block the dispatch resumes at. Every return of a
+kernel, written or implicit, stores the done mark first. The dispatch, emitted
+after the body and branched to from the entry, loads `pc` and compares it with
+each barrier's number in turn, resuming at its block, and falls through to the
+body for a fresh invocation. Beside every kernel a `K$frame() -> usize` answers
+the frame size, so a launcher in a module that reads the kernel's module from
+its artifact learns it at run time; the artifact writer maps the reference to
+the kernel's own declaration.
+
+**The scheduler** is `e.gpu.launch_run`, ordinary source: frames for one
+workgroup from the device arena, and for each workgroup in workgroup-id order,
+rounds in which every invocation not yet done is stepped in local-id order
+with `gid`, `lid` and `wgid` set before it; after a round, every invocation
+still running must stand at the same barrier, and one that returned while its
+peers wait, or reached another barrier, is the divergence a device turns into a
+hang -- it traps as `barrier`, naming both invocations by their ids, to stderr,
+exit 134. The launcher generated for `gpu.launch[K]` now packs the kernel's
+arguments into a block and generates a second function, `launch$step(ctx,
+frame)`, that unpacks them and calls the kernel's build for one invocation;
+`launch_run` takes the block, the step, the workgroup size and `K$frame()`.
+Nothing a kernel can observe distinguishes this from one thread per invocation,
+and the ordering is exactly the one a barrier guarantees.
+
+Not yet: a barrier's occurrence count (the static barrier is what is compared,
+so a loop where one invocation runs an extra iteration is caught only when its
+barrier differs); a barrier inside a helper a kernel calls, or inside a `for`,
+whose counters are not frame slots; `shared var`; subgroups; the debug `0xCD`
+fill; frame reuse across launches. The bootstrap taught two more of its rules:
+a bare enum member as an argument of a call inside the enum's own module, and
+a constant past `i64`, are both refused -- the opcode is bound to a typed local
+and the done mark is `u32` max. And the builder's tables live in the arena, not
+in the `Builder`: 2 KB more in that record overflowed a worker's stack under
+`neper build`, which copies a builder onto it, while `emit-executable` did not.

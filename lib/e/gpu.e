@@ -6,20 +6,30 @@
 // at once because a launch has run to completion before `gpu.launch` returns.
 //
 // A launch is the compiler's: `gpu.launch[K](q, grid, args...)` expands into a
-// generated function that calls `launch_begin` (the grid against the kernel's
-// workgroup size, the invocation count), `launch_view` for every `Buf` argument (the
-// slice over its storage), `launch_invocation` before each call of the kernel (the
-// ids), and `launch_end`. The ids are this module's `gid`, `lid` and `wgid`, which a
-// kernel reads as `gpu.gid.x`; they are set for the calling thread's launch only, so
-// launches on two threads at once are the caller's race, as is every other use of a
-// queue from two threads (section 10: a queue is one thread at a time). ponytail: no
-// lock on the device block either; add one when a second thread opens a queue.
+// generated function that turns every `Buf` argument into the slice over its
+// storage (`launch_view`), packs the kernel's arguments into a block, and hands
+// `launch_run` the grid, the kernel's workgroup size and frame size, and a step
+// function that calls the kernel's CPU build once for one invocation. That build
+// is the CPU execution model of section 10 (D780): every local lives in a frame of
+// the invocation's own, the body is cut at every `gpu.barrier()`, and a step runs
+// an invocation from where it stopped to its next barrier or its return, leaving
+// the barrier's number -- or the done mark -- in the frame's first eight bytes.
+// `launch_run` is the scheduler: workgroups in workgroup-id order, and within one,
+// every invocation stepped in local-id order until all have returned; before each
+// step the ids are set -- this module's `gid`, `lid` and `wgid`, which a kernel reads
+// as `gpu.gid.x`. After each round the invocations still running must all stand
+// at the same barrier: one that returned while its peers wait, or reached another
+// barrier, is the bug a device turns into a hang, and traps here as `barrier`.
+// The ids are set for the calling thread's launch only, so launches on two threads
+// at once are the caller's race, as is every other use of a queue from two threads
+// (section 10: a queue is one thread at a time). ponytail: no lock on the device
+// block either; add one when a second thread opens a queue. A launch's frames are
+// arena until the device closes; reusing them across launches is the upgrade.
 //
-// Not here yet: `gpu.barrier`, `shared var`, the subgroup builtins and `Atomic` slices
-// -- the barrier state machine of the CPU execution model is the next M3 slice, and
-// a kernel that names them does not compile; `.Vulkan` and `.Cuda` answer
-// `Unsupported`, as a backend the build did not embed does; the fault buffer, since
-// the CPU build's checks trap where they fire.
+// Not here yet: `shared var`, the subgroup builtins, `Atomic` slices, a barrier in
+// a helper a kernel calls (only the kernel's own body is cut); `.Vulkan` and
+// `.Cuda` answer `Unsupported`, as a backend the build did not embed does; the
+// fault buffer, since the CPU build's checks trap where they fire.
 
 use e.mem
 use e.os
@@ -391,6 +401,8 @@ fn grid3(x: usize, y: usize, z: usize) -> Grid {
 
 // ------------------------------------------------------------------ the launch
 
+const DONE: usize = 4294967295usize
+
 // Workgroups along one axis: the invocation count divided by the workgroup size,
 // rounded up; zero invocations is zero workgroups.
 fn groups_along(invocations: usize, size: usize) -> (usize, err) {
@@ -399,31 +411,6 @@ fn groups_along(invocations: usize, size: usize) -> (usize, err) {
     let groups = (invocations + size - 1usize) / size
     if groups > 65535usize { ret (0usize, TooLarge) }
     ret (groups, ok)
-}
-
-// The invocation count of a launch of a kernel with workgroup size (x, y, z) over
-// `grid`, and the launch state the invocations read.
-fn launch_begin(q: *Queue, grid: Grid, x: usize, y: usize, z: usize) -> (usize, err) {
-    let (_, state_error) = queue_state(q)
-    if state_error != ok { ret (0usize, state_error) }
-    if launch_active { ret (0usize, Unsupported) }
-    if x == 0usize || y == 0usize || z == 0usize || x * y * z > 1024usize { ret (0usize, Unsupported) }
-    let (gx, gx_error) = groups_along(grid.x, x)
-    if gx_error != ok { ret (0usize, gx_error) }
-    let (gy, gy_error) = groups_along(grid.y, y)
-    if gy_error != ok { ret (0usize, gy_error) }
-    let (gz, gz_error) = groups_along(grid.z, z)
-    if gz_error != ok { ret (0usize, gz_error) }
-    launch_size[0usize] = x
-    launch_size[1usize] = y
-    launch_size[2usize] = z
-    launch_groups[0usize] = gx
-    launch_groups[1usize] = gy
-    launch_groups[2usize] = gz
-    launch_active = true
-    // Workgroup counts are at most 65535 each and the size at most 1024: the product
-    // is below 2^58.
-    ret (gx * gy * gz * x * y * z, ok)
 }
 
 // The storage a Buf names, as an address and an element count.
@@ -437,12 +424,7 @@ fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usi
     ret (mem.address_of(&buffer.bytes[0usize]), buffer.count, ok)
 }
 
-// The ids of invocation `i` of the launch: workgroups in workgroup-id order, and
-// within one, invocations in local-id order, x fastest.
-fn launch_invocation(i: usize) {
-    let per_group = launch_size[0usize] * launch_size[1usize] * launch_size[2usize]
-    let group = i / per_group
-    let local = i % per_group
+fn set_ids(group: usize, local: usize) {
     let lx = local % launch_size[0usize]
     let ly = (local / launch_size[0usize]) % launch_size[1usize]
     let lz = local / (launch_size[0usize] * launch_size[1usize])
@@ -454,10 +436,172 @@ fn launch_invocation(i: usize) {
     gid = Id { x: u32(wx * launch_size[0usize] + lx), y: u32(wy * launch_size[1usize] + ly), z: u32(wz * launch_size[2usize] + lz) }
 }
 
-fn launch_end(q: *Queue) -> err {
-    launch_active = false
+fn frame_pc(frames: []u8, at: usize) -> usize {
+    var value = 0usize
+    var i = 8usize
+    while i > 0usize {
+        i -= 1usize
+        value = (value << 8usize) | usize(frames[at + i])
+    }
+    ret value
+}
+
+fn write_decimal(out: []u8, at: usize, v: usize) -> usize {
+    var digits: [20]u8 = zero
+    var n = 0usize
+    var rest = v
+    if rest == 0usize {
+        digits[0usize] = 48u8
+        n = 1usize
+    }
+    while rest > 0usize {
+        digits[n] = u8(48usize + rest % 10usize)
+        rest = rest / 10usize
+        n += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        out[at + i] = digits[n - 1usize - i]
+        i += 1usize
+    }
+    ret at + n
+}
+
+fn write_text(out: []u8, at: usize, text: str) -> usize {
+    var i = 0usize
+    while i < text.len {
+        out[at + i] = text[i]
+        i += 1usize
+    }
+    ret at + text.len
+}
+
+fn write_id(out: []u8, at0: usize, group: usize, local: usize) -> usize {
+    set_ids(group, local)
+    var at = write_text(out, at0, "invocation (")
+    at = write_decimal(out, at, usize(gid.x))
+    at = write_text(out, at, ", ")
+    at = write_decimal(out, at, usize(gid.y))
+    at = write_text(out, at, ", ")
+    at = write_decimal(out, at, usize(gid.z))
+    at = write_text(out, at, ") of workgroup (")
+    at = write_decimal(out, at, usize(wgid.x))
+    at = write_text(out, at, ", ")
+    at = write_decimal(out, at, usize(wgid.y))
+    at = write_text(out, at, ", ")
+    at = write_decimal(out, at, usize(wgid.z))
+    ret write_text(out, at, ")")
+}
+
+// The divergence trap (spec section 10): `trap[barrier]: invocation (7, 0, 0) of
+// workgroup (3, 0, 0) returned before barrier 1 that invocation (0, 0, 0) reached`,
+// or `... reached barrier 2 while invocation (0, 0, 0) reached barrier 1`, written
+// to stderr; then the process ends as a trap does.
+fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local: usize, other_at: usize) {
+    var line: [256]u8 = zero
+    var at = write_text(line[0..], 0usize, "trap[barrier]: ")
+    at = write_id(line[0..], at, group, stopped_local)
+    if stopped_at == DONE {
+        at = write_text(line[0..], at, " returned before barrier ")
+        at = write_decimal(line[0..], at, other_at)
+        at = write_text(line[0..], at, " that ")
+        at = write_id(line[0..], at, group, other_local)
+        at = write_text(line[0..], at, " reached")
+    } else {
+        at = write_text(line[0..], at, " reached barrier ")
+        at = write_decimal(line[0..], at, stopped_at)
+        at = write_text(line[0..], at, " while ")
+        at = write_id(line[0..], at, group, other_local)
+        at = write_text(line[0..], at, " reached barrier ")
+        at = write_decimal(line[0..], at, other_at)
+    }
+    line[at] = 10u8
+    at += 1usize
+    let error_output = os.stderr()
+    let (written, write_error) = os.write(error_output, line[..at])
+    os.exit(134i32)
+}
+
+// A whole launch on the calling thread: the grid against the kernel's workgroup
+// size `(x, y, z)`, one frame of `frame_bytes` per invocation of a workgroup, and
+// `step(ctx, frame)` run for every invocation in local-id order, round after round,
+// until all have returned -- each round ending at one barrier for all of them.
+fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, step: fn(ctx: *void, frame: *u8), ctx: *void) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
+    if launch_active { ret Unsupported }
+    if x == 0usize || y == 0usize || z == 0usize || x * y * z > 1024usize { ret Unsupported }
+    let (gx, gx_error) = groups_along(grid.x, x)
+    if gx_error != ok { ret gx_error }
+    let (gy, gy_error) = groups_along(grid.y, y)
+    if gy_error != ok { ret gy_error }
+    let (gz, gz_error) = groups_along(grid.z, z)
+    if gz_error != ok { ret gz_error }
+    let per_group = x * y * z
+    var bytes_per_frame = frame_bytes
+    if bytes_per_frame < 8usize { bytes_per_frame = 8usize }
+    bytes_per_frame = (bytes_per_frame + 15usize) / 16usize * 16usize
+    let (frames, frames_error) = mem.alloc[u8](state.device.arena, per_group * bytes_per_frame + 16usize)
+    if frames_error != ok { ret frames_error }
+    // Frames start sixteen-aligned: the arena's cursor may not.
+    var base = 0usize
+    let misalign = mem.address_of(&frames[0usize]) % 16usize
+    if misalign != 0usize { base = 16usize - misalign }
+    launch_size[0usize] = x
+    launch_size[1usize] = y
+    launch_size[2usize] = z
+    launch_groups[0usize] = gx
+    launch_groups[1usize] = gy
+    launch_groups[2usize] = gz
+    launch_active = true
+    var group = 0usize
+    let group_count = gx * gy * gz
+    while group < group_count {
+        var i = 0usize
+        while i < per_group * bytes_per_frame {
+            frames[base + i] = 0u8
+            i += 1usize
+        }
+        while true {
+            var any_active = false
+            var local = 0usize
+            while local < per_group {
+                let frame_at = base + local * bytes_per_frame
+                if frame_pc(frames, frame_at) != DONE {
+                    any_active = true
+                    set_ids(group, local)
+                    step(ctx, &frames[frame_at])
+                }
+                local += 1usize
+            }
+            if !any_active { break }
+            // Every invocation still running stands at one barrier; one that
+            // returned while others wait, or stopped elsewhere, is divergence.
+            var waiting_at = DONE
+            var waiting_local = 0usize
+            local = 0usize
+            while local < per_group {
+                let reached = frame_pc(frames, base + local * bytes_per_frame)
+                if reached != DONE {
+                    if waiting_at == DONE {
+                        waiting_at = reached
+                        waiting_local = local
+                    } else {
+                        if reached != waiting_at { divergence(group, local, reached, waiting_local, waiting_at) }
+                    }
+                }
+                local += 1usize
+            }
+            if waiting_at == DONE { break }
+            local = 0usize
+            while local < per_group {
+                if frame_pc(frames, base + local * bytes_per_frame) == DONE { divergence(group, local, DONE, waiting_local, waiting_at) }
+                local += 1usize
+            }
+        }
+        group += 1usize
+    }
+    launch_active = false
     state.serial += 1u64
     ret ok
 }

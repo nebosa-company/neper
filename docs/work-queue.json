@@ -328,10 +328,10 @@
       "group": "Back end",
       "order": 91,
       "title": "M3-03: CPU backend, workgroup-by-workgroup launch with barrier loop-fission",
-      "score": 0.3,
+      "score": 0.6,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "A launch on `.Cpu` runs the whole grid on the calling thread, workgroups in workgroup-id order and invocations in local-id order, the grid rounded up to whole workgroups, with `gpu.gid`, `gpu.lid` and `gpu.wgid` set before each invocation (D778; `link/gpu_cpu`, `examples/saxpy.e`). Not yet: the barrier state machine and its divergence trap, per-invocation slots for locals that cross a barrier, `shared var`, subgroups, the debug `0xCD` fill, `--subgroup-width`."
+      "evidence": "A launch on `.Cpu` runs the whole grid on the calling thread, workgroups in workgroup-id order and invocations in local-id order, the grid rounded up to whole workgroups, with `gpu.gid`, `gpu.lid` and `gpu.wgid` set before each step (D778). The kernel's CPU build is a resumable step (D780): every local lives in a frame of the invocation's own (`FieldAddress` words made in the entry block, `Stack` answering the next one), the body is cut at every `gpu.barrier()` into a store of the barrier's number, a return and a resume block the entry's dispatch branches to by `pc`; `launch_run` in `e.gpu` schedules a workgroup round by round until every invocation returned, and an invocation that returned before a barrier its peers reached, or reached another one, traps as `barrier` naming both (`link/gpu_barrier`, `link/gpu_divergence`). Not yet: the occurrence count of a barrier in a loop (only the static barrier is compared), a barrier inside a helper a kernel calls or inside a `for` (its counters are not frame slots), per-invocation frames over 1 KB, `shared var`, subgroups, the debug `0xCD` fill, `--subgroup-width`, frame reuse across launches."
     },
     {
       "id": "C092",
@@ -339,10 +339,10 @@
       "group": "Back end",
       "order": 92,
       "title": "M3-04: e.gpu runtime surface: Device, Queue, Buf[T], launch, sync, barrier",
-      "score": 0.55,
+      "score": 0.7,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "`e.gpu` at `surface: partial`: `open`/`close`/`has`/`info`, `queue` and `queue_with`, `Buf[T]` as a generation-checked handle into a per-device table, `alloc`/`upload`/`write`/`download`/`release`/`len`, tokens with `done`/`wait`/`wait_for`, `sync`, `grid1/2/3`, and `gpu.launch[K]` as the third argument-pack intrinsic: the pack is checked against the kernel's parameters (`Buf[T]` for a device slice, a value of the parameter's type otherwise) and expands into a generated launcher per calling module, kernel and argument shape (D778). Not yet: the fault buffer and `gpu.Fault`, `[]Atomic[T]` parameters, `gpu.barrier`/`memory_barrier`, staging pools that do anything, a lock on the device block."
+      "evidence": "`e.gpu` at `surface: partial`: `open`/`close`/`has`/`info`, `queue` and `queue_with`, `Buf[T]` as a generation-checked handle into a per-device table, `alloc`/`upload`/`write`/`download`/`release`/`len`, tokens with `done`/`wait`/`wait_for`, `sync`, `grid1/2/3`, and `gpu.launch[K]` as the third argument-pack intrinsic: the pack is checked against the kernel's parameters (`Buf[T]` for a device slice, a value of the parameter's type otherwise) and expands into a generated launcher per calling module, kernel and argument shape (D778). `gpu.barrier()` is the third device intrinsic recognised, legal only in a kernel's own body, lowered as the cut of the CPU build (D780). Not yet: the fault buffer and `gpu.Fault`, `[]Atomic[T]` parameters, `gpu.memory_barrier`, staging pools that do anything, a lock on the device block."
     },
     {
       "id": "C093",

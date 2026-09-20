@@ -32,12 +32,12 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Code anchors
 
-- `e.gpu`: `src/check.e`×4‡, `src/lower.e`×4‡, `lib/e/gpu.e`×1, `scripts/check_module_plan.py`×1, `src/resolve.e`×1†, `tests/conformance/tools/batch.txt`×1, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×1, `tests/conformance/tools/batch.x64-windows.expected.jsonl`×1
+- `e.gpu`: `src/check.e`×6‡, `src/lower.e`×3‡, `src/resolve.e`×2†, `lib/e/gpu.e`×1, `lib/e/gpu/tensor.e`×1, `scripts/check_module_plan.py`×1, `tests/conformance/tools/batch.txt`×1, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×1
 - `Device`: `lib/e/gpu.e`×34, `lib/e/os.windows.e`×1‡
-- `Queue`: `lib/e/gpu.e`×22, `lib/e/concurrent/queue.e`×13, `lib/e/data/queue.e`×11, `src/check.e`×3‡
-- `upload`: `lib/e/gpu.e`×2, `lib/e/gfx/image.e`×1
-- `download`: `lib/e/gpu.e`×2
-- `gpu.barrier`: `lib/e/gpu.e`×1
+- `Queue`: `lib/e/gpu.e`×21, `lib/e/concurrent/queue.e`×13, `lib/e/data/queue.e`×11, `lib/e/gpu/tensor.e`×5, `src/check.e`×3‡
+- `upload`: `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2, `lib/e/gfx/image.e`×1
+- `download`: `lib/e/gpu/tensor.e`×3, `lib/e/gpu.e`×2
+- `gpu.barrier`: `src/check.e`×4‡, `lib/e/gpu.e`×1, `src/lower.e`×1‡
 - `module-apis.md`: `scripts/check_module_surfaces.py`×5, `scripts/render_module_apis.py`×3, `scripts/render_progress.py`×2, `scripts/audit_repo_coverage.py`×1, `scripts/build-docs-pdf.py`×1, `scripts/check_gpu_contracts.py`×1, `src/check.e`×1‡
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)
 

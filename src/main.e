@@ -7077,6 +7077,14 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
             try write_usize(&message, builder.verify_instruction)
             try write_all(&message, " at operand ")
             try write_usize(&message, builder.verify_operand)
+            if builder.verify_instruction < builder.instruction_count {
+                let refused = builder.instructions[builder.verify_instruction]
+                try write_all(&message, " (opcode ")
+                try write_usize(&message, em.opcode_id(refused.opcode))
+                try write_all(&message, ", operand value ")
+                if builder.verify_operand < refused.operand_count { try write_usize(&message, builder.operands[refused.first_operand + builder.verify_operand]) }
+                try write_all(&message, ")")
+            }
         }
         if lower_error == nir.InvalidControlFlow {
             try write_all(&message, "lowering failed: invalid NIR control flow")

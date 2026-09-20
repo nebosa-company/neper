@@ -1484,6 +1484,30 @@ gpu_tensor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/gpu-tensor-selfhost"
 gpu_tensor_output=$("$test_build/gpu-tensor-selfhost")
 [ "$gpu_tensor_output" = 'gpu tensor ok' ]
+# `gpu.barrier()` on the CPU backend (D780): the barrier loop-fission machine over device
+# memory, a barrier in a loop, two workgroups apart, a barrier-free kernel under the same
+# frames; an invocation returning before a barrier its peers reach traps as `barrier`;
+# a barrier outside a kernel is refused.
+gpu_barrier_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-selfhost")
+[ "$gpu_barrier_written" = 'executable written' ]
+chmod +x "$test_build/gpu-barrier-selfhost"
+gpu_barrier_output=$("$test_build/gpu-barrier-selfhost")
+[ "$gpu_barrier_output" = 'gpu barrier ok' ]
+gpu_divergence_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_divergence/src/main.e" "$repo" x64 linux "$test_build/gpu-divergence-selfhost")
+[ "$gpu_divergence_written" = 'executable written' ]
+chmod +x "$test_build/gpu-divergence-selfhost"
+gpu_divergence_status=0
+gpu_divergence_output=$("$test_build/gpu-divergence-selfhost" 2>&1) || gpu_divergence_status=$?
+[ "$gpu_divergence_status" = 134 ]
+case "$gpu_divergence_output" in
+    *'trap[barrier]: invocation (2, 0, 0) of workgroup (0, 0, 0) returned before barrier 1 that invocation (0, 0, 0)'*) ;;
+    *) printf '%s\n' "a divergent workgroup did not trap as barrier: $gpu_divergence_output" >&2; exit 1 ;;
+esac
+gpu_outside=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_barrier_outside/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$gpu_outside" in
+    *'main.e:4:5: error[E-TYPE-9999]: `gpu.barrier()` is written outside a kernel'*) ;;
+    *) printf '%s\n' "a barrier outside a kernel was not refused: $gpu_outside" >&2; exit 1 ;;
+esac
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -310,6 +310,24 @@ type Builder = struct {
     runtime_prefix: usize,
     // Set while lowering a `@nocheck` block; every instruction emitted carries it.
     nocheck: bool,
+    // A kernel's CPU build (D780): every `Stack` slot becomes a word of the
+    // invocation's frame, eight bytes of `pc` first. The words' addresses are made
+    // in the entry block, one `FieldAddress` each over `frame_base`, so they dominate
+    // every block a barrier resumes at; a `Stack` then answers the next free one's
+    // value and instruction, sixteen-aligned when it is more than one word. A frame
+    // is at most FRAME_WORDS words.
+    frame_mode: bool,
+    frame_base: usize,
+    frame_offset: usize,
+    frame_next: usize,
+    // The tables are the caller's arena's, not the builder's own bytes: a builder
+    // is copied onto worker stacks, and 2 KB more on one overflowed `build`.
+    frame_slot_values: []usize,
+    frame_slot_instructions: []usize,
+    // The barriers cut so far in the kernel being lowered, and the block each one
+    // resumes at; the dispatch at the entry branches to them by the frame's `pc`.
+    kernel_barriers: usize,
+    kernel_resume: []usize,
     // Bounds proofs (D356, H03): the `while i < x.len` loops open around the point
     // being lowered, innermost last -- the index and the slice by name, the first
     // token in the body that assigns the index, and whether the proof holds at all
@@ -1088,6 +1106,17 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
     if !builder.function_active || !builder.block_active || builder.blocks[builder.current_block].terminated || opcode == .Invalid { ret (0usize, 0usize, InvalidControlFlow) }
     if builder.instruction_count == builder.instructions.len { ret (0usize, 0usize, Capacity) }
     if builder.instruction_limit != 0usize && builder.instruction_count - builder.limit_base >= builder.instruction_limit { ret (0usize, 0usize, TooLong) }
+    if opcode == .Stack && builder.frame_mode {
+        var words = immediate
+        if words == 0usize { words = 1usize }
+        var next = builder.frame_next
+        if words > 1usize { next = (next + 1usize) / 2usize * 2usize }
+        let most = FRAME_WORDS
+        if next + words > most { ret (0usize, 0usize, Capacity) }
+        builder.frame_next = next + words
+        builder.frame_offset = 8usize + 8usize * builder.frame_next
+        ret (builder.frame_slot_instructions[next], builder.frame_slot_values[next], ok)
+    }
     let instruction_index = builder.instruction_count
     var result = 0usize
     if has_result {
@@ -1114,6 +1143,37 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
     builder.functions[builder.current_function].instruction_count += 1usize
     if is_terminator(opcode) { builder.blocks[builder.current_block].terminated = true }
     ret (instruction_index, result, ok)
+}
+
+const FRAME_WORDS: usize = 128usize
+
+// The frame's words, addressed once in the entry block of a kernel's CPU build.
+// `values`, `instructions` and `resume` are the caller's tables, FRAME_WORDS and
+// 64 long.
+fn begin_frame(builder: *Builder, frame_base: usize, values: []usize, instructions: []usize, resume: []usize, token: lex.Token) -> err {
+    if values.len < FRAME_WORDS || instructions.len < FRAME_WORDS || resume.len < 64usize { ret Capacity }
+    builder.frame_mode = false
+    builder.frame_base = frame_base
+    builder.frame_next = 0usize
+    builder.frame_offset = 8usize
+    builder.kernel_barriers = 0usize
+    builder.frame_slot_values = values
+    builder.frame_slot_instructions = instructions
+    builder.kernel_resume = resume
+    let usize_type = check.make_type(.Integer, "usize", 0usize)
+    let field_address: Opcode = .FieldAddress
+    let words = FRAME_WORDS
+    var word = 0usize
+    while word < words {
+        let (instruction, value, emit_error) = emit(builder, field_address, usize_type, true, 8usize + 8usize * word, token)
+        if emit_error != ok { ret emit_error }
+        try add_operand(builder, instruction, frame_base)
+        builder.frame_slot_instructions[word] = instruction
+        builder.frame_slot_values[word] = value
+        word += 1usize
+    }
+    builder.frame_mode = true
+    ret ok
 }
 
 fn add_operand(builder: *Builder, instruction_index: usize, value: usize) -> err {

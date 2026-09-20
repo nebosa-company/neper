@@ -1564,6 +1564,22 @@ $gpuTensorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $gpuTensorWritten -ne 'executable written') { throw 'gpu_tensor emission failed' }
 $gpuTensorOutput = & $gpuTensorPath
 if ($LASTEXITCODE -ne 0 -or $gpuTensorOutput -ne 'gpu tensor ok') { throw "an e.gpu.tensor upload, launch, download or refusal answered wrongly: exit $LASTEXITCODE" }
+# `gpu.barrier()` on the CPU backend (D780): the barrier loop-fission machine over device
+# memory, a barrier in a loop, two workgroups apart, a barrier-free kernel under the same
+# frames; an invocation returning before a barrier its peers reach traps as `barrier`;
+# a barrier outside a kernel is refused.
+$gpuBarrierPath = Join-Path $testBuild 'gpu-barrier-selfhost.exe'
+$gpuBarrierWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_barrier\src\main.e') $repo 'x64' 'windows' $gpuBarrierPath
+if ($LASTEXITCODE -ne 0 -or $gpuBarrierWritten -ne 'executable written') { throw 'gpu_barrier emission failed' }
+$gpuBarrierOutput = & $gpuBarrierPath
+if ($LASTEXITCODE -ne 0 -or $gpuBarrierOutput -ne 'gpu barrier ok') { throw "a kernel with barriers answered wrongly: exit $LASTEXITCODE" }
+$gpuDivergencePath = Join-Path $testBuild 'gpu-divergence-selfhost.exe'
+$gpuDivergenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_divergence\src\main.e') $repo 'x64' 'windows' $gpuDivergencePath
+if ($LASTEXITCODE -ne 0 -or $gpuDivergenceWritten -ne 'executable written') { throw 'gpu_divergence emission failed' }
+$gpuDivergenceOutput = & $gpuDivergencePath 2>&1
+if ($LASTEXITCODE -ne 134 -or ($gpuDivergenceOutput -join "`n") -notmatch 'trap\[barrier\]: invocation \(2, 0, 0\) of workgroup \(0, 0, 0\) returned before barrier 1 that invocation \(0, 0, 0\)') { throw "a divergent workgroup did not trap as barrier: exit $LASTEXITCODE, $($gpuDivergenceOutput -join "`n")" }
+$gpuOutside = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_barrier_outside\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($gpuOutside -join "`n") -notmatch 'main\.e:4:5: error\[E-TYPE-9999\]: `gpu\.barrier\(\)` is written outside a kernel') { throw "a barrier outside a kernel was not refused: $($gpuOutside -join "`n")" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

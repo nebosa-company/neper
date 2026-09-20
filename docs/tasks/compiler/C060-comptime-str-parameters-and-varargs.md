@@ -65,7 +65,7 @@ Notes:
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `gpu.launch`: `src/check.e`×10‡, `lib/e/gpu.e`×2, `src/lower.e`×1‡
+- `gpu.launch`: `src/check.e`×10‡, `lib/e/gpu/tensor.e`×8, `lib/e/gpu.e`×2, `src/lower.e`×1‡
 
 ## Existing fixtures
 

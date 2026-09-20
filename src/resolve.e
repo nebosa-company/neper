@@ -320,6 +320,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.meta", "set", .Value, .Intrinsic)
     try seed(r, g, "e.io", "printf", .Value, .Intrinsic)
     try seed(r, g, "e.gpu", "launch", .Value, .Intrinsic)
+    try seed(r, g, "e.gpu", "barrier", .Value, .Intrinsic)
     try seed(r, g, "e.mem", "stats", .Value, .Intrinsic)
     try seed(r, g, "e.mem", "Exhausted", .Value, .Error)
     try seed(r, g, "e.mem", "Stats", .Type, .Type)
