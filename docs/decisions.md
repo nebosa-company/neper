@@ -15006,3 +15006,32 @@ that is what the hundred milliseconds are; a keep set decided from a digest
 alone, without the declarations, is the roadmap's later saving and not
 this row's. C080 closes on these numbers, the fixtures of D205–D324, and
 the hot build.
+
+## D790 — The test root's control handle is the exit status; C062 and C065 close
+
+Section 11 and section 13 describe a control handle the generated test root
+installs: a nonce from `os.random`, a framed `begin` and `end` record per
+test, and the trap written to it as authenticated JSON before stderr, so
+that a test's own stderr cannot impersonate a trap and one process's
+records cannot be attributed to another test. That design was written for
+one process per module (D15); D62 moved the runner to one process per
+test, and under it every fact the frames would carry is already in hand
+without them. The outcome is the child's exit status -- `0` passed, `1`
+failed with the merged table's `error: <qualified name>` line, `134`
+trapped, `124` timed out -- which no bytes a test writes can forge; the
+trap record and the error line are read out of the captured stderr only
+under the status that produced them (D253); and there is no other test in
+the process to misattribute to. A test that prints a trap record and exits
+`134` has crashed itself, which is what it is reported as. The frames would
+say the same three things again, from a runtime that would have to grow a
+JSON writer and a nonce in both assembly prefixes (D149), for nothing the
+report does not already know. So the control handle is not built: the
+exit status is the authenticated channel, the spec's text stands as the
+design of a per-module runner, and this row is the note under it.
+
+C062 closes with it: the merged error table serves `main`'s failure line
+(D199), `{}` on an `err` prints its qualified name from it, `neper test`'s
+`error` field is that line read back (D253), and no trap row carries an
+`err` value, so the trap protocol has nothing further to read from it.
+C065 closes: every section 11 row traps as the table says, in debug and
+release, with its backtrace, and the test root's channel is the one above.

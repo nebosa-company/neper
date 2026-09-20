@@ -191,28 +191,6 @@
       "evidence": "The seeded and declared resources are affine and obligated, `own` transfers, every exit audits, `defer` reserves, failed acquisition narrows, branches/loops join, borrows cannot be consumed, copies and representation access are refused, and `os.dup` creates the only second handle identity (D345-D353). Pointer-mediated consumption resolves to the pinned owner (D610); concrete generic containment is classified after substitution (D611); tagged-union payloads propagate affinity (D612); and contextual closers consume their final resource parameter (D613). Fixed arrays inherit their element's classification and track comptime-indexed slots, exact provenance and full or comptime-offset slice aliases (D616-D620). Runtime-indexed reads, moves, overwrites and stores conservatively cover every possible affine element, and runtime-offset slices retain the same owner set (D711, D716-D720). Owned resource-slice parameters carry collective obligations, reject partial moves, drain through a proven zero-to-length sweep, and receive full or comptime-offset fixed-array ownership transfers (D721-D725). Dynamically filled `os.Thread` arrays retain their view behavior until owned resource-slice summaries can prove helper joins. Seeded handle representations are private behind explicit plain-handle views; resource reflection is empty outside the declaring module; `meta.get` and `meta.set` reject affine fields; and every delivered typed format codec stops at the same named-field boundary (D624-D628). Both host compilers pin valid transfers and each negative surface. Not yet: arbitrary/dynamic resource-slice partitions, a failure-safe generic container for obligated elements (H02), cross-function borrow retention beyond explicit `own` (H02), and the recorded debug check-bodies budget breach"
     },
     {
-      "id": "C062",
-      "category": "compiler",
-      "group": "Front end and language",
-      "order": 62,
-      "title": "Merged error table",
-      "score": 0.75,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "src/error_table.e builds it and push_err expands against it; `main`'s failure line reads it in the binary (D199): a root `main` returning anything but `ok` reaches a synthesized `neper_report_failure`, one compare per declared error of the program, which writes `error: <qualified name>` to stderr through the runtime's own write before the exit with code 1 -- link/failure_line pins the module's own error and one of `e.os`'s on both platforms. Not yet: the trap protocol's use of it and `neper test`"
-    },
-    {
-      "id": "C065",
-      "category": "compiler",
-      "group": "Front end and language",
-      "order": 65,
-      "title": "Spec 11 debug check table and trap protocol",
-      "score": 0.99,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "A check that fires follows the trap protocol (D194): the runtime's `neper_trap` writes `file:line:col: trap[kind]: <values>` to stderr and exits 134 on both platforms, and link/trap_bounds pins the record for an index and a slice past the end. Rows delivered: `bounds` (index and slice), the compiler's own `unreachable` points, the `unreachable()` builtin with its literal as the values, which the checker counts as diverging (D195, link/trap_unreachable, check/unreachable_argument), the rows that trap in every mode -- `divide` by zero and the minimum by -1, both reported before x64 could raise `#DE` for them, and `shift` by a count past the width -- with a signed operand printed signed (D196, link/trap_arithmetic), `enum`: section 4's `Kind(x)` cast exists now and traps on a value naming no member (D197, link/trap_enum, check/enum_cast_width), `narrow` for an integer source: a cast whose value does not fit by width or by sign traps, and section 4's meant truncation `T.trunc(x)` exists and never does (D198, link/trap_narrow, check/trunc_float_argument), `narrow` for a float source -- NaN and a value past the target's range -- `tag`: a payload read or written under another member's tag (D200, link/trap_tag), `null`: every dereference of a pointer value -- `*p` and `p.field` -- read or written, refused for nil (D201, link/trap_null), and `overflow`: `+ - *` and unary `-` on every width, an unsigned 64-bit `*` through `mul`'s high half (D202, link/trap_overflow); `@nocheck { }` leaves the debug-only rows out of a block and the release rows in (D203, link/nocheck); `emit-executable --release` is the release build: every debug-only row left out, `+ - *` wrapping, casts truncating, shifts masked and a float outside its target saturating, NaN to 0 (D204, link/release_build, a fifth smaller). A trap ends with its backtrace: one `  at module.function` line per frame, walked over the rbp chain and named from a symbol table the driver appends after the code, which the artifact path reproduces byte for byte (D206, link/trap_backtrace), each frame with the file and line its call is at, from the line table (D209, D212), and `align`: `simd.load_aligned`/`store_aligned` at an address that is not a multiple of the vector's width, checked at the call site in debug and left out in release (D210, link/trap_align). Not yet: the test root's control handle"
-    },
-    {
       "id": "C066",
       "category": "compiler",
       "group": "Front end and language",

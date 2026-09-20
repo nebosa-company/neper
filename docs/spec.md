@@ -3532,6 +3532,10 @@ byte length, then exactly that many UTF-8 JSON bytes. The parent rejects a wrong
 oversized length, invalid JSON or partial frame as a crashed test. Source code cannot
 read the installed nonce or handle through a language API, so neither user stderr nor
 a guessed raw handle can impersonate a control record.
+As built, with one process per test (D62), the child's exit status is the
+authenticated channel -- `134` for a trap, `1` for a failure, `124` for a timeout --
+and the record is read from the captured stderr under that status; no control handle
+is installed (D790).
 
 ```
 src/lex.e:88:14: trap[bounds]: index 7 out of bounds for len 5
