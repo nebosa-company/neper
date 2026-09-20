@@ -1533,6 +1533,13 @@ meta_signed_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/meta-signed-selfhost"
 meta_signed_output=$("$test_build/meta-signed-selfhost")
 [ "$meta_signed_output" = 'meta signed ok' ]
+# `printf` and `format` inside a generic of another module (D784): the template body
+# accepts a `T` it cannot format yet, and each instance's expansion is the caller's.
+format_generic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/format_generic/src/main.e" "$repo" x64 linux "$test_build/format-generic-selfhost")
+[ "$format_generic_written" = 'executable written' ]
+chmod +x "$test_build/format-generic-selfhost"
+format_generic_output=$("$test_build/format-generic-selfhost")
+[ "$format_generic_output" = 'n=42;m=-7;x=2.5;format generic ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

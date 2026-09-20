@@ -55,7 +55,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `formatted`: `src/tool.e`×15‡, `benchmarks/metamorphic/metamorphic.py`×8, `src/main.e`×8‡, `scripts/build-docs-pdf.py`×3, `benchmarks/metamorphic/format_tree.py`×2, `scripts/render_module_apis.py`×2, `benchmarks/llm_edit/neper_advantage_matrix.md`×1, `tests/conformance/tools/fmt.expected.jsonl`×1
+- `formatted`: `src/tool.e`×15‡, `benchmarks/metamorphic/metamorphic.py`×8, `src/main.e`×8‡, `scripts/build-docs-pdf.py`×3, `benchmarks/metamorphic/format_tree.py`×2, `scripts/render_module_apis.py`×2, `benchmarks/llm_edit/neper_advantage_matrix.md`×1, `src/check.e`×1‡
 
 ## Existing fixtures
 

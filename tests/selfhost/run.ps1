@@ -1599,6 +1599,13 @@ $metaSignedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $metaSignedWritten -ne 'executable written') { throw 'meta_signed emission failed' }
 $metaSignedOutput = & $metaSignedPath
 if ($LASTEXITCODE -ne 0 -or $metaSignedOutput -ne 'meta signed ok') { throw "meta.signed answered wrongly: exit $LASTEXITCODE" }
+# `printf` and `format` inside a generic of another module (D784): the template body
+# accepts a `T` it cannot format yet, and each instance's expansion is the caller's.
+$formatGenericPath = Join-Path $testBuild 'format-generic-selfhost.exe'
+$formatGenericWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\format_generic\src\main.e') $repo 'x64' 'windows' $formatGenericPath
+if ($LASTEXITCODE -ne 0 -or $formatGenericWritten -ne 'executable written') { throw 'format_generic emission failed' }
+$formatGenericOutput = & $formatGenericPath
+if ($LASTEXITCODE -ne 0 -or ($formatGenericOutput -join "`n") -ne 'n=42;m=-7;x=2.5;format generic ok') { throw "a formatter in a cross-module generic answered wrongly: $($formatGenericOutput -join "`n")" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -14881,3 +14881,16 @@ infers position by position from the actual's arguments, so `gpu.len(dx)`,
 example always wrote them; the example drops its brackets. A symbolic actual
 argument -- a template body naming `Buf[T]` of its own `T` -- binds nothing,
 as a slice of a type parameter binds nothing.
+
+## D784 — A template may format its `T`; the expansion is the caller's
+
+`io.printf["{}"](v)` with `v: T` inside a generic was `InvalidFormat` at the
+template check, since a type parameter is not a formattable type; and had it
+passed, the expansion would have belonged to the template's module, whose
+artifact was written before the instance existed -- the fault D779 fixed for
+launchers. Both follow the launcher now: a template body accepts a `T` it
+cannot yet format (the instance's check decides), makes no expansion of its
+own and answers `err`, or `(str, err)` for `format`, from `call_return`; the
+instance's expansion is owned by `instance_owner`, the module that
+instantiated it. `printf` and `format` in a generic of another module are
+pinned by `link/format_generic` over three element types.

@@ -9556,7 +9556,9 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         let (supplied, supplied_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                         if supplied_error != ok { ret (info, supplied_error) }
                         if is_untyped(supplied) { ret (info, MissingContext) }
-                        if !formattable_type(c, supplied, verb) { ret (info, InvalidFormat) }
+                        // A template body formats a `T` it does not know yet (D784): the
+                        // instance's check decides whether it can be formatted.
+                        if !(c.generic_declaration && type_shape_unknown(supplied)) && !formattable_type(c, supplied, verb) { ret (info, InvalidFormat) }
                         if child_position - 1usize >= formatter_types.len { ret (info, Capacity) }
                         formatter_types[child_position - 1usize] = supplied
                         child_position += 1usize
@@ -9679,7 +9681,10 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         ret (info, ok)
     }
     if info.formatter {
-        let (instance_index, instance_error) = formatter_instance(c, module_index, function.module_index, function.name, info.formatter_spelling, formatter_types[0usize..function.parameter_count], info.formatter_arena)
+        // No expansion for a template body (D784); the instance is the calling
+        // instance's module's, as a launcher's is.
+        if c.generic_declaration { ret (info, ok) }
+        let (instance_index, instance_error) = formatter_instance(c, instance_owner(c, module_index), function.module_index, function.name, info.formatter_spelling, formatter_types[0usize..function.parameter_count], info.formatter_arena)
         if instance_error != ok { ret (info, instance_error) }
         info.function = c.functions[instance_index]
         ret (info, ok)
@@ -10316,6 +10321,17 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
     }
     // A launch answers `err` (D778); in a template body no instance carries it yet.
     if call.launcher && call.function.intrinsic {
+        if index != 0usize { ret (invalid_type(), InvalidType) }
+        ret (make_type(.Err, "err", call.function.module_index), ok)
+    }
+    // A formatter in a template body likewise (D784): `printf` answers `err`,
+    // `format` a `(str, err)`.
+    if call.formatter && call.function.intrinsic {
+        if call.formatter_arena {
+            if index == 0usize { ret (make_type(.String, "str", call.function.module_index), ok) }
+            if index == 1usize { ret (make_type(.Err, "err", call.function.module_index), ok) }
+            ret (invalid_type(), InvalidType)
+        }
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (make_type(.Err, "err", call.function.module_index), ok)
     }
