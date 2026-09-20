@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.72 of 1 |
-| queue position | 50 of 54 (only position 1 is eligible for the next session; see README) |
+| queue position | 49 of 53 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done

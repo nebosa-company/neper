@@ -1722,6 +1722,11 @@ if ($LASTEXITCODE -ne 1 -or ($genericFieldLeak -join "`n") -notmatch 'main\.e:8:
 Require-Fixture 'check/extern_without_import'
 $externUnbound = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\extern_without_import\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($externUnbound -join "`n") -notmatch 'main\.e:7:13: error\[E-TYPE-9999\]: `mystery` is an extern fn with no') { throw "an extern with no @import was not reported: $($externUnbound -join "`n")" }
+# A `...` parameter outside the three intrinsic packs (D787): refused at the
+# parameter, naming the function.
+Require-Fixture 'check/argument_pack'
+$packRefused = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\argument_pack\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($packRefused -join "`n") -notmatch 'main\.e:6:10: error\[E-TYPE-9999\]: `total` declares a `\.\.\.` parameter: an argument pack belongs to the three intrinsics') { throw "a user-declared argument pack was not refused: $($packRefused -join "`n")" }
 $externPath = Join-Path $testBuild 'extern-import-selfhost.exe'
 $externWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\extern_import\src\main.e') $repo 'x64' 'windows' $externPath
 if ($LASTEXITCODE -ne 0 -or $externWritten -ne 'executable written') { throw 'imported extern executable emission failed' }

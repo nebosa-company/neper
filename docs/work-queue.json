@@ -191,17 +191,6 @@
       "evidence": "The seeded and declared resources are affine and obligated, `own` transfers, every exit audits, `defer` reserves, failed acquisition narrows, branches/loops join, borrows cannot be consumed, copies and representation access are refused, and `os.dup` creates the only second handle identity (D345-D353). Pointer-mediated consumption resolves to the pinned owner (D610); concrete generic containment is classified after substitution (D611); tagged-union payloads propagate affinity (D612); and contextual closers consume their final resource parameter (D613). Fixed arrays inherit their element's classification and track comptime-indexed slots, exact provenance and full or comptime-offset slice aliases (D616-D620). Runtime-indexed reads, moves, overwrites and stores conservatively cover every possible affine element, and runtime-offset slices retain the same owner set (D711, D716-D720). Owned resource-slice parameters carry collective obligations, reject partial moves, drain through a proven zero-to-length sweep, and receive full or comptime-offset fixed-array ownership transfers (D721-D725). Dynamically filled `os.Thread` arrays retain their view behavior until owned resource-slice summaries can prove helper joins. Seeded handle representations are private behind explicit plain-handle views; resource reflection is empty outside the declaring module; `meta.get` and `meta.set` reject affine fields; and every delivered typed format codec stops at the same named-field boundary (D624-D628). Both host compilers pin valid transfers and each negative surface. Not yet: arbitrary/dynamic resource-slice partitions, a failure-safe generic container for obligated elements (H02), cross-function borrow retention beyond explicit `own` (H02), and the recorded debug check-bodies budget breach"
     },
     {
-      "id": "C060",
-      "category": "compiler",
-      "group": "Front end and language",
-      "order": 60,
-      "title": "Comptime str parameters and varargs",
-      "score": 0.95,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "link/comptime_str, link/str_format, link/io_printf; two of the three pack intrinsics expand, `gpu.launch` does not"
-    },
-    {
       "id": "C062",
       "category": "compiler",
       "group": "Front end and language",

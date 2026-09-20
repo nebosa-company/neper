@@ -5862,6 +5862,11 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail)
         ret write_all(file, "` is an extern fn with no `@import(LIBRARY, SYMBOL)`, so there is nothing to bind it to")
     }
+    if checker.failure_kind == .ArgumentPack {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` declares a `...` parameter: an argument pack belongs to the three intrinsics `printf`, `format` and `gpu.launch` alone, and a C variadic to an `extern fn`")
+    }
     if checker.failure_kind == .GpuAttribute {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)

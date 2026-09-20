@@ -134,6 +134,9 @@ type DiagnosticKind = enum u8 {
     MetaFieldOwner,
     ExternWithoutImport,
     ExternType,
+    // A `...` parameter on a function that is not one of section 9's three intrinsic
+    // packs nor an `extern` (D787).
+    ArgumentPack,
     VariadicArgument,
     // A field the aggregate does not declare (D448, H09).
     FieldMissing,
@@ -3875,9 +3878,16 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         if parse.child_is_node_at(tree, at) {
             let child = tree.nodes[parse.child_index_at(tree, at)]
             if child.kind == .Parameter {
-                if usize(child.token_start) < usize(child.token_end) && c.tokens[usize(child.token_start)].kind == .PunctEllipsis {
-                    // Legal on an `extern` alone; anywhere else `...` is still refused.
-                    if !item.external { ret Unsupported }
+                let bare_pack = usize(child.token_start) < usize(child.token_end) && c.tokens[usize(child.token_start)].kind == .PunctEllipsis
+                // `args: ...`, the intrinsics' own spelling, is a pack no source may
+                // declare (section 9, D787); the bare `...` is legal on an `extern`
+                // alone. Both are refused by name.
+                let named_pack = !bare_pack && usize(child.token_start) < usize(child.token_end) && c.tokens[usize(child.token_end) - 1usize].kind == .PunctEllipsis
+                if bare_pack || named_pack {
+                    if !item.external || named_pack {
+                        record_failure(c, module_index, child, .ArgumentPack, item.name, "")
+                        ret Unsupported
+                    }
                     item.variadic = true
                 } else {
                     if item.variadic { ret parse.InvalidSyntax }

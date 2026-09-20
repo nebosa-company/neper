@@ -1628,6 +1628,13 @@ case "$extern_unbound" in
     *'is an extern fn with no `@import(LIBRARY, SYMBOL)`'*) ;;
     *) printf '%s\n' "an extern with no @import was not reported: $extern_unbound" >&2; exit 1 ;;
 esac
+# A `...` parameter outside the three intrinsic packs (D787): refused at the
+# parameter, naming the function.
+pack_refused=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/argument_pack/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$pack_refused" in
+    *'main.e:6:10: error[E-TYPE-9999]: `total` declares a `...` parameter: an argument pack belongs to the three intrinsics'*) ;;
+    *) printf '%s\n' "a user-declared argument pack was not refused: $pack_refused" >&2; exit 1 ;;
+esac
 extern_path="$test_build/extern-import-selfhost"
 extern_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/extern_import/src/main.e" "$repo" x64 linux "$extern_path")
 [ "$extern_written" = 'executable written' ]

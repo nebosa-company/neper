@@ -14947,3 +14947,18 @@ generated-code work and arrives with it. Section 5's text stands as the
 target; this row records the deviation and where it ends. C029 is closed on
 that: every lowering, every packed form, every refusal and the CPU levels are
 in, and the fixtures pin them on both hosts.
+
+## D787 — A declared `...` is refused by name; C060 closes
+
+Section 9 says a `...` parameter appears in the three intrinsic packs and
+nowhere else, and the checker refused one -- but as a bare `Unsupported`,
+which `check-file` reported as "type checking failed" at line 1, and only
+for the bare `...` spelling: `args: ...`, the intrinsics' own spelling,
+parsed as a parameter without a type and failed further in. Both spellings
+are now caught at the parameter node where the signature is collected and
+reported as `ArgumentPack` at the parameter, naming the function and the
+three intrinsics; the bare `...` stays legal on an `extern fn` as section
+5's C variadic, `args: ...` is refused there too, since a C variadic has no
+name. `check/argument_pack` pins the message and position in both suites.
+With `gpu.launch` expanding (D778) the three packs all expand, and the row
+C060 -- comptime `str` parameters and the packs -- is complete.
