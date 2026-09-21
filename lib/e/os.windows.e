@@ -3588,10 +3588,14 @@ fn window_metrics(w: Window) -> (WindowMetrics, err) {
 
 fn window_title(w: Window, value: str) -> err {
     if w.raw == 0usize || window_slot(w.raw) >= WINDOW_TABLE { ret NotFound }
-    var storage: [4096]u8 = zero
-    var scratch = mem.arena_from(storage[..])
-    let (title, title_error) = widen(&scratch, value)
-    if title_error != ok { ret title_error }
+    // Widened into a local block: a title is short, and `e.os` keeps to the fixed
+    // `e.mem` surface (no arena over a local array here).
+    var title: [1024]u16 = zero
+    if value.len > 1000usize { ret Unsupported }
+    if value.len != 0usize {
+        let converted = raw_widen(CP_UTF8, 0u32, &value[0usize], i32(value.len), &title[0usize], 1023i32)
+        if converted <= 0i32 { ret Failed }
+    }
     if raw_set_window_text(w.raw, &title[0usize]) == 0i32 { ret from_last_error() }
     ret ok
 }
@@ -3705,12 +3709,15 @@ fn clipboard_text(a: *mem.Arena) -> (str, err) {
 }
 
 fn set_clipboard_text(value: str) -> err {
-    var storage: [65536]u8 = zero
-    var scratch = mem.arena_from(storage[..])
-    let (units, units_error) = widen(&scratch, value)
-    if units_error != ok { ret units_error }
+    // The unit count first: a UTF-16 encoding never needs more units than the
+    // UTF-8 encoding needs bytes, and the block is widened into directly.
     var count = 0usize
-    while units[count] != 0u16 { count += 1usize }
+    if value.len != 0usize {
+        var probe: [1]u16 = zero
+        let needed = raw_widen(CP_UTF8, 0u32, &value[0usize], i32(value.len), &probe[0usize], 0i32)
+        if needed <= 0i32 { ret Failed }
+        count = usize(needed)
+    }
     let handle = raw_global_alloc(GMEM_MOVEABLE_ZEROED, (count + 1usize) * 2usize)
     if handle == 0usize { ret OutOfMemory }
     let locked = raw_global_lock(handle)
