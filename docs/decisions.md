@@ -16910,3 +16910,40 @@ address already classifies as an integer. The link fixture
 seventh, eighth and ninth arguments, a slice before the pointers, the
 address of a field and of an element, and a compared pointer; it
 crashes under the previous compiler on both hosts.
+
+## D853 — Productivity navigation: a wizard validates nothing, a palette filters nothing
+
+P3-04 of the widget plan. A `wizard` names its steps in a row (the
+done ones marked, the current one the tree's current item) over the
+current step's content and a footer of Cancel, Back and Next -- Finish
+on the last step -- with one boolean from the caller, `can_advance`,
+disabling Next or Finish and the scope's Enter with it; Escape is
+Cancel; the caller keeps `current` and does the validating, since a
+wizard's rules are its application's. A `window_switcher` and a
+`command_palette` are the same two pieces: `choice_rows`, plain buttons
+naming the choices with the active one filled and selected, and
+`choice_scope`, whose Up and Down move the active index through
+`activate`, whose Enter picks it and whose Escape dismisses, in a
+centred modal panel a press outside also dismisses; the palette puts
+D823's search field first, so the focus lands in it, and the caller
+filters its commands by what was typed and hands back the matches --
+the palette matches nothing itself. How a switcher is opened is the
+host's chord and the caller's: Ctrl+Tab cannot be a widget shortcut
+because Tab moves the focus first (D803). `link/ui_productivity` steps,
+finishes, cancels, switches, types and runs on both hosts.
+
+## D854 — Desktop selection and history: a font picker over the caller's catalogue, a notification list over the caller's queue
+
+P3-05 of the widget plan, which closes phase 3. A `font_picker` is
+three earlier controls and a line: D824's list box of the families,
+D819's segmented control of the styles, D830's stepper for the size
+and a bordered preview of a sample text, each choice reported by index
+or size through its own change; the catalogue is the caller's slices
+(a host's font enumeration is a P4 service), and the preview is drawn
+in the theme's face, since the picked family's face is the caller's to
+supply through the theme's fonts once it has loaded it. The
+`notification_list` is D832's `Notice` again -- the same queue a
+snackbar shows the head of, kept whole and ordered by the caller -- as
+a viewport of rows, each with its action and its close, under a Clear
+all button, a polite group of list items. `link/ui_desktop` picks a
+family, a style and a size, undoes, closes and clears on both hosts.

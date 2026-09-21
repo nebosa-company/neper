@@ -2797,3 +2797,165 @@ fn accordion(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels
     sem.label = label
     ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
 }
+
+// ------------------------------------- desktop selection and history (D854, P3-05)
+
+// An index reported through a change, for a row or a segment.
+type Chosen = struct { index: usize, change: widget.Change[usize] }
+
+fn chosen_fire(ctx: *void) -> err {
+    let c = mem.cast[*Chosen](ctx)
+    ret widget.fire_change[usize](c.change, c.index)
+}
+
+// One submit an index, over `change`, for controls that take a submit a choice.
+fn chosen_actions(a: *mem.Arena, count: usize, change: widget.Change[usize]) -> ([]widget.Submit, err) {
+    var none: []widget.Submit = zero
+    let (picks, picks_error) = mem.alloc[Chosen](a, count)
+    if picks_error != ok { ret (none, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, count)
+    if actions_error != ok { ret (none, TooLarge) }
+    var i = 0usize
+    while i < count {
+        picks[i] = Chosen { index: i, change: change }
+        actions[i] = widget.Submit { ctx: mem.cast[*void](&picks[i]), invoke: chosen_fire }
+        i += 1usize
+    }
+    ret (actions[0usize..count], ok)
+}
+
+// A font picker over the caller's catalogue: the families in D824's list box
+// (keyed `key + 1`, its rows `key + 2 + index`, `rows` tall), the styles as a
+// segmented control (`key + 64`, its segments after), the size as D830's stepper
+// (`key + 80`) and a preview of `sample` (keyed `key + 81`) in the theme's face --
+// the picked family's face is the caller's to supply through the theme's fonts;
+// each choice reaches its change with the index or the size. A group in the tree
+// named `label` whose value is the picked family.
+fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, families: []const str, family: usize, styles: []const str, style_index: usize, size: i64, sample: str, pick_family: widget.Change[usize], pick_style: widget.Change[usize], change_size: widget.Change[i64], rows: u32, width: f32) -> (widget.Node, err) {
+    if families.len == 0usize || styles.len == 0usize { ret (zero, TooLarge) }
+    let (family_actions, family_error) = chosen_actions(a, families.len, pick_family)
+    if family_error != ok { ret (zero, family_error) }
+    let (style_actions, style_error) = chosen_actions(a, styles.len, pick_style)
+    if style_error != ok { ret (zero, style_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (listed_families, listed_error) = list_box(a, key + 1u64, t, "Family", families, family, family_actions, rows, width)
+    if listed_error != ok { ret (zero, listed_error) }
+    parts[0usize] = listed_families
+    let (segments, segments_error) = segmented_control(a, key + 64u64, t, "Style", styles, style_index, style_actions, true)
+    if segments_error != ok { ret (zero, segments_error) }
+    parts[1usize] = segments
+    let (sized, sized_error) = stepper(a, key + 80u64, t, "Size", size, 4i64, 288i64, 1i64, change_size)
+    if sized_error != ok { ret (zero, sized_error) }
+    parts[2usize] = sized
+    var caption = text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    caption.ellipsis = "..."
+    caption.max_lines = 1u32
+    let (preview, preview_error) = text_node(a, key + 81u64, sample, t, caption)
+    if preview_error != ok { ret (zero, preview_error) }
+    let (previewed, previewed_error) = mem.alloc[widget.Node](a, 1usize)
+    if previewed_error != ok { ret (zero, TooLarge) }
+    previewed[0usize] = preview
+    var frame_options = surface_options(t)
+    frame_options.bordered = true
+    frame_options.padding = t.tokens.spacing.sm
+    var frame_style = surface_style(t, frame_options)
+    frame_style.width = style.Length { Px: width }
+    frame_style.min_height = style.Length { Px: 2.0 * t.tokens.text[0usize].line_height }
+    parts[3usize] = widget.box(0u64, frame_style, previewed[0usize..1usize])
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..4usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    sem.value = families[family]
+    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A notification list: D832's notices, newest first as the caller orders them,
+// each a row (keyed `key + 2 + 3 * index`) of its text, its action as a plain
+// button (`key + 3 + 3 * index`) when it has one and a close (`key + 4 + 3 * index`)
+// firing its dismiss, in a
+// viewport (keyed `key`) `height` tall with a Clear all button (`key + 1`) firing
+// `clear` above; a list of list items in the tree named `label`, polite.
+fn notification_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, notices: []const Notice, clear: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
+    if notices.len > 64usize { ret (zero, TooLarge) }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, notices.len)
+    if rows_error != ok { ret (zero, TooLarge) }
+    let row_height = t.tokens.metrics.control_height + t.tokens.spacing.sm
+    var i = 0usize
+    while i < notices.len {
+        let n = &notices[i]
+        var count = 2usize
+        if n.action_label.len != 0usize { count = 3usize }
+        let (cells, cells_error) = mem.alloc[widget.Node](a, count)
+        if cells_error != ok { ret (zero, TooLarge) }
+        var caption = text_options()
+        caption.wrap = .None
+        caption.ellipsis = "..."
+        caption.max_lines = 1u32
+        let (text_item, text_error) = text_node(a, 0u64, n.text, t, caption)
+        if text_error != ok { ret (zero, text_error) }
+        var grown = text_item
+        grown.style.width = style.Length { Flex: 1.0 }
+        cells[0usize] = grown
+        var at = 1usize
+        if n.action_label.len != 0usize {
+            var plain = button_options()
+            plain.variant = .Plain
+            let (act, act_error) = button(a, key + 3u64 + 3u64 * u64(i), t, n.action_label, &n.action, plain)
+            if act_error != ok { ret (zero, act_error) }
+            cells[at] = act
+            at += 1usize
+        }
+        var plain_close = button_options()
+        plain_close.variant = .Plain
+        let (close, close_error) = button(a, key + 4u64 + 3u64 * u64(i), t, "x", &n.dismiss, plain_close)
+        if close_error != ok { ret (zero, close_error) }
+        cells[at] = close
+        var row_style = style.defaults()
+        row_style.width = style.Length { Px: width }
+        row_style.height = style.Length { Px: row_height }
+        let pad = style.Length { Px: t.tokens.spacing.xs }
+        row_style.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+        let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
+        if lined_error != ok { ret (zero, TooLarge) }
+        lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, row_style, cells[0usize..count])
+        var entry: widget.Semantics = zero
+        entry.role = 11u8
+        entry.label = n.text
+        entry.row = u32(i + 1usize)
+        entry.row_count = u32(notices.len)
+        rows[i] = widget.semantics(key + 2u64 + 3u64 * u64(i), entry, style.defaults(), lined[0usize..1usize])
+        i += 1usize
+    }
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: width }
+    view_style.height = style.Length { Px: height }
+    view_style.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Border) }
+    view_style.radius = t.tokens.radii.sm
+    view_style.overflow = .Clip
+    let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, rows[0usize..notices.len])
+    if view_error != ok { ret (zero, TooLarge) }
+    var outlined = button_options()
+    outlined.variant = .Outlined
+    outlined.enabled = notices.len > 0usize
+    let (cleared, cleared_error) = button(a, key + 1u64, t, "Clear all", clear, outlined)
+    if cleared_error != ok { ret (zero, cleared_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = cleared
+    parts[1usize] = view
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .End, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    sem.live = 1u8
+    sem.row_count = u32(notices.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}

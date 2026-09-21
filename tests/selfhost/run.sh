@@ -2464,6 +2464,18 @@ ui_workspace_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/ui-workspace-selfhost"
 ui_workspace_output=$("$test_build/ui-workspace-selfhost")
 [ "$ui_workspace_output" = 'ui workspace ok' ]
+# Productivity navigation (D853, widget plan P3-04): wizard, window switcher, command palette.
+ui_productivity_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_productivity/src/main.e" "$repo" x64 linux "$test_build/ui-productivity-selfhost")
+[ "$ui_productivity_written" = 'executable written' ]
+chmod +x "$test_build/ui-productivity-selfhost"
+ui_productivity_output=$("$test_build/ui-productivity-selfhost")
+[ "$ui_productivity_output" = 'ui productivity ok' ]
+# Desktop selection and history (D854, widget plan P3-05): font picker, notification list.
+ui_desktop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_desktop/src/main.e" "$repo" x64 linux "$test_build/ui-desktop-selfhost")
+[ "$ui_desktop_written" = 'executable written' ]
+chmod +x "$test_build/ui-desktop-selfhost"
+ui_desktop_output=$("$test_build/ui-desktop-selfhost")
+[ "$ui_desktop_output" = 'ui desktop ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

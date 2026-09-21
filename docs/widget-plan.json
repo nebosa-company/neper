@@ -761,8 +761,12 @@
             "WindowSwitcher",
             "CommandPalette"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Wizard",
+            "WindowSwitcher",
+            "CommandPalette"
+          ],
+          "evidence": "lib/e/ui/navigation.e (D853): wizard as the step names (done marked, current in the tree) over the step's content and a footer of Cancel, Back and Next or Finish with the caller's can_advance disabling and the scope's Enter and Escape; window_switcher and command_palette as centred modal panels over one choice_rows/choice_scope pair (Up/Down activate, Enter and taps pick or run, Escape and a press outside dismiss), the palette with a search field the caller filters by; tests/selfhost/fixtures/link/ui_productivity on both hosts"
         },
         {
           "id": "P3-05",
@@ -772,8 +776,11 @@
             "FontPicker",
             "NotificationList"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "FontPicker",
+            "NotificationList"
+          ],
+          "evidence": "lib/e/ui/control.e (D854): font_picker over the caller's catalogue as a list box of families, a segmented control of styles, a size stepper and a preview line, each choice reported by index or size; notification_list as the caller's Notice queue in a viewport, a row a notice with its action and its close, and a Clear all button; tests/selfhost/fixtures/link/ui_desktop on both hosts"
         }
       ]
     },

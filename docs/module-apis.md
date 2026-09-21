@@ -5764,6 +5764,8 @@ fn info_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity,
 fn skeleton(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, phase: f32) -> (widget.Node, err)
 fn empty_state(a: *mem.Arena, key: widget.Key, t: *const Theme, icon_texture: scene.TextureId, title: str, message: str, action_label: str, action: *const widget.Submit, width: f32) -> (widget.Node, err)
 fn accordion(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, contents: []const widget.Node, expanded: usize, toggles: []const widget.Submit) -> (widget.Node, err)
+fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, families: []const str, family: usize, styles: []const str, style_index: usize, size: i64, sample: str, pick_family: widget.Change[usize], pick_style: widget.Change[usize], change_size: widget.Change[i64], rows: u32, width: f32) -> (widget.Node, err)
+fn notification_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, notices: []const Notice, clear: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
@@ -5889,6 +5891,9 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 fn dock_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit) -> (widget.Node, err)
 fn dock_layout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, left: widget.Node, centre: widget.Node, right: widget.Node, bottom: widget.Node, sizes: DockSizes, change: widget.Change[DockSizes], width: f32, height: f32) -> (widget.Node, err)
 fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, view: widget.Node, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], width: f32, height: f32) -> (widget.Node, err)
+fn wizard(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, steps: []const str, current: usize, content: widget.Node, can_advance: bool, back: *const widget.Submit, next: *const widget.Submit, finish: *const widget.Submit, cancel: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err)
+fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err)
+fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err)
 ```
 
 ### `e.ui.collection`

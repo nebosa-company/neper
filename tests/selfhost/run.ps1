@@ -2646,6 +2646,18 @@ $uiWorkspaceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $uiWorkspaceWritten -ne 'executable written') { throw 'ui_workspace emission failed' }
 $uiWorkspaceOutput = & $uiWorkspacePath
 if ($LASTEXITCODE -ne 0 -or $uiWorkspaceOutput -ne 'ui workspace ok') { throw "the document workspace answered wrongly: exit $LASTEXITCODE" }
+# Productivity navigation (D853, widget plan P3-04): wizard, window switcher, command palette.
+$uiProductivityPath = Join-Path $testBuild 'ui-productivity-selfhost.exe'
+$uiProductivityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_productivity\src\main.e') $repo 'x64' 'windows' $uiProductivityPath
+if ($LASTEXITCODE -ne 0 -or $uiProductivityWritten -ne 'executable written') { throw 'ui_productivity emission failed' }
+$uiProductivityOutput = & $uiProductivityPath
+if ($LASTEXITCODE -ne 0 -or $uiProductivityOutput -ne 'ui productivity ok') { throw "the productivity navigation answered wrongly: exit $LASTEXITCODE" }
+# Desktop selection and history (D854, widget plan P3-05): font picker, notification list.
+$uiDesktopPath = Join-Path $testBuild 'ui-desktop-selfhost.exe'
+$uiDesktopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_desktop\src\main.e') $repo 'x64' 'windows' $uiDesktopPath
+if ($LASTEXITCODE -ne 0 -or $uiDesktopWritten -ne 'executable written') { throw 'ui_desktop emission failed' }
+$uiDesktopOutput = & $uiDesktopPath
+if ($LASTEXITCODE -ne 0 -or $uiDesktopOutput -ne 'ui desktop ok') { throw "the desktop controls answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
