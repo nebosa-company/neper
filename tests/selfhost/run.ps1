@@ -1742,6 +1742,13 @@ $uiGalleryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiGalleryWritten -ne 'executable written') { throw 'ui_gallery emission failed' }
 $uiGalleryOutput = & $uiGalleryPath
 if ($LASTEXITCODE -ne 0 -or $uiGalleryOutput -ne 'ui gallery ok') { throw "the gallery answered wrongly: exit $LASTEXITCODE" }
+# Content controls (D813, widget plan P1-01): text under roles with a line budget,
+# selectable text, rich text with links, icon, image and canvas under a theme.
+$uiContentPath = Join-Path $testBuild 'ui-content-selfhost.exe'
+$uiContentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_content\src\main.e') $repo 'x64' 'windows' $uiContentPath
+if ($LASTEXITCODE -ne 0 -or $uiContentWritten -ne 'executable written') { throw 'ui_content emission failed' }
+$uiContentOutput = & $uiContentPath
+if ($LASTEXITCODE -ne 0 -or $uiContentOutput -ne 'ui content ok') { throw "the content controls answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

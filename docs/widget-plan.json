@@ -170,8 +170,15 @@
             "Image",
             "Canvas"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Text",
+            "SelectableText",
+            "RichText",
+            "Icon",
+            "Image",
+            "Canvas"
+          ],
+          "evidence": "lib/e/ui/control.e (D813): text in a role with align, wrap, max_lines and ellipsis (widget.Text carries them now), selectable_text as a read-only editor, rich_text spans side by side with tap regions and the link role, icon, image (unlabelled hidden) and canvas with semantic labels, under a Theme of tokens, fonts and language; tests/selfhost/fixtures/link/ui_content on both hosts"
         },
         {
           "id": "P1-02",

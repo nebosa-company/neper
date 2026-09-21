@@ -34,7 +34,8 @@ type Key = u64
 type ElementId = struct { slot: u32, generation: u32 }
 type StateId = struct { slot: u32, generation: u32 }
 type Action = struct { ctx: *void, invoke: fn(*void, input.Event) -> err }
-type Text = struct { value: str, style: layout.Style, color: paint.Color }
+// A text's wrap, alignment, line budget and ellipsis are the layout's options (D813).
+type Text = struct { value: str, style: layout.Style, color: paint.Color, wrap: layout.Wrap, align: layout.Align, max_lines: u32, ellipsis: str }
 type Button = struct { action: Action, enabled: bool }
 type Image = struct { texture: scene.TextureId, fit: Fit }
 // A scroll viewport (D808, widget plan P0-05): its children stacked and clipped,
@@ -835,7 +836,7 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         // A text with no font choice measures as nothing and paints nothing: a
         // label that exists for the semantic tree alone.
         if t.style.fonts.len == 0usize { ret (geometry.Size { width: 0.0, height: 0.0 }, ok) }
-        let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.max_width, max_lines: 0u32, align: .Start, wrap: .Word, ellipsis: "" })
+        let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.max_width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis })
         if layout_error != ok { ret (zero, InvalidTree) }
         ret (geometry.Size { width: laid.bounds.width, height: laid.bounds.height }, ok)
     case .Custom as c:
@@ -973,7 +974,7 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     switch node.kind {
     case .Text as t:
         if t.style.fonts.len == 0usize { ret finish_place(b, clipped, layered) }
-        let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.width, max_lines: 0u32, align: .Start, wrap: .Word, ellipsis: "" })
+        let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis })
         if layout_error != ok { ret InvalidTree }
         let (copies, copies_error) = mem.alloc[layout.Layout](a, 1usize)
         if copies_error != ok { ret TooLarge }

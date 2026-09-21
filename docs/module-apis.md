@@ -3304,7 +3304,7 @@ type Key = u64
 type ElementId = struct { slot: u32, generation: u32 }
 type StateId = struct { slot: u32, generation: u32 }
 type Action = struct { ctx: *void, invoke: fn(*void, input.Event) -> err }
-type Text = struct { value: str, style: layout.Style, color: paint.Color }
+type Text = struct { value: str, style: layout.Style, color: paint.Color, wrap: layout.Wrap, align: layout.Align, max_lines: u32, ellipsis: str }
 type Button = struct { action: Action, enabled: bool }
 type Image = struct { texture: scene.TextureId, fit: Fit }
 type Overscroll = enum u8 { Clamp, Bounce }
@@ -3581,6 +3581,39 @@ stands in for and sends the insets event). `gallery` is the reference page: one 
 each primitive under a theme -- a heading, a filled button, an outlined field, a
 checkbox, a list in a viewport, a tooltip overlay -- with stable keys 1..9 and 20..25
 and its state in a `Gallery` the caller owns.
+
+### `e.ui.control`
+
+```neper
+type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str }
+type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str }
+type Span = struct { value: str, role: style.TextRole, color: style.ColorRole, link: widget.Submit }
+error TooLarge
+
+fn text_options() -> TextOptions
+fn text_style(a: *mem.Arena, t: *const Theme, role: style.TextRole) -> (layout.Style, err)
+fn text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions) -> (widget.Node, err)
+fn selectable_text(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *const Theme, options: TextOptions) -> (widget.Node, err)
+fn rich_text(a: *mem.Arena, key: widget.Key, spans: []const Span, t: *const Theme) -> (widget.Node, err)
+fn icon(a: *mem.Arena, key: widget.Key, texture: scene.TextureId, size: f32, label: str) -> (widget.Node, err)
+fn image(a: *mem.Arena, key: widget.Key, texture: scene.TextureId, width: f32, height: f32, fit: widget.Fit, label: str) -> (widget.Node, err)
+fn canvas(a: *mem.Arena, key: widget.Key, custom: widget.Custom, label: str) -> (widget.Node, err)
+```
+
+The catalogue's controls (D813, widget plan phase 1) are functions that return node
+subtrees into the caller's frame arena under a `Theme` -- the tokens, the fonts in
+preference order and the language a page is set in. A control is `e.ui.widget`'s
+primitives composed with the looks `e.ui.style` resolves, its internals keyed
+positionally under the caller's key, and its semantics said through a `Semantics`
+node; nothing here is a new primitive. Section 3.1, content (P1-01): `text` in a
+text role with the layout's alignment, wrapping, line budget and ellipsis;
+`selectable_text` is a read-only editor over the caller's buffer, so selection and
+copy are the editor's; `rich_text` lays its spans side by side, a linked span a tap
+region with the link role whose `Submit` the caller's spans must keep alive (spans
+sit on one line until a span-aware layout wraps them); `icon` and `image` carry a
+semantic label, an unlabelled image leaving the tree; `canvas` is the caller's
+custom paint with a label. An icon is not tinted until the renderer has an image
+brush.
 
 ### `e.ui.app`
 

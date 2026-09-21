@@ -382,9 +382,9 @@ fn gallery(a: *mem.Arena, t: *const style.ThemeTokens, text_style: layout.Style,
     let check_look = style.resolve(t, .Outlined, checked)
     let (labels, labels_error) = mem.alloc[widget.Node](a, 3usize)
     if labels_error != ok { ret (zero, labels_error) }
-    labels[0usize] = widget.text(11u64, widget.Text { value: "Gallery", style: text_style, color: style.color(t, .Text) }, style.defaults())
-    labels[1usize] = widget.text(12u64, widget.Text { value: "Save", style: text_style, color: filled.foreground }, style.defaults())
-    labels[2usize] = widget.text(13u64, widget.Text { value: "Tip", style: text_style, color: style.color(t, .Text) }, style.defaults())
+    labels[0usize] = widget.text(11u64, widget.Text { value: "Gallery", style: text_style, color: style.color(t, .Text), wrap: .Word, align: .Start, max_lines: 0u32, ellipsis: "" }, style.defaults())
+    labels[1usize] = widget.text(12u64, widget.Text { value: "Save", style: text_style, color: filled.foreground, wrap: .Word, align: .Start, max_lines: 0u32, ellipsis: "" }, style.defaults())
+    labels[2usize] = widget.text(13u64, widget.Text { value: "Tip", style: text_style, color: style.color(t, .Text), wrap: .Word, align: .Start, max_lines: 0u32, ellipsis: "" }, style.defaults())
     let (rows, rows_error) = mem.alloc[widget.Node](a, 6usize)
     if rows_error != ok { ret (zero, rows_error) }
     var i = 0usize

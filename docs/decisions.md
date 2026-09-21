@@ -15622,3 +15622,30 @@ compare the frames. `link/ui_gallery` drives all of it and checks that
 two frames of the page are the same pixels. The key helper is
 `press_key`, since `key` is `by_key`'s parameter and a module-scope
 function's name is reserved from its parameters (D806's rule, met again).
+
+## D813 — `e.ui.control` opens: controls are functions under a `Theme`, and the content controls
+
+P1-01 of the widget plan, and the first of the four candidate modules the
+plan froze. A control is a function that returns a node subtree into the
+caller's frame arena, taking a `Theme` -- the tokens of D805, the fonts in
+preference order and the language a page is set in -- and composing
+`e.ui.widget`'s primitives with the looks `e.ui.style` resolves; its
+internals are keyed positionally under the caller's key, so
+reconciliation stays deterministic without a key scheme, and what it is
+to a screen reader is said through a `Semantics` node (D809). Nothing in
+the module is a new primitive, as the proposal's section 4 asks. The
+content controls: `text` sets a string in a text role, and `widget.Text`
+now carries the layout's alignment, wrapping, line budget and ellipsis
+so a control can ask for them; `selectable_text` is a read-only editor
+over the caller's buffer, since D807's editor already owns the caret,
+the selection and copy; `rich_text` lays its spans side by side, each in
+its own role and colour, a linked span wrapped in a tap region with the
+link role whose action the caller's spans keep alive the way an action
+context does -- the spans sit on one line, and wrapping across spans
+waits on a span-aware layout; `icon` and `image` carry a semantic label,
+an unlabelled image leaving the tree the way a decoration should, and
+neither is tinted until the renderer has an image brush; `canvas` is the
+caller's custom paint with a label. The square-glyph font has no space,
+so `link/ui_content` wraps by character; it checks the roles' sizes, the
+line budget, the read-only selection, the link, the images and a
+rendered canvas on both hosts.

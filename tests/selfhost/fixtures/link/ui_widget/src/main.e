@@ -149,7 +149,7 @@ fn build_tree(a: *mem.Arena, font: shape.Font, counter: *Counter, swapped: bool)
     if children_error != ok { ret (zero, children_error) }
     let (label, label_error) = mem.alloc[widget.Node](a, 1usize)
     if label_error != ok { ret (zero, label_error) }
-    label[0usize] = widget.text(0u64, widget.Text { value: "aa", style: layout.Style { fonts: fonts, language: "", line_height: 16.0 }, color: paint.rgba(1.0, 1.0, 1.0, 1.0) }, style.defaults())
+    label[0usize] = widget.text(0u64, widget.Text { value: "aa", style: layout.Style { fonts: fonts, language: "", line_height: 16.0 }, color: paint.rgba(1.0, 1.0, 1.0, 1.0), wrap: .Word, align: .Start, max_lines: 0u32, ellipsis: "" }, style.defaults())
     let red = widget.box(1u64, sized(20.0, 12.0, solid(1.0, 0.0, 0.0)), zero)
     let press = widget.button(2u64, widget.Button { action: widget.Action { ctx: mem.cast[*void](counter), invoke: on_press }, enabled: true }, sized(40.0, 20.0, solid(0.0, 0.0, 1.0)), label[0usize..1usize])
     let green = widget.box(3u64, sized(20.0, 12.0, solid(0.0, 1.0, 0.0)), zero)

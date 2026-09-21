@@ -65,7 +65,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if fonts_error != ok { os.exit(5i32) }
     let (label, label_error) = mem.alloc[widget.Node](a, 1usize)
     if label_error != ok { os.exit(6i32) }
-    label[0usize] = widget.text(0u64, widget.Text { value: "Go", style: layout.Style { fonts: fonts, language: "", line_height: 16.0 }, color: paint.rgba(1.0, 1.0, 1.0, 1.0) }, style.defaults())
+    label[0usize] = widget.text(0u64, widget.Text { value: "Go", style: layout.Style { fonts: fonts, language: "", line_height: 16.0 }, color: paint.rgba(1.0, 1.0, 1.0, 1.0), wrap: .Word, align: .Start, max_lines: 0u32, ellipsis: "" }, style.defaults())
     let (children, children_error) = mem.alloc[widget.Node](a, 2usize)
     if children_error != ok { os.exit(7i32) }
     children[0usize] = widget.button(2u64, widget.Button { action: widget.Action { ctx: mem.cast[*void](&counter), invoke: on_press }, enabled: true }, sized(40.0, 20.0), label[0usize..1usize])
