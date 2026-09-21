@@ -134,13 +134,14 @@ fn attack_root(race: *RootRace) {
 
 // A `stat` right after a replace on Windows can meet the name while a scanner holds
 // the replaced file open, and answer a sharing refusal that clears within
-// milliseconds (D793); the check is what the replace left, not the scanner's timing,
+// milliseconds -- up to seconds under a suite running eight builds at once (D793);
+// the check is what the replace left, not the scanner's timing,
 // so the stat is retried over a bounded wait before it counts.
 fn stat_settled(a: *mem.Arena, path_text: str) -> (fs.Entry, err) {
     var attempt = 0usize
     while true {
         let (entry, stat_error) = fs.stat(a, path_text)
-        if stat_error == ok || attempt == 50usize { ret (entry, stat_error) }
+        if stat_error == ok || attempt == 500usize { ret (entry, stat_error) }
         var pause: Atomic[u32] = zero
         let waited = os.wait_u32(&pause, 0u32, 10000000i64)
         attempt += 1usize
