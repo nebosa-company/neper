@@ -189,7 +189,82 @@
     "e.text.diff",
     "e.text.rank",
     "e.text.index",
-    "e.text.tokenize"
+    "e.text.tokenize",
+    "e.data.spatial",
+    "e.data.succinct",
+    "e.data.rope",
+    "e.data.cartesian_tree",
+    "e.data.bitmap",
+    "e.data.hamt",
+    "e.data.link_cut",
+    "e.data.stream",
+    "e.ratelimit",
+    "e.resilience",
+    "e.valid",
+    "e.control",
+    "e.fmt.semver",
+    "e.fmt.cbor",
+    "e.parse",
+    "e.ml.linear",
+    "e.ml.cluster",
+    "e.ml.cluster.density",
+    "e.ml.knn",
+    "e.ml.bayes",
+    "e.ml.tree",
+    "e.ml.svm",
+    "e.ml.optim",
+    "e.ml.loss",
+    "e.ml.sample",
+    "e.ml.nn",
+    "e.ml.hmm",
+    "e.ml.rl",
+    "e.ml.reduce",
+    "e.ml.ann",
+    "e.data.treap",
+    "e.data.skip_list",
+    "e.data.splay",
+    "e.data.window",
+    "e.data.btree",
+    "e.algo.align",
+    "e.algo.schedule",
+    "e.algo.timeseries",
+    "e.algo.exact_cover",
+    "e.data.bk_tree",
+    "e.algo.graph.centrality",
+    "e.algo.graph.color",
+    "e.algo.graph.community",
+    "e.algo.graph.cut",
+    "e.algo.graph.iso",
+    "e.algo.combopt",
+    "e.algo.sat",
+    "e.algo.csp",
+    "e.algo.logic",
+    "e.algo.bdd",
+    "e.fmt.toml",
+    "e.fmt.markdown",
+    "e.time.sync",
+    "e.trace",
+    "e.text.hyphen",
+    "e.dist.clock",
+    "e.dist.election",
+    "e.dist.gossip",
+    "e.dist.failure_detector",
+    "e.parse.ll",
+    "e.parse.lr",
+    "e.text.collab",
+    "e.test.prop",
+    "e.test.sim",
+    "e.test.linearize",
+    "e.fmt.pretty",
+    "e.fmt.json.schema",
+    "e.fmt.css",
+    "e.dist.consensus",
+    "e.dist.commit",
+    "e.dist.replica",
+    "e.dist.collective",
+    "e.algo.ecc",
+    "e.algo.rand.quasi",
+    "e.algo.geom3"
    ]
   },
   {
@@ -946,6 +1021,144 @@
    "blocked_by": []
   },
   {
+   "name": "e.data.spatial",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.succinct",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.text.suffix"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.rope",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.cartesian_tree",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.bitmap",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.hamt",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.link_cut",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.stream",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.treap",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.skip_list",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.splay",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.window",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.btree",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.bk_tree",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
    "name": "e.db",
    "layer": 6,
    "surface": "source",
@@ -1356,6 +1569,60 @@
     "e.io",
     "e.mem"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.semver",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.cbor",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.toml",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.markdown",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.pretty",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {
@@ -2026,6 +2293,39 @@
    "blocked_by": []
   },
   {
+   "name": "e.test.prop",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.sim",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.linearize",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
    "name": "e.text.collate",
    "layer": 2,
    "surface": "source",
@@ -2287,6 +2587,27 @@
    "blocked_by": []
   },
   {
+   "name": "e.text.hyphen",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.collab",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.thread",
    "layer": 4,
    "surface": "source",
@@ -2330,6 +2651,15 @@
     "e.mem",
     "e.time"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.time.sync",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {
@@ -2616,6 +2946,15 @@
    "blocked_by": []
   },
   {
+   "name": "e.algo.rand.quasi",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
    "name": "e.algo.stat.test",
    "layer": 2,
    "surface": "source",
@@ -2692,6 +3031,175 @@
    "blocked_by": []
   },
   {
+   "name": "e.algo.graph.centrality",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.graph"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.graph.color",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.graph"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.graph.community",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.data.graph"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.graph.cut",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.mem",
+    "e.data.graph"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.graph.iso",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.graph"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.align",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.schedule",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.timeseries",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math",
+    "e.math.opt"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.exact_cover",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.combopt",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.sat",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.csp",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.logic",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.bdd",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.ecc",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math.gf"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.geom3",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.math.opt.meta",
    "layer": 2,
    "surface": "source",
@@ -2757,6 +3265,373 @@
     "e.algo.rand",
     "e.algo.rand.dist",
     "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ratelimit",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.resilience",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.valid",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.control",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.filter"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.parse",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.linear",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.cluster",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.cluster.density",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.knn",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.bayes",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.tree",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.svm",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.optim",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.loss",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.sample",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.nn",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.hmm",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.rl",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.reduce",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.ann",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math",
+    "e.mem",
+    "e.ml.cluster"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.trace",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.clock",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.election",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.gossip",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.failure_detector",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.consensus",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.bytes"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.commit",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.replica",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.dist.clock"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.collective",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.parse.ll",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.parse"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.parse.lr",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.parse",
+    "e.parse.ll"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.json.schema",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.json",
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.text.regex"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.css",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.str"
    ],
    "blocked_by": []
   }

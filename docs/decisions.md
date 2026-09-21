@@ -16796,3 +16796,95 @@ discarded non-void call is refused (`let _ = f()`), fixed arrays are
 written `[N]T{ a, b }`, and a `usize` where a `u64` is wanted is reported
 at the enclosing `if`, not at the argument.
 
+## D859 — Identifier validation, control loops, versions, CBOR and parsing
+
+Batch nineteen of the algos.md stream (D834), by parallel subagents:
+`e.valid` (Luhn, ISBN, EAN, UPC and IBAN checks), `e.control` (PID with
+anti-windup and Ziegler-Nichols tuning, bang-bang, feedforward, sliding
+mode, a discrete LQR by Riccati iteration, Ackermann pole placement and
+a Luenberger observer, reusing the matrix helpers of e.math.filter),
+`e.fmt.semver` (parsing, precedence and node-style ranges, verified
+against node's own semver over 168 pairs rather than a replica),
+`e.fmt.cbor` (a streaming encoder and a full-grammar decoder, byte-equal
+to cbor2 on the RFC 8949 appendix) and `e.parse` (a scanner, the
+off-side rule, shunting-yard, Pratt and recursive descent over one AST
+pool, CYK, Earley with next-terminal prediction for constrained
+decoding, and a packrat PEG). The control fixture is `control_loop`
+because `link/control` already names a compiler fixture. Where a real
+implementation was reachable (node semver, cbor2, scipy's place_poles)
+the fixture was measured against it; the one hand-typed expectation in
+the batch was the wrong one, again.
+
+## D860 — TOML, Markdown, clock synchronisation, trace context and hyphenation
+
+Batch twenty of the algos.md stream (D834), by parallel subagents:
+`e.fmt.toml` (a pull parser measured event by event against tomllib),
+`e.fmt.markdown` (a CommonMark block and inline subset rendered against
+97 examples of the specification and cross-checked with markdown-it),
+`e.time.sync` (Marzullo, Berkeley, Cristian), `e.trace` (W3C
+traceparent and tracestate) and `e.text.hyphen` (Liang's algorithm with
+the pattern subset that reproduces hyph_en_US on the fixture words).
+The markdown parser keeps to ASCII whitespace and punctuation for the
+flanking rules and reads reference links, entities and raw HTML as
+text; the TOML parser detects no duplicate keys, since that needs the
+tree a pull parser exists not to build. Both are noted in the sources.
+
+## D861 — Distributed clocks, elections, gossip, failure detection and LL(1)
+
+Batch twenty-one of the algos.md stream (D834): `e.dist.clock`
+(Lamport, vector and hybrid logical clocks), `e.dist.election` (bully
+and ring, simulated with every message recorded), `e.dist.gossip`
+(push/pull rumour rounds and a SWIM-style membership table with
+incarnation precedence), `e.dist.failure_detector` (phi accrual through
+the exact normal tail) and `e.parse.ll` (nullable, FIRST, FOLLOW, the
+LL(1) table and a table-driven parse over e.parse grammars). Every
+distributed protocol is a pure state machine over caller storage whose
+messages the caller delivers, so a fixture can replay a Python replica
+on the same generator stream and compare each answer.
+
+## D862 — LR parsing, collaborative text, property testing, simulation and linearizability
+
+Batch twenty-two of the algos.md stream (D834): `e.parse.lr` (LR(0)
+and LR(1) collections, SLR, canonical and LALR tables, a table-driven
+parse), `e.text.collab` (operational transformation, an RGA text CRDT
+and fractional indexing), `e.test.prop` (generators and shrinkers),
+`e.test.sim` (a seeded deterministic scheduler with delays and drops)
+and `e.test.linearize` (Wing-Gong search against register, counter and
+set models). The lessons the agents reported: a `const` of type `str`
+does not type-check (a nullary function holding the literal does), a
+public function may not share the name of an imported module (`parse`
+in a module that uses e.parse -- import with an alias), and the
+linearizability search has no memo, so it is exponential past a dozen
+concurrent operations.
+
+## D863 — Pretty printing, JSON Schema, CSS, and the consensus and commit protocols
+
+Batch twenty-three of the algos.md stream (D834): `e.fmt.pretty`
+(Wadler layout with a lazy fits lookahead), `e.fmt.json.schema`
+(validation over e.fmt.json trees, judged as jsonschema does on 53
+pairs), `e.fmt.css` (selector matching right to left, specificity,
+cascade, matched as lxml.cssselect does), `e.dist.consensus` (Raft
+election, replication, snapshots and joint membership; single-decree
+and multi Paxos; viewstamped replication) and `e.dist.commit`
+(two- and three-phase commit, sagas, try-confirm-cancel). The consensus
+fixture delivers messages from a pool in a seeded order with drops and
+checks the safety properties in-fixture (one leader per term, committed
+entries never change) as well as the replica's answers. Deferred, in
+the sources: no pre-vote, configuration not reverted on truncation,
+Multi-Paxos promises carry no accepted values, VR delivered in order.
+
+## D864 — Replicas, collectives, error-correcting codes and quasi-random sequences
+
+Batch twenty-four of the algos.md stream (D834): `e.dist.replica`
+(quorum reads and writes by vector clock, read repair, hinted handoff),
+`e.dist.collective` (ring all-reduce, binomial broadcast, scatter,
+gather with transfer counts), `e.algo.ecc` (Reed-Solomon with errors
+and erasures over the GF(2^8) tables of e.math.gf, BCH, a Viterbi
+decoder, min-sum LDPC, Hamming and SECDED) and `e.algo.rand.quasi`
+(Sobol in Gray-code order, van der Corput, Halton, bit-equal to scipy)
+and `e.algo.geom3` (rays, the separating axis theorem, GJK and EPA,
+Barnes-Hut, Kabsch by Horn's quaternion, quickhull). The brief handed the agent "n = 5, r = 2,
+w = 3 is consistent", which is wrong (2 + 3 is not more than 5); the
+fixture asserts the truth, which is the reason the references are
+programs rather than sentences.
+

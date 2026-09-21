@@ -1444,6 +1444,456 @@ $textTokenizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $textTokenizeWritten -ne 'executable written') { throw 'text_tokenize emission failed' }
 & $textTokenizePath
 if ($LASTEXITCODE -ne 0) { throw "a text_tokenize check failed: exit $LASTEXITCODE" }
+# `e.data.spatial`: 200 LCG points against brute force for every index: nearest, ranges, overlaps, neighbours, ray hits (D857).
+$dataSpatialPath = Join-Path $testBuild 'data-spatial-selfhost.exe'
+$dataSpatialWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_spatial\src\main.e') $repo 'x64' 'windows' $dataSpatialPath
+if ($LASTEXITCODE -ne 0 -or $dataSpatialWritten -ne 'executable written') { throw 'data_spatial emission failed' }
+& $dataSpatialPath
+if ($LASTEXITCODE -ne 0) { throw "a data_spatial check failed: exit $LASTEXITCODE" }
+# `e.data.succinct`: rank/select against a scan, LOUDS and parentheses over a tree, wavelet queries, CSA and FM-index over a text (D857).
+$dataSuccinctPath = Join-Path $testBuild 'data-succinct-selfhost.exe'
+$dataSuccinctWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_succinct\src\main.e') $repo 'x64' 'windows' $dataSuccinctPath
+if ($LASTEXITCODE -ne 0 -or $dataSuccinctWritten -ne 'executable written') { throw 'data_succinct emission failed' }
+& $dataSuccinctPath
+if ($LASTEXITCODE -ne 0) { throw "a data_succinct check failed: exit $LASTEXITCODE" }
+# `e.data.rope`: sixty LCG-driven inserts, removes and concatenations checked against a flat reference (D857).
+$dataRopePath = Join-Path $testBuild 'data-rope-selfhost.exe'
+$dataRopeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_rope\src\main.e') $repo 'x64' 'windows' $dataRopePath
+if ($LASTEXITCODE -ne 0 -or $dataRopeWritten -ne 'executable written') { throw 'data_rope emission failed' }
+& $dataRopePath
+if ($LASTEXITCODE -ne 0) { throw "a data_rope check failed: exit $LASTEXITCODE" }
+# `e.data.cartesian_tree`: parent arrays, range minima and LCAs of 48 LCG arrays against a recursive definition (D857).
+$dataCartesianTreePath = Join-Path $testBuild 'data-cartesian-tree-selfhost.exe'
+$dataCartesianTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_cartesian_tree\src\main.e') $repo 'x64' 'windows' $dataCartesianTreePath
+if ($LASTEXITCODE -ne 0 -or $dataCartesianTreeWritten -ne 'executable written') { throw 'data_cartesian_tree emission failed' }
+& $dataCartesianTreePath
+if ($LASTEXITCODE -ne 0) { throw "a data_cartesian_tree check failed: exit $LASTEXITCODE" }
+# `e.data.bitmap`: roaring sets against Python sets (membership, and/or, removals) and WAH round trips with fills over streams of unequal length (D857).
+$dataBitmapPath = Join-Path $testBuild 'data-bitmap-selfhost.exe'
+$dataBitmapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_bitmap\src\main.e') $repo 'x64' 'windows' $dataBitmapPath
+if ($LASTEXITCODE -ne 0 -or $dataBitmapWritten -ne 'executable written') { throw 'data_bitmap emission failed' }
+& $dataBitmapPath
+if ($LASTEXITCODE -ne 0) { throw "a data_bitmap check failed: exit $LASTEXITCODE" }
+# `e.data.hamt`: sixty kept versions each still answering its own dictionary, node usage matched exactly against a Python mirror (D858).
+$dataHamtPath = Join-Path $testBuild 'data-hamt-selfhost.exe'
+$dataHamtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_hamt\src\main.e') $repo 'x64' 'windows' $dataHamtPath
+if ($LASTEXITCODE -ne 0 -or $dataHamtWritten -ne 'executable written') { throw 'data_hamt emission failed' }
+& $dataHamtPath
+if ($LASTEXITCODE -ne 0) { throw "a data_hamt check failed: exit $LASTEXITCODE" }
+# `e.data.link_cut`: 260 random links, cuts, path sums and connectivity queries on 40 vertices against a BFS (D858).
+$dataLinkCutPath = Join-Path $testBuild 'data-link-cut-selfhost.exe'
+$dataLinkCutWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_link_cut\src\main.e') $repo 'x64' 'windows' $dataLinkCutPath
+if ($LASTEXITCODE -ne 0 -or $dataLinkCutWritten -ne 'executable written') { throw 'data_link_cut emission failed' }
+& $dataLinkCutPath
+if ($LASTEXITCODE -ne 0) { throw "a data_link_cut check failed: exit $LASTEXITCODE" }
+# `e.data.stream`: 200 out-of-order events: the watermark sequence, late events, merged marks and the fired windows against a replica (D858).
+$dataStreamPath = Join-Path $testBuild 'data-stream-selfhost.exe'
+$dataStreamWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_stream\src\main.e') $repo 'x64' 'windows' $dataStreamPath
+if ($LASTEXITCODE -ne 0 -or $dataStreamWritten -ne 'executable written') { throw 'data_stream emission failed' }
+& $dataStreamPath
+if ($LASTEXITCODE -ne 0) { throw "a data_stream check failed: exit $LASTEXITCODE" }
+# `e.ratelimit`: 200 timed requests per limiter against a replica; the fixed window admits the boundary burst, the sliding ones do not (D858).
+$ratelimitPath = Join-Path $testBuild 'ratelimit-selfhost.exe'
+$ratelimitWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ratelimit\src\main.e') $repo 'x64' 'windows' $ratelimitPath
+if ($LASTEXITCODE -ne 0 -or $ratelimitWritten -ne 'executable written') { throw 'ratelimit emission failed' }
+& $ratelimitPath
+if ($LASTEXITCODE -ne 0) { throw "a ratelimit check failed: exit $LASTEXITCODE" }
+# `e.resilience`: a scripted breaker, jitter bounds over 800 draws, heartbeat sweeps, shedding matrix and rollout buckets against a replica (D858).
+$resiliencePath = Join-Path $testBuild 'resilience-selfhost.exe'
+$resilienceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\resilience\src\main.e') $repo 'x64' 'windows' $resiliencePath
+if ($LASTEXITCODE -ne 0 -or $resilienceWritten -ne 'executable written') { throw 'resilience emission failed' }
+& $resiliencePath
+if ($LASTEXITCODE -ne 0) { throw "a resilience check failed: exit $LASTEXITCODE" }
+# `e.valid`: known identifiers accepted and every single-digit and transposition corruption refused, from a Python replica (D859).
+$validPath = Join-Path $testBuild 'valid-selfhost.exe'
+$validWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\valid\src\main.e') $repo 'x64' 'windows' $validPath
+if ($LASTEXITCODE -ne 0 -or $validWritten -ne 'executable written') { throw 'valid emission failed' }
+& $validPath
+if ($LASTEXITCODE -ne 0) { throw "a valid check failed: exit $LASTEXITCODE" }
+# `e.control`: PID families on a simulated plant, LQR and pole-placement gains against numpy and scipy, an observer converging (D859).
+$controlLoopPath = Join-Path $testBuild 'control-loop-selfhost.exe'
+$controlLoopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\control_loop\src\main.e') $repo 'x64' 'windows' $controlLoopPath
+if ($LASTEXITCODE -ne 0 -or $controlLoopWritten -ne 'executable written') { throw 'control_loop emission failed' }
+& $controlLoopPath
+if ($LASTEXITCODE -ne 0) { throw "a control_loop check failed: exit $LASTEXITCODE" }
+# `e.fmt.semver`: the spec precedence chain both ways, bad versions and ranges, and 168 range pairs verified by node semver (D859).
+$fmtSemverPath = Join-Path $testBuild 'fmt-semver-selfhost.exe'
+$fmtSemverWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_semver\src\main.e') $repo 'x64' 'windows' $fmtSemverPath
+if ($LASTEXITCODE -ne 0 -or $fmtSemverWritten -ne 'executable written') { throw 'fmt_semver emission failed' }
+& $fmtSemverPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_semver check failed: exit $LASTEXITCODE" }
+# `e.fmt.cbor`: the RFC 8949 Appendix A stream byte-equal to cbor2 and decoded back, f16 patterns, skips and the error paths (D859).
+$fmtCborPath = Join-Path $testBuild 'fmt-cbor-selfhost.exe'
+$fmtCborWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_cbor\src\main.e') $repo 'x64' 'windows' $fmtCborPath
+if ($LASTEXITCODE -ne 0 -or $fmtCborWritten -ne 'executable written') { throw 'fmt_cbor emission failed' }
+& $fmtCborPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_cbor check failed: exit $LASTEXITCODE" }
+# `e.parse`: RPN, Pratt and descent values, token streams, CYK and Earley membership over LCG sentences, PEG matches and next-terminal sets against a Python oracle (D859).
+$parsePath = Join-Path $testBuild 'parse-selfhost.exe'
+$parseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\parse\src\main.e') $repo 'x64' 'windows' $parsePath
+if ($LASTEXITCODE -ne 0 -or $parseWritten -ne 'executable written') { throw 'parse emission failed' }
+& $parsePath
+if ($LASTEXITCODE -ne 0) { throw "a parse check failed: exit $LASTEXITCODE" }
+# `e.ml.linear`: OLS, ridge, lasso and logistic regression against scikit-learn, the singular and storage cases (D846).
+$mlLinearPath = Join-Path $testBuild 'ml-linear-selfhost.exe'
+$mlLinearWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_linear\src\main.e') $repo 'x64' 'windows' $mlLinearPath
+if ($LASTEXITCODE -ne 0 -or $mlLinearWritten -ne 'executable written') { throw 'ml_linear emission failed' }
+& $mlLinearPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_linear check failed: exit $LASTEXITCODE" }
+# `e.ml.cluster`: k-means and its seeding, online and LBG forms, k-medoids, three linkages, GMM by EM against scikit-learn, and neighbour joining on the textbook five taxa (D846).
+$mlClusterPath = Join-Path $testBuild 'ml-cluster-selfhost.exe'
+$mlClusterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_cluster\src\main.e') $repo 'x64' 'windows' $mlClusterPath
+if ($LASTEXITCODE -ne 0 -or $mlClusterWritten -ne 'executable written') { throw 'ml_cluster emission failed' }
+& $mlClusterPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_cluster check failed: exit $LASTEXITCODE" }
+# `e.ml.cluster.density`: DBSCAN and OPTICS on three blobs and a stray point against scikit-learn (D846).
+$mlClusterDensityPath = Join-Path $testBuild 'ml-cluster-density-selfhost.exe'
+$mlClusterDensityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_cluster_density\src\main.e') $repo 'x64' 'windows' $mlClusterDensityPath
+if ($LASTEXITCODE -ne 0 -or $mlClusterDensityWritten -ne 'executable written') { throw 'ml_cluster_density emission failed' }
+& $mlClusterDensityPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_cluster_density check failed: exit $LASTEXITCODE" }
+# `e.ml.knn`: the three nearest with distances, majority classification and mean regression against scikit-learn (D846).
+$mlKnnPath = Join-Path $testBuild 'ml-knn-selfhost.exe'
+$mlKnnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_knn\src\main.e') $repo 'x64' 'windows' $mlKnnPath
+if ($LASTEXITCODE -ne 0 -or $mlKnnWritten -ne 'executable written') { throw 'ml_knn emission failed' }
+& $mlKnnPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_knn check failed: exit $LASTEXITCODE" }
+# `e.ml.bayes`: Gaussian and multinomial naive Bayes fits and predictions against scikit-learn (D846).
+$mlBayesPath = Join-Path $testBuild 'ml-bayes-selfhost.exe'
+$mlBayesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_bayes\src\main.e') $repo 'x64' 'windows' $mlBayesPath
+if ($LASTEXITCODE -ne 0 -or $mlBayesWritten -ne 'executable written') { throw 'ml_bayes emission failed' }
+& $mlBayesPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_bayes check failed: exit $LASTEXITCODE" }
+# `e.ml.tree`: a regression tree and a classifier splitting where scikit-learn splits, a random forest classifying three groups, and gradient boosting driving the error down with the rounds (D847).
+$mlTreePath = Join-Path $testBuild 'ml-tree-selfhost.exe'
+$mlTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_tree\src\main.e') $repo 'x64' 'windows' $mlTreePath
+if ($LASTEXITCODE -ne 0 -or $mlTreeWritten -ne 'executable written') { throw 'ml_tree emission failed' }
+& $mlTreePath
+if ($LASTEXITCODE -ne 0) { throw "a ml_tree check failed: exit $LASTEXITCODE" }
+# `e.ml.svm`: the kernels, SMO finding the maximum-margin line of two squares as scikit-learn does, and an RBF machine learning XOR where a linear one cannot (D847).
+$mlSvmPath = Join-Path $testBuild 'ml-svm-selfhost.exe'
+$mlSvmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_svm\src\main.e') $repo 'x64' 'windows' $mlSvmPath
+if ($LASTEXITCODE -ne 0 -or $mlSvmWritten -ne 'executable written') { throw 'ml_svm emission failed' }
+& $mlSvmPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_svm check failed: exit $LASTEXITCODE" }
+# `e.ml.optim`: one step of every rule against hand-worked values, the cosine schedule at its landmarks, and online gradient descent (D847).
+$mlOptimPath = Join-Path $testBuild 'ml-optim-selfhost.exe'
+$mlOptimWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_optim\src\main.e') $repo 'x64' 'windows' $mlOptimPath
+if ($LASTEXITCODE -ne 0 -or $mlOptimWritten -ne 'executable written') { throw 'ml_optim emission failed' }
+& $mlOptimPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_optim check failed: exit $LASTEXITCODE" }
+# `e.ml.loss`: InfoNCE, the triplet hinge, the distillation KL and CTC against a brute-force sum over alignments (D847).
+$mlLossPath = Join-Path $testBuild 'ml-loss-selfhost.exe'
+$mlLossWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_loss\src\main.e') $repo 'x64' 'windows' $mlLossPath
+if ($LASTEXITCODE -ne 0 -or $mlLossWritten -ne 'executable written') { throw 'ml_loss emission failed' }
+& $mlLossPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_loss check failed: exit $LASTEXITCODE" }
+# `e.ml.sample`: softmax, top-k and nucleus frequencies, contrastive decoding, and beam search finding the best path of a toy chain where greedy does not (D847).
+$mlSamplePath = Join-Path $testBuild 'ml-sample-selfhost.exe'
+$mlSampleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_sample\src\main.e') $repo 'x64' 'windows' $mlSamplePath
+if ($LASTEXITCODE -ne 0 -or $mlSampleWritten -ne 'executable written') { throw 'ml_sample emission failed' }
+& $mlSamplePath
+if ($LASTEXITCODE -ne 0) { throw "a ml_sample check failed: exit $LASTEXITCODE" }
+# `e.ml.nn`: the perceptron, autodiff against derivatives by hand, attention and its causal form against NumPy, two heads over identity projections, and rotary embedding (D848).
+$mlNnPath = Join-Path $testBuild 'ml-nn-selfhost.exe'
+$mlNnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_nn\src\main.e') $repo 'x64' 'windows' $mlNnPath
+if ($LASTEXITCODE -ne 0 -or $mlNnWritten -ne 'executable written') { throw 'ml_nn emission failed' }
+& $mlNnPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_nn check failed: exit $LASTEXITCODE" }
+# `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
+$mlHmmPath = Join-Path $testBuild 'ml-hmm-selfhost.exe'
+$mlHmmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_hmm\src\main.e') $repo 'x64' 'windows' $mlHmmPath
+if ($LASTEXITCODE -ne 0 -or $mlHmmWritten -ne 'executable written') { throw 'ml_hmm emission failed' }
+& $mlHmmPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_hmm check failed: exit $LASTEXITCODE" }
+# `e.ml.rl`: Q-learning and SARSA converge on a four-state corridor, and epsilon-greedy explores at the asked rate (D848).
+$mlRlPath = Join-Path $testBuild 'ml-rl-selfhost.exe'
+$mlRlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_rl\src\main.e') $repo 'x64' 'windows' $mlRlPath
+if ($LASTEXITCODE -ne 0 -or $mlRlWritten -ne 'executable written') { throw 'ml_rl emission failed' }
+& $mlRlPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_rl check failed: exit $LASTEXITCODE" }
+# `e.ml.reduce`: PCA against NumPy, Oja's rule converging on the leading component, frequent directions keeping the dominant direction, and t-SNE keeping three groups apart (D848).
+$mlReducePath = Join-Path $testBuild 'ml-reduce-selfhost.exe'
+$mlReduceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_reduce\src\main.e') $repo 'x64' 'windows' $mlReducePath
+if ($LASTEXITCODE -ne 0 -or $mlReduceWritten -ne 'executable written') { throw 'ml_reduce emission failed' }
+& $mlReducePath
+if ($LASTEXITCODE -ne 0) { throw "a ml_reduce check failed: exit $LASTEXITCODE" }
+# `e.ml.ann`: MinHash and LSH banding, the small-world graph answering exact neighbours on a cloud, and IVF-PQ finding the nearest within the probed cells (D848).
+$mlAnnPath = Join-Path $testBuild 'ml-ann-selfhost.exe'
+$mlAnnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_ann\src\main.e') $repo 'x64' 'windows' $mlAnnPath
+if ($LASTEXITCODE -ne 0 -or $mlAnnWritten -ne 'executable written') { throw 'ml_ann emission failed' }
+& $mlAnnPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_ann check failed: exit $LASTEXITCODE" }
+# `e.data.treap`: keyed and implicit treaps against arrays through random operations, split and merge, and persistent versions (D849).
+$dataTreapPath = Join-Path $testBuild 'data-treap-selfhost.exe'
+$dataTreapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_treap\src\main.e') $repo 'x64' 'windows' $dataTreapPath
+if ($LASTEXITCODE -ne 0 -or $dataTreapWritten -ne 'executable written') { throw 'data_treap emission failed' }
+& $dataTreapPath
+if ($LASTEXITCODE -ne 0) { throw "a data_treap check failed: exit $LASTEXITCODE" }
+# `e.data.skip_list`: random inserts and removals against a sorted array, lower bounds, the chain, and slot reuse (D849).
+$dataSkipListPath = Join-Path $testBuild 'data-skip-list-selfhost.exe'
+$dataSkipListWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_skip_list\src\main.e') $repo 'x64' 'windows' $dataSkipListPath
+if ($LASTEXITCODE -ne 0 -or $dataSkipListWritten -ne 'executable written') { throw 'data_skip_list emission failed' }
+& $dataSkipListPath
+if ($LASTEXITCODE -ne 0) { throw "a data_skip_list check failed: exit $LASTEXITCODE" }
+# `e.data.splay`: a balanced build, splaying by position, and random range reversals against an array (D849).
+$dataSplayPath = Join-Path $testBuild 'data-splay-selfhost.exe'
+$dataSplayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_splay\src\main.e') $repo 'x64' 'windows' $dataSplayPath
+if ($LASTEXITCODE -ne 0 -or $dataSplayWritten -ne 'executable written') { throw 'data_splay emission failed' }
+& $dataSplayPath
+if ($LASTEXITCODE -ne 0) { throw "a data_splay check failed: exit $LASTEXITCODE" }
+# `e.data.window`: the monotonic queue and the two-stack window against scans, and the exponential histogram within its error bound (D849).
+$dataWindowPath = Join-Path $testBuild 'data-window-selfhost.exe'
+$dataWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_window\src\main.e') $repo 'x64' 'windows' $dataWindowPath
+if ($LASTEXITCODE -ne 0 -or $dataWindowWritten -ne 'executable written') { throw 'data_window emission failed' }
+& $dataWindowPath
+if ($LASTEXITCODE -ne 0) { throw "a data_window check failed: exit $LASTEXITCODE" }
+# `e.data.btree`: a B+ tree against a sorted array through random inserts, overwrites and removals, range scans, and emptying (D849).
+$dataBtreePath = Join-Path $testBuild 'data-btree-selfhost.exe'
+$dataBtreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_btree\src\main.e') $repo 'x64' 'windows' $dataBtreePath
+if ($LASTEXITCODE -ne 0 -or $dataBtreeWritten -ne 'executable written') { throw 'data_btree emission failed' }
+& $dataBtreePath
+if ($LASTEXITCODE -ne 0) { throw "a data_btree check failed: exit $LASTEXITCODE" }
+# `e.algo.align`: Needleman-Wunsch, Smith-Waterman and Gotoh scores against a NumPy dynamic programme, and Hirschberg replaying to both strings (D850).
+$algoAlignPath = Join-Path $testBuild 'algo-align-selfhost.exe'
+$algoAlignWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_align\src\main.e') $repo 'x64' 'windows' $algoAlignPath
+if ($LASTEXITCODE -ne 0 -or $algoAlignWritten -ne 'executable written') { throw 'algo_align emission failed' }
+& $algoAlignPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_align check failed: exit $LASTEXITCODE" }
+# `e.algo.schedule`: activity selection, interval covering, job sequencing with deadlines and the cooldown bound on textbook cases (D850).
+$algoSchedulePath = Join-Path $testBuild 'algo-schedule-selfhost.exe'
+$algoScheduleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_schedule\src\main.e') $repo 'x64' 'windows' $algoSchedulePath
+if ($LASTEXITCODE -ne 0 -or $algoScheduleWritten -ne 'executable written') { throw 'algo_schedule emission failed' }
+& $algoSchedulePath
+if ($LASTEXITCODE -ne 0) { throw "a algo_schedule check failed: exit $LASTEXITCODE" }
+# `e.algo.timeseries`: Holt-Winters and STL on a synthetic seasonal series, three change detectors on a shift, GARCH fit and forecasts on a simulation, and a Hawkes process near its rate (D850).
+$algoTimeseriesPath = Join-Path $testBuild 'algo-timeseries-selfhost.exe'
+$algoTimeseriesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_timeseries\src\main.e') $repo 'x64' 'windows' $algoTimeseriesPath
+if ($LASTEXITCODE -ne 0 -or $algoTimeseriesWritten -ne 'executable written') { throw 'algo_timeseries emission failed' }
+& $algoTimeseriesPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_timeseries check failed: exit $LASTEXITCODE" }
+# `e.algo.exact_cover`: the unique cover of the paper's matrix, an uncoverable one, and a Sudoku solved to its known solution (D850).
+$algoExactCoverPath = Join-Path $testBuild 'algo-exact-cover-selfhost.exe'
+$algoExactCoverWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_exact_cover\src\main.e') $repo 'x64' 'windows' $algoExactCoverPath
+if ($LASTEXITCODE -ne 0 -or $algoExactCoverWritten -ne 'executable written') { throw 'algo_exact_cover emission failed' }
+& $algoExactCoverPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_exact_cover check failed: exit $LASTEXITCODE" }
+# `e.data.bk_tree`: words within one edit of a query under Levenshtein, the empty tree, a full pool and a short stack (D850).
+$dataBkTreePath = Join-Path $testBuild 'data-bk-tree-selfhost.exe'
+$dataBkTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_bk_tree\src\main.e') $repo 'x64' 'windows' $dataBkTreePath
+if ($LASTEXITCODE -ne 0 -or $dataBkTreeWritten -ne 'executable written') { throw 'data_bk_tree emission failed' }
+& $dataBkTreePath
+if ($LASTEXITCODE -ne 0) { throw "a data_bk_tree check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.centrality`: PageRank, HITS, eigenvector, closeness and betweenness on the unweighted karate club against NetworkX (D855).
+$algoGraphCentralityPath = Join-Path $testBuild 'algo-graph-centrality-selfhost.exe'
+$algoGraphCentralityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_centrality\src\main.e') $repo 'x64' 'windows' $algoGraphCentralityPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphCentralityWritten -ne 'executable written') { throw 'algo_graph_centrality emission failed' }
+& $algoGraphCentralityPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_centrality check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.color`: Welsh-Powell and DSATUR on the karate club, a 6-cycle and K5 (D855).
+$algoGraphColorPath = Join-Path $testBuild 'algo-graph-color-selfhost.exe'
+$algoGraphColorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_color\src\main.e') $repo 'x64' 'windows' $algoGraphColorPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphColorWritten -ne 'executable written') { throw 'algo_graph_color emission failed' }
+& $algoGraphColorPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_color check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.community`: modularity, label propagation, Louvain and Girvan-Newman on the karate club against NetworkX (D855).
+$algoGraphCommunityPath = Join-Path $testBuild 'algo-graph-community-selfhost.exe'
+$algoGraphCommunityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_community\src\main.e') $repo 'x64' 'windows' $algoGraphCommunityPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphCommunityWritten -ne 'executable written') { throw 'algo_graph_community emission failed' }
+& $algoGraphCommunityPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_community check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.cut`: Stoer-Wagner and Karger on the karate club and a weighted square (D855).
+$algoGraphCutPath = Join-Path $testBuild 'algo-graph-cut-selfhost.exe'
+$algoGraphCutWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_cut\src\main.e') $repo 'x64' 'windows' $algoGraphCutPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphCutWritten -ne 'executable written') { throw 'algo_graph_cut emission failed' }
+& $algoGraphCutPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_cut check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.iso`: a triangle and a path inside the karate club, no 4-cycle in a path, two drawings of the Petersen graph isomorphic and a 10-cycle not (D855).
+$algoGraphIsoPath = Join-Path $testBuild 'algo-graph-iso-selfhost.exe'
+$algoGraphIsoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_iso\src\main.e') $repo 'x64' 'windows' $algoGraphIsoPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphIsoWritten -ne 'executable written') { throw 'algo_graph_iso emission failed' }
+& $algoGraphIsoPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_iso check failed: exit $LASTEXITCODE" }
+# `e.algo.combopt`: tours improved to the brute-force optimum, set cover, bin packing, routing, knapsack and generic branch and bound, and LNS on a toy (D856).
+$algoComboptPath = Join-Path $testBuild 'algo-combopt-selfhost.exe'
+$algoComboptWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_combopt\src\main.e') $repo 'x64' 'windows' $algoComboptPath
+if ($LASTEXITCODE -ne 0 -or $algoComboptWritten -ne 'executable written') { throw 'algo_combopt emission failed' }
+& $algoComboptPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_combopt check failed: exit $LASTEXITCODE" }
+# `e.algo.sat`: models and the pigeonhole refusal, at-most and pseudo-boolean encodings against counting, Tseitin circuits told apart by equivalence, WalkSAT and preprocessing (D856).
+$algoSatPath = Join-Path $testBuild 'algo-sat-selfhost.exe'
+$algoSatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_sat\src\main.e') $repo 'x64' 'windows' $algoSatPath
+if ($LASTEXITCODE -ne 0 -or $algoSatWritten -ne 'executable written') { throw 'algo_sat emission failed' }
+& $algoSatPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_sat check failed: exit $LASTEXITCODE" }
+# `e.algo.csp`: AC-3 on a chain, MAC and limited discrepancy on 4-queens, all-different Hall pruning, element, table and cumulative (D856).
+$algoCspPath = Join-Path $testBuild 'algo-csp-selfhost.exe'
+$algoCspWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_csp\src\main.e') $repo 'x64' 'windows' $algoCspPath
+if ($LASTEXITCODE -ne 0 -or $algoCspWritten -ne 'executable written') { throw 'algo_csp emission failed' }
+& $algoCspPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_csp check failed: exit $LASTEXITCODE" }
+# `e.algo.logic`: the textbook four-variable function reduced to its four primes and a three-term cover (D856).
+$algoLogicPath = Join-Path $testBuild 'algo-logic-selfhost.exe'
+$algoLogicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_logic\src\main.e') $repo 'x64' 'windows' $algoLogicPath
+if ($LASTEXITCODE -ne 0 -or $algoLogicWritten -ne 'executable written') { throw 'algo_logic emission failed' }
+& $algoLogicPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_logic check failed: exit $LASTEXITCODE" }
+# `e.algo.bdd`: two functions evaluated on every assignment and counted, canonicity, negation and a full pool (D856).
+$algoBddPath = Join-Path $testBuild 'algo-bdd-selfhost.exe'
+$algoBddWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_bdd\src\main.e') $repo 'x64' 'windows' $algoBddPath
+if ($LASTEXITCODE -ne 0 -or $algoBddWritten -ne 'executable written') { throw 'algo_bdd emission failed' }
+& $algoBddPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_bdd check failed: exit $LASTEXITCODE" }
+# `e.fmt.toml`: a 60-line document flattened event by event against tomllib, twelve refusals tomllib shares, and the value corners (D860).
+$fmtTomlPath = Join-Path $testBuild 'fmt-toml-selfhost.exe'
+$fmtTomlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_toml\src\main.e') $repo 'x64' 'windows' $fmtTomlPath
+if ($LASTEXITCODE -ne 0 -or $fmtTomlWritten -ne 'executable written') { throw 'fmt_toml emission failed' }
+& $fmtTomlPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_toml check failed: exit $LASTEXITCODE" }
+# `e.fmt.markdown`: 97 CommonMark 0.31.2 spec examples rendered to the spec's HTML, cross-checked with markdown-it (D860).
+$fmtMarkdownPath = Join-Path $testBuild 'fmt-markdown-selfhost.exe'
+$fmtMarkdownWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_markdown\src\main.e') $repo 'x64' 'windows' $fmtMarkdownPath
+if ($LASTEXITCODE -ne 0 -or $fmtMarkdownWritten -ne 'executable written') { throw 'fmt_markdown emission failed' }
+& $fmtMarkdownPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_markdown check failed: exit $LASTEXITCODE" }
+# `e.time.sync`: forty LCG interval sets against a brute-force count over every endpoint, Berkeley with outliers, Cristian (D860).
+$timeSyncPath = Join-Path $testBuild 'time-sync-selfhost.exe'
+$timeSyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_sync\src\main.e') $repo 'x64' 'windows' $timeSyncPath
+if ($LASTEXITCODE -ne 0 -or $timeSyncWritten -ne 'executable written') { throw 'time_sync emission failed' }
+& $timeSyncPath
+if ($LASTEXITCODE -ne 0) { throw "a time_sync check failed: exit $LASTEXITCODE" }
+# `e.trace`: the spec example round trip, seven invalid headers, drawn ids and tracestate ordering against a replica (D860).
+$tracePath = Join-Path $testBuild 'trace-selfhost.exe'
+$traceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trace\src\main.e') $repo 'x64' 'windows' $tracePath
+if ($LASTEXITCODE -ne 0 -or $traceWritten -ne 'executable written') { throw 'trace emission failed' }
+& $tracePath
+if ($LASTEXITCODE -ne 0) { throw "a trace check failed: exit $LASTEXITCODE" }
+# `e.text.hyphen`: twelve words at two minimum settings, exceptions and case folding against pyphen (D860).
+$textHyphenPath = Join-Path $testBuild 'text-hyphen-selfhost.exe'
+$textHyphenWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_hyphen\src\main.e') $repo 'x64' 'windows' $textHyphenPath
+if ($LASTEXITCODE -ne 0 -or $textHyphenWritten -ne 'executable written') { throw 'text_hyphen emission failed' }
+& $textHyphenPath
+if ($LASTEXITCODE -ne 0) { throw "a text_hyphen check failed: exit $LASTEXITCODE" }
+# `e.dist.clock`: Lamport, vector and hybrid clocks over scripted exchanges against a replica (D861).
+$distClockPath = Join-Path $testBuild 'dist-clock-selfhost.exe'
+$distClockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_clock\src\main.e') $repo 'x64' 'windows' $distClockPath
+if ($LASTEXITCODE -ne 0 -or $distClockWritten -ne 'executable written') { throw 'dist_clock emission failed' }
+& $distClockPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_clock check failed: exit $LASTEXITCODE" }
+# `e.dist.election`: leaders and exact message counts for several alive patterns against a replica (D861).
+$distElectionPath = Join-Path $testBuild 'dist-election-selfhost.exe'
+$distElectionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_election\src\main.e') $repo 'x64' 'windows' $distElectionPath
+if ($LASTEXITCODE -ne 0 -or $distElectionWritten -ne 'executable written') { throw 'dist_election emission failed' }
+& $distElectionPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_election check failed: exit $LASTEXITCODE" }
+# `e.dist.gossip`: per-round informed counts for three seeds and a merge-rule table against a PCG replica (D861).
+$distGossipPath = Join-Path $testBuild 'dist-gossip-selfhost.exe'
+$distGossipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_gossip\src\main.e') $repo 'x64' 'windows' $distGossipPath
+if ($LASTEXITCODE -ne 0 -or $distGossipWritten -ne 'executable written') { throw 'dist_gossip emission failed' }
+& $distGossipPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_gossip check failed: exit $LASTEXITCODE" }
+# `e.dist.failure_detector`: phi at four gaps and the threshold crossing to the tick against math.erfc (D861).
+$distFailureDetectorPath = Join-Path $testBuild 'dist-failure-detector-selfhost.exe'
+$distFailureDetectorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_failure_detector\src\main.e') $repo 'x64' 'windows' $distFailureDetectorPath
+if ($LASTEXITCODE -ne 0 -or $distFailureDetectorWritten -ne 'executable written') { throw 'dist_failure_detector emission failed' }
+& $distFailureDetectorPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_failure_detector check failed: exit $LASTEXITCODE" }
+# `e.parse.ll`: sets, table and derivations of the left-factored expression grammar against a replica, and the conflicts of the left-recursive one (D861).
+$parseLlPath = Join-Path $testBuild 'parse-ll-selfhost.exe'
+$parseLlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\parse_ll\src\main.e') $repo 'x64' 'windows' $parseLlPath
+if ($LASTEXITCODE -ne 0 -or $parseLlWritten -ne 'executable written') { throw 'parse_ll emission failed' }
+& $parseLlPath
+if ($LASTEXITCODE -ne 0) { throw "a parse_ll check failed: exit $LASTEXITCODE" }
+# `e.parse.lr`: 12/22/12 states on the dragon grammar with equal LALR and SLR tables, the `L = R` grammar not SLR but LALR, ten sentences under each table (D862).
+$parseLrPath = Join-Path $testBuild 'parse-lr-selfhost.exe'
+$parseLrWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\parse_lr\src\main.e') $repo 'x64' 'windows' $parseLrPath
+if ($LASTEXITCODE -ne 0 -or $parseLrWritten -ne 'executable written') { throw 'parse_lr emission failed' }
+& $parseLrPath
+if ($LASTEXITCODE -ne 0) { throw "a parse_lr check failed: exit $LASTEXITCODE" }
+# `e.text.collab`: 200 concurrent pairs converging both ways, two RGA replicas in opposite orders, 100 ordered keys (D862).
+$textCollabPath = Join-Path $testBuild 'text-collab-selfhost.exe'
+$textCollabWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_collab\src\main.e') $repo 'x64' 'windows' $textCollabPath
+if ($LASTEXITCODE -ne 0 -or $textCollabWritten -ne 'executable written') { throw 'text_collab emission failed' }
+& $textCollabPath
+if ($LASTEXITCODE -ne 0) { throw "a text_collab check failed: exit $LASTEXITCODE" }
+# `e.test.prop`: draws in range and stream-matched, `x > 100` shrinking to 101 from twenty starts, a pair property to two bytes (D862).
+$testPropPath = Join-Path $testBuild 'test-prop-selfhost.exe'
+$testPropWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_prop\src\main.e') $repo 'x64' 'windows' $testPropPath
+if ($LASTEXITCODE -ne 0 -or $testPropWritten -ne 'executable written') { throw 'test_prop emission failed' }
+& $testPropPath
+if ($LASTEXITCODE -ne 0) { throw "a test_prop check failed: exit $LASTEXITCODE" }
+# `e.test.sim`: ping-pong counts, identical replay for one seed and a different trace for another, matched to a replica (D862).
+$testSimPath = Join-Path $testBuild 'test-sim-selfhost.exe'
+$testSimWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_sim\src\main.e') $repo 'x64' 'windows' $testSimPath
+if ($LASTEXITCODE -ne 0 -or $testSimWritten -ne 'executable written') { throw 'test_sim emission failed' }
+& $testSimPath
+if ($LASTEXITCODE -ne 0) { throw "a test_sim check failed: exit $LASTEXITCODE" }
+# `e.test.linearize`: thirty LCG histories under three models against brute force over permutations, the stale read refused (D862).
+$testLinearizePath = Join-Path $testBuild 'test-linearize-selfhost.exe'
+$testLinearizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_linearize\src\main.e') $repo 'x64' 'windows' $testLinearizePath
+if ($LASTEXITCODE -ne 0 -or $testLinearizeWritten -ne 'executable written') { throw 'test_linearize emission failed' }
+& $testLinearizePath
+if ($LASTEXITCODE -ne 0) { throw "a test_linearize check failed: exit $LASTEXITCODE" }
+# `e.fmt.pretty`: Wadler's tree at four widths and soft-line cases byte-exact against a replica, plus the lazy-versus-strict group case (D863).
+$fmtPrettyPath = Join-Path $testBuild 'fmt-pretty-selfhost.exe'
+$fmtPrettyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pretty\src\main.e') $repo 'x64' 'windows' $fmtPrettyPath
+if ($LASTEXITCODE -ne 0 -or $fmtPrettyWritten -ne 'executable written') { throw 'fmt_pretty emission failed' }
+& $fmtPrettyPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_pretty check failed: exit $LASTEXITCODE" }
+# `e.fmt.json.schema`: 53 schema and document pairs judged as jsonschema 4.25 does, with the first failing pointer (D863).
+$fmtJsonSchemaPath = Join-Path $testBuild 'fmt-json-schema-selfhost.exe'
+$fmtJsonSchemaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_json_schema\src\main.e') $repo 'x64' 'windows' $fmtJsonSchemaPath
+if ($LASTEXITCODE -ne 0 -or $fmtJsonSchemaWritten -ne 'executable written') { throw 'fmt_json_schema emission failed' }
+& $fmtJsonSchemaPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_json_schema check failed: exit $LASTEXITCODE" }
+# `e.fmt.css`: 35 selectors over a 16-element document matched as lxml.cssselect does, spec specificity examples and a twelve-declaration cascade (D863).
+$fmtCssPath = Join-Path $testBuild 'fmt-css-selfhost.exe'
+$fmtCssWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_css\src\main.e') $repo 'x64' 'windows' $fmtCssPath
+if ($LASTEXITCODE -ne 0 -or $fmtCssWritten -ne 'executable written') { throw 'fmt_css emission failed' }
+& $fmtCssPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_css check failed: exit $LASTEXITCODE" }
+# `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
+$distConsensusPath = Join-Path $testBuild 'dist-consensus-selfhost.exe'
+$distConsensusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_consensus\src\main.e') $repo 'x64' 'windows' $distConsensusPath
+if ($LASTEXITCODE -ne 0 -or $distConsensusWritten -ne 'executable written') { throw 'dist_consensus emission failed' }
+& $distConsensusPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_consensus check failed: exit $LASTEXITCODE" }
+# `e.dist.commit`: per-tick state hashes for success, a failing participant and a dead coordinator: 2PC blocks, 3PC resolves (D863).
+$distCommitPath = Join-Path $testBuild 'dist-commit-selfhost.exe'
+$distCommitWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_commit\src\main.e') $repo 'x64' 'windows' $distCommitPath
+if ($LASTEXITCODE -ne 0 -or $distCommitWritten -ne 'executable written') { throw 'dist_commit emission failed' }
+& $distCommitPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_commit check failed: exit $LASTEXITCODE" }
+# `e.dist.replica`: 120 LCG steps on five replicas: no stale reads at r=w=3, two at r=w=2, hint and repair counts matched (D864).
+$distReplicaPath = Join-Path $testBuild 'dist-replica-selfhost.exe'
+$distReplicaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_replica\src\main.e') $repo 'x64' 'windows' $distReplicaPath
+if ($LASTEXITCODE -ne 0 -or $distReplicaWritten -ne 'executable written') { throw 'dist_replica emission failed' }
+& $distReplicaPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_replica check failed: exit $LASTEXITCODE" }
+# `e.dist.collective`: results and transfer counts against numpy: 24 moves in 6 steps for a ring of four, 4 transfers in 3 rounds to broadcast to five (D864).
+$distCollectivePath = Join-Path $testBuild 'dist-collective-selfhost.exe'
+$distCollectiveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_collective\src\main.e') $repo 'x64' 'windows' $distCollectivePath
+if ($LASTEXITCODE -ne 0 -or $distCollectiveWritten -ne 'executable written') { throw 'dist_collective emission failed' }
+& $distCollectivePath
+if ($LASTEXITCODE -ne 0) { throw "a dist_collective check failed: exit $LASTEXITCODE" }
+# `e.algo.ecc`: RS errors and erasures corrected and over-budget refused, every BCH(15,7) one- and two-bit pattern, Viterbi bursts, all LDPC singles, exhaustive Hamming and SECDED (D864).
+$algoEccPath = Join-Path $testBuild 'algo-ecc-selfhost.exe'
+$algoEccWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_ecc\src\main.e') $repo 'x64' 'windows' $algoEccPath
+if ($LASTEXITCODE -ne 0 -or $algoEccWritten -ne 'executable written') { throw 'algo_ecc emission failed' }
+& $algoEccPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_ecc check failed: exit $LASTEXITCODE" }
+# `e.algo.rand.quasi`: the first 64 Sobol points bit-equal to scipy's unscrambled Sobol and Halton points to zero error (D864).
+$algoRandQuasiPath = Join-Path $testBuild 'algo-rand-quasi-selfhost.exe'
+$algoRandQuasiWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rand_quasi\src\main.e') $repo 'x64' 'windows' $algoRandQuasiPath
+if ($LASTEXITCODE -ne 0 -or $algoRandQuasiWritten -ne 'executable written') { throw 'algo_rand_quasi emission failed' }
+& $algoRandQuasiPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_rand_quasi check failed: exit $LASTEXITCODE" }
+# `e.algo.geom3`: rays against a replica, 50 tetrahedron pairs where hull, SAT and GJK agree with linprog, EPA depths, Barnes-Hut within 0.52% at theta 0.5, Kabsch equal to scipy, a 68-face hull with scipy's volume (D864).
+$algoGeom3Path = Join-Path $testBuild 'algo-geom3-selfhost.exe'
+$algoGeom3Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_geom3\src\main.e') $repo 'x64' 'windows' $algoGeom3Path
+if ($LASTEXITCODE -ne 0 -or $algoGeom3Written -ne 'executable written') { throw 'algo_geom3 emission failed' }
+& $algoGeom3Path
+if ($LASTEXITCODE -ne 0) { throw "a algo_geom3 check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

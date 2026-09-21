@@ -1349,6 +1349,381 @@ text_tokenize_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$text_tokenize_written" = 'executable written' ]
 chmod +x "$test_build/text-tokenize-selfhost"
 "$test_build/text-tokenize-selfhost"
+# `e.data.spatial`: 200 LCG points against brute force for every index: nearest, ranges, overlaps, neighbours, ray hits (D857).
+data_spatial_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_spatial/src/main.e" "$repo" x64 linux "$test_build/data-spatial-selfhost")
+[ "$data_spatial_written" = 'executable written' ]
+chmod +x "$test_build/data-spatial-selfhost"
+"$test_build/data-spatial-selfhost"
+# `e.data.succinct`: rank/select against a scan, LOUDS and parentheses over a tree, wavelet queries, CSA and FM-index over a text (D857).
+data_succinct_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_succinct/src/main.e" "$repo" x64 linux "$test_build/data-succinct-selfhost")
+[ "$data_succinct_written" = 'executable written' ]
+chmod +x "$test_build/data-succinct-selfhost"
+"$test_build/data-succinct-selfhost"
+# `e.data.rope`: sixty LCG-driven inserts, removes and concatenations checked against a flat reference (D857).
+data_rope_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_rope/src/main.e" "$repo" x64 linux "$test_build/data-rope-selfhost")
+[ "$data_rope_written" = 'executable written' ]
+chmod +x "$test_build/data-rope-selfhost"
+"$test_build/data-rope-selfhost"
+# `e.data.cartesian_tree`: parent arrays, range minima and LCAs of 48 LCG arrays against a recursive definition (D857).
+data_cartesian_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_cartesian_tree/src/main.e" "$repo" x64 linux "$test_build/data-cartesian-tree-selfhost")
+[ "$data_cartesian_tree_written" = 'executable written' ]
+chmod +x "$test_build/data-cartesian-tree-selfhost"
+"$test_build/data-cartesian-tree-selfhost"
+# `e.data.bitmap`: roaring sets against Python sets (membership, and/or, removals) and WAH round trips with fills over streams of unequal length (D857).
+data_bitmap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_bitmap/src/main.e" "$repo" x64 linux "$test_build/data-bitmap-selfhost")
+[ "$data_bitmap_written" = 'executable written' ]
+chmod +x "$test_build/data-bitmap-selfhost"
+"$test_build/data-bitmap-selfhost"
+# `e.data.hamt`: sixty kept versions each still answering its own dictionary, node usage matched exactly against a Python mirror (D858).
+data_hamt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_hamt/src/main.e" "$repo" x64 linux "$test_build/data-hamt-selfhost")
+[ "$data_hamt_written" = 'executable written' ]
+chmod +x "$test_build/data-hamt-selfhost"
+"$test_build/data-hamt-selfhost"
+# `e.data.link_cut`: 260 random links, cuts, path sums and connectivity queries on 40 vertices against a BFS (D858).
+data_link_cut_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_link_cut/src/main.e" "$repo" x64 linux "$test_build/data-link-cut-selfhost")
+[ "$data_link_cut_written" = 'executable written' ]
+chmod +x "$test_build/data-link-cut-selfhost"
+"$test_build/data-link-cut-selfhost"
+# `e.data.stream`: 200 out-of-order events: the watermark sequence, late events, merged marks and the fired windows against a replica (D858).
+data_stream_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_stream/src/main.e" "$repo" x64 linux "$test_build/data-stream-selfhost")
+[ "$data_stream_written" = 'executable written' ]
+chmod +x "$test_build/data-stream-selfhost"
+"$test_build/data-stream-selfhost"
+# `e.ratelimit`: 200 timed requests per limiter against a replica; the fixed window admits the boundary burst, the sliding ones do not (D858).
+ratelimit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ratelimit/src/main.e" "$repo" x64 linux "$test_build/ratelimit-selfhost")
+[ "$ratelimit_written" = 'executable written' ]
+chmod +x "$test_build/ratelimit-selfhost"
+"$test_build/ratelimit-selfhost"
+# `e.resilience`: a scripted breaker, jitter bounds over 800 draws, heartbeat sweeps, shedding matrix and rollout buckets against a replica (D858).
+resilience_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/resilience/src/main.e" "$repo" x64 linux "$test_build/resilience-selfhost")
+[ "$resilience_written" = 'executable written' ]
+chmod +x "$test_build/resilience-selfhost"
+"$test_build/resilience-selfhost"
+# `e.valid`: known identifiers accepted and every single-digit and transposition corruption refused, from a Python replica (D859).
+valid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/valid/src/main.e" "$repo" x64 linux "$test_build/valid-selfhost")
+[ "$valid_written" = 'executable written' ]
+chmod +x "$test_build/valid-selfhost"
+"$test_build/valid-selfhost"
+# `e.control`: PID families on a simulated plant, LQR and pole-placement gains against numpy and scipy, an observer converging (D859).
+control_loop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/control_loop/src/main.e" "$repo" x64 linux "$test_build/control-loop-selfhost")
+[ "$control_loop_written" = 'executable written' ]
+chmod +x "$test_build/control-loop-selfhost"
+"$test_build/control-loop-selfhost"
+# `e.fmt.semver`: the spec precedence chain both ways, bad versions and ranges, and 168 range pairs verified by node semver (D859).
+fmt_semver_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_semver/src/main.e" "$repo" x64 linux "$test_build/fmt-semver-selfhost")
+[ "$fmt_semver_written" = 'executable written' ]
+chmod +x "$test_build/fmt-semver-selfhost"
+"$test_build/fmt-semver-selfhost"
+# `e.fmt.cbor`: the RFC 8949 Appendix A stream byte-equal to cbor2 and decoded back, f16 patterns, skips and the error paths (D859).
+fmt_cbor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_cbor/src/main.e" "$repo" x64 linux "$test_build/fmt-cbor-selfhost")
+[ "$fmt_cbor_written" = 'executable written' ]
+chmod +x "$test_build/fmt-cbor-selfhost"
+"$test_build/fmt-cbor-selfhost"
+# `e.parse`: RPN, Pratt and descent values, token streams, CYK and Earley membership over LCG sentences, PEG matches and next-terminal sets against a Python oracle (D859).
+parse_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/parse/src/main.e" "$repo" x64 linux "$test_build/parse-selfhost")
+[ "$parse_written" = 'executable written' ]
+chmod +x "$test_build/parse-selfhost"
+"$test_build/parse-selfhost"
+# `e.ml.linear`: OLS, ridge, lasso and logistic regression against scikit-learn, the singular and storage cases (D846).
+ml_linear_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_linear/src/main.e" "$repo" x64 linux "$test_build/ml-linear-selfhost")
+[ "$ml_linear_written" = 'executable written' ]
+chmod +x "$test_build/ml-linear-selfhost"
+"$test_build/ml-linear-selfhost"
+# `e.ml.cluster`: k-means and its seeding, online and LBG forms, k-medoids, three linkages, GMM by EM against scikit-learn, and neighbour joining on the textbook five taxa (D846).
+ml_cluster_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_cluster/src/main.e" "$repo" x64 linux "$test_build/ml-cluster-selfhost")
+[ "$ml_cluster_written" = 'executable written' ]
+chmod +x "$test_build/ml-cluster-selfhost"
+"$test_build/ml-cluster-selfhost"
+# `e.ml.cluster.density`: DBSCAN and OPTICS on three blobs and a stray point against scikit-learn (D846).
+ml_cluster_density_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_cluster_density/src/main.e" "$repo" x64 linux "$test_build/ml-cluster-density-selfhost")
+[ "$ml_cluster_density_written" = 'executable written' ]
+chmod +x "$test_build/ml-cluster-density-selfhost"
+"$test_build/ml-cluster-density-selfhost"
+# `e.ml.knn`: the three nearest with distances, majority classification and mean regression against scikit-learn (D846).
+ml_knn_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_knn/src/main.e" "$repo" x64 linux "$test_build/ml-knn-selfhost")
+[ "$ml_knn_written" = 'executable written' ]
+chmod +x "$test_build/ml-knn-selfhost"
+"$test_build/ml-knn-selfhost"
+# `e.ml.bayes`: Gaussian and multinomial naive Bayes fits and predictions against scikit-learn (D846).
+ml_bayes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_bayes/src/main.e" "$repo" x64 linux "$test_build/ml-bayes-selfhost")
+[ "$ml_bayes_written" = 'executable written' ]
+chmod +x "$test_build/ml-bayes-selfhost"
+"$test_build/ml-bayes-selfhost"
+# `e.ml.tree`: a regression tree and a classifier splitting where scikit-learn splits, a random forest classifying three groups, and gradient boosting driving the error down with the rounds (D847).
+ml_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_tree/src/main.e" "$repo" x64 linux "$test_build/ml-tree-selfhost")
+[ "$ml_tree_written" = 'executable written' ]
+chmod +x "$test_build/ml-tree-selfhost"
+"$test_build/ml-tree-selfhost"
+# `e.ml.svm`: the kernels, SMO finding the maximum-margin line of two squares as scikit-learn does, and an RBF machine learning XOR where a linear one cannot (D847).
+ml_svm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_svm/src/main.e" "$repo" x64 linux "$test_build/ml-svm-selfhost")
+[ "$ml_svm_written" = 'executable written' ]
+chmod +x "$test_build/ml-svm-selfhost"
+"$test_build/ml-svm-selfhost"
+# `e.ml.optim`: one step of every rule against hand-worked values, the cosine schedule at its landmarks, and online gradient descent (D847).
+ml_optim_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_optim/src/main.e" "$repo" x64 linux "$test_build/ml-optim-selfhost")
+[ "$ml_optim_written" = 'executable written' ]
+chmod +x "$test_build/ml-optim-selfhost"
+"$test_build/ml-optim-selfhost"
+# `e.ml.loss`: InfoNCE, the triplet hinge, the distillation KL and CTC against a brute-force sum over alignments (D847).
+ml_loss_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_loss/src/main.e" "$repo" x64 linux "$test_build/ml-loss-selfhost")
+[ "$ml_loss_written" = 'executable written' ]
+chmod +x "$test_build/ml-loss-selfhost"
+"$test_build/ml-loss-selfhost"
+# `e.ml.sample`: softmax, top-k and nucleus frequencies, contrastive decoding, and beam search finding the best path of a toy chain where greedy does not (D847).
+ml_sample_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_sample/src/main.e" "$repo" x64 linux "$test_build/ml-sample-selfhost")
+[ "$ml_sample_written" = 'executable written' ]
+chmod +x "$test_build/ml-sample-selfhost"
+"$test_build/ml-sample-selfhost"
+# `e.ml.nn`: the perceptron, autodiff against derivatives by hand, attention and its causal form against NumPy, two heads over identity projections, and rotary embedding (D848).
+ml_nn_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_nn/src/main.e" "$repo" x64 linux "$test_build/ml-nn-selfhost")
+[ "$ml_nn_written" = 'executable written' ]
+chmod +x "$test_build/ml-nn-selfhost"
+"$test_build/ml-nn-selfhost"
+# `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
+ml_hmm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hmm/src/main.e" "$repo" x64 linux "$test_build/ml-hmm-selfhost")
+[ "$ml_hmm_written" = 'executable written' ]
+chmod +x "$test_build/ml-hmm-selfhost"
+"$test_build/ml-hmm-selfhost"
+# `e.ml.rl`: Q-learning and SARSA converge on a four-state corridor, and epsilon-greedy explores at the asked rate (D848).
+ml_rl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_rl/src/main.e" "$repo" x64 linux "$test_build/ml-rl-selfhost")
+[ "$ml_rl_written" = 'executable written' ]
+chmod +x "$test_build/ml-rl-selfhost"
+"$test_build/ml-rl-selfhost"
+# `e.ml.reduce`: PCA against NumPy, Oja's rule converging on the leading component, frequent directions keeping the dominant direction, and t-SNE keeping three groups apart (D848).
+ml_reduce_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_reduce/src/main.e" "$repo" x64 linux "$test_build/ml-reduce-selfhost")
+[ "$ml_reduce_written" = 'executable written' ]
+chmod +x "$test_build/ml-reduce-selfhost"
+"$test_build/ml-reduce-selfhost"
+# `e.ml.ann`: MinHash and LSH banding, the small-world graph answering exact neighbours on a cloud, and IVF-PQ finding the nearest within the probed cells (D848).
+ml_ann_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_ann/src/main.e" "$repo" x64 linux "$test_build/ml-ann-selfhost")
+[ "$ml_ann_written" = 'executable written' ]
+chmod +x "$test_build/ml-ann-selfhost"
+"$test_build/ml-ann-selfhost"
+# `e.data.treap`: keyed and implicit treaps against arrays through random operations, split and merge, and persistent versions (D849).
+data_treap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_treap/src/main.e" "$repo" x64 linux "$test_build/data-treap-selfhost")
+[ "$data_treap_written" = 'executable written' ]
+chmod +x "$test_build/data-treap-selfhost"
+"$test_build/data-treap-selfhost"
+# `e.data.skip_list`: random inserts and removals against a sorted array, lower bounds, the chain, and slot reuse (D849).
+data_skip_list_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_skip_list/src/main.e" "$repo" x64 linux "$test_build/data-skip-list-selfhost")
+[ "$data_skip_list_written" = 'executable written' ]
+chmod +x "$test_build/data-skip-list-selfhost"
+"$test_build/data-skip-list-selfhost"
+# `e.data.splay`: a balanced build, splaying by position, and random range reversals against an array (D849).
+data_splay_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_splay/src/main.e" "$repo" x64 linux "$test_build/data-splay-selfhost")
+[ "$data_splay_written" = 'executable written' ]
+chmod +x "$test_build/data-splay-selfhost"
+"$test_build/data-splay-selfhost"
+# `e.data.window`: the monotonic queue and the two-stack window against scans, and the exponential histogram within its error bound (D849).
+data_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_window/src/main.e" "$repo" x64 linux "$test_build/data-window-selfhost")
+[ "$data_window_written" = 'executable written' ]
+chmod +x "$test_build/data-window-selfhost"
+"$test_build/data-window-selfhost"
+# `e.data.btree`: a B+ tree against a sorted array through random inserts, overwrites and removals, range scans, and emptying (D849).
+data_btree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_btree/src/main.e" "$repo" x64 linux "$test_build/data-btree-selfhost")
+[ "$data_btree_written" = 'executable written' ]
+chmod +x "$test_build/data-btree-selfhost"
+"$test_build/data-btree-selfhost"
+# `e.algo.align`: Needleman-Wunsch, Smith-Waterman and Gotoh scores against a NumPy dynamic programme, and Hirschberg replaying to both strings (D850).
+algo_align_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_align/src/main.e" "$repo" x64 linux "$test_build/algo-align-selfhost")
+[ "$algo_align_written" = 'executable written' ]
+chmod +x "$test_build/algo-align-selfhost"
+"$test_build/algo-align-selfhost"
+# `e.algo.schedule`: activity selection, interval covering, job sequencing with deadlines and the cooldown bound on textbook cases (D850).
+algo_schedule_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_schedule/src/main.e" "$repo" x64 linux "$test_build/algo-schedule-selfhost")
+[ "$algo_schedule_written" = 'executable written' ]
+chmod +x "$test_build/algo-schedule-selfhost"
+"$test_build/algo-schedule-selfhost"
+# `e.algo.timeseries`: Holt-Winters and STL on a synthetic seasonal series, three change detectors on a shift, GARCH fit and forecasts on a simulation, and a Hawkes process near its rate (D850).
+algo_timeseries_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_timeseries/src/main.e" "$repo" x64 linux "$test_build/algo-timeseries-selfhost")
+[ "$algo_timeseries_written" = 'executable written' ]
+chmod +x "$test_build/algo-timeseries-selfhost"
+"$test_build/algo-timeseries-selfhost"
+# `e.algo.exact_cover`: the unique cover of the paper's matrix, an uncoverable one, and a Sudoku solved to its known solution (D850).
+algo_exact_cover_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_exact_cover/src/main.e" "$repo" x64 linux "$test_build/algo-exact-cover-selfhost")
+[ "$algo_exact_cover_written" = 'executable written' ]
+chmod +x "$test_build/algo-exact-cover-selfhost"
+"$test_build/algo-exact-cover-selfhost"
+# `e.data.bk_tree`: words within one edit of a query under Levenshtein, the empty tree, a full pool and a short stack (D850).
+data_bk_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_bk_tree/src/main.e" "$repo" x64 linux "$test_build/data-bk-tree-selfhost")
+[ "$data_bk_tree_written" = 'executable written' ]
+chmod +x "$test_build/data-bk-tree-selfhost"
+"$test_build/data-bk-tree-selfhost"
+# `e.algo.graph.centrality`: PageRank, HITS, eigenvector, closeness and betweenness on the unweighted karate club against NetworkX (D855).
+algo_graph_centrality_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_centrality/src/main.e" "$repo" x64 linux "$test_build/algo-graph-centrality-selfhost")
+[ "$algo_graph_centrality_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-centrality-selfhost"
+"$test_build/algo-graph-centrality-selfhost"
+# `e.algo.graph.color`: Welsh-Powell and DSATUR on the karate club, a 6-cycle and K5 (D855).
+algo_graph_color_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_color/src/main.e" "$repo" x64 linux "$test_build/algo-graph-color-selfhost")
+[ "$algo_graph_color_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-color-selfhost"
+"$test_build/algo-graph-color-selfhost"
+# `e.algo.graph.community`: modularity, label propagation, Louvain and Girvan-Newman on the karate club against NetworkX (D855).
+algo_graph_community_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_community/src/main.e" "$repo" x64 linux "$test_build/algo-graph-community-selfhost")
+[ "$algo_graph_community_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-community-selfhost"
+"$test_build/algo-graph-community-selfhost"
+# `e.algo.graph.cut`: Stoer-Wagner and Karger on the karate club and a weighted square (D855).
+algo_graph_cut_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_cut/src/main.e" "$repo" x64 linux "$test_build/algo-graph-cut-selfhost")
+[ "$algo_graph_cut_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-cut-selfhost"
+"$test_build/algo-graph-cut-selfhost"
+# `e.algo.graph.iso`: a triangle and a path inside the karate club, no 4-cycle in a path, two drawings of the Petersen graph isomorphic and a 10-cycle not (D855).
+algo_graph_iso_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_iso/src/main.e" "$repo" x64 linux "$test_build/algo-graph-iso-selfhost")
+[ "$algo_graph_iso_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-iso-selfhost"
+"$test_build/algo-graph-iso-selfhost"
+# `e.algo.combopt`: tours improved to the brute-force optimum, set cover, bin packing, routing, knapsack and generic branch and bound, and LNS on a toy (D856).
+algo_combopt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_combopt/src/main.e" "$repo" x64 linux "$test_build/algo-combopt-selfhost")
+[ "$algo_combopt_written" = 'executable written' ]
+chmod +x "$test_build/algo-combopt-selfhost"
+"$test_build/algo-combopt-selfhost"
+# `e.algo.sat`: models and the pigeonhole refusal, at-most and pseudo-boolean encodings against counting, Tseitin circuits told apart by equivalence, WalkSAT and preprocessing (D856).
+algo_sat_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sat/src/main.e" "$repo" x64 linux "$test_build/algo-sat-selfhost")
+[ "$algo_sat_written" = 'executable written' ]
+chmod +x "$test_build/algo-sat-selfhost"
+"$test_build/algo-sat-selfhost"
+# `e.algo.csp`: AC-3 on a chain, MAC and limited discrepancy on 4-queens, all-different Hall pruning, element, table and cumulative (D856).
+algo_csp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_csp/src/main.e" "$repo" x64 linux "$test_build/algo-csp-selfhost")
+[ "$algo_csp_written" = 'executable written' ]
+chmod +x "$test_build/algo-csp-selfhost"
+"$test_build/algo-csp-selfhost"
+# `e.algo.logic`: the textbook four-variable function reduced to its four primes and a three-term cover (D856).
+algo_logic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_logic/src/main.e" "$repo" x64 linux "$test_build/algo-logic-selfhost")
+[ "$algo_logic_written" = 'executable written' ]
+chmod +x "$test_build/algo-logic-selfhost"
+"$test_build/algo-logic-selfhost"
+# `e.algo.bdd`: two functions evaluated on every assignment and counted, canonicity, negation and a full pool (D856).
+algo_bdd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_bdd/src/main.e" "$repo" x64 linux "$test_build/algo-bdd-selfhost")
+[ "$algo_bdd_written" = 'executable written' ]
+chmod +x "$test_build/algo-bdd-selfhost"
+"$test_build/algo-bdd-selfhost"
+# `e.fmt.toml`: a 60-line document flattened event by event against tomllib, twelve refusals tomllib shares, and the value corners (D860).
+fmt_toml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_toml/src/main.e" "$repo" x64 linux "$test_build/fmt-toml-selfhost")
+[ "$fmt_toml_written" = 'executable written' ]
+chmod +x "$test_build/fmt-toml-selfhost"
+"$test_build/fmt-toml-selfhost"
+# `e.fmt.markdown`: 97 CommonMark 0.31.2 spec examples rendered to the spec's HTML, cross-checked with markdown-it (D860).
+fmt_markdown_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_markdown/src/main.e" "$repo" x64 linux "$test_build/fmt-markdown-selfhost")
+[ "$fmt_markdown_written" = 'executable written' ]
+chmod +x "$test_build/fmt-markdown-selfhost"
+"$test_build/fmt-markdown-selfhost"
+# `e.time.sync`: forty LCG interval sets against a brute-force count over every endpoint, Berkeley with outliers, Cristian (D860).
+time_sync_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_sync/src/main.e" "$repo" x64 linux "$test_build/time-sync-selfhost")
+[ "$time_sync_written" = 'executable written' ]
+chmod +x "$test_build/time-sync-selfhost"
+"$test_build/time-sync-selfhost"
+# `e.trace`: the spec example round trip, seven invalid headers, drawn ids and tracestate ordering against a replica (D860).
+trace_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trace/src/main.e" "$repo" x64 linux "$test_build/trace-selfhost")
+[ "$trace_written" = 'executable written' ]
+chmod +x "$test_build/trace-selfhost"
+"$test_build/trace-selfhost"
+# `e.text.hyphen`: twelve words at two minimum settings, exceptions and case folding against pyphen (D860).
+text_hyphen_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_hyphen/src/main.e" "$repo" x64 linux "$test_build/text-hyphen-selfhost")
+[ "$text_hyphen_written" = 'executable written' ]
+chmod +x "$test_build/text-hyphen-selfhost"
+"$test_build/text-hyphen-selfhost"
+# `e.dist.clock`: Lamport, vector and hybrid clocks over scripted exchanges against a replica (D861).
+dist_clock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_clock/src/main.e" "$repo" x64 linux "$test_build/dist-clock-selfhost")
+[ "$dist_clock_written" = 'executable written' ]
+chmod +x "$test_build/dist-clock-selfhost"
+"$test_build/dist-clock-selfhost"
+# `e.dist.election`: leaders and exact message counts for several alive patterns against a replica (D861).
+dist_election_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_election/src/main.e" "$repo" x64 linux "$test_build/dist-election-selfhost")
+[ "$dist_election_written" = 'executable written' ]
+chmod +x "$test_build/dist-election-selfhost"
+"$test_build/dist-election-selfhost"
+# `e.dist.gossip`: per-round informed counts for three seeds and a merge-rule table against a PCG replica (D861).
+dist_gossip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_gossip/src/main.e" "$repo" x64 linux "$test_build/dist-gossip-selfhost")
+[ "$dist_gossip_written" = 'executable written' ]
+chmod +x "$test_build/dist-gossip-selfhost"
+"$test_build/dist-gossip-selfhost"
+# `e.dist.failure_detector`: phi at four gaps and the threshold crossing to the tick against math.erfc (D861).
+dist_failure_detector_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_failure_detector/src/main.e" "$repo" x64 linux "$test_build/dist-failure-detector-selfhost")
+[ "$dist_failure_detector_written" = 'executable written' ]
+chmod +x "$test_build/dist-failure-detector-selfhost"
+"$test_build/dist-failure-detector-selfhost"
+# `e.parse.ll`: sets, table and derivations of the left-factored expression grammar against a replica, and the conflicts of the left-recursive one (D861).
+parse_ll_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/parse_ll/src/main.e" "$repo" x64 linux "$test_build/parse-ll-selfhost")
+[ "$parse_ll_written" = 'executable written' ]
+chmod +x "$test_build/parse-ll-selfhost"
+"$test_build/parse-ll-selfhost"
+# `e.parse.lr`: 12/22/12 states on the dragon grammar with equal LALR and SLR tables, the `L = R` grammar not SLR but LALR, ten sentences under each table (D862).
+parse_lr_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/parse_lr/src/main.e" "$repo" x64 linux "$test_build/parse-lr-selfhost")
+[ "$parse_lr_written" = 'executable written' ]
+chmod +x "$test_build/parse-lr-selfhost"
+"$test_build/parse-lr-selfhost"
+# `e.text.collab`: 200 concurrent pairs converging both ways, two RGA replicas in opposite orders, 100 ordered keys (D862).
+text_collab_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_collab/src/main.e" "$repo" x64 linux "$test_build/text-collab-selfhost")
+[ "$text_collab_written" = 'executable written' ]
+chmod +x "$test_build/text-collab-selfhost"
+"$test_build/text-collab-selfhost"
+# `e.test.prop`: draws in range and stream-matched, `x > 100` shrinking to 101 from twenty starts, a pair property to two bytes (D862).
+test_prop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_prop/src/main.e" "$repo" x64 linux "$test_build/test-prop-selfhost")
+[ "$test_prop_written" = 'executable written' ]
+chmod +x "$test_build/test-prop-selfhost"
+"$test_build/test-prop-selfhost"
+# `e.test.sim`: ping-pong counts, identical replay for one seed and a different trace for another, matched to a replica (D862).
+test_sim_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_sim/src/main.e" "$repo" x64 linux "$test_build/test-sim-selfhost")
+[ "$test_sim_written" = 'executable written' ]
+chmod +x "$test_build/test-sim-selfhost"
+"$test_build/test-sim-selfhost"
+# `e.test.linearize`: thirty LCG histories under three models against brute force over permutations, the stale read refused (D862).
+test_linearize_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_linearize/src/main.e" "$repo" x64 linux "$test_build/test-linearize-selfhost")
+[ "$test_linearize_written" = 'executable written' ]
+chmod +x "$test_build/test-linearize-selfhost"
+"$test_build/test-linearize-selfhost"
+# `e.fmt.pretty`: Wadler's tree at four widths and soft-line cases byte-exact against a replica, plus the lazy-versus-strict group case (D863).
+fmt_pretty_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pretty/src/main.e" "$repo" x64 linux "$test_build/fmt-pretty-selfhost")
+[ "$fmt_pretty_written" = 'executable written' ]
+chmod +x "$test_build/fmt-pretty-selfhost"
+"$test_build/fmt-pretty-selfhost"
+# `e.fmt.json.schema`: 53 schema and document pairs judged as jsonschema 4.25 does, with the first failing pointer (D863).
+fmt_json_schema_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_json_schema/src/main.e" "$repo" x64 linux "$test_build/fmt-json-schema-selfhost")
+[ "$fmt_json_schema_written" = 'executable written' ]
+chmod +x "$test_build/fmt-json-schema-selfhost"
+"$test_build/fmt-json-schema-selfhost"
+# `e.fmt.css`: 35 selectors over a 16-element document matched as lxml.cssselect does, spec specificity examples and a twelve-declaration cascade (D863).
+fmt_css_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_css/src/main.e" "$repo" x64 linux "$test_build/fmt-css-selfhost")
+[ "$fmt_css_written" = 'executable written' ]
+chmod +x "$test_build/fmt-css-selfhost"
+"$test_build/fmt-css-selfhost"
+# `e.dist.consensus`: leaders per phase, logs equal after a healed partition, a snapshot installed, joint membership, duelling Paxos deciding under drops, a VR view change (D863).
+dist_consensus_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_consensus/src/main.e" "$repo" x64 linux "$test_build/dist-consensus-selfhost")
+[ "$dist_consensus_written" = 'executable written' ]
+chmod +x "$test_build/dist-consensus-selfhost"
+"$test_build/dist-consensus-selfhost"
+# `e.dist.commit`: per-tick state hashes for success, a failing participant and a dead coordinator: 2PC blocks, 3PC resolves (D863).
+dist_commit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_commit/src/main.e" "$repo" x64 linux "$test_build/dist-commit-selfhost")
+[ "$dist_commit_written" = 'executable written' ]
+chmod +x "$test_build/dist-commit-selfhost"
+"$test_build/dist-commit-selfhost"
+# `e.dist.replica`: 120 LCG steps on five replicas: no stale reads at r=w=3, two at r=w=2, hint and repair counts matched (D864).
+dist_replica_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_replica/src/main.e" "$repo" x64 linux "$test_build/dist-replica-selfhost")
+[ "$dist_replica_written" = 'executable written' ]
+chmod +x "$test_build/dist-replica-selfhost"
+"$test_build/dist-replica-selfhost"
+# `e.dist.collective`: results and transfer counts against numpy: 24 moves in 6 steps for a ring of four, 4 transfers in 3 rounds to broadcast to five (D864).
+dist_collective_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_collective/src/main.e" "$repo" x64 linux "$test_build/dist-collective-selfhost")
+[ "$dist_collective_written" = 'executable written' ]
+chmod +x "$test_build/dist-collective-selfhost"
+"$test_build/dist-collective-selfhost"
+# `e.algo.ecc`: RS errors and erasures corrected and over-budget refused, every BCH(15,7) one- and two-bit pattern, Viterbi bursts, all LDPC singles, exhaustive Hamming and SECDED (D864).
+algo_ecc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_ecc/src/main.e" "$repo" x64 linux "$test_build/algo-ecc-selfhost")
+[ "$algo_ecc_written" = 'executable written' ]
+chmod +x "$test_build/algo-ecc-selfhost"
+"$test_build/algo-ecc-selfhost"
+# `e.algo.rand.quasi`: the first 64 Sobol points bit-equal to scipy's unscrambled Sobol and Halton points to zero error (D864).
+algo_rand_quasi_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rand_quasi/src/main.e" "$repo" x64 linux "$test_build/algo-rand-quasi-selfhost")
+[ "$algo_rand_quasi_written" = 'executable written' ]
+chmod +x "$test_build/algo-rand-quasi-selfhost"
+"$test_build/algo-rand-quasi-selfhost"
+# `e.algo.geom3`: rays against a replica, 50 tetrahedron pairs where hull, SAT and GJK agree with linprog, EPA depths, Barnes-Hut within 0.52% at theta 0.5, Kabsch equal to scipy, a 68-face hull with scipy's volume (D864).
+algo_geom3_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_geom3/src/main.e" "$repo" x64 linux "$test_build/algo-geom3-selfhost")
+[ "$algo_geom3_written" = 'executable written' ]
+chmod +x "$test_build/algo-geom3-selfhost"
+"$test_build/algo-geom3-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

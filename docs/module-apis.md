@@ -608,6 +608,485 @@ nodes; `Lazy` is the `i64` tree with range addition and range sum and minimum;
 `Persistent` keeps every version in a node pool (`2 * n` for the build plus
 `ceil(log2 n) + 1` per update) and answers a root per version.
 
+### `e.data.spatial`
+
+```neper
+type KdTree = struct { points: []const f64, d: usize, order: []usize }
+type QuadTree = struct { x0: f64, y0: f64, size: f64, capacity: usize, child: []u32, first: []u32, count: []u32, next: []u32, used: usize, items: usize, xs: []f64, ys: []f64 }
+type OcTree = struct { x0: f64, y0: f64, z0: f64, size: f64, capacity: usize, child: []u32, first: []u32, count: []u32, next: []u32, used: usize, items: usize, xs: []f64, ys: []f64, zs: []f64 }
+type IntervalTree = struct { starts: []const f64, ends: []const f64, order: []usize, left: []u32, right: []u32, centre: []f64, first: []u32, count: []u32, used: usize }
+type Best = struct { node: usize, distance: f64 }
+type HashGrid = struct { cell: f64, x0: f64, y0: f64, columns: usize, rows: usize, head: []u32, next: []u32, xs: []f64, ys: []f64, count: usize }
+type RTree = struct { items: []const f64, fanout: usize, box: []f64, child: []u32, count: []u32, leaf: []u8, used: usize, root: usize }
+type Bvh = struct { boxes: []const f64, order: []usize, box: []f64, left: []u32, right: []u32, first: []u32, count: []u32, used: usize }
+type RangeTree = struct { xs: []const f64, ys: []const f64, n: usize, order: []usize, pool: []usize, levels: usize }
+type BallTree = struct { tree: KdTree, centre: []f64, radius: []f64 }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn coordinate(t: *const KdTree, i: usize, axis: usize) -> f64
+fn build_range(t: *const KdTree, lo: usize, hi: usize, depth: usize)
+fn kd_build(points: []const f64, n: usize, d: usize, order: []usize) -> (KdTree, err)
+fn distance_squared(t: *const KdTree, i: usize, query: []const f64) -> f64
+fn nearest_range(t: *const KdTree, lo: usize, hi: usize, depth: usize, query: []const f64, best: *Best)
+fn kd_nearest(t: *const KdTree, query: []const f64) -> (usize, f64, err)
+fn quadtree(x0: f64, y0: f64, size: f64, capacity: usize, child: []u32, first: []u32, count: []u32, next: []u32, xs: []f64, ys: []f64) -> (QuadTree, err)
+fn quadrant(x: f64, y: f64, cx: f64, cy: f64) -> usize
+fn quadtree_insert(t: *QuadTree, x: f64, y: f64) -> (usize, err)
+fn quadtree_range(t: *const QuadTree, x1: f64, y1: f64, x2: f64, y2: f64, out: []usize) -> (usize, err)
+fn quadtree_range_node(t: *const QuadTree, node: usize, nx: f64, ny: f64, size: f64, x1: f64, y1: f64, x2: f64, y2: f64, out: []usize, found: *usize) -> err
+fn octree(x0: f64, y0: f64, z0: f64, size: f64, capacity: usize, child: []u32, first: []u32, count: []u32, next: []u32, xs: []f64, ys: []f64, zs: []f64) -> (OcTree, err)
+fn octant(x: f64, y: f64, z: f64, cx: f64, cy: f64, cz: f64) -> usize
+fn octree_insert(t: *OcTree, x: f64, y: f64, z: f64) -> (usize, err)
+fn octree_range(t: *const OcTree, x1: f64, y1: f64, z1: f64, x2: f64, y2: f64, z2: f64, out: []usize) -> (usize, err)
+fn octree_range_node(t: *const OcTree, node: usize, nx: f64, ny: f64, nz: f64, size: f64, x1: f64, y1: f64, z1: f64, x2: f64, y2: f64, z2: f64, out: []usize, found: *usize) -> err
+fn interval_build(starts: []const f64, ends: []const f64, n: usize, order: []usize, left: []u32, right: []u32, centre: []f64, first: []u32, count: []u32) -> (IntervalTree, err)
+fn interval_node(t: *IntervalTree, head: usize) -> (u32, err)
+fn interval_overlap(t: *const IntervalTree, lo: f64, hi: f64, out: []usize) -> (usize, err)
+fn interval_overlap_node(t: *const IntervalTree, node: usize, lo: f64, hi: f64, out: []usize, found: *usize) -> err
+fn hash_grid(x0: f64, y0: f64, cell: f64, columns: usize, rows: usize, head: []u32, next: []u32, xs: []f64, ys: []f64) -> (HashGrid, err)
+fn cell_of(g: *const HashGrid, x: f64, y: f64) -> (usize, usize)
+fn hash_grid_insert(g: *HashGrid, x: f64, y: f64) -> (usize, err)
+fn hash_grid_near(g: *const HashGrid, x: f64, y: f64, radius: f64, out: []usize) -> (usize, err)
+fn rtree(items: []const f64, fanout: usize, box: []f64, child: []u32, count: []u32, leaf: []u8) -> (RTree, err)
+fn rtree_new_node(t: *RTree, is_leaf: bool) -> (usize, err)
+fn rtree_entry_box(t: *const RTree, node: usize, e: u32, out: []f64)
+fn box_area(b: []const f64) -> f64
+fn box_union(a: []const f64, b: []const f64, out: []f64)
+fn box_intersects(a: []const f64, b: []const f64) -> bool
+fn rtree_fit(t: *RTree, node: usize)
+fn rtree_split(t: *RTree, node: usize, extra: u32) -> (usize, err)
+fn rtree_insert(t: *RTree, item: usize) -> err
+fn rtree_search(t: *const RTree, x1: f64, y1: f64, x2: f64, y2: f64, out: []usize) -> (usize, err)
+fn rtree_search_node(t: *const RTree, node: usize, query: []const f64, out: []usize, found: *usize) -> err
+fn hilbert_index(order: u32, x: u64, y: u64) -> u64
+fn sift_keys(keys: []u64, order: []usize, start: usize, end: usize)
+fn sort_by_key(keys: []u64, order: []usize, n: usize)
+fn rtree_hilbert(items: []const f64, n: usize, fanout: usize, box: []f64, child: []u32, count: []u32, leaf: []u8, keys: []u64, order: []usize) -> (RTree, err)
+fn bvh_centroid(b: *const Bvh, p: usize, axis: usize) -> f64
+fn bvh_node(b: *Bvh, lo: usize, hi: usize, leaf_size: usize) -> (u32, err)
+fn bvh_build(boxes: []const f64, n: usize, leaf_size: usize, order: []usize, box: []f64, left: []u32, right: []u32, first: []u32, count: []u32) -> (Bvh, err)
+fn ray_hits_box(box: []const f64, origin: []const f64, direction: []const f64) -> bool
+fn bvh_traverse(b: *const Bvh, origin: []const f64, direction: []const f64, out: []usize) -> (usize, err)
+fn range_tree_fill(t: *RangeTree, level: usize, lo: usize, hi: usize) -> err
+fn range_tree_build(xs: []const f64, ys: []const f64, n: usize, order: []usize, pool: []usize) -> (RangeTree, err)
+fn range_tree_query_node(t: *const RangeTree, level: usize, lo: usize, hi: usize, x1: f64, x2: f64, y1: f64, y2: f64, out: []usize, found: *usize) -> err
+fn range_tree_query(t: *const RangeTree, x1: f64, y1: f64, x2: f64, y2: f64, out: []usize) -> (usize, err)
+fn ball_fill(b: *BallTree, lo: usize, hi: usize)
+fn ball_tree_build(points: []const f64, n: usize, d: usize, order: []usize, centre: []f64, radius: []f64) -> (BallTree, err)
+fn ball_nearest_range(b: *const BallTree, lo: usize, hi: usize, query: []const f64, best: *Best)
+fn ball_tree_nearest(b: *const BallTree, query: []const f64) -> (usize, f64, err)
+```
+
+Spatial indexes over caller storage: implicit k-d tree (`kd_build`, `kd_nearest`), quadtree
+and octree with node pools (`quadtree_insert/range`, `octree_insert/range`), a centred
+interval tree (`interval_build`, `interval_overlap`), a hash grid (`hash_grid_insert/near`),
+an R-tree with quadratic splits (`rtree_insert/search`) and Hilbert bulk loading
+(`rtree_hilbert`, `hilbert_index`), a BVH with ray traversal (`bvh_build/traverse`), a
+2-d range tree (`range_tree_build/query`) and a ball tree (`ball_tree_build/nearest`).
+
+### `e.data.succinct`
+
+```neper
+type BitVector = struct { bits: []u64, counts: []u32, n: usize }
+type WaveletMatrix = struct { levels: []BitVector, zeros: []usize, n: usize }
+type Csa = struct { psi: []u32, sampled: []u32, n: usize, rate: usize }
+type FmIndex = struct { bwt: WaveletMatrix, starts: []u32, sampled: []u32, n: usize, rate: usize }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn popcount(x: u64) -> usize
+fn words_for(n: usize) -> usize
+fn bit_vector(bits: []u64, n: usize, counts: []u32) -> (BitVector, err)
+fn get_bit(v: *const BitVector, i: usize) -> bool
+fn set_bit(bits: []u64, i: usize, on: bool)
+fn rank(v: *const BitVector, i: usize) -> usize
+fn rank0(v: *const BitVector, i: usize) -> usize
+fn select(v: *const BitVector, k: usize) -> usize
+fn select0(v: *const BitVector, k: usize) -> usize
+fn louds_encode(first_child: []const u32, next_sibling: []const u32, n: usize, root: usize, bits: []u64, counts: []u32, queue: []u32, order: []usize) -> (BitVector, err)
+fn louds_degree(v: *const BitVector, i: usize) -> usize
+fn louds_child(v: *const BitVector, i: usize, k: usize) -> usize
+fn louds_parent(v: *const BitVector, i: usize) -> usize
+fn bp_encode(first_child: []const u32, next_sibling: []const u32, n: usize, root: usize, bits: []u64, counts: []u32, stack: []u32, order: []usize) -> (BitVector, err)
+fn bp_find_close(v: *const BitVector, i: usize) -> usize
+fn bp_enclose(v: *const BitVector, i: usize) -> usize
+fn bp_subtree_size(v: *const BitVector, i: usize) -> usize
+fn bp_preorder(v: *const BitVector, i: usize) -> usize
+fn wavelet_build(symbols: []const u8, n: usize, bits: []u64, counts: []u32, levels: []BitVector, zeros: []usize, scratch: []u8) -> (WaveletMatrix, err)
+fn wavelet_access(w: *const WaveletMatrix, i: usize) -> u8
+fn wavelet_rank(w: *const WaveletMatrix, c: u8, i: usize) -> usize
+fn wavelet_quantile(w: *const WaveletMatrix, lo: usize, hi: usize, k: usize) -> (u8, err)
+fn wavelet_select(w: *const WaveletMatrix, c: u8, k: usize) -> usize
+fn csa_build(text: str, rate: usize, psi: []u32, sampled: []u32, sa: []usize, scratch: []usize) -> (Csa, err)
+fn csa_lookup(c: *const Csa, i: usize) -> usize
+fn csa_search(c: *const Csa, text: str, pattern: str) -> (usize, usize)
+fn fm_build(text: str, rate: usize, starts: []u32, sampled: []u32, sa: []usize, scratch: []usize, bwt_bytes: []u8, bits: []u64, counts: []u32, levels: []BitVector, zeros: []usize, wave_scratch: []u8) -> (FmIndex, err)
+fn fm_search(f: *const FmIndex, pattern: str) -> (usize, usize)
+fn fm_count(f: *const FmIndex, pattern: str) -> usize
+fn fm_locate(f: *const FmIndex, i: usize) -> usize
+```
+
+`BitVector` with `rank`, `rank0`, `select`, `select0` over a count per word; `louds_encode`
+with `louds_degree/child/parent`; `bp_encode` with `bp_find_close/enclose/subtree_size`;
+a `WaveletMatrix` (`wavelet_build/access/rank/select/quantile`); `Csa` (Ψ plus sampled
+positions: `csa_build/lookup/search`) and `FmIndex` (`fm_build/search/count/locate`)
+over a BWT held in the wavelet matrix.
+
+### `e.data.rope`
+
+```neper
+type Rope = struct { text: []u8, used: usize, weight: []u32, left: []u32, right: []u32, start: []u32, nodes: usize }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+const LEAF: usize = 64usize
+
+fn rope(text: []u8, weight: []u32, left: []u32, right: []u32, start: []u32) -> Rope
+fn new_node(r: *Rope, weight: u32, left: u32, right: u32, start: u32) -> (u32, err)
+fn from_text(r: *Rope, text: []const u8) -> (u32, err)
+fn len(r: *const Rope, root: u32) -> usize
+fn byte_at(r: *const Rope, root: u32, i: usize) -> (u8, bool)
+fn concat(r: *Rope, a: u32, b: u32) -> (u32, err)
+fn split(r: *Rope, root: u32, i: usize) -> (u32, u32, err)
+fn insert(r: *Rope, root: u32, i: usize, text: []const u8) -> (u32, err)
+fn remove(r: *Rope, root: u32, i: usize, count: usize) -> (u32, err)
+fn report(r: *const Rope, root: u32, out: []u8) -> (usize, err)
+fn build(r: *Rope, lo: usize, hi: usize) -> (u32, err)
+fn rebalance(r: *Rope, root: u32) -> (u32, err)
+```
+
+A rope over caller pools (leaves reference a text pool, internal nodes carry the left
+weight): `from_text`, `len`, `byte_at`, `concat`, `split`, `insert`, `remove`, `report`
+(flatten) and `rebalance` (rebuilt from a flat copy).
+
+### `e.data.cartesian_tree`
+
+```neper
+type Tree = struct { left: []u32, right: []u32, parent: []u32, n: usize, root: u32 }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn build[T: type](keys: []const T, left: []u32, right: []u32, parent: []u32) -> (Tree, err)
+fn depth(t: *const Tree, i: usize) -> usize
+fn lca(t: *const Tree, i: usize, j: usize) -> (usize, err)
+fn range_min(t: *const Tree, lo: usize, hi: usize) -> (usize, err)
+fn is_valid[T: type](keys: []const T, t: *const Tree) -> bool
+```
+
+`build[T]` (stack construction, leftmost minimum on ties), `lca` by parent walking,
+`range_min` as the LCA of the range ends and `is_valid`.
+
+### `e.data.bitmap`
+
+```neper
+type Roaring = struct { keys: []u16, kind: []u8, count: []u32, slot: []u32, pool: []u16, n: usize }
+type Wah = struct { words: []u32, used: usize, bits: usize }
+error TooSmall
+error Invalid
+const CHUNK: usize = 4096usize
+const ARRAY: u8 = 0u8
+const BITSET: u8 = 1u8
+const WAH_FILL: u32 = 0x80000000u32
+const WAH_ONES: u32 = 0x7fffffffu32
+const WAH_RUN: u32 = 0x3fffffffu32
+const NO_END: usize = 4611686018427387904usize
+
+fn roaring(keys: []u16, kind: []u8, count: []u32, slot: []u32, pool: []u16) -> Roaring
+fn find_key(r: *const Roaring, key: u16) -> (usize, bool)
+fn chunk_of(r: *const Roaring, pos: usize) -> []u16
+fn array_find(c: []const u16, count: usize, low: u16) -> (usize, bool)
+fn bit_at(c: []const u16, low: u16) -> bool
+fn set_bit(c: []u16, low: u16)
+fn clear_bit(c: []u16, low: u16)
+fn container_has(c: []const u16, kind: u8, count: usize, low: u16) -> bool
+fn zero_chunk(c: []u16)
+fn chunk_ones(c: []const u16) -> u32
+fn to_bitset(c: []u16, count: usize)
+fn to_array(c: []u16)
+fn or_into(c: []u16, src: []const u16, kind: u8, count: usize)
+fn new_container(r: *Roaring, pos: usize, key: u16) -> err
+fn roaring_add(r: *Roaring, x: u32) -> err
+fn roaring_contains(r: *const Roaring, x: u32) -> bool
+fn roaring_remove(r: *Roaring, x: u32) -> bool
+fn roaring_count(r: *const Roaring) -> usize
+fn roaring_to_list(r: *const Roaring, out: []u32) -> (usize, err)
+fn roaring_and(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err
+fn roaring_or(a: *const Roaring, b: *const Roaring, out: *Roaring) -> err
+fn wah_push_fill(out: []u32, used: usize, value: u32, run: usize) -> (usize, err)
+fn wah_push_literal(out: []u32, used: usize, literal: u32) -> (usize, err)
+fn groups_for(n: usize) -> usize
+fn group_of(bits: []const u64, n: usize, g: usize) -> u32
+fn put_group(bits: []u64, g: usize, v: u32)
+fn wah(bits: []const u64, n: usize, out: []u32) -> (Wah, err)
+fn wah_decode(w: *const Wah, bits: []u64) -> err
+fn wah_count(w: *const Wah) -> usize
+fn wah_peek(w: *const Wah, i: usize, done: usize) -> (u32, usize, bool)
+fn wah_skip(w: *const Wah, i: usize, done: usize, k: usize) -> (usize, usize)
+fn wah_merge(a: *const Wah, b: *const Wah, out: []u32, is_and: bool) -> (Wah, err)
+fn wah_and(a: *const Wah, b: *const Wah, out: []u32) -> (Wah, err)
+fn wah_or(a: *const Wah, b: *const Wah, out: []u32) -> (Wah, err)
+```
+
+Roaring bitmaps over caller pools (array or bitset containers keyed by the high
+half: `roaring_add/contains/remove/count/to_list`, `roaring_and/or`) and word-aligned
+hybrid bit vectors (`wah` encode, `wah_decode`, `wah_count`, `wah_and/or` directly over
+the encoded streams, canonical fills).
+
+### `e.data.hamt`
+
+```neper
+type Hamt = struct { bitmap: []u32, first: []u32, key: []u64, value: []u64, slots: []u32, used: usize, slots_used: usize }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn hamt(bitmap: []u32, first: []u32, key: []u64, value: []u64, slots: []u32) -> Hamt
+fn mix(key: u64) -> u64
+fn lane(hash: u64, shift: u32) -> u32
+fn is_leaf(h: *const Hamt, node: u32) -> bool
+fn new_node(h: *Hamt) -> (u32, err)
+fn new_leaf(h: *Hamt, key: u64, value: u64) -> (u32, err)
+fn new_branch(h: *Hamt, bitmap: u32, width: usize) -> (u32, err)
+fn pair(h: *Hamt, old: u32, old_hash: u64, key: u64, value: u64, hash: u64, shift: u32) -> (u32, err)
+fn put_at(h: *Hamt, node: u32, hash: u64, shift: u32, key: u64, value: u64) -> (u32, err)
+fn put(h: *Hamt, root: u32, key: u64, value: u64) -> (u32, err)
+fn get(h: *const Hamt, root: u32, key: u64) -> (u64, bool)
+fn remove_at(h: *Hamt, node: u32, hash: u64, shift: u32, key: u64) -> (u32, bool, err)
+fn remove(h: *Hamt, root: u32, key: u64) -> (u32, err)
+fn count(h: *const Hamt, root: u32) -> usize
+```
+
+A persistent hash array mapped trie over caller pools (32-way bitmap nodes indexed by
+popcount): `put`, `get`, `remove` and `count`; every version shares structure with the
+last and only the path to the change is copied.
+
+### `e.data.link_cut`
+
+```neper
+type LinkCut = struct { n: usize, left: []u32, right: []u32, parent: []u32, rev: []bool, value: []i64, sum: []i64 }
+type Euler = struct { n: usize, left: []u32, right: []u32, parent: []u32, edge_u: []u32, edge_v: []u32 }
+error TooSmall
+error Invalid
+
+fn link_cut(n: usize, left: []u32, right: []u32, parent: []u32, rev: []bool, value: []i64, sum: []i64) -> (LinkCut, err)
+fn valid(t: *const LinkCut, v: u32) -> bool
+fn is_root(t: *const LinkCut, x: u32) -> bool
+fn push(t: *LinkCut, x: u32)
+fn update(t: *LinkCut, x: u32)
+fn push_path(t: *LinkCut, x: u32)
+fn rotate(left: []u32, right: []u32, parent: []u32, x: u32)
+fn rotate_up(t: *LinkCut, x: u32)
+fn splay(t: *LinkCut, x: u32)
+fn access(t: *LinkCut, v: u32) -> err
+fn make_root(t: *LinkCut, v: u32) -> err
+fn find_root(t: *LinkCut, v: u32) -> (u32, err)
+fn connected(t: *LinkCut, u: u32, v: u32) -> bool
+fn link(t: *LinkCut, u: u32, v: u32) -> err
+fn cut(t: *LinkCut, u: u32, v: u32) -> err
+fn path_sum(t: *LinkCut, u: u32, v: u32) -> (i64, err)
+fn set_value(t: *LinkCut, v: u32, x: i64) -> err
+fn euler_tour_tree(n: usize, left: []u32, right: []u32, parent: []u32, edge_u: []u32, edge_v: []u32) -> (Euler, err)
+fn ett_splay(t: *Euler, x: u32)
+fn concat(t: *Euler, a: u32, b: u32) -> u32
+fn reroot(t: *Euler, v: u32)
+fn ett_connected(t: *Euler, u: u32, v: u32) -> bool
+fn ett_link(t: *Euler, u: u32, v: u32) -> err
+fn ett_cut(t: *Euler, u: u32, v: u32) -> err
+```
+
+A link-cut tree over caller arrays (splay trees of preferred paths with lazy reversal):
+`access`, `make_root`, `find_root`, `connected`, `link`, `cut`, `path_sum`, `set_value`;
+and a dynamic Euler tour tree (`euler_tour_tree`, `ett_link`, `ett_cut`, `ett_connected`).
+
+### `e.data.stream`
+
+```neper
+type Watermark = struct { lateness: u64, max_seen: u64, mark: u64, seen: bool, late: u64 }
+type Merge = struct { marks: []u64, last: []u64, idle: u64, mark: u64 }
+type Window = struct { start: u64, count: u64, sum: u64 }
+type WindowBuffer = struct { size: u64, slide: u64, windows: []Window, used: usize, late: u64 }
+error TooSmall
+error Invalid
+
+fn watermark(lateness: u64) -> Watermark
+fn watermark_is_late(w: *const Watermark, event_time: u64) -> bool
+fn watermark_observe(w: *Watermark, event_time: u64) -> u64
+fn watermark_current(w: *const Watermark) -> u64
+fn merge(marks: []u64, last: []u64, idle: u64) -> (Merge, err)
+fn merge_update(m: *Merge, source: usize, mark: u64, now: u64) -> (u64, err)
+fn merge_at(m: *Merge, now: u64) -> u64
+fn window_start(event_time: u64, size: u64) -> u64
+fn sliding_windows(event_time: u64, size: u64, slide: u64, out: []u64) -> (usize, err)
+fn window_buffer(size: u64, slide: u64, windows: []Window) -> (WindowBuffer, err)
+fn window_add(b: *WindowBuffer, event_time: u64, value: u64, mark: u64) -> err
+fn window_fire(b: *WindowBuffer, mark: u64, out: []Window) -> (usize, err)
+```
+
+Event-time watermarks (`watermark`, `watermark_observe/is_late/current`), a merge over
+sources with an idle timeout (`merge`, `merge_update/at`), tumbling and sliding window
+assignment (`window_start`, `sliding_windows`) and a window buffer that fires by the
+watermark (`window_buffer`, `window_add`, `window_fire`).
+
+### `e.data.treap`
+
+```neper
+type Treap[K: type] = struct { keys: []K, priority: []u64, left: []u32, right: []u32, used: usize }
+type Implicit[T: type] = struct { values: []T, priority: []u64, left: []u32, right: []u32, size: []u32, used: usize }
+error TooSmall
+error Invalid
+
+fn treap[K: type](keys: []K, priority: []u64, left: []u32, right: []u32) -> Treap[K]
+fn new_node[K: type](t: *Treap[K], key: K, r: *rand.Pcg64) -> (u32, err)
+fn split[K: type](t: *Treap[K], root: u32, key: K) -> (u32, u32)
+fn merge[K: type](t: *Treap[K], a: u32, b: u32) -> u32
+fn insert[K: type](t: *Treap[K], root: u32, key: K, r: *rand.Pcg64) -> (u32, err)
+fn remove[K: type](t: *Treap[K], root: u32, key: K) -> (u32, bool)
+fn contains[K: type](t: *const Treap[K], root: u32, key: K) -> bool
+fn collect[K: type](t: *const Treap[K], root: u32, out: []K) -> (usize, err)
+fn persistent_insert[K: type](t: *Treap[K], root: u32, key: K, r: *rand.Pcg64) -> (u32, err)
+fn copy_node[K: type](t: *Treap[K], from: u32) -> (u32, err)
+fn persistent_split[K: type](t: *Treap[K], root: u32, key: K) -> (u32, u32, err)
+fn persistent_merge[K: type](t: *Treap[K], a: u32, b: u32) -> (u32, err)
+fn implicit[T: type](values: []T, priority: []u64, left: []u32, right: []u32, size: []u32) -> Implicit[T]
+fn implicit_size[T: type](t: *const Implicit[T], n: u32) -> u32
+fn implicit_fix[T: type](t: *Implicit[T], n: u32)
+fn split_at[T: type](t: *Implicit[T], root: u32, count: usize) -> (u32, u32)
+fn implicit_merge[T: type](t: *Implicit[T], a: u32, b: u32) -> u32
+fn insert_at[T: type](t: *Implicit[T], root: u32, position: usize, value: T, r: *rand.Pcg64) -> (u32, err)
+fn remove_at[T: type](t: *Implicit[T], root: u32, position: usize) -> (u32, err)
+fn at[T: type](t: *const Implicit[T], root: u32, position: usize) -> (T, err)
+```
+
+Over a caller node pool (node 0 empty): `Treap[K]` by `K.cmp` with `split`, `merge`,
+`insert`, `remove`, `contains`, `collect`, and `persistent_insert` copying the path so
+every version stays readable; `Implicit[T]` over a sequence with `split_at`,
+`implicit_merge`, `insert_at`, `remove_at`, `at` and `implicit_size`.
+
+### `e.data.skip_list`
+
+```neper
+type SkipList[K: type] = struct { keys: []K, forward: []u32, height: []u8, levels: usize, used: usize, free: u32, count: usize }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn skip_list[K: type](keys: []K, forward: []u32, height: []u8, levels: usize) -> (SkipList[K], err)
+fn link[K: type](s: *const SkipList[K], node: u32, level: usize) -> u32
+fn insert[K: type](s: *SkipList[K], key: K, r: *rand.Pcg64) -> err
+fn remove[K: type](s: *SkipList[K], key: K) -> bool
+fn contains[K: type](s: *const SkipList[K], key: K) -> bool
+fn lower_bound[K: type](s: *const SkipList[K], key: K) -> u32
+fn next[K: type](s: *const SkipList[K], node: u32) -> u32
+fn collect[K: type](s: *const SkipList[K], out: []K) -> (usize, err)
+```
+
+`SkipList[K]` over caller pools with `levels` levels and geometric heights from the
+caller's PCG: `insert` (a duplicate is `Invalid`), `remove` (slots go to a free list),
+`contains`, `lower_bound`, `next` along the bottom chain and `collect`.
+
+### `e.data.splay`
+
+```neper
+type Splay[T: type] = struct { values: []T, left: []u32, right: []u32, parent: []u32, size: []u32, reversed: []bool, used: usize }
+error TooSmall
+error Invalid
+
+fn splay_tree[T: type](values: []T, left: []u32, right: []u32, parent: []u32, size: []u32, reversed: []bool) -> Splay[T]
+fn build[T: type](t: *Splay[T], items: []const T) -> (u32, err)
+fn build_range[T: type](t: *Splay[T], items: []const T, parent: u32) -> u32
+fn push[T: type](t: *Splay[T], n: u32)
+fn fix[T: type](t: *Splay[T], n: u32)
+fn rotate[T: type](t: *Splay[T], n: u32)
+fn splay[T: type](t: *Splay[T], n: u32) -> u32
+fn find[T: type](t: *Splay[T], root: u32, position: usize) -> u32
+fn at[T: type](t: *Splay[T], root: u32, position: usize) -> (T, u32, err)
+fn reverse_range[T: type](t: *Splay[T], root: u32, low: usize, high: usize) -> (u32, err)
+fn collect[T: type](t: *Splay[T], root: u32, out: []T) -> (usize, err)
+```
+
+`Splay[T]` holds a sequence by position over caller pools with a lazy reversal flag:
+`build` (balanced), `splay` (zig, zig-zig, zig-zag to the root), `find`/`at` by
+position, `reverse_range` by splitting the range out and tagging it, `collect`.
+
+### `e.data.window`
+
+```neper
+type MonotonicQueue = struct { values: []i64, positions: []u64, head: usize, tail: usize, width: usize, pushed: u64, minimum: bool }
+type TwoStack[T: type] = struct { front: []T, front_folds: []T, back: []T, front_count: usize, back_count: usize, identity: T }
+type ExponentialHistogram = struct { sizes: []u64, stamps: []u64, count: usize, width: u64, k: usize, now: u64 }
+error TooSmall
+error Invalid
+
+fn monotonic_queue(values: []i64, positions: []u64, width: usize, minimum: bool) -> (MonotonicQueue, err)
+fn dominated(q: *const MonotonicQueue, kept: i64, incoming: i64) -> bool
+fn monotonic_push(q: *MonotonicQueue, value: i64)
+fn monotonic_extreme(q: *const MonotonicQueue) -> (i64, err)
+fn two_stack[T: type](front: []T, front_folds: []T, back: []T, identity: T) -> TwoStack[T]
+fn two_stack_push[T: type](w: *TwoStack[T], value: T) -> err
+fn two_stack_pop[T: type, Ctx: type](w: *TwoStack[T], ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> (T, err)
+fn two_stack_query[T: type, Ctx: type](w: *const TwoStack[T], ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> T
+fn exponential_histogram(sizes: []u64, stamps: []u64, width: u64, k: usize) -> (ExponentialHistogram, err)
+fn histogram_push(h: *ExponentialHistogram, bit: bool) -> err
+fn histogram_estimate(h: *const ExponentialHistogram) -> u64
+```
+
+`MonotonicQueue` answers the minimum or maximum of the last `width` values;
+`TwoStack[T]` folds any associative `combine` over a FIFO window (`two_stack_push`,
+`two_stack_pop`, `two_stack_query`); `ExponentialHistogram` counts the ones of the
+last `width` bits within `1 / k` (`histogram_push`, `histogram_estimate`).
+
+### `e.data.btree`
+
+```neper
+type Btree = struct { keys: []u64, values: []u32, count: []u32, leaf: []bool, next: []u32, order: usize, root: u32, used: usize, height: usize, free: u32 }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn btree(keys: []u64, values: []u32, count: []u32, leaf: []bool, next: []u32, order: usize) -> (Btree, err)
+fn key_at(t: *const Btree, node: u32, i: usize) -> u64
+fn set_key(t: *Btree, node: u32, i: usize, k: u64)
+fn value_at(t: *const Btree, node: u32, i: usize) -> u32
+fn set_value(t: *Btree, node: u32, i: usize, v: u32)
+fn lower_bound(t: *const Btree, node: u32, key: u64) -> usize
+fn child_for(t: *const Btree, node: u32, key: u64) -> usize
+fn get(t: *const Btree, key: u64) -> (u32, bool)
+fn new_node(t: *Btree, is_leaf: bool) -> (u32, err)
+fn split_node(t: *Btree, node: u32) -> (u32, u64, err)
+fn insert_into(t: *Btree, node: u32, key: u64, value: u32) -> (u32, u64, bool, err)
+fn insert(t: *Btree, key: u64, value: u32) -> err
+fn release(t: *Btree, node: u32)
+fn merge_node(t: *Btree, node: u32, c: usize)
+fn minimum_fill(t: *const Btree) -> usize
+fn remove_from(t: *Btree, node: u32, key: u64) -> bool
+fn remove(t: *Btree, key: u64) -> bool
+fn scan(t: *const Btree, low: u64, high: u64, keys: []u64, values: []u32) -> (usize, err)
+```
+
+A B+ tree of `order` over caller pools with `u64` keys and `u32` values, leaves
+chained: `insert` (`split_node` promotes a separator), `remove` (borrow or
+`merge_node`, freed nodes reused), `get` and `scan` over a key range.
+
+### `e.data.bk_tree`
+
+```neper
+type BkTree[T: type] = struct { items: []T, first_child: []u32, next_sibling: []u32, edge: []u32, used: usize }
+error TooSmall
+const NONE: u32 = 4294967295u32
+
+fn bk_tree[T: type](items: []T, first_child: []u32, next_sibling: []u32, edge: []u32) -> BkTree[T]
+fn insert[T: type, Ctx: type](t: *BkTree[T], item: T, ctx: *Ctx, distance: fn(*Ctx, T, T) -> u32) -> err
+fn search[T: type, Ctx: type](t: *const BkTree[T], query: T, radius: u32, ctx: *Ctx, distance: fn(*Ctx, T, T) -> u32, on_hit: fn(*Ctx, T, u32), stack: []u32) -> (usize, err)
+```
+
+`BkTree[T]` over a caller node pool with the caller's metric `distance(ctx, a, b)`:
+`insert` hangs an item under its parent by their distance and `search` visits every
+item within a radius, pruning by the triangle inequality, through `on_hit`.
+
 ### `e.data.cache`
 
 ```neper
@@ -1181,6 +1660,438 @@ answer one CSR index per chosen edge (the `from < to` copy) and the tree count;
 `bridges_and_cuts` marks the same copies; `euler_path` works on a digraph and
 answers the node sequence; `transitive_closure` fills an `n x n` byte matrix.
 
+### `e.algo.align`
+
+```neper
+type Scores = struct { match_score: i64, mismatch: i64, gap: i64 }
+type Op = enum u8 { Match, Insert, Delete }
+error TooSmall
+
+fn score_pair(s: Scores, a: u8, b: u8) -> i64
+fn max3(a: i64, b: i64, c: i64) -> i64
+fn global(a: str, b: str, s: Scores, scratch: []i64) -> (i64, err)
+fn local(a: str, b: str, s: Scores, scratch: []i64) -> (i64, usize, usize, err)
+fn affine_gap(a: str, b: str, s: Scores, open: i64, extend: i64, scratch: []i64) -> (i64, err)
+fn last_row(a: str, b: str, s: Scores, reverse: bool, row: []i64, work: []i64)
+fn global_linear_space(a: str, b: str, s: Scores, ops: []Op, scratch: []i64) -> (i64, usize, err)
+fn hirschberg(a: str, b: str, s: Scores, ops: []Op, at: usize, scratch: []i64) -> usize
+```
+
+Byte sequences scored by `Scores` (match, mismatch, gap): `global` (Needleman-Wunsch),
+`local` (Smith-Waterman, the score and the end positions), `affine_gap` (Gotoh with
+opening and extension penalties) and `global_linear_space` (Hirschberg, the global
+score with the alignment as `Op`s over two rows of storage).
+
+### `e.algo.schedule`
+
+```neper
+error TooSmall
+error Invalid
+const NONE: usize = 18446744073709551615usize
+
+fn sort_by(order: []usize, keys: []const i64)
+fn activity_selection(starts: []const i64, ends: []const i64, chosen: []usize, order: []usize) -> (usize, err)
+fn interval_cover(starts: []const i64, ends: []const i64, points: []i64, order: []usize) -> (usize, err)
+fn find_slot(parent: []usize, slot: usize) -> usize
+fn jobs_with_deadlines(deadlines: []const usize, profits: []const i64, slots: []usize, parent: []usize, order: []usize) -> (i64, usize, err)
+fn cooldown(tasks: []const usize, kinds: usize, gap: usize, counts: []usize) -> (usize, err)
+```
+
+Greedy scheduling over intervals and jobs: `activity_selection` (earliest end first),
+`interval_cover` (fewest points touching every interval), `jobs_with_deadlines` (most
+profitable first into the latest free slot, disjoint sets over slots) and `cooldown`
+(the shortest schedule bound with a gap between repeats).
+
+### `e.algo.timeseries`
+
+```neper
+type Cusum = struct { centre: f64, drift: f64, threshold: f64, high: f64, low: f64 }
+type PageHinkley = struct { delta: f64, threshold: f64, count: u64, mean: f64, sum: f64, least: f64 }
+type Adwin = struct { values: []f64, head: usize, count: usize, delta: f64 }
+type GarchFit = struct { returns: []const f64 }
+error TooSmall
+error Invalid
+
+fn holt_winters(series: []const f64, period: usize, alpha: f64, beta: f64, gamma: f64, horizon: usize, forecast: []f64, season: []f64) -> (f64, f64, err)
+fn loess(series: []const f64, window: usize, out: []f64) -> err
+fn stl(series: []const f64, period: usize, window: usize, trend: []f64, seasonal: []f64, remainder: []f64, scratch: []f64) -> err
+fn cusum(centre: f64, drift: f64, threshold: f64) -> Cusum
+fn cusum_step(c: *Cusum, value: f64) -> bool
+fn page_hinkley(delta: f64, threshold: f64) -> PageHinkley
+fn page_hinkley_step(p: *PageHinkley, value: f64) -> bool
+fn adwin(values: []f64, delta: f64) -> (Adwin, err)
+fn adwin_at(a: *const Adwin, i: usize) -> f64
+fn adwin_step(a: *Adwin, value: f64) -> bool
+fn adwin_mean(a: *const Adwin) -> f64
+fn garch_log_likelihood(omega: f64, alpha: f64, beta: f64, returns: []const f64) -> f64
+fn garch_objective(fit: *GarchFit, p: []const f64) -> f64
+fn garch_fit(returns: []const f64, p: []f64, iterations: u32, scratch: []f64) -> (f64, err)
+fn garch_forecast(omega: f64, alpha: f64, beta: f64, last_return: f64, last_variance: f64, horizon: usize, out: []f64) -> err
+fn hawkes_intensity(mu: f64, alpha: f64, beta: f64, events: []const f64, t: f64) -> f64
+fn hawkes_log_likelihood(mu: f64, alpha: f64, beta: f64, events: []const f64, horizon: f64) -> f64
+fn hawkes_simulate(mu: f64, alpha: f64, beta: f64, horizon: f64, r: *rand.Pcg64, out: []f64) -> (usize, err)
+```
+
+`holt_winters` (additive triple smoothing with forecasts), `loess` and `stl` (a LOESS
+trend, phase-mean season, two passes), the streaming detectors `Cusum`, `PageHinkley`
+and `Adwin` (a ring of recent values cut by the Hoeffding bound), GARCH(1,1)
+(`garch_log_likelihood`, `garch_fit` by Nelder-Mead, `garch_forecast`) and the Hawkes
+process (`hawkes_intensity`, `hawkes_log_likelihood`, `hawkes_simulate` by thinning).
+
+### `e.algo.exact_cover`
+
+```neper
+type Links = struct { left: []u32, right: []u32, up: []u32, down: []u32, column: []u32, row: []u32, size: []u32, columns: usize, nodes: usize }
+error TooSmall
+error Invalid
+error Unsolvable
+
+fn links(matrix: []const u8, rows: usize, columns: usize, left: []u32, right: []u32, up: []u32, down: []u32, column: []u32, row: []u32, size: []u32) -> (Links, err)
+fn cover(l: *Links, header: u32)
+fn uncover(l: *Links, header: u32)
+fn search(l: *Links, chosen: []usize, depth: usize) -> (usize, bool)
+fn solve(l: *Links, chosen: []usize) -> (usize, err)
+fn sudoku(grid: []u8, matrix: []u8, left: []u32, right: []u32, up: []u32, down: []u32, column: []u32, row: []u32, size: []u32, chosen: []usize) -> err
+```
+
+`links` threads a 0/1 matrix into dancing links over caller arrays, `solve` runs
+Algorithm X (fewest-ones column first) for the first cover, and `sudoku` maps a 9 × 9
+grid onto the 729 × 324 cover matrix and back.
+
+### `e.algo.graph.centrality`
+
+```neper
+error TooSmall
+error Invalid
+
+fn out_degree[E: type](g: *const graph.Graph[E], v: usize) -> usize
+fn pagerank[E: type](g: *const graph.Graph[E], damping: f64, tolerance: f64, max_iterations: u32, scores: []f64, scratch: []f64) -> (u32, err)
+fn normalise(v: []f64)
+fn sqrt(x: f64) -> f64
+fn hits[E: type](g: *const graph.Graph[E], tolerance: f64, max_iterations: u32, authority: []f64, hub: []f64) -> (u32, err)
+fn eigenvector[E: type](g: *const graph.Graph[E], tolerance: f64, max_iterations: u32, scores: []f64, scratch: []f64) -> (u32, err)
+fn closeness[E: type](g: *const graph.Graph[E], scores: []f64, queue: []u32, distance: []u32) -> err
+fn betweenness[E: type](g: *const graph.Graph[E], halve: bool, scores: []f64, order: []u32, distance: []u32, sigma: []f64, delta: []f64, first_pred: []u32, pred: []u32, next_pred: []u32) -> err
+```
+
+`pagerank` (power iteration with damping, dangling mass spread), `hits` (hubs and
+authorities, unit length), `eigenvector` (power iteration on the adjacency), `closeness`
+(reached over the hop-distance sum) and `betweenness` (Brandes over unweighted paths,
+halved for an undirected graph), all into caller storage.
+
+### `e.algo.graph.color`
+
+```neper
+error TooSmall
+
+fn degree[E: type](g: *const graph.Graph[E], v: usize) -> usize
+fn smallest_free[E: type](g: *const graph.Graph[E], v: usize, colors: []const u32, used: []usize, stamp: usize) -> u32
+fn greedy[E: type](g: *const graph.Graph[E], colors: []u32, order: []usize, used: []usize) -> (usize, err)
+fn dsatur[E: type](g: *const graph.Graph[E], colors: []u32, saturation: []usize, used: []usize) -> (usize, err)
+fn is_proper[E: type](g: *const graph.Graph[E], colors: []const u32) -> bool
+```
+
+`greedy` (Welsh-Powell, nodes by falling degree) and `dsatur` (most saturated node
+next) colour an undirected graph into caller storage and answer the colour count;
+`is_proper` checks a colouring.
+
+### `e.algo.graph.community`
+
+```neper
+error TooSmall
+error Invalid
+
+fn degree[E: type](g: *const graph.Graph[E], v: usize) -> usize
+fn modularity[E: type](g: *const graph.Graph[E], labels: []const u32) -> f64
+fn label_propagation[E: type](g: *const graph.Graph[E], labels: []u32, counts: []usize, max_sweeps: u32) -> (u32, err)
+fn compact(labels: []u32, n: usize, map: []u32) -> usize
+fn local_moving(w: []const f64, strength: []const f64, k: usize, two_m: f64, community: []u32, total: []f64, link: []f64) -> bool
+fn louvain[E: type](a: *mem.Arena, g: *const graph.Graph[E], labels: []u32) -> (f64, err)
+fn edge_betweenness[E: type](g: *const graph.Graph[E], removed: []const u8, scores: []f64, order: []u32, distance: []u32, sigma: []f64, delta: []f64) -> err
+fn components[E: type](g: *const graph.Graph[E], removed: []const u8, labels: []u32, stack: []u32) -> usize
+fn girvan_newman[E: type](g: *const graph.Graph[E], removed: []u8, scores: []f64, labels: []u32, order: []u32, distance: []u32, sigma: []f64, delta: []f64) -> (usize, err)
+```
+
+`modularity` of a labelling; `label_propagation` to a fixed point; `louvain` (local
+moving then aggregation over a dense community matrix in the arena, repeated while it
+improves); `edge_betweenness`, `components` and `girvan_newman` (the highest-betweenness
+edge removed until a component splits).
+
+### `e.algo.graph.cut`
+
+```neper
+error TooSmall
+error Invalid
+
+fn stoer_wagner(w: []f64, n: usize, side: []u8, scratch: []f64, marks: []usize) -> (f64, err)
+fn find(parent: []u32, v: u32) -> u32
+fn karger[E: type](a: *mem.Arena, g: *const graph.Graph[E], r: *rand.Pcg64, side: []u8) -> (usize, err)
+fn karger_best[E: type](a: *mem.Arena, g: *const graph.Graph[E], runs: usize, r: *rand.Pcg64, best_side: []u8, side: []u8) -> (usize, err)
+```
+
+`stoer_wagner` over a dense weight matrix answers the global minimum cut and one side;
+`karger` contracts random edges of a graph through a disjoint set in the arena and
+`karger_best` keeps the best of several runs.
+
+### `e.algo.graph.iso`
+
+```neper
+error TooSmall
+
+fn degree[E: type](g: *const graph.Graph[E], v: usize) -> usize
+fn adjacent[E: type](g: *const graph.Graph[E], v: usize, w: usize) -> bool
+fn feasible[E: type](pattern: *const graph.Graph[E], host: *const graph.Graph[E], mapping: []const u32, used: []const u8, p: usize, t: usize, induced: bool) -> bool
+fn search[E: type](pattern: *const graph.Graph[E], host: *const graph.Graph[E], mapping: []u32, used: []u8, p: usize, induced: bool) -> bool
+fn subgraph_vf2[E: type](pattern: *const graph.Graph[E], host: *const graph.Graph[E], mapping: []u32, used: []u8) -> (bool, err)
+fn isomorphic[E: type](a: *const graph.Graph[E], b: *const graph.Graph[E], mapping: []u32, used: []u8) -> (bool, err)
+```
+
+`subgraph_vf2` finds a monomorphism of a pattern into a host graph by VF2-style
+backtracking (degree and adjacency feasibility), `isomorphic` an isomorphism between two
+graphs of one size (non-edges checked too); `adjacent` reads an edge.
+
+### `e.algo.combopt`
+
+```neper
+error TooSmall
+error Invalid
+
+fn at(d: []const f64, n: usize, i: usize, j: usize) -> f64
+fn tour_length(d: []const f64, n: usize, tour: []const usize) -> f64
+fn tsp_nearest_neighbor(d: []const f64, n: usize, start: usize, tour: []usize, visited: []u8) -> (f64, err)
+fn reverse(tour: []usize, i: usize, j: usize)
+fn tsp_two_opt(d: []const f64, n: usize, tour: []usize) -> (f64, usize, err)
+fn tsp_or_opt(d: []const f64, n: usize, tour: []usize, scratch: []usize) -> (f64, usize, err)
+fn tsp_held_karp(d: []const f64, n: usize, tour: []usize, table: []f64, parent: []usize) -> (f64, err)
+fn set_cover_greedy(membership: []const u8, sets: usize, universe: usize, chosen: []usize, covered: []u8) -> (usize, err)
+fn bin_pack_ffd(sizes: []const f64, capacity: f64, bins: []usize, loads: []f64, order: []usize) -> (usize, err)
+fn vrp_savings(d: []const f64, n: usize, demand: []const f64, capacity: f64, route: []usize, next: []usize, previous: []usize, load: []f64, savings: []f64, order: []usize) -> (usize, err)
+fn knapsack_branch_and_bound(weights: []const f64, values: []const f64, capacity: f64, taken: []u8, order: []usize, current: []u8) -> (f64, err)
+fn density(weights: []const f64, values: []const f64, i: usize) -> f64
+fn knapsack_bound(weights: []const f64, values: []const f64, capacity: f64, order: []const usize, from: usize, weight: f64, value: f64) -> f64
+fn knapsack_search(weights: []const f64, values: []const f64, capacity: f64, order: []const usize, from: usize, weight: f64, value: f64, best: f64, current: []u8, taken: []u8) -> (f64, bool)
+fn branch_and_bound[Ctx: type](ctx: *Ctx, leaf_depth: fn(*Ctx) -> usize, choices: fn(*Ctx, usize) -> usize, bound: fn(*Ctx, usize) -> f64, branch: fn(*Ctx, usize, usize), undo: fn(*Ctx, usize, usize), record: fn(*Ctx), start: f64) -> (f64, usize)
+fn bb_search[Ctx: type](ctx: *Ctx, leaf_depth: fn(*Ctx) -> usize, choices: fn(*Ctx, usize) -> usize, bound: fn(*Ctx, usize) -> f64, branch: fn(*Ctx, usize, usize), undo: fn(*Ctx, usize, usize), record: fn(*Ctx), depth: usize, best: f64) -> (f64, usize)
+fn large_neighborhood_search[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, iterations: usize, start: f64, destroy: fn(*Ctx, *rand.Pcg64), repair: fn(*Ctx, *rand.Pcg64) -> f64, accept: fn(*Ctx), restore: fn(*Ctx)) -> (f64, usize)
+```
+
+Tours over a distance matrix: `tsp_nearest_neighbor`, `tsp_two_opt`, `tsp_or_opt`,
+`tsp_held_karp` (exact, `n <= 16`), `tour_length`; `set_cover_greedy`, `bin_pack_ffd`,
+`vrp_savings` (Clarke-Wright under a capacity), `knapsack_branch_and_bound`, the generic
+`branch_and_bound` over caller callbacks and `large_neighborhood_search` over caller
+destroy and repair.
+
+### `e.algo.sat`
+
+```neper
+type Cnf = struct { literals: []i32, starts: []usize, clauses: usize, variables: usize }
+error TooSmall
+error Invalid
+error Unsatisfiable
+
+fn cnf(literals: []i32, starts: []usize, variables: usize) -> (Cnf, err)
+fn fresh(f: *Cnf) -> i32
+fn add_clause(f: *Cnf, lits: []const i32) -> err
+fn abs(x: i32) -> i32
+fn clause1(f: *Cnf, a: i32) -> err
+fn clause2(f: *Cnf, a: i32, b: i32) -> err
+fn clause3(f: *Cnf, a: i32, b: i32, c3: i32) -> err
+fn tseitin_and(f: *Cnf, a: i32, b: i32) -> (i32, err)
+fn tseitin_or(f: *Cnf, a: i32, b: i32) -> (i32, err)
+fn tseitin_xor(f: *Cnf, a: i32, b: i32) -> (i32, err)
+fn tseitin_not(a: i32) -> i32
+fn at_most(f: *Cnf, lits: []const i32, k: usize) -> err
+fn pseudo_boolean(f: *Cnf, lits: []const i32, coefficients: []const u32, bound: u32, memo: []i32) -> err
+fn pb_node(f: *Cnf, lits: []const i32, coefficients: []const u32, bound: u32, memo: []i32, index: usize, sum: u32) -> (i32, err)
+fn value_of(assignment: []const i8, lit: i32) -> i8
+fn solve(f: *const Cnf, assignment: []i8, trail: []u32, level: []u32, flipped: []u8, learned: []i32, learned_starts: []usize, max_conflicts: usize) -> err
+fn propagate(f: *const Cnf, assignment: []i8, trail: []u32, level: []u32, trail_len: *usize, decisions: usize, learned: []const i32, learned_starts: []const usize, learned_count: usize) -> bool
+fn satisfied(f: *const Cnf, assignment: []const i8) -> bool
+fn walksat(f: *const Cnf, assignment: []i8, p: f64, flips: usize, r: *rand.Pcg64) -> (bool, err)
+fn preprocess(f: *Cnf, fixed: []i8) -> err
+fn equivalent(f: *Cnf, left: i32, right: i32, assignment: []i8, trail: []u32, level: []u32, flipped: []u8, learned: []i32, learned_starts: []usize) -> (bool, err)
+```
+
+`Cnf` over caller literal and clause arrays (`add_clause`, `clause1..3`, `fresh`);
+`solve` (DPLL with unit propagation, flipping backtrack and a learned clause per
+conflict), `walksat`, `preprocess`, `satisfied`; `tseitin_and/or/xor/not`, `at_most`
+(sequential counter), `pseudo_boolean` (a decision diagram over partial sums) and
+`equivalent` (a miter solved).
+
+### `e.algo.csp`
+
+```neper
+error TooSmall
+error Invalid
+error Unsatisfiable
+
+fn count(domains: []const u8, k: usize, x: usize) -> usize
+fn revise[Ctx: type](domains: []u8, k: usize, x: usize, y: usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool) -> bool
+fn ac3[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, queue: []usize, queued: []u8) -> err
+fn solve[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, assignment: []usize, saved: []u8, queue: []usize, queued: []u8) -> (bool, err)
+fn mac[Ctx: type](domains: []u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, assignment: []usize, saved: []u8, queue: []usize, queued: []u8, depth: usize) -> bool
+fn limited_discrepancy[Ctx: type](domains: []const u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, max_discrepancies: usize, assignment: []usize) -> (bool, usize, err)
+fn consistent[Ctx: type](pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, assignment: []const usize, x: usize) -> bool
+fn lds[Ctx: type](domains: []const u8, n: usize, k: usize, pairs: []const usize, ctx: *Ctx, allowed: fn(*Ctx, usize, usize, usize, usize) -> bool, assignment: []usize, x: usize, budget: usize) -> bool
+fn augment(domains: []const u8, k: usize, vars: []const usize, x: usize, match_value: []usize, seen: []u8) -> bool
+fn all_different(domains: []u8, k: usize, vars: []const usize, match_value: []usize, seen: []u8) -> err
+fn element(domains: []u8, k: usize, index: usize, result: usize, array: []const usize) -> err
+fn table(domains: []u8, k: usize, vars: []const usize, tuples: []const usize, rows: usize) -> err
+fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const usize, demand: []const usize, capacity: usize, horizon: usize, profile: []usize) -> err
+```
+
+Domains as `n × k` bytes and binary constraints as the caller's `allowed(ctx, x, y, a, b)`
+over listed pairs: `ac3`, `solve` (maintained arc consistency, smallest domain first),
+`limited_discrepancy`; the filters `all_different` (matching-based pruning), `element`,
+`table` and `cumulative` (a time-table capacity check).
+
+### `e.algo.logic`
+
+```neper
+type Implicant = struct { value: u32, care: u32 }
+error TooSmall
+error Invalid
+
+fn popcount(x: u32) -> usize
+fn prime_implicants(n: usize, minterms: []const u32, dont_cares: []const u32, primes: []Implicant, work: []Implicant, merged: []u8) -> (usize, err)
+fn covers(p: Implicant, m: u32) -> bool
+fn cover(minterms: []const u32, primes: []const Implicant, chosen: []usize, covered: []u8) -> (usize, err)
+fn quine_mccluskey(n: usize, minterms: []const u32, dont_cares: []const u32, primes: []Implicant, chosen: []usize, work: []Implicant, merged: []u8, covered: []u8) -> (usize, usize, err)
+fn verify(n: usize, minterms: []const u32, dont_cares: []const u32, primes: []const Implicant, chosen: []const usize) -> bool
+```
+
+Quine-McCluskey: `prime_implicants` merges minterms (with don't cares) into
+`Implicant`s (value and care masks), `cover` takes the essential primes then a greedy
+cover, `quine_mccluskey` does both and `verify` checks a cover against the function.
+
+### `e.algo.bdd`
+
+```neper
+type Bdd = struct { variable: []u32, low: []u32, high: []u32, used: usize, variables: usize }
+type Op = enum u8 { And, Or, Xor }
+error TooSmall
+error Invalid
+
+fn bdd(variable: []u32, low: []u32, high: []u32, variables: usize) -> (Bdd, err)
+fn make(b: *Bdd, v: u32, lo: u32, hi: u32) -> (u32, err)
+fn var_node(b: *Bdd, v: usize) -> (u32, err)
+fn constant(value: bool) -> u32
+fn op_apply(op: Op, a: bool, c: bool) -> bool
+fn apply(b: *Bdd, op: Op, f: u32, g: u32, memo_keys: []u64, memo_values: []u32, memo_count: *usize) -> (u32, err)
+fn negate(b: *Bdd, f: u32, memo_keys: []u64, memo_values: []u32, memo_count: *usize) -> (u32, err)
+fn evaluate(b: *const Bdd, f: u32, assignment: []const bool) -> bool
+fn count(b: *const Bdd, f: u32) -> u64
+fn count_from(b: *const Bdd, f: u32, from: u32) -> u64
+```
+
+Reduced ordered BDDs over a caller node pool with a unique table: `var_node`, `apply`
+(and, or, xor with a caller memo, reset per operation), `negate`, `evaluate`, `count`
+(satisfying assignments).
+
+### `e.algo.ecc`
+
+```neper
+type Field = struct { exp: [512]u8, log: [256]u8, order: usize }
+error Invalid
+error TooSmall
+
+fn field() -> Field
+fn field16() -> Field
+fn mul(f: *const Field, a: u8, b: u8) -> u8
+fn inverse(f: *const Field, a: u8) -> u8
+fn alpha_pow(f: *const Field, e: usize) -> u8
+fn alpha_neg(f: *const Field, e: usize) -> u8
+fn poly_eval(f: *const Field, p: []const u8, x: u8) -> u8
+fn code_eval(f: *const Field, c: []const u8, x: u8) -> u8
+fn poly_mul(f: *const Field, a: []const u8, b: []const u8, out: []u8)
+fn berlekamp_massey(f: *const Field, seq: []const u8, lambda: []u8, prior: []u8, scratch: []u8) -> usize
+fn chien(f: *const Field, p: []const u8, n: usize, roots: []usize) -> usize
+fn reed_solomon_encode(f: *const Field, data: []const u8, parity: usize, out: []u8) -> (usize, err)
+fn reed_solomon_decode(f: *const Field, code: []u8, parity: usize, erasures: []const usize) -> (usize, err)
+fn reed_solomon_erasure_encode(f: *const Field, data: []const u8, k: usize, parity: []u8, m: usize) -> err
+fn reed_solomon_erasure_decode(f: *const Field, chunks: []u8, k: usize, m: usize, missing: []const usize) -> err
+fn bch_encode(generator: u32, data: u32) -> u32
+fn bch_decode(word: u32, t: usize) -> (u32, usize, err)
+fn convolutional_encode(bits: []const u8, out: []u8) -> (usize, err)
+fn viterbi_decode(received: []const u8, out: []u8, survivors: []u8) -> (usize, err)
+fn ldpc_check(h: []const u8, rows: usize, cols: usize, word: []const u8) -> bool
+fn ldpc_decode(h: []const u8, rows: usize, cols: usize, word: []u8, messages: []f64, iterations: usize) -> (usize, err)
+fn hamming_encode(nibble: u8) -> u8
+fn hamming_syndrome(word: u8) -> u8
+fn hamming_nibble(word: u8) -> u8
+fn hamming_decode(word: u8) -> (u8, bool, bool)
+fn secded_encode(nibble: u8) -> u8
+fn secded_decode(word: u8) -> (u8, bool, bool)
+```
+
+Reed-Solomon over GF(2^8) (`reed_solomon_encode/decode` with errors and erasures by
+Berlekamp-Massey, Chien and Forney; K+M `reed_solomon_erasure_encode/decode`), BCH over
+GF(2^4) (`bch_encode/decode`), a rate-1/2 K=3 convolutional code (`convolutional_encode`,
+`viterbi_decode`), min-sum LDPC (`ldpc_check`, `ldpc_decode`) and Hamming (7,4) with
+SECDED (8,4).
+
+### `e.algo.geom3`
+
+```neper
+type Vec3 = struct { x: f64, y: f64, z: f64 }
+type BarnesHut = struct { xs: []const f64, ys: []const f64, zs: []const f64, masses: []const f64, x0: f64, y0: f64, z0: f64, size: f64, child: []u32, body: []u32, mass: []f64, cx: []f64, cy: []f64, cz: []f64, used: usize }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn vec3(x: f64, y: f64, z: f64) -> Vec3
+fn add(a: Vec3, b: Vec3) -> Vec3
+fn sub(a: Vec3, b: Vec3) -> Vec3
+fn scale(a: Vec3, s: f64) -> Vec3
+fn dot(a: Vec3, b: Vec3) -> f64
+fn cross(a: Vec3, b: Vec3) -> Vec3
+fn length(a: Vec3) -> f64
+fn normalize(a: Vec3) -> Vec3
+fn component(v: Vec3, axis: usize) -> f64
+fn same(a: Vec3, b: Vec3) -> bool
+fn ray_box(origin: Vec3, direction: Vec3, box_min: Vec3, box_max: Vec3) -> (bool, f64)
+fn ray_triangle(origin: Vec3, direction: Vec3, a: Vec3, b: Vec3, c: Vec3) -> (bool, f64, f64, f64)
+fn ray_sphere(origin: Vec3, direction: Vec3, center: Vec3, radius: f64) -> (bool, f64)
+fn ray_plane(origin: Vec3, direction: Vec3, point: Vec3, normal: Vec3) -> (bool, f64)
+fn ray_disk(origin: Vec3, direction: Vec3, center: Vec3, normal: Vec3, radius: f64) -> (bool, f64)
+fn project(points: []const Vec3, axis: Vec3) -> (f64, f64)
+fn separating_axis(a: []const Vec3, b: []const Vec3, axes: []const Vec3) -> bool
+fn obb_axes(a: []const Vec3, b: []const Vec3, out: []Vec3) -> (usize, err)
+fn push_axis(out: []Vec3, n: *usize, v: Vec3) -> err
+fn polytope_axes(a: []const Vec3, a_faces: []const u32, b: []const Vec3, b_faces: []const u32, out: []Vec3) -> (usize, err)
+fn support(points: []const Vec3, d: Vec3) -> Vec3
+fn minkowski_support(a: []const Vec3, b: []const Vec3, d: Vec3) -> Vec3
+fn closest_on_triangle(a: Vec3, b: Vec3, c: Vec3) -> (Vec3, u32)
+fn keep_triangle(s: []Vec3, base: usize, bits: u32) -> usize
+fn closest_on_simplex(s: []Vec3, n: usize) -> (Vec3, usize)
+fn gjk(a: []const Vec3, b: []const Vec3, simplex: []Vec3) -> (bool, f64, usize, err)
+fn face_normal(vertices: []const Vec3, faces: []const u32, f: usize) -> Vec3
+fn face_sees(vertices: []const Vec3, faces: []const u32, f: usize, p: Vec3, tolerance: f64) -> bool
+fn expand_polytope(vertices: []const Vec3, faces: []u32, count: usize, edges: []u32, p_index: usize, tolerance: f64) -> (usize, err)
+fn complete_tetrahedron(a: []const Vec3, b: []const Vec3, vertices: []Vec3, count: usize) -> (usize, err)
+fn epa(a: []const Vec3, b: []const Vec3, simplex: []const Vec3, count: usize, vertices: []Vec3, faces: []u32, edges: []u32, tolerance: f64, max_iterations: usize) -> (Vec3, f64, err)
+fn octant(x: f64, y: f64, z: f64, cx: f64, cy: f64, cz: f64) -> usize
+fn clear_node(t: *BarnesHut, node: usize)
+fn insert_body(t: *BarnesHut, b: usize) -> err
+fn barnes_hut_build(xs: []const f64, ys: []const f64, zs: []const f64, masses: []const f64, child: []u32, body: []u32, mass: []f64, cx: []f64, cy: []f64, cz: []f64) -> (BarnesHut, err)
+fn force_node(t: *const BarnesHut, node: usize, size: f64, i: usize, theta: f64, acc: *Vec3)
+fn barnes_hut_force(t: *const BarnesHut, i: usize, theta: f64) -> Vec3
+fn rotate(rotation: []const f64, v: Vec3) -> Vec3
+fn mean_point(points: []const Vec3) -> Vec3
+fn kabsch(p: []const Vec3, q: []const Vec3, rotation: []f64) -> (Vec3, err)
+fn kabsch_rmsd(p: []const Vec3, q: []const Vec3, rotation: []const f64, translation: Vec3) -> f64
+fn farthest_from_plane(points: []const Vec3, a: Vec3, normal: Vec3) -> (usize, f64)
+fn hull(points: []const Vec3, faces: []u32, edges: []u32, tolerance: f64) -> (usize, err)
+fn hull_volume(points: []const Vec3, faces: []const u32, count: usize) -> f64
+fn hull_area(points: []const Vec3, faces: []const u32, count: usize) -> f64
+```
+
+`Vec3` helpers; ray tests (`ray_box`, `ray_triangle`, `ray_sphere`, `ray_plane`,
+`ray_disk`); `separating_axis` with `obb_axes` and `polytope_axes`; `gjk` (closest-point
+GJK leaving its simplex) and `epa`; `barnes_hut_build/force` over an octree of masses;
+`kabsch` (Horn's quaternion) with `rotate` and `kabsch_rmsd`; `hull` (quickhull) with
+`hull_volume` and `hull_area`.
+
 ### `e.algo.hash`
 
 ```neper
@@ -1267,6 +2178,27 @@ fn reset(s: *DisjointSet)
 The caller supplies storage. `count` must fit `u32` and both slices. `find` performs
 path compression and `join` uses union by rank (it is not spelled `union`: that is a
 keyword, D161); indices outside `count` follow the ordinary bounds-trap rule.
+
+### `e.algo.rand.quasi`
+
+```neper
+type Sobol = struct { index: u64, x: [8]u64, dims: usize }
+error Invalid
+error TooSmall
+
+fn direction(d: usize, bit: u32) -> u64
+fn sobol(index: u64, out: []f64) -> err
+fn sobol_start(dims: usize) -> (Sobol, err)
+fn sobol_next(s: *Sobol, out: []f64) -> err
+fn van_der_corput(index: u64, base: u64) -> f64
+fn halton(index: u64, base: u64) -> f64
+fn halton_point(index: u64, out: []f64) -> err
+fn prime(d: usize) -> u64
+```
+
+Low-discrepancy sequences: `sobol` and the incremental `sobol_start`/`sobol_next` in
+Gray-code order over Joe-Kuo direction numbers (eight dimensions), `van_der_corput`,
+`halton` and `halton_point` over the first sixteen primes.
 
 ### `e.algo.rand.dist`
 
@@ -2006,6 +2938,64 @@ pair, earliest seen on ties) and `bpe_encode` applies them; `wordpiece` is greed
 longest-match-first over `##` continuation pieces; `unigram` is the Viterbi
 segmentation over log probabilities and `unigram_sample` draws one by forward
 filtering and backward sampling under a temperature.
+
+### `e.text.hyphen`
+
+```neper
+error Invalid
+error TooSmall
+error TooLong
+const MAX_WORD: usize = 64usize
+
+fn english() -> str
+fn fold(c: u8) -> u8
+fn is_digit(c: u8) -> bool
+fn token(s: str, at: usize) -> (usize, usize, usize)
+fn exception_matches(e: str, w: []const u8) -> bool
+fn break_points(patterns: str, exceptions: str, word: str, left_min: usize, right_min: usize, out: []usize) -> (usize, err)
+fn hyphenate(patterns: str, exceptions: str, word: str, left_min: usize, right_min: usize, hyphen: u8, out: []u8) -> (usize, err)
+```
+
+Liang's algorithm: `break_points` over space-separated TeX patterns with an exceptions
+list and left/right minimums, `hyphenate`, and `english` (the pattern subset that
+hyphenates the fixture words as the full hyph_en_US dictionary does).
+
+### `e.text.collab`
+
+```neper
+type Kind = enum u8 { Insert, Delete }
+type Op = struct { kind: Kind, pos: usize, len: usize, text: str }
+type Id = struct { site: u32, counter: u32 }
+type CrdtOp = struct { insert: bool, after: Id, id: Id, byte: u8 }
+type Doc = struct { site: []u32, counter: []u32, byte: []u8, dead: []u8, link: []u32, used: usize }
+error TooSmall
+error Invalid
+
+fn digits() -> str
+fn insert(pos: usize, text: str) -> Op
+fn delete(pos: usize, len: usize) -> Op
+fn shift(x: usize, lo: usize, hi: usize) -> usize
+fn transform(a: Op, b: Op, a_wins: bool) -> Op
+fn apply(text: []const u8, op: Op, out: []u8) -> (usize, err)
+fn doc(site: []u32, counter: []u32, byte: []u8, dead: []u8, link: []u32) -> Doc
+fn id_less(a: Id, b: Id) -> bool
+fn crdt_find(d: *const Doc, id: Id) -> usize
+fn crdt_insert(d: *Doc, after: Id, id: Id, byte: u8) -> err
+fn crdt_delete(d: *Doc, id: Id) -> err
+fn crdt_apply(d: *Doc, op: CrdtOp) -> err
+fn crdt_text(d: *const Doc, out: []u8) -> (usize, err)
+fn crdt_len(d: *const Doc) -> usize
+fn crdt_id_at(d: *const Doc, index: usize) -> (Id, err)
+fn digit_value(b: u8) -> (usize, bool)
+fn valid_key(k: str) -> bool
+fn tail(k: str, from: usize) -> str
+fn between(a: str, b: str, out: []u8) -> (usize, err)
+fn order_key_between(a: str, b: str, out: []u8) -> (usize, err)
+```
+
+Operational transformation of insert/delete ops (`transform`, `apply`), an RGA text
+CRDT over parallel arrays with tombstones (`crdt_insert/delete/apply/text/find`) and
+fractional indexing (`order_key_between`, base 62).
 
 ### `e.text.unicode`
 
@@ -3670,6 +4660,70 @@ fn minimize(a: *mem.Arena, target_fn: Target, failing: Input, deadline: time.Ins
 Mutation is deterministic from each explicit seed. Corpus persistence, subprocess
 isolation and reproduction commands belong to `neper test --fuzz`.
 
+### `e.test.prop`
+
+```neper
+type Kind = enum u8 { Int, Bytes, Choice, List }
+type Gen = struct { kind: Kind, lo: i64, hi: i64, max_len: usize, choices: []const i64 }
+type Value = struct { int: i64, len: usize }
+error TooSmall
+
+fn int_gen(lo: i64, hi: i64) -> Gen
+fn bytes_gen(max_len: usize) -> Gen
+fn choice_gen(choices: []const i64) -> Gen
+fn list_gen(max_len: usize, lo: i64, hi: i64) -> Gen
+fn gen_int(r: *rand.Pcg64, lo: i64, hi: i64) -> i64
+fn gen_bytes(r: *rand.Pcg64, out: []u8, max_len: usize) -> usize
+fn gen_choice(r: *rand.Pcg64, choices: []const i64) -> i64
+fn gen_list(r: *rand.Pcg64, out: []i64, max_len: usize, lo: i64, hi: i64) -> usize
+fn generate(r: *rand.Pcg64, g: Gen, bytes: []u8, ints: []i64) -> Value
+fn shrink[Ctx: type](ctx: *Ctx, fails: fn(*Ctx, i64) -> bool, x: i64) -> i64
+fn shrink_bytes[Ctx: type](ctx: *Ctx, fails: fn(*Ctx, []const u8) -> bool, data: []u8, len: usize, scratch: []u8) -> (usize, err)
+```
+
+Generators (`gen_int`, `gen_bytes`, `gen_choice`, `gen_list` and `Gen` descriptors
+through `generate`) and shrinkers (`shrink` toward zero by halving then steps,
+`shrink_bytes` by delta debugging then per-byte).
+
+### `e.test.sim`
+
+```neper
+type Message = struct { from: u32, to: u32, kind: u32, value: i64, due: u64 }
+type Sim = struct { actors: usize, pool: []Message, in_flight: []u8, rng: rand.Pcg64, clock: u64, max_delay: u64, drop_per_mille: u64, delivered: u64, dropped: u64, trace: u64 }
+error TooSmall
+error Invalid
+
+fn mix(h: u64, v: u64) -> u64
+fn sim(actors: usize, pool: []Message, in_flight: []u8, seed: u64, max_delay: u64, drop_per_mille: u64) -> Sim
+fn enqueue(s: *Sim, m: Message) -> err
+fn send(s: *Sim, from: u32, to: u32, kind: u32, value: i64) -> err
+fn timer(s: *Sim, actor: u32, delay: u64, kind: u32, value: i64) -> err
+fn pending(s: *const Sim) -> usize
+fn choose(s: *Sim) -> (usize, bool)
+fn run[Ctx: type](s: *Sim, ctx: *Ctx, steps: usize, step: fn(*Ctx, *Sim, u32, Message)) -> usize
+```
+
+A deterministic simulation scheduler: actors with a caller message pool, seeded
+delays and drops, timers, `run` over a step callback, and a delivery trace hash that
+replays per seed.
+
+### `e.test.linearize`
+
+```neper
+type Op = enum u8 { Read, Write, Cas }
+type Model = enum u8 { Register, Counter, Set }
+type Event = struct { call_time: u64, return_time: u64, op: Op, arg: i64, arg2: i64, result: i64 }
+error TooSmall
+error Invalid
+
+fn step(model: Model, state: i64, e: Event) -> (i64, bool)
+fn search(history: []const Event, model: Model, state: i64, placed: []u8, remaining: usize) -> bool
+fn check(history: []const Event, model: Model, initial: i64, placed: []u8) -> (bool, err)
+```
+
+`check`: Wing-Gong backtracking linearizability of a history of timed calls against a
+register, counter or set model.
+
 ### `e.debug`
 
 ```neper
@@ -4960,6 +6014,41 @@ patch input are rejected. Numeric test equality is exact mathematical equality,
 not f64 equality. Limits, invalid array indices, move-into-descendant and missing
 targets fail explicitly. Source-file edits additionally require H09 transactions.
 
+### `e.fmt.json.schema`
+
+```neper
+type Checker = struct { arena: *mem.Arena, root: *const json.Value, path: []u8 }
+error Invalid
+error TooSmall
+error TooDeep
+const MAX_DEPTH: usize = 256usize
+
+fn member(members: []const json.Member, name: str) -> (usize, bool)
+fn append_byte(c: *Checker, n: usize, byte: u8) -> (usize, err)
+fn append_key(c: *Checker, n: usize, key: str) -> (usize, err)
+fn append_index(c: *Checker, n: usize, index: usize) -> (usize, err)
+fn is_integer(v: *const json.Value) -> bool
+fn type_matches(name: str, v: *const json.Value) -> (bool, err)
+fn schema_f64(s: *const json.Value) -> (f64, err)
+fn schema_usize(s: *const json.Value) -> (usize, err)
+fn code_points(s: str) -> usize
+fn resolve_ref(c: *Checker, reference: str) -> (*const json.Value, err)
+fn check_number(s: []const json.Member, v: f64) -> (bool, err)
+fn check_string(c: *Checker, s: []const json.Member, v: str) -> (bool, err)
+fn check_array(c: *Checker, s: []const json.Member, items: []const json.Value, n: usize, depth: usize) -> (bool, usize, err)
+fn check_object(c: *Checker, s: []const json.Member, members: []const json.Member, n: usize, depth: usize) -> (bool, usize, err)
+fn subschemas(s: []const json.Member, name: str) -> ([]const json.Value, bool, err)
+fn check(c: *Checker, schema: *const json.Value, v: *const json.Value, n: usize, depth: usize) -> (bool, usize, err)
+fn validate_value(a: *mem.Arena, root: *const json.Value, doc: *const json.Value, path: []u8) -> (bool, usize, err)
+fn validate(a: *mem.Arena, schema_json: str, doc_json: str, path: []u8) -> (bool, usize, err)
+```
+
+`validate` and `validate_value` over parsed e.fmt.json trees: type, enum, const,
+numeric bounds and multipleOf, string lengths and pattern (e.text.regex), array bounds,
+uniqueItems, items, required, properties, additionalProperties, allOf/anyOf/oneOf/not,
+boolean schemas and `$ref` to `#` and `#/$defs/name`; the first failing pointer is written
+to a caller buffer.
+
 ### `e.fmt.csv`
 
 ```neper
@@ -5000,6 +6089,341 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err
 
 The accepted syntax is sections, `key=value`, `;`/`#` line comments, quoted values,
 and backslash escapes. It deliberately excludes interpolation and includes.
+
+### `e.fmt.semver`
+
+```neper
+type Version = struct { major: u64, minor: u64, patch: u64, prerelease: str, build: str }
+type Partial = struct { major: u64, minor: u64, patch: u64, prerelease: str, x_major: bool, x_minor: bool, x_patch: bool }
+type SetState = struct { all: bool, prerelease_allowed: bool }
+error Invalid
+error TooSmall
+const DOT: u8 = 46u8
+const DASH: u8 = 45u8
+const PLUS: u8 = 43u8
+const ZERO: u8 = 48u8
+const NINE: u8 = 57u8
+const LOWER_X: u8 = 120u8
+const UPPER_X: u8 = 88u8
+const STAR: u8 = 42u8
+const LOWER_V: u8 = 118u8
+const EQUALS: u8 = 61u8
+const LESS: u8 = 60u8
+const GREATER: u8 = 62u8
+const CARET: u8 = 94u8
+const TILDE: u8 = 126u8
+const BAR: u8 = 124u8
+const OP_ANY: u8 = 0u8
+const OP_EQ: u8 = 1u8
+const OP_LT: u8 = 2u8
+const OP_LE: u8 = 3u8
+const OP_GT: u8 = 4u8
+const OP_GE: u8 = 5u8
+const OP_CARET: u8 = 6u8
+const OP_TILDE: u8 = 7u8
+
+fn is_digit(b: u8) -> bool
+fn is_ident_byte(b: u8) -> bool
+fn is_numeric(s: str) -> bool
+fn parse_number(s: str) -> (u64, err)
+fn valid_identifiers(s: str, strict: bool) -> bool
+fn core_end(s: str) -> usize
+fn parse_tails(s: str, from: usize) -> (str, str, err)
+fn parse(text: str) -> (Version, err)
+fn cmp_u64(a: u64, b: u64) -> i32
+fn cmp_identifier(a: str, b: str) -> i32
+fn next_identifier(s: str, at: usize) -> (str, usize)
+fn cmp_prerelease(a: str, b: str) -> i32
+fn cmp(a: Version, b: Version) -> i32
+fn put_byte(out: []u8, at: *usize, b: u8) -> err
+fn put_text(out: []u8, at: *usize, s: str) -> err
+fn put_number(out: []u8, at: *usize, value: u64) -> err
+fn format(v: Version, out: []u8) -> (usize, err)
+fn put_version(v: Version, out: []u8, at: *usize) -> err
+fn is_x(s: str) -> bool
+fn partial_component(s: str, present: bool) -> (u64, bool, err)
+fn parse_partial(text: str) -> (Partial, err)
+fn version_of(major: u64, minor: u64, patch: u64, prerelease: str) -> Version
+fn test_op(op: u8, bound: Version, v: Version) -> bool
+fn apply(s: *SetState, op: u8, bound: Version, v: Version)
+fn apply_caret(s: *SetState, p: Partial, v: Version)
+fn apply_tilde(s: *SetState, p: Partial, v: Version)
+fn apply_xrange(s: *SetState, op: u8, p: Partial, v: Version)
+fn apply_hyphen(s: *SetState, from: Partial, to: Partial, v: Version)
+fn split_op(token: str) -> (u8, usize)
+fn next_token(s: str, at: *usize) -> (str, bool)
+fn satisfies_set(v: Version, set: str) -> (bool, err)
+fn satisfies(v: Version, range: str) -> (bool, err)
+```
+
+`parse` (SemVer 2.0.0 with an optional `v`), `cmp` (spec precedence; build ignored),
+`format` and `satisfies` over node-style ranges (`^ ~ = < <= > >=`, wildcards, hyphen
+ranges, whitespace AND, `||` OR) desugared as read.
+
+### `e.fmt.cbor`
+
+```neper
+type Encoder = struct { out: []u8, len: usize }
+type Decoder = struct { data: []const u8, at: usize }
+type Item = struct { major: u8, info: u8, value: u64, indefinite: bool }
+error Invalid
+error Truncated
+error TooSmall
+error Mismatch
+const MAJOR_UINT: u8 = 0u8
+const MAJOR_NEGATIVE: u8 = 1u8
+const MAJOR_BYTES: u8 = 2u8
+const MAJOR_TEXT: u8 = 3u8
+const MAJOR_ARRAY: u8 = 4u8
+const MAJOR_MAP: u8 = 5u8
+const MAJOR_TAG: u8 = 6u8
+const MAJOR_SIMPLE: u8 = 7u8
+const SIMPLE_FALSE: u64 = 20u64
+const SIMPLE_TRUE: u64 = 21u64
+const SIMPLE_NULL: u64 = 22u64
+const SIMPLE_UNDEFINED: u64 = 23u64
+const INFO_INDEFINITE: u8 = 31u8
+const BREAK: u8 = 255u8
+
+fn encoder(out: []u8) -> Encoder
+fn encoded(e: *const Encoder) -> []const u8
+fn put(e: *Encoder, b: u8) -> err
+fn put_all(e: *Encoder, data: []const u8) -> err
+fn put_be(e: *Encoder, value: u64, width: usize) -> err
+fn encode_head(e: *Encoder, major: u8, value: u64) -> err
+fn encode_uint(e: *Encoder, value: u64) -> err
+fn encode_int(e: *Encoder, value: i64) -> err
+fn encode_negative(e: *Encoder, argument: u64) -> err
+fn encode_bytes(e: *Encoder, data: []const u8) -> err
+fn encode_text(e: *Encoder, text: str) -> err
+fn encode_array(e: *Encoder, count: usize) -> err
+fn encode_map(e: *Encoder, count: usize) -> err
+fn encode_tag(e: *Encoder, tag: u64) -> err
+fn encode_bool(e: *Encoder, value: bool) -> err
+fn encode_null(e: *Encoder) -> err
+fn encode_undefined(e: *Encoder) -> err
+fn encode_simple(e: *Encoder, value: u8) -> err
+fn encode_f64(e: *Encoder, value: f64) -> err
+fn encode_f32(e: *Encoder, value: f32) -> err
+fn begin_array(e: *Encoder) -> err
+fn begin_map(e: *Encoder) -> err
+fn encode_break(e: *Encoder) -> err
+fn decoder(data: []const u8) -> Decoder
+fn remaining(d: *const Decoder) -> usize
+fn take(d: *Decoder) -> (u8, err)
+fn take_be(d: *Decoder, width: usize) -> (u64, err)
+fn decode_head(d: *Decoder) -> (Item, err)
+fn at_break(d: *const Decoder) -> bool
+fn expect(d: *Decoder, major: u8) -> (Item, err)
+fn decode_uint(d: *Decoder) -> (u64, err)
+fn decode_int(d: *Decoder) -> (i64, err)
+fn payload(d: *Decoder, major: u8) -> ([]const u8, err)
+fn decode_bytes(d: *Decoder) -> ([]const u8, err)
+fn decode_text(d: *Decoder) -> (str, err)
+fn decode_array_len(d: *Decoder) -> (usize, bool, err)
+fn decode_map_len(d: *Decoder) -> (usize, bool, err)
+fn decode_tag(d: *Decoder) -> (u64, err)
+fn decode_bool(d: *Decoder) -> (bool, err)
+fn decode_null(d: *Decoder) -> err
+fn pow2(exponent: i64) -> f64
+fn f16_to_f64(bits: u64) -> f64
+fn decode_f64(d: *Decoder) -> (f64, err)
+fn skip(d: *Decoder) -> err
+```
+
+A streaming `Encoder` over a caller buffer (`encode_uint/int/negative/bytes/text/
+array/map/tag/bool/null/undefined/simple/f64/f32`, indefinite `begin_array/begin_map`,
+`encode_break`) and a `Decoder` (`decode_head` for the whole grammar, typed readers,
+`decode_f64` over f16/f32/f64, `skip` over nested and indefinite items).
+
+### `e.fmt.toml`
+
+```neper
+type Kind = enum u8 { String, Integer, Float, Bool, Datetime, ArrayStart, ArrayEnd, InlineTableStart, InlineTableEnd }
+type EventKind = enum u8 { End, TableStart, ArrayTableStart, Key, Value }
+type Value = struct { kind: Kind, text: str, integer: i64, float: f64, boolean: bool }
+type Event = struct { kind: EventKind, path: []const str, value: Value }
+type Parser = struct { source: str, at: usize, keys: []str, scratch: []u8, used: usize, stack: [MAX_DEPTH]u8, depth: usize, need_eol: bool }
+error Invalid
+error TooLarge
+error TooDeep
+const MAX_DEPTH: usize = 32usize
+const ARRAY_FIRST: u8 = 1u8
+const ARRAY_MORE: u8 = 2u8
+const TABLE_FIRST: u8 = 3u8
+const TABLE_MORE: u8 = 4u8
+const TAB: u8 = 9u8
+const LF: u8 = 10u8
+const CR: u8 = 13u8
+const SPACE: u8 = 32u8
+const HASH: u8 = 35u8
+const DQUOTE: u8 = 34u8
+const SQUOTE: u8 = 39u8
+const BACKSLASH: u8 = 92u8
+
+fn parser(source: str, keys: []str, scratch: []u8) -> Parser
+fn peek(p: *Parser) -> u8
+fn peek_at(p: *Parser, ahead: usize) -> u8
+fn skip_space(p: *Parser)
+fn skip_comment(p: *Parser)
+fn skip_blank(p: *Parser)
+fn expect_eol(p: *Parser) -> err
+fn put(p: *Parser, byte: u8) -> err
+fn put_utf8(p: *Parser, point: u32) -> err
+fn hex_value(byte: u8) -> (u32, bool)
+fn escape(p: *Parser, multi: bool) -> err
+fn basic(p: *Parser) -> (str, err)
+fn multi_basic(p: *Parser) -> (str, err)
+fn literal(p: *Parser) -> (str, err)
+fn multi_literal(p: *Parser) -> (str, err)
+fn is_bare(c: u8) -> bool
+fn key_path(p: *Parser) -> ([]const str, err)
+fn is_digit(c: u8) -> bool
+fn strip_underscores(p: *Parser, text: str) -> (str, err)
+fn looks_like_datetime(text: str) -> bool
+fn datetime_ok(text: str) -> bool
+fn number(p: *Parser, text: str) -> (Value, err)
+fn push_container(p: *Parser, state: u8) -> err
+fn value(p: *Parser) -> (Value, err)
+fn pop(p: *Parser)
+fn parse(p: *Parser) -> (Event, err)
+```
+
+A pull parser: `parser` over the source with caller key slots and a decode scratch,
+`parse` yielding table, array-table, key and value events (dotted, basic and literal
+keys; every string form and escape; integers with `_` and radix prefixes; floats with
+`inf`/`nan`; datetimes as text; nested arrays and inline tables as start/end events).
+
+### `e.fmt.markdown`
+
+```neper
+type BlockKind = enum u8 { ParagraphStart, ParagraphEnd, HeadingStart, HeadingEnd, FencedCodeStart, FencedCodeEnd, IndentedCodeStart, IndentedCodeEnd, ThematicBreak, BlockQuoteStart, BlockQuoteEnd, BulletListStart, BulletListEnd, OrderedListStart, OrderedListEnd, ItemStart, ItemEnd, Line }
+type Block = struct { kind: BlockKind, level: u32, start: usize, len: usize, indent: usize, loose: bool, extra_start: usize, extra_len: usize }
+type InlineKind = enum u8 { Text, Code, Emph, Strong, Link, Image, Autolink, Email, SoftBreak, HardBreak }
+type Inline = struct { kind: InlineKind, start: usize, len: usize, extra_start: usize, extra_len: usize, title_start: usize, title_len: usize }
+type Blocks = struct { text: str, out: []Block, count: usize, kind: [MAX_DEPTH]u8, data: [MAX_DEPTH]usize, marker: [MAX_DEPTH]u8, ordered: [MAX_DEPTH]bool, blank_pending: [MAX_DEPTH]bool, loose: [MAX_DEPTH]bool, open: usize, leaf: u8, leaf_index: usize, fence_char: u8, fence_len: usize, fence_indent: usize, pending_blanks: usize }
+type Delimiter = struct { pos: usize, count: usize, original: usize, ch: u8, can_open: bool, can_close: bool, active: bool, removed: bool, node: usize }
+type Inlines = struct { text: str, out: []Inline, count: usize, delimiters: [MAX_DELIMITERS]Delimiter, delimiter_count: usize }
+error TooLarge
+error TooDeep
+const MAX_DEPTH: usize = 32usize
+const MAX_DELIMITERS: usize = 128usize
+const TAB: u8 = 9u8
+const LF: u8 = 10u8
+const CR: u8 = 13u8
+const SPACE: u8 = 32u8
+const QUOTE: u8 = 1u8
+const LIST: u8 = 2u8
+const ITEM: u8 = 3u8
+const LEAF_NONE: u8 = 0u8
+const LEAF_PARAGRAPH: u8 = 1u8
+const LEAF_FENCED: u8 = 2u8
+const LEAF_INDENTED: u8 = 3u8
+
+fn emit(s: *Blocks, kind: BlockKind, start: usize, len: usize) -> (usize, err)
+fn spaces_from(text: str, at: usize, stop: usize) -> usize
+fn close_leaf(s: *Blocks) -> err
+fn close_from(s: *Blocks, from: usize) -> err
+fn close_unmatched(s: *Blocks, matched: usize) -> err
+fn push(s: *Blocks, kind: u8, data: usize) -> err
+fn settle_lists(s: *Blocks)
+fn note_blank(s: *Blocks)
+fn open_leaf(s: *Blocks, kind: BlockKind, leaf: u8) -> err
+fn is_break_char(c: u8) -> bool
+fn is_thematic(text: str, at: usize, stop: usize) -> bool
+fn only_spaces(text: str, at: usize, stop: usize) -> bool
+fn heading_content(text: str, at: usize, stop: usize) -> (usize, usize)
+fn line(s: *Blocks, at: usize, stop: usize) -> err
+fn process(s: *Blocks, at: usize, stop: usize) -> err
+fn parse_blocks(text: str, out: []Block) -> (usize, err)
+fn add(s: *Inlines, kind: InlineKind, start: usize, len: usize) -> (usize, err)
+fn add_delimiter(s: *Inlines, d: Delimiter) -> err
+fn is_punct(c: u8) -> bool
+fn is_white(c: u8) -> bool
+fn is_scheme_char(c: u8) -> bool
+fn autolink(text: str, at: usize) -> (usize, bool, bool)
+fn code_span(text: str, at: usize, run_end: usize) -> (usize, usize, usize, bool)
+fn link_tail(text: str, at: usize) -> (usize, usize, usize, usize, usize, bool)
+fn process_emphasis(s: *Inlines, bottom: usize) -> err
+fn flush_text(s: *Inlines, from: usize, to: usize) -> err
+fn parse_inlines(text: str, out: []Inline) -> (usize, err)
+fn is_container(kind: InlineKind) -> bool
+fn later(a: Inline, b: Inline) -> bool
+```
+
+`parse_blocks` (a container-stack line parser: ATX and setext headings, thematic
+breaks, fenced and indented code, nested block quotes, bullet and ordered lists with
+tight/loose, paragraphs with lazy continuation) and `parse_inlines` (the delimiter-run
+algorithm for emphasis, code spans, links and images with titles, autolinks, hard and
+soft breaks, escapes), both as caller arrays of spans over the input.
+
+### `e.fmt.pretty`
+
+```neper
+type Kind = enum u8 { Text, Line, SoftLine, Nest, Concat, Group }
+type Doc = struct { kind: Kind, content: str, indent: u32, first: u32, second: u32 }
+type Pool = struct { docs: []Doc, used: usize }
+type Frame = struct { doc: u32, indent: u32, flat: bool }
+error TooSmall
+error Invalid
+
+fn pool(docs: []Doc) -> (Pool, err)
+fn add(p: *Pool, d: Doc) -> (u32, err)
+fn text(p: *Pool, s: str) -> (u32, err)
+fn line(p: *Pool) -> (u32, err)
+fn soft_line(p: *Pool) -> (u32, err)
+fn nest(p: *Pool, amount: u32, child: u32) -> (u32, err)
+fn concat(p: *Pool, a: u32, b: u32) -> (u32, err)
+fn group(p: *Pool, child: u32) -> (u32, err)
+fn fits(p: *const Pool, stack: []Frame, base: usize, top: usize, depth: usize, remaining: i64) -> (bool, err)
+fn emit(out: []u8, n: usize, byte: u8) -> (usize, err)
+fn layout(p: *const Pool, root: u32, width: usize, out: []u8, stack: []Frame) -> (usize, err)
+```
+
+Wadler-style layout over a caller document pool (`text`, `line`, `soft_line`, `nest`,
+`concat`, `group`) rendered by `layout` with a lazy `fits` lookahead over a caller frame
+stack.
+
+### `e.fmt.css`
+
+```neper
+type Element = struct { tag: str, id: str, class_lo: u32, class_hi: u32, attr_lo: u32, attr_hi: u32, parent: u32, prev: u32 }
+type Attribute = struct { name: str, value: str }
+type Dom = struct { elements: []const Element, classes: []const str, attributes: []const Attribute }
+type Origin = enum u8 { UserAgent, User, Author }
+type Decl = struct { origin: Origin, important: bool, specificity: u32, order: u32 }
+error Invalid
+error TooSmall
+const NONE: u32 = 4294967295u32
+
+fn is_ident(b: u8) -> bool
+fn ident_end(s: str, from: usize) -> usize
+fn is_combinator(b: u8) -> bool
+fn find_top(s: str, from: usize, sep: u8) -> (usize, bool, err)
+fn has_class(d: *const Dom, e: Element, name: str) -> bool
+fn attribute(d: *const Dom, e: Element, name: str) -> (str, bool)
+fn word_in(list: str, word: str) -> bool
+fn match_attribute(d: *const Dom, e: Element, body: str) -> (bool, err)
+fn skip_spaces(s: str, from: usize) -> usize
+fn digits(s: str, from: usize) -> (i64, usize)
+fn parse_nth(arg: str) -> (i64, i64, err)
+fn position(d: *const Dom, index: usize) -> i64
+fn match_pseudo(d: *const Dom, index: usize, name: str, arg: str, has_arg: bool) -> (bool, err)
+fn match_compound(d: *const Dom, index: usize, c: str) -> (bool, err)
+fn match_complex(d: *const Dom, index: usize, sel: str) -> (bool, err)
+fn matches(d: *const Dom, index: usize, selector: str) -> (bool, err)
+fn select(d: *const Dom, selector: str, out: []u32) -> (usize, err)
+fn specificity_one(sel: str) -> (u32, err)
+fn specificity(selector: str) -> (u32, err)
+fn rank(decl: Decl) -> u32
+fn precedes(x: Decl, y: Decl) -> bool
+fn cascade(decls: []const Decl, out_order: []u32) -> err
+```
+
+Selectors matched right to left over a caller element table (`matches`, `select`:
+type, id, class, attribute operators, `:first-child`, `:nth-child`, the four
+combinators and lists), `specificity` packed as three bytes and `cascade` ordering
+declarations by origin, importance, specificity and source order.
 
 ### `e.fmt.uri`
 
@@ -5530,6 +6954,22 @@ a legal package namespace: Neper-owned facilities live in `e.*`, `e.algo.*`, `e.
 `e.crypto.*`, `e.fmt.*`, `e.gfx.*` or `e.ui.*`. A remaining vendor reservation without a package specification
 promises zero functions and structures.
 
+### `e.time.sync`
+
+```neper
+error TooSmall
+error Invalid
+
+fn marzullo(lows: []const i64, highs: []const i64, n: usize, scratch: []i64) -> (i64, i64, usize, err)
+fn marzullo_estimate(lows: []const i64, highs: []const i64, n: usize, scratch: []i64) -> (i64, err)
+fn berkeley(offsets: []const i64, n: usize, tolerance: i64, out: []i64) -> err
+fn cristian(t0_send: i64, t_server: i64, t1_receive: i64, min_one_way: i64) -> (i64, i64)
+```
+
+`marzullo` (the interval covered by the most sources) and `marzullo_estimate`,
+`berkeley` (median-filtered average adjustments) and `cristian` (round-trip halving
+with an error bound).
+
 ### `e.time.cron`
 
 ```neper
@@ -5545,6 +6985,578 @@ The delivered parser accepts six numeric fields with lists, inclusive ranges and
 Sunday is 0 or 7. Day-of-month and day-of-week use Vixie cron's OR rule when both are
 restricted. `next` is strictly after its input and searches no more than one complete
 400-year Gregorian cycle or the representable timestamp range.
+
+### `e.ratelimit`
+
+```neper
+type TokenBucket = struct { capacity: u64, refill: u64, interval: u64, level: u64, last: u64 }
+type LeakyBucket = struct { capacity: u64, leak: u64, interval: u64, water: u64, last: u64 }
+type FixedWindow = struct { limit: u64, width: u64, window: u64, count: u64 }
+type SlidingLog = struct { limit: u64, width: u64, stamps: []u64, head: usize, len: usize }
+type SlidingWindow = struct { limit: u64, width: u64, window: u64, count: u64, previous: u64 }
+error Invalid
+
+fn token_bucket(capacity: u64, refill: u64, interval: u64, now: u64) -> (TokenBucket, err)
+fn token_bucket_refill(b: *TokenBucket, now: u64)
+fn token_bucket_allow(b: *TokenBucket, now: u64, cost: u64) -> bool
+fn token_bucket_tokens(b: *TokenBucket, now: u64) -> u64
+fn leaky_bucket(capacity: u64, leak: u64, interval: u64, now: u64) -> (LeakyBucket, err)
+fn leaky_bucket_drain(b: *LeakyBucket, now: u64)
+fn leaky_bucket_allow(b: *LeakyBucket, now: u64, cost: u64) -> bool
+fn leaky_bucket_level(b: *LeakyBucket, now: u64) -> u64
+fn fixed_window(limit: u64, width: u64) -> (FixedWindow, err)
+fn fixed_window_allow(w: *FixedWindow, now: u64, cost: u64) -> bool
+fn sliding_log(limit: u64, width: u64, stamps: []u64) -> (SlidingLog, err)
+fn sliding_log_evict(l: *SlidingLog, now: u64)
+fn sliding_log_allow(l: *SlidingLog, now: u64) -> bool
+fn sliding_log_count(l: *SlidingLog, now: u64) -> u64
+fn sliding_window(limit: u64, width: u64) -> (SlidingWindow, err)
+fn sliding_window_roll(w: *SlidingWindow, now: u64)
+fn sliding_window_count(w: *SlidingWindow, now: u64) -> u64
+fn sliding_window_allow(w: *SlidingWindow, now: u64, cost: u64) -> bool
+```
+
+Limiters over the caller's clock in exact integer arithmetic: `token_bucket`,
+`leaky_bucket`, `fixed_window`, `sliding_log` (a caller ring of timestamps) and
+`sliding_window`, each with `_allow` and a level or count query.
+
+### `e.resilience`
+
+```neper
+type BreakerState = enum u8 { Closed, Open, HalfOpen }
+type Breaker = struct { state: BreakerState, failure_threshold: u32, open_timeout: u64, half_open_probes: u32, failures: u32, probes: u32, opened_at: u64 }
+type Heartbeat = struct { ids: []u64, last_seen: []u64, count: usize }
+type Shedder = struct { load: f64, alpha: f64, thresholds: []const f64 }
+type Bulkhead = struct { limits: []const u32, used: []u32 }
+type Health = enum u8 { Live, Degraded, NotReady, Dead }
+error TooSmall
+error Invalid
+
+fn circuit_breaker(failure_threshold: u32, open_timeout: u64, half_open_probes: u32) -> Breaker
+fn breaker_allow(b: *Breaker, now: u64) -> bool
+fn breaker_success(b: *Breaker)
+fn breaker_failure(b: *Breaker, now: u64)
+fn backoff_exponential(attempt: u32, base: u64, cap: u64) -> u64
+fn backoff(attempt: u32, base: u64, cap: u64, rng: *rand.Pcg64) -> u64
+fn backoff_decorrelated(previous: u64, base: u64, cap: u64, rng: *rand.Pcg64) -> u64
+fn heartbeat(ids: []u64, last_seen: []u64) -> Heartbeat
+fn heartbeat_find(h: *const Heartbeat, id: u64) -> usize
+fn heartbeat_observe(h: *Heartbeat, id: u64, now: u64) -> err
+fn heartbeat_alive(h: *const Heartbeat, id: u64, now: u64, timeout: u64) -> bool
+fn heartbeat_sweep(h: *Heartbeat, now: u64, timeout: u64, out_dead: []u64) -> (usize, err)
+fn load_shed(alpha: f64, thresholds: []const f64) -> Shedder
+fn load_shed_observe(s: *Shedder, sample: f64)
+fn load_shed_admit(s: *const Shedder, priority: usize) -> bool
+fn bulkhead(limits: []const u32, used: []u32) -> Bulkhead
+fn bulkhead_acquire(b: *Bulkhead, partition: usize) -> bool
+fn bulkhead_release(b: *Bulkhead, partition: usize)
+fn bulkhead_available(b: *const Bulkhead, partition: usize) -> u32
+fn health(up: []const bool, critical: []const bool) -> Health
+fn health_live(h: Health) -> bool
+fn health_ready(h: Health) -> bool
+fn fnv_feed(h: u32, s: str) -> u32
+fn rollout_bucket(user_id: str, salt: str) -> u32
+fn rollout_enabled(user_id: str, salt: str, basis_points: u32) -> bool
+```
+
+`circuit_breaker` (closed, open, half-open with probes), `backoff` (exponential, full
+jitter, decorrelated), `heartbeat` tables with `heartbeat_sweep`, `load_shed` (EWMA load
+against per-priority thresholds), `bulkhead` permits per partition, `health` aggregation
+(live, degraded, not ready, dead) and `rollout_bucket` by FNV-1a.
+
+### `e.valid`
+
+```neper
+error Invalid
+
+fn is_digit(c: u8) -> bool
+fn is_separator(c: u8) -> bool
+fn digits(s: str, out: []u8) -> usize
+fn luhn(s: str) -> bool
+fn luhn_sum(d: []const u8, shifted: bool) -> u32
+fn luhn_check_digit(s: str) -> (u8, err)
+fn weighted_mod10(s: str, count: usize, first: u32) -> bool
+fn ean13(s: str) -> bool
+fn ean8(s: str) -> bool
+fn upc_a(s: str) -> bool
+fn isbn13(s: str) -> bool
+fn isbn10(s: str) -> bool
+fn iban_length(a: u8, b: u8) -> usize
+fn mod97(r: u32, s: str) -> (u32, bool)
+fn iban(s: str) -> bool
+```
+
+Identifier checks: `luhn` and `luhn_check_digit`, `isbn13`, `isbn10`, `ean13`, `ean8`,
+`upc_a` (one weighted mod-10 helper) and `iban` (mod 97 digit by digit with a country
+length table).
+
+### `e.control`
+
+```neper
+type Pid = struct { kp: f64, ki: f64, kd: f64, integral: f64, previous_error: f64, out_min: f64, out_max: f64, kb: f64 }
+type Tuning = enum u8 { P, PI, PID }
+type Feedforward = struct { gain: f64, feedback: Pid }
+error TooSmall
+error Singular
+
+fn pid(kp: f64, ki: f64, kd: f64) -> Pid
+fn pid_step(p: *Pid, setpoint: f64, measured: f64, dt: f64) -> f64
+fn pid_anti_windup(kp: f64, ki: f64, kd: f64, out_min: f64, out_max: f64, kb: f64) -> Pid
+fn clamp(x: f64, lo: f64, hi: f64) -> f64
+fn pid_anti_windup_step(p: *Pid, setpoint: f64, measured: f64, dt: f64) -> f64
+fn pid_reset(p: *Pid)
+fn pid_tune_ziegler_nichols(ku: f64, tu: f64, kind: Tuning) -> (f64, f64, f64)
+fn bang_bang(measured: f64, setpoint: f64, hysteresis: f64, on: bool) -> bool
+fn feedforward(f: *Feedforward, setpoint: f64, measured: f64, dt: f64) -> f64
+fn sliding_mode(error_value: f64, error_rate: f64, c: f64, k: f64, boundary: f64) -> f64
+fn identity(out: []f64, n: usize)
+fn lqr(a: []const f64, b: []const f64, q: []const f64, r: []const f64, n: usize, m: usize, k: []f64, scratch: []f64, iterations: usize, tolerance: f64) -> (usize, err)
+fn characteristic(re: []const f64, im: []const f64, out: []f64, scratch: []f64) -> err
+fn pole_placement(a: []const f64, b: []const f64, n: usize, poles_re: []const f64, poles_im: []const f64, k: []f64, scratch: []f64) -> err
+fn observer_gain(a: []const f64, c: []const f64, n: usize, poles_re: []const f64, poles_im: []const f64, l: []f64, scratch: []f64) -> err
+fn observer_step(x_hat: []f64, a: []const f64, b: []const f64, c: []const f64, l: []const f64, n: usize, m: usize, p: usize, u: []const f64, y: []const f64, scratch: []f64) -> err
+```
+
+`pid` and `pid_step`, `pid_anti_windup` (clamped output with back-calculation),
+`pid_tune_ziegler_nichols`, `bang_bang`, `feedforward`, `sliding_mode`, `lqr` (discrete
+Riccati iteration), `pole_placement` (Ackermann, single input), `observer_gain` on the
+dual and `observer_step` (Luenberger); matrices row-major in caller storage.
+
+### `e.parse`
+
+```neper
+type Token = struct { kind: u8, start: usize, len: usize }
+type Op = struct { text: str, kind: u8, prec: u8, right: bool }
+type Ast = struct { kind: []u8, a: []u32, b: []u32, tok: []u32, used: usize }
+type Grammar = struct { lhs: []const u32, rhs: []const u32, rule_start: []const usize, terminals: u32 }
+type Item = struct { rule: u32, dot: u32, origin: u32 }
+type Peg = struct { op: []const u8, a: []const u32, b: []const u32, rules: []const u32 }
+type Parser = struct { tokens: []const Token, text: str, ops: []const Op, pos: usize }
+error TooSmall
+error Invalid
+const IDENT: u8 = 1u8
+const INT: u8 = 2u8
+const STRING: u8 = 3u8
+const OP: u8 = 4u8
+const INDENT: u8 = 5u8
+const DEDENT: u8 = 6u8
+const PREFIX: u8 = 0u8
+const INFIX: u8 = 1u8
+const POSTFIX: u8 = 2u8
+const LEAF: u8 = 1u8
+const NODE_PREFIX: u8 = 2u8
+const NODE_INFIX: u8 = 3u8
+const NODE_POSTFIX: u8 = 4u8
+const PEG_CHAR: u8 = 1u8
+const PEG_RANGE: u8 = 2u8
+const PEG_ANY: u8 = 3u8
+const PEG_SEQ: u8 = 4u8
+const PEG_CHOICE: u8 = 5u8
+const PEG_STAR: u8 = 6u8
+const PEG_PLUS: u8 = 7u8
+const PEG_OPT: u8 = 8u8
+const PEG_NOT: u8 = 9u8
+const PEG_AND: u8 = 10u8
+const PEG_RULE: u8 = 11u8
+const PEG_EMPTY: u8 = 12u8
+
+fn is_ident_start(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn is_punct(c: u8) -> bool
+fn starts_at(text: str, at_pos: usize, s: str) -> bool
+fn push_token(out: []Token, n: usize, kind: u8, start: usize, len: usize) -> err
+fn lex(text: str, operators: []const str, out: []Token) -> (usize, err)
+fn lex_indent(text: str, stack: []usize, out: []Token) -> (usize, err)
+fn is_char(text: str, t: Token, c: u8) -> bool
+fn find_op(ops: []const Op, text: str, t: Token, kind: u8) -> (usize, bool)
+fn shunting_yard(tokens: []const Token, text: str, ops: []const Op, out: []Token, stack: []Token) -> (usize, err)
+fn ast(kind: []u8, a: []u32, b: []u32, tok: []u32) -> Ast
+fn ast_node(t: *Ast, kind: u8, a: u32, b: u32, tok: u32) -> (u32, err)
+fn ast_child(t: *const Ast, node: u32, which: usize) -> u32
+fn pratt(tokens: []const Token, text: str, ops: []const Op, t: *Ast) -> (u32, err)
+fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8) -> (u32, err)
+fn recursive_descent(tokens: []const Token, text: str, t: *Ast) -> (u32, err)
+fn peek_char(p: *const Parser, c: u8) -> bool
+fn rd_binary(p: *Parser, t: *Ast, lhs: u32, rhs: u32) -> (u32, err)
+fn rd_expr(p: *Parser, t: *Ast) -> (u32, err)
+fn rd_term(p: *Parser, t: *Ast) -> (u32, err)
+fn rd_unary(p: *Parser, t: *Ast) -> (u32, err)
+fn rd_power(p: *Parser, t: *Ast) -> (u32, err)
+fn rd_atom(p: *Parser, t: *Ast) -> (u32, err)
+fn evaluate(t: *const Ast, node: u32, tokens: []const Token, text: str) -> (f64, err)
+fn grammar(lhs: []const u32, rhs: []const u32, rule_start: []const usize, terminals: u32) -> Grammar
+fn rule_count(g: *const Grammar) -> usize
+fn rule_len(g: *const Grammar, rule: usize) -> usize
+fn rule_symbol(g: *const Grammar, rule: usize, at_pos: usize) -> u32
+fn cyk(g: *const Grammar, start: u32, sentence: []const u32, chart: []u64) -> (bool, err)
+fn nullable_set(g: *const Grammar) -> u64
+fn earley_add(items: []Item, from: usize, used: usize, it: Item) -> (usize, err)
+fn earley_run(g: *const Grammar, start: u32, sentence: []const u32, items: []Item, sets: []usize) -> (usize, err)
+fn earley(g: *const Grammar, start: u32, sentence: []const u32, items: []Item, sets: []usize) -> (bool, usize, err)
+fn next_terminals(g: *const Grammar, start: u32, prefix: []const u32, out: []u32, items: []Item, sets: []usize) -> (usize, err)
+fn peg(p: *const Peg, rule: usize, text: str, memo: []i64) -> (usize, bool, err)
+fn peg_rule(p: *const Peg, rule: usize, text: str, pos: usize, memo: []i64) -> (usize, bool)
+fn peg_match(p: *const Peg, node: u32, text: str, pos: usize, memo: []i64) -> (usize, bool)
+```
+
+`lex` (table scanner with a caller operator list), `lex_indent` (off-side rule),
+`shunting_yard`, an AST pool (`ast`, `ast_node`, `ast_child`), `pratt` and
+`recursive_descent` producing the same shapes, `evaluate`; a shared `grammar`
+representation for `cyk` (CNF, bitset chart), `earley` (any grammar, epsilon and
+ambiguity), `next_terminals` (constrained decoding by Earley prediction) and `peg`
+(packrat over a node table with a caller memo).
+
+### `e.trace`
+
+```neper
+type TraceContext = struct { trace_id: [16]u8, span_id: [8]u8, flags: u8 }
+error Invalid
+error TooSmall
+const HEADER_LEN: usize = 55usize
+const MAX_MEMBERS: usize = 32usize
+const FLAG_SAMPLED: u8 = 1u8
+
+fn nibble(c: u8) -> (u8, bool)
+fn unhex(s: str, at: usize, out: []u8) -> bool
+fn hex(bytes: []const u8, out: []u8)
+fn parse_traceparent(s: str) -> (TraceContext, err)
+fn format_traceparent(c: *const TraceContext, out: []u8) -> (usize, err)
+fn all_zero(bytes: []const u8) -> bool
+fn child(parent: *const TraceContext, new_span_id: []const u8) -> (TraceContext, err)
+fn propagate(parent: *const TraceContext, new_span_id: []const u8, out: []u8) -> (usize, err)
+fn sampled(c: *const TraceContext) -> bool
+fn span_id_from(r: *rand.Pcg64) -> [8]u8
+fn trace_id_from(r: *rand.Pcg64) -> [16]u8
+fn fill(r: *rand.Pcg64, out: []u8)
+fn member(state: str, at: usize) -> (str, str, usize, bool)
+fn tracestate_get(state: str, key: str) -> (str, bool)
+fn tracestate_set(state: str, key: str, value: str, out: []u8) -> (usize, err)
+fn append(out: []u8, n: usize, s: str) -> (usize, err)
+```
+
+W3C Trace Context: `parse_traceparent`, `format_traceparent`, `child`, `propagate`,
+`sampled`, `span_id_from`/`trace_id_from` over a generator, and `tracestate_get`/
+`tracestate_set` (move to front, 32 members).
+
+### `e.dist.clock`
+
+```neper
+type Lamport = struct { time: u64 }
+type Hlc = struct { physical: u64, logical: u64 }
+type Order = enum u8 { Before, After, Equal, Concurrent }
+
+fn lamport() -> Lamport
+fn lamport_tick(c: *Lamport) -> u64
+fn lamport_send(c: *Lamport) -> u64
+fn lamport_receive(c: *Lamport, stamp: u64) -> u64
+fn vector_tick(v: []u64, node: usize) -> u64
+fn vector_merge(dst: []u64, src: []const u64)
+fn vector_receive(v: []u64, src: []const u64, node: usize) -> u64
+fn vector_cmp(a: []const u64, b: []const u64) -> Order
+fn hlc() -> Hlc
+fn hlc_now(c: *Hlc, physical: u64) -> Hlc
+fn hlc_receive(c: *Hlc, physical: u64, remote: Hlc) -> Hlc
+fn hlc_cmp(a: Hlc, b: Hlc) -> i32
+```
+
+Lamport clocks (`lamport_tick/send/receive`), vector clocks over caller arrays
+(`vector_tick/merge/receive/cmp` answering before, after, equal or concurrent) and
+hybrid logical clocks (`hlc_now`, `hlc_receive`, `hlc_cmp`).
+
+### `e.dist.election`
+
+```neper
+type Kind = enum u8 { Election, Ok, Coordinator }
+type Message = struct { kind: Kind, from: u32, to: u32 }
+type Sent = struct { out: []Message, count: usize }
+error TooSmall
+error Invalid
+
+fn push(s: *Sent, kind: Kind, from: usize, to: usize)
+fn highest_alive(alive: []const bool) -> usize
+fn bully(alive: []const bool, initiator: usize, out: []Message) -> (usize, usize, err)
+fn ring(alive: []const bool, ring_order: []const usize, initiator: usize, out: []Message) -> (usize, usize, err)
+```
+
+Simulated leader election over an alive table with the messages recorded: `bully`
+(election, ok and coordinator rounds) and `ring` (Chang-Roberts around a caller ring order).
+
+### `e.dist.gossip`
+
+```neper
+type Gossip = struct { state: []u8, fanout: usize, informed: usize }
+type Status = enum u8 { Alive, Suspect, Dead }
+type Member = struct { id: u32, incarnation: u32, status: Status, heartbeat: u64 }
+type Membership = struct { members: []Member, count: usize }
+error TooSmall
+
+fn gossip(state: []u8, fanout: usize, origin: usize) -> Gossip
+fn informed(g: *const Gossip, node: usize) -> bool
+fn gossip_round(g: *Gossip, r: *rand.Pcg64) -> usize
+fn gossip_rounds_until_all(g: *Gossip, r: *rand.Pcg64, limit: usize) -> usize
+fn membership(members: []Member) -> Membership
+fn membership_find(t: *const Membership, id: u32) -> (usize, bool)
+fn rank(s: Status) -> u32
+fn supersedes(incoming: Member, held: Member) -> bool
+fn membership_apply(t: *Membership, incoming: Member) -> (bool, err)
+fn membership_merge(t: *Membership, incoming: []const Member) -> (usize, err)
+fn set_status(t: *Membership, id: u32, from: Status, to: Status, now: u64) -> bool
+fn membership_suspect(t: *Membership, id: u32, now: u64) -> bool
+fn membership_confirm(t: *Membership, id: u32, now: u64) -> bool
+fn membership_refute(t: *Membership, id: u32, now: u64) -> u32
+fn membership_sweep(t: *Membership, now: u64, timeout: u64) -> usize
+```
+
+Rumour spread by push/pull rounds over a generator (`gossip_round`,
+`gossip_rounds_until_all`) and a SWIM-style membership table (`membership_merge` with
+incarnation precedence, `membership_suspect/confirm/refute/sweep`).
+
+### `e.dist.failure_detector`
+
+```neper
+type Detector = struct { intervals: []u64, count: usize, head: usize, last: u64, seen: bool, min_std_dev: f64 }
+
+fn detector(intervals: []u64, min_std_dev: f64) -> Detector
+fn heartbeat(d: *Detector, now: u64)
+fn stats(d: *const Detector) -> (f64, f64)
+fn phi(d: *const Detector, now: u64) -> f64
+fn suspect(d: *const Detector, now: u64, threshold: f64) -> bool
+```
+
+The phi accrual detector over a caller ring of inter-arrival times: `heartbeat`,
+`stats`, `phi` (the exact normal tail through erfc) and `suspect` against a threshold.
+
+### `e.parse.ll`
+
+```neper
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn bit(t: u32) -> u64
+fn max_symbol(g: *const base.Grammar) -> usize
+fn symbol_count(g: *const base.Grammar) -> usize
+fn nullable(g: *const base.Grammar, out: []bool) -> err
+fn first_of(g: *const base.Grammar, nullable_set: []const bool, first_sets: []const u64, rule: usize, from: usize) -> (u64, bool)
+fn first(g: *const base.Grammar, nullable_set: []const bool, first_sets: []u64) -> err
+fn follow(g: *const base.Grammar, start: u32, nullable_set: []const bool, first_sets: []const u64, follow_sets: []u64) -> err
+fn table(g: *const base.Grammar, start: u32, nullable_set: []bool, first_sets: []u64, follow_sets: []u64, out: []u32) -> (usize, err)
+fn parse(g: *const base.Grammar, start: u32, tbl: []const u32, sentence: []const u32, stack: []u32, out_rules: []u32) -> (usize, err)
+```
+
+Over `e.parse` grammars: `nullable`, `first`, `first_of`, `follow` as bitsets,
+`table` (the LL(1) table with a conflict count) and `parse` (leftmost derivation as
+rule indices).
+
+### `e.parse.lr`
+
+```neper
+type Item = struct { rule: u32, dot: u32, la: u32 }
+type Collection = struct { items: []Item, set_start: []usize, trans: []u32, nullable: []bool, first: []u64, follow: []u64, states: usize, symbols: usize, used: usize }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+const ERROR: u32 = 0u32
+const SHIFT: u32 = 1u32
+const REDUCE: u32 = 2u32
+const ACCEPT: u32 = 3u32
+
+fn collection(pool: []Item, set_start: []usize, trans: []u32, nullable: []bool, first: []u64, follow: []u64) -> Collection
+fn tag(action: u32) -> u32
+fn value(action: u32) -> u32
+fn encode(kind: u32, v: u32) -> u32
+fn body_len(g: *const base.Grammar, rule: usize) -> usize
+fn body_symbol(g: *const base.Grammar, start: u32, rule: usize, k: usize) -> u32
+fn add_item(c: *Collection, from: usize, it: Item) -> err
+fn closure(g: *const base.Grammar, start: u32, c: *Collection, from: usize, lr1: bool) -> err
+fn same_set(c: *const Collection, s: usize, from: usize) -> bool
+fn build(g: *const base.Grammar, start: u32, c: *Collection, lr1: bool) -> err
+fn items(g: *const base.Grammar, start: u32, c: *Collection) -> err
+fn items1(g: *const base.Grammar, start: u32, c: *Collection) -> err
+fn set_action(action: []u32, cell: usize, kind: u32, v: u32, conflicts: usize) -> usize
+fn fill(g: *const base.Grammar, start: u32, c: *const Collection, merged: []const u32, states: usize, slr: bool, action: []u32, gotos: []u32) -> (usize, err)
+fn identity(merged: []u32, states: usize) -> err
+fn slr_table(g: *const base.Grammar, start: u32, c: *Collection, merged: []u32, action: []u32, gotos: []u32) -> (usize, usize, err)
+fn canonical_table(g: *const base.Grammar, start: u32, c: *Collection, merged: []u32, action: []u32, gotos: []u32) -> (usize, usize, err)
+fn same_core(c: *const Collection, s: usize, t: usize) -> bool
+fn lalr_table(g: *const base.Grammar, start: u32, c: *Collection, merged: []u32, action: []u32, gotos: []u32) -> (usize, usize, err)
+fn parse(g: *const base.Grammar, action: []const u32, gotos: []const u32, sentence: []const u32, stack: []u32, out_rules: []u32) -> (usize, err)
+```
+
+LR(0) and LR(1) canonical collections over caller item pools (`items`, `items1`),
+`slr_table`, `canonical_table` and `lalr_table` (LR(1) states merged on equal cores)
+with shift-preferring conflict counts, and `parse` answering the reduce sequence.
+
+### `e.dist.consensus`
+
+```neper
+type Kind = enum u8 { None, RequestVote, VoteResponse, AppendEntries, AppendResponse, InstallSnapshot, SnapshotResponse, Prepare, Promise, Accept, Accepted, VrPrepare, VrPrepareOk, VrCommit, StartViewChange, DoViewChange, StartView }
+type Entry = struct { term: u64, value: i64, cfg_old: u64, cfg_new: u64 }
+type Message = struct { from: u32, to: u32, kind: Kind, term: u64, index: u64, term2: u64, commit: u64, value: i64, flag: bool, entry: Entry }
+type Pool = struct { items: []Message, len: usize }
+type Role = enum u8 { Follower, Candidate, Leader }
+type Node = struct { id: u32, role: Role, term: u64, voted_for: u32, votes: u64, leader: u32, log: []Entry, log_len: usize, snap_index: u64, snap_term: u64, snap_state: i64, commit: u64, applied: u64, state: i64, next_index: []u64, match_index: []u64, cfg_old: u64, cfg_new: u64, timeout_at: u64, heartbeat_at: u64 }
+type Cluster = struct { nodes: []Node, rng: rand.Pcg64, timeout_min: u64, timeout_max: u64, heartbeat: u64 }
+type Acceptor = struct { promised: u64, accepted_n: u64, accepted_value: i64 }
+type Proposer = struct { round: u64, n: u64, value: i64, phase: u8, promises: u64, best_n: u64, best_value: i64, learned_n: u64, learned_mask: u64, decided: bool, decided_value: i64 }
+type Paxos = struct { acceptors: []Acceptor, proposers: []Proposer }
+type MpNode = struct { promised: u64, slot_n: []u64, slot_value: []i64, ballot: u64, leading: bool, promises: u64, next_slot: u64, proposed: []i64, accept_mask: []u64, decided: []bool }
+type MultiPaxos = struct { nodes: []MpNode }
+type VrStatus = enum u8 { Normal, ViewChange }
+type VrNode = struct { id: u32, view: u64, status: VrStatus, last_normal: u64, op: u64, commit: u64, state: i64, log: []i64, prepare_ok: []u64, svc_mask: u64, dvc_sent: bool, dvc_mask: u64, best_from: u32, best_view: u64, best_op: u64, best_commit: u64 }
+type Vr = struct { nodes: []VrNode }
+error TooSmall
+error Invalid
+error NotLeader
+const NONE: u32 = 4294967295u32
+
+fn pool(items: []Message) -> Pool
+fn pool_push(p: *Pool, m: Message) -> err
+fn pool_take(p: *Pool, at: usize) -> Message
+fn pool_pop(p: *Pool) -> Message
+fn has_bit(mask: u64, i: u32) -> bool
+fn majority(mask: u64, cfg: u64) -> bool
+fn has_majority(n: *const Node, mask: u64) -> bool
+fn raft_node(id: u32, log: []Entry, next_index: []u64, match_index: []u64, config: u64) -> Node
+fn raft_cluster(nodes: []Node, seed: u64, timeout_min: u64, timeout_max: u64, heartbeat: u64) -> Cluster
+fn reset_timeout(c: *Cluster, n: *Node, now: u64)
+fn last_index(n: *const Node) -> u64
+fn term_at(n: *const Node, index: u64) -> u64
+fn step_down(n: *Node, term: u64)
+fn append_entry(n: *Node, e: Entry) -> err
+fn apply(n: *Node) -> err
+fn broadcast(c: *Cluster, n: *const Node, out: *Pool, m: Message) -> err
+fn become_leader(c: *Cluster, n: *Node, now: u64, out: *Pool) -> err
+fn send_append(c: *Cluster, n: *const Node, to: u32, out: *Pool) -> err
+fn send_appends(c: *Cluster, n: *Node, now: u64, out: *Pool) -> err
+fn raft_election_step(c: *Cluster, node: usize, now: u64, msg: *const Message, out: *Pool) -> err
+fn advance_commit(c: *Cluster, n: *Node) -> err
+fn raft_replicate_step(c: *Cluster, node: usize, now: u64, msg: *const Message, out: *Pool) -> err
+fn raft_propose(c: *Cluster, node: usize, value: i64) -> (u64, err)
+fn membership_change(c: *Cluster, node: usize, new_config: u64) -> err
+fn raft_snapshot(c: *Cluster, node: usize) -> err
+fn raft_snapshot_step(c: *Cluster, node: usize, now: u64, msg: *const Message, out: *Pool) -> err
+fn raft_step(c: *Cluster, node: usize, now: u64, msg: *const Message, out: *Pool) -> err
+fn paxos(acceptors: []Acceptor, proposers: []Proposer) -> Paxos
+fn simple_majority(mask: u64, count: usize) -> bool
+fn to_all(count: usize, out: *Pool, m: Message) -> err
+fn paxos_propose(p: *Paxos, node: usize, value: i64, out: *Pool) -> err
+fn paxos_step(p: *Paxos, node: usize, msg: *const Message, out: *Pool) -> err
+fn multi_paxos(nodes: []MpNode) -> MultiPaxos
+fn mp_node(slot_n: []u64, slot_value: []i64, proposed: []i64, accept_mask: []u64, decided: []bool) -> MpNode
+fn multi_paxos_lead(m: *MultiPaxos, node: usize, out: *Pool) -> err
+fn multi_paxos_propose(m: *MultiPaxos, node: usize, value: i64, out: *Pool) -> (u64, err)
+fn multi_paxos_step(m: *MultiPaxos, node: usize, msg: *const Message, out: *Pool) -> err
+fn viewstamped(nodes: []VrNode) -> Vr
+fn vr_node(id: u32, log: []i64, prepare_ok: []u64) -> VrNode
+fn vr_primary(v: *const Vr, view: u64) -> u32
+fn vr_execute(n: *VrNode, up_to: u64)
+fn vr_others(v: *const Vr, node: usize, out: *Pool, m: Message) -> err
+fn vr_request(v: *Vr, node: usize, value: i64, out: *Pool) -> err
+fn vr_primary_dead(v: *Vr, node: usize, out: *Pool) -> err
+fn vr_copy_log(v: *Vr, node: usize, from: u32, count: u64)
+fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err
+```
+
+Simulated consensus over caller message pools (node ids as mask bits): Raft
+(`raft_election_step`, `raft_replicate_step`, `raft_propose`, `raft_snapshot` and
+`raft_snapshot_step`, `membership_change` by joint consensus, `raft_step`), single-decree
+`paxos` (`paxos_propose`, `paxos_step`), `multi_paxos` with a stable leader and
+viewstamped replication (`vr_request`, `vr_primary_dead`, `vr_step`).
+
+### `e.dist.commit`
+
+```neper
+type Kind = enum u8 { None, Prepare, VoteYes, VoteNo, PreCommit, Ack, Commit, Abort, Execute, StepDone, StepFailed, Compensate, Compensated }
+type Message = struct { from: u32, to: u32, kind: Kind, step: u32 }
+type Pool = struct { items: []Message, len: usize }
+type CoordState = enum u8 { Init, Waiting, PreCommitting, Committed, Aborted }
+type PartState = enum u8 { Init, Prepared, PreCommitted, Committed, Aborted }
+type Participant = struct { state: PartState, vote_yes: bool, deadline: u64 }
+type Commit = struct { three: bool, state: CoordState, parts: []Participant, yes: u64, acks: u64, deadline: u64, timeout: u64 }
+type SagaState = enum u8 { Running, Completed, Compensating, Aborted }
+type Saga = struct { orchestrated: bool, state: SagaState, done: []u8, fail_at: u32 }
+type TccState = enum u8 { Free, Tried, Confirmed, Cancelled }
+type Reservation = struct { state: TccState, expires: u64 }
+type Tcc = struct { parts: []Reservation, ttl: u64, state: SagaState }
+error TooSmall
+error Invalid
+error Expired
+const NONE: u32 = 4294967295u32
+
+fn pool(items: []Message) -> Pool
+fn pool_push(p: *Pool, m: Message) -> err
+fn pool_pop(p: *Pool) -> Message
+fn send(out: *Pool, from: u32, to: u32, kind: Kind, step: u32) -> err
+fn send_all(t: *const Commit, kind: Kind, out: *Pool) -> err
+fn all_mask(t: *const Commit) -> u64
+fn two_phase(parts: []Participant, timeout: u64) -> Commit
+fn three_phase(parts: []Participant, timeout: u64) -> Commit
+fn commit_begin(t: *Commit, now: u64, out: *Pool) -> err
+fn decide(t: *Commit, state: CoordState, kind: Kind, out: *Pool) -> err
+fn commit_step(t: *Commit, node: usize, now: u64, msg: *const Message, out: *Pool) -> err
+fn commit_blocked(t: *const Commit, node: usize, now: u64) -> bool
+fn saga_choreography(done: []u8, fail_at: u32) -> Saga
+fn saga_orchestrate(done: []u8, fail_at: u32) -> Saga
+fn saga_start(s: *Saga, out: *Pool) -> err
+fn saga_step(s: *Saga, node: usize, msg: *const Message, out: *Pool) -> err
+fn tcc(parts: []Reservation, ttl: u64) -> Tcc
+fn tcc_try(t: *Tcc, node: usize, now: u64) -> err
+fn tcc_expire(t: *Tcc, now: u64) -> usize
+fn tcc_confirm(t: *Tcc, now: u64) -> err
+fn tcc_cancel(t: *Tcc)
+```
+
+`two_phase` and `three_phase` commit (`commit_begin`, `commit_step`, `commit_blocked`),
+sagas by choreography and orchestration (`saga_start`, `saga_step` with compensations
+in reverse) and try-confirm-cancel (`tcc_try/confirm/cancel/expire`).
+
+### `e.dist.replica`
+
+```neper
+type Replica = struct { clock: []u64, value: i64, up: bool }
+type Store = struct { replicas: []Replica, r: usize, w: usize }
+type Handoff = struct { target: []u32, value: []i64, clocks: []u64, width: usize, len: usize }
+error Invalid
+error NoQuorum
+error TooSmall
+
+fn quorum(n: usize, r: usize, w: usize) -> (bool, err)
+fn replica(stamp: []u64) -> Replica
+fn store(replicas: []Replica, r: usize, w: usize) -> Store
+fn hinted_handoff(targets: []u32, values: []i64, clocks: []u64, width: usize) -> Handoff
+fn handoff_store(h: *Handoff, to: u32, value: i64, stamp: []const u64) -> err
+fn copy_clock(dst: []u64, src: []const u64)
+fn quorum_write(s: *Store, coordinator: usize, value: i64, h: *Handoff) -> (usize, err)
+fn read_set(s: *const Store, chosen: []usize) -> (usize, bool, err)
+fn quorum_read(s: *const Store) -> (usize, bool, err)
+fn read_repair(s: *Store, stale: []usize) -> (usize, err)
+fn handoff_replay(h: *Handoff, s: *Store, to: u32) -> usize
+```
+
+`quorum` arithmetic, `quorum_write` with hints for down replicas, `quorum_read` by vector
+clock (latest or conflict), `read_repair` of the stale, and `hinted_handoff` stores with
+`handoff_replay` on recovery.
+
+### `e.dist.collective`
+
+```neper
+type Op = enum u8 { Sum, Max }
+type Collective = struct { vectors: []f64, n: usize, d: usize }
+error Invalid
+
+fn collective(vectors: []f64, n: usize, d: usize) -> (Collective, err)
+fn chunk_lo(c: *const Collective, chunk: usize) -> usize
+fn move_chunk(c: *Collective, from: usize, to: usize, chunk: usize, op: Op, reduce: bool)
+fn all_reduce_ring(c: *Collective, op: Op) -> (usize, usize)
+fn copy_row(c: *Collective, from: usize, to: usize)
+fn broadcast(c: *Collective, root: usize) -> (usize, usize)
+fn scatter(c: *Collective, root: usize) -> usize
+fn gather(c: *Collective, root: usize) -> usize
+```
+
+`all_reduce_ring` (reduce-scatter then all-gather, transfers and steps counted),
+binomial `broadcast`, `scatter` and `gather` over an n-by-d matrix.
 
 ### `e.grep`
 
@@ -5966,6 +7978,331 @@ One infeasible-start primal-dual interior-point method behind `interior_point`
 (`max c·x`) and `quadratic_program` (`min ½ x·Q x + c·x`), both subject to `A x <= b`,
 `x >= 0`; an equality is two inequalities. A programme that is infeasible or unbounded
 is `Stalled` when `max_iterations` runs out; scratch is `(n + m)^2 + 4 (n + m)`.
+
+### `e.ml.linear`
+
+```neper
+error TooSmall
+error Singular
+error Invalid
+
+fn solve(matrix: []f64, rhs: []f64, k: usize) -> err
+fn at(x: []const f64, d: usize, i: usize, j: usize) -> f64
+fn normal_equations(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, matrix: []f64, rhs: []f64)
+fn ols(x: []const f64, y: []const f64, n: usize, d: usize, coefficients: []f64, scratch: []f64) -> err
+fn ridge(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, coefficients: []f64, scratch: []f64) -> err
+fn lasso(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolerance: f64, max_sweeps: u32, coefficients: []f64, scratch: []f64) -> err
+fn sigmoid(z: f64) -> f64
+fn predict(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
+fn predict_probability(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
+fn logistic(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err)
+```
+
+Row-major samples (`n` rows of `d`), coefficients `d + 1` with the intercept last:
+`ols` and `ridge` solve the normal equations (`Singular` without a unique solution),
+`lasso` is cyclic coordinate descent with soft thresholding on
+`(1 / 2n) Σ (y - Xβ)² + λ Σ |β|`, `logistic` is Newton on the log loss with a ridge
+of `lambda`; `predict` and `predict_probability` apply the coefficients.
+
+### `e.ml.cluster`
+
+```neper
+type Linkage = enum u8 { Single, Complete, Average }
+error TooSmall
+error Invalid
+
+fn distance_squared(x: []const f64, d: usize, i: usize, y: []const f64, j: usize) -> f64
+fn nearest(x: []const f64, d: usize, i: usize, centroids: []const f64, k: usize) -> (usize, f64)
+fn kmeans(x: []const f64, n: usize, d: usize, k: usize, centroids: []f64, labels: []usize, max_iterations: u32, scratch: []usize) -> (u32, err)
+fn kmeans_pp_init(x: []const f64, n: usize, d: usize, k: usize, r: *rand.Pcg64, centroids: []f64, scratch: []f64) -> err
+fn kmeans_online(sample: []const f64, d: usize, k: usize, centroids: []f64, counts: []usize) -> (usize, err)
+fn vector_quantize(x: []const f64, n: usize, d: usize, k: usize, epsilon: f64, centroids: []f64, labels: []usize, max_iterations: u32, scratch: []usize) -> (u32, err)
+fn medoid_cost(x: []const f64, n: usize, d: usize, medoids: []const usize, k: usize) -> f64
+fn kmedoids(x: []const f64, n: usize, d: usize, k: usize, medoids: []usize, labels: []usize, max_iterations: u32) -> (u32, err)
+fn agglomerative(x: []const f64, n: usize, d: usize, linkage: Linkage, k: usize, labels: []usize, distances: []f64) -> err
+fn neighbor_joining(distance: []const f64, n: usize, work: []f64, joins: []usize, lengths: []f64, scratch: []usize) -> (usize, err)
+fn row_sum(work: []const f64, n: usize, ids: []const usize, dead: usize, i: usize) -> f64
+fn gmm_em(x: []const f64, n: usize, d: usize, k: usize, means: []f64, variances: []f64, weights: []f64, responsibilities: []f64, tolerance: f64, max_iterations: u32) -> (f64, u32, err)
+```
+
+`kmeans` runs Lloyd's iterations from caller centroids (`kmeans_pp_init` seeds them,
+`kmeans_online` updates them per streamed sample, `vector_quantize` grows them by LBG
+splitting); `kmedoids` is PAM; `agglomerative` merges under single, complete or
+average linkage over a caller distance matrix; `gmm_em` fits a diagonal Gaussian
+mixture; `neighbor_joining` builds the tree of a distance matrix as joins and branch
+lengths.
+
+### `e.ml.cluster.density`
+
+```neper
+error TooSmall
+error Invalid
+const NOISE: usize = 18446744073709551615usize
+
+fn distance(x: []const f64, d: usize, i: usize, j: usize) -> f64
+fn neighbour_count(x: []const f64, n: usize, d: usize, i: usize, eps: f64) -> usize
+fn dbscan(x: []const f64, n: usize, d: usize, eps: f64, min_points: usize, labels: []usize, scratch: []usize) -> (usize, err)
+fn core_distance(x: []const f64, n: usize, d: usize, i: usize, eps: f64, min_points: usize, work: []f64) -> f64
+fn infinity() -> f64
+fn optics(x: []const f64, n: usize, d: usize, eps: f64, min_points: usize, order: []usize, reachability: []f64, scratch: []f64, work: []f64, marks: []usize) -> err
+```
+
+`dbscan` labels clusters and `NOISE` from `eps` and `min_points` (the point itself
+counted) over a full scan; `optics` answers the processing order and a reachability
+per sample, `1e300` for the unreached.
+
+### `e.ml.knn`
+
+```neper
+error TooSmall
+error Invalid
+
+fn neighbors(x: []const f64, n: usize, d: usize, query: []const f64, k: usize, indices: []usize, distances: []f64) -> err
+fn classify(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usize, query: []const f64, k: usize, scratch: []usize, distances: []f64) -> (usize, err)
+fn regress(x: []const f64, y: []const f64, n: usize, d: usize, query: []const f64, k: usize, indices: []usize, distances: []f64) -> (f64, err)
+```
+
+`neighbors` finds the `k` nearest by a full Euclidean scan into caller storage;
+`classify` takes the majority label (ties to the smallest) and `regress` the mean
+target of those neighbours.
+
+### `e.ml.bayes`
+
+```neper
+error TooSmall
+error Invalid
+
+fn gaussian_fit(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usize, means: []f64, variances: []f64, priors: []f64, scratch: []usize) -> err
+fn gaussian_log_posterior(query: []const f64, d: usize, c: usize, means: []const f64, variances: []const f64, priors: []const f64) -> f64
+fn gaussian_predict(query: []const f64, d: usize, classes: usize, means: []const f64, variances: []const f64, priors: []const f64) -> usize
+fn multinomial_fit(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usize, alpha: f64, log_probability: []f64, log_prior: []f64, scratch: []usize) -> err
+fn multinomial_predict(query: []const f64, d: usize, classes: usize, log_probability: []const f64, log_prior: []const f64) -> usize
+```
+
+`gaussian_fit`/`gaussian_predict` keep a mean and variance per class and feature
+(a floor keeps a constant feature usable); `multinomial_fit`/`multinomial_predict` keep
+Laplace-smoothed feature log probabilities from count features; both predict the
+largest log posterior.
+
+### `e.ml.tree`
+
+```neper
+type Node = struct { feature: usize, threshold: f64, left: u32, right: u32, value: f64 }
+type Tree = struct { nodes: []Node, count: usize, classes: usize }
+type Forest = struct { trees: []Tree, count: usize, classes: usize }
+type Boost = struct { trees: []Tree, count: usize, base: f64, rate: f64 }
+error TooSmall
+error Invalid
+const LEAF: u32 = 4294967295u32
+
+fn impurity(x: []const f64, y: []const f64, rows: []const usize, count: usize, classes: usize, bins: []usize) -> f64
+fn leaf_value(y: []const f64, rows: []const usize, count: usize, classes: usize, bins: []usize) -> f64
+fn partition(x: []const f64, d: usize, rows: []usize, count: usize, feature: usize, threshold: f64) -> usize
+fn best_split(x: []const f64, y: []const f64, d: usize, rows: []usize, count: usize, classes: usize, features: []const usize, feature_count: usize, bins: []usize, order: []usize) -> (usize, f64, f64)
+fn grow(t: *Tree, x: []const f64, y: []const f64, d: usize, rows: []usize, count: usize, depth: usize, max_depth: usize, min_samples: usize, features: []usize, feature_count: usize, subset: usize, r: *rand.Pcg64, bins: []usize, order: []usize) -> (u32, err)
+fn grow_tree(a: *mem.Arena, x: []const f64, y: []const f64, d: usize, rows: []usize, count: usize, classes: usize, max_depth: usize, min_samples: usize, subset: usize, r: *rand.Pcg64) -> (Tree, err)
+fn cart(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, classes: usize, max_depth: usize, min_samples: usize) -> (Tree, err)
+fn predict(t: *const Tree, sample: []const f64) -> f64
+fn random_forest(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, classes: usize, trees: usize, subset: usize, max_depth: usize, min_samples: usize, r: *rand.Pcg64) -> (Forest, err)
+fn forest_predict(f: *const Forest, sample: []const f64, bins: []usize) -> (f64, err)
+fn gradient_boost(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, rounds: usize, rate: f64, max_depth: usize, min_samples: usize, residuals: []f64) -> (Boost, err)
+fn boost_predict(b: *const Boost, sample: []const f64) -> f64
+```
+
+Trees live in the arena as `Node`s (`LEAF` marks a leaf): `cart` grows one by the
+best threshold split (Gini for `classes > 0`, squared error for regression) to
+`max_depth`/`min_samples`; `random_forest` grows bootstrap trees with `subset`
+random features per split and `forest_predict` votes or averages; `gradient_boost`
+fits regression trees to residuals at a learning rate and `boost_predict` sums them.
+
+### `e.ml.svm`
+
+```neper
+type Kind = enum u8 { Linear, Polynomial, Rbf }
+type Kernel = struct { kind: Kind, gamma: f64, degree: f64, offset: f64 }
+type Model = struct { alphas: []f64, bias: f64, kernel: Kernel }
+error TooSmall
+error Invalid
+
+fn kernel(k: Kernel, x: []const f64, d: usize, i: usize, y: []const f64, j: usize) -> f64
+fn decide(m: *const Model, x: []const f64, y: []const f64, n: usize, d: usize, q: []const f64, j: usize) -> f64
+fn smo(x: []const f64, y: []const f64, n: usize, d: usize, k: Kernel, c: f64, tolerance: f64, passes: u32, max_sweeps: u32, r: *rand.Pcg64, alphas: []f64) -> (Model, u32, err)
+```
+
+`kernel` evaluates the linear, polynomial or RBF kernel of two samples; `smo` trains
+the dual on labels `±1` by the simplified sequential minimal optimisation (random
+partner per violating multiplier, box `c`, KKT `tolerance`); `decide` is the kernel
+expansion over the support vectors.
+
+### `e.ml.optim`
+
+```neper
+error TooSmall
+error Invalid
+
+fn sgd(parameters: []f64, gradient: []const f64, rate: f64) -> err
+fn momentum(parameters: []f64, gradient: []const f64, velocity: []f64, rate: f64, beta: f64) -> err
+fn rmsprop(parameters: []f64, gradient: []const f64, cache: []f64, rate: f64, decay: f64, epsilon: f64) -> err
+fn adamw(parameters: []f64, gradient: []const f64, first: []f64, second: []f64, t: u64, rate: f64, beta1: f64, beta2: f64, epsilon: f64, weight_decay: f64) -> err
+fn adam(parameters: []f64, gradient: []const f64, first: []f64, second: []f64, t: u64, rate: f64, beta1: f64, beta2: f64, epsilon: f64) -> err
+fn cosine_schedule(base: f64, minimum: f64, step: u64, period: u64) -> f64
+fn online_gd(parameters: []f64, gradient: []const f64, t: u64, base: f64) -> (f64, err)
+```
+
+One step each over flat parameter and gradient vectors: `sgd`, `momentum`,
+`rmsprop`, `adam`, `adamw` (decoupled weight decay), `online_gd` (`base / sqrt(t)`),
+and `cosine_schedule` with warm restarts; state vectors are the caller's.
+
+### `e.ml.loss`
+
+```neper
+error TooSmall
+error Invalid
+
+fn dot(a: []const f64, b: []const f64, d: usize, i: usize, j: usize) -> f64
+fn log_sum_exp(values: []const f64, n: usize) -> f64
+fn info_nce(anchor: []const f64, candidates: []const f64, count: usize, d: usize, positive: usize, temperature: f64, scratch: []f64) -> (f64, err)
+fn distance_squared(a: []const f64, b: []const f64, d: usize) -> f64
+fn triplet(anchor: []const f64, positive: []const f64, negative: []const f64, d: usize, margin: f64) -> (f64, err)
+fn distillation_kl(teacher: []const f64, student: []const f64, n: usize, temperature: f64, scratch: []f64) -> (f64, err)
+fn log_add(a: f64, b: f64) -> f64
+fn ctc(log_probabilities: []const f64, frames: usize, classes: usize, blank: usize, labels: []const usize, scratch: []f64) -> (f64, err)
+```
+
+`info_nce` (softmax over scaled dot products with one positive), `triplet` (the
+hinge on squared distances), `distillation_kl` (`T² KL(teacher || student)` at a
+temperature) and `ctc` (the forward algorithm in log space over `frames × classes`
+log probabilities and a label sequence).
+
+### `e.ml.sample`
+
+```neper
+error TooSmall
+error Invalid
+
+fn softmax(logits: []const f64, temperature: f64, out: []f64) -> err
+fn rank(probabilities: []const f64, order: []usize)
+fn draw(probabilities: []const f64, order: []const usize, count: usize, r: *rand.Pcg64) -> usize
+fn top_k(logits: []const f64, temperature: f64, k: usize, r: *rand.Pcg64, probabilities: []f64, order: []usize) -> (usize, err)
+fn top_p(logits: []const f64, temperature: f64, p: f64, r: *rand.Pcg64, probabilities: []f64, order: []usize) -> (usize, err)
+fn contrastive(expert: []const f64, amateur: []const f64, alpha: f64, scratch: []f64) -> (usize, err)
+fn beam_search[Ctx: type](ctx: *Ctx, score: fn(*Ctx, []const usize, []f64), n: usize, width: usize, length: usize, out: []usize, tokens: []usize, scores: []f64) -> (f64, err)
+```
+
+`softmax` at a temperature, `top_k` and `top_p` draws through the caller's PCG,
+`contrastive` decoding (expert against amateur above a plausibility floor), and
+`beam_search` over a caller's scoring step keeping the `width` best prefixes.
+
+### `e.ml.nn`
+
+```neper
+type Op = enum u8 { Input, Add, Sub, Mul, Div, Neg, Exp, Log, Tanh, Relu, Sigmoid }
+type Tape = struct { op: []Op, left: []usize, right: []usize, value: []f64, gradient: []f64, count: usize }
+error TooSmall
+error Invalid
+
+fn perceptron_epoch(x: []const f64, y: []const f64, n: usize, d: usize, weights: []f64, rate: f64) -> (usize, err)
+fn perceptron_predict(sample: []const f64, weights: []f64) -> f64
+fn tape(op: []Op, left: []usize, right: []usize, value: []f64, gradient: []f64) -> Tape
+fn record(t: *Tape, op: Op, left: usize, right: usize, value: f64) -> (usize, err)
+fn input(t: *Tape, value: f64) -> (usize, err)
+fn add(t: *Tape, a: usize, b: usize) -> (usize, err)
+fn sub(t: *Tape, a: usize, b: usize) -> (usize, err)
+fn mul(t: *Tape, a: usize, b: usize) -> (usize, err)
+fn div(t: *Tape, a: usize, b: usize) -> (usize, err)
+fn neg(t: *Tape, a: usize) -> (usize, err)
+fn exp(t: *Tape, a: usize) -> (usize, err)
+fn log(t: *Tape, a: usize) -> (usize, err)
+fn tanh(t: *Tape, a: usize) -> (usize, err)
+fn relu(t: *Tape, a: usize) -> (usize, err)
+fn sigmoid(t: *Tape, a: usize) -> (usize, err)
+fn backward(t: *Tape, root: usize) -> err
+fn attention(queries: []const f64, keys: []const f64, values: []const f64, n: usize, m: usize, d: usize, dv: usize, causal: bool, out: []f64, scratch: []f64) -> err
+fn matmul(x: []const f64, w: []const f64, n: usize, d: usize, e: usize, out: []f64)
+fn multi_head_attention(x: []const f64, n: usize, d: usize, heads: usize, wq: []const f64, wk: []const f64, wv: []const f64, wo: []const f64, causal: bool, out: []f64, scratch: []f64) -> err
+fn rope(x: []f64, p: u64, base: f64) -> err
+```
+
+`perceptron_epoch`/`perceptron_predict` are the perceptron rule; a `Tape` over caller
+arrays records scalar operations (`input`, `add`, `sub`, `mul`, `div`, `neg`, `exp`,
+`log`, `tanh`, `relu`, `sigmoid`) and `backward` fills every gradient in reverse;
+`attention` is scaled dot-product attention (optionally causal), `multi_head_attention`
+projects with caller `d × d` matrices and attends per head, `rope` rotates pairs of a
+vector by their position.
+
+### `e.ml.hmm`
+
+```neper
+error TooSmall
+error Invalid
+
+fn forward(start: []const f64, transition: []const f64, emission: []const f64, s: usize, k: usize, observed: []const usize, scratch: []f64) -> (f64, err)
+fn viterbi(start: []const f64, transition: []const f64, emission: []const f64, s: usize, k: usize, observed: []const usize, path: []usize, scratch: []f64, back: []usize) -> (f64, err)
+fn baum_welch(start: []f64, transition: []f64, emission: []f64, s: usize, k: usize, observed: []const usize, scratch: []f64) -> (f64, err)
+```
+
+Discrete-emission models as row-major probabilities: `forward` (scaled log
+likelihood), `viterbi` (the most probable path and its log probability) and
+`baum_welch` (one re-estimation pass in place, answering the likelihood before it).
+
+### `e.ml.rl`
+
+```neper
+error TooSmall
+error Invalid
+
+fn greedy(q: []const f64, actions: usize, state: usize) -> usize
+fn epsilon_greedy(q: []const f64, actions: usize, state: usize, epsilon: f64, r: *rand.Pcg64) -> usize
+fn q_learning(q: []f64, actions: usize, state: usize, action: usize, reward: f64, next: usize, terminal: bool, rate: f64, gamma: f64) -> (f64, err)
+fn sarsa(q: []f64, actions: usize, state: usize, action: usize, reward: f64, next: usize, next_action: usize, terminal: bool, rate: f64, gamma: f64) -> (f64, err)
+```
+
+Tabular action values (`states × actions`): `q_learning` and `sarsa` apply one
+temporal-difference update, `epsilon_greedy` and `greedy` choose actions.
+
+### `e.ml.reduce`
+
+```neper
+error TooSmall
+error Invalid
+
+fn symmetric_eigen(a: []f64, d: usize, values: []f64, vectors: []f64, tolerance: f64, sweeps: u32) -> err
+fn pca(x: []const f64, n: usize, d: usize, mean: []f64, variances: []f64, components: []f64, scratch: []f64) -> err
+fn pca_project(sample: []const f64, mean: []const f64, components: []const f64, d: usize, k: usize, out: []f64) -> err
+fn pca_online(w: []f64, sample: []const f64, rate: f64) -> (f64, err)
+fn frequent_directions_insert(sketch: []f64, rows: usize, d: usize, filled: *usize, sample: []const f64, scratch: []f64) -> err
+fn tsne(x: []const f64, n: usize, d: usize, perplexity: f64, iterations: u32, rate: f64, momentum: f64, y: []f64, scratch: []f64) -> err
+```
+
+`symmetric_eigen` (cyclic Jacobi) serves `pca` (mean, falling variances, components
+by row) and `pca_project`; `pca_online` is Oja's rule; `frequent_directions_insert`
+maintains the deterministic sketch; `tsne` is exact t-SNE with a perplexity search
+and momentum gradient descent into two dimensions.
+
+### `e.ml.ann`
+
+```neper
+type Graph = struct { first: []u32, count: []u32, neighbours: []u32, m: usize, n: usize }
+type IvfPq = struct { coarse: []f64, codebooks: []f64, codes: []u8, cell_start: []usize, cell_items: []u32, cells: usize, subspaces: usize, codebook_size: usize, d: usize, n: usize }
+error TooSmall
+error Invalid
+
+fn minhash(set: []const u64, seed: u64, signature: []u64) -> err
+fn jaccard_estimate(a: []const u64, b: []const u64) -> f64
+fn lsh_match(a: []const u64, b: []const u64, bands: usize, rows: usize) -> bool
+fn distance_squared(x: []const f64, d: usize, i: usize, q: []const f64, j: usize) -> f64
+fn beam_insert(ids: []u32, dists: []f64, count: usize, cap: usize, candidate: u32, dist: f64) -> usize
+fn graph_build(a: *mem.Arena, x: []const f64, n: usize, d: usize, m: usize, ef: usize, scratch: []f64, visited: []u32) -> (Graph, err)
+fn graph_search(g: *const Graph, x: []const f64, d: usize, query: []const f64, k: usize, ef: usize, ids: []f64, dists: []f64, scratch: []f64, visited: []u32) -> (usize, err)
+fn float_beam_insert(ids: []f64, dists: []f64, count: usize, cap: usize, candidate: usize, dist: f64) -> usize
+fn ivf_pq_train(a: *mem.Arena, x: []const f64, n: usize, d: usize, cells: usize, subspaces: usize, codebook_size: usize, r: *rand.Pcg64, scratch: []f64, labels: []usize, marks: []usize) -> (IvfPq, err)
+fn ivf_pq_search(index: *const IvfPq, query: []const f64, probes: usize, k: usize, ids: []u32, dists: []f64, scratch: []f64) -> (usize, err)
+```
+
+`minhash`/`jaccard_estimate`/`lsh_match` estimate and band set similarity;
+`graph_build`/`graph_search` are a navigable small-world graph (the base layer of
+HNSW) in the arena; `ivf_pq_train`/`ivf_pq_search` build an inverted file over k-means
+cells with product-quantised residuals and search by asymmetric distance.
 
 ### `e.math.fixed`
 

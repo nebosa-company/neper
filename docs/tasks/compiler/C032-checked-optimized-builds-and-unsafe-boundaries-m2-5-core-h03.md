@@ -86,7 +86,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `@nocheck`: `src/tool.e`×4‡, `src/nir.e`×3†, `tests/conformance/tools/manifest_unsafe/src/main.e`×3, `src/main.e`×2‡, `src/em.e`×1‡, `src/lower.e`×1‡, `src/stats.e`×1, `tests/conformance/parse/every_kind.e`×1
 - `unchecked`: `src/em.e`×36‡, `src/main.e`×27‡, `src/check.e`×23‡, `src/tool.e`×11‡, `src/codegen_x64.e`×1‡, `src/lower.e`×1‡, `tests/conformance/reject/safety_unchecked.expected.jsonl`×1
 - `@unsafe`: `src/tool.e`×6‡, `lib/e/os.linux.e`×2‡, `lib/e/os.windows.e`×2‡, `src/check.e`×2‡, `tests/conformance/tools/manifest_unsafe/src/main.e`×2, `lib/e/proc.e`×1, `src/main.e`×1‡, `tests/conformance/reject/safety_opaque.expected.jsonl`×1
-- `mem.bitcast`: `lib/e/math.e`×26†, `lib/e/str.e`×16†, `lib/e/math/float.e`×12, `lib/e/gfx/scene.e`×7†, `lib/e/os.windows.e`×7‡, `lib/e/audio.e`×6, `lib/e/fmt/bson.e`×6, `src/check.e`×5‡
+- `mem.bitcast`: `lib/e/math.e`×26†, `lib/e/str.e`×16†, `lib/e/math/float.e`×12, `lib/e/fmt/cbor.e`×8, `lib/e/gfx/scene.e`×7†, `lib/e/os.windows.e`×7‡, `lib/e/audio.e`×6, `lib/e/fmt/bson.e`×6
 - `mem.cast`: `lib/e/ui/control.e`×44‡, `lib/e/ui/collection.e`×42†, `lib/e/io.e`×34, `lib/e/task.e`×23, `lib/e/os.windows.e`×22‡, `lib/e/net/http.e`×19†, `lib/e/ui/widget.e`×19‡, `lib/e/data/tree.e`×14
 
 ## Verification

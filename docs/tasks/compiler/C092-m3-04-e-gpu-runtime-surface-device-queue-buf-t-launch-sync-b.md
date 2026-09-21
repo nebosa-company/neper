@@ -44,9 +44,9 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `wait_for`: `lib/e/task.e`×4, `lib/e/sync.e`×3, `lib/e/concurrent/queue.e`×2, `lib/e/os.windows.e`×2‡, `lib/e/gpu.e`×1
 - `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1, `src/lower.e`×1‡
 - `FaultRecord`: `lib/e/gpu.e`×4
-- `Fault`: `lib/e/gpu.e`×12, `src/main.e`×3‡, `src/lower.e`×1‡
+- `Fault`: `lib/e/gpu.e`×12, `src/main.e`×3‡, `lib/e/resilience.e`×1, `src/lower.e`×1‡
 - `last_fault`: `lib/e/gpu.e`×3
-- `Image`: `lib/e/gfx/image.e`×10, `lib/e/gfx/scene.e`×10†, `lib/e/gpu.e`×9, `lib/e/ui/widget.e`×9‡, `scripts/build-docs-pdf.py`×7, `lib/e/fmt/png.e`×6, `lib/e/fmt/webp.e`×5†, `lib/e/ui/accessibility.e`×4
+- `Image`: `lib/e/gfx/image.e`×10, `lib/e/gfx/scene.e`×10†, `lib/e/gpu.e`×9, `lib/e/ui/widget.e`×9‡, `scripts/build-docs-pdf.py`×7, `lib/e/fmt/png.e`×6, `lib/e/fmt/webp.e`×5†, `lib/e/fmt/markdown.e`×4
 - `open_target`: `lib/e/ui/window.e`×2, `lib/e/gpu.e`×1, `lib/e/ui/testing.e`×1
 - `presented`: `lib/e/gpu.e`×4, `lib/e/ui/testing.e`×2, `lib/e/ui/window.e`×2, `lib/e/gfx/scene.e`×1†, `lib/e/os.linux.e`×1‡, `lib/e/os.windows.e`×1‡, `lib/e/ui/app.e`×1, `src/check.e`×1‡
 - `resize`: `lib/e/ui/collection.e`×18†, `lib/e/ui/window.e`×2, `lib/e/gpu.e`×1, `lib/e/os.linux.e`×1‡, `lib/e/ui/app.e`×1, `lib/e/ui/navigation.e`×1†
