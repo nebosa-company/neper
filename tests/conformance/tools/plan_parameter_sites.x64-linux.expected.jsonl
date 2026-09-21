@@ -3,4 +3,4 @@
 {"record":"edit","op":"add-parameter-and-migrate","symbol":"contract.total","site":"declaration","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":492,"byte_end":492,"line":18,"column":27,"end_line":18,"end_column":27,"column_utf16":27,"end_column_utf16":27},"replacement":", scale: i64"}
 {"record":"edit","op":"add-parameter-and-migrate","symbol":"contract.total","site":"use","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":834,"byte_end":834,"line":28,"column":31,"end_line":28,"end_column":31,"column_utf16":31,"end_column_utf16":31},"replacement":", 2i64"}
 {"record":"postcondition","check":"check-file passes; context-file --symbol contract.total reports the signature with `scale: i64` last, and uses-file --symbol contract.total reports uses at 1 sites"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":2,"files":1,"complete":true,"snapshot":"071c79c80d74619a"}}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":2,"files":1,"complete":true,"snapshot":"ac3e15fd031932e8"}}
