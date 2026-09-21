@@ -16,7 +16,7 @@
 
 ## Code anchors
 
-- `.text`: `src/check.e`×118‡, `src/tool.e`×51‡, `src/main.e`×41‡, `src/lower.e`×39‡, `lib/e/text/io.e`×28, `src/em.e`×15‡, `lib/e/ui/input.e`×14, `src/graph.e`×13†
+- `.text`: `src/check.e`×118‡, `src/tool.e`×51‡, `src/main.e`×41‡, `src/lower.e`×39‡, `lib/e/text/io.e`×28, `src/em.e`×15‡, `lib/e/ui/input.e`×14, `lib/e/ui/widget.e`×14†
 - `.idata`: `src/link_pe.e`×2
 - `project.yaml`: `src/main.e`×5‡, `src/assets.e`×4, `lib/e/asset.e`×1
 - `CURSOR`: `src/main.e`×1‡

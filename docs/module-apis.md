@@ -3291,7 +3291,8 @@ type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
 type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
 type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
 type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope }
+type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -3315,6 +3316,7 @@ fn image(key: Key, value: Image, value_style: style.Style) -> Node
 fn scroll(key: Key, value: Scroll, value_style: style.Style, children: []const Node) -> Node
 fn region(key: Key, value: Region, value_style: style.Style, children: []const Node) -> Node
 fn scope(key: Key, value: Scope, value_style: style.Style, children: []const Node) -> Node
+fn edit(key: Key, value: Edit, value_style: style.Style) -> Node
 fn fire_change[T: type](c: Change[T], value: T) -> err
 fn fire_submit(a: Submit) -> err
 fn fire_gesture(a: GestureAction, g: Gesture) -> err
@@ -3324,6 +3326,8 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
 fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err
 fn focused(widget_runtime: *const Runtime) -> (ElementId, bool)
+fn edit_value(widget_runtime: *const Runtime, element: ElementId) -> (str, bool)
+fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize, usize, bool)
 fn close(widget_runtime: *Runtime) -> err
 fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool)
 fn renderer_of(widget_runtime: *Runtime) -> *scene.Renderer
@@ -3359,6 +3363,19 @@ leaves the last. A `Scope` bounds Tab and Shift+Tab to its focusable descendants
 when it traps focus, holds up to eight shortcuts, and answers Enter with its
 default action and Escape with its cancel action; a key down walks the scopes from
 the focused element upward and the first that takes it wins.
+
+Editable text (D807, widget plan P0-04): an `Edit` node edits the caller's buffer
+in place and reports each new value through `change`; a `len` the caller changes
+between frames replaces the value, one it leaves alone keeps the runtime's edits. A
+press places the caret by hit test and a drag selects; Left, Right, Home and End
+move (Shift extends), Up and Down move between a multiline editor's lines, Backspace
+and Delete erase, Enter fires `submit` in a single line and breaks a multiline one;
+Control with A, C, X, V, Z and Y (or Shift+Z) select all, copy, cut, paste, undo and
+redo, over the host clipboard with a runtime fallback and a bounded history that
+coalesces typed runs; a composition shows at the caret with an underline until its
+text commits it. A value that would not fit its buffer is left as it is. Key codes
+are Windows virtual codes; the X keysyms the editor and the scopes read map onto
+them.
 
 ### `e.ui.animation`
 

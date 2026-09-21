@@ -1700,6 +1700,13 @@ $uiGestureWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiGestureWritten -ne 'executable written') { throw 'ui_gesture emission failed' }
 $uiGestureOutput = & $uiGesturePath
 if ($LASTEXITCODE -ne 0 -or $uiGestureOutput -ne 'ui gesture ok') { throw "the gesture arena answered wrongly: exit $LASTEXITCODE" }
+# Editable text (D807, widget plan P0-04): caret and selection by hit test, typed
+# text, clipboard, undo and redo, a multiline editor and a composition.
+$uiEditPath = Join-Path $testBuild 'ui-edit-selfhost.exe'
+$uiEditWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_edit\src\main.e') $repo 'x64' 'windows' $uiEditPath
+if ($LASTEXITCODE -ne 0 -or $uiEditWritten -ne 'executable written') { throw 'ui_edit emission failed' }
+$uiEditOutput = & $uiEditPath
+if ($LASTEXITCODE -ne 0 -or $uiEditOutput -ne 'ui edit ok') { throw "the editable text answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

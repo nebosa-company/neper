@@ -15470,3 +15470,32 @@ action sees the event as before. `focused` answers the focused element
 for a harness. The slop is a function, not a constant: a float module
 constant fails type checking silently (a compiler defect recorded for a
 later fix). `link/ui_gesture` checks every rule on both hosts.
+
+## D807 — Editable text in `e.ui.widget`: a caller-owned buffer edited in place
+
+P0-04 of the widget plan. An `Edit` node names the caller's buffer and how
+many bytes of it are the value; the runtime edits the buffer in place and
+reports every new value through a `Change[str]`. Ownership of the length
+follows a rule rather than a mode: the node's `len` is taken when the caller
+changed it since the last frame (or handed over another buffer), and is
+otherwise left to the runtime, so a program that echoes the value back
+each frame and one that never listens both keep what was typed. The caret
+and the selection anchor live in the element; a press places the caret by
+`e.text.layout`'s hit test on the value laid out in a 64 KB scratch region
+of the runtime, a drag extends the selection, and Left, Right, Home, End,
+Up and Down move it with Shift extending. Typed text (a `Text` event that
+is not a control character) replaces the selection; Backspace and Delete
+erase a character or the selection; Enter fires `submit` in a single line
+and inserts a newline in a multiline editor. Copy, cut and paste go through
+the host clipboard, and through a 256-byte fallback in the runtime when the
+host has none or refused the copy, which is what the X11 backend and the
+Windows sandbox answer. Undo and redo are one history per runtime: thirty-
+two entries of what an edit removed and inserted, in a 1 KB pool that is
+forgotten when full and never compacted, a typed byte coalescing onto the
+last typed run, an edit dropping the redo tail. A composition is kept for
+the focused editor and painted at the caret with an underline until a
+`Text` event commits it. A value that would not fit its buffer is left
+untouched and unreported. An empty editor measures one line tall and
+paints its caret alone. Key codes are Windows virtual codes throughout the
+widget runtime now: the X keysyms the editor and D806's scopes read map
+onto them in one place. `link/ui_edit` runs every rule on both hosts.

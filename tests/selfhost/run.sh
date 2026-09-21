@@ -1636,6 +1636,13 @@ ui_gesture_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-gesture-selfhost"
 ui_gesture_output=$("$test_build/ui-gesture-selfhost")
 [ "$ui_gesture_output" = 'ui gesture ok' ]
+# Editable text (D807, widget plan P0-04): caret and selection by hit test, typed
+# text, clipboard, undo and redo, a multiline editor and a composition.
+ui_edit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_edit/src/main.e" "$repo" x64 linux "$test_build/ui-edit-selfhost")
+[ "$ui_edit_written" = 'executable written' ]
+chmod +x "$test_build/ui-edit-selfhost"
+ui_edit_output=$("$test_build/ui-edit-selfhost")
+[ "$ui_edit_output" = 'ui edit ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

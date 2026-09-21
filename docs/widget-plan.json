@@ -74,8 +74,10 @@
           "components": [
             "EditableText"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "EditableText"
+          ],
+          "evidence": "lib/e/ui/widget.e (D807): Edit node over a caller-owned buffer with caret, anchor selection, hit-test placement and drag selection, typed text and IME composition, Backspace/Delete/Home/End/arrows, single-line submit and multiline breaks, clipboard copy/cut/paste with a runtime fallback, a 32-entry coalescing undo/redo history, and edit_value/edit_selection for harnesses; tests/selfhost/fixtures/link/ui_edit on both hosts"
         },
         {
           "id": "P0-05",

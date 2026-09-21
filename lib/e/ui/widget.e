@@ -20,6 +20,7 @@
 
 use e.gpu
 use e.mem
+use e.os
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -55,7 +56,14 @@ type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
 // (and, trapping, never leave it); a key down that matches one of its shortcuts
 // fires it; Enter fires the default action and Escape the cancel one.
 type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope }
+// An editable text (D807, widget plan P0-04): the caller owns `buffer` and `len`
+// bytes of it are the value; the runtime edits in place -- caret, selection, typed
+// text, IME composition, clipboard, undo -- and reports every change as the new
+// value through `change`; Enter in a single-line editor fires `submit`. A `len`
+// the caller changes between frames replaces the value; one it leaves alone keeps
+// the runtime's edits.
+type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -73,6 +81,12 @@ const MAX_TEXT: usize = 64usize
 const SCROLL_TAG: u8 = 7u8
 const REGION_TAG: u8 = 9u8
 const SCOPE_TAG: u8 = 10u8
+const EDIT_TAG: u8 = 11u8
+const MAX_HISTORY: usize = 32usize
+const HISTORY_BYTES: usize = 1024usize
+const MAX_COMPOSE: usize = 64usize
+const MAX_CLIP: usize = 256usize
+const EDIT_SCRATCH: usize = 65536usize
 const MAX_SHORTCUTS: usize = 8usize
 const GESTURE_TAP: u8 = 1u8
 const GESTURE_DRAG: u8 = 2u8
@@ -113,7 +127,23 @@ type Element = struct {
     shortcut_count: usize,
     default_action: Submit,
     cancel_action: Submit,
+    // An editor's buffer and value length, caret and selection anchor (the selection
+    // is between them), text style and actions, and where its text was last placed.
+    edit_buffer: []u8,
+    edit_len: usize,
+    node_len: usize,
+    caret: usize,
+    anchor: usize,
+    edit_style: layout.Style,
+    edit_change: Change[str],
+    edit_submit: Submit,
+    read_only: bool,
+    multiline: bool,
+    text_origin: geometry.Point,
+    text_width: f32,
 }
+// One undoable edit: the bytes it removed and inserted at `at`, in the history pool.
+type Undo = struct { element: u32, at: usize, removed_off: usize, removed_len: usize, inserted_off: usize, inserted_len: usize }
 // The gesture arena: one pointer, the region it went down on, where, whether it has
 // become a drag, and the region hovered last.
 type Arena = struct { pressed: bool, candidate: u32, down: geometry.Point, last: geometry.Point, dragging: bool, hovered: u32, has_hovered: bool }
@@ -134,6 +164,20 @@ type State = struct {
     has_scene: bool,
     closed: bool,
     arena_state: Arena,
+    // Editing: a scratch region for hit-test layouts, the composition (preedit) of
+    // the focused editor, the fallback clipboard for a host without one, and the
+    // undo history -- entries and their byte pool -- with the redo point.
+    scratch: []u8,
+    compose: [64]u8,
+    compose_len: usize,
+    clip: [256]u8,
+    clip_len: usize,
+    clip_hosted: bool,
+    history: [32]Undo,
+    history_count: usize,
+    history_at: usize,
+    history_bytes: [1024]u8,
+    history_used: usize,
 }
 
 // ---------------------------------------------------------------- constructors
@@ -180,6 +224,11 @@ fn region(key: Key, value: Region, value_style: style.Style, children: []const N
 
 fn scope(key: Key, value: Scope, value_style: style.Style, children: []const Node) -> Node {
     ret Node { key: key, kind: Kind { Scope: value }, style: value_style, children: children }
+}
+
+fn edit(key: Key, value: Edit, value_style: style.Style) -> Node {
+    var none: []const Node = zero
+    ret Node { key: key, kind: Kind { Edit: value }, style: value_style, children: none }
 }
 
 // Whether a function value is set: its bits are not zero, read through a pun.
@@ -234,6 +283,8 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
     if cells_error != ok { ret (zero, TooLarge) }
     let (storage, storage_error) = mem.alloc[u8](a, limits.state_bytes + 16usize)
     if storage_error != ok { ret (zero, TooLarge) }
+    let (scratch, scratch_error) = mem.alloc[u8](a, EDIT_SCRATCH)
+    if scratch_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < elements.len {
         var empty: Element = zero
@@ -253,6 +304,7 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
     s.elements = elements
     s.cells = cells
     s.storage = storage
+    s.scratch = scratch
     states[0usize] = s
     ret (Runtime { state: mem.cast[*void](&states[0usize]) }, ok)
 }
@@ -294,6 +346,8 @@ fn kind_tag(kind: Kind) -> u8 {
         ret REGION_TAG
     case .Scope as sc:
         ret SCOPE_TAG
+    case .Edit as ed:
+        ret EDIT_TAG
     }
     ret 0u8
 }
@@ -510,6 +564,24 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.shortcut_count = sc.shortcuts.len
         e.default_action = sc.default_action
         e.cancel_action = sc.cancel_action
+    case .Edit as ed:
+        // The node's length is taken when the caller changed it since the last
+        // frame (or the buffer is another); else the runtime's edits stand, so a
+        // caller that does not echo the value back keeps what was typed.
+        if ed.len != e.node_len || ed.buffer.len != e.edit_buffer.len { e.edit_len = ed.len }
+        e.node_len = ed.len
+        e.edit_buffer = ed.buffer
+        if e.edit_len > ed.buffer.len { e.edit_len = ed.buffer.len }
+        if e.caret > e.edit_len { e.caret = e.edit_len }
+        if e.anchor > e.edit_len { e.anchor = e.edit_len }
+        e.edit_style = ed.style
+        e.edit_change = ed.change
+        e.edit_submit = ed.submit
+        e.enabled = ed.enabled
+        e.read_only = ed.read_only
+        e.multiline = ed.multiline
+        e.focusable = ed.enabled
+        e.gestures = GESTURE_TAP | GESTURE_DRAG
     }
     // Duplicate nonzero keys among siblings are refused.
     var i = 0usize
@@ -653,6 +725,13 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         ret (geometry.Size { width: laid.bounds.width, height: laid.bounds.height }, ok)
     case .Custom as c:
         ret (c.measure(c.ctx, inner), ok)
+    case .Edit as ed:
+        if ed.style.fonts.len == 0usize { ret (geometry.Size { width: 0.0, height: 0.0 }, ok) }
+        // An empty value stands one line tall.
+        if ed.len == 0usize { ret (geometry.Size { width: 0.0, height: ed.style.line_height }, ok) }
+        let (laid, layout_error) = layout.layout(a, ed.buffer[0usize..ed.len], ed.style, edit_options(inner.max_width, ed.multiline))
+        if layout_error != ok { ret (zero, InvalidTree) }
+        ret (geometry.Size { width: laid.bounds.width, height: laid.bounds.height }, ok)
     case .Image as im:
         ret (geometry.Size { width: 0.0, height: 0.0 }, ok)
     case .Flex as f:
@@ -779,6 +858,8 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try scene.push(b, scene.Command { Image: scene.DrawImage { texture: im.texture, source: geometry.Rect { x: 0.0, y: 0.0, width: 1.0, height: 1.0 }, destination: inner, opacity: 1.0 } })
     case .Custom as c:
         try c.paint(c.ctx, b, inner)
+    case .Edit as ed:
+        try place_edit(s, a, element, ed, inner, b)
     case .Flex as f:
         try place_flex(s, a, node, element, f, inner, inner_limits, b, depth)
     case .Box:
@@ -805,6 +886,91 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try scene.push(b, restore)
     }
     ret finish_place(b, clipped, layered)
+}
+
+fn edit_options(width: f32, multiline: bool) -> layout.Options {
+    var wrap: layout.Wrap = .None
+    if multiline { wrap = .Word }
+    ret layout.Options { width: width, max_lines: 0u32, align: .Start, wrap: wrap, ellipsis: "" }
+}
+
+// The text an editor shows: its value, with the composition at the caret when it is
+// the focused one.
+fn edit_display(s: *State, a: *mem.Arena, e: *const Element, composing: bool) -> (str, err) {
+    let value: str = e.edit_buffer[0usize..e.edit_len]
+    if !composing || s.compose_len == 0usize { ret (value, ok) }
+    let (d, d_error) = mem.alloc[u8](a, e.edit_len + s.compose_len)
+    if d_error != ok { ret ("", TooLarge) }
+    var i = 0usize
+    while i < e.caret {
+        d[i] = value[i]
+        i += 1usize
+    }
+    var k = 0usize
+    while k < s.compose_len {
+        d[e.caret + k] = s.compose[k]
+        k += 1usize
+    }
+    while i < e.edit_len {
+        d[i + s.compose_len] = value[i]
+        i += 1usize
+    }
+    ret (d[..], ok)
+}
+
+fn push_rect(b: *scene.Builder, r: geometry.Rect, origin: geometry.Point, color: paint.Color) -> err {
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.Rect { x: origin.x + r.x, y: origin.y + r.y, width: r.width, height: r.height }, brush: paint.Brush { Solid: color } } })
+}
+
+// An editor paints its selection under the text, then the text, then -- focused --
+// an underline beneath the composition and a one-pixel caret.
+fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometry.Rect, b: *scene.Builder) -> err {
+    let e = &s.elements[element]
+    let origin = geometry.Point { x: inner.x, y: inner.y }
+    e.text_origin = origin
+    e.text_width = inner.width
+    if ed.style.fonts.len == 0usize { ret ok }
+    let focused_here = s.has_focus && usize(s.focus) == element
+    let (shown, shown_error) = edit_display(s, a, e, focused_here)
+    if shown_error != ok { ret shown_error }
+    if shown.len == 0usize {
+        // Nothing to lay out: the caret alone, one line tall.
+        if focused_here { try push_rect(b, geometry.Rect { x: 0.0, y: 0.0, width: 1.0, height: ed.style.line_height }, origin, ed.color) }
+        ret ok
+    }
+    let (laid, layout_error) = layout.layout(a, shown, ed.style, edit_options(inner.width, ed.multiline))
+    if layout_error != ok { ret InvalidTree }
+    let (copies, copies_error) = mem.alloc[layout.Layout](a, 1usize)
+    if copies_error != ok { ret TooLarge }
+    copies[0usize] = laid
+    if focused_here {
+        let (lo, hi) = selection_of(e)
+        if lo < hi {
+            let (rects, rects_error) = layout.selection(a, &copies[0usize], lo, hi)
+            if rects_error != ok { ret InvalidTree }
+            var i = 0usize
+            while i < rects.len {
+                try push_rect(b, rects[i], origin, ed.selection)
+                i += 1usize
+            }
+        }
+    }
+    try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: origin, brush: paint.Brush { Solid: ed.color } } })
+    if focused_here {
+        if s.compose_len != 0usize {
+            let (under, under_error) = layout.selection(a, &copies[0usize], e.caret, e.caret + s.compose_len)
+            if under_error != ok { ret InvalidTree }
+            var k = 0usize
+            while k < under.len {
+                let r = under[k]
+                try push_rect(b, geometry.Rect { x: r.x, y: r.y + r.height - 1.0, width: r.width, height: 1.0 }, origin, ed.color)
+                k += 1usize
+            }
+        }
+        let c = layout.caret(&copies[0usize], e.caret + s.compose_len)
+        try push_rect(b, geometry.Rect { x: c.x, y: c.y, width: 1.0, height: c.height }, origin, ed.color)
+    }
+    ret ok
 }
 
 // The Restores that close what `place` opened.
@@ -978,7 +1144,7 @@ fn hit_region(s: *State, index: usize, p: geometry.Point, wanted: u8) -> (usize,
         let (found, has_found) = hit_region(s, usize(order[count]), p, wanted)
         if has_found { ret (found, true) }
     }
-    if e.kind == REGION_TAG && e.enabled && (e.gestures & wanted) != 0u8 { ret (index, true) }
+    if (e.kind == REGION_TAG || e.kind == EDIT_TAG) && e.enabled && (e.gestures & wanted) != 0u8 { ret (index, true) }
     ret (0usize, false)
 }
 
@@ -1008,7 +1174,7 @@ fn scope_of(s: *State, index: usize) -> (usize, bool) {
 
 fn focusable(e: *const Element) -> bool {
     if !e.live || !e.enabled { ret false }
-    if e.kind == REGION_TAG { ret e.focusable }
+    if e.kind == REGION_TAG || e.kind == EDIT_TAG { ret e.focusable }
     ret e.has_action
 }
 
@@ -1065,6 +1231,353 @@ fn move_focus(s: *State, backward: bool) {
     s.has_focus = true
 }
 
+// ---------------------------------------------------------------------- editing
+
+// The host's key as a Windows virtual code: an X keysym for the keys the editor
+// and the scopes read maps onto it, a Latin letter onto its upper case.
+fn key_code(physical: u32) -> u32 {
+    if physical >= 97u32 && physical <= 122u32 { ret physical - 32u32 }
+    if physical == 65361u32 { ret 37u32 }
+    if physical == 65362u32 { ret 38u32 }
+    if physical == 65363u32 { ret 39u32 }
+    if physical == 65364u32 { ret 40u32 }
+    if physical == 65360u32 { ret 36u32 }
+    if physical == 65367u32 { ret 35u32 }
+    if physical == 65288u32 { ret 8u32 }
+    if physical == 65535u32 { ret 46u32 }
+    if physical == 65293u32 || physical == 65421u32 { ret 13u32 }
+    if physical == 65307u32 { ret 27u32 }
+    if physical == 65289u32 { ret 9u32 }
+    ret physical
+}
+
+fn selection_of(e: *const Element) -> (usize, usize) {
+    if e.anchor <= e.caret { ret (e.anchor, e.caret) }
+    ret (e.caret, e.anchor)
+}
+
+fn prev_char(e: *const Element, at: usize) -> usize {
+    var i = at
+    if i == 0usize { ret 0usize }
+    i -= 1usize
+    while i > 0usize && (u32(e.edit_buffer[i]) & 192u32) == 128u32 { i -= 1usize }
+    ret i
+}
+
+fn next_char(e: *const Element, at: usize) -> usize {
+    var i = at
+    if i >= e.edit_len { ret e.edit_len }
+    i += 1usize
+    while i < e.edit_len && (u32(e.edit_buffer[i]) & 192u32) == 128u32 { i += 1usize }
+    ret i
+}
+
+fn line_start(e: *const Element, at: usize) -> usize {
+    var i = at
+    while i > 0usize && e.edit_buffer[i - 1usize] != 10u8 { i -= 1usize }
+    ret i
+}
+
+fn line_end(e: *const Element, at: usize) -> usize {
+    var i = at
+    while i < e.edit_len && e.edit_buffer[i] != 10u8 { i += 1usize }
+    ret i
+}
+
+// The editor's value laid out in the scratch region, for a hit test or a caret.
+fn edit_layout(s: *State, e: *const Element) -> (layout.Layout, err) {
+    if e.edit_style.fonts.len == 0usize || e.edit_len == 0usize { ret (zero, InvalidTree) }
+    var scratch = mem.arena_from(s.scratch)
+    let (laid, layout_error) = layout.layout(&scratch, e.edit_buffer[0usize..e.edit_len], e.edit_style, edit_options(e.text_width, e.multiline))
+    if layout_error != ok { ret (zero, InvalidTree) }
+    ret (laid, ok)
+}
+
+fn edit_hit(s: *State, element: usize, p: geometry.Point) -> usize {
+    let e = &s.elements[element]
+    let (laid, laid_error) = edit_layout(s, e)
+    if laid_error != ok { ret 0usize }
+    ret layout.hit_test(&laid, geometry.Point { x: p.x - e.text_origin.x, y: p.y - e.text_origin.y })
+}
+
+// The caret one line up or down, by its x in the layout; the ends past the first
+// and last lines.
+fn edit_vertical(s: *State, element: usize, down: bool) -> usize {
+    let e = &s.elements[element]
+    let (laid, laid_error) = edit_layout(s, e)
+    if laid_error != ok { ret e.caret }
+    let line = layout.line_of_offset(&laid, e.caret)
+    if line >= laid.lines.len { ret e.caret }
+    if down && line + 1usize >= laid.lines.len { ret e.edit_len }
+    if !down && line == 0usize { ret 0usize }
+    let c = layout.caret(&laid, e.caret)
+    var y = c.y - 1.0
+    if down { y = c.y + c.height + 1.0 }
+    ret layout.hit_test(&laid, geometry.Point { x: c.x, y: y })
+}
+
+// The history: an edit is remembered as what it removed and inserted, a typed byte
+// onto the last typed run; an edit drops the redo tail.
+// ponytail: the byte pool is never compacted; when it is full the history is forgotten.
+fn history_push(s: *State, element: usize, at: usize, removed: []const u8, inserted: []const u8) {
+    s.history_count = s.history_at
+    if s.history_count > 0usize && removed.len == 0usize && inserted.len == 1usize {
+        let last = &s.history[s.history_count - 1usize]
+        if usize(last.element) == element && last.removed_len == 0usize && last.at + last.inserted_len == at && last.inserted_off + last.inserted_len == s.history_used && s.history_used < HISTORY_BYTES {
+            s.history_bytes[s.history_used] = inserted[0usize]
+            s.history_used += 1usize
+            last.inserted_len += 1usize
+            ret
+        }
+    }
+    if s.history_used + removed.len + inserted.len > HISTORY_BYTES {
+        s.history_used = 0usize
+        s.history_count = 0usize
+        s.history_at = 0usize
+        if removed.len + inserted.len > HISTORY_BYTES { ret }
+    }
+    if s.history_count == MAX_HISTORY {
+        var i = 1usize
+        while i < MAX_HISTORY {
+            s.history[i - 1usize] = s.history[i]
+            i += 1usize
+        }
+        s.history_count -= 1usize
+    }
+    var entry = Undo { element: u32(element), at: at, removed_off: s.history_used, removed_len: removed.len, inserted_off: s.history_used + removed.len, inserted_len: inserted.len }
+    var k = 0usize
+    while k < removed.len {
+        s.history_bytes[s.history_used + k] = removed[k]
+        k += 1usize
+    }
+    k = 0usize
+    while k < inserted.len {
+        s.history_bytes[entry.inserted_off + k] = inserted[k]
+        k += 1usize
+    }
+    s.history_used += removed.len + inserted.len
+    s.history[s.history_count] = entry
+    s.history_count += 1usize
+    s.history_at = s.history_count
+}
+
+// The one edit: `start..end` of the value becomes `inserted`, the caret after it, the
+// change reported. A value that would not fit its buffer is left as it is.
+fn edit_replace(s: *State, element: usize, start: usize, end: usize, inserted: []const u8, remember: bool) -> err {
+    let e = &s.elements[element]
+    if start > end || end > e.edit_len { ret InvalidTree }
+    let removed = end - start
+    let new_len = e.edit_len - removed + inserted.len
+    if new_len > e.edit_buffer.len { ret ok }
+    if remember { history_push(s, element, start, e.edit_buffer[start..end], inserted) }
+    if inserted.len > removed {
+        var i = e.edit_len
+        while i > end {
+            i -= 1usize
+            e.edit_buffer[i + inserted.len - removed] = e.edit_buffer[i]
+        }
+    } else if inserted.len < removed {
+        var i = end
+        while i < e.edit_len {
+            e.edit_buffer[i - removed + inserted.len] = e.edit_buffer[i]
+            i += 1usize
+        }
+    }
+    var k = 0usize
+    while k < inserted.len {
+        e.edit_buffer[start + k] = inserted[k]
+        k += 1usize
+    }
+    e.edit_len = new_len
+    e.caret = start + inserted.len
+    e.anchor = e.caret
+    e.invalid = true
+    let value: str = e.edit_buffer[0usize..new_len]
+    ret fire_change[str](e.edit_change, value)
+}
+
+fn edit_undo(s: *State) -> err {
+    if s.history_at == 0usize { ret ok }
+    let u = s.history[s.history_at - 1usize]
+    s.history_at -= 1usize
+    let element = usize(u.element)
+    let e = &s.elements[element]
+    if !e.live || e.kind != EDIT_TAG || u.at + u.inserted_len > e.edit_len { ret ok }
+    ret edit_replace(s, element, u.at, u.at + u.inserted_len, s.history_bytes[u.removed_off..u.removed_off + u.removed_len], false)
+}
+
+fn edit_redo(s: *State) -> err {
+    if s.history_at >= s.history_count { ret ok }
+    let u = s.history[s.history_at]
+    s.history_at += 1usize
+    let element = usize(u.element)
+    let e = &s.elements[element]
+    if !e.live || e.kind != EDIT_TAG || u.at + u.removed_len > e.edit_len { ret ok }
+    ret edit_replace(s, element, u.at, u.at + u.removed_len, s.history_bytes[u.inserted_off..u.inserted_off + u.inserted_len], false)
+}
+
+// The selection to the host's clipboard, and to the fallback for a host without one.
+fn edit_copy(s: *State, e: *const Element) {
+    let (lo, hi) = selection_of(e)
+    var n = hi - lo
+    if n > MAX_CLIP { n = MAX_CLIP }
+    var k = 0usize
+    while k < n {
+        s.clip[k] = e.edit_buffer[lo + k]
+        k += 1usize
+    }
+    s.clip_len = n
+    s.clip_hosted = os.set_clipboard_text(e.edit_buffer[lo..hi]) == ok
+}
+
+fn edit_paste(s: *State, element: usize) -> err {
+    let e = &s.elements[element]
+    let (lo, hi) = selection_of(e)
+    if s.clip_hosted || s.clip_len == 0usize {
+        var scratch = mem.arena_from(s.scratch)
+        let (host_text, host_error) = os.clipboard_text(&scratch)
+        if host_error == ok { ret edit_replace(s, element, lo, hi, host_text, true) }
+    }
+    ret edit_replace(s, element, lo, hi, s.clip[0usize..s.clip_len], true)
+}
+
+fn edit_move(e: *Element, to: usize, extend: bool) {
+    e.caret = to
+    if !extend { e.anchor = to }
+    e.invalid = true
+}
+
+// A key down in the focused editor: movement (Shift extends the selection), Home
+// and End within the line, Backspace and Delete, Enter, and the Control chords for
+// select all, copy, cut, paste, undo and redo. Anything else is not the editor's.
+fn edit_key(s: *State, element: usize, k: input.KeyEvent) -> (bool, err) {
+    let e = &s.elements[element]
+    if !e.enabled { ret (false, ok) }
+    let code = key_code(k.key.physical)
+    let (lo, hi) = selection_of(e)
+    let writable = !e.read_only
+    let extend = k.modifiers.shift
+    if k.modifiers.control {
+        if code == 65u32 {
+            e.anchor = 0usize
+            e.caret = e.edit_len
+            ret (true, ok)
+        }
+        if code == 67u32 {
+            edit_copy(s, e)
+            ret (true, ok)
+        }
+        if code == 88u32 && writable {
+            edit_copy(s, e)
+            let cut = edit_replace(s, element, lo, hi, "", true)
+            ret (true, cut)
+        }
+        if code == 86u32 && writable {
+            let pasted = edit_paste(s, element)
+            ret (true, pasted)
+        }
+        if code == 90u32 && writable {
+            if extend {
+                let redone = edit_redo(s)
+                ret (true, redone)
+            }
+            let undone = edit_undo(s)
+            ret (true, undone)
+        }
+        if code == 89u32 && writable {
+            let redone = edit_redo(s)
+            ret (true, redone)
+        }
+        ret (false, ok)
+    }
+    if code == 37u32 {
+        if !extend && lo < hi { edit_move(e, lo, false) } else { edit_move(e, prev_char(e, e.caret), extend) }
+        ret (true, ok)
+    }
+    if code == 39u32 {
+        if !extend && lo < hi { edit_move(e, hi, false) } else { edit_move(e, next_char(e, e.caret), extend) }
+        ret (true, ok)
+    }
+    if code == 36u32 {
+        edit_move(e, line_start(e, e.caret), extend)
+        ret (true, ok)
+    }
+    if code == 35u32 {
+        edit_move(e, line_end(e, e.caret), extend)
+        ret (true, ok)
+    }
+    if code == 38u32 && e.multiline {
+        edit_move(e, edit_vertical(s, element, false), extend)
+        ret (true, ok)
+    }
+    if code == 40u32 && e.multiline {
+        edit_move(e, edit_vertical(s, element, true), extend)
+        ret (true, ok)
+    }
+    if code == 8u32 {
+        if !writable { ret (true, ok) }
+        if lo < hi {
+            let erased = edit_replace(s, element, lo, hi, "", true)
+            ret (true, erased)
+        }
+        let before = prev_char(e, e.caret)
+        let erased = edit_replace(s, element, before, e.caret, "", true)
+        ret (true, erased)
+    }
+    if code == 46u32 {
+        if !writable { ret (true, ok) }
+        if lo < hi {
+            let erased = edit_replace(s, element, lo, hi, "", true)
+            ret (true, erased)
+        }
+        let after = next_char(e, e.caret)
+        let erased = edit_replace(s, element, e.caret, after, "", true)
+        ret (true, erased)
+    }
+    if code == 13u32 {
+        if e.multiline {
+            if !writable { ret (true, ok) }
+            let broken = edit_replace(s, element, lo, hi, "\n", true)
+            ret (true, broken)
+        }
+        let submitted = fire_submit(e.edit_submit)
+        ret (true, submitted)
+    }
+    ret (false, ok)
+}
+
+// Typed text replaces the selection and ends any composition; a control character
+// is a key, not text.
+fn edit_text_input(s: *State, element: usize, typed: str) -> err {
+    let e = &s.elements[element]
+    if !e.enabled || e.read_only { ret ok }
+    s.compose_len = 0usize
+    if typed.len == 0usize || (typed.len == 1usize && typed[0usize] < 32u8) { ret ok }
+    let (lo, hi) = selection_of(e)
+    ret edit_replace(s, element, lo, hi, typed, true)
+}
+
+fn edit_compose(s: *State, element: usize, preedit: str) {
+    let e = &s.elements[element]
+    if !e.enabled || e.read_only { ret }
+    var n = preedit.len
+    if n > MAX_COMPOSE { n = MAX_COMPOSE }
+    var k = 0usize
+    while k < n {
+        s.compose[k] = preedit[k]
+        k += 1usize
+    }
+    s.compose_len = n
+    e.invalid = true
+}
+
+fn focused_edit(s: *State) -> (usize, bool) {
+    if !s.has_focus { ret (0usize, false) }
+    let e = &s.elements[usize(s.focus)]
+    if !e.live || e.kind != EDIT_TAG { ret (0usize, false) }
+    ret (usize(s.focus), true)
+}
+
 fn same_modifiers(a: input.Modifiers, b: input.Modifiers) -> bool {
     ret a.shift == b.shift && a.control == b.control && a.alt == b.alt && a.meta == b.meta
 }
@@ -1072,9 +1585,15 @@ fn same_modifiers(a: input.Modifiers, b: input.Modifiers) -> bool {
 // A key down walks the scopes from the focused element up: a matching shortcut
 // fires, Enter is the default action, Escape the cancel one; Tab moves focus first.
 fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
-    if k.key.physical == 9u32 {
+    let code = key_code(k.key.physical)
+    if code == 9u32 {
         move_focus(s, k.modifiers.shift)
         ret (true, ok)
+    }
+    let (editor, has_editor) = focused_edit(s)
+    if has_editor {
+        let (edited, edit_error) = edit_key(s, editor, k)
+        if edited || edit_error != ok { ret (true, edit_error) }
     }
     var at = usize(s.root)
     if s.has_focus { at = usize(s.focus) }
@@ -1084,17 +1603,17 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
             var i = 0usize
             while i < e.shortcut_count {
                 let shortcut = e.shortcuts[i]
-                if shortcut.key == k.key.physical && same_modifiers(shortcut.modifiers, k.modifiers) {
+                if key_code(shortcut.key) == code && same_modifiers(shortcut.modifiers, k.modifiers) {
                     let fired = fire_submit(shortcut.action)
                     ret (true, fired)
                 }
                 i += 1usize
             }
-            if k.key.physical == 13u32 && submit_set(e.default_action.invoke) {
+            if code == 13u32 && submit_set(e.default_action.invoke) {
                 let fired = fire_submit(e.default_action)
                 ret (true, fired)
             }
-            if k.key.physical == 27u32 && submit_set(e.cancel_action.invoke) {
+            if code == 27u32 && submit_set(e.cancel_action.invoke) {
                 let fired = fire_submit(e.cancel_action)
                 ret (true, fired)
             }
@@ -1123,6 +1642,11 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             if s.elements[region_index].focusable {
                 s.focus = u32(region_index)
                 s.has_focus = true
+            }
+            if s.elements[region_index].kind == EDIT_TAG {
+                s.compose_len = 0usize
+                let at = edit_hit(s, region_index, p.position)
+                edit_move(&s.elements[region_index], at, false)
             }
             ret ok
         }
@@ -1156,6 +1680,11 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if s.arena_state.pressed {
             let candidate = usize(s.arena_state.candidate)
             let e = &s.elements[candidate]
+            if e.live && e.kind == EDIT_TAG {
+                let at = edit_hit(s, candidate, p.position)
+                edit_move(e, at, true)
+                ret ok
+            }
             if !e.live || e.kind != REGION_TAG {
                 s.arena_state.pressed = false
                 ret ok
@@ -1220,11 +1749,15 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .Text as t:
+        let (editor, has_editor) = focused_edit(s)
+        if has_editor { ret edit_text_input(s, editor, t.text) }
         if s.has_focus && s.elements[usize(s.focus)].has_action {
             let action = s.elements[usize(s.focus)].action
             ret action.invoke(action.ctx, event)
         }
     case .Composition as c:
+        let (editor, has_editor) = focused_edit(s)
+        if has_editor { edit_compose(s, editor, c.text) }
         ret ok
     case .Frame as w:
         ret ok
@@ -1238,6 +1771,25 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         ret ok
     }
     ret ok
+}
+
+// An editor's value and selection, for a harness.
+fn edit_value(widget_runtime: *const Runtime, element: ElementId) -> (str, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || usize(element.slot) >= s.elements.len { ret ("", false) }
+    let e = &s.elements[usize(element.slot)]
+    if !e.live || e.generation != element.generation || e.kind != EDIT_TAG { ret ("", false) }
+    let value: str = e.edit_buffer[0usize..e.edit_len]
+    ret (value, true)
+}
+
+fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize, usize, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || usize(element.slot) >= s.elements.len { ret (0usize, 0usize, false) }
+    let e = &s.elements[usize(element.slot)]
+    if !e.live || e.generation != element.generation || e.kind != EDIT_TAG { ret (0usize, 0usize, false) }
+    let (lo, hi) = selection_of(e)
+    ret (lo, hi, true)
 }
 
 // The element that has the focus, for a harness or a control.
