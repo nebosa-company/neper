@@ -824,8 +824,12 @@
             "TaskbarProgress",
             "TaskbarOverlay"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "JumpList",
+            "TaskbarProgress",
+            "TaskbarOverlay"
+          ],
+          "evidence": "lib/e/os/shell.windows.e and lib/e/ui/app.e (D887): taskbar_progress (state and completed of total on the app window's button), taskbar_overlay (an icon from the caller's pixels with a spoken description, cleared by an icon of no width) and jump_list/jump_list_clear (the application's tasks as shell links with a title in their property store, replaced whole and removed) over ITaskbarList3, ICustomDestinationList, IObjectCollection, IShellLinkW and IPropertyStore reached by vtable slot through extern fn pointer types; e.ui.window.host_window hands the app's window to them; Linux answers Unsupported with the capability record saying so; tests/selfhost/fixtures/link/ui_taskbar on both hosts"
         },
         {
           "id": "P4-03",

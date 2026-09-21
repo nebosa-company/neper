@@ -17100,3 +17100,34 @@ and every call is `shell.Unsupported` -- the proposal's rule, no
 in-window tray. `link/ui_tray` opens, badges, re-tips, refuses a
 resized icon, polls nothing, and closes once on Windows, and gets
 `Unsupported` on Linux.
+
+## D887 — COM by vtable slot: the taskbar button and the jump list are the shell's objects
+
+P4-02 of the widget plan. Windows has no flat export for a taskbar
+button's progress or overlay, nor for a jump list: they are
+`ITaskbarList3`, `ICustomDestinationList`, `IObjectCollection`,
+`IShellLinkW` and `IPropertyStore`, COM interfaces reached through a
+vtable. D32 already named what that takes -- an `extern fn` pointer
+type carrying the C convention -- and a probe confirmed the compiler
+honours it for a six-argument call through a pointer read from a
+union pun, so `e.os.shell` declares one pointer type per method
+shape, an object as a pointer to a table of slots, and each interface
+by the slot numbers the SDK's IDL fixes; nothing more of COM is
+declared. `taskbar_progress` is the window's button state and, for a
+determinate one, `completed` of `total`; `taskbar_overlay` an icon
+from the caller's pixels with a spoken description, cleared by an
+icon of no width; `jump_list` the application's tasks replaced whole
+-- a list begun, a collection of links each with its title in the
+property store the link also is, the list committed -- and
+`jump_list_clear` the list removed. `e.ui.window.host_window` hands
+the app's window to them, and `e.ui.app` wraps the three for its own
+window. Linux has no desktop standard for any of it since the launcher
+APIs went, so all three are `Unsupported` and the capability record
+says so first. Two lessons paid for: a GUID typed by hand in decimal
+was wrong in six of eleven places (the probe printed `f6` where `fd`
+belonged, and COM answered "class not registered"), so every GUID's
+parts are now computed and pasted; and the host's commit limit makes a
+burst of three emits fail as "arena exhausted" where one at a time
+passes. `link/ui_taskbar` drives the app's real window through
+progress, overlay, a refused total and a published-then-removed jump
+list on Windows, and gets `Unsupported` on Linux.

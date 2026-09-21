@@ -3807,11 +3807,13 @@ platform delivery requirements and escape limitations.
 ### `e.os.shell`
 
 ```neper
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool }
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
+type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
+type JumpTask = struct { title: str, program: str, arguments: str, description: str }
 error Unsupported
 error Invalid
 error NotFound
@@ -3825,6 +3827,10 @@ fn popup_menu(a: *mem.Arena, items: []const MenuItem, x: i32, y: i32) -> (u32, b
 fn open_uri(a: *mem.Arena, uri: str) -> err
 fn reveal(a: *mem.Arena, path: str) -> err
 fn trash(a: *mem.Arena, path: str) -> err
+fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed: u64, total: u64) -> err
+fn taskbar_overlay(a: *mem.Arena, w: os.Window, icon: Icon, description: str) -> err
+fn jump_list(a: *mem.Arena, tasks: []const JumpTask) -> err
+fn jump_list_clear(a: *mem.Arena) -> err
 ```
 
 The host's shell services (D885, the widget plan's `native-shell-api`), written per
@@ -3838,6 +3844,15 @@ shell's open verb (`ShellExecuteW`; `xdg-open` by its exit code), `reveal` the f
 manager at the item (selected on Windows; the item's directory on Linux) and `trash`
 the recycle bin or the freedesktop home trash with its `.trashinfo`. An empty
 argument is `Invalid` and a missing item `NotFound` before the host is asked.
+
+The taskbar and the jump list (D887) are COM on Windows, reached through D32's
+`extern fn` pointer types by vtable slot: `taskbar_progress` is the window's button
+state and, for a determinate one, `completed` of `total` (`Invalid` past it or over
+nothing); `taskbar_overlay` an icon from the caller's pixels on the button with a
+spoken description, cleared by an icon of no width; `jump_list` the application's
+tasks replaced whole, each a title, a program, its arguments and a description, and
+`jump_list_clear` the list removed. Linux has no desktop standard for any of the
+three, so they are `Unsupported` and the record says so.
 
 ### `e.cancel`
 
@@ -5692,6 +5707,7 @@ error Closed
 fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err)
 fn metrics(window: *const Window) -> (Metrics, err)
 fn draw_target(window: *const Window) -> (scene.Target, err)
+fn host_window(window: *const Window) -> (os.Window, err)
 fn title(window: *Window, value: str) -> err
 fn cursor(window: *Window, value: Cursor) -> err
 fn visible(window: *Window, value: bool) -> err
@@ -6402,6 +6418,12 @@ fn tray_set_badge(a: *mem.Arena, t: *Tray, count: u32) -> err
 fn tray_set_menu(t: *Tray, items: []const shell.MenuItem)
 fn tray_poll(a: *mem.Arena, t: *Tray) -> (TrayActivation, bool, err)
 fn tray_close(a: *mem.Arena, t: *Tray) -> err
+fn taskbar_supported() -> bool
+fn jump_list_supported() -> bool
+fn taskbar_progress(a: *mem.Arena, app: *App, state: shell.ProgressState, completed: u64, total: u64) -> err
+fn taskbar_overlay(a: *mem.Arena, app: *App, icon: shell.Icon, description: str) -> err
+fn jump_list(a: *mem.Arena, tasks: []const shell.JumpTask) -> err
+fn jump_list_clear(a: *mem.Arena) -> err
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,

@@ -19,15 +19,17 @@ error Invalid
 error NotFound
 error Failed
 
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
+type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
+type JumpTask = struct { title: str, program: str, arguments: str, description: str }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true }
+    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false }
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
@@ -49,6 +51,24 @@ fn tray_poll() -> (TrayEvent, bool) {
 
 fn popup_menu(a: *mem.Arena, items: []const MenuItem, x: i32, y: i32) -> (u32, bool, err) {
     ret (0u32, false, Unsupported)
+}
+
+// A taskbar button's progress, overlay and jump list have no desktop standard;
+// the launcher APIs that had them are gone.
+fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed: u64, total: u64) -> err {
+    ret Unsupported
+}
+
+fn taskbar_overlay(a: *mem.Arena, w: os.Window, icon: Icon, description: str) -> err {
+    ret Unsupported
+}
+
+fn jump_list(a: *mem.Arena, tasks: []const JumpTask) -> err {
+    ret Unsupported
+}
+
+fn jump_list_clear(a: *mem.Arena) -> err {
+    ret Unsupported
 }
 
 // `xdg-open` by the PATH's first directory that holds it; `execve` searches nothing.

@@ -37,7 +37,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
 - `.jsonl`: `scripts/render_progress.py`×3, `scripts/validate_stream.py`×3, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/check_stats_record.py`×1, `scripts/render_card.py`×1
-- `jsonschema`: `scripts/validate_stream.py`×3
+- `jsonschema`: `scripts/validate_stream.py`×3, `scripts/algos/decisions-pending.md`×1
 
 ## Verification
 

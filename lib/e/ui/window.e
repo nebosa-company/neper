@@ -161,6 +161,13 @@ fn draw_target(window: *const Window) -> (scene.Target, err) {
     ret (s.drawable, ok)
 }
 
+// The host's own window, for the shell services that take one (D887).
+fn host_window(window: *const Window) -> (os.Window, err) {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret (zero, state_error) }
+    ret (s.handle, ok)
+}
+
 fn title(window: *Window, value: str) -> err {
     let (s, state_error) = state_of(window)
     if state_error != ok { ret state_error }

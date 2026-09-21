@@ -14,6 +14,7 @@
 
 use e.gpu
 use e.mem
+use e.os
 use e.os.shell
 use e.time
 use e.gfx.geometry
@@ -333,4 +334,49 @@ fn tray_close(a: *mem.Arena, t: *Tray) -> err {
     if !t.open { ret shell.NotFound }
     t.open = false
     ret shell.tray_remove(a, t.id)
+}
+
+// ------------------------------------------------- taskbar and jump list (D887)
+//
+// Widget plan P4-02, three thin controllers over `e.os.shell` for the app's own
+// window: the taskbar button's progress and overlay, and the jump list's tasks.
+// Each answers `shell.Unsupported` where the host has no taskbar or jump list,
+// which `taskbar_supported` and `jump_list_supported` say first.
+
+fn taskbar_supported() -> bool {
+    ret shell.capabilities().taskbar
+}
+
+fn jump_list_supported() -> bool {
+    ret shell.capabilities().jump_list
+}
+
+fn host_window(app: *App) -> (os.Window, err) {
+    let (s, state_error) = state_of(app)
+    if state_error != ok { ret (zero, state_error) }
+    let (handle, host_error) = window.host_window(&s.win)
+    if host_error != ok { ret (zero, Failed) }
+    ret (handle, ok)
+}
+
+fn taskbar_progress(a: *mem.Arena, app: *App, state: shell.ProgressState, completed: u64, total: u64) -> err {
+    let (handle, handle_error) = host_window(app)
+    if handle_error != ok { ret handle_error }
+    ret shell.taskbar_progress(a, handle, state, completed, total)
+}
+
+// An icon of no width clears the overlay.
+fn taskbar_overlay(a: *mem.Arena, app: *App, icon: shell.Icon, description: str) -> err {
+    let (handle, handle_error) = host_window(app)
+    if handle_error != ok { ret handle_error }
+    ret shell.taskbar_overlay(a, handle, icon, description)
+}
+
+// The application's jump list tasks, replaced whole; `jump_list_clear` removes it.
+fn jump_list(a: *mem.Arena, tasks: []const shell.JumpTask) -> err {
+    ret shell.jump_list(a, tasks)
+}
+
+fn jump_list_clear(a: *mem.Arena) -> err {
+    ret shell.jump_list_clear(a)
 }

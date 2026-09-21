@@ -2834,6 +2834,13 @@ $uiTrayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $uiTrayWritten -ne 'executable written') { throw 'ui_tray emission failed' }
 $uiTrayOutput = & $uiTrayPath
 if ($LASTEXITCODE -ne 0 -or $uiTrayOutput -ne 'ui tray ok') { throw "the tray controller answered wrongly: exit $LASTEXITCODE" }
+# The taskbar and jump list controllers (D887, widget plan P4-02): the app's window shows
+# progress and an overlay on its real taskbar button, and a jump list is published then removed.
+$uiTaskbarPath = Join-Path $testBuild 'ui-taskbar-selfhost.exe'
+$uiTaskbarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_taskbar\src\main.e') $repo 'x64' 'windows' $uiTaskbarPath
+if ($LASTEXITCODE -ne 0 -or $uiTaskbarWritten -ne 'executable written') { throw 'ui_taskbar emission failed' }
+$uiTaskbarOutput = & $uiTaskbarPath
+if ($LASTEXITCODE -ne 0 -or $uiTaskbarOutput -ne 'ui taskbar ok') { throw "the taskbar controllers answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

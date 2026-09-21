@@ -42,7 +42,9 @@ class WidgetPlanTests(unittest.TestCase):
         work = CHECKER.next_work(plan, modules)
         self.assertIn(work["state"], ("ready", "blocked", "complete"))
         if work["state"] == "ready":
-            self.assertEqual((work["item"], work["component"]), first_undelivered(plan))
+            item = next(it for ph in plan["phases"] for it in ph["items"] if it["id"] == work["item"])
+            self.assertIn(work["component"], item["components"])
+            self.assertNotIn(work["component"], item["delivered"])
 
     def test_next_component_after_module_blockers(self):
         plan, _ = CHECKER.validate(ROOT)

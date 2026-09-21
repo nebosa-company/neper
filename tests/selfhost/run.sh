@@ -2627,6 +2627,13 @@ ui_tray_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/ui-tray-selfhost"
 ui_tray_output=$("$test_build/ui-tray-selfhost")
 [ "$ui_tray_output" = 'ui tray ok' ]
+# The taskbar and jump list controllers (D887, widget plan P4-02): `Unsupported` throughout
+# on a host without a taskbar, and the capability record saying so first.
+ui_taskbar_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_taskbar/src/main.e" "$repo" x64 linux "$test_build/ui-taskbar-selfhost")
+[ "$ui_taskbar_written" = 'executable written' ]
+chmod +x "$test_build/ui-taskbar-selfhost"
+ui_taskbar_output=$("$test_build/ui-taskbar-selfhost")
+[ "$ui_taskbar_output" = 'ui taskbar ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

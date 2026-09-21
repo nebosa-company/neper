@@ -38,7 +38,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 - `upload`: `lib/e/ui/asset.e`×8, `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2, `lib/e/gfx/image.e`×1, `lib/e/gfx/scene.e`×1†
 - `download`: `lib/e/gpu.e`×4, `lib/e/gpu/tensor.e`×3
 - `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1, `src/lower.e`×1‡
-- `module-apis.md`: `scripts/check_module_surfaces.py`×5, `scripts/render_module_apis.py`×3, `scripts/render_progress.py`×2, `scripts/audit_repo_coverage.py`×1, `scripts/build-docs-pdf.py`×1, `scripts/check_gpu_contracts.py`×1, `src/check.e`×1‡
+- `module-apis.md`: `scripts/check_module_surfaces.py`×5, `scripts/algos/add_batch.py`×3, `scripts/render_module_apis.py`×3, `scripts/render_progress.py`×2, `scripts/algos/reapply.sh`×1, `scripts/audit_repo_coverage.py`×1, `scripts/build-docs-pdf.py`×1, `scripts/check_gpu_contracts.py`×1
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session
