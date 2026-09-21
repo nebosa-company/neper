@@ -1,0 +1,20 @@
+{
+ "decision": "D869",
+ "modules": [
+  {"name": "e.dist.anti_entropy", "deps": [], "fixture": "dist_anti_entropy", "anchor": "### `e.grep`\n",
+   "note": "`merkle_build` over key-range buckets (FNV-1a leaves in a heap-ordered caller tree),\n`merkle_sync` (top-down comparison answering the differing buckets and the comparison\ncount) and `merkle_diff_keys`.",
+   "comment": "`e.dist.anti_entropy`: 500 keys with seven differences: exactly the differing buckets, 53 comparisons and the seven keys"},
+  {"name": "e.dist.crdt", "deps": [], "fixture": "dist_crdt", "anchor": "### `e.grep`\n",
+   "note": "State-based CRDTs over caller storage: G-counter, PN-counter, LWW-register and an OR-set\nwith (site, counter) tags and tombstones, each with `_merge`, and `merge` dispatching on\nthe kind.",
+   "comment": "`e.dist.crdt`: per-site values, both merge orders, self-merge and the dispatch against a replica"},
+  {"name": "e.dist.deadlock", "deps": [], "fixture": "dist_deadlock", "anchor": "### `e.grep`\n",
+   "note": "`wait_for_graph_cycle` (three-colour DFS) and `chandy_misra_haas` (edge-chasing probes\nthrough a FIFO pool, deadlock when a probe returns to its initiator).",
+   "comment": "`e.dist.deadlock`: verdicts and probe counts on four graphs, including the initiator outside the cycle"},
+  {"name": "e.dist.dht", "deps": [], "fixture": "dist_dht", "anchor": "### `e.grep`\n",
+   "note": "Chord (`chord_successor`, `chord_finger_tables`, `chord_lookup` answering owner and hops)\nand Kademlia (`kademlia_bucket`, `kademlia_buckets`, `kademlia_lookup` with k and alpha\nover an in-memory node set).",
+   "comment": "`e.dist.dht`: forty Chord and forty Kademlia lookups folded to one word each against a replica"},
+  {"name": "e.dist.lock", "deps": [], "fixture": "dist_lock", "anchor": "### `e.grep`\n",
+   "note": "Redlock over simulated instances with skew and latency (`redlock_acquire` needing a\nmajority inside the validity window, `redlock_release`, `redlock_held`) and leases\n(`lease_acquire`, `lease_renew`, `lease_expired`, `lease_due`).",
+   "comment": "`e.dist.lock`: a scripted sequence with instances down and clocks skewed against a replica"}
+ ]
+}

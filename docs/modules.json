@@ -279,7 +279,19 @@
     "e.gfx.raster",
     "e.gfx.shade",
     "e.gfx.trace",
-    "e.gfx.texture"
+    "e.gfx.texture",
+    "e.dist.anti_entropy",
+    "e.dist.crdt",
+    "e.dist.deadlock",
+    "e.dist.dht",
+    "e.dist.lock",
+    "e.dist.mutex",
+    "e.dist.snapshot",
+    "e.gfx.filter",
+    "e.gfx.vision",
+    "e.audio.analysis",
+    "e.audio.fx",
+    "e.audio.synth"
    ]
   },
   {
@@ -688,6 +700,43 @@
     "e.audio",
     "e.audio.mixer",
     "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.audio.analysis",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.dsp",
+    "e.math",
+    "e.math.fft"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.audio.fx",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.dsp",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.audio.synth",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
    ],
    "blocked_by": []
   },
@@ -2001,6 +2050,33 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.filter",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.vision",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.geom3",
+    "e.algo.rand",
+    "e.math",
+    "e.math.fft",
+    "e.math.filter",
+    "e.ml.reduce"
+   ],
    "blocked_by": []
   },
   {
@@ -3724,6 +3800,69 @@
   },
   {
    "name": "e.dist.collective",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.anti_entropy",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.crdt",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.deadlock",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.dht",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.lock",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.mutex",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dist.snapshot",
    "layer": 2,
    "surface": "source",
    "milestone": null,

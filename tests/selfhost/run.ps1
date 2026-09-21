@@ -1990,6 +1990,78 @@ $gfxTextureWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gfxTextureWritten -ne 'executable written') { throw 'gfx_texture emission failed' }
 & $gfxTexturePath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_texture check failed: exit $LASTEXITCODE" }
+# `e.dist.anti_entropy`: 500 keys with seven differences: exactly the differing buckets, 53 comparisons and the seven keys (D869).
+$distAntiEntropyPath = Join-Path $testBuild 'dist-anti-entropy-selfhost.exe'
+$distAntiEntropyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_anti_entropy\src\main.e') $repo 'x64' 'windows' $distAntiEntropyPath
+if ($LASTEXITCODE -ne 0 -or $distAntiEntropyWritten -ne 'executable written') { throw 'dist_anti_entropy emission failed' }
+& $distAntiEntropyPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_anti_entropy check failed: exit $LASTEXITCODE" }
+# `e.dist.crdt`: per-site values, both merge orders, self-merge and the dispatch against a replica (D869).
+$distCrdtPath = Join-Path $testBuild 'dist-crdt-selfhost.exe'
+$distCrdtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_crdt\src\main.e') $repo 'x64' 'windows' $distCrdtPath
+if ($LASTEXITCODE -ne 0 -or $distCrdtWritten -ne 'executable written') { throw 'dist_crdt emission failed' }
+& $distCrdtPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_crdt check failed: exit $LASTEXITCODE" }
+# `e.dist.deadlock`: verdicts and probe counts on four graphs, including the initiator outside the cycle (D869).
+$distDeadlockPath = Join-Path $testBuild 'dist-deadlock-selfhost.exe'
+$distDeadlockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_deadlock\src\main.e') $repo 'x64' 'windows' $distDeadlockPath
+if ($LASTEXITCODE -ne 0 -or $distDeadlockWritten -ne 'executable written') { throw 'dist_deadlock emission failed' }
+& $distDeadlockPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_deadlock check failed: exit $LASTEXITCODE" }
+# `e.dist.dht`: forty Chord and forty Kademlia lookups folded to one word each against a replica (D869).
+$distDhtPath = Join-Path $testBuild 'dist-dht-selfhost.exe'
+$distDhtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_dht\src\main.e') $repo 'x64' 'windows' $distDhtPath
+if ($LASTEXITCODE -ne 0 -or $distDhtWritten -ne 'executable written') { throw 'dist_dht emission failed' }
+& $distDhtPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_dht check failed: exit $LASTEXITCODE" }
+# `e.dist.lock`: a scripted sequence with instances down and clocks skewed against a replica (D869).
+$distLockPath = Join-Path $testBuild 'dist-lock-selfhost.exe'
+$distLockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_lock\src\main.e') $repo 'x64' 'windows' $distLockPath
+if ($LASTEXITCODE -ne 0 -or $distLockWritten -ne 'executable written') { throw 'dist_lock emission failed' }
+& $distLockPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_lock check failed: exit $LASTEXITCODE" }
+# `e.dist.mutex`: mutual exclusion and exact message counts (30 and 24 for five entries) over a scripted schedule (D870).
+$distMutexPath = Join-Path $testBuild 'dist-mutex-selfhost.exe'
+$distMutexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_mutex\src\main.e') $repo 'x64' 'windows' $distMutexPath
+if ($LASTEXITCODE -ne 0 -or $distMutexWritten -ne 'executable written') { throw 'dist_mutex emission failed' }
+& $distMutexPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_mutex check failed: exit $LASTEXITCODE" }
+# `e.dist.snapshot`: a token-passing computation snapshotted mid-flight with 67 tokens in channels: recorded states plus channels equal the 400 live (D870).
+$distSnapshotPath = Join-Path $testBuild 'dist-snapshot-selfhost.exe'
+$distSnapshotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_snapshot\src\main.e') $repo 'x64' 'windows' $distSnapshotPath
+if ($LASTEXITCODE -ne 0 -or $distSnapshotWritten -ne 'executable written') { throw 'dist_snapshot emission failed' }
+& $distSnapshotPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_snapshot check failed: exit $LASTEXITCODE" }
+# `e.gfx.filter`: every filter pixel-exact or within 1e-9 of scipy.ndimage and scikit-image on a 32x32 image, Canny and watershed included (D870).
+$gfxFilterPath = Join-Path $testBuild 'gfx-filter-selfhost.exe'
+$gfxFilterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_filter\src\main.e') $repo 'x64' 'windows' $gfxFilterPath
+if ($LASTEXITCODE -ne 0 -or $gfxFilterWritten -ne 'executable written') { throw 'gfx_filter emission failed' }
+& $gfxFilterPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_filter check failed: exit $LASTEXITCODE" }
+# `e.gfx.vision`: a homography to 5e-14, epipolar residuals to 1e-8, RANSAC finding the planted inliers, a known shift and flow recovered, Zhang intrinsics to 1e-10, ORB and SIFT descriptors equal to a replica (D870).
+$gfxVisionPath = Join-Path $testBuild 'gfx-vision-selfhost.exe'
+$gfxVisionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_vision\src\main.e') $repo 'x64' 'windows' $gfxVisionPath
+if ($LASTEXITCODE -ne 0 -or $gfxVisionWritten -ne 'executable written') { throw 'gfx_vision emission failed' }
+& $gfxVisionPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_vision check failed: exit $LASTEXITCODE" }
+# `e.audio.analysis`: four pitch trackers within 0.5 Hz, a click train's onsets, tempo and beats exact, chroma of a C-major chord, a calibrated sine reading -23 LUFS (D870).
+$audioAnalysisPath = Join-Path $testBuild 'audio-analysis-selfhost.exe'
+$audioAnalysisWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audio_analysis\src\main.e') $repo 'x64' 'windows' $audioAnalysisPath
+if ($LASTEXITCODE -ne 0 -or $audioAnalysisWritten -ne 'executable written') { throw 'audio_analysis emission failed' }
+& $audioAnalysisPath
+if ($LASTEXITCODE -ne 0) { throw "a audio_analysis check failed: exit $LASTEXITCODE" }
+# `e.audio.fx`: the static compressor curve, a limiter at its ceiling, EQ and reverb digests to 1e-9, an echo cancelled by 20 dB, a stretch keeping its pitch and a shift moving it (D871).
+$audioFxPath = Join-Path $testBuild 'audio-fx-selfhost.exe'
+$audioFxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audio_fx\src\main.e') $repo 'x64' 'windows' $audioFxPath
+if ($LASTEXITCODE -ne 0 -or $audioFxWritten -ne 'executable written') { throw 'audio_fx emission failed' }
+& $audioFxPath
+if ($LASTEXITCODE -ne 0) { throw "a audio_fx check failed: exit $LASTEXITCODE" }
+# `e.audio.synth`: samples to 1e-12 against replicas and a PolyBLEP saw with a third of the naive aliasing energy (D871).
+$audioSynthPath = Join-Path $testBuild 'audio-synth-selfhost.exe'
+$audioSynthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audio_synth\src\main.e') $repo 'x64' 'windows' $audioSynthPath
+if ($LASTEXITCODE -ne 0 -or $audioSynthWritten -ne 'executable written') { throw 'audio_synth emission failed' }
+& $audioSynthPath
+if ($LASTEXITCODE -ne 0) { throw "a audio_synth check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

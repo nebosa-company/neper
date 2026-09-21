@@ -1804,6 +1804,66 @@ gfx_texture_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$gfx_texture_written" = 'executable written' ]
 chmod +x "$test_build/gfx-texture-selfhost"
 "$test_build/gfx-texture-selfhost"
+# `e.dist.anti_entropy`: 500 keys with seven differences: exactly the differing buckets, 53 comparisons and the seven keys (D869).
+dist_anti_entropy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_anti_entropy/src/main.e" "$repo" x64 linux "$test_build/dist-anti-entropy-selfhost")
+[ "$dist_anti_entropy_written" = 'executable written' ]
+chmod +x "$test_build/dist-anti-entropy-selfhost"
+"$test_build/dist-anti-entropy-selfhost"
+# `e.dist.crdt`: per-site values, both merge orders, self-merge and the dispatch against a replica (D869).
+dist_crdt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_crdt/src/main.e" "$repo" x64 linux "$test_build/dist-crdt-selfhost")
+[ "$dist_crdt_written" = 'executable written' ]
+chmod +x "$test_build/dist-crdt-selfhost"
+"$test_build/dist-crdt-selfhost"
+# `e.dist.deadlock`: verdicts and probe counts on four graphs, including the initiator outside the cycle (D869).
+dist_deadlock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_deadlock/src/main.e" "$repo" x64 linux "$test_build/dist-deadlock-selfhost")
+[ "$dist_deadlock_written" = 'executable written' ]
+chmod +x "$test_build/dist-deadlock-selfhost"
+"$test_build/dist-deadlock-selfhost"
+# `e.dist.dht`: forty Chord and forty Kademlia lookups folded to one word each against a replica (D869).
+dist_dht_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_dht/src/main.e" "$repo" x64 linux "$test_build/dist-dht-selfhost")
+[ "$dist_dht_written" = 'executable written' ]
+chmod +x "$test_build/dist-dht-selfhost"
+"$test_build/dist-dht-selfhost"
+# `e.dist.lock`: a scripted sequence with instances down and clocks skewed against a replica (D869).
+dist_lock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_lock/src/main.e" "$repo" x64 linux "$test_build/dist-lock-selfhost")
+[ "$dist_lock_written" = 'executable written' ]
+chmod +x "$test_build/dist-lock-selfhost"
+"$test_build/dist-lock-selfhost"
+# `e.dist.mutex`: mutual exclusion and exact message counts (30 and 24 for five entries) over a scripted schedule (D870).
+dist_mutex_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_mutex/src/main.e" "$repo" x64 linux "$test_build/dist-mutex-selfhost")
+[ "$dist_mutex_written" = 'executable written' ]
+chmod +x "$test_build/dist-mutex-selfhost"
+"$test_build/dist-mutex-selfhost"
+# `e.dist.snapshot`: a token-passing computation snapshotted mid-flight with 67 tokens in channels: recorded states plus channels equal the 400 live (D870).
+dist_snapshot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_snapshot/src/main.e" "$repo" x64 linux "$test_build/dist-snapshot-selfhost")
+[ "$dist_snapshot_written" = 'executable written' ]
+chmod +x "$test_build/dist-snapshot-selfhost"
+"$test_build/dist-snapshot-selfhost"
+# `e.gfx.filter`: every filter pixel-exact or within 1e-9 of scipy.ndimage and scikit-image on a 32x32 image, Canny and watershed included (D870).
+gfx_filter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_filter/src/main.e" "$repo" x64 linux "$test_build/gfx-filter-selfhost")
+[ "$gfx_filter_written" = 'executable written' ]
+chmod +x "$test_build/gfx-filter-selfhost"
+"$test_build/gfx-filter-selfhost"
+# `e.gfx.vision`: a homography to 5e-14, epipolar residuals to 1e-8, RANSAC finding the planted inliers, a known shift and flow recovered, Zhang intrinsics to 1e-10, ORB and SIFT descriptors equal to a replica (D870).
+gfx_vision_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_vision/src/main.e" "$repo" x64 linux "$test_build/gfx-vision-selfhost")
+[ "$gfx_vision_written" = 'executable written' ]
+chmod +x "$test_build/gfx-vision-selfhost"
+"$test_build/gfx-vision-selfhost"
+# `e.audio.analysis`: four pitch trackers within 0.5 Hz, a click train's onsets, tempo and beats exact, chroma of a C-major chord, a calibrated sine reading -23 LUFS (D870).
+audio_analysis_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audio_analysis/src/main.e" "$repo" x64 linux "$test_build/audio-analysis-selfhost")
+[ "$audio_analysis_written" = 'executable written' ]
+chmod +x "$test_build/audio-analysis-selfhost"
+"$test_build/audio-analysis-selfhost"
+# `e.audio.fx`: the static compressor curve, a limiter at its ceiling, EQ and reverb digests to 1e-9, an echo cancelled by 20 dB, a stretch keeping its pitch and a shift moving it (D871).
+audio_fx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audio_fx/src/main.e" "$repo" x64 linux "$test_build/audio-fx-selfhost")
+[ "$audio_fx_written" = 'executable written' ]
+chmod +x "$test_build/audio-fx-selfhost"
+"$test_build/audio-fx-selfhost"
+# `e.audio.synth`: samples to 1e-12 against replicas and a PolyBLEP saw with a third of the naive aliasing energy (D871).
+audio_synth_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audio_synth/src/main.e" "$repo" x64 linux "$test_build/audio-synth-selfhost")
+[ "$audio_synth_written" = 'executable written' ]
+chmod +x "$test_build/audio-synth-selfhost"
+"$test_build/audio-synth-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

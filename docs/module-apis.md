@@ -5453,6 +5453,142 @@ fn grid_weight(weights: []const u32, count: usize, planes: usize, plane: usize, 
 to 12x12, void extents, partitions, trit and quint sequences, all ten colour endpoint
 modes, dual planes, infill).
 
+### `e.gfx.filter`
+
+```neper
+type Rect = struct { x: usize, y: usize, w: usize, h: usize, area: usize }
+error TooSmall
+error Invalid
+error TooLarge
+
+fn inf() -> f64
+fn reflect(i: i64, n: usize) -> usize
+fn conv_h(src: []const f64, w: usize, h: usize, r: usize, k: []const f64, dst: []f64)
+fn conv_v(src: []const f64, w: usize, h: usize, r: usize, k: []const f64, dst: []f64)
+fn gaussian_blur(src: []const f64, w: usize, h: usize, sigma: f64, dst: []f64, scratch: []f64) -> err
+fn sobel(src: []const f64, w: usize, h: usize, gx: []f64, gy: []f64, magnitude: []f64) -> err
+fn canny(src: []const f64, w: usize, h: usize, low: f64, high: f64, sigma: f64, edges: []u8, scratch: []f64) -> (usize, err)
+fn median(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scratch: []f64) -> err
+fn bilateral(src: []const f64, w: usize, h: usize, sigma_s: f64, sigma_r: f64, dst: []f64) -> err
+fn box_mean(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scratch: []f64) -> err
+fn guided(src: []const f64, guide: []const f64, w: usize, h: usize, radius: usize, eps: f64, dst: []f64, scratch: []f64) -> err
+fn integral_image(src: []const f64, w: usize, h: usize, out: []f64) -> err
+fn integral_sum(integral: []const f64, w: usize, x: usize, y: usize, rw: usize, rh: usize) -> f64
+fn integral_image_u8(src: []const u8, w: usize, h: usize, out: []u64) -> err
+fn integral_sum_u64(integral: []const u64, w: usize, x: usize, y: usize, rw: usize, rh: usize) -> u64
+fn threshold_otsu(src: []const u8, w: usize, h: usize) -> u8
+fn morph_extreme(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, dilate: bool) -> err
+fn morph_erode(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64) -> err
+fn morph_dilate(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64) -> err
+fn morph_open(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scratch: []f64) -> err
+fn morph_close(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scratch: []f64) -> err
+fn uf_find(parent: []u32, a: u32) -> u32
+fn uf_union(parent: []u32, a: u32, b: u32)
+fn label_components(src: []const u8, w: usize, h: usize, connectivity: u32, labels: []u32, parent: []u32) -> (u32, err)
+fn flood_fill(image: []u8, w: usize, h: usize, x: usize, y: usize, new_value: u8, stack: []u32) -> (usize, err)
+fn flood_fill_scanline(image: []u8, w: usize, h: usize, x: usize, y: usize, new_value: u8, stack: []u32) -> (usize, err)
+fn dt1d(f: []const f64, n: usize, d: []f64, v: []f64, z: []f64)
+fn distance_transform(binary: []const u8, w: usize, h: usize, out: []f64, scratch: []f64) -> err
+fn godunov(a: f64, b: f64, f: f64) -> f64
+fn eikonal_update(t: []const f64, speed: []const f64, w: usize, h: usize, x: usize, y: usize, known: []const u32) -> f64
+fn heap_less(key: []const f64, tie: []const u32, i: u32, j: u32) -> bool
+fn heap_swap(heap: []u32, pos: []u32, a: usize, b: usize)
+fn sift_up(key: []const f64, tie: []const u32, heap: []u32, pos: []u32, start: usize)
+fn sift_down(key: []const f64, tie: []const u32, heap: []u32, pos: []u32, size: usize, start: usize)
+fn fast_marching(speed: []const f64, w: usize, h: usize, sources: []const u32, out: []f64, heap: []u32, pos: []u32) -> err
+fn fast_sweeping(speed: []const f64, w: usize, h: usize, sources: []const u32, out: []f64, sweeps: usize) -> err
+fn half(n: usize) -> usize
+fn tap(k: usize) -> f64
+fn pyramid_size(w: usize, h: usize, levels: usize) -> usize
+fn reduce(src: []const f64, w: usize, h: usize, dst: []f64, tmp: []f64)
+fn up_sample(line: []const f64, stride: usize, i: i64, n: usize) -> f64
+fn expand(src: []const f64, w2: usize, h2: usize, w: usize, h: usize, dst: []f64, tmp: []f64)
+fn laplacian_pyramid(src: []const f64, w: usize, h: usize, levels: usize, out: []f64, scratch: []f64) -> err
+fn laplacian_collapse(pyramid: []const f64, w: usize, h: usize, levels: usize, dst: []f64, scratch: []f64) -> err
+fn level_width(n: usize, level: usize) -> usize
+fn max_rectangle(binary: []const u8, w: usize, h: usize, heights: []u32, stack: []u32) -> (Rect, err)
+fn mean_shift(src: []const f64, w: usize, h: usize, hs: f64, hr: f64, iterations: usize, dst: []f64, modes: []f64) -> (usize, err)
+fn watershed(gradient: []const f64, w: usize, h: usize, markers: []const u32, labels: []u32, heap: []u32, age: []u32) -> err
+```
+
+Grid filters over caller `[]f64`/`[]u8`: `gaussian_blur`, `sobel`, `canny` (bilinear
+non-maximum suppression, hysteresis), `median`, `bilateral`, `box_mean`, `guided`,
+`integral_image`/`integral_sum` (and the exact u8/u64 pair), `threshold_otsu`,
+`morph_erode/dilate/open/close`, `label_components` (union-find), `flood_fill` and
+`flood_fill_scanline`, `distance_transform` (Felzenszwalb-Huttenlocher), `fast_marching`,
+`fast_sweeping`, `laplacian_pyramid`/`laplacian_collapse`, `max_rectangle`, `mean_shift`
+and `watershed` (Meyer priority flood).
+
+### `e.gfx.vision`
+
+```neper
+type Point = struct { x: f64, y: f64 }
+type Keypoint = struct { x: f64, y: f64, angle: f64, response: f64, scale: f64 }
+type Line = struct { rho: f64, theta: f64, votes: u32 }
+error TooSmall
+error Invalid
+
+fn pi() -> f64
+fn clamp_index(v: i64, n: usize) -> usize
+fn pixel(img: []const f64, w: usize, h: usize, x: i64, y: i64) -> f64
+fn bilinear(img: []const f64, w: usize, h: usize, x: f64, y: f64) -> f64
+fn grad_x(img: []const f64, w: usize, h: usize, x: i64, y: i64) -> f64
+fn grad_y(img: []const f64, w: usize, h: usize, x: i64, y: i64) -> f64
+fn gaussian_radius(sigma: f64) -> usize
+fn gaussian_kernel(sigma: f64, kernel: []f64) -> usize
+fn gaussian_blur(src: []const f64, dst: []f64, w: usize, h: usize, sigma: f64, tmp: []f64) -> err
+fn harris_corners(img: []const f64, w: usize, h: usize, k: f64, sigma: f64, threshold: f64, out: []Keypoint, scratch: []f64) -> (usize, err)
+fn hough_lines(edges: []const bool, w: usize, h: usize, rho_bins: usize, theta_bins: usize, threshold: u32, accumulator: []u32, out: []Line) -> (usize, err)
+fn mul3(a: []const f64, b: []const f64, out: []f64)
+fn transpose3(a: []const f64, out: []f64)
+fn det3(m: []const f64) -> f64
+fn normalise_matrix(m: []f64)
+fn svd3(m: []const f64, u: []f64, s: []f64, v: []f64) -> err
+fn normalisation(points: []const Point, n: usize) -> (f64, f64, f64)
+fn similarity(cx: f64, cy: f64, s: f64, out: []f64)
+fn accumulate9(ata: []f64, row: []const f64)
+fn null_vector9(ata: []f64, out: []f64) -> err
+fn homography(src: []const Point, dst: []const Point, out: []f64) -> err
+fn apply_homography(hm: []const f64, p: Point) -> Point
+fn fundamental_matrix(a: []const Point, b: []const Point, out: []f64) -> err
+fn epipolar_residual(f: []const f64, a: Point, b: Point) -> f64
+fn ransac[Ctx: type](ctx: *Ctx, n: usize, sample_size: usize, iterations: u32, threshold: f64, fit: fn(*Ctx, []const usize) -> bool, residual: fn(*Ctx, usize) -> f64, r: *rand.Pcg64, inliers: []bool, sample: []usize) -> (usize, err)
+fn fft2(re: []f64, im: []f64, w: usize, h: usize, inverse: bool, col: []f64) -> err
+fn phase_correlate(a: []const f64, b: []const f64, w: usize, h: usize, scratch: []f64) -> (f64, f64, f64, err)
+fn optical_flow_lk(a: []const f64, b: []const f64, w: usize, h: usize, points: []const Point, window: usize, iterations: u32, out: []Point) -> err
+fn poly_expand(img: []const f64, w: usize, h: usize, window: usize, ginv: []const f64, coeff: []f64)
+fn optical_flow_farneback(a: []const f64, b: []const f64, w: usize, h: usize, window: usize, out: []Point, scratch: []f64) -> err
+fn icp(p: []const geom3.Vec3, q: []const geom3.Vec3, iterations: u32, rotation: []f64, matched: []geom3.Vec3) -> (geom3.Vec3, f64, err)
+fn orb_pattern() -> str
+fn pattern_entry(i: usize) -> i64
+fn fast_offset(i: usize) -> (i64, i64)
+fn fast9(img: []const f64, w: usize, h: usize, x: i64, y: i64, threshold: f64) -> bool
+fn harris7(img: []const f64, w: usize, h: usize, x: i64, y: i64) -> f64
+fn centroid_angle(img: []const f64, w: usize, h: usize, x: i64, y: i64) -> f64
+fn brief(img: []const f64, w: usize, h: usize, x: i64, y: i64, angle: f64, out: []u8)
+fn orb(img: []const f64, w: usize, h: usize, threshold: f64, out: []Keypoint, descriptors: []u8) -> (usize, err)
+fn hamming(a: []const u8, b: []const u8) -> u32
+fn sift_sigma(level: usize) -> f64
+fn wrap_angle(a: f64) -> f64
+fn sift_orientation(img: []const f64, w: usize, h: usize, x: i64, y: i64, sigma: f64) -> f64
+fn sift_descriptor(img: []const f64, w: usize, h: usize, x: i64, y: i64, ori: f64, sigma: f64, out: []f64)
+fn sift(img: []const f64, w: usize, h: usize, threshold: f64, out: []Keypoint, descriptors: []f64, scratch: []f64) -> (usize, err)
+fn zhang_row(hm: []const f64, i: usize, j: usize, out: []f64)
+fn calibrate_camera(model: []const Point, image: []const Point, views: usize, out: []f64) -> err
+fn triangulate(rotation: []const f64, t: []const f64, a: Point, b: Point) -> (geom3.Vec3, bool)
+fn to_normalised(kinv: []const f64, p: Point) -> Point
+fn structure_from_motion(k: []const f64, a: []const Point, b: []const Point, rotation: []f64, translation: []f64, points: []geom3.Vec3, scratch: []Point) -> err
+fn pose_candidate(u: []const f64, r1: []const f64, r2: []const f64, pose: usize, rotation: []f64, t: []f64)
+```
+
+`harris_corners`, `hough_lines` (skimage-identical accumulator), `homography` (normalised
+DLT) with `apply_homography`, `fundamental_matrix` (eight-point, rank two) with
+`epipolar_residual`, a generic `ransac` over caller fit and residual callbacks,
+`phase_correlate`, `optical_flow_lk` and `optical_flow_farneback`, `icp` (Kabsch),
+`orb` (FAST-9, Harris ranking, rBRIEF with the OpenCV pattern), `sift` (three octaves,
+4x4x8 descriptors), `calibrate_camera` (Zhang) and `structure_from_motion` (essential
+matrix, cheirality, linear triangulation); `svd3`, `hamming`.
+
 ### `e.gfx.scene`
 
 ```neper
@@ -8147,6 +8283,194 @@ Smoothing (`moving_average`, `ema`, `savitzky_golay`), filters (`fir`, `iir`, `o
 and alignment (`levinson_durbin`, `lpc`, `dtw`, `dtw_path`, `zero_crossings`), adaptive
 filters (`lms`, `nlms`, `rls`) and resampling (`resample_polyphase`, `resample_sinc`).
 
+### `e.dist.anti_entropy`
+
+```neper
+type Entry = struct { key: u64, version: u64 }
+type Merkle = struct { hashes: []u64, width: u64 }
+error TooSmall
+error Invalid
+
+fn fnv_offset() -> u64
+fn fnv_word(h: u64, v: u64) -> u64
+fn leaves(m: *const Merkle) -> usize
+fn merkle_build(entries: []const Entry, width: u64, hashes: []u64) -> (Merkle, err)
+fn sync_node(a: *const Merkle, b: *const Merkle, node: usize, out: []usize, count: *usize, comparisons: *usize)
+fn merkle_sync(a: *const Merkle, b: *const Merkle, out: []usize) -> (usize, usize, err)
+fn lower_bound(entries: []const Entry, key: u64) -> usize
+fn emit(out: []u64, count: *usize, key: u64)
+fn merkle_diff_keys(a: []const Entry, b: []const Entry, width: u64, buckets: []const usize, out: []u64) -> (usize, err)
+```
+
+`merkle_build` over key-range buckets (FNV-1a leaves in a heap-ordered caller tree),
+`merkle_sync` (top-down comparison answering the differing buckets and the comparison
+count) and `merkle_diff_keys`.
+
+### `e.dist.crdt`
+
+```neper
+type GCounter = struct { counts: []u64 }
+type PnCounter = struct { pos: []u64, neg: []u64 }
+type Lww = struct { value: u64, stamp: u64, site: u32 }
+type Tag = struct { site: u32, counter: u32 }
+type OrElem = struct { element: u64, tag: Tag, removed: bool }
+type OrSet = struct { elems: []OrElem, count: usize, site: u32, counter: u32 }
+type Kind = enum u8 { GCounter, PnCounter, Lww, OrSet }
+type Crdt = struct { kind: Kind, gcounter: GCounter, pncounter: PnCounter, lww: Lww, orset: OrSet }
+error TooSmall
+
+fn fill(xs: []u64)
+fn max_into(dst: []u64, src: []const u64)
+fn sum(xs: []const u64) -> u64
+fn gcounter(counts: []u64) -> GCounter
+fn gcounter_increment(c: *GCounter, site: usize, by: u64)
+fn gcounter_merge(dst: *GCounter, src: *const GCounter)
+fn gcounter_value(c: *const GCounter) -> u64
+fn pncounter(pos: []u64, neg: []u64) -> PnCounter
+fn pncounter_increment(c: *PnCounter, site: usize, by: u64)
+fn pncounter_decrement(c: *PnCounter, site: usize, by: u64)
+fn pncounter_merge(dst: *PnCounter, src: *const PnCounter)
+fn pncounter_value(c: *const PnCounter) -> i64
+fn lww() -> Lww
+fn lww_wins(stamp: u64, site: u32, over: *const Lww) -> bool
+fn lww_set(r: *Lww, value: u64, stamp: u64, site: u32) -> bool
+fn lww_merge(dst: *Lww, src: *const Lww) -> bool
+fn orset(elems: []OrElem, site: u32) -> OrSet
+fn orset_add(s: *OrSet, element: u64) -> err
+fn orset_remove(s: *OrSet, element: u64) -> usize
+fn orset_contains(s: *const OrSet, element: u64) -> bool
+fn orset_find(s: *const OrSet, tag: Tag) -> (usize, bool)
+fn orset_merge(dst: *OrSet, src: *const OrSet) -> err
+fn merge(a: *Crdt, b: *const Crdt) -> err
+```
+
+State-based CRDTs over caller storage: G-counter, PN-counter, LWW-register and an OR-set
+with (site, counter) tags and tombstones, each with `_merge`, and `merge` dispatching on
+the kind.
+
+### `e.dist.deadlock`
+
+```neper
+type Edge = struct { from: u32, to: u32 }
+type Probe = struct { initiator: u32, from: u32, to: u32 }
+type Chase = struct { edges: []const Edge, site: []const u32, initiator: u32, probes: []Probe, sent: usize, seen: []bool }
+error TooSmall
+error Invalid
+
+fn dfs(edges: []const Edge, n: usize, u: usize, colour: []usize, depth: []usize) -> (bool, usize)
+fn wait_for_graph_cycle(edges: []const Edge, n: usize, scratch: []usize) -> (bool, usize, err)
+fn spread(c: *Chase, u: usize)
+fn chandy_misra_haas(edges: []const Edge, site: []const u32, initiator: usize, probes: []Probe, scratch: []bool) -> (bool, usize, err)
+```
+
+`wait_for_graph_cycle` (three-colour DFS) and `chandy_misra_haas` (edge-chasing probes
+through a FIFO pool, deadlock when a probe returns to its initiator).
+
+### `e.dist.dht`
+
+```neper
+error TooSmall
+error Invalid
+
+fn between(x: u64, a: u64, b: u64) -> bool
+fn between_closed(x: u64, a: u64, b: u64) -> bool
+fn chord_successor(nodes: []const u64, key: u64) -> usize
+fn chord_finger_tables(nodes: []const u64, bits: u32, fingers: []u32) -> err
+fn chord_lookup(nodes: []const u64, bits: u32, fingers: []const u32, start: usize, key: u64) -> (usize, usize)
+fn kademlia_bucket(self_id: u64, other: u64) -> u32
+fn kademlia_buckets(nodes: []const u64, self: usize, counts: []usize) -> err
+fn knows(nodes: []const u64, i: usize, j: usize, k: usize) -> bool
+fn kademlia_lookup(nodes: []const u64, start: usize, goal: u64, k: usize, alpha: usize, out: []usize, scratch: []usize) -> (usize, usize, err)
+fn closest_u(nodes: []const u64, goal: u64, state: []const usize, k: usize, out: []usize) -> usize
+```
+
+Chord (`chord_successor`, `chord_finger_tables`, `chord_lookup` answering owner and hops)
+and Kademlia (`kademlia_bucket`, `kademlia_buckets`, `kademlia_lookup` with k and alpha
+over an in-memory node set).
+
+### `e.dist.lock`
+
+```neper
+type Instance = struct { up: bool, skew: i64, latency: u64, holder: u64, expires: u64 }
+type Lease = struct { holder: u64, granted: u64, expires: u64 }
+
+fn instance(skew: i64, latency: u64) -> Instance
+fn local_time(inst: *const Instance, now: u64) -> u64
+fn instance_free(inst: *const Instance, now: u64) -> bool
+fn redlock_acquire(instances: []Instance, token: u64, now: u64, ttl: u64, drift: u64) -> (bool, u64)
+fn redlock_release(instances: []Instance, token: u64) -> usize
+fn redlock_held(instances: []const Instance, token: u64, now: u64) -> usize
+fn lease() -> Lease
+fn lease_expired(l: *const Lease, now: u64) -> bool
+fn lease_acquire(l: *Lease, holder: u64, now: u64, ttl: u64) -> bool
+fn lease_renew(l: *Lease, holder: u64, now: u64, ttl: u64) -> bool
+fn lease_due(l: *const Lease, now: u64, num: u64, den: u64) -> bool
+```
+
+Redlock over simulated instances with skew and latency (`redlock_acquire` needing a
+majority inside the validity window, `redlock_release`, `redlock_held`) and leases
+(`lease_acquire`, `lease_renew`, `lease_expired`, `lease_due`).
+
+### `e.dist.mutex`
+
+```neper
+type Kind = enum u8 { Request, Reply, Token }
+type Message = struct { kind: Kind, from: u32, to: u32, stamp: u64 }
+type Sent = struct { out: []Message, count: usize }
+type RaNode = struct { clock: u64, requesting: bool, stamp: u64, replies: usize, in_cs: bool }
+type Ra = struct { nodes: []RaNode, deferred: []bool }
+type RayNode = struct { holder: u32, asked: bool, in_cs: bool, head: usize, count: usize }
+type Raymond = struct { nodes: []RayNode, queue: []u32 }
+error TooSmall
+error Invalid
+
+fn sent(out: []Message) -> Sent
+fn push(s: *Sent, kind: Kind, from: usize, to: usize, stamp: u64)
+fn ra(nodes: []RaNode, deferred: []bool) -> (Ra, err)
+fn ra_request(r: *Ra, i: usize, s: *Sent)
+fn ra_receive(r: *Ra, m: Message, s: *Sent) -> bool
+fn ra_release(r: *Ra, i: usize, s: *Sent)
+fn raymond(nodes: []RayNode, queue: []u32, parent: []const u32, root: usize) -> (Raymond, err)
+fn enqueue(t: *Raymond, i: usize, who: usize)
+fn dequeue(t: *Raymond, i: usize) -> usize
+fn settle(t: *Raymond, i: usize, s: *Sent) -> bool
+fn raymond_request(t: *Raymond, i: usize, s: *Sent) -> bool
+fn raymond_receive(t: *Raymond, m: Message, s: *Sent) -> bool
+fn raymond_release(t: *Raymond, i: usize, s: *Sent)
+```
+
+Ricart-Agrawala (`ra_request`, `ra_receive`, `ra_release`: Lamport-stamped requests
+with deferred replies) and Raymond's token tree (`raymond_request`, `raymond_receive`,
+`raymond_release`: holder pointers and per-node queues), messages counted into a
+caller pool.
+
+### `e.dist.snapshot`
+
+```neper
+type Message = struct { from: u32, to: u32, marker: bool, amount: u64 }
+type Sent = struct { out: []Message, count: usize }
+type Proc = struct { state: u64, recorded: bool, snapshot: u64, markers: usize }
+type Channel = struct { recording: bool, count: usize, total: u64 }
+type Snapshot = struct { procs: []Proc, channels: []Channel }
+error TooSmall
+error Invalid
+
+fn sent(out: []Message) -> Sent
+fn push(s: *Sent, from: usize, to: usize, marker: bool, amount: u64)
+fn snapshot(procs: []Proc, channels: []Channel, initial: []const u64) -> (Snapshot, err)
+fn snapshot_send(s: *Snapshot, from: usize, to: usize, amount: u64, out: *Sent) -> err
+fn record(s: *Snapshot, i: usize, except: usize, out: *Sent)
+fn snapshot_initiate(s: *Snapshot, i: usize, out: *Sent) -> err
+fn snapshot_step(s: *Snapshot, m: Message, out: *Sent) -> bool
+fn snapshot_complete(s: *const Snapshot) -> bool
+fn snapshot_total(s: *const Snapshot) -> u64
+fn snapshot_live(s: *const Snapshot) -> u64
+```
+
+Chandy-Lamport over caller FIFO channels: `snapshot_send`, `snapshot_initiate`,
+`snapshot_step` (markers and recorded channel states), `snapshot_complete`,
+`snapshot_total` and `snapshot_live`.
+
 ### `e.grep`
 
 ```neper
@@ -9450,6 +9774,101 @@ fn axis(s: State, x: Axis) -> fixed.Fx
 fn combo(s: State, c: Combo, steps: []const u16) -> bool
 fn rebind(a: *Action, primary: u16, secondary: u16) -> err
 ```
+
+### `e.audio.analysis`
+
+```neper
+error Invalid
+error TooSmall
+
+fn abs(x: f64) -> f64
+fn parabolic(ym: f64, y0: f64, yp: f64) -> f64
+fn magnitudes(re: []f64, im: []const f64, count: usize)
+fn yin_difference(x: []const f64, out: []f64) -> (usize, err)
+fn yin_pick(cmnd: []const f64, threshold: f64) -> (usize, f64)
+fn yin_frequency(cmnd: []const f64, tau: usize, sample_rate: f64) -> f64
+fn pitch_yin(x: []const f64, sample_rate: f64, threshold: f64, scratch: []f64) -> (f64, f64, err)
+fn pitch_pyin(x: []const f64, sample_rate: f64, thresholds: []const f64, scratch: []f64) -> (f64, f64, err)
+fn autocorrelation_lag(x: []const f64, tau: usize) -> f64
+fn pitch_autocorrelation(x: []const f64, sample_rate: f64, f_min: f64, f_max: f64, scratch: []f64) -> (f64, err)
+fn pitch_hps(x: []const f64, sample_rate: f64, harmonics: usize, scratch: []f64) -> (f64, err)
+fn frame_count(n: usize, frame: usize, hop: usize) -> usize
+fn onset_strength(x: []const f64, frame: usize, hop: usize, scratch: []f64, out: []f64) -> (usize, err)
+fn onsets_pick(envelope: []const f64, threshold: f64, out: []usize) -> (usize, err)
+fn onsets(x: []const f64, frame: usize, hop: usize, threshold: f64, scratch: []f64, out: []usize) -> (usize, err)
+fn tempo(envelope: []const f64, hop: usize, sample_rate: f64) -> (f64, err)
+fn beats(envelope: []const f64, bpm: f64, hop: usize, sample_rate: f64, tightness: f64, scratch: []f64, out: []usize) -> (usize, err)
+fn chroma(x: []const f64, sample_rate: f64, frame: usize, hop: usize, scratch: []f64, out: []f64) -> (usize, err)
+fn block_loudness(z: f64) -> f64
+fn loudness_lufs(x: []const f64, sample_rate: f64, scratch: []f64) -> (f64, err)
+fn voice_activity(x: []const f64, frame: usize, energy: f64, zcr: f64, flatness: f64, scratch: []f64, out: []bool) -> (usize, err)
+```
+
+Pitch (`pitch_yin`, `pitch_pyin`, `pitch_autocorrelation`, `pitch_hps`), onsets
+(`onset_strength`, `onsets_pick`, `onsets`), `tempo` and `beats` (Ellis dynamic
+programming), `chroma`, `loudness_lufs` (BS.1770-4 at 48 kHz) and `voice_activity`.
+
+### `e.audio.fx`
+
+```neper
+error Invalid
+error TooSmall
+
+fn abs(x: f64) -> f64
+fn db_to_gain(db: f64) -> f64
+fn gain_to_db(g: f64) -> f64
+fn coefficient(seconds: f64, sample_rate: f64) -> f64
+fn compressor_gain(level_db: f64, threshold_db: f64, ratio: f64, knee_db: f64) -> f64
+fn compressor(x: []const f64, threshold_db: f64, ratio: f64, attack: f64, release: f64, knee_db: f64, makeup_db: f64, sample_rate: f64, out: []f64) -> err
+fn limiter(x: []const f64, ceiling: f64, lookahead: usize, release: f64, sample_rate: f64, out: []f64) -> err
+fn gate(x: []const f64, threshold_db: f64, attack: f64, release: f64, sample_rate: f64, out: []f64) -> err
+fn equalizer(x: []const f64, bands: []const f64, sample_rate: f64, out: []f64, scratch: []f64) -> err
+fn echo_cancel(mic: []const f64, reference: []const f64, mu: f64, w: []f64, out: []f64) -> err
+fn comb_delay(i: usize) -> usize
+fn allpass_step(buffer: []f64, n: usize, input: f64) -> f64
+fn reverb_schroeder(x: []const f64, feedback: f64, damp: f64, out: []f64, scratch: []f64) -> err
+fn reverb_fdn(x: []const f64, delays: []const usize, feedback: f64, out: []f64, scratch: []f64) -> err
+fn reverb_convolution(x: []const f64, impulse: []const f64, out: []f64) -> (usize, err)
+fn wrap_phase(p: f64) -> f64
+fn synthesis_hop(hop: usize, ratio: f64) -> usize
+fn time_stretch_len(x_len: usize, ratio: f64, frame: usize, hop: usize) -> usize
+fn time_stretch_scratch(x_len: usize, ratio: f64, frame: usize, hop: usize) -> usize
+fn time_stretch(x: []const f64, ratio: f64, frame: usize, hop: usize, out: []f64, scratch: []f64) -> (usize, err)
+fn pitch_shift(x: []const f64, semitones: f64, frame: usize, hop: usize, out: []f64, scratch: []f64) -> err
+fn psola(x: []const f64, marks: []const usize, ratio: f64, out: []f64) -> err
+```
+
+`compressor` (soft-knee gain computer with a smoothed detector), `limiter` (look-ahead),
+`gate`, `equalizer` (cascaded peaking biquads), `echo_cancel` (NLMS), `reverb_schroeder`
+(Freeverb constants), `reverb_fdn` (Householder), `reverb_convolution`, `time_stretch`
+and `pitch_shift` (phase vocoder over the STFT) and `psola`.
+
+### `e.audio.synth`
+
+```neper
+type Stage = enum u8 { Idle, Attack, Decay, Sustain, Release }
+type Adsr = struct { attack: f64, decay: f64, sustain: f64, release: f64, stage: Stage, level: f64 }
+type Waveform = enum u8 { Saw, Square, Triangle }
+type Interpolation = enum u8 { Linear, Cubic }
+error Invalid
+error TooSmall
+
+fn fract(x: f64) -> f64
+fn rate(seconds: f64, sample_rate: f64) -> f64
+fn adsr(attack: f64, decay: f64, sustain: f64, release: f64, sample_rate: f64) -> Adsr
+fn adsr_gate(e: *Adsr, on: bool)
+fn adsr_next(e: *Adsr) -> f64
+fn polyblep(t: f64, dt: f64) -> f64
+fn oscillator_naive(kind: Waveform, phase: f64) -> f64
+fn oscillator_polyblep(kind: Waveform, phase: f64, increment: f64) -> f64
+fn wavetable_build(table: []f64, harmonics: usize) -> err
+fn wavetable(table: []const f64, phase: f64, interpolation: Interpolation) -> f64
+fn karplus_strong(frequency: f64, sample_rate: f64, decay: f64, r: *rand.Pcg64, out: []f64) -> err
+```
+
+`adsr` envelopes (`adsr_gate`, `adsr_next`), `oscillator_polyblep` (saw, square,
+triangle) beside `oscillator_naive`, `wavetable_build`/`wavetable` (linear and
+Catmull-Rom) and `karplus_strong`.
 
 ### `e.audio.spatial`
 

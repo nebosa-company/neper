@@ -1,0 +1,58 @@
+{
+ "decision": "D870",
+ "modules": [
+  {
+   "name": "e.dist.mutex",
+   "deps": [],
+   "fixture": "dist_mutex",
+   "anchor": "### `e.grep`\n",
+   "note": "Ricart-Agrawala (`ra_request`, `ra_receive`, `ra_release`: Lamport-stamped requests\nwith deferred replies) and Raymond's token tree (`raymond_request`, `raymond_receive`,\n`raymond_release`: holder pointers and per-node queues), messages counted into a\ncaller pool.",
+   "comment": "`e.dist.mutex`: mutual exclusion and exact message counts (30 and 24 for five entries) over a scripted schedule"
+  },
+  {
+   "name": "e.dist.snapshot",
+   "deps": [],
+   "fixture": "dist_snapshot",
+   "anchor": "### `e.grep`\n",
+   "note": "Chandy-Lamport over caller FIFO channels: `snapshot_send`, `snapshot_initiate`,\n`snapshot_step` (markers and recorded channel states), `snapshot_complete`,\n`snapshot_total` and `snapshot_live`.",
+   "comment": "`e.dist.snapshot`: a token-passing computation snapshotted mid-flight with 67 tokens in channels: recorded states plus channels equal the 400 live"
+  },
+  {
+   "name": "e.gfx.filter",
+   "deps": [
+    "e.math"
+   ],
+   "fixture": "gfx_filter",
+   "anchor": "### `e.gfx.scene`\n",
+   "note": "Grid filters over caller `[]f64`/`[]u8`: `gaussian_blur`, `sobel`, `canny` (bilinear\nnon-maximum suppression, hysteresis), `median`, `bilateral`, `box_mean`, `guided`,\n`integral_image`/`integral_sum` (and the exact u8/u64 pair), `threshold_otsu`,\n`morph_erode/dilate/open/close`, `label_components` (union-find), `flood_fill` and\n`flood_fill_scanline`, `distance_transform` (Felzenszwalb-Huttenlocher), `fast_marching`,\n`fast_sweeping`, `laplacian_pyramid`/`laplacian_collapse`, `max_rectangle`, `mean_shift`\nand `watershed` (Meyer priority flood).",
+   "comment": "`e.gfx.filter`: every filter pixel-exact or within 1e-9 of scipy.ndimage and scikit-image on a 32x32 image, Canny and watershed included"
+  },
+  {
+   "name": "e.gfx.vision",
+   "deps": [
+    "e.algo.geom3",
+    "e.algo.rand",
+    "e.math",
+    "e.math.fft",
+    "e.math.filter",
+    "e.ml.reduce"
+   ],
+   "fixture": "gfx_vision",
+   "anchor": "### `e.gfx.scene`\n",
+   "note": "`harris_corners`, `hough_lines` (skimage-identical accumulator), `homography` (normalised\nDLT) with `apply_homography`, `fundamental_matrix` (eight-point, rank two) with\n`epipolar_residual`, a generic `ransac` over caller fit and residual callbacks,\n`phase_correlate`, `optical_flow_lk` and `optical_flow_farneback`, `icp` (Kabsch),\n`orb` (FAST-9, Harris ranking, rBRIEF with the OpenCV pattern), `sift` (three octaves,\n4x4x8 descriptors), `calibrate_camera` (Zhang) and `structure_from_motion` (essential\nmatrix, cheirality, linear triangulation); `svd3`, `hamming`.",
+   "comment": "`e.gfx.vision`: a homography to 5e-14, epipolar residuals to 1e-8, RANSAC finding the planted inliers, a known shift and flow recovered, Zhang intrinsics to 1e-10, ORB and SIFT descriptors equal to a replica"
+  },
+  {
+   "name": "e.audio.analysis",
+   "deps": [
+    "e.dsp",
+    "e.math",
+    "e.math.fft"
+   ],
+   "fixture": "audio_analysis",
+   "anchor": "### `e.audio.spatial`\n",
+   "note": "Pitch (`pitch_yin`, `pitch_pyin`, `pitch_autocorrelation`, `pitch_hps`), onsets\n(`onset_strength`, `onsets_pick`, `onsets`), `tempo` and `beats` (Ellis dynamic\nprogramming), `chroma`, `loudness_lufs` (BS.1770-4 at 48 kHz) and `voice_activity`.",
+   "comment": "`e.audio.analysis`: four pitch trackers within 0.5 Hz, a click train's onsets, tempo and beats exact, chroma of a C-major chord, a calibrated sine reading -23 LUFS"
+  }
+ ]
+}

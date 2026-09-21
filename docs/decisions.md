@@ -17006,6 +17006,48 @@ registration tooling and the batch descriptions with it; the tooling
 was rewritten from this conversation and the brief now says what a
 scratchpad is.
 
+## D869 — Anti-entropy, CRDTs, deadlock detection, distributed hash tables and locks
+
+Batch twenty-eight of the algos.md stream (D834): `e.dist.anti_entropy`
+(Merkle trees over key-range buckets with a counted top-down sync),
+`e.dist.crdt` (G- and PN-counters, LWW registers, OR-sets with tags and
+tombstones, one `merge` dispatch), `e.dist.deadlock` (wait-for-graph
+cycles and Chandy-Misra-Haas edge chasing, where an initiator outside
+the cycle correctly detects nothing), `e.dist.dht` (Chord finger tables
+and Kademlia XOR lookups) and `e.dist.lock` (Redlock with skew and
+latency, leases with due-time renewal). None of the five imports
+anything: they are arithmetic over caller arrays.
+
+## D870 — Distributed mutual exclusion, global snapshots and image filters
+
+Batch twenty-nine of the algos.md stream (D834): `e.dist.mutex`
+(Ricart-Agrawala and Raymond's tree with exact message counts),
+`e.dist.snapshot` (Chandy-Lamport over FIFO channels, checked by token
+conservation) and `e.gfx.filter` (twenty grid filters from Gaussian
+blur to watershed, each pixel-exact or within 1e-9 of scipy.ndimage or
+scikit-image, including Canny once its non-maximum suppression became
+the bilinear one scikit-image uses -- the quantised-direction variant
+was ten percent off, which the replica showed and the plan text never
+would have). Also `e.gfx.vision`: Harris, Hough, homographies and
+fundamental matrices, RANSAC, phase correlation, Lucas-Kanade and
+Farneback flow, ICP, ORB, SIFT, Zhang calibration and two-view structure
+from motion, each against a replica cross-checked with scikit-image.
+And `e.audio.analysis` (pitch by YIN, pYIN, autocorrelation and HPS,
+onsets, tempo and beats, chroma, BS.1770 loudness, voice activity).
+
+## D871 — Audio effects and synthesis
+
+Batch thirty of the algos.md stream (D834): `e.audio.fx` (compressor,
+limiter, gate, equaliser, NLMS echo cancellation, Schroeder and
+feedback-delay-network reverbs, convolution reverb, phase-vocoder
+stretch and shift, TD-PSOLA) and `e.audio.synth` (ADSR, PolyBLEP
+oscillators, wavetables, Karplus-Strong), both over `e.dsp`. The
+analysis module of the same family (`e.audio.analysis`: pitch, onsets,
+tempo and beats, chroma, LUFS loudness, voice activity) landed with
+batch twenty-nine. A lesson the agent recorded: `mem.alloc` hands back
+unzeroed memory, so a module clears any scratch it reads before it
+writes.
+
 ## D885 — `e.os.shell` opens the host's shell: a capability record, never an emulation
 
 The widget plan's phase 4 waits on reviewed host primitives, and its

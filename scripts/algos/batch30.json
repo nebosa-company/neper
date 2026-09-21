@@ -1,0 +1,27 @@
+{
+ "decision": "D871",
+ "modules": [
+  {
+   "name": "e.audio.fx",
+   "deps": [
+    "e.dsp",
+    "e.math"
+   ],
+   "fixture": "audio_fx",
+   "anchor": "### `e.audio.spatial`\n",
+   "note": "`compressor` (soft-knee gain computer with a smoothed detector), `limiter` (look-ahead),\n`gate`, `equalizer` (cascaded peaking biquads), `echo_cancel` (NLMS), `reverb_schroeder`\n(Freeverb constants), `reverb_fdn` (Householder), `reverb_convolution`, `time_stretch`\nand `pitch_shift` (phase vocoder over the STFT) and `psola`.",
+   "comment": "`e.audio.fx`: the static compressor curve, a limiter at its ceiling, EQ and reverb digests to 1e-9, an echo cancelled by 20 dB, a stretch keeping its pitch and a shift moving it"
+  },
+  {
+   "name": "e.audio.synth",
+   "deps": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "fixture": "audio_synth",
+   "anchor": "### `e.audio.spatial`\n",
+   "note": "`adsr` envelopes (`adsr_gate`, `adsr_next`), `oscillator_polyblep` (saw, square,\ntriangle) beside `oscillator_naive`, `wavetable_build`/`wavetable` (linear and\nCatmull-Rom) and `karplus_strong`.",
+   "comment": "`e.audio.synth`: samples to 1e-12 against replicas and a PolyBLEP saw with a third of the naive aliasing energy"
+  }
+ ]
+}
