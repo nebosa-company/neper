@@ -2315,6 +2315,7 @@
     "e.mem",
     "e.ui.accessibility",
     "e.ui.control",
+    "e.ui.input",
     "e.ui.layout",
     "e.ui.overlay",
     "e.ui.style",

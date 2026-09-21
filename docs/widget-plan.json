@@ -744,8 +744,13 @@
             "DockPanel",
             "MultiDocumentWorkspace"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "DocumentTabs",
+            "DockLayout",
+            "DockPanel",
+            "MultiDocumentWorkspace"
+          ],
+          "evidence": "lib/e/ui/navigation.e (D852): document_tabs as tab regions that pick on a tap, close from a button unless pinned, mark dirty titles, move by a D844 drag onto another tab (a DocumentMove) and pick neighbours on Left/Right; dock_panel as a title bar with a close over content; dock_layout as nested resizable panes (left, middle sizing the right by what remains, centre over bottom) reporting the whole DockSizes; multi_document_workspace as the tabs over the view with Ctrl+W, Ctrl+PageDown and Ctrl+PageUp; tests/selfhost/fixtures/link/ui_workspace on both hosts"
         },
         {
           "id": "P3-04",

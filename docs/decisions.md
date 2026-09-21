@@ -16531,3 +16531,28 @@ grows, shrinks and stores the pairs, so the editor holds nothing. Both
 are tables of two columns in the tree. `link/ui_property` checks the
 rows, the headers, a collapse, the checkbox, the edits, a remove and
 an add on both hosts.
+
+## D852 — Document workspace: tabs move by a drop, a dock reports the whole of its sizes
+
+P3-03 of the widget plan. `document_tabs` takes the caller's
+`Document` list -- key, title, dirty, pinned -- and the current index:
+each tab is one region whose tap picks, whose drag begins D844's drag
+with the tab's index as the payload and whose drop of another's tab
+reports a `DocumentMove` (a pinned tab neither moves nor takes a
+drop), with a close button after the title unless pinned, a mark before
+the title while dirty ("unsaved" as the tree's hint), and Left and
+Right picking the neighbours; the caller reorders, closes and saves.
+`dock_panel` is a title bar with a close over content on a bordered
+surface. `dock_layout` is D826's resizable panes nested: the left
+panel's, then the middle's whose handle sizes the middle so the right
+panel is what remains, and inside the middle the centre's vertical
+handle so the bottom panel is what remains -- every handle's move is
+turned into the whole `DockSizes` the caller keeps, so a layout is one
+value to save and restore. `multi_document_workspace` puts the tabs
+over the current document's view under a scope with Ctrl+W (close),
+Ctrl+PageDown and Ctrl+PageUp (next and previous); Ctrl+Tab is not
+offered because Tab moves the focus before any shortcut, by D803's
+rule. The fixture found the drag contract's fine print: a drag reports
+from the move after the one that crosses the slop, so a short drag in
+few steps reports nothing. `link/ui_workspace` picks, closes, moves,
+chords and resizes on both hosts.

@@ -11,6 +11,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
@@ -400,4 +401,346 @@ fn breadcrumbs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     sem.role = 2u8
     sem.label = label
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// ------------------------------------------------------ document workspace (D852, P3-03)
+
+// An open document: its stable key, its title, whether it has unsaved changes,
+// whether it is pinned (its tab keeps no close button and stays where it is).
+type Document = struct { key: widget.Key, title: str, dirty: bool, pinned: bool }
+
+// A document tab moved from one index to another.
+type DocumentMove = struct { from: usize, to: usize }
+
+// A tab's gestures: a tap picks it, a drag begins a move carrying the index
+// (D844), a drop of another's tab on it ends one.
+type TabGesture = struct { runtime: *widget.Runtime, index: usize, pinned: bool, pick: widget.Change[usize], move: widget.Change[DocumentMove] }
+
+fn tab_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let h = mem.cast[*TabGesture](ctx)
+    switch g {
+    case .Tap as at:
+        ret widget.fire_change[usize](h.pick, h.index)
+    case .DragStart as at:
+        if h.pinned { ret ok }
+        ret widget.begin_drag(h.runtime, u64(h.index) + 1u64)
+    case .Drop as d:
+        if d.payload == 0u64 || h.pinned { ret ok }
+        let from = usize(d.payload - 1u64)
+        if from == h.index { ret ok }
+        ret widget.fire_change[DocumentMove](h.move, DocumentMove { from: from, to: h.index })
+    default:
+        ret ok
+    }
+}
+
+type TabClose = struct { index: usize, close: widget.Change[usize] }
+
+fn tab_close_fire(ctx: *void) -> err {
+    let c = mem.cast[*TabClose](ctx)
+    ret widget.fire_change[usize](c.close, c.index)
+}
+
+// Document tabs: a tab a document keyed `key + 1 + 2 * index`, the current one
+// filled and selected, a dirty one's title marked, with a close button (keyed
+// `key + 2 + 2 * index`) after the title unless pinned; a tap picks, a close
+// reports the index through `close`, a tab dragged onto another reports a
+// `DocumentMove` (pinned tabs neither move nor take a drop), and Left and Right
+// from a focused tab pick the neighbours. A tab list in the tree named `label`.
+fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove]) -> (widget.Node, err) {
+    if documents.len > 64usize { ret (zero, TooLarge) }
+    let (tabs, tabs_error) = mem.alloc[widget.Node](a, documents.len)
+    if tabs_error != ok { ret (zero, TooLarge) }
+    let (gestures, gestures_error) = mem.alloc[TabGesture](a, documents.len)
+    if gestures_error != ok { ret (zero, TooLarge) }
+    let (closes, closes_error) = mem.alloc[TabClose](a, documents.len)
+    if closes_error != ok { ret (zero, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, documents.len)
+    if actions_error != ok { ret (zero, TooLarge) }
+    let (picks, picks_error) = mem.alloc[TabClose](a, 2usize)
+    if picks_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < documents.len {
+        let d = documents[i]
+        let chosen = i == current
+        let tab_key = key + 1u64 + 2u64 * u64(i)
+        gestures[i] = TabGesture { runtime: t.runtime, index: i, pinned: d.pinned, pick: pick, move: move }
+        closes[i] = TabClose { index: i, close: close }
+        actions[i] = widget.Submit { ctx: mem.cast[*void](&closes[i]), invoke: tab_close_fire }
+        var variant: style.ControlVariant = .Plain
+        if chosen { variant = .Filled }
+        let look = style.resolve(t.tokens, variant, control.control_state(t, tab_key, true, chosen))
+        // The title, a dot before it while dirty.
+        let (title_bytes, title_error) = mem.alloc[u8](a, d.title.len + 2usize)
+        if title_error != ok { ret (zero, TooLarge) }
+        var n = 0usize
+        if d.dirty {
+            title_bytes[0usize] = 42u8
+            title_bytes[1usize] = 32u8
+            n = 2usize
+        }
+        var k = 0usize
+        while k < d.title.len {
+            title_bytes[n + k] = d.title[k]
+            k += 1usize
+        }
+        n += d.title.len
+        var caption = control.text_options()
+        caption.role = .Label
+        caption.wrap = .None
+        let (title_node, title_node_error) = control.colored_text(a, 0u64, title_bytes[0usize..n], t, caption, look.foreground)
+        if title_node_error != ok { ret (zero, title_node_error) }
+        var part_count = 1usize
+        if !d.pinned { part_count = 2usize }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, part_count)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = title_node
+        if !d.pinned {
+            var plain = control.button_options()
+            plain.variant = .Plain
+            let (closer, closer_error) = control.button(a, key + 2u64 + 2u64 * u64(i), t, "x", &actions[i], plain)
+            if closer_error != ok { ret (zero, closer_error) }
+            parts[1usize] = closer
+        }
+        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+        if body_error != ok { ret (zero, TooLarge) }
+        body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..part_count])
+        var tab_style = style.defaults()
+        tab_style.background = paint.Brush { Solid: look.background }
+        tab_style.min_height = style.Length { Px: t.tokens.metrics.control_height }
+        let pad_x = style.Length { Px: t.tokens.spacing.sm }
+        let pad_y = style.Length { Px: t.tokens.spacing.xs }
+        tab_style.padding = style.EdgeLengths { left: pad_x, top: pad_y, right: pad_x, bottom: pad_y }
+        let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
+        if region_error != ok { ret (zero, TooLarge) }
+        region[0usize] = widget.region(tab_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&gestures[i]), invoke: tab_gesture }, gestures: 1u8 | 2u8 | 4u8 | 8u8, enabled: true, focusable: true }, tab_style, body[0usize..1usize])
+        var sem: widget.Semantics = zero
+        sem.role = 19u8
+        sem.label = d.title
+        sem.column = u32(i + 1usize)
+        sem.column_count = u32(documents.len)
+        sem.actions = accessibility.ACTION_PRESS
+        if chosen { sem.states = accessibility.STATE_SELECTED }
+        if d.dirty { sem.hint = "unsaved" }
+        tabs[i] = widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize])
+        i += 1usize
+    }
+    // Left and Right pick the neighbours of the current tab.
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var bound = 0usize
+    if current > 0usize && current < documents.len {
+        picks[0usize] = TabClose { index: current - 1usize, close: pick }
+        shortcuts[bound] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[0usize]), invoke: tab_close_fire } }
+        bound += 1usize
+    }
+    if current + 1usize < documents.len {
+        picks[1usize] = TabClose { index: current + 1usize, close: pick }
+        shortcuts[bound] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[1usize]), invoke: tab_close_fire } }
+        bound += 1usize
+    }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    var strip = style.defaults()
+    strip.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 0.0 }, strip, tabs[0usize..documents.len])
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), row[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 20u8
+    sem.label = label
+    sem.column_count = u32(documents.len)
+    ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// A dock panel: a title bar (the title as a label, a close button keyed `key + 1`
+// firing `close`) over the content on a bordered surface; a group in the tree
+// named by the title.
+fn dock_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit) -> (widget.Node, err) {
+    var caption = control.text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (title_node, title_error) = control.text(a, 0u64, title, t, caption)
+    if title_error != ok { ret (zero, title_error) }
+    var plain = control.button_options()
+    plain.variant = .Plain
+    let (closer, closer_error) = control.button(a, key + 1u64, t, "x", close, plain)
+    if closer_error != ok { ret (zero, closer_error) }
+    let (head, head_error) = mem.alloc[widget.Node](a, 2usize)
+    if head_error != ok { ret (zero, TooLarge) }
+    head[0usize] = title_node
+    head[1usize] = closer
+    var bar = style.defaults()
+    bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
+    bar.width = style.Length { Percent: 100.0 }
+    let pad = style.Length { Px: t.tokens.spacing.xs }
+    bar.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: t.tokens.spacing.xs }, bar, head[0usize..2usize])
+    parts[1usize] = content
+    var options = control.surface_options(t)
+    options.bordered = true
+    var panel = control.surface_style(t, options)
+    panel.width = style.Length { Percent: 100.0 }
+    panel.height = style.Length { Percent: 100.0 }
+    panel.overflow = .Clip
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, panel, parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = title
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// The sizes of a dock layout's side panels, the caller's value.
+type DockSizes = struct { left: f32, right: f32, bottom: f32 }
+
+// One handle's move turned into the whole sizes value.
+type DockMove = struct { side: u8, sizes: DockSizes, width: f32, handle: f32, change: widget.Change[DockSizes] }
+
+fn dock_move_fire(ctx: *void, moved: f32) -> err {
+    let m = mem.cast[*DockMove](ctx)
+    var next = m.sizes
+    if m.side == 0u8 { next.left = moved }
+    if m.side == 2u8 { next.bottom = moved }
+    if m.side == 1u8 {
+        // The middle's handle sizes the middle; the right panel is what remains.
+        next.right = m.width - m.sizes.left - moved - 2.0 * m.handle
+        if next.right < 0.0 { next.right = 0.0 }
+    }
+    ret widget.fire_change[DockSizes](m.change, next)
+}
+
+// A dock layout: `left` and `right` panels beside a middle of `centre` over
+// `bottom`, `width` by `height`, the panels sized by `sizes` (the caller's) and
+// resized by D826's handles -- the left panel's (keyed `key + 1`, its content
+// `key + 2`, its handle `key + 3`), the middle's (`key + 4`, whose move sizes the
+// right panel by what remains) and the bottom's inside the middle (`key + 7`);
+// every move reaches `change` with the whole sizes. A group in the tree.
+fn dock_layout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, left: widget.Node, centre: widget.Node, right: widget.Node, bottom: widget.Node, sizes: DockSizes, change: widget.Change[DockSizes], width: f32, height: f32) -> (widget.Node, err) {
+    let handle = t.tokens.spacing.xs
+    let (moves, moves_error) = mem.alloc[DockMove](a, 3usize)
+    if moves_error != ok { ret (zero, TooLarge) }
+    moves[0usize] = DockMove { side: 0u8, sizes: sizes, width: width, handle: handle, change: change }
+    moves[1usize] = DockMove { side: 1u8, sizes: sizes, width: width, handle: handle, change: change }
+    moves[2usize] = DockMove { side: 2u8, sizes: sizes, width: width, handle: handle, change: change }
+    // The middle: the centre over the bottom panel, the centre's height the rest.
+    var middle_height = height - sizes.bottom - handle
+    if middle_height < 0.0 { middle_height = 0.0 }
+    let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+    if centred_error != ok { ret (zero, TooLarge) }
+    centred[0usize] = centre
+    var centre_style = style.defaults()
+    centre_style.width = style.Length { Percent: 100.0 }
+    centre_style.height = style.Length { Px: middle_height }
+    centre_style.overflow = .Clip
+    let (stack, stack_error) = mem.alloc[widget.Node](a, 2usize)
+    if stack_error != ok { ret (zero, TooLarge) }
+    stack[0usize] = widget.box(0u64, centre_style, centred[0usize..1usize])
+    // The bottom panel's handle sits above it: the centre is the resizable pane,
+    // its size the centre's height, so a drag reports the bottom by what remains.
+    let (bottom_boxed, bottom_boxed_error) = mem.alloc[widget.Node](a, 1usize)
+    if bottom_boxed_error != ok { ret (zero, TooLarge) }
+    bottom_boxed[0usize] = bottom
+    var bottom_style = style.defaults()
+    bottom_style.width = style.Length { Percent: 100.0 }
+    bottom_style.height = style.Length { Px: sizes.bottom }
+    bottom_style.overflow = .Clip
+    stack[1usize] = widget.box(0u64, bottom_style, bottom_boxed[0usize..1usize])
+    let (lower, lower_error) = mem.alloc[DockMove](a, 1usize)
+    if lower_error != ok { ret (zero, TooLarge) }
+    lower[0usize] = DockMove { side: 3u8, sizes: sizes, width: height, handle: handle, change: change }
+    let (middle_pane, middle_pane_error) = control.resizable_pane(a, key + 7u64, t, "Bottom panel", .Vertical, middle_height, 2.0 * t.tokens.spacing.lg, height - handle, widget.Change[f32] { ctx: mem.cast[*void](&lower[0usize]), invoke: dock_bottom_fire }, stack[0usize])
+    if middle_pane_error != ok { ret (zero, middle_pane_error) }
+    let (middle_parts, middle_parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if middle_parts_error != ok { ret (zero, TooLarge) }
+    middle_parts[0usize] = middle_pane
+    middle_parts[1usize] = stack[1usize]
+    var middle_style = style.defaults()
+    middle_style.width = style.Length { Percent: 100.0 }
+    middle_style.height = style.Length { Px: height }
+    let middle = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, middle_style, middle_parts[0usize..2usize])
+    // The row: the left panel, the middle (whose handle sizes the right), the right.
+    var middle_width = width - sizes.left - sizes.right - 2.0 * handle
+    if middle_width < 0.0 { middle_width = 0.0 }
+    let (left_pane, left_error) = control.resizable_pane(a, key + 1u64, t, "Left panel", .Horizontal, sizes.left, 2.0 * t.tokens.spacing.lg, width - handle, widget.Change[f32] { ctx: mem.cast[*void](&moves[0usize]), invoke: dock_move_fire }, left)
+    if left_error != ok { ret (zero, left_error) }
+    let (middle_sized, middle_sized_error) = control.resizable_pane(a, key + 4u64, t, "Right panel", .Horizontal, middle_width, 2.0 * t.tokens.spacing.lg, width - handle, widget.Change[f32] { ctx: mem.cast[*void](&moves[1usize]), invoke: dock_move_fire }, middle)
+    if middle_sized_error != ok { ret (zero, middle_sized_error) }
+    let (righted, righted_error) = mem.alloc[widget.Node](a, 1usize)
+    if righted_error != ok { ret (zero, TooLarge) }
+    righted[0usize] = right
+    var right_style = style.defaults()
+    right_style.width = style.Length { Flex: 1.0 }
+    right_style.height = style.Length { Percent: 100.0 }
+    right_style.overflow = .Clip
+    let (row, row_error) = mem.alloc[widget.Node](a, 3usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = left_pane
+    row[1usize] = middle_sized
+    row[2usize] = widget.box(0u64, right_style, righted[0usize..1usize])
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, control.sized_style(width, height), row[0usize..3usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// The middle's vertical handle sizes the centre; the bottom is what remains.
+fn dock_bottom_fire(ctx: *void, moved: f32) -> err {
+    let m = mem.cast[*DockMove](ctx)
+    var next = m.sizes
+    next.bottom = m.width - moved - m.handle
+    if next.bottom < 0.0 { next.bottom = 0.0 }
+    ret widget.fire_change[DockSizes](m.change, next)
+}
+
+// A multi-document workspace: the document tabs (keyed `key + 1`) over the
+// current document's view, `width` by `height`, under a scope whose Ctrl+W
+// closes the current document and whose Ctrl+PageDown and Ctrl+PageUp pick the
+// next and the previous; a group in the tree named `label`.
+fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, view: widget.Node, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], width: f32, height: f32) -> (widget.Node, err) {
+    let (strip, strip_error) = document_tabs(a, key + 1u64, t, label, documents, current, pick, close, move)
+    if strip_error != ok { ret (zero, strip_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = strip
+    let (viewed, viewed_error) = mem.alloc[widget.Node](a, 1usize)
+    if viewed_error != ok { ret (zero, TooLarge) }
+    viewed[0usize] = view
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: width }
+    view_style.height = style.Length { Flex: 1.0 }
+    view_style.overflow = .Clip
+    parts[1usize] = widget.box(0u64, view_style, viewed[0usize..1usize])
+    let (keys, keys_error) = mem.alloc[TabClose](a, 3usize)
+    if keys_error != ok { ret (zero, TooLarge) }
+    var next = current
+    if current + 1usize < documents.len { next = current + 1usize }
+    var previous = current
+    if current > 0usize { previous = current - 1usize }
+    keys[0usize] = TabClose { index: current, close: close }
+    keys[1usize] = TabClose { index: next, close: pick }
+    keys[2usize] = TabClose { index: previous, close: pick }
+    var held: input.Modifiers = zero
+    held.control = true
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 3usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    shortcuts[0usize] = widget.Shortcut { key: 87u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&keys[0usize]), invoke: tab_close_fire } }
+    shortcuts[1usize] = widget.Shortcut { key: 34u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&keys[1usize]), invoke: tab_close_fire } }
+    shortcuts[2usize] = widget.Shortcut { key: 33u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&keys[2usize]), invoke: tab_close_fire } }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(width, height), parts[0usize..2usize])
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..3usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }

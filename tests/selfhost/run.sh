@@ -2027,6 +2027,13 @@ ui_property_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/ui-property-selfhost"
 ui_property_output=$("$test_build/ui-property-selfhost")
 [ "$ui_property_output" = 'ui property ok' ]
+# Document workspace (D852, widget plan P3-03): document tabs, dock panel, dock
+# layout, multi-document workspace.
+ui_workspace_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_workspace/src/main.e" "$repo" x64 linux "$test_build/ui-workspace-selfhost")
+[ "$ui_workspace_written" = 'executable written' ]
+chmod +x "$test_build/ui-workspace-selfhost"
+ui_workspace_output=$("$test_build/ui-workspace-selfhost")
+[ "$ui_workspace_output" = 'ui workspace ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -2123,6 +2123,13 @@ $uiPropertyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiPropertyWritten -ne 'executable written') { throw 'ui_property emission failed' }
 $uiPropertyOutput = & $uiPropertyPath
 if ($LASTEXITCODE -ne 0 -or $uiPropertyOutput -ne 'ui property ok') { throw "the property editing answered wrongly: exit $LASTEXITCODE" }
+# Document workspace (D852, widget plan P3-03): document tabs, dock panel, dock
+# layout, multi-document workspace.
+$uiWorkspacePath = Join-Path $testBuild 'ui-workspace-selfhost.exe'
+$uiWorkspaceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_workspace\src\main.e') $repo 'x64' 'windows' $uiWorkspacePath
+if ($LASTEXITCODE -ne 0 -or $uiWorkspaceWritten -ne 'executable written') { throw 'ui_workspace emission failed' }
+$uiWorkspaceOutput = & $uiWorkspacePath
+if ($LASTEXITCODE -ne 0 -or $uiWorkspaceOutput -ne 'ui workspace ok') { throw "the document workspace answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
