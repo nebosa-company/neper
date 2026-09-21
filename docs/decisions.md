@@ -15691,3 +15691,27 @@ plus the child's margin box, so an absolute position needs no new field
 or kind, only the style's `position` set to say so. `link/ui_layout_primary`
 checks the row, the column, the wrap's line break and the positioned
 box on both hosts.
+
+## D816 — The layout adapters, and a placed flex fills its settled size
+
+P1-04 of the widget plan. Five of the eight adapters are the style or a
+flex under another name: `aligned` and `center` are a vertical flex with
+the main and cross alignment of the two axes, `padded` and `constrained`
+set the padding and the size bounds, and `spacer` is a box with a flex
+share of both axes. Alignment exposed a gap in D799's placement: a flex
+laid its children out under the constraints it was measured with, so a
+box sized larger than its content had no leftover to align in and
+Center was Start; a placed flex now lays out within its settled size on
+both axes (the children are still measured under the open constraints),
+which is what Stretch should have meant too. Two adapters need a kind:
+an `Aspect` box is as wide as its constraints allow -- or as its content
+when they are unbounded -- and the ratio tall; a `Fitted` box measures
+its content unconstrained and paints it through a scale transform about
+the box's origin, never above one, so a too-large picture fits without
+being laid out twice, and its elements' bounds stay unscaled (a hit test
+in a fitted box waits on transformed bounds). `responsive` is a pure
+choice of subtree by the size class of a width when the tree is built,
+where the app knows the window. Three names moved out of the way of
+module-scope functions' parameters (`aligned`, `padded`, `constrained`'s
+local), D806's rule again. `link/ui_layout_adapters` checks each on both
+hosts, the fitted box by its pixels.

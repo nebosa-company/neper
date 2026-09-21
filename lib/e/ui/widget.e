@@ -91,7 +91,11 @@ type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u
 // `dismiss`. Overlays stack in tree order; the last is on top.
 type Placement = enum u8 { Below, Above, Right, Left, Center }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap }
+// The layout adapters that need a kind (D816): an aspect box is as wide as it may
+// be and as tall as the ratio says; a fitted box scales its content down to fit,
+// painting through a transform (its elements' bounds stay unscaled).
+type Alignment = enum u8 { Start, Center, End }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -113,6 +117,8 @@ const EDIT_TAG: u8 = 11u8
 const SEMANTICS_TAG: u8 = 12u8
 const OVERLAY_TAG: u8 = 13u8
 const WRAP_TAG: u8 = 14u8
+const ASPECT_TAG: u8 = 15u8
+const FITTED_TAG: u8 = 16u8
 const MAX_OVERLAYS: usize = 8usize
 const MAX_SHORT: usize = 32usize
 const MAX_HISTORY: usize = 32usize
@@ -318,6 +324,62 @@ fn wrap(key: Key, spec: ui_layout.Wrap, value_style: style.Style, children: []co
     ret Node { key: key, kind: Kind { Wrap: spec }, style: value_style, children: children }
 }
 
+// The layout adapters (D816): a child aligned in its box, centred, padded, a spacer
+// that takes a flex share, a box constrained between sizes, an aspect box, a fitted
+// box, and a choice of subtree by the size class of a width.
+fn aligned(key: Key, horizontal: Alignment, vertical: Alignment, value_style: style.Style, children: []const Node) -> Node {
+    var main: ui_layout.MainAlign = .Start
+    if vertical == .Center { main = .Center }
+    if vertical == .End { main = .End }
+    var cross: ui_layout.CrossAlign = .Start
+    if horizontal == .Center { cross = .Center }
+    if horizontal == .End { cross = .End }
+    ret flex(key, ui_layout.Flex { axis: .Vertical, main: main, cross: cross, gap: 0.0 }, value_style, children)
+}
+
+fn center(key: Key, value_style: style.Style, children: []const Node) -> Node {
+    ret aligned(key, .Center, .Center, value_style, children)
+}
+
+fn padded(key: Key, left: f32, top: f32, right: f32, bottom: f32, value_style: style.Style, children: []const Node) -> Node {
+    var inset = value_style
+    inset.padding = style.EdgeLengths { left: style.Length { Px: left }, top: style.Length { Px: top }, right: style.Length { Px: right }, bottom: style.Length { Px: bottom } }
+    ret box(key, inset, children)
+}
+
+fn spacer(key: Key, share: f32) -> Node {
+    var s = style.defaults()
+    s.width = style.Length { Flex: share }
+    s.height = style.Length { Flex: share }
+    ret box(key, s, zero)
+}
+
+fn constrained(key: Key, min_width: f32, max_width: f32, min_height: f32, max_height: f32, value_style: style.Style, children: []const Node) -> Node {
+    var limited = value_style
+    limited.min_width = style.Length { Px: min_width }
+    limited.max_width = style.Length { Px: max_width }
+    limited.min_height = style.Length { Px: min_height }
+    limited.max_height = style.Length { Px: max_height }
+    ret box(key, limited, children)
+}
+
+fn aspect_ratio(key: Key, ratio: f32, value_style: style.Style, children: []const Node) -> Node {
+    ret Node { key: key, kind: Kind { Aspect: ratio }, style: value_style, children: children }
+}
+
+fn fitted(key: Key, value_style: style.Style, children: []const Node) -> Node {
+    var kind: Kind = .Fitted
+    ret Node { key: key, kind: kind, style: value_style, children: children }
+}
+
+// The subtree for a width's size class, chosen when the tree is built.
+fn responsive(width: f32, compact: Node, medium: Node, expanded: Node) -> Node {
+    let class = style.size_class(width)
+    if class == .Compact { ret compact }
+    if class == .Medium { ret medium }
+    ret expanded
+}
+
 fn positioned(key: Key, x: f32, y: f32, value_style: style.Style, children: []const Node) -> Node {
     var placed = value_style
     placed.position = .Absolute
@@ -448,6 +510,10 @@ fn kind_tag(kind: Kind) -> u8 {
         ret OVERLAY_TAG
     case .Wrap as w:
         ret WRAP_TAG
+    case .Aspect as ratio:
+        ret ASPECT_TAG
+    case .Fitted:
+        ret FITTED_TAG
     }
     ret 0u8
 }
@@ -715,6 +781,10 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.hint_len = copy_short(e.hint[..], sm.hint, MAX_SHORT)
     case .Wrap as w:
         e.enabled = true
+    case .Aspect as ratio:
+        e.enabled = true
+    case .Fitted:
+        e.enabled = true
     case .Overlay as ov:
         e.enabled = true
         e.modal = ov.modal
@@ -903,6 +973,19 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         ret (described, describe_error)
     case .Overlay as ov:
         ret (geometry.Size { width: 0.0, height: 0.0 }, ok)
+    case .Aspect as ratio:
+        // As wide as it may be -- or as its content when unbounded -- and the ratio tall.
+        let (content, content_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner)
+        if content_error != ok { ret (zero, content_error) }
+        var width = inner.max_width
+        if !(width < 1.0e30) || !(ratio > 0.0) { width = content.width }
+        var height = width
+        if ratio > 0.0 { height = width / ratio }
+        ret (geometry.Size { width: width, height: height }, ok)
+    case .Fitted:
+        let (natural, natural_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, ui_layout.Constraints { min_width: 0.0, max_width: 3.0e38, min_height: 0.0, max_height: 3.0e38 })
+        if natural_error != ok { ret (zero, natural_error) }
+        ret (ui_layout.constrain(natural, inner), ok)
     case .Wrap as w:
         let (children, children_error) = children_of(s, a, node, inner, w.axis == .Horizontal)
         if children_error != ok { ret (zero, children_error) }
@@ -1051,6 +1134,10 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
     case .Wrap as w:
         try place_wrap(s, a, node, element, w, inner, inner_limits, b, depth)
+    case .Aspect as ratio:
+        try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
+    case .Fitted:
+        try place_fitted(s, a, node, element, inner, b, depth)
     case .Overlay as ov:
         if s.overlay_count >= MAX_OVERLAYS { ret TooLarge }
         s.overlays[s.overlay_count] = u32(element)
@@ -1342,7 +1429,9 @@ fn place_flex(s: *State, a: *mem.Arena, node: *const Node, element: usize, spec:
     if node.children.len == 0usize { ret ok }
     let (children, children_error) = children_of(s, a, node, limits, spec.axis == .Horizontal)
     if children_error != ok { ret children_error }
-    let (result, layout_error) = ui_layout.flex(a, spec, limits, children)
+    // The box's size is settled by now: the children are aligned within all of it.
+    let tight = ui_layout.Constraints { min_width: inner.width, max_width: inner.width, min_height: inner.height, max_height: inner.height }
+    let (result, layout_error) = ui_layout.flex(a, spec, tight, children)
     if layout_error != ok { ret InvalidTree }
     var i = 0usize
     while i < node.children.len {
@@ -1350,6 +1439,26 @@ fn place_flex(s: *State, a: *mem.Arena, node: *const Node, element: usize, spec:
         try place(s, a, &node.children[i], child_element(s, element, i), geometry.Rect { x: inner.x + r.x, y: inner.y + r.y, width: r.width, height: r.height }, b, depth + 1usize)
         i += 1usize
     }
+    ret ok
+}
+
+// The content at its natural size, painted scaled down about the box's origin to
+// fit it; the scale is never more than one.
+fn place_fitted(s: *State, a: *mem.Arena, node: *const Node, element: usize, inner: geometry.Rect, b: *scene.Builder, depth: usize) -> err {
+    if node.children.len == 0usize { ret ok }
+    let open = ui_layout.Constraints { min_width: 0.0, max_width: 3.0e38, min_height: 0.0, max_height: 3.0e38 }
+    let (natural, natural_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, open)
+    if natural_error != ok { ret natural_error }
+    var scale: f32 = 1.0
+    if natural.width > 0.0 && inner.width / natural.width < scale { scale = inner.width / natural.width }
+    if natural.height > 0.0 && inner.height / natural.height < scale { scale = inner.height / natural.height }
+    var save: scene.Command = .Save
+    var restore: scene.Command = .Restore
+    try scene.push(b, save)
+    let about = geometry.transform_multiply(geometry.transform_translate(inner.x, inner.y), geometry.transform_multiply(geometry.transform_scale(scale, scale), geometry.transform_translate(0.0 - inner.x, 0.0 - inner.y)))
+    try scene.push(b, scene.Command { Transform: about })
+    try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, geometry.Rect { x: inner.x, y: inner.y, width: natural.width, height: natural.height }, open, b, depth)
+    try scene.push(b, restore)
     ret ok
 }
 

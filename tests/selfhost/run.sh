@@ -1698,6 +1698,13 @@ ui_layout_primary_written=$($test_build/neper-self emit-executable "$repo/tests/
 chmod +x "$test_build/ui-layout-primary-selfhost"
 ui_layout_primary_output=$("$test_build/ui-layout-primary-selfhost")
 [ "$ui_layout_primary_output" = 'ui layout primary ok' ]
+# Layout adapters (D816, widget plan P1-04): centred, padded, spacer, constrained,
+# aspect, fitted and responsive.
+ui_layout_adapters_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_layout_adapters/src/main.e" "$repo" x64 linux "$test_build/ui-layout-adapters-selfhost")
+[ "$ui_layout_adapters_written" = 'executable written' ]
+chmod +x "$test_build/ui-layout-adapters-selfhost"
+ui_layout_adapters_output=$("$test_build/ui-layout-adapters-selfhost")
+[ "$ui_layout_adapters_output" = 'ui layout adapters ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

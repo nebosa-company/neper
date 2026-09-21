@@ -3331,7 +3331,8 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
 type Placement = enum u8 { Below, Above, Right, Left, Center }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap }
+type Alignment = enum u8 { Start, Center, End }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -3362,6 +3363,14 @@ fn row(key: Key, gap: f32, value_style: style.Style, children: []const Node) -> 
 fn column(key: Key, gap: f32, value_style: style.Style, children: []const Node) -> Node
 fn wrap(key: Key, spec: ui_layout.Wrap, value_style: style.Style, children: []const Node) -> Node
 fn positioned(key: Key, x: f32, y: f32, value_style: style.Style, children: []const Node) -> Node
+fn aligned(key: Key, horizontal: Alignment, vertical: Alignment, value_style: style.Style, children: []const Node) -> Node
+fn center(key: Key, value_style: style.Style, children: []const Node) -> Node
+fn padded(key: Key, left: f32, top: f32, right: f32, bottom: f32, value_style: style.Style, children: []const Node) -> Node
+fn spacer(key: Key, share: f32) -> Node
+fn constrained(key: Key, min_width: f32, max_width: f32, min_height: f32, max_height: f32, value_style: style.Style, children: []const Node) -> Node
+fn aspect_ratio(key: Key, ratio: f32, value_style: style.Style, children: []const Node) -> Node
+fn fitted(key: Key, value_style: style.Style, children: []const Node) -> Node
+fn responsive(width: f32, compact: Node, medium: Node, expanded: Node) -> Node
 fn fire_change[T: type](c: Change[T], value: T) -> err
 fn fire_submit(a: Submit) -> err
 fn fire_gesture(a: GestureAction, g: Gesture) -> err
@@ -3465,6 +3474,15 @@ The primary layouts (D815, widget plan P1-03): `row` and `column` are flexes alo
 an axis with a gap; `wrap` is `ui_layout.wrap`, lines broken where the next child
 would pass the main limit; `positioned` is a box whose margin is its offset, which a
 stack places it by; `box`, `flex`, `grid` and `stack` are D799's.
+
+The layout adapters (D816, P1-04): `aligned` and `center` are a flex whose main
+and cross alignment place the child in the box -- a placed flex lays its children
+out within all of its settled size now, so alignment holds in a sized box; `padded`
+and `constrained` set the style's padding and size bounds; `spacer` takes a flex
+share of both axes; an `Aspect` box is as wide as it may be and the ratio tall; a
+`Fitted` box paints its content at its natural size scaled down about its origin to
+fit, its elements' bounds unscaled; `responsive` picks a subtree by the size class
+of a width when the tree is built.
 
 ### `e.ui.animation`
 

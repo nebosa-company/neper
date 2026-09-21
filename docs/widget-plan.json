@@ -246,8 +246,17 @@
             "Fitted",
             "Responsive"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Align",
+            "Center",
+            "Padding",
+            "Spacer",
+            "Constrained",
+            "AspectRatio",
+            "Fitted",
+            "Responsive"
+          ],
+          "evidence": "lib/e/ui/widget.e (D816): aligned/center as an aligned flex (a placed flex now lays out within its settled size), padded, spacer, constrained on the style, Aspect and Fitted node kinds (the latter painting through a scale transform), responsive by size class at build; tests/selfhost/fixtures/link/ui_layout_adapters on both hosts"
         },
         {
           "id": "P1-05",
