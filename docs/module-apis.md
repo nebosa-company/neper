@@ -3218,6 +3218,9 @@ type Window = struct { state: *void, id: Id }
 type Mode = enum u8 { Windowed, Maximized, Fullscreen }
 type Cursor = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
 type Options = struct { title: str, width: u32, height: u32, min_width: u32, min_height: u32, resizable: bool, transparent: bool, mode: Mode }
+type Lifecycle = enum u8 { Active, Inactive, Background, Suspended }
+type Orientation = enum u8 { Landscape, Portrait }
+type Screen = struct { bounds: geometry.Rect, work_area: geometry.Rect, scale: f32, primary: bool }
 type Metrics = struct { logical_size: geometry.Size, framebuffer_width: u32, framebuffer_height: u32, scale: f32, focused: bool, visible: bool }
 error Unsupported
 error Invalid
@@ -3232,6 +3235,12 @@ fn visible(window: *Window, value: bool) -> err
 fn request_frame(window: *Window) -> err
 fn clipboard_get(a: *mem.Arena, window: *Window) -> (str, err)
 fn clipboard_set(window: *Window, value: str) -> err
+fn capabilities(window: *const Window) -> (style.Capabilities, err)
+fn safe_insets(window: *const Window) -> (geometry.Insets, err)
+fn keyboard_insets(window: *const Window) -> (geometry.Insets, err)
+fn orientation(window: *const Window) -> (Orientation, err)
+fn lifecycle(window: *const Window) -> (Lifecycle, err)
+fn screens(a: *mem.Arena, limit: usize) -> ([]const Screen, err)
 fn close(window: *Window) -> err
 ```
 
@@ -3239,6 +3248,16 @@ Windows are logically linear handles backed only by reviewed `e.os` primitives.
 Coordinates exposed above the module are logical pixels; framebuffer dimensions are
 physical pixels. `draw_target` (named so because `target` is a reserved word, D797) is
 non-owning and becomes invalid when the window closes.
+
+The host capability model (D811, widget plan P0-08): `capabilities` answers what a
+window's host can do as the `style.Capabilities` that `style.adapt` takes -- every
+host today is a desktop with a hovering fine pointer, a keyboard, no touch or pen,
+other windows and no insets; `safe_insets` and `keyboard_insets` are what a mobile
+host would report and are none here; `orientation` follows the logical size;
+`screens` are the host's monitors in logical pixels (the work area is the screen
+until a host reports its shell's edges); `lifecycle` is active when focused and
+visible, inactive when visible without the focus, background when hidden, and
+suspended only when a host says so.
 
 ### `e.ui.input`
 
@@ -3253,7 +3272,9 @@ type Pointer = struct { window: window.Id, device: DeviceId, pointer: PointerId,
 type KeyEvent = struct { window: window.Id, key: Key, modifiers: Modifiers, repeat: bool }
 type TextEvent = struct { window: window.Id, text: str }
 type Composition = struct { window: window.Id, text: str, selection_start: usize, selection_end: usize }
-type Event = union enum u8 { Frame: window.Id, Close: window.Id, Resize: window.Metrics, Focus: window.Id, Blur: window.Id, PointerDown: Pointer, PointerUp: Pointer, PointerMove: Pointer, Scroll: Pointer, KeyDown: KeyEvent, KeyUp: KeyEvent, Text: TextEvent, Composition: Composition }
+type LifecycleEvent = struct { window: window.Id, state: window.Lifecycle }
+type InsetsEvent = struct { window: window.Id, safe: geometry.Insets, keyboard: geometry.Insets }
+type Event = union enum u8 { Frame: window.Id, Close: window.Id, Resize: window.Metrics, Focus: window.Id, Blur: window.Id, PointerDown: Pointer, PointerUp: Pointer, PointerMove: Pointer, Scroll: Pointer, KeyDown: KeyEvent, KeyUp: KeyEvent, Text: TextEvent, Composition: Composition, Lifecycle: LifecycleEvent, Insets: InsetsEvent, Back: window.Id }
 type Queue = struct { state: *void }
 error Closed
 error TooLarge
@@ -3270,6 +3291,11 @@ Events preserve native ordering and borrow transient text until the next `poll`.
 Platform key codes are normalized into stable physical and Unicode-oriented logical
 values. Gesture recognition is built by widgets from pointer streams rather than
 being hidden in the OS boundary.
+
+Lifecycle events (D811): a `Lifecycle` event follows the `Focus` or `Blur` that
+implied it (active, inactive) on the next poll; `Insets` and `Back` are what a
+mobile host sends and a desktop host never does. The widget runtime takes the
+first two quietly and treats `Back` as Escape, the nearest scope's cancel action.
 
 ### `e.ui.widget`
 

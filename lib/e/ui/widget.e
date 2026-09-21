@@ -2167,6 +2167,14 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         ret ok
     case .Blur as w:
         ret ok
+    case .Lifecycle as l:
+        ret ok
+    case .Insets as n:
+        ret ok
+    case .Back as w:
+        // The mobile back gesture is Escape: the nearest cancel action from the focus.
+        let (taken, back_error) = dispatch_key(s, input.KeyEvent { window: w, key: input.Key { physical: 27u32, logical: 27u32 }, modifiers: zero, repeat: false })
+        ret back_error
     }
     ret ok
 }

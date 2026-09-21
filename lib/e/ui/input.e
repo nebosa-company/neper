@@ -26,18 +26,23 @@ type Pointer = struct { window: window.Id, device: DeviceId, pointer: PointerId,
 type KeyEvent = struct { window: window.Id, key: Key, modifiers: Modifiers, repeat: bool }
 type TextEvent = struct { window: window.Id, text: str }
 type Composition = struct { window: window.Id, text: str, selection_start: usize, selection_end: usize }
-type Event = union enum u8 { Frame: window.Id, Close: window.Id, Resize: window.Metrics, Focus: window.Id, Blur: window.Id, PointerDown: Pointer, PointerUp: Pointer, PointerMove: Pointer, Scroll: Pointer, KeyDown: KeyEvent, KeyUp: KeyEvent, Text: TextEvent, Composition: Composition }
+// Lifecycle events (D811): the window's lifecycle changing, its safe and keyboard
+// insets changing, and the mobile back gesture; a desktop host derives the first
+// from its focus and never sends the other two.
+type LifecycleEvent = struct { window: window.Id, state: window.Lifecycle }
+type InsetsEvent = struct { window: window.Id, safe: geometry.Insets, keyboard: geometry.Insets }
+type Event = union enum u8 { Frame: window.Id, Close: window.Id, Resize: window.Metrics, Focus: window.Id, Blur: window.Id, PointerDown: Pointer, PointerUp: Pointer, PointerMove: Pointer, Scroll: Pointer, KeyDown: KeyEvent, KeyUp: KeyEvent, Text: TextEvent, Composition: Composition, Lifecycle: LifecycleEvent, Insets: InsetsEvent, Back: window.Id }
 type Queue = struct { state: *void }
 error Closed
 error TooLarge
 
-type State = struct { capacity: usize, buttons: u32, text: [4]u8, closed: bool }
+type State = struct { capacity: usize, buttons: u32, text: [4]u8, closed: bool, pending: Event, has_pending: bool }
 
 fn queue(a: *mem.Arena, capacity: usize) -> (Queue, err) {
     if capacity == 0usize { ret (zero, TooLarge) }
     let (states, states_error) = mem.alloc[State](a, 1usize)
     if states_error != ok { ret (zero, TooLarge) }
-    states[0usize] = State { capacity: capacity, buttons: 0u32, text: zero, closed: false }
+    states[0usize] = State { capacity: capacity, buttons: 0u32, text: zero, closed: false, pending: zero, has_pending: false }
     ret (Queue { state: mem.cast[*void](&states[0usize]) }, ok)
 }
 
@@ -110,6 +115,11 @@ fn poll(q: *Queue, timeout: time.Duration) -> (Event, bool, err) {
     if state_error != ok { ret (none, false, state_error) }
     let (requested, has_request) = window.take_frame_request()
     if has_request { ret (Event { Frame: requested }, true, ok) }
+    // The lifecycle change a focus event implied follows it.
+    if s.has_pending {
+        s.has_pending = false
+        ret (s.pending, true, ok)
+    }
     var remaining = time.as_nanos(timeout)
     if remaining < 0i64 { remaining = 0i64 }
     while true {
@@ -121,8 +131,16 @@ fn poll(q: *Queue, timeout: time.Duration) -> (Event, bool, err) {
         let (id, known) = window.id_of(host.window)
         if known {
             if host.kind == .Close { ret (Event { Close: id }, true, ok) }
-            if host.kind == .Focus { ret (Event { Focus: id }, true, ok) }
-            if host.kind == .Blur { ret (Event { Blur: id }, true, ok) }
+            if host.kind == .Focus {
+                s.pending = Event { Lifecycle: LifecycleEvent { window: id, state: .Active } }
+                s.has_pending = true
+                ret (Event { Focus: id }, true, ok)
+            }
+            if host.kind == .Blur {
+                s.pending = Event { Lifecycle: LifecycleEvent { window: id, state: .Inactive } }
+                s.has_pending = true
+                ret (Event { Blur: id }, true, ok)
+            }
             if host.kind == .Paint { ret (Event { Frame: id }, true, ok) }
             if host.kind == .Resize {
                 let (state, window_error) = window.state_by_id(id)

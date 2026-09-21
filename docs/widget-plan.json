@@ -128,8 +128,12 @@
             "SafeInsets",
             "LifecycleEvents"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "HostCapabilities",
+            "SafeInsets",
+            "LifecycleEvents"
+          ],
+          "evidence": "lib/e/ui/window.e and lib/e/ui/input.e (D811): capabilities as style.Capabilities, safe_insets and keyboard_insets, orientation, screens in logical pixels, lifecycle from focus and visibility; Lifecycle, Insets and Back events, the first derived from Focus/Blur, Back dispatched as Escape; tests/selfhost/fixtures/link/ui_host on both hosts"
         },
         {
           "id": "P0-09",

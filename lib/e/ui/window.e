@@ -15,6 +15,7 @@ use e.mem
 use e.os
 use e.gfx.geometry
 use e.gfx.scene
+use e.ui.style
 
 type Id = struct { slot: u32, generation: u32 }
 type Window = struct { state: *void, id: Id }
@@ -22,6 +23,15 @@ type Mode = enum u8 { Windowed, Maximized, Fullscreen }
 type Cursor = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
 type Options = struct { title: str, width: u32, height: u32, min_width: u32, min_height: u32, resizable: bool, transparent: bool, mode: Mode }
 type Metrics = struct { logical_size: geometry.Size, framebuffer_width: u32, framebuffer_height: u32, scale: f32, focused: bool, visible: bool }
+// The host capability model (D811, widget plan P0-08): what a window's host can do
+// as `style.Capabilities` for `style.adapt`, the safe and keyboard insets a mobile
+// host would report (a desktop host has none), the orientation, the screens in
+// logical pixels, and the window's lifecycle: active when focused and visible,
+// inactive when visible without the focus, background when hidden, suspended
+// only when a host says so.
+type Lifecycle = enum u8 { Active, Inactive, Background, Suspended }
+type Orientation = enum u8 { Landscape, Portrait }
+type Screen = struct { bounds: geometry.Rect, work_area: geometry.Rect, scale: f32, primary: bool }
 error Unsupported
 error Invalid
 error Closed
@@ -39,6 +49,7 @@ type State = struct {
     height: u32,
     mode: Mode,
     transparent: bool,
+    resizable: bool,
     frame_requested: bool,
     closed: bool,
 }
@@ -89,7 +100,7 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
-    states[0usize] = State { arena: a, handle: handle, scratch: scratch, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, frame_requested: false, closed: false }
+    states[0usize] = State { arena: a, handle: handle, scratch: scratch, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false }
     generations[slot] += 1u32
     slots[slot] = &states[0usize]
     live[slot] = true
@@ -217,6 +228,64 @@ fn clipboard_set(window: *Window, value: str) -> err {
     if set_error == os.Unsupported { ret Unsupported }
     if set_error != ok { ret Invalid }
     ret ok
+}
+
+// A desktop host: a fine pointer that hovers, a keyboard, no touch or pen, other
+// windows beside this one, and no insets.
+// ponytail: a touch or pen host waits on a host that reports one; every host today is a desktop.
+fn capabilities(window: *const Window) -> (style.Capabilities, err) {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret (zero, state_error) }
+    let (insets, insets_error) = safe_insets(window)
+    if insets_error != ok { ret (zero, insets_error) }
+    ret (style.Capabilities { hover: true, fine_pointer: true, keyboard: true, touch: false, pen: false, resizable: s.resizable, multi_window: true, insets: insets }, ok)
+}
+
+fn safe_insets(window: *const Window) -> (geometry.Insets, err) {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret (zero, state_error) }
+    ret (geometry.Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }, ok)
+}
+
+fn keyboard_insets(window: *const Window) -> (geometry.Insets, err) {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret (zero, state_error) }
+    ret (geometry.Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }, ok)
+}
+
+fn orientation(window: *const Window) -> (Orientation, err) {
+    let (m, metrics_error) = metrics(window)
+    if metrics_error != ok { ret (.Landscape, metrics_error) }
+    if m.logical_size.height > m.logical_size.width { ret (.Portrait, ok) }
+    ret (.Landscape, ok)
+}
+
+fn lifecycle(window: *const Window) -> (Lifecycle, err) {
+    let (m, metrics_error) = metrics(window)
+    if metrics_error != ok { ret (.Background, metrics_error) }
+    if !m.visible { ret (.Background, ok) }
+    if !m.focused { ret (.Inactive, ok) }
+    ret (.Active, ok)
+}
+
+// The host's screens in logical pixels, from its monitors.
+// ponytail: the work area is the screen; a host that reports its shell's reserved edges narrows it.
+fn screens(a: *mem.Arena, limit: usize) -> ([]const Screen, err) {
+    let (found, found_error) = os.monitors(a, limit)
+    if found_error == os.Unsupported { ret (zero, Unsupported) }
+    if found_error != ok { ret (zero, Invalid) }
+    let (out, out_error) = mem.alloc[Screen](a, found.len)
+    if out_error != ok { ret (zero, Invalid) }
+    var i = 0usize
+    while i < found.len {
+        let m = found[i]
+        var scale = f32(m.scale_percent) / 100.0
+        if !(scale > 0.0) { scale = 1.0 }
+        let bounds = geometry.Rect { x: f32(m.x) / scale, y: f32(m.y) / scale, width: f32(m.width) / scale, height: f32(m.height) / scale }
+        out[i] = Screen { bounds: bounds, work_area: bounds, scale: scale, primary: m.primary }
+        i += 1usize
+    }
+    ret (out, ok)
 }
 
 fn close(window: *Window) -> err {

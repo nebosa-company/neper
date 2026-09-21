@@ -2138,11 +2138,12 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.gfx.geometry",
+    "e.gfx.scene",
     "e.gpu",
     "e.mem",
     "e.os",
-    "e.gfx.geometry",
-    "e.gfx.scene"
+    "e.ui.style"
    ],
    "blocked_by": []
   }

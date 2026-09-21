@@ -1664,6 +1664,13 @@ ui_overlay_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-overlay-selfhost"
 ui_overlay_output=$("$test_build/ui-overlay-selfhost")
 [ "$ui_overlay_output" = 'ui overlay ok' ]
+# The host capability model (D811, widget plan P0-08): capabilities, insets,
+# orientation, screens, lifecycle, and the lifecycle, insets and back events.
+ui_host_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_host/src/main.e" "$repo" x64 linux "$test_build/ui-host-selfhost")
+[ "$ui_host_written" = 'executable written' ]
+chmod +x "$test_build/ui-host-selfhost"
+ui_host_output=$("$test_build/ui-host-selfhost")
+[ "$ui_host_output" = 'ui host ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

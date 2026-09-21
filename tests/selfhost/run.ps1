@@ -1728,6 +1728,13 @@ $uiOverlayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiOverlayWritten -ne 'executable written') { throw 'ui_overlay emission failed' }
 $uiOverlayOutput = & $uiOverlayPath
 if ($LASTEXITCODE -ne 0 -or $uiOverlayOutput -ne 'ui overlay ok') { throw "the overlays answered wrongly: exit $LASTEXITCODE" }
+# The host capability model (D811, widget plan P0-08): capabilities, insets,
+# orientation, screens, lifecycle, and the lifecycle, insets and back events.
+$uiHostPath = Join-Path $testBuild 'ui-host-selfhost.exe'
+$uiHostWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_host\src\main.e') $repo 'x64' 'windows' $uiHostPath
+if ($LASTEXITCODE -ne 0 -or $uiHostWritten -ne 'executable written') { throw 'ui_host emission failed' }
+$uiHostOutput = & $uiHostPath
+if ($LASTEXITCODE -ne 0 -or $uiHostOutput -ne 'ui host ok') { throw "the host capabilities answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -15571,3 +15571,28 @@ is retired the focus returns to the element that had it, if that element
 is still there. Eight overlays at once; the ninth is `TooLarge`.
 `link/ui_overlay` checks the paint order, the placements, the routing,
 the dismissal and the focus on both hosts.
+
+## D811 — The host capability model in `e.ui.window`, and the lifecycle events
+
+P0-08 of the widget plan. What a host can do is asked of the window, not
+guessed by the catalogue: `capabilities` answers the `style.Capabilities`
+that D805's `adapt` takes, so the theme and the host model share one
+record. Every host today is a desktop and says so -- a hovering fine
+pointer, a keyboard, no touch or pen, other windows beside this one, the
+window's own resizability, no insets -- and a touch or pen host waits on
+a host that reports one rather than on a guess from a pointer event. The
+safe and keyboard insets are functions that answer none, the orientation
+follows the logical size, the screens are the host's monitors in logical
+pixels with the work area equal to the screen until a host reports its
+shell's reserved edges, and the lifecycle is derived: active when focused
+and visible, inactive when visible without the focus, background when
+hidden, suspended only when a host says so. `e.ui.input` gains the three
+lifecycle events the proposal's section 8 asks for: `Lifecycle`, which a
+desktop host derives from its focus events and the queue delivers on the
+poll after the `Focus` or `Blur` that implied it, so the pair stays in
+order without a second host event; `Insets` and `Back`, which only a
+mobile host sends. The widget runtime takes the first two quietly and
+treats `Back` as Escape, so the nearest scope's cancel action is what a
+back gesture reaches with nothing more written. `link/ui_host` checks the
+model and the events on both hosts and says so where windows are not
+supported.
