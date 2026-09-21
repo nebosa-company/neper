@@ -16231,3 +16231,26 @@ over the top of the content and the group is busy; while `revealed`,
 the row's actions are buttons at its end and the row says expanded.
 `link/ui_interaction` drags, drops, nudges, pulls, swipes and taps on
 both hosts.
+
+## D840 — Adaptive navigation: the width chooses the form, the caller keeps the path
+
+P2-08 of the widget plan, eight components that are compositions of
+D827 and D828, and `e.ui.navigation` now depends on `e.ui.overlay` for
+the menus. `menu_bar` is a row of menu buttons on the surface variant,
+the one at `open` open, each firing its toggle; the buttons stand
+sixteen keys apart so a title, its menu and up to fourteen items never
+share a key -- the fixture caught two apart colliding. `context_menu`
+is the overlay menu at an anchor; who opens it (a secondary press, the
+keyboard's menu key) is the caller's, since the runtime's regions know
+one button. `navigation_split` is D826's split view of primary and
+detail when the width reaches the medium size class and one of them
+alone when compact -- the detail while `showing_detail`, so a push
+shows it and a pop shows the primary, the same path at every width.
+`navigation_drawer` is the sidebar form of D828's destination bar in a
+modal overlay along the left edge, a modal dialog named Navigation,
+dismissed by Escape or a press outside; `navigation_rail`,
+`bottom_navigation` and `sidebar` are the three explicit forms for a
+caller that chooses (§3.7: adaptation is never forced). `breadcrumbs`
+link every name but the last, which is the current place as text.
+`link/ui_adaptive` opens, escapes, nudges, picks and re-lays out at
+700 and 400 wide on both hosts.

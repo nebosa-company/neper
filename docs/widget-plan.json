@@ -615,8 +615,17 @@
             "Breadcrumbs",
             "Sidebar"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "MenuBar",
+            "ContextMenu",
+            "NavigationSplit",
+            "NavigationDrawer",
+            "NavigationRail",
+            "BottomNavigation",
+            "Breadcrumbs",
+            "Sidebar"
+          ],
+          "evidence": "lib/e/ui/navigation.e (D840): menu_bar as a row of overlay menu buttons sixteen keys apart with one open, context_menu as the overlay menu at an anchor, navigation_split as the split view at medium width and one page (the detail while showing_detail) when compact, navigation_drawer as a modal sidebar overlay along the left edge dismissed by Escape or a press outside, navigation_rail/bottom_navigation/sidebar as the destination bar's explicit forms, breadcrumbs as links with slashes and the current name as text; tests/selfhost/fixtures/link/ui_adaptive on both hosts"
         },
         {
           "id": "P2-09",

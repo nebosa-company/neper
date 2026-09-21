@@ -2130,6 +2130,7 @@
     "e.ui.accessibility",
     "e.ui.control",
     "e.ui.layout",
+    "e.ui.overlay",
     "e.ui.style",
     "e.ui.widget"
    ],

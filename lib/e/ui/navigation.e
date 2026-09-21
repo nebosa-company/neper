@@ -12,6 +12,7 @@ use e.gfx.scene
 use e.ui.accessibility
 use e.ui.control
 use e.ui.layout as ui_layout
+use e.ui.overlay
 use e.ui.style
 use e.ui.widget
 
@@ -248,4 +249,155 @@ fn destination_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         sem.row_count = u32(labels.len)
     }
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// --------------------------------------------------- adaptive navigation (D840, P2-08)
+
+// A menu of a menu bar: its title and its commands.
+type MenuBarItem = struct { label: str, items: []const overlay.MenuItem }
+
+// A menu bar: the menus' titles as D827's menu buttons in a row, sixteen keys
+// apart from `key + 1` (a title, its menu and up to fourteen items each), the one
+// at `open` open (an index past the end for none), each firing its toggle; on the
+// surface variant, a group in the tree named `label`.
+fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const MenuBarItem, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
+    if toggles.len != menus.len { ret (zero, TooLarge) }
+    let (heads, heads_error) = mem.alloc[widget.Node](a, menus.len)
+    if heads_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < menus.len {
+        let (head, head_error) = overlay.menu_button(a, key + 1u64 + 16u64 * u64(i), t, menus[i].label, menus[i].items, i == open, &toggles[i])
+        if head_error != ok { ret (zero, head_error) }
+        heads[i] = head
+        i += 1usize
+    }
+    var options = control.surface_options(t)
+    options.background = .SurfaceVariant
+    options.padding = t.tokens.spacing.xs
+    var bar = control.surface_style(t, options)
+    bar.width = style.Length { Percent: 100.0 }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, heads[0usize..menus.len])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// A context menu: D827's menu (keyed `key`, items `key + 1 + index`) below
+// `anchor` while `open`; the caller opens it from the secondary press or the
+// keyboard's menu key it handles itself, and `dismiss` closes it.
+fn context_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, items: []const overlay.MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = overlay.menu(a, key, t, anchor, label, items, open, dismiss)
+    ret (made, made_error)
+}
+
+// A navigation split: `primary` and `detail` side by side in D826's split view
+// (keyed `key`, the pane `key + 1`) when the width reaches the medium size
+// class; compact, one of them alone -- the detail while `showing_detail`, so a
+// push shows it and a pop (the caller's) shows the primary again.
+fn navigation_split(a: *mem.Arena, key: widget.Key, t: *const control.Theme, primary: widget.Node, detail: widget.Node, showing_detail: bool, position: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err) {
+    if style.size_class(width) != .Compact {
+        let (split, split_error) = control.split_view(a, key, t, .Horizontal, primary, detail, position, 4.0 * t.tokens.spacing.lg, 4.0 * t.tokens.spacing.lg, change, width, height)
+        ret (split, split_error)
+    }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = primary
+    if showing_detail { body[0usize] = detail }
+    var page = control.sized_style(width, height)
+    page.overflow = .Clip
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
+    if boxed_error != ok { ret (zero, TooLarge) }
+    boxed[0usize] = widget.box(key, page, body[0usize..1usize])
+    ret (widget.semantics(0u64, sem, style.defaults(), boxed[0usize..1usize]), ok)
+}
+
+// A navigation drawer: the destinations as a sidebar (keyed `key + 1`, its
+// tabs `key + 2 + index`) in a modal overlay (keyed `key`) along the left edge of
+// the window while `open`; a press outside or Escape fires `dismiss`; nothing
+// while shut.
+fn navigation_drawer(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labels: []const str, selected: usize, picks: []const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (bar, bar_error) = destination_bar(a, key + 1u64, t, labels, selected, picks, .Sidebar, width)
+    if bar_error != ok { ret (zero, bar_error) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = bar
+    var sheet = control.surface_options(t)
+    sheet.elevation = 3u8
+    var sheet_style = control.surface_style(t, sheet)
+    sheet_style.height = style.Length { Percent: 100.0 }
+    let (panel, panel_error) = mem.alloc[widget.Node](a, 1usize)
+    if panel_error != ok { ret (zero, TooLarge) }
+    panel[0usize] = widget.box(0u64, sheet_style, body[0usize..1usize])
+    var none: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), panel[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 23u8
+    sem.label = "Navigation"
+    sem.states = accessibility.STATE_MODAL
+    let (drawer, drawer_error) = mem.alloc[widget.Node](a, 1usize)
+    if drawer_error != ok { ret (zero, TooLarge) }
+    drawer[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Left, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), drawer[0usize..1usize]), ok)
+}
+
+// The three explicit forms of the destination bar, for a caller that chooses.
+fn navigation_rail(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labels: []const str, selected: usize, picks: []const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = destination_bar(a, key, t, labels, selected, picks, .Rail, width)
+    ret (made, made_error)
+}
+
+fn bottom_navigation(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labels: []const str, selected: usize, picks: []const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = destination_bar(a, key, t, labels, selected, picks, .Bottom, width)
+    ret (made, made_error)
+}
+
+fn sidebar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labels: []const str, selected: usize, picks: []const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = destination_bar(a, key, t, labels, selected, picks, .Sidebar, width)
+    ret (made, made_error)
+}
+
+// Breadcrumbs: the path's names in a row, every one but the last a link keyed
+// `key + 1 + index` firing its pick, the last the current place as plain text,
+// slashes between; a group in the tree named `label`.
+fn breadcrumbs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit) -> (widget.Node, err) {
+    if picks.len != names.len || names.len == 0usize { ret (zero, TooLarge) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize * names.len - 1usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < names.len {
+        if i + 1usize < names.len {
+            let (crumb, crumb_error) = control.link(a, key + 1u64 + u64(i), t, names[i], &picks[i])
+            if crumb_error != ok { ret (zero, crumb_error) }
+            parts[2usize * i] = crumb
+            var slash = control.text_options()
+            slash.color = .TextMuted
+            slash.wrap = .None
+            let (between, between_error) = control.text(a, 0u64, "/", t, slash)
+            if between_error != ok { ret (zero, between_error) }
+            parts[2usize * i + 1usize] = between
+        } else {
+            var here = control.text_options()
+            here.role = .Label
+            here.wrap = .None
+            let (current, current_error) = control.text(a, 0u64, names[i], t, here)
+            if current_error != ok { ret (zero, current_error) }
+            parts[2usize * i] = current
+        }
+        i += 1usize
+    }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..2usize * names.len - 1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }

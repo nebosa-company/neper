@@ -1852,6 +1852,13 @@ ui_interaction_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/ui-interaction-selfhost"
 ui_interaction_output=$("$test_build/ui-interaction-selfhost")
 [ "$ui_interaction_output" = 'ui interaction ok' ]
+# Adaptive navigation (D840, widget plan P2-08): menu bar, context menu, navigation
+# split, drawer, rail, breadcrumbs.
+ui_adaptive_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_adaptive/src/main.e" "$repo" x64 linux "$test_build/ui-adaptive-selfhost")
+[ "$ui_adaptive_written" = 'executable written' ]
+chmod +x "$test_build/ui-adaptive-selfhost"
+ui_adaptive_output=$("$test_build/ui-adaptive-selfhost")
+[ "$ui_adaptive_output" = 'ui adaptive ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

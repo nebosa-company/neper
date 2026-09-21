@@ -1921,6 +1921,13 @@ $uiInteractionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $uiInteractionWritten -ne 'executable written') { throw 'ui_interaction emission failed' }
 $uiInteractionOutput = & $uiInteractionPath
 if ($LASTEXITCODE -ne 0 -or $uiInteractionOutput -ne 'ui interaction ok') { throw "the collection interaction answered wrongly: exit $LASTEXITCODE" }
+# Adaptive navigation (D840, widget plan P2-08): menu bar, context menu, navigation
+# split, drawer, rail, breadcrumbs.
+$uiAdaptivePath = Join-Path $testBuild 'ui-adaptive-selfhost.exe'
+$uiAdaptiveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_adaptive\src\main.e') $repo 'x64' 'windows' $uiAdaptivePath
+if ($LASTEXITCODE -ne 0 -or $uiAdaptiveWritten -ne 'executable written') { throw 'ui_adaptive emission failed' }
+$uiAdaptiveOutput = & $uiAdaptivePath
+if ($LASTEXITCODE -ne 0 -or $uiAdaptiveOutput -ne 'ui adaptive ok') { throw "the adaptive navigation answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
