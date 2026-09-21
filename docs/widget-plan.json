@@ -322,8 +322,11 @@
             "Slider",
             "RangeSlider"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Slider",
+            "RangeSlider"
+          ],
+          "evidence": "lib/e/ui/widget.e and lib/e/ui/control.e (D820): a Slider node kind moved by press, drag, arrow keys, Home and End with step snapping and reported changes, a range with two thumbs the press picks the nearer of; slider and range_slider under the theme; tests/selfhost/fixtures/link/ui_slider on both hosts"
         },
         {
           "id": "P1-09",

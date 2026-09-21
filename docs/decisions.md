@@ -15811,3 +15811,26 @@ says so: "`e.mem` is `<path>`, the project's replacement of the
 toolchain's", checked by `check/replaced_module`; and the fixture's stub
 carries the rest of `e.mem`'s fence, so a library module may call
 `arena_from`, `copy` or `eq` without that fixture forbidding it.
+
+## D820 — The slider is a runtime kind, because a value needs the geometry only the runtime has
+
+P1-08 of the widget plan. A slider maps a pointer position to a value,
+and the mapping needs the track's bounds, which a control function does
+not have when it builds and a gesture action is not given when it
+fires; so the slider is a node kind of `e.ui.widget` like the editor and
+the viewport, not a composite in `e.ui.control`. The runtime sets the
+value from a press along the track (the thumb's radius kept clear at
+each end), follows a drag, steps it by the arrow keys and jumps by Home
+and End when it has the focus, snaps every value to the step (a
+hundredth of the range when there is none) and reports each change
+through a `Change[f32]`; a range slider carries a second value and a
+press takes the nearer thumb, which the drag then keeps. The caller's
+value follows D807's rule -- taken when it changes between frames, else
+the runtime's stands -- so a page that echoes the value and one that
+does not both work. The paint is the runtime's too, in the colours the
+node names, so a theme is a matter of three colours; `e.ui.control`'s
+`slider` and `range_slider` supply them with the label beside and the
+slider role offering increment, decrement and set value. `link/ui_slider`
+checks the press, the snap, the drags past both ends, the keys, the
+caller's value, the painted fill and the range's nearer thumb on both
+hosts.

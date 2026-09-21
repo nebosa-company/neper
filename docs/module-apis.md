@@ -3334,7 +3334,8 @@ type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Poin
 type Alignment = enum u8 { Start, Center, End }
 type Scrollbar = struct { viewport: Key, axis: ui_layout.Axis }
 type Interaction = struct { hovered: bool, pressed: bool, focused: bool }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar }
+type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32, step: f32, vertical: bool, track: paint.Color, fill: paint.Color, thumb: paint.Color, change: Change[f32], change_second: Change[f32], enabled: bool }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar, Slider: Slider }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -3375,6 +3376,7 @@ fn fitted(key: Key, value_style: style.Style, children: []const Node) -> Node
 fn responsive(width: f32, compact: Node, medium: Node, expanded: Node) -> Node
 fn scroll_view(a: *mem.Arena, key: Key, axis: ui_layout.Axis, value_style: style.Style, children: []const Node) -> (Node, err)
 fn scrollbar(key: Key, viewport: Key, axis: ui_layout.Axis, value_style: style.Style) -> Node
+fn slider(key: Key, value: Slider, value_style: style.Style) -> Node
 fn safe_area(key: Key, insets: geometry.Insets, value_style: style.Style, children: []const Node) -> Node
 fn keyboard_avoiding(key: Key, keyboard: geometry.Insets, value_style: style.Style, children: []const Node) -> Node
 fn fire_change[T: type](c: Change[T], value: T) -> err
@@ -3387,6 +3389,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err
 fn focused(widget_runtime: *const Runtime) -> (ElementId, bool)
 fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction
+fn slider_value_of(widget_runtime: *const Runtime, element: ElementId) -> (f32, f32, bool)
 fn edit_value(widget_runtime: *const Runtime, element: ElementId) -> (str, bool)
 fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize, usize, bool)
 fn scroll_to(widget_runtime: *Runtime, element: ElementId, offset: f32) -> err
@@ -3502,6 +3505,13 @@ the host's insets (D811) rather than scroll.
 element -- hovered, pressed while the pointer is down on it, focused -- for the look
 a control resolves; and Enter or Space on a focused tap region is a tap at its
 centre, before the scopes see the key.
+
+A `Slider` node (D820) is a value in `low..high` the runtime moves: a press sets it
+from the point along the track (the nearer thumb of a range), a drag follows, the
+arrow keys step it (a hundredth of the range when `step` is 0) and Home and End jump
+to the ends when it has the focus, each change snapped to the step and reported;
+the track, its filled part and the round thumbs paint in the colours given, and
+the caller's value follows the editor's rule.
 
 ### `e.ui.animation`
 
@@ -3676,6 +3686,8 @@ fn radio(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: 
 fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err)
 fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, on: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err)
 fn segmented_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err)
+fn slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool) -> (widget.Node, err)
+fn range_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
@@ -3718,6 +3730,11 @@ keyed `key + 1 + index`, each firing its own action from a slice the caller keep
 alive, a group in the tree; `switch_control` is a track with its knob at the right
 when on, the filled variant then and the outlined one off, a switch in the tree.
 The caller keeps the chosen value and passes it back each frame.
+
+Range selection (D820, P1-08): `slider` and `range_slider` are a `widget.Slider`
+in the theme's colours -- the track in the border colour, the filled part and the
+thumbs in the primary -- 120 px long at the control height with the label beside,
+a slider in the tree offering increment, decrement and set value.
 
 ### `e.ui.app`
 

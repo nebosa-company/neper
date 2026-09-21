@@ -1726,6 +1726,13 @@ ui_selection_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/ui-selection-selfhost"
 ui_selection_output=$("$test_build/ui-selection-selfhost")
 [ "$ui_selection_output" = 'ui selection ok' ]
+# Range selection (D820, widget plan P1-08): a slider pressed, dragged, stepped and
+# keyed, a range slider's nearer thumb.
+ui_slider_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_slider/src/main.e" "$repo" x64 linux "$test_build/ui-slider-selfhost")
+[ "$ui_slider_written" = 'executable written' ]
+chmod +x "$test_build/ui-slider-selfhost"
+ui_slider_output=$("$test_build/ui-slider-selfhost")
+[ "$ui_slider_output" = 'ui slider ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

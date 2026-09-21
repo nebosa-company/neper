@@ -99,7 +99,13 @@ type Alignment = enum u8 { Start, Center, End }
 // style's background is the track and its border colour the thumb; a drag of it
 // moves the viewport by the content's share of the distance.
 type Scrollbar = struct { viewport: Key, axis: ui_layout.Axis }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar }
+// A slider (D820): a value in `low..high` moved by a press, a drag, the arrow keys
+// (a `step`), Home and End, reported through `change`; a range slider has two
+// thumbs (`value` and `second`, `second` reported through `change_second`), a
+// press taking the nearer. The track, its filled part and the thumbs are painted
+// in the colours given; the value follows D807's rule for the caller's copy.
+type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32, step: f32, vertical: bool, track: paint.Color, fill: paint.Color, thumb: paint.Color, change: Change[f32], change_second: Change[f32], enabled: bool }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar, Slider: Slider }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -124,6 +130,7 @@ const WRAP_TAG: u8 = 14u8
 const ASPECT_TAG: u8 = 15u8
 const FITTED_TAG: u8 = 16u8
 const SCROLLBAR_TAG: u8 = 17u8
+const SLIDER_TAG: u8 = 18u8
 const MAX_OVERLAYS: usize = 8usize
 const MAX_SHORT: usize = 32usize
 const MAX_HISTORY: usize = 32usize
@@ -166,6 +173,19 @@ type Element = struct {
     overscroll: Overscroll,
     momentum: bool,
     linked: Key,
+    // A slider's values and range, its second thumb, and which thumb a press took.
+    slider_value: f32,
+    slider_second: f32,
+    node_value: f32,
+    node_second: f32,
+    slider_low: f32,
+    slider_high: f32,
+    slider_step: f32,
+    slider_range: bool,
+    slider_vertical: bool,
+    slider_change: Change[f32],
+    slider_change_second: Change[f32],
+    second_held: bool,
     state_keys: [8]Key,
     state_ids: [8]StateId,
     state_count: usize,
@@ -397,6 +417,11 @@ fn scroll_view(a: *mem.Arena, key: Key, axis: ui_layout.Axis, value_style: style
     ret (scroll(key, Scroll { axis: axis, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, value_style, stacked[0usize..1usize]), ok)
 }
 
+fn slider(key: Key, value: Slider, value_style: style.Style) -> Node {
+    var none: []const Node = zero
+    ret Node { key: key, kind: Kind { Slider: value }, style: value_style, children: none }
+}
+
 fn scrollbar(key: Key, viewport: Key, axis: ui_layout.Axis, value_style: style.Style) -> Node {
     var none: []const Node = zero
     ret Node { key: key, kind: Kind { Scrollbar: Scrollbar { viewport: viewport, axis: axis } }, style: value_style, children: none }
@@ -546,6 +571,8 @@ fn kind_tag(kind: Kind) -> u8 {
         ret FITTED_TAG
     case .Scrollbar as bar:
         ret SCROLLBAR_TAG
+    case .Slider as sl:
+        ret SLIDER_TAG
     }
     ret 0u8
 }
@@ -822,6 +849,21 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.linked = bar.viewport
         e.scroll_axis = bar.axis
         e.gestures = GESTURE_DRAG
+    case .Slider as sl:
+        e.enabled = sl.enabled
+        e.focusable = sl.enabled
+        e.gestures = GESTURE_TAP | GESTURE_DRAG
+        if sl.value != e.node_value { e.slider_value = sl.value }
+        if sl.second != e.node_second { e.slider_second = sl.second }
+        e.node_value = sl.value
+        e.node_second = sl.second
+        e.slider_low = sl.low
+        e.slider_high = sl.high
+        e.slider_step = sl.step
+        e.slider_range = sl.range
+        e.slider_vertical = sl.vertical
+        e.slider_change = sl.change
+        e.slider_change_second = sl.change_second
     case .Overlay as ov:
         e.enabled = true
         e.modal = ov.modal
@@ -1021,6 +1063,8 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         ret (geometry.Size { width: width, height: height }, ok)
     case .Scrollbar as bar:
         ret (geometry.Size { width: 0.0, height: 0.0 }, ok)
+    case .Slider as sl:
+        ret (geometry.Size { width: 0.0, height: 0.0 }, ok)
     case .Fitted:
         let (natural, natural_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, ui_layout.Constraints { min_width: 0.0, max_width: 3.0e38, min_height: 0.0, max_height: 3.0e38 })
         if natural_error != ok { ret (zero, natural_error) }
@@ -1179,6 +1223,8 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try place_fitted(s, a, node, element, inner, b, depth)
     case .Scrollbar as bar:
         try place_scrollbar(s, bar, inner, b, node.style.border.color)
+    case .Slider as sl:
+        try place_slider(s, a, element, sl, inner, b)
     case .Overlay as ov:
         if s.overlay_count >= MAX_OVERLAYS { ret TooLarge }
         s.overlays[s.overlay_count] = u32(element)
@@ -1483,6 +1529,135 @@ fn place_flex(s: *State, a: *mem.Arena, node: *const Node, element: usize, spec:
     ret ok
 }
 
+// Where a slider value sits along its track, 0..1.
+fn slider_share(e: *const Element, value: f32) -> f32 {
+    let span = e.slider_high - e.slider_low
+    if !(span > 0.0) { ret 0.0 }
+    var t = (value - e.slider_low) / span
+    if t < 0.0 { t = 0.0 }
+    if t > 1.0 { t = 1.0 }
+    ret t
+}
+
+// The track along the middle of the box, filled between the low end (or the first
+// thumb of a range) and the value, a round thumb at each value.
+fn place_slider(s: *State, a: *mem.Arena, element: usize, sl: Slider, inner: geometry.Rect, b: *scene.Builder) -> err {
+    let e = &s.elements[element]
+    let thickness: f32 = 4.0
+    var thumb = inner.height
+    if sl.vertical { thumb = inner.width }
+    if thumb > 16.0 { thumb = 16.0 }
+    let half = thumb * 0.5
+    var track = geometry.Rect { x: inner.x + half, y: inner.y + inner.height * 0.5 - thickness * 0.5, width: max_f(inner.width - thumb, 0.0), height: thickness }
+    if sl.vertical { track = geometry.Rect { x: inner.x + inner.width * 0.5 - thickness * 0.5, y: inner.y + half, width: thickness, height: max_f(inner.height - thumb, 0.0) } }
+    try fill_shape(a, b, track, thickness * 0.5, paint.Brush { Solid: sl.track })
+    let first = slider_share(e, e.slider_value)
+    var from: f32 = 0.0
+    var to = first
+    if sl.range {
+        let other = slider_share(e, e.slider_second)
+        from = min_f(first, other)
+        to = max_f(first, other)
+    }
+    var filled = geometry.Rect { x: track.x + track.width * from, y: track.y, width: track.width * (to - from), height: thickness }
+    if sl.vertical { filled = geometry.Rect { x: track.x, y: track.y + track.height * (1.0 - to), width: thickness, height: track.height * (to - from) } }
+    try fill_shape(a, b, filled, thickness * 0.5, paint.Brush { Solid: sl.fill })
+    var knob = geometry.Rect { x: track.x + track.width * first - half, y: inner.y + inner.height * 0.5 - half, width: thumb, height: thumb }
+    if sl.vertical { knob = geometry.Rect { x: inner.x + inner.width * 0.5 - half, y: track.y + track.height * (1.0 - first) - half, width: thumb, height: thumb } }
+    try fill_shape(a, b, knob, half, paint.Brush { Solid: sl.thumb })
+    if sl.range {
+        let other = slider_share(e, e.slider_second)
+        var knob_2 = geometry.Rect { x: track.x + track.width * other - half, y: knob.y, width: thumb, height: thumb }
+        if sl.vertical { knob_2 = geometry.Rect { x: knob.x, y: track.y + track.height * (1.0 - other) - half, width: thumb, height: thumb } }
+        try fill_shape(a, b, knob_2, half, paint.Brush { Solid: sl.thumb })
+    }
+    ret ok
+}
+
+// A value snapped to the step and kept in the range, set on the thumb held and
+// reported when it changed.
+fn slider_set(s: *State, element: usize, raw: f32, second: bool) -> err {
+    let e = &s.elements[element]
+    var value = raw
+    if e.slider_step > 0.0 {
+        let steps = (value - e.slider_low) / e.slider_step
+        var nearest = steps + 0.5
+        if nearest < 0.0 { nearest = nearest - 1.0 }
+        value = e.slider_low + f32(i64(nearest)) * e.slider_step
+    }
+    if value < e.slider_low { value = e.slider_low }
+    if value > e.slider_high { value = e.slider_high }
+    if second {
+        if value == e.slider_second { ret ok }
+        e.slider_second = value
+        e.invalid = true
+        ret fire_change[f32](e.slider_change_second, value)
+    }
+    if value == e.slider_value { ret ok }
+    e.slider_value = value
+    e.invalid = true
+    ret fire_change[f32](e.slider_change, value)
+}
+
+// The value under a point on the slider's track.
+fn slider_at(e: *const Element, p: geometry.Point) -> f32 {
+    var thumb = e.bounds.height
+    if e.slider_vertical { thumb = e.bounds.width }
+    if thumb > 16.0 { thumb = 16.0 }
+    var t: f32 = 0.0
+    if e.slider_vertical {
+        let length = max_f(e.bounds.height - thumb, 1.0)
+        t = 1.0 - (p.y - e.bounds.y - thumb * 0.5) / length
+    } else {
+        let length = max_f(e.bounds.width - thumb, 1.0)
+        t = (p.x - e.bounds.x - thumb * 0.5) / length
+    }
+    if t < 0.0 { t = 0.0 }
+    if t > 1.0 { t = 1.0 }
+    ret e.slider_low + t * (e.slider_high - e.slider_low)
+}
+
+// A press on a slider: the nearer thumb of a range is taken, and the value set.
+fn slider_press(s: *State, element: usize, p: geometry.Point) -> err {
+    let e = &s.elements[element]
+    let value = slider_at(e, p)
+    var second = false
+    if e.slider_range {
+        var d1 = value - e.slider_value
+        if d1 < 0.0 { d1 = 0.0 - d1 }
+        var d2 = value - e.slider_second
+        if d2 < 0.0 { d2 = 0.0 - d2 }
+        second = d2 < d1
+    }
+    e.second_held = second
+    ret slider_set(s, element, value, second)
+}
+
+// The arrow keys, Home and End on a focused slider move its first thumb.
+fn slider_key(s: *State, element: usize, code: u32) -> (bool, err) {
+    let e = &s.elements[element]
+    if !e.enabled { ret (false, ok) }
+    var step = e.slider_step
+    if !(step > 0.0) { step = (e.slider_high - e.slider_low) / 100.0 }
+    if code == 37u32 || code == 40u32 {
+        let moved = slider_set(s, element, e.slider_value - step, false)
+        ret (true, moved)
+    }
+    if code == 39u32 || code == 38u32 {
+        let moved = slider_set(s, element, e.slider_value + step, false)
+        ret (true, moved)
+    }
+    if code == 36u32 {
+        let moved = slider_set(s, element, e.slider_low, false)
+        ret (true, moved)
+    }
+    if code == 35u32 {
+        let moved = slider_set(s, element, e.slider_high, false)
+        ret (true, moved)
+    }
+    ret (false, ok)
+}
+
 // The thumb of the viewport the scrollbar names, in the border colour, over the
 // track the background painted; nothing when the content fits.
 fn place_scrollbar(s: *State, bar: Scrollbar, inner: geometry.Rect, b: *scene.Builder, color: paint.Color) -> err {
@@ -1692,7 +1867,7 @@ fn hit_region(s: *State, index: usize, p: geometry.Point, wanted: u8) -> (usize,
         let (found, has_found) = hit_region(s, usize(order[count]), p, wanted)
         if has_found { ret (found, true) }
     }
-    if (e.kind == REGION_TAG || e.kind == EDIT_TAG || e.kind == SCROLLBAR_TAG) && e.enabled && (e.gestures & wanted) != 0u8 { ret (index, true) }
+    if (e.kind == REGION_TAG || e.kind == EDIT_TAG || e.kind == SCROLLBAR_TAG || e.kind == SLIDER_TAG) && e.enabled && (e.gestures & wanted) != 0u8 { ret (index, true) }
     ret (0usize, false)
 }
 
@@ -2228,6 +2403,10 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
         let (edited, edit_error) = edit_key(s, editor, k)
         if edited || edit_error != ok { ret (true, edit_error) }
     }
+    if s.has_focus && s.elements[usize(s.focus)].live && s.elements[usize(s.focus)].kind == SLIDER_TAG {
+        let (slid, slide_error) = slider_key(s, usize(s.focus), code)
+        if slid || slide_error != ok { ret (true, slide_error) }
+    }
     var at = usize(s.root)
     if s.has_focus { at = usize(s.focus) }
     while true {
@@ -2289,6 +2468,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 let at = edit_hit(s, region_index, p.position)
                 edit_move(&s.elements[region_index], at, false)
             }
+            if s.elements[region_index].kind == SLIDER_TAG { ret slider_press(s, region_index, p.position) }
             ret ok
         }
         let (found, has_found) = hit_action(s, from, p.position)
@@ -2339,6 +2519,10 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 let at = edit_hit(s, candidate, p.position)
                 edit_move(e, at, true)
                 ret ok
+            }
+            if e.live && e.kind == SLIDER_TAG {
+                let value = slider_at(e, p.position)
+                ret slider_set(s, candidate, value, e.second_held)
             }
             if e.live && e.kind == SCROLLBAR_TAG {
                 // The thumb follows the pointer: the viewport moves by the content's
@@ -2596,6 +2780,15 @@ fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction {
     if count == 0usize { ret zero }
     let index = usize(found.slot)
     ret Interaction { hovered: s.arena_state.has_hovered && usize(s.arena_state.hovered) == index, pressed: s.arena_state.pressed && usize(s.arena_state.candidate) == index, focused: s.has_focus && usize(s.focus) == index }
+}
+
+// A slider's values, for a harness.
+fn slider_value_of(widget_runtime: *const Runtime, element: ElementId) -> (f32, f32, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret (0.0, 0.0, false) }
+    let (index, found) = element_of(s, element)
+    if !found || s.elements[index].kind != SLIDER_TAG { ret (0.0, 0.0, false) }
+    ret (s.elements[index].slider_value, s.elements[index].slider_second, true)
 }
 
 // The element that has the focus, for a harness or a control.

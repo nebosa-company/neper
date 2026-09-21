@@ -1790,6 +1790,13 @@ $uiSelectionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $uiSelectionWritten -ne 'executable written') { throw 'ui_selection emission failed' }
 $uiSelectionOutput = & $uiSelectionPath
 if ($LASTEXITCODE -ne 0 -or $uiSelectionOutput -ne 'ui selection ok') { throw "the selection controls answered wrongly: exit $LASTEXITCODE" }
+# Range selection (D820, widget plan P1-08): a slider pressed, dragged, stepped and
+# keyed, a range slider's nearer thumb.
+$uiSliderPath = Join-Path $testBuild 'ui-slider-selfhost.exe'
+$uiSliderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_slider\src\main.e') $repo 'x64' 'windows' $uiSliderPath
+if ($LASTEXITCODE -ne 0 -or $uiSliderWritten -ne 'executable written') { throw 'ui_slider emission failed' }
+$uiSliderOutput = & $uiSliderPath
+if ($LASTEXITCODE -ne 0 -or $uiSliderOutput -ne 'ui slider ok') { throw "the sliders answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

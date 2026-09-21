@@ -606,3 +606,45 @@ fn segmented_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     sem.label = label
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }
+
+// --------------------------------------------------- range selection (D820, P1-08)
+
+// A slider in the theme's colours: the track in the border colour, the filled part
+// and the thumb in the primary; the label beside it; a slider in the tree. The
+// caller keeps the value and passes it back each frame; `change` is caller-owned.
+fn slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    let (node, node_error) = ranged(a, key, t, label, value, value, false, low, high, step, change, zero, enabled)
+    ret (node, node_error)
+}
+
+fn range_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    let (node, node_error) = ranged(a, key, t, label, first, second, true, low, high, step, change, change_second, enabled)
+    ret (node, node_error)
+}
+
+fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, range: bool, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
+    var track_style = style.defaults()
+    track_style.width = style.Length { Px: 120.0 }
+    track_style.height = style.Length { Px: t.tokens.metrics.control_height }
+    let state = control_state(t, key, enabled, false)
+    let look = style.resolve(t.tokens, .Outlined, state)
+    track_style.opacity = look.opacity
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.slider(key, widget.Slider { value: first, second: second, range: range, low: low, high: high, step: step, vertical: false, track: style.color(t.tokens, .Border), fill: style.color(t.tokens, .Primary), thumb: style.color(t.tokens, .Primary), change: change, change_second: change_second, enabled: enabled }, track_style)
+    var caption = text_options()
+    caption.wrap = .None
+    if !enabled { caption.color = .TextMuted }
+    let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
+    if label_error != ok { ret (zero, label_error) }
+    parts[1usize] = label_node
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
+}
