@@ -1719,6 +1719,13 @@ ui_button_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/ui-button-selfhost"
 ui_button_output=$("$test_build/ui-button-selfhost")
 [ "$ui_button_output" = 'ui button ok' ]
+# Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
+# segmented control under a theme, tapped, with their states in the tree.
+ui_selection_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_selection/src/main.e" "$repo" x64 linux "$test_build/ui-selection-selfhost")
+[ "$ui_selection_written" = 'executable written' ]
+chmod +x "$test_build/ui-selection-selfhost"
+ui_selection_output=$("$test_build/ui-selection-selfhost")
+[ "$ui_selection_output" = 'ui selection ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

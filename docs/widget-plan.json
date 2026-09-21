@@ -305,8 +305,14 @@
             "Switch",
             "SegmentedControl"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Checkbox",
+            "Radio",
+            "RadioGroup",
+            "Switch",
+            "SegmentedControl"
+          ],
+          "evidence": "lib/e/ui/control.e (D819): checkbox and radio as a marked row in a tap region centred in the hit target with checked/mixed/disabled states, radio_group and segmented_control keyed per label with one action each, switch_control as a track and knob under the filled or outlined variant; tests/selfhost/fixtures/link/ui_selection on both hosts"
         },
         {
           "id": "P1-08",

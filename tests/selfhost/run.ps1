@@ -1783,6 +1783,13 @@ $uiButtonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $uiButtonWritten -ne 'executable written') { throw 'ui_button emission failed' }
 $uiButtonOutput = & $uiButtonPath
 if ($LASTEXITCODE -ne 0 -or $uiButtonOutput -ne 'ui button ok') { throw "the buttons answered wrongly: exit $LASTEXITCODE" }
+# Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
+# segmented control under a theme, tapped, with their states in the tree.
+$uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'
+$uiSelectionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_selection\src\main.e') $repo 'x64' 'windows' $uiSelectionPath
+if ($LASTEXITCODE -ne 0 -or $uiSelectionWritten -ne 'executable written') { throw 'ui_selection emission failed' }
+$uiSelectionOutput = & $uiSelectionPath
+if ($LASTEXITCODE -ne 0 -or $uiSelectionOutput -ne 'ui selection ok') { throw "the selection controls answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

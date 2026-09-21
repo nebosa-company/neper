@@ -428,3 +428,181 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     sem.actions = accessibility.ACTION_PRESS
     ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
 }
+
+// ------------------------------------------------- discrete selection (D819, P1-07)
+
+// A choosable row: a mark box beside a label, a tap-and-hover region under the
+// role, its states from what the caller says. The mark is a square, or a disc when
+// `round`, in the outlined look, filled inside when chosen.
+fn choosable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, chosen: bool, mixed: bool, round: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, chosen)
+    let look = style.resolve(t.tokens, .Outlined, state)
+    let size = t.tokens.metrics.control_height * 0.5
+    var mark_style = sized_style(size, size)
+    mark_style.background = paint.Brush { Solid: look.background }
+    mark_style.border = style.Border { width: t.tokens.borders.regular, color: look.border }
+    mark_style.radius = t.tokens.radii.sm
+    if round { mark_style.radius = size * 0.5 }
+    let pad = style.Length { Px: size * 0.25 }
+    mark_style.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    var mark_count = 0usize
+    if chosen || mixed { mark_count = 1usize }
+    let (dot, dot_error) = mem.alloc[widget.Node](a, mark_count)
+    if dot_error != ok { ret (zero, TooLarge) }
+    if mark_count != 0usize {
+        var dot_style = style.defaults()
+        dot_style.width = style.Length { Percent: 100.0 }
+        dot_style.height = style.Length { Percent: 100.0 }
+        if mixed { dot_style.height = style.Length { Percent: 30.0 } }
+        dot_style.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        if round { dot_style.radius = size }
+        dot[0usize] = widget.box(0u64, dot_style, zero)
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.box(0u64, mark_style, dot[0usize..mark_count])
+    var caption = text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    if !enabled { caption.color = .TextMuted }
+    let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
+    if label_error != ok { ret (zero, label_error) }
+    parts[1usize] = label_node
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize])
+    // The row is centred in a box at least the hit target, which the region wraps.
+    var target_style = style.defaults()
+    target_style.min_height = style.Length { Px: t.tokens.metrics.hit_target }
+    target_style.min_width = style.Length { Px: t.tokens.metrics.hit_target }
+    target_style.opacity = look.opacity
+    let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+    if centred_error != ok { ret (zero, TooLarge) }
+    centred[0usize] = widget.aligned(0u64, .Start, .Center, target_style, row[0usize..1usize])
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, style.defaults(), centred[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = role
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if chosen { sem.states = accessibility.STATE_CHECKED }
+    if mixed { sem.states = sem.states | accessibility.STATE_MIXED }
+    if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
+}
+
+// A checkbox: checked, or mixed for a choice made in part; a tap fires `action`.
+fn checkbox(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let (node, node_error) = choosable(a, key, t, 4u8, label, checked, mixed, false, action, enabled)
+    ret (node, node_error)
+}
+
+// A radio: one of a group, the caller keeping which is selected.
+fn radio(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let (node, node_error) = choosable(a, key, t, 5u8, label, selected, false, true, action, enabled)
+    ret (node, node_error)
+}
+
+// A radio group: a radio per label in a column, keyed `key + 1 + index`, the
+// selected one marked, each firing its own action (one per label, caller-owned);
+// a group in the tree under `label`.
+fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    if actions.len != labels.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < labels.len {
+        let (item, item_error) = radio(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], enabled)
+        if item_error != ok { ret (zero, item_error) }
+        items[i] = item
+        i += 1usize
+    }
+    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 1usize)
+    if stacked_error != ok { ret (zero, TooLarge) }
+    stacked[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), items[0usize..labels.len])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), stacked[0usize..1usize]), ok)
+}
+
+// A switch: a track with its knob at the right when on, the label beside; a switch
+// in the tree, checked when on.
+fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, on: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    // On is the filled variant, not the selected tint.
+    let state = control_state(t, key, enabled, false)
+    var variant: style.ControlVariant = .Outlined
+    if on { variant = .Filled }
+    let look = style.resolve(t.tokens, variant, state)
+    let height = t.tokens.metrics.control_height * 0.5
+    let width = height * 1.75
+    var track = sized_style(width, height)
+    track.background = paint.Brush { Solid: look.background }
+    track.border = style.Border { width: t.tokens.borders.regular, color: look.border }
+    track.radius = height * 0.5
+    let knob = height - 4.0
+    var knob_style = sized_style(knob, knob)
+    knob_style.background = paint.Brush { Solid: look.foreground }
+    knob_style.radius = knob * 0.5
+    var at: f32 = 2.0
+    if on { at = width - knob - 2.0 }
+    let (knobs, knobs_error) = mem.alloc[widget.Node](a, 1usize)
+    if knobs_error != ok { ret (zero, TooLarge) }
+    knobs[0usize] = widget.positioned(0u64, at, 2.0, knob_style, zero)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.stack(0u64, track, knobs[0usize..1usize])
+    var caption = text_options()
+    caption.wrap = .None
+    if !enabled { caption.color = .TextMuted }
+    let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
+    if label_error != ok { ret (zero, label_error) }
+    parts[1usize] = label_node
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize])
+    var target_style = style.defaults()
+    target_style.min_height = style.Length { Px: t.tokens.metrics.hit_target }
+    target_style.opacity = look.opacity
+    let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+    if centred_error != ok { ret (zero, TooLarge) }
+    centred[0usize] = widget.aligned(0u64, .Start, .Center, target_style, row[0usize..1usize])
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, style.defaults(), centred[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 18u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if on { sem.states = accessibility.STATE_CHECKED }
+    if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
+}
+
+// A segmented control: a segment per label in a row, keyed `key + 1 + index`, the
+// selected one filled and the rest outlined, each firing its own action; a group
+// in the tree.
+fn segmented_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    if actions.len != labels.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < labels.len {
+        var options = button_options()
+        options.enabled = enabled
+        options.variant = .Outlined
+        if i == selected { options.variant = .Filled }
+        let (item, item_error) = toggle_button(a, key + 1u64 + u64(i), t, labels[i], i == selected, &actions[i], options)
+        if item_error != ok { ret (zero, item_error) }
+        items[i] = item
+        i += 1usize
+    }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..labels.len])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}

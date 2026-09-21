@@ -3671,6 +3671,11 @@ fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *
 fn icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err)
 fn toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err)
 fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit) -> (widget.Node, err)
+fn checkbox(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, checked: bool, mixed: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err)
+fn radio(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err)
+fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err)
+fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, on: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err)
+fn segmented_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
@@ -3704,6 +3709,15 @@ look from its state each frame; `button`, `icon_button` and `toggle_button` are 
 tap-and-hover region in the resolved look, at least the control height and the hit
 target, with a button's semantics, and `link` a region with the link role; each
 fires the `Submit` the caller keeps alive on a tap and, focused, on Enter or Space.
+
+Discrete selection (D819, P1-07): `checkbox` and `radio` are a mark beside a label
+in a tap-and-hover region centred in a box at least the hit target, the mark filled
+when chosen (a bar when mixed), with the checkbox or radio role and the checked,
+mixed and disabled states; `radio_group` and `segmented_control` are one per label
+keyed `key + 1 + index`, each firing its own action from a slice the caller keeps
+alive, a group in the tree; `switch_control` is a track with its knob at the right
+when on, the filled variant then and the outlined one off, a switch in the tree.
+The caller keeps the chosen value and passes it back each frame.
 
 ### `e.ui.app`
 

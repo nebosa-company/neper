@@ -15760,3 +15760,25 @@ is not a button, which `link/ui_gesture` now checks by focusing the
 scope itself. `link/ui_button` checks the tap, the keys, the hovered
 pixels, the disabled button, the toggle's selection, the icon button
 and the link on both hosts.
+
+## D819 — Discrete selection: the value stays with the caller, one action per choice
+
+P1-07 of the widget plan. A checkbox, a radio, a switch and a segment are
+all a `choosable` or a `pressable` (D818) with a mark: the caller keeps
+the chosen value and hands it back each frame, the control shows it --
+a filled square or disc, a bar for a mixed checkbox, a knob at the right
+of a filled track for a switch that is on, a filled segment -- and says it
+in the tree as the checked, mixed or selected state under the checkbox,
+radio, switch or button role. A group of choices takes one action per
+label from a slice the caller keeps alive rather than a single action
+with an index, because an action's context must outlive the element and
+the control has nowhere stable to keep an index per item; the items are
+keyed `key + 1 + index` under the group's key so a harness can reach
+each. Two things the fixture found: a row centred in a region is centred
+in the row's own height, not the region's, so the row now sits in an
+aligned box at least the hit target and the region wraps that; and a
+switch that is on is the filled variant and not the selected tint, since
+`resolve` mixes a selected background toward the selection colour, which
+is a light blue meant for text. `link/ui_selection` checks the roles and
+states, the taps through to the actions and the switch's track pixels on
+both hosts.
