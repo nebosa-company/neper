@@ -14,6 +14,7 @@
 
 use e.gpu
 use e.mem
+use e.os.shell
 use e.time
 use e.gfx.geometry
 use e.gfx.scene
@@ -182,4 +183,154 @@ fn frames_of(app: *const App) -> u64 {
     let s = mem.cast[*State](app.state)
     if mem.address_of(s) == 0usize { ret 0u64 }
     ret s.frames
+}
+
+// ---------------------------------------------------------------- tray (D886)
+//
+// The system tray (widget plan P4-01) as a typed controller over `e.os.shell`: a
+// `Tray` is the caller's icon, tooltip, badge and command menu under one id, and
+// `tray_poll` turns the shell's activations into the caller's -- a context
+// activation with a menu attached becomes the shell's popup menu at the pointer,
+// and its choice a `.Command` with the item's id. The badge is composed into the
+// icon here, since the shell has no badge of its own: a filled disc in the top
+// right corner while the count is not zero. ponytail: a disc, not the number; a
+// glyph needs a face the app does not hold at this level. Every call answers
+// `shell.Unsupported` where the host has no tray, and `tray_supported` says so
+// before one is opened.
+
+type Tray = struct { id: u32, width: u32, height: u32, source: []const u32, composed: []u32, tooltip: str, badge: u32, menu: []const shell.MenuItem, open: bool }
+type TrayActivationKind = enum u8 { Select, Open, Command, Dismissed }
+type TrayActivation = struct { kind: TrayActivationKind, command: u32, x: i32, y: i32 }
+
+const BADGE_COLOUR: u32 = 4293281869u32
+
+fn tray_supported() -> bool {
+    ret shell.capabilities().tray
+}
+
+fn composed_icon(t: *const Tray) -> shell.Icon {
+    ret shell.Icon { width: t.width, height: t.height, pixels: t.composed[0usize..t.composed.len] }
+}
+
+// The source pixels, and the badge over them when the count is not zero: a disc
+// of a quarter of the shorter side, its centre a radius in from the top right.
+fn compose(t: *Tray) {
+    let count = usize(t.width) * usize(t.height)
+    var at = 0usize
+    while at < count {
+        t.composed[at] = t.source[at]
+        at += 1usize
+    }
+    if t.badge == 0u32 { ret }
+    var side = t.width
+    if t.height < side { side = t.height }
+    let radius = i32(side / 4u32)
+    if radius == 0i32 { ret }
+    let centre_x = i32(t.width) - radius
+    let centre_y = radius
+    var y = 0i32
+    while y < i32(t.height) {
+        var x = 0i32
+        while x < i32(t.width) {
+            let dx = x - centre_x
+            let dy = y - centre_y
+            if dx * dx + dy * dy <= radius * radius { t.composed[usize(y) * usize(t.width) + usize(x)] = BADGE_COLOUR }
+            x += 1i32
+        }
+        y += 1i32
+    }
+}
+
+fn tray_open(a: *mem.Arena, id: u32, icon: shell.Icon, tooltip: str) -> (Tray, err) {
+    var t: Tray = zero
+    if !tray_supported() { ret (t, shell.Unsupported) }
+    if icon.width == 0u32 || icon.height == 0u32 || icon.pixels.len < usize(icon.width) * usize(icon.height) { ret (t, shell.Invalid) }
+    let (composed, allocation_error) = mem.alloc[u32](a, usize(icon.width) * usize(icon.height))
+    if allocation_error != ok { ret (t, allocation_error) }
+    t.id = id
+    t.width = icon.width
+    t.height = icon.height
+    t.source = icon.pixels
+    t.composed = composed
+    t.tooltip = tooltip
+    compose(&t)
+    let added = shell.tray_add(a, id, composed_icon(&t), tooltip)
+    if added != ok { ret (t, added) }
+    t.open = true
+    ret (t, ok)
+}
+
+fn tray_push(a: *mem.Arena, t: *Tray) -> err {
+    if !t.open { ret shell.NotFound }
+    compose(t)
+    ret shell.tray_update(a, t.id, composed_icon(t), t.tooltip)
+}
+
+// A new icon has to be the size the tray was opened with, since the composed
+// pixels are allocated once.
+fn tray_set_icon(a: *mem.Arena, t: *Tray, icon: shell.Icon) -> err {
+    if icon.width != t.width || icon.height != t.height || icon.pixels.len < usize(icon.width) * usize(icon.height) { ret shell.Invalid }
+    t.source = icon.pixels
+    ret tray_push(a, t)
+}
+
+fn tray_set_tooltip(a: *mem.Arena, t: *Tray, tooltip: str) -> err {
+    t.tooltip = tooltip
+    ret tray_push(a, t)
+}
+
+fn tray_set_badge(a: *mem.Arena, t: *Tray, count: u32) -> err {
+    t.badge = count
+    ret tray_push(a, t)
+}
+
+// The menu the next context activation shows; the items are the caller's and
+// have to outlive the tray. An empty menu means a context activation is reported
+// as such and nothing is shown.
+fn tray_set_menu(t: *Tray, items: []const shell.MenuItem) {
+    t.menu = items
+}
+
+// The oldest activation of this tray, with a context activation resolved through
+// the menu when one is attached: `.Command` names the chosen item, `.Dismissed`
+// a menu closed without a choice. Activations of other trays are left in the queue's
+// order and dropped, since a tray is the whole of its id.
+fn tray_poll(a: *mem.Arena, t: *Tray) -> (TrayActivation, bool, err) {
+    var none: TrayActivation = zero
+    if !t.open { ret (none, false, shell.NotFound) }
+    while true {
+        let (event, any) = shell.tray_poll()
+        if !any { ret (none, false, ok) }
+        if event.id != t.id { continue }
+        var activation: TrayActivation = zero
+        activation.x = event.x
+        activation.y = event.y
+        if event.kind == .Select {
+            activation.kind = .Select
+            ret (activation, true, ok)
+        }
+        if event.kind == .Open {
+            activation.kind = .Open
+            ret (activation, true, ok)
+        }
+        if t.menu.len == 0usize {
+            activation.kind = .Dismissed
+            ret (activation, true, ok)
+        }
+        let (chosen, has_chosen, menu_error) = shell.popup_menu(a, t.menu, event.x, event.y)
+        if menu_error != ok { ret (none, false, menu_error) }
+        activation.kind = .Dismissed
+        if has_chosen {
+            activation.kind = .Command
+            activation.command = chosen
+        }
+        ret (activation, true, ok)
+    }
+    ret (none, false, ok)
+}
+
+fn tray_close(a: *mem.Arena, t: *Tray) -> err {
+    if !t.open { ret shell.NotFound }
+    t.open = false
+    ret shell.tray_remove(a, t.id)
 }

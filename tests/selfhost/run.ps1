@@ -2755,6 +2755,13 @@ $osShellWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $osShellWritten -ne 'executable written') { throw 'os_shell emission failed' }
 $osShellOutput = & $osShellPath
 if ($LASTEXITCODE -ne 0 -or $osShellOutput -ne 'os shell ok') { throw "the shell services answered wrongly: exit $LASTEXITCODE" }
+# The tray controller (D886, widget plan P4-01): a real tray item with its badge composed
+# and its menu attached, opened and closed once.
+$uiTrayPath = Join-Path $testBuild 'ui-tray-selfhost.exe'
+$uiTrayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_tray\src\main.e') $repo 'x64' 'windows' $uiTrayPath
+if ($LASTEXITCODE -ne 0 -or $uiTrayWritten -ne 'executable written') { throw 'ui_tray emission failed' }
+$uiTrayOutput = & $uiTrayPath
+if ($LASTEXITCODE -ne 0 -or $uiTrayOutput -ne 'ui tray ok') { throw "the tray controller answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -17040,3 +17040,21 @@ host is asked, a tray item added, updated and removed on Windows, and
 the trash under a scratch data home on Linux; the recycle bin, the
 reveal and the open verb were run by hand on Windows. The plan's
 `resolved_blockers` gains `native-shell-api`; `--next` now names P4-01.
+
+## D886 — The tray is a controller: the shell's item, the shell's menu, the app's badge
+
+P4-01 of the widget plan, the first item over D885's primitive. A
+`Tray` in `e.ui.app` is one shell item under one id with the caller's
+icon, tooltip, badge and command menu, and every change is one
+`shell.tray_update` of the composed pixels; the menu is
+`shell.popup_menu` -- the shell's own -- shown by `tray_poll` when a
+context activation arrives and a menu is attached, so the caller sees
+`.Command` with the item's id or `.Dismissed`, never the menu. The
+badge is the one thing composed in the app, because no shell has a
+badge on a tray item: a disc in the icon's top right corner while the
+count is not zero (the number would need a face the app does not hold
+at this level). Where the host has no tray `tray_supported` says so
+and every call is `shell.Unsupported` -- the proposal's rule, no
+in-window tray. `link/ui_tray` opens, badges, re-tips, refuses a
+resized icon, polls nothing, and closes once on Windows, and gets
+`Unsupported` on Linux.

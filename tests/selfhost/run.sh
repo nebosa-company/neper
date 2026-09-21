@@ -2560,6 +2560,13 @@ rm -rf "$test_build/shell-home"
 mkdir -p "$test_build/shell-home"
 os_shell_output=$(XDG_DATA_HOME="$test_build/shell-home" NEPER_SHELL_TRASH_HOME="$test_build/shell-home" "$test_build/os-shell-selfhost")
 [ "$os_shell_output" = 'os shell ok' ]
+# The tray controller (D886, widget plan P4-01): the badge composed, the menu attached, and
+# `Unsupported` throughout where the host has no tray.
+ui_tray_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_tray/src/main.e" "$repo" x64 linux "$test_build/ui-tray-selfhost")
+[ "$ui_tray_written" = 'executable written' ]
+chmod +x "$test_build/ui-tray-selfhost"
+ui_tray_output=$("$test_build/ui-tray-selfhost")
+[ "$ui_tray_output" = 'ui tray ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

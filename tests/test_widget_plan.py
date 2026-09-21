@@ -11,36 +11,68 @@ CHECKER = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKER)
 
 
+def first_undelivered(plan):
+    """The first component the plan still owes, in phase and item order."""
+    for phase in plan["phases"]:
+        for item in phase["items"]:
+            missing = [c for c in item["components"] if c not in item["delivered"]]
+            if missing:
+                return item["id"], missing[0]
+    return None
+
+
+def fresh_last_phase(plan):
+    """The plan with every earlier phase delivered and the last one not started, so
+    the host-phase tests do not move as the repository delivers."""
+    plan = copy.deepcopy(plan)
+    for phase in plan["phases"][:-1]:
+        for item in phase["items"]:
+            item["delivered"] = list(item["components"])
+    for item in plan["phases"][-1]["items"]:
+        item["delivered"] = []
+    plan["resolved_blockers"] = []
+    return plan
+
+
 class WidgetPlanTests(unittest.TestCase):
     def test_repository_widget_plan(self):
         plan, errors = CHECKER.validate(ROOT)
         self.assertEqual(errors, [])
         modules = json.loads((ROOT / "docs/modules.json").read_text(encoding="utf-8"))
-        self.assertEqual(CHECKER.next_work(plan, modules)["state"], "blocked")
+        work = CHECKER.next_work(plan, modules)
+        self.assertIn(work["state"], ("ready", "blocked", "complete"))
+        if work["state"] == "ready":
+            self.assertEqual((work["item"], work["component"]), first_undelivered(plan))
 
     def test_next_component_after_module_blockers(self):
         plan, _ = CHECKER.validate(ROOT)
+        plan = copy.deepcopy(plan)
         modules = json.loads((ROOT / "docs/modules.json").read_text(encoding="utf-8"))
         modules = copy.deepcopy(modules)
         blockers = set(plan["phases"][0]["blocked_by"])
         for module in modules["modules"]:
             if module["name"] in blockers:
                 module["surface"] = "source"
+        plan["resolved_blockers"] = sorted({blocker
+                                             for phase in plan["phases"]
+                                             for item in phase["items"]
+                                             for blocker in item.get("blocked_by", [])
+                                             if not blocker.startswith(("P", "e."))})
         work = CHECKER.next_work(plan, modules)
-        self.assertEqual((work["state"], work["item"], work["component"]),
-                         ("ready", "P0-01", "ThemeTokens"))
+        expected = first_undelivered(plan)
+        if expected is None:
+            self.assertEqual(work["state"], "complete")
+        else:
+            self.assertEqual((work["state"], work["item"], work["component"]), ("ready",) + expected)
 
     def test_host_phase_requires_explicit_native_blockers(self):
         plan, _ = CHECKER.validate(ROOT)
-        plan = copy.deepcopy(plan)
+        plan = fresh_last_phase(plan)
         modules = json.loads((ROOT / "docs/modules.json").read_text(encoding="utf-8"))
         modules = copy.deepcopy(modules)
         for module in modules["modules"]:
             if module["name"] in plan["phases"][0]["blocked_by"]:
                 module["surface"] = "source"
-        for phase in plan["phases"][:-1]:
-            for item in phase["items"]:
-                item["delivered"] = list(item["components"])
 
         work = CHECKER.next_work(plan, modules)
         self.assertEqual((work["item"], work["blocked_by"]),

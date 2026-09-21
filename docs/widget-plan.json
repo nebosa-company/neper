@@ -805,8 +805,12 @@
             "TrayMenu",
             "TrayBadge"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "SystemTray",
+            "TrayMenu",
+            "TrayBadge"
+          ],
+          "evidence": "lib/e/ui/app.e (D886): Tray as a typed controller over e.os.shell -- tray_open/tray_set_icon/tray_set_tooltip/tray_close under one id, tray_set_badge composing a disc into the icon's pixels, tray_set_menu attaching the shell's own popup menu, tray_poll turning the shell's activations into Select, Open, Command (the chosen item) or Dismissed, and tray_supported plus shell.Unsupported everywhere on a host without a tray; tests/selfhost/fixtures/link/ui_tray on both hosts"
         },
         {
           "id": "P4-02",

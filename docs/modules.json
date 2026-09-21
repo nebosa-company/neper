@@ -2940,6 +2940,7 @@
     "e.gpu",
     "e.mem",
     "e.os",
+    "e.os.shell",
     "e.time",
     "e.ui.accessibility",
     "e.ui.animation",

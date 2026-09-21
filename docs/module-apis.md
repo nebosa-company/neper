@@ -6255,6 +6255,17 @@ fn run(app: *App) -> err
 fn stop(app: *App)
 fn close(app: *App) -> err
 fn frames_of(app: *const App) -> u64
+type Tray = struct { id: u32, width: u32, height: u32, source: []const u32, composed: []u32, tooltip: str, badge: u32, menu: []const shell.MenuItem, open: bool }
+type TrayActivationKind = enum u8 { Select, Open, Command, Dismissed }
+type TrayActivation = struct { kind: TrayActivationKind, command: u32, x: i32, y: i32 }
+fn tray_supported() -> bool
+fn tray_open(a: *mem.Arena, id: u32, icon: shell.Icon, tooltip: str) -> (Tray, err)
+fn tray_set_icon(a: *mem.Arena, t: *Tray, icon: shell.Icon) -> err
+fn tray_set_tooltip(a: *mem.Arena, t: *Tray, tooltip: str) -> err
+fn tray_set_badge(a: *mem.Arena, t: *Tray, count: u32) -> err
+fn tray_set_menu(t: *Tray, items: []const shell.MenuItem)
+fn tray_poll(a: *mem.Arena, t: *Tray) -> (TrayActivation, bool, err)
+fn tray_close(a: *mem.Arena, t: *Tray) -> err
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,
