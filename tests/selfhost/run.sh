@@ -2634,6 +2634,15 @@ ui_taskbar_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-taskbar-selfhost"
 ui_taskbar_output=$("$test_build/ui-taskbar-selfhost")
 [ "$ui_taskbar_output" = 'ui taskbar ok' ]
+# The shell file operations (D888, widget plan P4-09): the app's verbs are the shell's answers,
+# and a file the app trashes lands in the scratch data home's trash.
+ui_shell_ops_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_shell_ops/src/main.e" "$repo" x64 linux "$test_build/ui-shell-ops-selfhost")
+[ "$ui_shell_ops_written" = 'executable written' ]
+chmod +x "$test_build/ui-shell-ops-selfhost"
+rm -rf "$test_build/shell-home"
+mkdir -p "$test_build/shell-home"
+ui_shell_ops_output=$(XDG_DATA_HOME="$test_build/shell-home" NEPER_SHELL_TRASH_HOME="$test_build/shell-home" "$test_build/ui-shell-ops-selfhost")
+[ "$ui_shell_ops_output" = 'ui shell ops ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

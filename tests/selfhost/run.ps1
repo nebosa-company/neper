@@ -2841,6 +2841,12 @@ $uiTaskbarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiTaskbarWritten -ne 'executable written') { throw 'ui_taskbar emission failed' }
 $uiTaskbarOutput = & $uiTaskbarPath
 if ($LASTEXITCODE -ne 0 -or $uiTaskbarOutput -ne 'ui taskbar ok') { throw "the taskbar controllers answered wrongly: exit $LASTEXITCODE" }
+# The shell file operations (D888, widget plan P4-09): the app's verbs are the shell's answers.
+$uiShellOpsPath = Join-Path $testBuild 'ui-shell-ops-selfhost.exe'
+$uiShellOpsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_shell_ops\src\main.e') $repo 'x64' 'windows' $uiShellOpsPath
+if ($LASTEXITCODE -ne 0 -or $uiShellOpsWritten -ne 'executable written') { throw 'ui_shell_ops emission failed' }
+$uiShellOpsOutput = & $uiShellOpsPath
+if ($LASTEXITCODE -ne 0 -or $uiShellOpsOutput -ne 'ui shell ops ok') { throw "the shell file operations answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

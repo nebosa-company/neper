@@ -17131,3 +17131,18 @@ burst of three emits fail as "arena exhausted" where one at a time
 passes. `link/ui_taskbar` drives the app's real window through
 progress, overlay, a refused total and a published-then-removed jump
 list on Windows, and gets `Unsupported` on Linux.
+
+## D888 — Shell file operations are delegations, and say so
+
+P4-09 of the widget plan, the last item `native-shell-api` alone
+unblocks. `e.ui.app` gains `open_uri`, `reveal_in_file_manager` and
+`move_to_trash`, and they are D885's verbs handed on unchanged: the
+proposal asks the widget layer to delegate these to the host shell,
+and a wrapper that reinterpreted the shell's answer would be the
+emulation it forbids. So each answers exactly what `e.os.shell` does
+-- `Invalid` for an empty argument, `NotFound` for a missing item,
+`Unsupported` where the host has no verb -- and `shell_capabilities`
+is the record a caller reads before offering a verb. `link/ui_shell_ops`
+checks the refusals on both hosts and, under the runner's scratch
+data home on Linux, that a file the app trashes is gone from where it
+was and present in the trash.

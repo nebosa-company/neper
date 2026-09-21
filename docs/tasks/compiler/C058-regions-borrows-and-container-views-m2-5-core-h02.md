@@ -122,6 +122,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `mem.reset`: `lib/e/os.windows.e`×70‡, `lib/e/os.linux.e`×54‡, `lib/e/fmt/json.e`×26†, `lib/e/net/http.e`×26†, `lib/e/io.e`×17, `lib/e/fs.e`×14, `lib/e/grep.e`×10, `lib/e/net/ws.e`×7
 - `context_moves.ends`: `tests/conformance/tools/context_moves.x64-linux.expected.jsonl`×1, `tests/conformance/tools/context_moves.x64-windows.expected.jsonl`×1
 - `Resource`: `src/check.e`×144‡, `src/main.e`×16‡
+- `@borrows`: `src/check.e`×3‡, `tests/conformance/accept/regions_borrow_contract_aggregate.e`×1, `tests/conformance/accept/regions_borrow_contract_artifact.e`×1, `tests/conformance/reject/regions_borrow_contract_body.e`×1, `tests/conformance/reject/regions_borrow_contract_body.expected.jsonl`×1, `tests/conformance/reject/regions_borrow_contract_call.e`×1, `tests/conformance/reject/regions_borrow_contract_generic.e`×1, `tests/conformance/reject/regions_borrow_contract_name.e`×1
 
 ## Verification
 

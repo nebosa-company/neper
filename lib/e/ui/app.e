@@ -380,3 +380,27 @@ fn jump_list(a: *mem.Arena, tasks: []const shell.JumpTask) -> err {
 fn jump_list_clear(a: *mem.Arena) -> err {
     ret shell.jump_list_clear(a)
 }
+
+// ---------------------------------------------- shell file operations (D888)
+//
+// Widget plan P4-09: the host shell's open verb, file-manager reveal and
+// recoverable deletion, delegated as they are. Each is the shell's answer --
+// `shell.Invalid` for an empty argument, `shell.NotFound` for a missing item,
+// `shell.Unsupported` where the host has no such verb -- and `shell_capabilities`
+// says beforehand which verbs this host has.
+
+fn shell_capabilities() -> shell.Capabilities {
+    ret shell.capabilities()
+}
+
+fn open_uri(a: *mem.Arena, uri: str) -> err {
+    ret shell.open_uri(a, uri)
+}
+
+fn reveal_in_file_manager(a: *mem.Arena, path: str) -> err {
+    ret shell.reveal(a, path)
+}
+
+fn move_to_trash(a: *mem.Arena, path: str) -> err {
+    ret shell.trash(a, path)
+}

@@ -6424,6 +6424,10 @@ fn taskbar_progress(a: *mem.Arena, app: *App, state: shell.ProgressState, comple
 fn taskbar_overlay(a: *mem.Arena, app: *App, icon: shell.Icon, description: str) -> err
 fn jump_list(a: *mem.Arena, tasks: []const shell.JumpTask) -> err
 fn jump_list_clear(a: *mem.Arena) -> err
+fn shell_capabilities() -> shell.Capabilities
+fn open_uri(a: *mem.Arena, uri: str) -> err
+fn reveal_in_file_manager(a: *mem.Arena, path: str) -> err
+fn move_to_trash(a: *mem.Arena, path: str) -> err
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,

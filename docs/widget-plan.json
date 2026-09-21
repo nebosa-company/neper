@@ -940,8 +940,12 @@
             "RevealInFileManager",
             "MoveToTrash"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "OpenUri",
+            "RevealInFileManager",
+            "MoveToTrash"
+          ],
+          "evidence": "lib/e/ui/app.e (D888): open_uri, reveal_in_file_manager and move_to_trash delegate to e.os.shell's open verb, reveal and trash and answer as the shell does (Invalid for an empty argument, NotFound for a missing item, Unsupported where the host has no verb), with shell_capabilities saying beforehand which verbs the host has; tests/selfhost/fixtures/link/ui_shell_ops on both hosts"
         },
         {
           "id": "P4-10",
