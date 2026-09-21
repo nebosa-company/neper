@@ -4012,6 +4012,7 @@ fn destination_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 
 ```neper
 type Source = struct { ctx: *void, count: fn(*void) -> usize, key: fn(*void, usize) -> widget.Key, build: fn(*void, *mem.Arena, usize, *widget.Node) -> err }
+type Reorder = struct { from: usize, to: usize }
 error TooLarge
 fn list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const widget.Node, keys: []const widget.Key, selected: []const widget.Key, separators: bool, width: f32) -> (widget.Node, err)
 fn virtual_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: Source, selected: []const widget.Key, extent: f32, offset: f32, change: widget.Change[f32], separators: bool, width: f32, height: f32) -> (widget.Node, err)
@@ -4021,6 +4022,9 @@ fn page_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []c
 fn page_indicator(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, current: usize, turn: widget.Change[usize]) -> (widget.Node, err)
 fn pagination(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, count: usize, current: usize, window: usize, turn: widget.Change[usize]) -> (widget.Node, err)
 fn carousel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []const widget.Node, current: usize, turn: widget.Change[usize], width: f32, height: f32) -> (widget.Node, err)
+fn reorderable_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const widget.Node, keys: []const widget.Key, extent: f32, move: widget.Change[Reorder], width: f32) -> (widget.Node, err)
+fn pull_to_refresh(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, refreshing: bool, refresh: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err)
+fn swipe_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, labels: []const str, actions: []const widget.Submit, revealed: bool, reveal: widget.Change[bool], width: f32, height: f32) -> (widget.Node, err)
 ```
 
 ### `e.ui.app`

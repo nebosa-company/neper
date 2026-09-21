@@ -16208,3 +16208,26 @@ comment, not by hand; exits are per check on both hosts. The batch was
 built, tested and committed from a detached worktree because a
 concurrent session's commits in the shared tree swept edits of the
 shared files along; that is the rule for the stream from here.
+
+## D839 — Collection interaction: a drop is an explicit move, and every touch behaviour has a button
+
+P2-07 of the widget plan (D836–D838 belong to the algos stream). A
+`reorderable_list` never reorders anything: a row is a focusable drag
+region, and its drop reports a `Reorder` from the row's index to the
+index of the row under the pointer -- read from the list's own bounds
+and the rows' fixed extent, so no per-frame state is needed -- while
+Alt+Up and Alt+Down from the focused row report a move by one through
+a scope per row; the caller moves its model and rebuilds, and the rows
+keep their keys. `pull_to_refresh` and `swipe_actions` are D835's
+once-per-drag pattern over a shared `swipe_cell` helper: the pull fires
+`refresh` once when the pointer has come a third of the height down
+from where it pressed, the swipe reports `reveal(true)` once past a
+quarter of the width leftward and `reveal(false)` rightward. Each
+touch behaviour has the alternative §3.6 asks for as an ordinary
+button: Refresh beside the pulled content, More at the row's end while
+its actions are hidden -- a keyboard or a pointer reaches them without
+a gesture. While `refreshing`, an indeterminate progress ring stands
+over the top of the content and the group is busy; while `revealed`,
+the row's actions are buttons at its end and the row says expanded.
+`link/ui_interaction` drags, drops, nudges, pulls, swipes and taps on
+both hosts.

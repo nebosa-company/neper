@@ -1914,6 +1914,13 @@ $uiPagedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $uiPagedWritten -ne 'executable written') { throw 'ui_paged emission failed' }
 $uiPagedOutput = & $uiPagedPath
 if ($LASTEXITCODE -ne 0 -or $uiPagedOutput -ne 'ui paged ok') { throw "the paged collections answered wrongly: exit $LASTEXITCODE" }
+# Collection interaction (D839, widget plan P2-07): reorderable list, pull to refresh,
+# swipe actions.
+$uiInteractionPath = Join-Path $testBuild 'ui-interaction-selfhost.exe'
+$uiInteractionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_interaction\src\main.e') $repo 'x64' 'windows' $uiInteractionPath
+if ($LASTEXITCODE -ne 0 -or $uiInteractionWritten -ne 'executable written') { throw 'ui_interaction emission failed' }
+$uiInteractionOutput = & $uiInteractionPath
+if ($LASTEXITCODE -ne 0 -or $uiInteractionOutput -ne 'ui interaction ok') { throw "the collection interaction answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

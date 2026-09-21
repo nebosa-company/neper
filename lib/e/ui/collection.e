@@ -10,6 +10,7 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
@@ -494,4 +495,276 @@ fn carousel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []co
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), across[0usize..3usize])
     parts[1usize] = dots
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+// ------------------------------------------------ collection interaction (D839, P2-07)
+
+// The swipe cell of the element under `key` from the frame before, if there is one
+// (D835): what a drag that must act once keeps across the frames it lasts.
+fn swipe_cell(t: *const control.Theme, key: widget.Key) -> (*Swipe, bool) {
+    var none: *Swipe = zero
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    let (kept, _, kept_error) = widget.state[Swipe](&build, key, Swipe { turned: false })
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
+// A move of a row from one index to another, the explicit action a reorder is.
+type Reorder = struct { from: usize, to: usize }
+
+// A row's drag in a reorderable list: which row, how many, how tall each, where
+// the list is (by key), and whom to tell on the drop.
+type Dragging = struct { runtime: *widget.Runtime, list: widget.Key, index: usize, count: usize, extent: f32, move: widget.Change[Reorder] }
+
+fn reorder_drag(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*Dragging](ctx)
+    switch g {
+    case .DragEnd as at:
+        let (area, has_area) = keyed_bounds_of(d.runtime, d.list)
+        if !has_area || d.extent <= 0.0 { ret ok }
+        var to = 0usize
+        if at.y > area.y { to = usize((at.y - area.y) / d.extent) }
+        if to >= d.count { to = d.count - 1usize }
+        if to == d.index { ret ok }
+        ret widget.fire_change[Reorder](d.move, Reorder { from: d.index, to: to })
+    default:
+        ret ok
+    }
+}
+
+// A keyboard move of a row by one.
+type Nudging = struct { index: usize, count: usize, up: bool, move: widget.Change[Reorder] }
+
+fn reorder_nudge(ctx: *void) -> err {
+    let n = mem.cast[*Nudging](ctx)
+    if n.up {
+        if n.index == 0usize { ret ok }
+        ret widget.fire_change[Reorder](n.move, Reorder { from: n.index, to: n.index - 1usize })
+    }
+    if n.index + 1usize >= n.count { ret ok }
+    ret widget.fire_change[Reorder](n.move, Reorder { from: n.index, to: n.index + 1usize })
+}
+
+fn keyed_bounds_of(runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
+    let (s, state_error) = widget.state_of(runtime)
+    if state_error != ok { ret (zero, false) }
+    let (id, count) = widget.find_by_key(s, key)
+    if count == 0usize { ret (zero, false) }
+    let (area, has_area) = widget.bounds_of(runtime, id)
+    ret (area, has_area)
+}
+
+// A reorderable list: the caller's rows, `extent` tall each, in a column `width`
+// wide (keyed `key`); a row (keyed by its key) is a focusable drag region whose
+// drop reports the move from its index to the row under the pointer, and Alt+Up
+// and Alt+Down from the focused row report a move by one; the caller reorders
+// its model and rebuilds. A list of list items in the tree named `label`.
+fn reorderable_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const widget.Node, keys: []const widget.Key, extent: f32, move: widget.Change[Reorder], width: f32) -> (widget.Node, err) {
+    if keys.len != items.len || extent <= 0.0 { ret (zero, TooLarge) }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, items.len)
+    if rows_error != ok { ret (zero, TooLarge) }
+    let (drags, drags_error) = mem.alloc[Dragging](a, items.len)
+    if drags_error != ok { ret (zero, TooLarge) }
+    let (nudges, nudges_error) = mem.alloc[Nudging](a, 2usize * items.len)
+    if nudges_error != ok { ret (zero, TooLarge) }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize * items.len)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var held: input.Modifiers = zero
+    held.alt = true
+    var i = 0usize
+    while i < items.len {
+        drags[i] = Dragging { runtime: t.runtime, list: key, index: i, count: items.len, extent: extent, move: move }
+        nudges[2usize * i] = Nudging { index: i, count: items.len, up: true, move: move }
+        nudges[2usize * i + 1usize] = Nudging { index: i, count: items.len, up: false, move: move }
+        shortcuts[2usize * i] = widget.Shortcut { key: 38u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&nudges[2usize * i]), invoke: reorder_nudge } }
+        shortcuts[2usize * i + 1usize] = widget.Shortcut { key: 40u32, modifiers: held, action: widget.Submit { ctx: mem.cast[*void](&nudges[2usize * i + 1usize]), invoke: reorder_nudge } }
+        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+        if body_error != ok { ret (zero, TooLarge) }
+        body[0usize] = items[i]
+        var row_style = style.defaults()
+        row_style.width = style.Length { Px: width }
+        row_style.height = style.Length { Px: extent }
+        let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
+        if region_error != ok { ret (zero, TooLarge) }
+        region[0usize] = widget.region(keys[i], widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[i]), invoke: reorder_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: true }, row_style, body[0usize..1usize])
+        let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+        if scoped_error != ok { ret (zero, TooLarge) }
+        scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[2usize * i..2usize * i + 2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), region[0usize..1usize])
+        var sem: widget.Semantics = zero
+        sem.role = 11u8
+        sem.row = u32(i + 1usize)
+        sem.row_count = u32(items.len)
+        rows[i] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+        i += 1usize
+    }
+    var column_style = style.defaults()
+    column_style.width = style.Length { Px: width }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, rows[0usize..items.len])
+    var sem: widget.Semantics = zero
+    sem.role = 10u8
+    sem.label = label
+    sem.row_count = u32(items.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A pull's drag: the swipe cell, how far down counts, and whom to tell.
+type Pulling = struct { cell: *Swipe, has_cell: bool, threshold: f32, refresh: widget.Submit }
+
+fn pull_drag(ctx: *void, g: widget.Gesture) -> err {
+    let p = mem.cast[*Pulling](ctx)
+    switch g {
+    case .DragStart as at:
+        if p.has_cell { p.cell.turned = false }
+        ret ok
+    case .DragMove as d:
+        if !p.has_cell || p.cell.turned { ret ok }
+        if d.position.y - d.start.y > p.threshold {
+            p.cell.turned = true
+            ret widget.fire_submit(p.refresh)
+        }
+        ret ok
+    case .DragEnd as at:
+        if p.has_cell { p.cell.turned = false }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// Pull to refresh: the content in a box `width` by `height` (keyed `key`) that a
+// drag down past a third of the height refreshes, once per pull; while
+// `refreshing`, an indeterminate progress ring stands over the top of it; a
+// Refresh button (keyed `key + 1`) is the same action for a keyboard or a
+// pointer. A group in the tree, busy while refreshing.
+fn pull_to_refresh(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, refreshing: bool, refresh: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
+    let (pulls, pulls_error) = mem.alloc[Pulling](a, 1usize)
+    if pulls_error != ok { ret (zero, TooLarge) }
+    let (kept, has_cell) = swipe_cell(t, key)
+    pulls[0usize] = Pulling { cell: kept, has_cell: has_cell, threshold: height / 3.0, refresh: *refresh }
+    var count = 2usize
+    if refreshing { count = 3usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var plain = control.button_options()
+    plain.variant = .Plain
+    let (again, again_error) = control.button(a, key + 1u64, t, "Refresh", refresh, plain)
+    if again_error != ok { ret (zero, again_error) }
+    parts[0usize] = again
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    var view_style = control.sized_style(width, height)
+    view_style.overflow = .Clip
+    parts[1usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&pulls[0usize]), invoke: pull_drag }, gestures: 2u8, enabled: true, focusable: false }, view_style, body[0usize..1usize])
+    if refreshing {
+        let (ring, ring_error) = control.progress_ring(a, key + 2u64, t, "Refreshing", 0.0, true, t.tokens.metrics.control_height)
+        if ring_error != ok { ret (zero, ring_error) }
+        let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+        if lifted_error != ok { ret (zero, TooLarge) }
+        lifted[0usize] = ring
+        parts[2usize] = widget.overlay(key + 3u64, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: (width - t.tokens.metrics.control_height) * 0.5, y: 0.0 - height }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    if refreshing { sem.states = accessibility.STATE_BUSY }
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A row's horizontal swipe: the cell, how far counts, and whom to tell whether
+// the actions are revealed.
+type Revealing = struct { cell: *Swipe, has_cell: bool, threshold: f32, reveal: widget.Change[bool] }
+
+fn reveal_drag(ctx: *void, g: widget.Gesture) -> err {
+    let r = mem.cast[*Revealing](ctx)
+    switch g {
+    case .DragStart as at:
+        if r.has_cell { r.cell.turned = false }
+        ret ok
+    case .DragMove as d:
+        if !r.has_cell || r.cell.turned { ret ok }
+        let moved = d.position.x - d.start.x
+        if moved < 0.0 - r.threshold {
+            r.cell.turned = true
+            ret widget.fire_change[bool](r.reveal, true)
+        }
+        if moved > r.threshold {
+            r.cell.turned = true
+            ret widget.fire_change[bool](r.reveal, false)
+        }
+        ret ok
+    case .DragEnd as at:
+        if r.has_cell { r.cell.turned = false }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
+// Swipe actions: a row's content (keyed `key`, a drag region) with `labels`'
+// actions revealed at its end while `revealed`: a swipe left past a quarter of
+// the width reveals, a swipe right hides, once per swipe, through `reveal`; a
+// More button (keyed `key + 1`) reveals for a keyboard or a pointer; the actions
+// are buttons keyed `key + 2 + index`. A list item in the tree.
+fn swipe_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, content: widget.Node, labels: []const str, actions: []const widget.Submit, revealed: bool, reveal: widget.Change[bool], width: f32, height: f32) -> (widget.Node, err) {
+    if labels.len != actions.len { ret (zero, TooLarge) }
+    let (reveals, reveals_error) = mem.alloc[Revealing](a, 1usize)
+    if reveals_error != ok { ret (zero, TooLarge) }
+    let (kept, has_cell) = swipe_cell(t, key)
+    reveals[0usize] = Revealing { cell: kept, has_cell: has_cell, threshold: width * 0.25, reveal: reveal }
+    var count = 2usize
+    if revealed { count = 1usize + labels.len }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    var row_style = style.defaults()
+    row_style.width = style.Length { Flex: 1.0 }
+    row_style.height = style.Length { Px: height }
+    row_style.overflow = .Clip
+    parts[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&reveals[0usize]), invoke: reveal_drag }, gestures: 2u8, enabled: true, focusable: false }, row_style, body[0usize..1usize])
+    if revealed {
+        var i = 0usize
+        while i < labels.len {
+            let (act, act_error) = control.button(a, key + 2u64 + u64(i), t, labels[i], &actions[i], control.button_options())
+            if act_error != ok { ret (zero, act_error) }
+            parts[1usize + i] = act
+            i += 1usize
+        }
+    } else {
+        let (more_actions, more_error) = mem.alloc[widget.Submit](a, 1usize)
+        if more_error != ok { ret (zero, TooLarge) }
+        let (opens, opens_error) = mem.alloc[Revealing](a, 1usize)
+        if opens_error != ok { ret (zero, TooLarge) }
+        opens[0usize] = reveals[0usize]
+        more_actions[0usize] = widget.Submit { ctx: mem.cast[*void](&opens[0usize]), invoke: reveal_more }
+        var plain = control.button_options()
+        plain.variant = .Plain
+        let (more, more_button_error) = control.button(a, key + 1u64, t, "More", &more_actions[0usize], plain)
+        if more_button_error != ok { ret (zero, more_button_error) }
+        parts[1usize] = more
+    }
+    let (row_node, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    var strip = style.defaults()
+    strip.width = style.Length { Px: width }
+    row_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, strip, parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 11u8
+    if revealed { sem.states = accessibility.STATE_EXPANDED }
+    ret (widget.semantics(0u64, sem, style.defaults(), row_node[0usize..1usize]), ok)
+}
+
+fn reveal_more(ctx: *void) -> err {
+    let r = mem.cast[*Revealing](ctx)
+    ret widget.fire_change[bool](r.reveal, true)
 }
