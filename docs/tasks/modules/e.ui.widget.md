@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/widget.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
-| unmet dependencies | `e.gfx.scene`, `e.ui.input`, `e.ui.window` |
+| unmet dependencies | `e.ui.input`, `e.ui.window` |
 
 ## Definition of done
 
@@ -23,7 +23,7 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |
 | `e.gfx.paint` | partial | `lib/e/gfx/paint.e` | 2 |
-| `e.gfx.scene` | planned | missing | 6 |
+| `e.gfx.scene` | partial | `lib/e/gfx/scene.e` | 6 |
 | `e.text.layout` | partial | `lib/e/text/layout.e` | 2 |
 | `e.ui.input` | planned | missing | 6 |
 | `e.ui.layout` | partial | `lib/e/ui/layout.e` | 2 |

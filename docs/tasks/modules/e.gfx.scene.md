@@ -1,9 +1,9 @@
-# e.gfx.scene — 29 of 29 declarations missing
+# e.gfx.scene — 31 of 31 declarations missing
 
 | field | value |
 |---|---|
 | file to create | `lib/e/gfx/scene.e` |
-| plan row | layer 6, surface `planned`, milestone none, schedule `later` |
+| plan row | layer 6, surface `partial`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
 | unmet dependencies | none — every dependency has source |
 
@@ -19,12 +19,14 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 
 | dependency | surface | source file | layer |
 |---|---|---|---|
-| `e.gpu` | partial | `lib/e/gpu.e` | 5 |
-| `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |
 | `e.gfx.image` | partial | `lib/e/gfx/image.e` | 2 |
 | `e.gfx.paint` | partial | `lib/e/gfx/paint.e` | 2 |
+| `e.gpu` | partial | `lib/e/gpu.e` | 5 |
+| `e.math` | partial | `lib/e/math.e` | 0 |
+| `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.text.layout` | partial | `lib/e/text/layout.e` | 2 |
+| `e.text.shape` | partial | `lib/e/text/shape.e` | 2 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].
 
@@ -54,6 +56,7 @@ fn builder(a: *mem.Arena, max_commands: usize) -> (Builder, err)
 fn push(b: *Builder, command: Command) -> err
 fn finish(b: *Builder) -> DisplayList
 fn renderer(a: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, max_scenes: u32, max_textures: u32) -> (Renderer, err)
+fn register_font(r: *Renderer, font: shape.Font) -> err
 fn upload_image(r: *Renderer, image_view: image.ConstImage) -> (TextureId, err)
 fn update_image(r: *Renderer, texture: TextureId, image_view: image.ConstImage) -> err
 fn release_image(r: *Renderer, texture: TextureId) -> err
@@ -61,12 +64,21 @@ fn compile(r: *Renderer, list: DisplayList) -> (SceneId, err)
 fn render(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Size) -> err
 fn release_scene(r: *Renderer, scene: SceneId) -> err
 fn close(r: *Renderer) -> err
+fn target_of(a: *mem.Arena, t: *gpu.Target) -> (Target, err)
 ```
 
 Display lists borrow their paths, gradients and text layouts until `compile`
 returns. A renderer owns bounded generation-checked GPU caches. Compilation may
 retain tessellation and glyph data but never application widget pointers. Rendering
 is explicit queue work followed by presentation through the target surface.
+
+Delivered as the CPU reference renderer (D796): one signed-area accumulation
+rasteriser draws fills, strokes as outlines, glyph outlines from a registered font's
+`glyf`, clips as coverage masks and opacity layers into a premultiplied canvas the
+frame's `gpu.Image` receives; `register_font` hands the renderer the bytes behind a
+shaper font id, and `target_of` wraps an `e.gpu` target -- a window's or an
+offscreen one. A driver backend draws the same list with the same arithmetic in
+kernels.
 
 ## Missing declarations
 
@@ -92,6 +104,7 @@ is explicit queue work followed by presentation through the target surface.
 - [ ] `push`
 - [ ] `finish`
 - [ ] `renderer`
+- [ ] `register_font`
 - [ ] `upload_image`
 - [ ] `update_image`
 - [ ] `release_image`
@@ -99,6 +112,7 @@ is explicit queue work followed by presentation through the target surface.
 - [ ] `render`
 - [ ] `release_scene`
 - [ ] `close`
+- [ ] `target_of`
 
 ## Contracts that name this module
 
@@ -119,7 +133,7 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/gfx/scene.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/gfx_scene/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 29.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 31.
 
 ## Session procedure
 

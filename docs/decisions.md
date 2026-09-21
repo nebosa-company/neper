@@ -15158,3 +15158,50 @@ interactive window station -- this sandboxed runner, a service -- for every
 process alike, so `clipboard_text` retries over a bounded wait and answers
 `Denied`, which the fixture accepts as the desktop's answer. `e.ui.window`,
 `e.ui.input` and `e.ui.app` are unblocked on the Windows host.
+
+## D796 — `e.gfx.scene`: the CPU reference renderer
+
+The UI proposal's first vertical slice is "a CPU reference renderer, geometry,
+solid paint and deterministic snapshots", and with presentation (D791) and
+the value layer in place it is written: `lib/e/gfx/scene.e` at
+`surface: partial`, the fence's builder, renderer, textures, scenes and
+`render`, plus two functions the fence lacked and the module cannot do
+without -- `register_font(r, font)`, since a `DrawText` names its font by
+the shaper's id and something has to hold the bytes behind it, and
+`target_of(a, t)`, since a `scene.Target` had no constructor and the
+window module that would make one is not written yet.
+
+One rasteriser draws everything: a command's outline -- a rectangle's four
+edges, a path flattened under the current transform with quadratics and
+cubics subdivided by their control polygon's length, a stroke as the union
+of a quad per segment with round, miter or bevel joins and butt, round or
+square caps, a glyph's contours read from the registered font's `loca` and
+`glyf` including composites -- goes into a signed-area accumulation buffer,
+and a prefix sum per row is the coverage, clamped to one so the union of a
+stroke's pieces reads as one. A brush is evaluated per covered pixel in the
+command's own space through the inverse transform, premultiplied, and
+source-over blended into a premultiplied RGBA canvas; a rect clip under an
+axis-aligned transform is the scissor, any other clip is a coverage mask
+multiplied into the mask in force, up to eight deep; an opacity layer is a
+canvas of its own merged at its opacity on the matching Restore, four deep;
+an image is sampled bilinearly through the inverse transform, so it rotates
+with everything else. `render` acquires the target's frame, draws at the
+size asked, packs the canvas in the frame's channel order, writes it and
+presents. `compile` copies the list -- paths, stops, glyph runs -- into a
+fixed block per scene, so the borrowed data is the caller's again when it
+returns and an unmatched Restore is refused there.
+
+`link/gfx_scene` checks ten drawings pixel by pixel on a 64x64 offscreen
+target on both hosts: a solid rectangle, a triangle's anti-aliased
+hypotenuse at half coverage, a rect clip, a linear gradient's midpoint, a
+stroke with its square caps, a scaled image's four quadrants, a square
+glyph from a synthetic font, a half-opacity layer's premultiplied red, a
+circular clip, and a rotated square -- and the refusals. Deliberately not
+here: a glyph cache (every glyph is flattened at every render), reclaiming a
+released texture's storage before the renderer closes, an anisotropic
+stroke (the width takes the transform's mean scale), the shear of a
+composite glyph's 2x2, and blend modes beyond source-over, which the
+command has no field for. D791 said this renderer would be kernels; it is
+host loops over the same per-pixel arithmetic, which a driver backend moves
+into kernels command by command, the proposal's per-pixel tolerance
+measured between the two.

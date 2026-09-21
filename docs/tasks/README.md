@@ -206,15 +206,15 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 
 | file | title | status |
 |---|---|---|
-| [`modules/e.gfx.scene.md`](modules/e.gfx.scene.md) | layer 6, later | 29/29 missing |
+| [`modules/e.gfx.scene.md`](modules/e.gfx.scene.md) | layer 6, later | 31/31 missing |
 | [`modules/e.ui.accessibility.md`](modules/e.ui.accessibility.md) | layer 6, later | 11/11 missing; blocked by native-accessibility-api; needs e.ui.widget, e.ui.window |
 | [`modules/e.ui.animation.md`](modules/e.ui.animation.md) | layer 6, later | 7/7 missing; needs e.ui.widget |
-| [`modules/e.ui.app.md`](modules/e.ui.app.md) | layer 6, later | 10/10 missing; blocked by native-accessibility-api; needs e.gfx.scene, e.ui.accessibility, e.ui.animation, e.ui.input, e.ui.widget, e.ui.window |
-| [`modules/e.ui.asset.md`](modules/e.ui.asset.md) | layer 6, later | 15/15 missing; needs e.gfx.scene |
+| [`modules/e.ui.app.md`](modules/e.ui.app.md) | layer 6, later | 10/10 missing; blocked by native-accessibility-api; needs e.ui.accessibility, e.ui.animation, e.ui.input, e.ui.widget, e.ui.window |
+| [`modules/e.ui.asset.md`](modules/e.ui.asset.md) | layer 6, later | 15/15 missing |
 | [`modules/e.ui.input.md`](modules/e.ui.input.md) | layer 6, later | 20/20 missing; needs e.ui.window |
-| [`modules/e.ui.testing.md`](modules/e.ui.testing.md) | layer 6, later | 13/13 missing; needs e.gfx.scene, e.ui.input, e.ui.widget |
-| [`modules/e.ui.widget.md`](modules/e.ui.widget.md) | layer 6, later | 35/35 missing; needs e.gfx.scene, e.ui.input, e.ui.window |
-| [`modules/e.ui.window.md`](modules/e.ui.window.md) | layer 6, later | 19/19 missing; needs e.gfx.scene |
+| [`modules/e.ui.testing.md`](modules/e.ui.testing.md) | layer 6, later | 13/13 missing; needs e.ui.input, e.ui.widget |
+| [`modules/e.ui.widget.md`](modules/e.ui.widget.md) | layer 6, later | 35/35 missing; needs e.ui.input, e.ui.window |
+| [`modules/e.ui.window.md`](modules/e.ui.window.md) | layer 6, later | 19/19 missing |
 
 ### UI and host integration (plan order)
 

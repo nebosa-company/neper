@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/asset.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
-| unmet dependencies | `e.gfx.scene` |
+| unmet dependencies | none — every dependency has source |
 
 ## Definition of done
 
@@ -22,7 +22,7 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 | `e.asset` | source | `lib/e/asset.e` | 5 |
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.gfx.image` | partial | `lib/e/gfx/image.e` | 2 |
-| `e.gfx.scene` | planned | missing | 6 |
+| `e.gfx.scene` | partial | `lib/e/gfx/scene.e` | 6 |
 | `e.text.shape` | partial | `lib/e/text/shape.e` | 2 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].

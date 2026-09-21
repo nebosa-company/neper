@@ -1638,6 +1638,14 @@ $osWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $osWindowWritten -ne 'executable written') { throw 'os_window emission failed' }
 $osWindowOutput = & $osWindowPath
 if ($LASTEXITCODE -ne 0 -or $osWindowOutput -ne 'os window ok') { throw "the window primitives answered wrongly: exit $LASTEXITCODE" }
+# `e.gfx.scene` (D796): the CPU reference renderer over an offscreen target -- fills,
+# an anti-aliased edge, clips, a gradient, a stroke, an image, a glyph, a layer, a
+# rotation -- checked pixel by pixel, and the refusals.
+$gfxScenePath = Join-Path $testBuild 'gfx-scene-selfhost.exe'
+$gfxSceneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_scene\src\main.e') $repo 'x64' 'windows' $gfxScenePath
+if ($LASTEXITCODE -ne 0 -or $gfxSceneWritten -ne 'executable written') { throw 'gfx_scene emission failed' }
+$gfxSceneOutput = & $gfxScenePath
+if ($LASTEXITCODE -ne 0 -or $gfxSceneOutput -ne 'gfx scene ok') { throw "the scene renderer answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/testing.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
-| unmet dependencies | `e.gfx.scene`, `e.ui.input`, `e.ui.widget` |
+| unmet dependencies | `e.ui.input`, `e.ui.widget` |
 
 ## Definition of done
 
@@ -23,7 +23,7 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 | `e.test` | source | `lib/e/test.e` | 5 |
 | `e.time` | partial | `lib/e/time.e` | 4 |
 | `e.gfx.image` | partial | `lib/e/gfx/image.e` | 2 |
-| `e.gfx.scene` | planned | missing | 6 |
+| `e.gfx.scene` | partial | `lib/e/gfx/scene.e` | 6 |
 | `e.ui.input` | planned | missing | 6 |
 | `e.ui.widget` | planned | missing | 6 |
 

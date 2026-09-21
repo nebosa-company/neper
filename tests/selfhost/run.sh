@@ -1575,6 +1575,14 @@ os_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/os-window-selfhost"
 os_window_output=$("$test_build/os-window-selfhost")
 [ "$os_window_output" = 'os window unsupported' ]
+# `e.gfx.scene` (D796): the CPU reference renderer over an offscreen target -- fills,
+# an anti-aliased edge, clips, a gradient, a stroke, an image, a glyph, a layer, a
+# rotation -- checked pixel by pixel, and the refusals.
+gfx_scene_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_scene/src/main.e" "$repo" x64 linux "$test_build/gfx-scene-selfhost")
+[ "$gfx_scene_written" = 'executable written' ]
+chmod +x "$test_build/gfx-scene-selfhost"
+gfx_scene_output=$("$test_build/gfx-scene-selfhost")
+[ "$gfx_scene_output" = 'gfx scene ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
