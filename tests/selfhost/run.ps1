@@ -1769,6 +1769,13 @@ $uiLayoutAdaptersWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $uiLayoutAdaptersWritten -ne 'executable written') { throw 'ui_layout_adapters emission failed' }
 $uiLayoutAdaptersOutput = & $uiLayoutAdaptersPath
 if ($LASTEXITCODE -ne 0 -or $uiLayoutAdaptersOutput -ne 'ui layout adapters ok') { throw "the layout adapters answered wrongly: exit $LASTEXITCODE" }
+# Scrolling and insets (D817, widget plan P1-05): scroll view, a dragged scrollbar,
+# safe area and keyboard avoiding.
+$uiScrollViewPath = Join-Path $testBuild 'ui-scroll-view-selfhost.exe'
+$uiScrollViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_scroll_view\src\main.e') $repo 'x64' 'windows' $uiScrollViewPath
+if ($LASTEXITCODE -ne 0 -or $uiScrollViewWritten -ne 'executable written') { throw 'ui_scroll_view emission failed' }
+$uiScrollViewOutput = & $uiScrollViewPath
+if ($LASTEXITCODE -ne 0 -or $uiScrollViewOutput -ne 'ui scroll view ok') { throw "the scroll view answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

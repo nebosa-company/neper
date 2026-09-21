@@ -15715,3 +15715,22 @@ where the app knows the window. Three names moved out of the way of
 module-scope functions' parameters (`aligned`, `padded`, `constrained`'s
 local), D806's rule again. `link/ui_layout_adapters` checks each on both
 hosts, the fitted box by its pixels.
+
+## D817 — Scrolling and insets: a scrollbar that stands apart, and insets that pad
+
+P1-05 of the widget plan. `scroll_view` is D808's viewport with the
+choices a page wants made -- children stacked along the axis, clamped,
+momentum, a thumb -- and nothing new. The scrollbar is: D808 painted a
+thumb inside the viewport and could not drag it; a `Scrollbar` node now
+stands apart from the viewport it names by key, so it can sit beside a
+list, in a toolbar or over a canvas, its style's background the track
+and its border colour the thumb, and a drag of it goes through the
+gesture arena like a region's -- no slop, the thumb follows the pointer
+from the press -- moving the viewport by the content's share of the
+distance along the bar, which is what a thumb of that length means.
+The safe area and the keyboard-avoiding box pad by the host's insets
+(D811) rather than scroll or resize the window, since a page that pads
+its edges by what the host covers is the whole of what a desktop needs
+and the first thing a mobile host will. `link/ui_scroll_view` checks the
+wheel, the painted thumb, the drag both ways and the two paddings on
+both hosts.

@@ -1705,6 +1705,13 @@ ui_layout_adapters_written=$($test_build/neper-self emit-executable "$repo/tests
 chmod +x "$test_build/ui-layout-adapters-selfhost"
 ui_layout_adapters_output=$("$test_build/ui-layout-adapters-selfhost")
 [ "$ui_layout_adapters_output" = 'ui layout adapters ok' ]
+# Scrolling and insets (D817, widget plan P1-05): scroll view, a dragged scrollbar,
+# safe area and keyboard avoiding.
+ui_scroll_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_scroll_view/src/main.e" "$repo" x64 linux "$test_build/ui-scroll-view-selfhost")
+[ "$ui_scroll_view_written" = 'executable written' ]
+chmod +x "$test_build/ui-scroll-view-selfhost"
+ui_scroll_view_output=$("$test_build/ui-scroll-view-selfhost")
+[ "$ui_scroll_view_output" = 'ui scroll view ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

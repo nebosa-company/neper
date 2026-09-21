@@ -268,8 +268,13 @@
             "SafeArea",
             "KeyboardAvoiding"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "ScrollView",
+            "Scrollbar",
+            "SafeArea",
+            "KeyboardAvoiding"
+          ],
+          "evidence": "lib/e/ui/widget.e (D817): scroll_view over a clamped viewport with momentum and a thumb; a Scrollbar node kind linked to a viewport by key, painting the thumb and moving the viewport by a drag; safe_area and keyboard_avoiding padding by insets; tests/selfhost/fixtures/link/ui_scroll_view on both hosts"
         },
         {
           "id": "P1-06",

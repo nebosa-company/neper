@@ -3332,7 +3332,8 @@ type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u
 type Placement = enum u8 { Below, Above, Right, Left, Center }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
 type Alignment = enum u8 { Start, Center, End }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted }
+type Scrollbar = struct { viewport: Key, axis: ui_layout.Axis }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -3371,6 +3372,10 @@ fn constrained(key: Key, min_width: f32, max_width: f32, min_height: f32, max_he
 fn aspect_ratio(key: Key, ratio: f32, value_style: style.Style, children: []const Node) -> Node
 fn fitted(key: Key, value_style: style.Style, children: []const Node) -> Node
 fn responsive(width: f32, compact: Node, medium: Node, expanded: Node) -> Node
+fn scroll_view(a: *mem.Arena, key: Key, axis: ui_layout.Axis, value_style: style.Style, children: []const Node) -> (Node, err)
+fn scrollbar(key: Key, viewport: Key, axis: ui_layout.Axis, value_style: style.Style) -> Node
+fn safe_area(key: Key, insets: geometry.Insets, value_style: style.Style, children: []const Node) -> Node
+fn keyboard_avoiding(key: Key, keyboard: geometry.Insets, value_style: style.Style, children: []const Node) -> Node
 fn fire_change[T: type](c: Change[T], value: T) -> err
 fn fire_submit(a: Submit) -> err
 fn fire_gesture(a: GestureAction, g: Gesture) -> err
@@ -3483,6 +3488,13 @@ share of both axes; an `Aspect` box is as wide as it may be and the ratio tall; 
 `Fitted` box paints its content at its natural size scaled down about its origin to
 fit, its elements' bounds unscaled; `responsive` picks a subtree by the size class
 of a width when the tree is built.
+
+Scrolling and insets (D817, P1-05): `scroll_view` stacks its children along its
+axis in a clamped viewport with momentum and a thumb; a `Scrollbar` node stands
+apart from the viewport it names by key -- its style's background the track and
+its border colour the thumb -- and a drag of it moves the viewport by the content's
+share of the distance along the bar; `safe_area` and `keyboard_avoiding` pad by
+the host's insets (D811) rather than scroll.
 
 ### `e.ui.animation`
 

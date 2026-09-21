@@ -95,7 +95,11 @@ type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Poin
 // be and as tall as the ratio says; a fitted box scales its content down to fit,
 // painting through a transform (its elements' bounds stay unscaled).
 type Alignment = enum u8 { Start, Center, End }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted }
+// A scrollbar (D817) stands apart from the viewport it moves, named by key: its
+// style's background is the track and its border colour the thumb; a drag of it
+// moves the viewport by the content's share of the distance.
+type Scrollbar = struct { viewport: Key, axis: ui_layout.Axis }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -119,6 +123,7 @@ const OVERLAY_TAG: u8 = 13u8
 const WRAP_TAG: u8 = 14u8
 const ASPECT_TAG: u8 = 15u8
 const FITTED_TAG: u8 = 16u8
+const SCROLLBAR_TAG: u8 = 17u8
 const MAX_OVERLAYS: usize = 8usize
 const MAX_SHORT: usize = 32usize
 const MAX_HISTORY: usize = 32usize
@@ -160,6 +165,7 @@ type Element = struct {
     scroll_change: Change[f32],
     overscroll: Overscroll,
     momentum: bool,
+    linked: Key,
     state_keys: [8]Key,
     state_ids: [8]StateId,
     state_count: usize,
@@ -380,6 +386,30 @@ fn responsive(width: f32, compact: Node, medium: Node, expanded: Node) -> Node {
     ret expanded
 }
 
+// Scrolling and insets (D817): a scroll view stacks its children along its axis in
+// a clamped viewport with momentum and a thumb; a scrollbar moves a viewport by
+// key; a safe area and a keyboard-avoiding box pad by the host's insets.
+fn scroll_view(a: *mem.Arena, key: Key, axis: ui_layout.Axis, value_style: style.Style, children: []const Node) -> (Node, err) {
+    let (stacked, stacked_error) = mem.alloc[Node](a, 1usize)
+    if stacked_error != ok { ret (zero, TooLarge) }
+    stacked[0usize] = flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), children)
+    let thumb = paint.rgba(0.5, 0.5, 0.5, 0.6)
+    ret (scroll(key, Scroll { axis: axis, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, value_style, stacked[0usize..1usize]), ok)
+}
+
+fn scrollbar(key: Key, viewport: Key, axis: ui_layout.Axis, value_style: style.Style) -> Node {
+    var none: []const Node = zero
+    ret Node { key: key, kind: Kind { Scrollbar: Scrollbar { viewport: viewport, axis: axis } }, style: value_style, children: none }
+}
+
+fn safe_area(key: Key, insets: geometry.Insets, value_style: style.Style, children: []const Node) -> Node {
+    ret padded(key, insets.left, insets.top, insets.right, insets.bottom, value_style, children)
+}
+
+fn keyboard_avoiding(key: Key, keyboard: geometry.Insets, value_style: style.Style, children: []const Node) -> Node {
+    ret padded(key, 0.0, 0.0, 0.0, keyboard.bottom, value_style, children)
+}
+
 fn positioned(key: Key, x: f32, y: f32, value_style: style.Style, children: []const Node) -> Node {
     var placed = value_style
     placed.position = .Absolute
@@ -514,6 +544,8 @@ fn kind_tag(kind: Kind) -> u8 {
         ret ASPECT_TAG
     case .Fitted:
         ret FITTED_TAG
+    case .Scrollbar as bar:
+        ret SCROLLBAR_TAG
     }
     ret 0u8
 }
@@ -785,6 +817,11 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.enabled = true
     case .Fitted:
         e.enabled = true
+    case .Scrollbar as bar:
+        e.enabled = true
+        e.linked = bar.viewport
+        e.scroll_axis = bar.axis
+        e.gestures = GESTURE_DRAG
     case .Overlay as ov:
         e.enabled = true
         e.modal = ov.modal
@@ -982,6 +1019,8 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         var height = width
         if ratio > 0.0 { height = width / ratio }
         ret (geometry.Size { width: width, height: height }, ok)
+    case .Scrollbar as bar:
+        ret (geometry.Size { width: 0.0, height: 0.0 }, ok)
     case .Fitted:
         let (natural, natural_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, ui_layout.Constraints { min_width: 0.0, max_width: 3.0e38, min_height: 0.0, max_height: 3.0e38 })
         if natural_error != ok { ret (zero, natural_error) }
@@ -1138,6 +1177,8 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
     case .Fitted:
         try place_fitted(s, a, node, element, inner, b, depth)
+    case .Scrollbar as bar:
+        try place_scrollbar(s, bar, inner, b, node.style.border.color)
     case .Overlay as ov:
         if s.overlay_count >= MAX_OVERLAYS { ret TooLarge }
         s.overlays[s.overlay_count] = u32(element)
@@ -1442,6 +1483,26 @@ fn place_flex(s: *State, a: *mem.Arena, node: *const Node, element: usize, spec:
     ret ok
 }
 
+// The thumb of the viewport the scrollbar names, in the border colour, over the
+// track the background painted; nothing when the content fits.
+fn place_scrollbar(s: *State, bar: Scrollbar, inner: geometry.Rect, b: *scene.Builder, color: paint.Color) -> err {
+    let (found, count) = find_by_key(s, bar.viewport)
+    if count == 0usize { ret ok }
+    let v = &s.elements[usize(found.slot)]
+    if v.kind != SCROLL_TAG || v.content_extent <= v.viewport_extent || v.content_extent <= 0.0 { ret ok }
+    let vertical = bar.axis == .Vertical
+    var track = inner.height
+    if !vertical { track = inner.width }
+    var length = track * v.viewport_extent / v.content_extent
+    if length < 8.0 { length = 8.0 }
+    var at = v.scroll_offset / v.content_extent * track
+    if at > track - length { at = track - length }
+    if at < 0.0 { at = 0.0 }
+    var thumb = geometry.Rect { x: inner.x, y: inner.y + at, width: inner.width, height: length }
+    if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y, width: length, height: inner.height } }
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: thumb, brush: paint.Brush { Solid: color } } })
+}
+
 // The content at its natural size, painted scaled down about the box's origin to
 // fit it; the scale is never more than one.
 fn place_fitted(s: *State, a: *mem.Arena, node: *const Node, element: usize, inner: geometry.Rect, b: *scene.Builder, depth: usize) -> err {
@@ -1631,7 +1692,7 @@ fn hit_region(s: *State, index: usize, p: geometry.Point, wanted: u8) -> (usize,
         let (found, has_found) = hit_region(s, usize(order[count]), p, wanted)
         if has_found { ret (found, true) }
     }
-    if (e.kind == REGION_TAG || e.kind == EDIT_TAG) && e.enabled && (e.gestures & wanted) != 0u8 { ret (index, true) }
+    if (e.kind == REGION_TAG || e.kind == EDIT_TAG || e.kind == SCROLLBAR_TAG) && e.enabled && (e.gestures & wanted) != 0u8 { ret (index, true) }
     ret (0usize, false)
 }
 
@@ -2278,6 +2339,20 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 let at = edit_hit(s, candidate, p.position)
                 edit_move(e, at, true)
                 ret ok
+            }
+            if e.live && e.kind == SCROLLBAR_TAG {
+                // The thumb follows the pointer: the viewport moves by the content's
+                // share of the distance along the bar.
+                let moved = axis_of(e, p.position) - axis_of(e, s.arena_state.last)
+                s.arena_state.last = p.position
+                let (found, count) = find_by_key(s, e.linked)
+                if count == 0usize { ret ok }
+                let v = &s.elements[usize(found.slot)]
+                if v.kind != SCROLL_TAG || v.viewport_extent <= 0.0 { ret ok }
+                var track = e.bounds.height
+                if e.scroll_axis == .Horizontal { track = e.bounds.width }
+                if track <= 0.0 { ret ok }
+                ret scroll_by(s, usize(found.slot), moved * v.content_extent / track, false)
             }
             if e.live && e.kind == SCROLL_TAG {
                 if !s.arena_state.dragging {
