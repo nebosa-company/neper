@@ -16087,3 +16087,33 @@ list box now shares. `link/ui_entry` formats, activates, picks,
 dismisses, toggles, removes, adds and selects on both hosts -- and
 found that a fixture must close an overlay before tapping what lay
 under it.
+
+## D832 — Feedback and disclosure: the notice queue is the caller's slice, the clock is the caller's phase
+
+P2-04 of the widget plan, nine components over what D822, D826 and D827
+already had. `gauge` is D822's progress ring with the value written
+under it and given to the tree as digits; `level` is the progress bar
+coloured by where the value stands -- the primary colour, the secondary
+from `warn`, the error colour from `danger`, shares of the range -- and
+invalid past danger. The proposal asks that a toast and a snackbar
+"not be two independent runtime systems": here they are one helper,
+`noticed`, and no runtime at all: the caller keeps a slice of `Notice`
+(text, optional action, dismiss) as the queue and the control shows its
+head as a non-modal overlay against the window, along the bottom for
+the snackbar and at the top right for the toast, with the action and a
+close button; when to drop the head, and after how long, is the
+caller's, as every timer is (D807). `banner` and `info_bar` are one
+helper too, `noted`: a full-width row in the severity's colour with the
+message, plain action buttons and, for the info bar, a close; a status
+in the tree for information and success, an assertive alert for a
+warning or an error. `skeleton` breathes its opacity with a `phase` the
+caller advances from its clock, and holds still when the theme's
+motion is reduced, so reduced motion costs the control nothing to
+honour; it is busy in the tree. `empty_state` is an icon, a title, a
+muted message and a filled button in a centred column. `accordion` is
+D826's disclosures in a column with the one at `expanded` open. The
+fixture found the rule every control has relied on since D819 stated
+plainly: an action slice a control keeps a pointer into must outlive
+the frame -- a local array in the caller's build function does not,
+and the button fires nothing. `link/ui_feedback` reads, undoes, closes,
+fires, starts and toggles on both hosts.

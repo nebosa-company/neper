@@ -3663,6 +3663,8 @@ type ChipKind = enum u8 { Assist, Filter, Input, Suggestion }
 type Chord = struct { key: u32, modifiers: input.Modifiers }
 type Format = struct { ctx: *void, accept: fn(*void, str) -> bool, format: fn(*void, []u8, str) -> usize }
 type PickerForm = enum u8 { Popup, Sheet }
+type Notice = struct { text: str, action_label: str, action: widget.Submit, dismiss: widget.Submit }
+type Severity = enum u8 { Info, Success, Warning, Error }
 error TooLarge
 
 fn text_options() -> TextOptions
@@ -3730,6 +3732,15 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
 fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err)
 fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, presentation: PickerForm) -> (widget.Node, err)
 fn multi_select_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: []const bool, toggles: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err)
+fn gauge(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, size: f32) -> (widget.Node, err)
+fn level(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, warn: f32, danger: f32, width: f32) -> (widget.Node, err)
+fn snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32) -> (widget.Node, err)
+fn toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32) -> (widget.Node, err)
+fn banner(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity, message: str, labels: []const str, actions: []const widget.Submit, width: f32) -> (widget.Node, err)
+fn info_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity, message: str, labels: []const str, actions: []const widget.Submit, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err)
+fn skeleton(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, phase: f32) -> (widget.Node, err)
+fn empty_state(a: *mem.Arena, key: widget.Key, t: *const Theme, icon_texture: scene.TextureId, title: str, message: str, action_label: str, action: *const widget.Submit, width: f32) -> (widget.Node, err)
+fn accordion(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, contents: []const widget.Node, expanded: usize, toggles: []const widget.Submit) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node

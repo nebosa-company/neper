@@ -536,8 +536,18 @@
             "EmptyState",
             "Accordion"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Gauge",
+            "Level",
+            "Toast",
+            "Snackbar",
+            "Banner",
+            "InfoBar",
+            "Skeleton",
+            "EmptyState",
+            "Accordion"
+          ],
+          "evidence": "lib/e/ui/control.e (D832): gauge as a progress ring with the value written under it, level as a bar coloured by its warn and danger shares and invalid past danger, snackbar and toast over one noticed helper showing the head of the caller's Notice queue as a non-modal overlay at the bottom or the top right with its action and close, banner and info_bar over one noted helper (an alert when warning or error, a status otherwise, the info bar with a close), skeleton breathing with the caller's phase unless motion is reduced, empty_state as icon, title, message and button, accordion as disclosures with one open; tests/selfhost/fixtures/link/ui_feedback on both hosts"
         },
         {
           "id": "P2-05",

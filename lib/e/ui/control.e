@@ -181,10 +181,10 @@ fn surface_style(t: *const Theme, options: SurfaceOptions) -> style.Style {
     if options.bordered { s.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Border) } }
     s.radius = options.radius
     if options.elevation != 0u8 {
-        var level = usize(options.elevation)
-        if level > 3usize { level = 3usize }
+        var raised = usize(options.elevation)
+        if raised > 3usize { raised = 3usize }
         // The elevation level is the shadow's strength; it falls two pixels a level.
-        s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(level) * 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[level]) }
+        s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(raised) * 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[raised]) }
     }
     let pad = style.Length { Px: options.padding }
     s.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
@@ -2477,4 +2477,323 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
 fn multi_select_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: []const bool, toggles: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
     let (made, made_error) = listed(a, key, t, label, options, selected, toggles, rows, width)
     ret (made, made_error)
+}
+
+// ------------------------------------------ feedback and disclosure (D832, P2-04)
+
+// A gauge: a read-only ring through `value`'s share of `low..high` with the value
+// written under it as digits (rounded); a progress in the tree named `label`
+// with those digits as its value.
+fn gauge(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, size: f32) -> (widget.Node, err) {
+    if high <= low { ret (zero, TooLarge) }
+    let share = (value - low) / (high - low)
+    let (ring, ring_error) = progress_ring(a, key + 1u64, t, label, share, false, size)
+    if ring_error != ok { ret (zero, ring_error) }
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    var rounded = value + 0.5
+    if value < 0.0 { rounded = value - 0.5 }
+    let digit_count = write_i64(digits, i64(rounded))
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (reading, reading_error) = text_node(a, 0u64, digits[0usize..digit_count], t, caption)
+    if reading_error != ok { ret (zero, reading_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = ring
+    parts[1usize] = reading
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    sem.value = digits[0usize..digit_count]
+    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A level: a read-only bar filled through `value`'s share of `low..high`, in the
+// primary colour, the secondary from `warn` and the error colour from `danger`
+// (shares of the range; 1 or more for never); a progress in the tree named
+// `label` with the value as digits.
+fn level(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, warn: f32, danger: f32, width: f32) -> (widget.Node, err) {
+    if high <= low { ret (zero, TooLarge) }
+    var share = (value - low) / (high - low)
+    if share < 0.0 { share = 0.0 }
+    if share > 1.0 { share = 1.0 }
+    var tone: style.ColorRole = .Primary
+    if share >= warn { tone = .Secondary }
+    if share >= danger { tone = .Error }
+    let height = t.tokens.spacing.sm
+    var track = sized_style(width, height)
+    track.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
+    track.radius = height * 0.5
+    var filled = style.defaults()
+    filled.height = style.Length { Px: height }
+    filled.width = style.Length { Percent: share * 100.0 }
+    filled.background = paint.Brush { Solid: style.color(t.tokens, tone) }
+    filled.radius = height * 0.5
+    let (fill, fill_error) = mem.alloc[widget.Node](a, 1usize)
+    if fill_error != ok { ret (zero, TooLarge) }
+    fill[0usize] = widget.box(key + 1u64, filled, zero)
+    let (bar, bar_error) = mem.alloc[widget.Node](a, 1usize)
+    if bar_error != ok { ret (zero, TooLarge) }
+    bar[0usize] = widget.box(0u64, track, fill[0usize..1usize])
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    var rounded = value + 0.5
+    if value < 0.0 { rounded = value - 0.5 }
+    let digit_count = write_i64(digits, i64(rounded))
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    sem.value = digits[0usize..digit_count]
+    if share >= danger { sem.states = accessibility.STATE_INVALID }
+    ret (widget.semantics(key, sem, style.defaults(), bar[0usize..1usize]), ok)
+}
+
+// A transient notice: its text, an optional action (an empty label for none) and
+// what dismisses it. The caller keeps the queue; a snackbar or a toast shows its
+// head.
+type Notice = struct { text: str, action_label: str, action: widget.Submit, dismiss: widget.Submit }
+
+// The head of a queue of notices on a raised surface `width` wide as a non-modal
+// overlay against the window: at the bottom (`bottom`) or the top right; the
+// text, the action as a plain button (keyed `key + 1`) when there is one, and a
+// close button (`key + 2`) firing the notice's dismiss; a polite status in the
+// tree named by the text. Nothing while the queue is empty.
+fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32, bottom: bool) -> (widget.Node, err) {
+    if notices.len == 0usize { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let head = &notices[0usize]
+    var count = 2usize
+    if head.action_label.len != 0usize { count = 3usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var caption = text_options()
+    caption.role = .Body
+    caption.color = .OnPrimary
+    let (text_item, text_error) = text_node(a, 0u64, head.text, t, caption)
+    if text_error != ok { ret (zero, text_error) }
+    var grown = text_item
+    grown.style.width = style.Length { Flex: 1.0 }
+    parts[0usize] = grown
+    var at = 1usize
+    if head.action_label.len != 0usize {
+        var plain = button_options()
+        plain.variant = .Plain
+        let (act, act_error) = button(a, key + 1u64, t, head.action_label, &head.action, plain)
+        if act_error != ok { ret (zero, act_error) }
+        parts[at] = act
+        at += 1usize
+    }
+    var plain_close = button_options()
+    plain_close.variant = .Plain
+    let (close, close_error) = button(a, key + 2u64, t, "x", &head.dismiss, plain_close)
+    if close_error != ok { ret (zero, close_error) }
+    parts[at] = close
+    var sheet = style.defaults()
+    sheet.background = paint.Brush { Solid: style.color(t.tokens, .Text) }
+    sheet.radius = t.tokens.radii.sm
+    sheet.width = style.Length { Px: width }
+    let pad = style.Length { Px: t.tokens.spacing.sm }
+    sheet.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, sheet, parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 26u8
+    sem.label = head.text
+    sem.live = 1u8
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize])
+    var placement: widget.Placement = .Right
+    if bottom { placement = .Below }
+    let margin = t.tokens.spacing.md
+    var offset = geometry.Point { x: 0.0 - margin, y: margin }
+    if bottom { offset = geometry.Point { x: margin, y: 0.0 - margin } }
+    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: offset, modal: false, dismiss: zero }, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// A snackbar: the queue's head along the bottom of the window.
+fn snackbar(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = noticed(a, key, t, notices, width, true)
+    ret (made, made_error)
+}
+
+// A toast: the queue's head at the top right of the window.
+fn toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notice, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = noticed(a, key, t, notices, width, false)
+    ret (made, made_error)
+}
+
+// How serious a banner is: the colour it takes and how the tree announces it.
+type Severity = enum u8 { Info, Success, Warning, Error }
+
+// A banner: a persistent inline notice `width` wide in the severity's colour,
+// its text and its actions as plain buttons keyed `key + 2 + index`; a status in
+// the tree for information and success, an alert for a warning or an error.
+fn banner(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity, message: str, labels: []const str, actions: []const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = noted(a, key, t, severity, message, labels, actions, width, zero)
+    ret (made, made_error)
+}
+
+// An info bar: a banner with a close button (keyed `key + 1`) firing `dismiss`.
+fn info_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity, message: str, labels: []const str, actions: []const widget.Submit, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = noted(a, key, t, severity, message, labels, actions, width, *dismiss)
+    ret (made, made_error)
+}
+
+fn noted(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity, message: str, labels: []const str, actions: []const widget.Submit, width: f32, dismiss: widget.Submit) -> (widget.Node, err) {
+    if labels.len != actions.len { ret (zero, TooLarge) }
+    let closable = widget.submit_set(dismiss.invoke)
+    var count = 1usize + labels.len
+    if closable { count += 1usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var background: style.ColorRole = .SurfaceVariant
+    var foreground: style.ColorRole = .Text
+    if severity == .Success { background = .Primary }
+    if severity == .Success { foreground = .OnPrimary }
+    if severity == .Warning { background = .Secondary }
+    if severity == .Warning { foreground = .OnSecondary }
+    if severity == .Error { background = .Error }
+    if severity == .Error { foreground = .OnError }
+    var caption = text_options()
+    caption.role = .Body
+    caption.color = foreground
+    let (text_item, text_error) = text_node(a, 0u64, message, t, caption)
+    if text_error != ok { ret (zero, text_error) }
+    var grown = text_item
+    grown.style.width = style.Length { Flex: 1.0 }
+    parts[0usize] = grown
+    var i = 0usize
+    while i < labels.len {
+        var plain = button_options()
+        plain.variant = .Plain
+        let (act, act_error) = button(a, key + 2u64 + u64(i), t, labels[i], &actions[i], plain)
+        if act_error != ok { ret (zero, act_error) }
+        parts[1usize + i] = act
+        i += 1usize
+    }
+    if closable {
+        let (closes, closes_error) = mem.alloc[widget.Submit](a, 1usize)
+        if closes_error != ok { ret (zero, TooLarge) }
+        closes[0usize] = dismiss
+        var plain = button_options()
+        plain.variant = .Plain
+        let (close, close_error) = button(a, key + 1u64, t, "x", &closes[0usize], plain)
+        if close_error != ok { ret (zero, close_error) }
+        parts[count - 1usize] = close
+    }
+    var sheet = style.defaults()
+    sheet.background = paint.Brush { Solid: style.color(t.tokens, background) }
+    sheet.width = style.Length { Px: width }
+    let pad = style.Length { Px: t.tokens.spacing.sm }
+    sheet.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, sheet, parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 26u8
+    sem.live = 1u8
+    if severity == .Warning || severity == .Error {
+        sem.role = 24u8
+        sem.live = 2u8
+    }
+    sem.label = message
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// A skeleton: a rounded placeholder of `width` by `height` in the surface variant
+// whose opacity breathes with `phase` (the caller's clock, in radians) unless the
+// theme's motion is reduced; busy and unnamed in the tree.
+fn skeleton(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, phase: f32) -> (widget.Node, err) {
+    var block = sized_style(width, height)
+    block.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
+    block.radius = t.tokens.radii.sm
+    block.opacity = 1.0
+    if !t.tokens.motion.reduced { block.opacity = 0.7 + 0.3 * math.sin[f32](phase) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.box(0u64, block, zero)
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.states = accessibility.STATE_BUSY
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// An empty state: an icon (a zero texture for none), a title, a muted message
+// and a filled button (keyed `key + 1`, none for an empty label) in a centred
+// column `width` wide; a group in the tree named by the title.
+fn empty_state(a: *mem.Arena, key: widget.Key, t: *const Theme, icon_texture: scene.TextureId, title: str, message: str, action_label: str, action: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let pictured = icon_texture.slot != 0u32 || icon_texture.generation != 0u32
+    var count = 2usize
+    if pictured { count += 1usize }
+    if action_label.len != 0usize { count += 1usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    if pictured {
+        let (picture, picture_error) = icon(a, 0u64, icon_texture, 2.0 * t.tokens.metrics.hit_target, title)
+        if picture_error != ok { ret (zero, picture_error) }
+        parts[at] = picture
+        at += 1usize
+    }
+    var heading = text_options()
+    heading.role = .Title
+    heading.align = .Center
+    let (title_node, title_error) = text_node(a, 0u64, title, t, heading)
+    if title_error != ok { ret (zero, title_error) }
+    parts[at] = title_node
+    at += 1usize
+    var body_text = text_options()
+    body_text.color = .TextMuted
+    body_text.align = .Center
+    let (message_node, message_error) = text_node(a, 0u64, message, t, body_text)
+    if message_error != ok { ret (zero, message_error) }
+    parts[at] = message_node
+    at += 1usize
+    if action_label.len != 0usize {
+        let (act, act_error) = button(a, key + 1u64, t, action_label, action, button_options())
+        if act_error != ok { ret (zero, act_error) }
+        parts[at] = act
+        at += 1usize
+    }
+    var column_style = style.defaults()
+    column_style.width = style.Length { Px: width }
+    let pad = style.Length { Px: t.tokens.spacing.lg }
+    column_style.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: t.tokens.spacing.sm }, column_style, parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = title
+    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// An accordion: D826's disclosures in a column, keyed `key + 1 + 2 * index` (their
+// content groups `key + 2 + 2 * index`), the one at `expanded` open and the others
+// shut (an index past the end for none), each header firing its own toggle; a
+// group in the tree named `label`.
+fn accordion(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, contents: []const widget.Node, expanded: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
+    if contents.len != labels.len || toggles.len != labels.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < labels.len {
+        let (opened, opened_error) = disclosure(a, key + 1u64 + 2u64 * u64(i), t, labels[i], i == expanded, &toggles[i], contents[i])
+        if opened_error != ok { ret (zero, opened_error) }
+        items[i] = opened
+        i += 1usize
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), items[0usize..labels.len])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
 }

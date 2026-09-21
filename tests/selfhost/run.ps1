@@ -1863,6 +1863,13 @@ $uiEntryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $uiEntryWritten -ne 'executable written') { throw 'ui_entry emission failed' }
 $uiEntryOutput = & $uiEntryPath
 if ($LASTEXITCODE -ne 0 -or $uiEntryOutput -ne 'ui entry ok') { throw "the entry controls answered wrongly: exit $LASTEXITCODE" }
+# Feedback and disclosure (D832, widget plan P2-04): gauge, level, snackbar, toast,
+# banner, info bar, skeleton, empty state, accordion.
+$uiFeedbackPath = Join-Path $testBuild 'ui-feedback-selfhost.exe'
+$uiFeedbackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_feedback\src\main.e') $repo 'x64' 'windows' $uiFeedbackPath
+if ($LASTEXITCODE -ne 0 -or $uiFeedbackWritten -ne 'executable written') { throw 'ui_feedback emission failed' }
+$uiFeedbackOutput = & $uiFeedbackPath
+if ($LASTEXITCODE -ne 0 -or $uiFeedbackOutput -ne 'ui feedback ok') { throw "the feedback controls answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
