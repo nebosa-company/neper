@@ -3,9 +3,9 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/ui/input.e` |
-| plan row | layer 6, surface `planned`, milestone none, schedule `later` |
+| plan row | layer 6, surface `partial`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
-| unmet dependencies | `e.ui.window` |
+| unmet dependencies | none — every dependency has source |
 
 ## Definition of done
 
@@ -23,7 +23,7 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 | `e.os` | spec | `lib/e/os.e` | 3 |
 | `e.time` | partial | `lib/e/time.e` | 4 |
 | `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |
-| `e.ui.window` | planned | missing | 6 |
+| `e.ui.window` | partial | `lib/e/ui/window.e` | 6 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].
 

@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/ui/window.e` |
-| plan row | layer 6, surface `planned`, milestone none, schedule `later` |
+| plan row | layer 6, surface `partial`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
 | unmet dependencies | none — every dependency has source |
 
@@ -42,7 +42,7 @@ error Closed
 
 fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err)
 fn metrics(window: *const Window) -> (Metrics, err)
-fn target(window: *const Window) -> (scene.Target, err)
+fn draw_target(window: *const Window) -> (scene.Target, err)
 fn title(window: *Window, value: str) -> err
 fn cursor(window: *Window, value: Cursor) -> err
 fn visible(window: *Window, value: bool) -> err
@@ -54,7 +54,8 @@ fn close(window: *Window) -> err
 
 Windows are logically linear handles backed only by reviewed `e.os` primitives.
 Coordinates exposed above the module are logical pixels; framebuffer dimensions are
-physical pixels. `target` is non-owning and becomes invalid when the window closes.
+physical pixels. `draw_target` (named so because `target` is a reserved word, D797) is
+non-owning and becomes invalid when the window closes.
 
 ## Missing declarations
 
@@ -69,7 +70,7 @@ physical pixels. `target` is non-owning and becomes invalid when the window clos
 - [ ] `Closed`
 - [ ] `open`
 - [ ] `metrics`
-- [ ] `target`
+- [ ] `draw_target`
 - [ ] `title`
 - [ ] `cursor`
 - [ ] `visible`

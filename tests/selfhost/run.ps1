@@ -1646,6 +1646,13 @@ $gfxSceneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $gfxSceneWritten -ne 'executable written') { throw 'gfx_scene emission failed' }
 $gfxSceneOutput = & $gfxScenePath
 if ($LASTEXITCODE -ne 0 -or $gfxSceneOutput -ne 'gfx scene ok') { throw "the scene renderer answered wrongly: exit $LASTEXITCODE" }
+# `e.ui.window` and `e.ui.input` (D797): a window with a scene target, a frame shown
+# through request_frame and its Frame event first, the host's events by window id.
+$uiWindowPath = Join-Path $testBuild 'ui-window-selfhost.exe'
+$uiWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_window\src\main.e') $repo 'x64' 'windows' $uiWindowPath
+if ($LASTEXITCODE -ne 0 -or $uiWindowWritten -ne 'executable written') { throw 'ui_window emission failed' }
+$uiWindowOutput = & $uiWindowPath
+if ($LASTEXITCODE -ne 0 -or $uiWindowOutput -ne 'ui window ok') { throw "the ui window answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

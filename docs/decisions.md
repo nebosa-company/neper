@@ -15205,3 +15205,30 @@ command has no field for. D791 said this renderer would be kernels; it is
 host loops over the same per-pixel arithmetic, which a driver backend moves
 into kernels command by command, the proposal's per-pixel tolerance
 measured between the two.
+
+## D797 — `e.ui.window` and `e.ui.input` over the host primitives
+
+Two more of the UI chain, on D795's primitives and D796's renderer. A
+`window.Window` opens through `os.window_open`, takes a queue on the device
+and an offscreen `gpu.Target` at the client size, and hands out a
+`scene.Target` over it as `draw_target` -- the fence said `target`, which is
+a reserved word, so the fence changed. On the CPU device the frame the
+renderer presents into that target is not on the screen until
+`request_frame` reads it back and blits it through `os.window_present`,
+and queues a `Frame` event; a driver device would give `gpu.open_target` the
+window's native surface and present there, `request_frame` then only
+queuing the event. `metrics` follows the client area, resizing the target
+when the host's size moved, and answers logical pixels beside physical.
+`input.Queue` is the host's `window_poll` mapped to the fence's `Event`
+by window id -- `Frame` first when one was requested, then close, focus,
+blur, resize with fresh metrics, pointer move/down/up with the queue's
+held-button set and the position in logical pixels, scroll with the notch
+count carried in `device` as its bits, since `Pointer` has no delta field,
+key down/up with the host's virtual key as both physical and logical, and
+text per code point as UTF-8 borrowed until the next poll. `capture` and
+`release_capture` are the host's; `composition_rect` answers `TooLarge`
+until IME lands, the fence having no `Unsupported`. `link/ui_window` opens
+a window, renders and shows a frame, reads its `Frame` event first, polls
+the host's, sets title, cursor and visibility, and finds the closed window
+stale on Windows; Linux answers "unsupported" at `open`. Not here: `Mode`
+and `transparent`, recorded and not acted on; a layout-aware logical key.

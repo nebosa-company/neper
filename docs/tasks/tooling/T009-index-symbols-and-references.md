@@ -57,7 +57,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `instantiate`: `src/check.e`×19‡, `src/lower.e`×4‡, `src/em.e`×2‡, `tests/conformance/tools/index_unsafe.expected.jsonl`×2, `src/tool.e`×1‡, `tests/conformance/reject/safety_copy_toolchain.e`×1, `tests/conformance/tools/explain.e`×1
 - `e.atomic`: `src/resolve.e`×14†, `src/check.e`×8‡, `src/main.e`×2‡, `benchmarks/metamorphic/rename_symbols.py`×1, `lib/e/cancel.e`×1, `lib/e/metrics.e`×1, `lib/e/sync.e`×1, `lib/e/task.e`×1
 - `e.io`: `src/check.e`×4‡, `src/lower.e`×3‡, `src/main.e`×3‡, `lib/e/fmt/bson.e`×2, `lib/e/fmt/msgpack.e`×2, `lib/e/fmt/quoted_printable.e`×2, `benchmarks/llm_gen/README.md`×1, `benchmarks/llm_gen/tasks/factorial/neper.e`×1
-- `e.str`: `src/lower.e`×17‡, `src/check.e`×7‡, `lib/e/str.e`×6†, `lib/e/fmt/json.e`×4†, `lib/e/fmt/csv.e`×3, `lib/e/fmt/ini.e`×3, `lib/e/fmt/png.e`×3, `lib/e/fmt/jpeg.e`×2†
+- `e.str`: `src/lower.e`×17‡, `src/check.e`×7‡, `lib/e/str.e`×6†, `lib/e/fmt/json.e`×4†, `lib/e/fmt/csv.e`×3, `lib/e/fmt/ini.e`×3, `lib/e/fmt/png.e`×3, `lib/e/gfx/scene.e`×3†
 
 ## Existing fixtures
 

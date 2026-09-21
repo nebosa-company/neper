@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/accessibility.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | `native-accessibility-api` |
-| unmet dependencies | `e.ui.widget`, `e.ui.window` |
+| unmet dependencies | `e.ui.widget` |
 
 ## Definition of done
 
@@ -25,7 +25,7 @@ Blockers named in the plan must be resolved first; a blocked module is not eligi
 | `e.os` | spec | `lib/e/os.e` | 3 |
 | `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |
 | `e.ui.widget` | planned | missing | 6 |
-| `e.ui.window` | planned | missing | 6 |
+| `e.ui.window` | partial | `lib/e/ui/window.e` | 6 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].
 
