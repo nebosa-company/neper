@@ -1724,6 +1724,11 @@ algo_geom3_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$algo_geom3_written" = 'executable written' ]
 chmod +x "$test_build/algo-geom3-selfhost"
 "$test_build/algo-geom3-selfhost"
+# A pointer to a float is an integer-class argument after floats, in the seventh slot and beyond, from a field and an element (D867).
+pointer_float_args_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/pointer_float_args/src/main.e" "$repo" x64 linux "$test_build/pointer-float-args-selfhost")
+[ "$pointer_float_args_written" = 'executable written' ]
+chmod +x "$test_build/pointer-float-args-selfhost"
+"$test_build/pointer-float-args-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

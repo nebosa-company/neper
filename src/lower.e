@@ -3318,6 +3318,19 @@ fn lower_unary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if operator == .PunctAmp {
         let (address, place_type, place_error) = lower_place(c, g, tree, module_index, child_index, builder, bindings, binding_count)
         if place_error != ok { ret (0usize, result_type, place_error) }
+        // An address instruction carries the type of what it addresses, and a call
+        // classifies its arguments by the value's type: the address of a float would
+        // travel in an xmm register while the callee reads a pointer from the integer
+        // file. The pointer type is put on the value here, the way `address_of` does.
+        let (place_representation, representation_error) = check.canonical_type(c, place_type)
+        if representation_error != ok { ret (0usize, result_type, representation_error) }
+        if place_representation.kind == .Float {
+            let (pointer_instruction, pointer, pointer_error) = nir.emit(builder, .Bitcast, result_type, true, 0usize, c.tokens[usize(node.token_start)])
+            if pointer_error != ok { ret (0usize, result_type, pointer_error) }
+            let pointer_operand_error = nir.add_operand(builder, pointer_instruction, address)
+            if pointer_operand_error != ok { ret (0usize, result_type, pointer_operand_error) }
+            ret (pointer, result_type, ok)
+        }
         ret (address, result_type, ok)
     }
     var operand_expected = result_type

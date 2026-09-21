@@ -16888,3 +16888,25 @@ w = 3 is consistent", which is wrong (2 + 3 is not more than 5); the
 fixture asserts the truth, which is the reason the references are
 programs rather than sentences.
 
+## D867 — The address of a float carries its pointer type
+
+An address instruction (`FieldAddress`, `IndexAddress`, a local's frame
+slot) carries the type of what it addresses, and a call classifies its
+arguments by the defining instruction's type. So `&x` with `x: f64`
+was classified as a float: the caller moved the address into an xmm
+register (or, past the register arguments on System V, counted it in
+the float file for the stack layout) while the callee read a pointer
+from the integer file. Win64 showed it as `fn f(x: f64, y: f64, seed:
+u64, p: *f64)` reading `p` from the seed's register; System V as a
+`*f64` seventh or eighth argument reading nil or zero. Two library
+agents met it independently (D865, D857) and worked around it with
+tuples and a record. The fix is in lowering: `&place` whose place is a
+float now passes through a `Bitcast` to the pointer type, the way
+`mem.address_of` already retypes to `usize` (D210), so every consumer
+that reads a value's type -- argument classification, comparison
+selection -- sees a pointer. Only float places are retyped; every other
+address already classifies as an integer. The link fixture
+`pointer_float_args` covers pointers after floats (both widths), the
+seventh, eighth and ninth arguments, a slice before the pointers, the
+address of a field and of an element, and a compared pointer; it
+crashes under the previous compiler on both hosts.

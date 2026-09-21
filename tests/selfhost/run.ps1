@@ -1894,6 +1894,12 @@ $algoGeom3Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $algoGeom3Written -ne 'executable written') { throw 'algo_geom3 emission failed' }
 & $algoGeom3Path
 if ($LASTEXITCODE -ne 0) { throw "a algo_geom3 check failed: exit $LASTEXITCODE" }
+# A pointer to a float is an integer-class argument after floats, in the seventh slot and beyond, from a field and an element (D867).
+$pointerFloatArgsPath = Join-Path $testBuild 'pointer-float-args-selfhost.exe'
+$pointerFloatArgsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\pointer_float_args\src\main.e') $repo 'x64' 'windows' $pointerFloatArgsPath
+if ($LASTEXITCODE -ne 0 -or $pointerFloatArgsWritten -ne 'executable written') { throw 'pointer_float_args emission failed' }
+& $pointerFloatArgsPath
+if ($LASTEXITCODE -ne 0) { throw "a pointer_float_args check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
