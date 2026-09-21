@@ -15292,3 +15292,18 @@ and the layout fixture is unchanged. And a `Kind`'s tag is read by a
 Not here: subtree reuse across frames (the whole tree is rebuilt each
 `reconcile`), `Fit` for images (the destination is the box), capture and
 bubble as separate phases, and a layout-aware focus order.
+
+## D800 — The static gate re-pinned for the window primitives
+
+The sc500k static cells moved with D795: `e.os` grew by fourteen functions,
+seven types and forty `extern` declarations over `user32`, `gdi32` and
+`kernel32` on Windows, and the same fourteen as stubs on Linux, and every
+program that imports `e.os` -- sc500k among them -- parses, checks and, in
+release, lowers that source into the inlining oracle. Windows: debug arena
+unchanged at 2,285 MB, release arena 2,990 to 2,996 MB (+0.2%), debug and
+release images +14 KB (+0.5%, +0.7%), inside the five-percent image budget.
+Linux: debug arena 2,283 to 2,284 MB, release 2,989 to 2,990 MB, images
+unchanged, since the stubs are small. Under D506's zero-growth arena rule
+the four arena cells are re-pinned to these exact eight-worker numbers with
+this row naming why; the growth is the surface, not a regression in the
+compiler, and the Linux cell will move again when its X11 backend lands.

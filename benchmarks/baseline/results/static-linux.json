@@ -4,21 +4,21 @@
  "static": true,
  "host": "linux",
  "jobs": 8,
- "compiler": "stage 2 (neper-big / neper-linux, cross-compiled) at the revision",
- "revision": "cd1af340da31",
+ "compiler": "build/linux/tests/selfhost/neper-own",
+ "revision": "ba091e51de1d87450d899d36f56f3d549c303c6a",
  "cells": [
   {
    "workload": "sc500k",
    "mode": "debug",
-   "command": "/mnt/d/Temp/claude/scratch475/neper-linux emit-executable /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/src/main.e /mnt/d/repos/neper-cot x64 linux /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/static-debug -j 8 --stats --json",
-   "arena_mb": 2283,
+   "command": "/mnt/d/repos/neper/build/linux/tests/selfhost/neper-own emit-executable /mnt/d/repos/neper/build/linux/tests/selfhost/baseline-fixtures/sc500k/src/main.e /mnt/d/repos/neper x64 linux /mnt/d/repos/neper/build/linux/tests/selfhost/baseline-fixtures/sc500k/static-debug -j 8 --stats --json",
+   "arena_mb": 2284,
    "image_bytes": 2980096
   },
   {
    "workload": "sc500k",
    "mode": "release",
-   "command": "/mnt/d/Temp/claude/scratch475/neper-linux emit-executable /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/src/main.e /mnt/d/repos/neper-cot x64 linux /mnt/d/Temp/claude/scratch475/fixtures-linux/sc500k/static-release --release -j 8 --stats --json",
-   "arena_mb": 2989,
+   "command": "/mnt/d/repos/neper/build/linux/tests/selfhost/neper-own emit-executable /mnt/d/repos/neper/build/linux/tests/selfhost/baseline-fixtures/sc500k/src/main.e /mnt/d/repos/neper x64 linux /mnt/d/repos/neper/build/linux/tests/selfhost/baseline-fixtures/sc500k/static-release --release -j 8 --stats --json",
+   "arena_mb": 2990,
    "image_bytes": 2079472
   }
  ]
