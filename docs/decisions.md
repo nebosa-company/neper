@@ -15550,3 +15550,24 @@ bridge whose record would carry the names, and the `os.AccessibleNode`
 record keeps its six state and action bits until that bridge is written,
 so the fixed `e.os` surface and its goldens stand. `link/ui_semantics`
 checks the tree and the operations on both hosts.
+
+## D810 — Overlays in `e.ui.widget`: placed after the tree, painted last, the topmost takes the pointer
+
+P0-07 of the widget plan, the portal and the anchor as one node. An
+`Overlay` sits anywhere in the tree -- so its state and keys live with the
+control that opened it -- but measures as nothing there; `place` records
+it, and once the whole tree is placed the overlays are placed in tree
+order, each against the bounds of the element its `anchor` names by key
+(the window for none) under one of five placements and an offset, kept
+inside the window by clamping rather than flipping, and their children
+stacked in that rect, so they paint after and over everything. A pointer
+event starts at the topmost overlay under it and walks that subtree
+alone; a modal overlay it misses keeps the press from what is under it
+and fires `dismiss` instead, and keeps hover from it too. Modality is
+focus as much as paint: a modal overlay takes the focus into its first
+focusable element the frame it appears, Tab and Shift+Tab travel its
+subtree the way D806's trapping scope bounds them, and when its element
+is retired the focus returns to the element that had it, if that element
+is still there. Eight overlays at once; the ninth is `TooLarge`.
+`link/ui_overlay` checks the paint order, the placements, the routing,
+the dismissal and the focus on both hosts.

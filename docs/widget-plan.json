@@ -113,8 +113,11 @@
             "OverlayPortal",
             "OverlayAnchor"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "OverlayPortal",
+            "OverlayAnchor"
+          ],
+          "evidence": "lib/e/ui/widget.e (D810): Overlay node placed after the tree and painted last against an anchor element by key with five placements and an offset, kept inside the window; the topmost overlay under a pointer takes it, a modal one blocks and dismisses, takes the focus when it appears, bounds Tab and restores the focus when it goes; overlay_bounds_of for harnesses; tests/selfhost/fixtures/link/ui_overlay on both hosts"
         },
         {
           "id": "P0-08",

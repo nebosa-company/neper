@@ -82,7 +82,15 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 // `level` is a heading's or a tree item's depth; a hidden element and its subtree
 // leave the tree. A platform action the element offers reaches `on_action` as its bit.
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics }
+// An overlay (D810, widget plan P0-07): its children leave the flow and paint at the
+// root level, last, stacked against the element `anchor` names by key (0: the
+// window) with `placement` and `offset`, kept inside the window. A modal overlay
+// takes the focus when it appears and gives it back when it goes, bounds Tab to its
+// subtree, keeps the pointer from what is under it, and a press outside it fires
+// `dismiss`. Overlays stack in tree order; the last is on top.
+type Placement = enum u8 { Below, Above, Right, Left, Center }
+type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -102,6 +110,8 @@ const REGION_TAG: u8 = 9u8
 const SCOPE_TAG: u8 = 10u8
 const EDIT_TAG: u8 = 11u8
 const SEMANTICS_TAG: u8 = 12u8
+const OVERLAY_TAG: u8 = 13u8
+const MAX_OVERLAYS: usize = 8usize
 const MAX_SHORT: usize = 32usize
 const MAX_HISTORY: usize = 32usize
 const HISTORY_BYTES: usize = 1024usize
@@ -179,6 +189,15 @@ type Element = struct {
     value_len: usize,
     hint: [32]u8,
     hint_len: usize,
+    // An overlay's content bounds, modality, dismiss action, and the focus it took
+    // over when it appeared.
+    overlay_bounds: geometry.Rect,
+    modal: bool,
+    dismiss: Submit,
+    saved_focus: u32,
+    has_saved: bool,
+    overlay_opened: bool,
+    wants_focus: bool,
 }
 // One undoable edit: the bytes it removed and inserted at `at`, in the history pool.
 type Undo = struct { element: u32, at: usize, removed_off: usize, removed_len: usize, inserted_off: usize, inserted_len: usize }
@@ -216,6 +235,11 @@ type State = struct {
     history_at: usize,
     history_bytes: [1024]u8,
     history_used: usize,
+    // The overlays placed this frame, in tree order, with their nodes.
+    overlays: [8]u32,
+    overlay_nodes: [8]*const Node,
+    overlay_count: usize,
+    window_size: geometry.Size,
 }
 
 // ---------------------------------------------------------------- constructors
@@ -271,6 +295,10 @@ fn edit(key: Key, value: Edit, value_style: style.Style) -> Node {
 
 fn semantics(key: Key, value: Semantics, value_style: style.Style, children: []const Node) -> Node {
     ret Node { key: key, kind: Kind { Semantics: value }, style: value_style, children: children }
+}
+
+fn overlay(key: Key, value: Overlay, value_style: style.Style, children: []const Node) -> Node {
+    ret Node { key: key, kind: Kind { Overlay: value }, style: value_style, children: children }
 }
 
 // Whether a function value is set: its bits are not zero, read through a pun.
@@ -392,6 +420,8 @@ fn kind_tag(kind: Kind) -> u8 {
         ret EDIT_TAG
     case .Semantics as sm:
         ret SEMANTICS_TAG
+    case .Overlay as ov:
+        ret OVERLAY_TAG
     }
     ret 0u8
 }
@@ -545,10 +575,13 @@ fn retire_element(s: *State, index: usize) {
         at = next
         has = more
     }
+    // An overlay gives back the focus it took, when that element is still here.
+    if e.kind == OVERLAY_TAG && e.has_saved && !s.has_focus && s.elements[usize(e.saved_focus)].live {
+        s.focus = e.saved_focus
+        s.has_focus = true
+    }
 }
 
-// The node's subtree matched to elements: children rebuilt in the node's order,
-// the old children not matched retired.
 // `from` into `into`, at most `most` bytes; the count.
 fn copy_short(into: []u8, from: str, most: usize) -> usize {
     var n = from.len
@@ -561,6 +594,8 @@ fn copy_short(into: []u8, from: str, most: usize) -> usize {
     ret n
 }
 
+// The node's subtree matched to elements: children rebuilt in the node's order,
+// the old children not matched retired.
 fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool, position: usize, old_siblings: []const u32, depth: usize) -> (usize, err) {
     if depth > usize(s.limits.max_depth) { ret (0usize, TooDeep) }
     if style.validate(&node.style) != ok { ret (0usize, InvalidTree) }
@@ -652,6 +687,16 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.text_len = copy_short(e.text[..], sm.label, MAX_TEXT)
         e.value_len = copy_short(e.value[..], sm.value, MAX_SHORT)
         e.hint_len = copy_short(e.hint[..], sm.hint, MAX_SHORT)
+    case .Overlay as ov:
+        e.enabled = true
+        e.modal = ov.modal
+        e.dismiss = ov.dismiss
+        if !e.overlay_opened {
+            e.overlay_opened = true
+            e.saved_focus = s.focus
+            e.has_saved = s.has_focus
+            e.wants_focus = ov.modal
+        }
     }
     // Duplicate nonzero keys among siblings are refused.
     var i = 0usize
@@ -828,6 +873,8 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
     case .Semantics as sm:
         let (described, describe_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner)
         ret (described, describe_error)
+    case .Overlay as ov:
+        ret (geometry.Size { width: 0.0, height: 0.0 }, ok)
     case .Scroll as sc:
         var open = inner
         if sc.axis == .Vertical { open.max_height = 3.0e38 } else { open.max_width = 3.0e38 }
@@ -950,6 +997,11 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
     case .Semantics as sm:
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
+    case .Overlay as ov:
+        if s.overlay_count >= MAX_OVERLAYS { ret TooLarge }
+        s.overlays[s.overlay_count] = u32(element)
+        s.overlay_nodes[s.overlay_count] = node
+        s.overlay_count += 1usize
     case .Grid as g:
         try place_grid(s, a, node, element, g, inner, inner_limits, b, depth)
     case .Stack:
@@ -1103,6 +1155,72 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
     ret ok
 }
 
+// Where an overlay's content of `size` goes against its anchor, kept in the window.
+fn overlay_rect(anchor: geometry.Rect, size: geometry.Size, ov: Overlay, window_size: geometry.Size) -> geometry.Rect {
+    var x = anchor.x
+    var y = anchor.y
+    if ov.placement == .Below { y = anchor.y + anchor.height }
+    if ov.placement == .Above { y = anchor.y - size.height }
+    if ov.placement == .Right { x = anchor.x + anchor.width }
+    if ov.placement == .Left { x = anchor.x - size.width }
+    if ov.placement == .Center {
+        x = (window_size.width - size.width) * 0.5
+        y = (window_size.height - size.height) * 0.5
+    }
+    x += ov.offset.x
+    y += ov.offset.y
+    if x + size.width > window_size.width { x = window_size.width - size.width }
+    if y + size.height > window_size.height { y = window_size.height - size.height }
+    if x < 0.0 { x = 0.0 }
+    if y < 0.0 { y = 0.0 }
+    ret geometry.Rect { x: x, y: y, width: size.width, height: size.height }
+}
+
+// The overlays placed after the tree, in order, each against its anchor's bounds
+// (the window when it names none), its children stacked in the content rect.
+fn place_overlays(s: *State, a: *mem.Arena, b: *scene.Builder) -> err {
+    var i = 0usize
+    while i < s.overlay_count {
+        let element = usize(s.overlays[i])
+        let node = s.overlay_nodes[i]
+        var spec: Overlay = zero
+        switch node.kind {
+        case .Overlay as ov:
+            spec = ov
+        default:
+            spec = spec
+        }
+        var anchor = geometry.Rect { x: 0.0, y: 0.0, width: s.window_size.width, height: s.window_size.height }
+        if spec.anchor != 0u64 {
+            let (found, count) = find_by_key(s, spec.anchor)
+            if count != 0usize { anchor = s.elements[usize(found.slot)].bounds }
+        }
+        let open = ui_layout.Constraints { min_width: 0.0, max_width: s.window_size.width, min_height: 0.0, max_height: s.window_size.height }
+        let (size, size_error) = measure_stack(s, a, node, open)
+        if size_error != ok { ret size_error }
+        let rect = overlay_rect(anchor, size, spec, s.window_size)
+        s.elements[element].overlay_bounds = rect
+        s.elements[element].bounds = rect
+        try place_stack(s, a, node, element, rect, open, b, 2usize)
+        i += 1usize
+    }
+    ret ok
+}
+
+// The topmost overlay under `p`, or the topmost modal one that keeps `p` from
+// what is under it: (element, inside, found).
+fn overlay_at(s: *State, p: geometry.Point) -> (usize, bool, bool) {
+    var i = s.overlay_count
+    while i > 0usize {
+        i -= 1usize
+        let element = usize(s.overlays[i])
+        let e = &s.elements[element]
+        if e.live && geometry.contains(e.overlay_bounds, p) { ret (element, true, true) }
+        if e.live && e.modal { ret (element, false, true) }
+    }
+    ret (0usize, false, false)
+}
+
 // The Restores that close what `place` opened.
 fn finish_place(b: *scene.Builder, clipped: bool, layered: bool) -> err {
     var restore: scene.Command = .Restore
@@ -1189,9 +1307,26 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     let (b, builder_error) = scene.builder(frame_arena, s.limits.max_commands)
     if builder_error != ok { ret (zero, TooLarge) }
     var builder = b
-    let place_error = place(s, frame_arena, &root, root_index, geometry.Rect { x: 0.0, y: 0.0, width: size.width, height: size.height }, &builder, 1usize)
+    s.overlay_count = 0usize
+    s.window_size = size
+    var place_error = place(s, frame_arena, &root, root_index, geometry.Rect { x: 0.0, y: 0.0, width: size.width, height: size.height }, &builder, 1usize)
+    if place_error == ok { place_error = place_overlays(s, frame_arena, &builder) }
     if place_error == scene.TooLarge { ret (zero, TooLarge) }
     if place_error != ok { ret (zero, place_error) }
+    var o = 0usize
+    while o < s.overlay_count {
+        let overlay_element = usize(s.overlays[o])
+        if s.elements[overlay_element].wants_focus {
+            s.elements[overlay_element].wants_focus = false
+            var order: [64]u32 = zero
+            let count = collect_focusable(s, overlay_element, order[..], 0usize)
+            if count > 0usize {
+                s.focus = order[0usize]
+                s.has_focus = true
+            }
+        }
+        o += 1usize
+    }
     let (compiled, compile_error) = scene.compile(s.renderer, scene.finish(&builder))
     if compile_error != ok { ret (zero, TooLarge) }
     // The previous frame's scene goes with the new one committed.
@@ -1373,6 +1508,18 @@ fn scope_of(s: *State, index: usize) -> (usize, bool) {
     ret (0usize, false)
 }
 
+// The nearest overlay at or above `index`, or none.
+fn overlay_of(s: *State, index: usize) -> (usize, bool) {
+    var at = index
+    while true {
+        let e = &s.elements[at]
+        if e.kind == OVERLAY_TAG { ret (at, true) }
+        if !e.has_parent { ret (0usize, false) }
+        at = usize(e.parent)
+    }
+    ret (0usize, false)
+}
+
 fn focusable(e: *const Element) -> bool {
     if !e.live || !e.enabled { ret false }
     if e.kind == REGION_TAG || e.kind == EDIT_TAG { ret e.focusable }
@@ -1406,6 +1553,8 @@ fn move_focus(s: *State, backward: bool) {
     if s.has_focus {
         let (found_scope, has_scope) = scope_of(s, usize(s.focus))
         if has_scope && s.elements[found_scope].traps_focus { root = found_scope }
+        let (found_overlay, has_overlay) = overlay_of(s, usize(s.focus))
+        if has_overlay && s.elements[found_overlay].modal { root = found_overlay }
     }
     var order: [256]u32 = zero
     let count = collect_focusable(s, root, order[..], 0usize)
@@ -1831,9 +1980,17 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     if !s.has_root { ret ok }
     switch event {
     case .PointerDown as p:
+        // The topmost overlay under the pointer is the tree the press is in; a modal
+        // one the press misses is dismissed and keeps the press from what is under.
+        var from = usize(s.root)
+        let (over, inside, has_over) = overlay_at(s, p.position)
+        if has_over {
+            if !inside { ret fire_submit(s.elements[over].dismiss) }
+            from = over
+        }
         // The arena takes the pointer for the deepest region that taps or drags; an
         // action element under it is the old contract and still answers.
-        let (region_index, has_region) = hit_region(s, usize(s.root), p.position, GESTURE_TAP | GESTURE_DRAG)
+        let (region_index, has_region) = hit_region(s, from, p.position, GESTURE_TAP | GESTURE_DRAG)
         if has_region {
             s.arena_state.pressed = true
             s.arena_state.candidate = u32(region_index)
@@ -1851,14 +2008,14 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             }
             ret ok
         }
-        let (found, has_found) = hit_action(s, usize(s.root), p.position)
+        let (found, has_found) = hit_action(s, from, p.position)
         if has_found {
             s.focus = u32(found)
             s.has_focus = true
             let action = s.elements[found].action
             ret action.invoke(action.ctx, event)
         }
-        let (viewport, has_viewport) = hit_scroll(s, usize(s.root), p.position)
+        let (viewport, has_viewport) = hit_scroll(s, from, p.position)
         if has_viewport {
             s.arena_state.pressed = true
             s.arena_state.candidate = u32(viewport)
@@ -1943,8 +2100,15 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             s.arena_state.last = p.position
             ret fire_gesture(e.gesture, Gesture { DragMove: Drag { start: s.arena_state.down, position: p.position, delta: delta } })
         }
-        // Hover: entering one region leaves the last.
-        let (over, has_over) = hit_region(s, usize(s.root), p.position, GESTURE_HOVER)
+        // Hover: entering one region leaves the last; a modal overlay keeps the
+        // pointer from what is under it.
+        var from = usize(s.root)
+        let (top, top_inside, has_top) = overlay_at(s, p.position)
+        if has_top {
+            if !top_inside { ret ok }
+            from = top
+        }
+        let (over, has_over) = hit_region(s, from, p.position, GESTURE_HOVER)
         if s.arena_state.has_hovered && (!has_over || over != usize(s.arena_state.hovered)) {
             let previous = usize(s.arena_state.hovered)
             s.arena_state.has_hovered = false
@@ -2096,6 +2260,15 @@ fn edit_select(widget_runtime: *Runtime, element: ElementId, start: usize, end: 
     e.caret = end
     e.invalid = true
     ret ok
+}
+
+// An overlay's content bounds, for a harness.
+fn overlay_bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret (zero, false) }
+    let (index, found) = element_of(s, element)
+    if !found || s.elements[index].kind != OVERLAY_TAG { ret (zero, false) }
+    ret (s.elements[index].overlay_bounds, true)
 }
 
 // The element that has the focus, for a harness or a control.

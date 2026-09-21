@@ -1657,6 +1657,13 @@ ui_semantics_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/ui-semantics-selfhost"
 ui_semantics_output=$("$test_build/ui-semantics-selfhost")
 [ "$ui_semantics_output" = 'ui semantics ok' ]
+# Overlays (D810, widget plan P0-07): root-level paint against an anchor, kept in the
+# window, presses routed by the topmost, a modal taking and returning the focus.
+ui_overlay_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_overlay/src/main.e" "$repo" x64 linux "$test_build/ui-overlay-selfhost")
+[ "$ui_overlay_written" = 'executable written' ]
+chmod +x "$test_build/ui-overlay-selfhost"
+ui_overlay_output=$("$test_build/ui-overlay-selfhost")
+[ "$ui_overlay_output" = 'ui overlay ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

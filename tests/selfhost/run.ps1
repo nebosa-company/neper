@@ -1721,6 +1721,13 @@ $uiSemanticsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $uiSemanticsWritten -ne 'executable written') { throw 'ui_semantics emission failed' }
 $uiSemanticsOutput = & $uiSemanticsPath
 if ($LASTEXITCODE -ne 0 -or $uiSemanticsOutput -ne 'ui semantics ok') { throw "the semantics answered wrongly: exit $LASTEXITCODE" }
+# Overlays (D810, widget plan P0-07): root-level paint against an anchor, kept in the
+# window, presses routed by the topmost, a modal taking and returning the focus.
+$uiOverlayPath = Join-Path $testBuild 'ui-overlay-selfhost.exe'
+$uiOverlayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_overlay\src\main.e') $repo 'x64' 'windows' $uiOverlayPath
+if ($LASTEXITCODE -ne 0 -or $uiOverlayWritten -ne 'executable written') { throw 'ui_overlay emission failed' }
+$uiOverlayOutput = & $uiOverlayPath
+if ($LASTEXITCODE -ne 0 -or $uiOverlayOutput -ne 'ui overlay ok') { throw "the overlays answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

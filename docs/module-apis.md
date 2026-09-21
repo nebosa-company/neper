@@ -3294,7 +3294,9 @@ type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
 type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit }
 type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool }
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics }
+type Placement = enum u8 { Below, Above, Right, Left, Center }
+type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -3320,6 +3322,7 @@ fn region(key: Key, value: Region, value_style: style.Style, children: []const N
 fn scope(key: Key, value: Scope, value_style: style.Style, children: []const Node) -> Node
 fn edit(key: Key, value: Edit, value_style: style.Style) -> Node
 fn semantics(key: Key, value: Semantics, value_style: style.Style, children: []const Node) -> Node
+fn overlay(key: Key, value: Overlay, value_style: style.Style, children: []const Node) -> Node
 fn fire_change[T: type](c: Change[T], value: T) -> err
 fn fire_submit(a: Submit) -> err
 fn fire_gesture(a: GestureAction, g: Gesture) -> err
@@ -3337,6 +3340,7 @@ fn visible_range(offset: f32, viewport: f32, count: usize, extent: f32) -> (usiz
 fn semantic_action(widget_runtime: *Runtime, element: ElementId, bit: u32) -> err
 fn edit_set(widget_runtime: *Runtime, element: ElementId, value: str) -> err
 fn edit_select(widget_runtime: *Runtime, element: ElementId, start: usize, end: usize) -> err
+fn overlay_bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool)
 fn close(widget_runtime: *Runtime) -> err
 fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool)
 fn renderer_of(widget_runtime: *Runtime) -> *scene.Renderer
@@ -3407,6 +3411,16 @@ collection and a level -- and a hidden one leaves the tree with its subtree. A
 platform action it offers reaches `on_action` as its bit through `semantic_action`;
 `edit_set` and `edit_select` are the platform's way into an editor. The summary
 carries all of it, and an editor's value, selection and read-only state.
+
+Overlays (D810, widget plan P0-07): an `Overlay` node's children leave the flow --
+it measures as nothing where it sits -- and are placed after the whole tree, painted
+last, stacked in the rect `placement` and `offset` put against the element `anchor`
+names by key (the window for none), kept inside the window. Up to eight overlays
+stack in tree order; a pointer event starts at the topmost overlay under it, and a
+modal one keeps the pointer from what is under it, firing `dismiss` on a press
+outside instead. A modal overlay takes the focus into its first focusable element
+when it appears, bounds Tab to its subtree, and gives the focus back to the element
+that had it when it goes.
 
 ### `e.ui.animation`
 
