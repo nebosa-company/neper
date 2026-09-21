@@ -16308,3 +16308,31 @@ straight RGBA -- a host's native picker, and any locale-aware
 formatting, are the caller's to offer over these. `link/ui_pickers`
 lays March 2026 out, picks, turns, opens, steps and slides on both
 hosts.
+
+## D844 — Content manipulation: a zoom view is a viewport with a transform, a drop is a gesture, the clipboard is a command set
+
+P2-11 of the widget plan, and the runtime's last phase-2 work (D843 is
+the algos stream's). The `Zoom` kind lays its children out at their
+natural size, as D816's fitted box does, and paints them through a
+clip and a transform of its own scale and offset; the wheel scales by a
+tenth per notch about the pointer -- the point under it stays put --
+within `min_scale..max_scale`, a press on the content pans it (the
+content is painted, not pressed), and the offset is bounded so the
+content never leaves the view, sitting at the origin while smaller;
+the state follows D807's rule, taken from the node when the caller
+changes it, and every move reaches `change`. An in-application drag is
+a payload, not a runtime system: a drag region's start handler calls
+`begin_drag` with a `u64` of its own meaning, `dragging` answers it
+while the drag lasts, and at the release the deepest region under the
+pointer that takes `GESTURE_DROP` hears `Gesture.Drop` with the
+position and the payload, after the source's own drag end; the
+cross-process kind stays with P4's host services. The clipboard
+commands are what an application's Edit menu runs: `clipboard_commands`
+says which of copy, cut and paste apply to the focused editor now (a
+secret is never copied, a read-only editor never cut or pasted into),
+`clipboard_copy`, `clipboard_cut` and `clipboard_paste` run them, and
+`clipboard_set` and `clipboard_get` move any text through the host's
+clipboard with the runtime's own fallback. Adding a gesture member
+made `link/ui_gesture`'s exhaustive switch name it, as the checker
+insists. `link/ui_manipulation` zooms, pans, bounds, drags, drops and
+copies on both hosts.

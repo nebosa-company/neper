@@ -683,8 +683,13 @@
             "DropTarget",
             "ClipboardCommands"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "ZoomView",
+            "DragSource",
+            "DropTarget",
+            "ClipboardCommands"
+          ],
+          "evidence": "lib/e/ui/widget.e (D844): the Zoom kind painting its children scaled and offset through a clipped transform, the wheel scaling about the pointer within the limits, a drag panning, the offset bounded to the view and every move reported (zoom_state_of for a harness); begin_drag/dragging carrying a payload from a drag region's start to the region under the release that takes GESTURE_DROP, which hears Gesture.Drop; clipboard_commands/copy/cut/paste on the focused editor and clipboard_set/get over the host clipboard with the runtime's fallback; tests/selfhost/fixtures/link/ui_manipulation on both hosts"
         }
       ]
     },

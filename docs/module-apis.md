@@ -3488,7 +3488,8 @@ type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> 
 type Change[T: type] = struct { ctx: *void, invoke: fn(*void, T) -> err }
 type Submit = struct { ctx: *void, invoke: fn(*void) -> err }
 type Drag = struct { start: geometry.Point, position: geometry.Point, delta: geometry.Point }
-type Gesture = union enum u8 { Tap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd }
+type Gesture = union enum u8 { Tap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd, Drop: Dropped }
+type Dropped = struct { position: geometry.Point, payload: u64 }
 type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
 type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
 type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
@@ -3501,7 +3502,10 @@ type Alignment = enum u8 { Start, Center, End }
 type Scrollbar = struct { viewport: Key, axis: ui_layout.Axis }
 type Interaction = struct { hovered: bool, pressed: bool, focused: bool }
 type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32, step: f32, vertical: bool, track: paint.Color, fill: paint.Color, thumb: paint.Color, change: Change[f32], change_second: Change[f32], enabled: bool }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar, Slider: Slider }
+type ZoomState = struct { scale: f32, offset: geometry.Point }
+type Zoom = struct { state: ZoomState, min_scale: f32, max_scale: f32, change: Change[ZoomState] }
+type ClipboardCommands = struct { copy: bool, cut: bool, paste: bool }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar, Slider: Slider, Zoom: Zoom }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -3543,6 +3547,16 @@ fn responsive(width: f32, compact: Node, medium: Node, expanded: Node) -> Node
 fn scroll_view(a: *mem.Arena, key: Key, axis: ui_layout.Axis, value_style: style.Style, children: []const Node) -> (Node, err)
 fn scrollbar(key: Key, viewport: Key, axis: ui_layout.Axis, value_style: style.Style) -> Node
 fn slider(key: Key, value: Slider, value_style: style.Style) -> Node
+fn zoom(key: Key, value: Zoom, value_style: style.Style, children: []const Node) -> Node
+fn zoom_state_of(widget_runtime: *const Runtime, element: ElementId) -> (ZoomState, bool)
+fn begin_drag(widget_runtime: *Runtime, payload: u64) -> err
+fn dragging(widget_runtime: *const Runtime) -> (u64, bool)
+fn clipboard_commands(widget_runtime: *Runtime) -> ClipboardCommands
+fn clipboard_copy(widget_runtime: *Runtime) -> err
+fn clipboard_cut(widget_runtime: *Runtime) -> err
+fn clipboard_paste(widget_runtime: *Runtime) -> err
+fn clipboard_set(widget_runtime: *Runtime, value: str) -> err
+fn clipboard_get(widget_runtime: *Runtime, a: *mem.Arena) -> (str, err)
 fn safe_area(key: Key, insets: geometry.Insets, value_style: style.Style, children: []const Node) -> Node
 fn keyboard_avoiding(key: Key, keyboard: geometry.Insets, value_style: style.Style, children: []const Node) -> Node
 fn fire_change[T: type](c: Change[T], value: T) -> err

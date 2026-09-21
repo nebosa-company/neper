@@ -58,7 +58,7 @@ type Submit = struct { ctx: *void, invoke: fn(*void) -> err }
 // A gesture the arena settled on: a tap, a drag from its start through its moves to
 // its end, a hover entering and leaving. Positions are logical pixels.
 type Drag = struct { start: geometry.Point, position: geometry.Point, delta: geometry.Point }
-type Gesture = union enum u8 { Tap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd }
+type Gesture = union enum u8 { Tap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd, Drop: Dropped }
 type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
 // The gestures a region takes part in, as bits: 1 tap, 2 drag, 4 hover.
 type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
@@ -107,7 +107,18 @@ type Scrollbar = struct { viewport: Key, axis: ui_layout.Axis }
 // press taking the nearer. The track, its filled part and the thumbs are painted
 // in the colours given; the value follows D807's rule for the caller's copy.
 type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32, step: f32, vertical: bool, track: paint.Color, fill: paint.Color, thumb: paint.Color, change: Change[f32], change_second: Change[f32], enabled: bool }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar, Slider: Slider }
+// A zoom view (D844, widget plan P2-11): its children laid out at their natural
+// size and painted scaled by `state.scale` and moved by `state.offset` inside its
+// own bounds, clipped; the wheel zooms about the pointer within `min_scale` and
+// `max_scale`, a drag pans, and the offset is bounded so the content never leaves
+// the view; the state follows D807's rule and every move reaches `change`. The
+// content is painted, not pressed: a press on it pans.
+type ZoomState = struct { scale: f32, offset: geometry.Point }
+type Zoom = struct { state: ZoomState, min_scale: f32, max_scale: f32, change: Change[ZoomState] }
+// A drop (D844): what a drag begun with `begin_drag` carried, released over a region
+// that takes drops.
+type Dropped = struct { position: geometry.Point, payload: u64 }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar, Slider: Slider, Zoom: Zoom }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -133,6 +144,7 @@ const ASPECT_TAG: u8 = 15u8
 const FITTED_TAG: u8 = 16u8
 const SCROLLBAR_TAG: u8 = 17u8
 const SLIDER_TAG: u8 = 18u8
+const ZOOM_TAG: u8 = 19u8
 const MAX_OVERLAYS: usize = 8usize
 const MAX_SHORT: usize = 32usize
 const MAX_HISTORY: usize = 32usize
@@ -144,6 +156,7 @@ const MAX_SHORTCUTS: usize = 8usize
 const GESTURE_TAP: u8 = 1u8
 const GESTURE_DRAG: u8 = 2u8
 const GESTURE_HOVER: u8 = 4u8
+const GESTURE_DROP: u8 = 8u8
 
 type Cell = struct { live: bool, generation: u32, offset: usize, size: usize, align: usize, owner: u32 }
 type Element = struct {
@@ -171,6 +184,15 @@ type Element = struct {
     content_extent: f32,
     viewport_extent: f32,
     scroll_velocity: f32,
+    // A zoom view's scale and offset, the node's last, its limits, its reporter and
+    // its content's natural size.
+    zoom_scale: f32,
+    zoom_offset: geometry.Point,
+    node_zoom: ZoomState,
+    zoom_min: f32,
+    zoom_max: f32,
+    zoom_change: Change[ZoomState],
+    natural: geometry.Size,
     scroll_change: Change[f32],
     overscroll: Overscroll,
     momentum: bool,
@@ -268,6 +290,9 @@ type State = struct {
     clip: [256]u8,
     clip_len: usize,
     clip_hosted: bool,
+    // An in-application drag's payload (D844), from `begin_drag` to the drop.
+    drag_payload: u64,
+    has_drag: bool,
     history: [32]Undo,
     history_count: usize,
     history_at: usize,
@@ -419,6 +444,10 @@ fn scroll_view(a: *mem.Arena, key: Key, axis: ui_layout.Axis, value_style: style
     stacked[0usize] = flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), children)
     let thumb = paint.rgba(0.5, 0.5, 0.5, 0.6)
     ret (scroll(key, Scroll { axis: axis, offset: 0.0, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: thumb, change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, value_style, stacked[0usize..1usize]), ok)
+}
+
+fn zoom(key: Key, value: Zoom, value_style: style.Style, children: []const Node) -> Node {
+    ret Node { key: key, kind: Kind { Zoom: value }, style: value_style, children: children }
 }
 
 fn slider(key: Key, value: Slider, value_style: style.Style) -> Node {
@@ -577,6 +606,8 @@ fn kind_tag(kind: Kind) -> u8 {
         ret SCROLLBAR_TAG
     case .Slider as sl:
         ret SLIDER_TAG
+    case .Zoom as z:
+        ret ZOOM_TAG
     }
     ret 0u8
 }
@@ -870,6 +901,16 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.slider_vertical = sl.vertical
         e.slider_change = sl.change
         e.slider_change_second = sl.change_second
+    case .Zoom as z:
+        e.enabled = true
+        if z.state.scale != e.node_zoom.scale || z.state.offset.x != e.node_zoom.offset.x || z.state.offset.y != e.node_zoom.offset.y {
+            e.zoom_scale = z.state.scale
+            e.zoom_offset = z.state.offset
+        }
+        e.node_zoom = z.state
+        e.zoom_min = z.min_scale
+        e.zoom_max = z.max_scale
+        e.zoom_change = z.change
     case .Overlay as ov:
         e.enabled = true
         e.modal = ov.modal
@@ -1075,6 +1116,10 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         let (natural, natural_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, ui_layout.Constraints { min_width: 0.0, max_width: 3.0e38, min_height: 0.0, max_height: 3.0e38 })
         if natural_error != ok { ret (zero, natural_error) }
         ret (ui_layout.constrain(natural, inner), ok)
+    case .Zoom as z:
+        let (natural, natural_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, ui_layout.Constraints { min_width: 0.0, max_width: 3.0e38, min_height: 0.0, max_height: 3.0e38 })
+        if natural_error != ok { ret (zero, natural_error) }
+        ret (ui_layout.constrain(natural, inner), ok)
     case .Wrap as w:
         let (children, children_error) = children_of(s, a, node, inner, w.axis == .Horizontal)
         if children_error != ok { ret (zero, children_error) }
@@ -1227,6 +1272,8 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
     case .Fitted:
         try place_fitted(s, a, node, element, inner, b, depth)
+    case .Zoom as z:
+        try place_zoom(s, a, node, element, inner, b, depth)
     case .Scrollbar as bar:
         try place_scrollbar(s, bar, inner, b, node.style.border.color)
     case .Slider as sl:
@@ -1745,6 +1792,93 @@ fn place_fitted(s: *State, a: *mem.Arena, node: *const Node, element: usize, inn
     try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, geometry.Rect { x: inner.x, y: inner.y, width: natural.width, height: natural.height }, open, b, depth)
     try scene.push(b, restore)
     ret ok
+}
+
+// The zoom view's offset kept within its bounds: the content may not leave the
+// view on either side (it sits at the origin while smaller than the view).
+fn zoom_clamp(e: *Element, inner: geometry.Rect) {
+    if e.zoom_scale < e.zoom_min { e.zoom_scale = e.zoom_min }
+    if e.zoom_scale > e.zoom_max { e.zoom_scale = e.zoom_max }
+    let shown_width = e.natural.width * e.zoom_scale
+    let shown_height = e.natural.height * e.zoom_scale
+    var low_x = inner.width - shown_width
+    if low_x > 0.0 { low_x = 0.0 }
+    var low_y = inner.height - shown_height
+    if low_y > 0.0 { low_y = 0.0 }
+    if e.zoom_offset.x < low_x { e.zoom_offset.x = low_x }
+    if e.zoom_offset.y < low_y { e.zoom_offset.y = low_y }
+    if e.zoom_offset.x > 0.0 { e.zoom_offset.x = 0.0 }
+    if e.zoom_offset.y > 0.0 { e.zoom_offset.y = 0.0 }
+}
+
+fn place_zoom(s: *State, a: *mem.Arena, node: *const Node, element: usize, inner: geometry.Rect, b: *scene.Builder, depth: usize) -> err {
+    if node.children.len == 0usize { ret ok }
+    let open = ui_layout.Constraints { min_width: 0.0, max_width: 3.0e38, min_height: 0.0, max_height: 3.0e38 }
+    let (natural, natural_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, open)
+    if natural_error != ok { ret natural_error }
+    let e = &s.elements[element]
+    e.natural = natural
+    zoom_clamp(e, inner)
+    let scale = e.zoom_scale
+    var save: scene.Command = .Save
+    var restore: scene.Command = .Restore
+    try scene.push(b, save)
+    try scene.push(b, scene.Command { Clip: scene.Clip { Rect: inner } })
+    let about = geometry.transform_multiply(geometry.transform_translate(inner.x + e.zoom_offset.x, inner.y + e.zoom_offset.y), geometry.transform_multiply(geometry.transform_scale(scale, scale), geometry.transform_translate(0.0 - inner.x, 0.0 - inner.y)))
+    try scene.push(b, scene.Command { Transform: about })
+    try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, geometry.Rect { x: inner.x, y: inner.y, width: natural.width, height: natural.height }, open, b, depth)
+    try scene.push(b, restore)
+    ret ok
+}
+
+// The deepest zoom view under `p`, if any.
+fn hit_zoom(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
+    let e = &s.elements[index]
+    if !e.live || !geometry.contains(e.bounds, p) { ret (0usize, false) }
+    var order: [64]u32 = zero
+    var count = 0usize
+    var at = e.first_child
+    var has = e.has_child
+    while has && count < 64usize {
+        order[count] = at
+        count += 1usize
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    while count > 0usize {
+        count = count - 1usize
+        let (found, has_found) = hit_zoom(s, usize(order[count]), p)
+        if has_found { ret (found, true) }
+    }
+    if e.kind == ZOOM_TAG { ret (index, true) }
+    ret (0usize, false)
+}
+
+// The zoom view scaled by `factor` about `p` (kept where it is under the pointer),
+// then bounded and reported.
+fn zoom_by(s: *State, element: usize, factor: f32, p: geometry.Point) -> err {
+    let e = &s.elements[element]
+    var next = e.zoom_scale * factor
+    if next < e.zoom_min { next = e.zoom_min }
+    if next > e.zoom_max { next = e.zoom_max }
+    let ratio = next / e.zoom_scale
+    let px = p.x - e.bounds.x
+    let py = p.y - e.bounds.y
+    e.zoom_offset = geometry.Point { x: px - (px - e.zoom_offset.x) * ratio, y: py - (py - e.zoom_offset.y) * ratio }
+    e.zoom_scale = next
+    zoom_clamp(e, e.bounds)
+    e.invalid = true
+    ret fire_change[ZoomState](e.zoom_change, ZoomState { scale: e.zoom_scale, offset: e.zoom_offset })
+}
+
+// The zoom view panned by `delta`, bounded and reported.
+fn pan_by(s: *State, element: usize, delta: geometry.Point) -> err {
+    let e = &s.elements[element]
+    e.zoom_offset = geometry.Point { x: e.zoom_offset.x + delta.x, y: e.zoom_offset.y + delta.y }
+    zoom_clamp(e, e.bounds)
+    e.invalid = true
+    ret fire_change[ZoomState](e.zoom_change, ZoomState { scale: e.zoom_scale, offset: e.zoom_offset })
 }
 
 fn place_wrap(s: *State, a: *mem.Arena, node: *const Node, element: usize, spec: ui_layout.Wrap, inner: geometry.Rect, limits: ui_layout.Constraints, b: *scene.Builder, depth: usize) -> err {
@@ -2546,6 +2680,15 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             let action = s.elements[found].action
             ret action.invoke(action.ctx, event)
         }
+        let (zoomed, has_zoomed) = hit_zoom(s, from, p.position)
+        if has_zoomed {
+            s.arena_state.pressed = true
+            s.arena_state.candidate = u32(zoomed)
+            s.arena_state.down = p.position
+            s.arena_state.last = p.position
+            s.arena_state.dragging = false
+            ret ok
+        }
         let (viewport, has_viewport) = hit_scroll(s, from, p.position)
         if has_viewport {
             s.arena_state.pressed = true
@@ -2556,10 +2699,32 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             s.elements[viewport].scroll_velocity = 0.0
         }
     case .PointerUp as p:
+        // A drag with a payload dropped: the deepest region under the pointer that
+        // takes drops hears it (after the source's own drag end).
+        var dropped_on = 0usize
+        var has_drop = false
+        if s.has_drag {
+            let (found_drop, has_found_drop) = hit_region(s, usize(s.root), p.position, GESTURE_DROP)
+            dropped_on = found_drop
+            has_drop = has_found_drop
+        }
+        let payload = s.drag_payload
+        s.has_drag = false
         if s.arena_state.pressed {
             s.arena_state.pressed = false
             let candidate = usize(s.arena_state.candidate)
             let e = &s.elements[candidate]
+            if e.live && e.kind == ZOOM_TAG {
+                s.arena_state.dragging = false
+                ret ok
+            }
+            if e.live && e.kind == REGION_TAG && s.arena_state.dragging {
+                s.arena_state.dragging = false
+                let ended = fire_gesture(e.gesture, Gesture { DragEnd: p.position })
+                if ended != ok { ret ended }
+                if has_drop { ret fire_gesture(s.elements[dropped_on].gesture, Gesture { Drop: Dropped { position: p.position, payload: payload } }) }
+                ret ok
+            }
             if e.live && e.kind == SCROLL_TAG {
                 if !e.momentum { e.scroll_velocity = 0.0 }
                 s.arena_state.dragging = false
@@ -2605,6 +2770,15 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 if e.scroll_axis == .Horizontal { track = e.bounds.width }
                 if track <= 0.0 { ret ok }
                 ret scroll_by(s, usize(found.slot), moved * v.content_extent / track, false)
+            }
+            if e.live && e.kind == ZOOM_TAG {
+                if !s.arena_state.dragging {
+                    if distance_sq(p.position, s.arena_state.down) <= gesture_slop() * gesture_slop() { ret ok }
+                    s.arena_state.dragging = true
+                }
+                let delta = geometry.Point { x: p.position.x - s.arena_state.last.x, y: p.position.y - s.arena_state.last.y }
+                s.arena_state.last = p.position
+                ret pan_by(s, candidate, delta)
             }
             if e.live && e.kind == SCROLL_TAG {
                 if !s.arena_state.dragging {
@@ -2677,6 +2851,15 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .Scroll as p:
+        let (zoomed, has_zoomed) = hit_zoom(s, usize(s.root), p.position)
+        if has_zoomed {
+            // A notch scales by a tenth either way.
+            let notches = f32(mem.bitcast[i32](p.device)) / 120.0
+            var factor: f32 = 1.0
+            if notches > 0.0 { factor = 1.1 }
+            if notches < 0.0 { factor = 1.0 / 1.1 }
+            ret zoom_by(s, zoomed, factor, p.position)
+        }
         let (found, has_found) = hit_scroll(s, usize(s.root), p.position)
         if has_found {
             // The notch count rides in `device` as its bits (D797); a notch is 40 px.
@@ -2734,6 +2917,111 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         ret back_error
     }
     ret ok
+}
+
+// An in-application drag (D844): a drag source's handler begins one with a
+// payload on its drag start; the region under the release that takes drops
+// (GESTURE_DROP) hears `Drop` with it; a drag is over at the release either way.
+fn begin_drag(widget_runtime: *Runtime, payload: u64) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    s.drag_payload = payload
+    s.has_drag = true
+    ret ok
+}
+
+fn dragging(widget_runtime: *const Runtime) -> (u64, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize { ret (0u64, false) }
+    ret (s.drag_payload, s.has_drag)
+}
+
+// A zoom view's scale and offset, for a harness or a caller.
+fn zoom_state_of(widget_runtime: *const Runtime, element: ElementId) -> (ZoomState, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize { ret (zero, false) }
+    let (index, found) = element_of(s, element)
+    if !found || s.elements[index].kind != ZOOM_TAG { ret (zero, false) }
+    ret (ZoomState { scale: s.elements[index].zoom_scale, offset: s.elements[index].zoom_offset }, true)
+}
+
+// The clipboard commands (D844) as an application's menu runs them: on the
+// focused editor, copy and cut its selection and paste over it; `clipboard_commands`
+// says which apply now; `clipboard_set` and `clipboard_get` move any text through
+// the host's clipboard (the runtime's own fallback on a host without one).
+type ClipboardCommands = struct { copy: bool, cut: bool, paste: bool }
+
+fn clipboard_commands(widget_runtime: *Runtime) -> ClipboardCommands {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret zero }
+    let (editor, has_editor) = focused_edit(s)
+    if !has_editor { ret zero }
+    let e = &s.elements[editor]
+    let (lo, hi) = selection_of(e)
+    let selected = hi > lo && !e.secret
+    ret ClipboardCommands { copy: selected, cut: selected && !e.read_only, paste: !e.read_only }
+}
+
+fn clipboard_copy(widget_runtime: *Runtime) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (editor, has_editor) = focused_edit(s)
+    if !has_editor { ret InvalidTree }
+    edit_copy(s, &s.elements[editor])
+    ret ok
+}
+
+fn clipboard_cut(widget_runtime: *Runtime) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (editor, has_editor) = focused_edit(s)
+    if !has_editor { ret InvalidTree }
+    let e = &s.elements[editor]
+    if e.read_only { ret InvalidTree }
+    edit_copy(s, e)
+    let (lo, hi) = selection_of(e)
+    ret edit_replace(s, editor, lo, hi, "", true)
+}
+
+fn clipboard_paste(widget_runtime: *Runtime) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (editor, has_editor) = focused_edit(s)
+    if !has_editor { ret InvalidTree }
+    if s.elements[editor].read_only { ret InvalidTree }
+    ret edit_paste(s, editor)
+}
+
+fn clipboard_set(widget_runtime: *Runtime, value: str) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    var n = value.len
+    if n > MAX_CLIP { n = MAX_CLIP }
+    var k = 0usize
+    while k < n {
+        s.clip[k] = value[k]
+        k += 1usize
+    }
+    s.clip_len = n
+    s.clip_hosted = os.set_clipboard_text(value) == ok
+    ret ok
+}
+
+fn clipboard_get(widget_runtime: *Runtime, a: *mem.Arena) -> (str, err) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret ("", state_error) }
+    if s.clip_hosted || s.clip_len == 0usize {
+        let (host_text, host_error) = os.clipboard_text(a)
+        if host_error == ok { ret (host_text, ok) }
+    }
+    let (copy, copy_error) = mem.alloc[u8](a, s.clip_len)
+    if copy_error != ok { ret ("", copy_error) }
+    var k = 0usize
+    while k < s.clip_len {
+        copy[k] = s.clip[k]
+        k += 1usize
+    }
+    ret (copy[0usize..s.clip_len], ok)
 }
 
 // An editor's value and selection, for a harness.

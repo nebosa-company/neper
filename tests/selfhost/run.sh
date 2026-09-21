@@ -1873,6 +1873,13 @@ ui_pickers_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-pickers-selfhost"
 ui_pickers_output=$("$test_build/ui-pickers-selfhost")
 [ "$ui_pickers_output" = 'ui pickers ok' ]
+# Content manipulation (D844, widget plan P2-11): the zoom view, in-application
+# drag and drop, the clipboard commands.
+ui_manipulation_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_manipulation/src/main.e" "$repo" x64 linux "$test_build/ui-manipulation-selfhost")
+[ "$ui_manipulation_written" = 'executable written' ]
+chmod +x "$test_build/ui-manipulation-selfhost"
+ui_manipulation_output=$("$test_build/ui-manipulation-selfhost")
+[ "$ui_manipulation_output" = 'ui manipulation ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

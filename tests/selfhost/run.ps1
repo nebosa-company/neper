@@ -1942,6 +1942,13 @@ $uiPickersWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiPickersWritten -ne 'executable written') { throw 'ui_pickers emission failed' }
 $uiPickersOutput = & $uiPickersPath
 if ($LASTEXITCODE -ne 0 -or $uiPickersOutput -ne 'ui pickers ok') { throw "the pickers answered wrongly: exit $LASTEXITCODE" }
+# Content manipulation (D844, widget plan P2-11): the zoom view, in-application
+# drag and drop, the clipboard commands.
+$uiManipulationPath = Join-Path $testBuild 'ui-manipulation-selfhost.exe'
+$uiManipulationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_manipulation\src\main.e') $repo 'x64' 'windows' $uiManipulationPath
+if ($LASTEXITCODE -ne 0 -or $uiManipulationWritten -ne 'executable written') { throw 'ui_manipulation emission failed' }
+$uiManipulationOutput = & $uiManipulationPath
+if ($LASTEXITCODE -ne 0 -or $uiManipulationOutput -ne 'ui manipulation ok') { throw "the content manipulation answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

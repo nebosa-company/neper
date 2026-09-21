@@ -37,6 +37,8 @@ fn on_gesture(ctx: *void, g: widget.Gesture) -> err {
         log.hovers += 1usize
     case .HoverEnd:
         log.hover_ends += 1usize
+    case .Drop as d:
+        log.taps += 0usize
     }
     ret ok
 }
