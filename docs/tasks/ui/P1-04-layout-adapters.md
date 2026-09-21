@@ -4,7 +4,7 @@
 |---|---|
 | phase | P1 — Useful desktop and mobile core |
 | module | `e.ui.widget` |
-| module surface | `planned`, layer 6, deps `e.data.slot_map`, `e.mem`, `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.text.layout`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.window` |
+| module surface | `partial`, layer 6, deps `e.data.slot_map`, `e.mem`, `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.text.layout`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.window` |
 | blocked by | `P0` |
 | delivered | 0 of 8 |
 

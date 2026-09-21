@@ -1,9 +1,9 @@
-# e.ui.widget — 35 of 35 declarations missing
+# e.ui.widget — 36 of 36 declarations missing
 
 | field | value |
 |---|---|
 | file to create | `lib/e/ui/widget.e` |
-| plan row | layer 6, surface `planned`, milestone none, schedule `later` |
+| plan row | layer 6, surface `partial`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
 | unmet dependencies | none — every dependency has source |
 
@@ -71,6 +71,7 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
 fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err
 fn close(widget_runtime: *Runtime) -> err
+fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool)
 ```
 
 `Node` is the declarative syntax: ordinary literals and the allocation-free convenience
@@ -82,6 +83,11 @@ are never retained. Removed state is destroyed logically at the reconciliation
 boundary and its size/alignment cell enters a bounded runtime free list. A reused
 `Action.ctx` must outlive the element that retains it; passing frame-arena context is
 `InvalidTree` in debug validation and undefined in release.
+
+Delivered (D799) over the CPU renderer: `reconcile` rebuilds, lays out and paints the
+whole tree each frame and compiles it into the renderer, releasing the previous
+frame's scene; `bounds_of` answers an element's last laid-out bounds for a harness or
+an accessibility tree.
 
 ## Missing declarations
 
@@ -120,11 +126,13 @@ boundary and its size/alignment cell enters a bounded runtime free list. A reuse
 - [ ] `dispatch`
 - [ ] `focus`
 - [ ] `close`
+- [ ] `bounds_of`
 
 ## Style references
 
 Delivered modules beside this one — copy their idioms (arena parameter first, `(value, err)` returns, no hidden allocation, `error` names as declared):
 
+- `lib/e/ui/asset.e`
 - `lib/e/ui/input.e`
 - `lib/e/ui/layout.e`
 - `lib/e/ui/style.e`
@@ -135,7 +143,7 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/ui/widget.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/ui_widget/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 35.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 36.
 
 ## Session procedure
 

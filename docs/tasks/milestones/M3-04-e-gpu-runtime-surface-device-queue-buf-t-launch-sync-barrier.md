@@ -35,7 +35,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 - `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2†, `src/resolve.e`×2†, `lib/e/gpu.e`×1, `lib/e/gpu/tensor.e`×1, `lib/e/ui/window.e`×1, `scripts/check_module_plan.py`×1
 - `Device`: `lib/e/gpu.e`×35, `lib/e/gfx/scene.e`×2†, `lib/e/os.windows.e`×2‡, `lib/e/ui/input.e`×2, `lib/e/ui/window.e`×1
 - `Queue`: `lib/e/gpu.e`×35, `lib/e/concurrent/queue.e`×13, `lib/e/data/queue.e`×11, `lib/e/ui/input.e`×9, `lib/e/gpu/tensor.e`×5, `src/check.e`×3‡, `lib/e/gfx/scene.e`×2†, `lib/e/ui/window.e`×1
-- `upload`: `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2, `lib/e/gfx/image.e`×1, `lib/e/gfx/scene.e`×1†
+- `upload`: `lib/e/ui/asset.e`×8, `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2, `lib/e/gfx/image.e`×1, `lib/e/gfx/scene.e`×1†
 - `download`: `lib/e/gpu.e`×4, `lib/e/gpu/tensor.e`×3
 - `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1, `src/lower.e`×1‡
 - `module-apis.md`: `scripts/check_module_surfaces.py`×5, `scripts/render_module_apis.py`×3, `scripts/render_progress.py`×2, `scripts/audit_repo_coverage.py`×1, `scripts/build-docs-pdf.py`×1, `scripts/check_gpu_contracts.py`×1, `src/check.e`×1‡

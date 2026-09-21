@@ -1596,6 +1596,13 @@ ui_asset_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/ui-asset-selfhost"
 ui_asset_output=$("$test_build/ui-asset-selfhost")
 [ "$ui_asset_output" = 'ui asset ok' ]
+# `e.ui.widget` (D799): a tree reconciled, laid out, painted and read back; state by
+# key across frames and a keyed reorder; a press dispatched; retirement; refusals.
+ui_widget_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_widget/src/main.e" "$repo" x64 linux "$test_build/ui-widget-selfhost")
+[ "$ui_widget_written" = 'executable written' ]
+chmod +x "$test_build/ui-widget-selfhost"
+ui_widget_output=$("$test_build/ui-widget-selfhost")
+[ "$ui_widget_output" = 'ui widget ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

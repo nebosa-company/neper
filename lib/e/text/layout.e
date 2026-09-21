@@ -571,10 +571,14 @@ fn layout(a: *mem.Arena, source: str, style: Style, options: Options) -> (Layout
         if shape.validate_font(style.fonts[f].font) != ok || style.fonts[f].size <= 0.0 { ret (zero, Invalid) }
         f += 1usize
     }
-    // Paragraphs at newlines; items per paragraph; then cuts.
-    let (items, items_error) = mem.alloc[Item](a, MAX_ITEMS)
+    // Paragraphs at newlines; items per paragraph; then cuts. An item and a cut
+    // each begin at a byte of the source, so a short text needs few of either
+    // (D799): the tables are sized by the source, up to the ceiling.
+    var table = source.len + 2usize
+    if table > MAX_ITEMS { table = MAX_ITEMS }
+    let (items, items_error) = mem.alloc[Item](a, table)
     if items_error != ok { ret (zero, items_error) }
-    let (cuts, cuts_error) = mem.alloc[Cut](a, MAX_ITEMS)
+    let (cuts, cuts_error) = mem.alloc[Cut](a, table)
     if cuts_error != ok { ret (zero, cuts_error) }
     var item_count = 0usize
     var cut_count = 0usize

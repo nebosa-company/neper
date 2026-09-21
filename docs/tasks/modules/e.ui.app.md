@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/app.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | `native-accessibility-api` |
-| unmet dependencies | `e.ui.accessibility`, `e.ui.animation`, `e.ui.widget` |
+| unmet dependencies | `e.ui.accessibility`, `e.ui.animation` |
 
 ## Definition of done
 
@@ -29,7 +29,7 @@ Blockers named in the plan must be resolved first; a blocked module is not eligi
 | `e.ui.accessibility` | planned | missing | 6 |
 | `e.ui.animation` | planned | missing | 6 |
 | `e.ui.input` | partial | `lib/e/ui/input.e` | 6 |
-| `e.ui.widget` | planned | missing | 6 |
+| `e.ui.widget` | partial | `lib/e/ui/widget.e` | 6 |
 | `e.ui.window` | partial | `lib/e/ui/window.e` | 6 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].
@@ -81,6 +81,7 @@ call. Streaming readers retain only their documented scratch state. Every writer
 
 Delivered modules beside this one — copy their idioms (arena parameter first, `(value, err)` returns, no hidden allocation, `error` names as declared):
 
+- `lib/e/ui/asset.e`
 - `lib/e/ui/input.e`
 - `lib/e/ui/layout.e`
 - `lib/e/ui/style.e`

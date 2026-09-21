@@ -1660,6 +1660,13 @@ $uiAssetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $uiAssetWritten -ne 'executable written') { throw 'ui_asset emission failed' }
 $uiAssetOutput = & $uiAssetPath
 if ($LASTEXITCODE -ne 0 -or $uiAssetOutput -ne 'ui asset ok') { throw "ui asset selection answered wrongly: exit $LASTEXITCODE" }
+# `e.ui.widget` (D799): a tree reconciled, laid out, painted and read back; state by
+# key across frames and a keyed reorder; a press dispatched; retirement; refusals.
+$uiWidgetPath = Join-Path $testBuild 'ui-widget-selfhost.exe'
+$uiWidgetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_widget\src\main.e') $repo 'x64' 'windows' $uiWidgetPath
+if ($LASTEXITCODE -ne 0 -or $uiWidgetWritten -ne 'executable written') { throw 'ui_widget emission failed' }
+$uiWidgetOutput = & $uiWidgetPath
+if ($LASTEXITCODE -ne 0 -or $uiWidgetOutput -ne 'ui widget ok') { throw "the widget runtime answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

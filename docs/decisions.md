@@ -15253,3 +15253,42 @@ a bare `union` pun, since `==` has no meaning for a function value and
 a base through the renderer, `clear` all, `close` both. `link/ui_asset`
 is a fixture project with one image in four variants and one font, checked
 on both hosts.
+
+## D799 — `e.ui.widget`: elements, state, layout, paint and dispatch
+
+The declarative tree becomes pixels: `reconcile` matches the frame's `Node`
+tree against the retained elements -- siblings by nonzero key and kind,
+else by position and kind, the old children gathered before the links are
+re-threaded so the unmatched ones can still be retired with their states
+-- lays it out under the constraints, paints a display list and compiles
+it into the renderer's scene, releasing the previous frame's. Layout is the
+proposal's: a node's own size from its style (`Px`, `Percent` of the
+parent's bound, `Auto` from content, `Flex` as a share), padding and
+margin, a `Flex` or `Grid` placing its children through `e.ui.layout`, a
+`Stack` overlaying them, a `Box` and a `Button` as vertical flexes, a
+`Scroll` giving its child an unbounded main axis and clipping at its
+offset, a `Text` measured by `e.text.layout` and painted as a `DrawText`,
+an `Image` as a `DrawImage`, a `Custom` through its two callbacks. Typed
+state is `state[T](ctx, key, initial)`: a cell of the type's size and
+alignment from the runtime's storage, found again by key on the element,
+`StateType` for another type at the same key, retired with the element
+and reused by a state of the same class. `dispatch` hit-tests the last
+laid-out bounds front to back for the deepest element with an action and
+invokes it -- the one action at the target the fence describes -- routes
+keys and text to the focused element, and scrolls the deepest `Scroll`
+under the pointer by the notch count `e.ui.input` carries. The fixture
+`link/ui_widget` draws a column of a red box, a button with a two-glyph
+label in the square font and a green box, checks the pixels, keeps a
+counter on the button by key across a keyed reorder, dispatches a press,
+finds the button and its state gone when the tree drops it, and refuses a
+duplicate key and a tree past the depth limit, on both hosts.
+
+Two things moved beneath it. `e.text.layout` allocated its item and cut
+tables at the 65,536 ceiling on every call -- eight megabytes for two
+letters -- and a widget tree lays text out several times a frame from a
+frame arena; the tables are now sized by the source, up to the ceiling,
+and the layout fixture is unchanged. And a `Kind`'s tag is read by a
+`switch` rather than `u8(kind.tag)`, which the checker does not take.
+Not here: subtree reuse across frames (the whole tree is rebuilt each
+`reconcile`), `Fit` for images (the destination is the box), capture and
+bubble as separate phases, and a layout-aware focus order.
