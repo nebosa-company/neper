@@ -54,10 +54,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, limit_error) = os.monitors(a, 0usize)
     if limit_error != os.Unsupported { os.exit(15i32) }
     // The clipboard is the desktop's: a session without an interactive station --
-    // a service, a sandboxed runner -- refuses `OpenClipboard` with `Denied`, and
-    // that is the answer here, not a wrong one.
+    // a service, a sandboxed runner -- refuses `OpenClipboard` with `Denied`, and a
+    // host whose selection protocol is not spoken yet answers `Unsupported`; both
+    // are the answer here, not a wrong one.
     let (_, clipboard_error) = os.clipboard_text(a)
-    if clipboard_error != ok && clipboard_error != os.Denied { os.exit(16i32) }
+    if clipboard_error != ok && clipboard_error != os.Denied && clipboard_error != os.Unsupported { os.exit(16i32) }
     // Closed: stale afterwards, and its events gone.
     if os.window_close(w) != ok { os.exit(17i32) }
     if os.window_close(w) != os.NotFound { os.exit(18i32) }

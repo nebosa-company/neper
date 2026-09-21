@@ -2810,12 +2810,22 @@ fn rename(a: *mem.Arena, src: str, dst: str) -> err {
     ret from_errno(result)
 }
 
-// ------------------------------------------------------------------ windows (D795)
+// ------------------------------------------------------------------ windows (D803)
 //
-// The native window primitives, declared here as the fence declares them and
-// answering `Unsupported`: the X11 connection over the display socket is the next
-// increment, and until it lands a Linux program learns at `window_open` that there
-// is no window to be had, not at the first event.
+// The native window primitives over the X11 protocol spoken directly on the display's
+// Unix socket -- no Xlib, no xcb, as `e.os` reaches every host through raw syscalls:
+// the setup handshake with the cookie from `~/.Xauthority`, one top-level window per
+// `window_open` with the WM_DELETE_WINDOW protocol so a close is reported and not
+// done, events read in their 32-byte units into the same ring the Windows variant
+// fills, a frame shown by `PutImage` in row bands under the request-size ceiling,
+// the pointer grabbed and released, the root screen as the one monitor. The
+// keyboard mapping is fetched once; a key event carries the keysym of its keycode
+// as `key`, and a Latin-1 keysym under the shift state is the text.
+//
+// Not here: the cursor shape (accepted, not shown -- a glyph cursor needs the cursor
+// font), the clipboard (a selection protocol of its own; `Unsupported`), DPI (100),
+// and a second screen. Wayland is not spoken: a display without an X socket is
+// `Unsupported` at `window_open`.
 
 type Window = struct { raw: usize }
 type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool }
@@ -2825,52 +2835,832 @@ type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i3
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
 type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
 
+const WINDOW_RING: usize = 256usize
+const WINDOW_TABLE: usize = 16usize
+const X_UNIT: usize = 32usize
+
+var window_events: [256]WindowEvent = zero
+var window_event_head: usize = 0usize
+var window_event_count: usize = 0usize
+var window_ids: [16]u32 = zero
+var window_gcs: [16]u32 = zero
+var window_widths: [16]u32 = zero
+var window_heights: [16]u32 = zero
+var window_mapped: [16]bool = zero
+var window_focused: [16]bool = zero
+var x_connected: bool = zero
+var x_failed: bool = zero
+var x_socket: usize = 0usize
+var x_sequence: u32 = 0u32
+var x_resource_base: u32 = 0u32
+var x_resource_mask: u32 = 0u32
+var x_next_resource: u32 = 0u32
+var x_root: u32 = 0u32
+var x_root_depth: u8 = 0u8
+var x_screen_width: u32 = 0u32
+var x_screen_height: u32 = 0u32
+var x_atom_protocols: u32 = 0u32
+var x_atom_delete: u32 = 0u32
+var x_min_keycode: u32 = 0u32
+var x_keysyms_per: u32 = 0u32
+var x_keysyms: [2048]u32 = zero
+var x_keysym_count: usize = 0usize
+var x_incoming: [4096]u8 = zero
+var x_incoming_len: usize = 0usize
+var x_reply: [64]u8 = zero
+var x_reply_extra: [8192]u8 = zero
+var x_reply_extra_len: usize = 0usize
+var x_pending_reply: bool = zero
+
+fn x_put16(d: []u8, at: usize, v: u32) {
+    d[at] = u8(v & 255u32)
+    d[at + 1usize] = u8((v >> 8u32) & 255u32)
+}
+
+fn x_put32(d: []u8, at: usize, v: u32) {
+    x_put16(d, at, v & 65535u32)
+    x_put16(d, at + 2usize, v >> 16u32)
+}
+
+fn x_get16(d: []const u8, at: usize) -> u32 {
+    ret u32(d[at]) | (u32(d[at + 1usize]) << 8u32)
+}
+
+fn x_get32(d: []const u8, at: usize) -> u32 {
+    ret x_get16(d, at) | (x_get16(d, at + 2usize) << 16u32)
+}
+
+fn x_pad4(n: usize) -> usize {
+    ret (n + 3usize) / 4usize * 4usize
+}
+
+// Every byte of `bytes` onto the socket, in as many writes as it takes.
+fn x_send(bytes: []const u8) -> err {
+    var sent = 0usize
+    while sent < bytes.len {
+        let written = syscall(SYS_WRITE, x_socket, mem.address_of(&bytes[sent]), bytes.len - sent, 0usize, 0usize, 0usize)
+        if written < 0isize {
+            x_failed = true
+            ret from_errno(written)
+        }
+        sent += usize(written)
+    }
+    x_sequence += 1u32
+    x_pending_reply = false
+    ret ok
+}
+
+// Exactly `count` bytes into `into`, blocking.
+fn x_receive_exact(into: []u8, count: usize) -> err {
+    var filled = 0usize
+    while filled < count {
+        let taken = syscall(SYS_READ, x_socket, mem.address_of(&into[filled]), count - filled, 0usize, 0usize, 0usize)
+        if taken < 0isize {
+            x_failed = true
+            ret from_errno(taken)
+        }
+        if taken == 0isize {
+            x_failed = true
+            ret Failed
+        }
+        filled += usize(taken)
+    }
+    ret ok
+}
+
+fn window_slot(id: u32) -> usize {
+    var at = 0usize
+    while at < WINDOW_TABLE {
+        if window_ids[at] == id && id != 0u32 { ret at }
+        at += 1usize
+    }
+    ret WINDOW_TABLE
+}
+
+fn window_push(event: WindowEvent) {
+    if window_event_count >= WINDOW_RING { ret }
+    window_events[(window_event_head + window_event_count) % WINDOW_RING] = event
+    window_event_count += 1usize
+}
+
+fn x_modifiers(state: u32) -> u8 {
+    var bits = 0u8
+    if state & 1u32 != 0u32 { bits = bits | 1u8 }
+    if state & 4u32 != 0u32 { bits = bits | 2u8 }
+    if state & 8u32 != 0u32 { bits = bits | 4u8 }
+    if state & 64u32 != 0u32 { bits = bits | 8u8 }
+    if state & 2u32 != 0u32 { bits = bits | 16u8 }
+    if state & 16u32 != 0u32 { bits = bits | 32u8 }
+    ret bits
+}
+
+fn x_keysym(keycode: u32, column: u32) -> u32 {
+    if x_keysyms_per == 0u32 || keycode < x_min_keycode { ret 0u32 }
+    let index = usize((keycode - x_min_keycode) * x_keysyms_per + column)
+    if index >= x_keysym_count { ret 0u32 }
+    ret x_keysyms[index]
+}
+
+// One 32-byte unit from the server that is an event: into the ring.
+fn x_event(unit: []const u8) {
+    let kind = u32(unit[0usize]) & 127u32
+    let sequence_window = x_get32(unit, 4usize)
+    var event: WindowEvent = zero
+    if kind == 12u32 {
+        let slot = window_slot(sequence_window)
+        if slot >= WINDOW_TABLE { ret }
+        event.kind = .Paint
+        event.window = Window { raw: usize(sequence_window) }
+        window_push(event)
+        ret
+    }
+    if kind == 22u32 {
+        let id = x_get32(unit, 4usize)
+        let slot = window_slot(id)
+        if slot >= WINDOW_TABLE { ret }
+        let width = x_get16(unit, 20usize)
+        let height = x_get16(unit, 22usize)
+        if width == window_widths[slot] && height == window_heights[slot] { ret }
+        window_widths[slot] = width
+        window_heights[slot] = height
+        event.kind = .Resize
+        event.window = Window { raw: usize(id) }
+        event.width = width
+        event.height = height
+        window_push(event)
+        ret
+    }
+    if kind == 9u32 || kind == 10u32 {
+        let id = x_get32(unit, 4usize)
+        let slot = window_slot(id)
+        if slot >= WINDOW_TABLE { ret }
+        window_focused[slot] = kind == 9u32
+        event.kind = .Focus
+        if kind == 10u32 { event.kind = .Blur }
+        event.window = Window { raw: usize(id) }
+        window_push(event)
+        ret
+    }
+    if kind == 4u32 || kind == 5u32 || kind == 6u32 {
+        let id = x_get32(unit, 12usize)
+        if window_slot(id) >= WINDOW_TABLE { ret }
+        event.window = Window { raw: usize(id) }
+        event.x = i32(mem.bitcast[i16](u16(x_get16(unit, 24usize))))
+        event.y = i32(mem.bitcast[i16](u16(x_get16(unit, 26usize))))
+        event.modifiers = x_modifiers(x_get16(unit, 28usize))
+        let detail = u32(unit[1usize])
+        if kind == 6u32 {
+            event.kind = .PointerMove
+            window_push(event)
+            ret
+        }
+        // Buttons 4 and 5 are the wheel; 1, 2, 3 are primary, middle, secondary; 8
+        // and 9 back and forward.
+        if detail == 4u32 || detail == 5u32 {
+            if kind != 4u32 { ret }
+            event.kind = .Scroll
+            event.delta = 120i32
+            if detail == 5u32 { event.delta = -120i32 }
+            window_push(event)
+            ret
+        }
+        event.kind = .PointerDown
+        if kind == 5u32 { event.kind = .PointerUp }
+        event.button = 0u8
+        if detail == 3u32 { event.button = 1u8 }
+        if detail == 2u32 { event.button = 2u8 }
+        if detail == 8u32 { event.button = 3u8 }
+        if detail == 9u32 { event.button = 4u8 }
+        window_push(event)
+        ret
+    }
+    if kind == 2u32 || kind == 3u32 {
+        let id = x_get32(unit, 12usize)
+        if window_slot(id) >= WINDOW_TABLE { ret }
+        let keycode = u32(unit[1usize])
+        let state = x_get16(unit, 28usize)
+        event.window = Window { raw: usize(id) }
+        event.modifiers = x_modifiers(state)
+        event.key = x_keysym(keycode, 0u32)
+        event.kind = .KeyDown
+        if kind == 3u32 { event.kind = .KeyUp }
+        window_push(event)
+        if kind == 2u32 {
+            var column = 0u32
+            if state & 1u32 != 0u32 || state & 2u32 != 0u32 { column = 1u32 }
+            var sym = x_keysym(keycode, column)
+            if sym == 0u32 { sym = event.key }
+            if sym >= 32u32 && sym < 256u32 {
+                var text: WindowEvent = zero
+                text.kind = .Text
+                text.window = event.window
+                text.modifiers = event.modifiers
+                text.codepoint = sym
+                window_push(text)
+            }
+        }
+        ret
+    }
+    if kind == 33u32 {
+        let id = x_get32(unit, 4usize)
+        if window_slot(id) >= WINDOW_TABLE { ret }
+        if x_get32(unit, 8usize) == x_atom_protocols && x_get32(unit, 12usize) == x_atom_delete {
+            event.kind = .Close
+            event.window = Window { raw: usize(id) }
+            window_push(event)
+        }
+        ret
+    }
+}
+
+// Whatever the socket holds, parsed: events into the ring, a reply kept aside for
+// the request waiting on it, an error unit dropped.
+fn x_drain(wait_ms: u32) -> err {
+    var descriptor: [2]u32 = zero
+    descriptor[0usize] = u32(x_socket)
+    descriptor[1usize] = 1u32
+    let ready = syscall(SYS_POLL, mem.address_of(&descriptor[0usize]), 1usize, usize(wait_ms), 0usize, 0usize, 0usize)
+    if ready < 0isize { ret from_errno(ready) }
+    if ready == 0isize { ret ok }
+    let taken = syscall(SYS_READ, x_socket, mem.address_of(&x_incoming[x_incoming_len]), x_incoming.len - x_incoming_len, 0usize, 0usize, 0usize)
+    if taken < 0isize {
+        x_failed = true
+        ret from_errno(taken)
+    }
+    if taken == 0isize {
+        x_failed = true
+        ret Failed
+    }
+    x_incoming_len += usize(taken)
+    ret x_parse_incoming()
+}
+
+fn x_parse_incoming() -> err {
+    var at = 0usize
+    while at + X_UNIT <= x_incoming_len {
+        let kind = u32(x_incoming[at]) & 127u32
+        if kind == 1u32 {
+            // A reply: its extra length in units follows; the whole reply must be here.
+            let extra = usize(x_get32(x_incoming[at..at + X_UNIT], 4usize)) * 4usize
+            if at + X_UNIT + extra > x_incoming_len {
+                // A reply that does not fit the buffer is read straight off the
+                // socket, keeping what the reply buffer holds.
+                if at + X_UNIT + extra > x_incoming.len { ret x_skip_reply(at, extra) }
+                break
+            }
+            var i = 0usize
+            while i < X_UNIT {
+                x_reply[i] = x_incoming[at + i]
+                i += 1usize
+            }
+            var extra_kept = extra
+            if extra_kept > x_reply_extra.len { extra_kept = x_reply_extra.len }
+            i = 0usize
+            while i < extra_kept {
+                x_reply_extra[i] = x_incoming[at + X_UNIT + i]
+                i += 1usize
+            }
+            x_reply_extra_len = extra_kept
+            x_pending_reply = true
+            at += X_UNIT + extra
+        } else {
+            if kind != 0u32 { x_event(x_incoming[at..at + X_UNIT]) }
+            at += X_UNIT
+        }
+    }
+    // The unconsumed tail moves to the front.
+    var rest = 0usize
+    while at + rest < x_incoming_len {
+        x_incoming[rest] = x_incoming[at + rest]
+        rest += 1usize
+    }
+    x_incoming_len = rest
+    ret ok
+}
+
+// A reply larger than the extra buffer: read past it on the socket, keeping only
+// what fits, so the stream stays aligned.
+fn x_skip_reply(at: usize, extra: usize) -> err {
+    var i = 0usize
+    while i < X_UNIT {
+        x_reply[i] = x_incoming[at + i]
+        i += 1usize
+    }
+    var have = x_incoming_len - at - X_UNIT
+    var kept = 0usize
+    while kept < have && kept < x_reply_extra.len {
+        x_reply_extra[kept] = x_incoming[at + X_UNIT + kept]
+        kept += 1usize
+    }
+    x_incoming_len = 0usize
+    var remaining = extra - have
+    var scratch: [4096]u8 = zero
+    while remaining > 0usize {
+        var chunk = remaining
+        if chunk > scratch.len { chunk = scratch.len }
+        try x_receive_exact(scratch[..], chunk)
+        var c = 0usize
+        while c < chunk && kept < x_reply_extra.len {
+            x_reply_extra[kept] = scratch[c]
+            kept += 1usize
+            c += 1usize
+        }
+        remaining = remaining - chunk
+    }
+    x_reply_extra_len = kept
+    x_pending_reply = true
+    ret ok
+}
+
+// Blocks until the reply to the request just sent is in `x_reply`.
+fn x_await_reply() -> err {
+    x_pending_reply = false
+    var rounds = 0usize
+    while !x_pending_reply {
+        if rounds > 4000usize { ret Timeout }
+        try x_drain(5000u32)
+        rounds += 1usize
+    }
+    ret ok
+}
+
+fn x_resource() -> u32 {
+    let id = x_resource_base | (x_next_resource & x_resource_mask)
+    x_next_resource += 1u32
+    ret id
+}
+
+// The cookie: the MIT-MAGIC-COOKIE-1 entry of `~/.Xauthority`, any address.
+fn x_cookie(a: *mem.Arena, cookie: []u8) -> (usize, err) {
+    let checkpoint = mem.mark(a)
+    let (home, home_error) = env(a, "HOME")
+    if home_error != ok {
+        mem.reset(a, checkpoint)
+        ret (0usize, ok)
+    }
+    let (path, path_error) = mem.alloc[u8](a, home.len + 13usize)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (0usize, OutOfMemory)
+    }
+    mem.copy[u8](path[0usize..home.len], home)
+    let suffix = "/.Xauthority"
+    mem.copy[u8](path[home.len..home.len + 12usize], suffix)
+    path[home.len + 12usize] = 0u8
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, mem.address_of(&path[0usize]), OPEN_READ_ONLY, 0usize, 0usize, 0usize)
+    if descriptor < 0isize {
+        mem.reset(a, checkpoint)
+        ret (0usize, ok)
+    }
+    var file: [4096]u8 = zero
+    var filled = 0usize
+    while filled < file.len {
+        let taken = syscall(SYS_READ, usize(descriptor), mem.address_of(&file[filled]), file.len - filled, 0usize, 0usize, 0usize)
+        if taken <= 0isize { break }
+        filled += usize(taken)
+    }
+    let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    // Entries: family u16, then four big-endian length-prefixed fields.
+    var at = 0usize
+    while at + 2usize <= filled {
+        at += 2usize
+        var field = 0usize
+        var name_at = 0usize
+        var name_len = 0usize
+        var data_at = 0usize
+        var data_len = 0usize
+        var broken = false
+        while field < 4usize {
+            if at + 2usize > filled {
+                broken = true
+                break
+            }
+            let len = (usize(file[at]) << 8usize) | usize(file[at + 1usize])
+            at += 2usize
+            if at + len > filled {
+                broken = true
+                break
+            }
+            if field == 2usize {
+                name_at = at
+                name_len = len
+            }
+            if field == 3usize {
+                data_at = at
+                data_len = len
+            }
+            at += len
+            field += 1usize
+        }
+        if broken { break }
+        let wanted = "MIT-MAGIC-COOKIE-1"
+        if name_len == wanted.len && data_len <= cookie.len {
+            var same_name = true
+            var i = 0usize
+            while i < name_len {
+                if file[name_at + i] != wanted[i] { same_name = false }
+                i += 1usize
+            }
+            if same_name {
+                i = 0usize
+                while i < data_len {
+                    cookie[i] = file[data_at + i]
+                    i += 1usize
+                }
+                ret (data_len, ok)
+            }
+        }
+    }
+    ret (0usize, ok)
+}
+
+// The display number of `$DISPLAY` (`:0`, `:0.0`, `host:1`), 0 when unset.
+fn x_display_number(a: *mem.Arena) -> usize {
+    let checkpoint = mem.mark(a)
+    let (display, display_error) = env(a, "DISPLAY")
+    var number = 0usize
+    if display_error == ok {
+        var at = 0usize
+        while at < display.len && display[at] != 58u8 { at += 1usize }
+        at += 1usize
+        while at < display.len && display[at] >= 48u8 && display[at] <= 57u8 {
+            number = number * 10usize + usize(display[at] - 48u8)
+            at += 1usize
+        }
+    }
+    mem.reset(a, checkpoint)
+    ret number
+}
+
+// The connection: the socket, the handshake, the atoms and the keyboard mapping.
+fn x_connect(a: *mem.Arena) -> err {
+    if x_connected { ret ok }
+    if x_failed { ret Unsupported }
+    let descriptor = syscall(SYS_SOCKET, 1usize, SOCK_STREAM | SOCK_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret Unsupported }
+    // sockaddr_un: family 1, then the path.
+    var address: [110]u8 = zero
+    address[0usize] = 1u8
+    let prefix = "/tmp/.X11-unix/X"
+    mem.copy[u8](address[2usize..2usize + prefix.len], prefix)
+    var number = x_display_number(a)
+    var digits: [8]u8 = zero
+    var digit_count = 0usize
+    if number == 0usize {
+        digits[0] = 48u8
+        digit_count = 1usize
+    }
+    while number > 0usize && digit_count < 8usize {
+        digits[digit_count] = u8(48usize + number % 10usize)
+        number = number / 10usize
+        digit_count += 1usize
+    }
+    var d = 0usize
+    while d < digit_count {
+        address[2usize + prefix.len + d] = digits[digit_count - 1usize - d]
+        d += 1usize
+    }
+    let connected = syscall(SYS_CONNECT, usize(descriptor), mem.address_of(&address[0usize]), 2usize + prefix.len + digit_count + 1usize, 0usize, 0usize, 0usize)
+    if connected < 0isize {
+        let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        x_failed = true
+        ret Unsupported
+    }
+    x_socket = usize(descriptor)
+    // The setup request with the cookie.
+    var cookie: [64]u8 = zero
+    let (cookie_len, cookie_error) = x_cookie(a, cookie[..])
+    if cookie_error != ok { ret cookie_error }
+    var setup: [64]u8 = zero
+    setup[0usize] = 108u8
+    x_put16(setup[..], 2usize, 11u32)
+    x_put16(setup[..], 4usize, 0u32)
+    var name_len = 0usize
+    let name = "MIT-MAGIC-COOKIE-1"
+    if cookie_len != 0usize { name_len = name.len }
+    x_put16(setup[..], 6usize, u32(name_len))
+    x_put16(setup[..], 8usize, u32(cookie_len))
+    var at = 12usize
+    if name_len != 0usize {
+        mem.copy[u8](setup[at..at + name_len], name)
+        at += x_pad4(name_len)
+        mem.copy[u8](setup[at..at + cookie_len], cookie[0usize..cookie_len])
+        at += x_pad4(cookie_len)
+    }
+    try x_send(setup[0usize..at])
+    x_sequence = 0u32
+    var head: [8]u8 = zero
+    try x_receive_exact(head[..], 8usize)
+    let extra = usize(x_get16(head[..], 6usize)) * 4usize
+    var reply: [8192]u8 = zero
+    if head[0usize] != 1u8 || extra > reply.len {
+        x_failed = true
+        ret Unsupported
+    }
+    try x_receive_exact(reply[..], extra)
+    x_resource_base = x_get32(reply[..], 4usize)
+    x_resource_mask = x_get32(reply[..], 8usize)
+    let vendor_len = usize(x_get16(reply[..], 16usize))
+    let format_count = usize(reply[21usize])
+    x_min_keycode = u32(reply[26usize])
+    let max_keycode = u32(reply[27usize])
+    var screen_at = 32usize + x_pad4(vendor_len) + 8usize * format_count
+    if screen_at + 40usize > extra {
+        x_failed = true
+        ret Unsupported
+    }
+    x_root = x_get32(reply[..], screen_at)
+    x_screen_width = x_get16(reply[..], screen_at + 20usize)
+    x_screen_height = x_get16(reply[..], screen_at + 22usize)
+    x_root_depth = reply[screen_at + 38usize]
+    x_next_resource = 1u32
+    x_connected = true
+    // The two atoms and the keyboard mapping.
+    let (protocols, protocols_error) = x_intern_atom("WM_PROTOCOLS")
+    if protocols_error != ok { ret protocols_error }
+    x_atom_protocols = protocols
+    let (delete, delete_error) = x_intern_atom("WM_DELETE_WINDOW")
+    if delete_error != ok { ret delete_error }
+    x_atom_delete = delete
+    ret x_keyboard_mapping(x_min_keycode, max_keycode)
+}
+
+fn x_intern_atom(name: str) -> (u32, err) {
+    var request: [64]u8 = zero
+    let units = 2usize + x_pad4(name.len) / 4usize
+    request[0usize] = 16u8
+    request[1usize] = 0u8
+    x_put16(request[..], 2usize, u32(units))
+    x_put16(request[..], 4usize, u32(name.len))
+    mem.copy[u8](request[8usize..8usize + name.len], name)
+    let send_error = x_send(request[0usize..units * 4usize])
+    if send_error != ok { ret (0u32, send_error) }
+    let reply_error = x_await_reply()
+    if reply_error != ok { ret (0u32, reply_error) }
+    ret (x_get32(x_reply[..], 8usize), ok)
+}
+
+fn x_keyboard_mapping(first: u32, last: u32) -> err {
+    if last < first { ret ok }
+    var request: [8]u8 = zero
+    request[0usize] = 101u8
+    x_put16(request[..], 2usize, 2u32)
+    request[4usize] = u8(first)
+    request[5usize] = u8(last - first + 1u32)
+    try x_send(request[..])
+    try x_await_reply()
+    x_keysyms_per = u32(x_reply[1usize])
+    var count = x_reply_extra_len / 4usize
+    if count > x_keysyms.len { count = x_keysyms.len }
+    var i = 0usize
+    while i < count {
+        x_keysyms[i] = x_get32(x_reply_extra[..], i * 4usize)
+        i += 1usize
+    }
+    x_keysym_count = count
+    ret ok
+}
+
+fn x_change_property(window: u32, property: u32, kind: u32, format: u32, data: []const u8, count: usize) -> err {
+    var request: [1024]u8 = zero
+    if 24usize + data.len > request.len { ret Unsupported }
+    let units = 6usize + x_pad4(data.len) / 4usize
+    request[0usize] = 18u8
+    request[1usize] = 0u8
+    x_put16(request[..], 2usize, u32(units))
+    x_put32(request[..], 4usize, window)
+    x_put32(request[..], 8usize, property)
+    x_put32(request[..], 12usize, kind)
+    request[16usize] = u8(format)
+    x_put32(request[..], 20usize, u32(count))
+    mem.copy[u8](request[24usize..24usize + data.len], data)
+    ret x_send(request[0usize..units * 4usize])
+}
+
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) {
     var none: Window = zero
-    ret (none, Unsupported)
+    if options.width == 0u32 || options.height == 0u32 || options.width > 16384u32 || options.height > 16384u32 { ret (none, Unsupported) }
+    let connect_error = x_connect(a)
+    if connect_error != ok { ret (none, connect_error) }
+    var slot = 0usize
+    while slot < WINDOW_TABLE && window_ids[slot] != 0u32 { slot += 1usize }
+    if slot >= WINDOW_TABLE { ret (none, OutOfMemory) }
+    let id = x_resource()
+    // CreateWindow with an event mask: key press/release, button press/release,
+    // pointer motion, exposure, structure notify, focus change.
+    var request: [40]u8 = zero
+    request[0usize] = 1u8
+    request[1usize] = 0u8
+    x_put16(request[..], 2usize, 9u32)
+    x_put32(request[..], 4usize, id)
+    x_put32(request[..], 8usize, x_root)
+    x_put16(request[..], 12usize, 0u32)
+    x_put16(request[..], 14usize, 0u32)
+    x_put16(request[..], 16usize, options.width)
+    x_put16(request[..], 18usize, options.height)
+    x_put16(request[..], 20usize, 0u32)
+    x_put16(request[..], 22usize, 1u32)
+    x_put32(request[..], 24usize, 0u32)
+    x_put32(request[..], 28usize, 2048u32)
+    x_put32(request[..], 32usize, 1u32 | 2u32 | 4u32 | 8u32 | 64u32 | 32768u32 | 131072u32 | 2097152u32)
+    let create_error = x_send(request[0usize..36usize])
+    if create_error != ok { ret (none, Failed) }
+    var atoms: [4]u8 = zero
+    x_put32(atoms[..], 0usize, x_atom_delete)
+    let protocol_error = x_change_property(id, x_atom_protocols, 4u32, 32u32, atoms[..], 1usize)
+    if protocol_error != ok { ret (none, Failed) }
+    if options.title.len != 0usize {
+        let title_error = x_change_property(id, 39u32, 31u32, 8u32, options.title, options.title.len)
+        if title_error != ok { ret (none, Failed) }
+    }
+    // A graphics context for the presents.
+    let gc = x_resource()
+    var gc_request: [16]u8 = zero
+    gc_request[0usize] = 55u8
+    x_put16(gc_request[..], 2usize, 4u32)
+    x_put32(gc_request[..], 4usize, gc)
+    x_put32(gc_request[..], 8usize, id)
+    x_put32(gc_request[..], 12usize, 0u32)
+    let gc_error = x_send(gc_request[..])
+    if gc_error != ok { ret (none, Failed) }
+    window_ids[slot] = id
+    window_gcs[slot] = gc
+    window_widths[slot] = options.width
+    window_heights[slot] = options.height
+    window_mapped[slot] = false
+    window_focused[slot] = false
+    if options.visible {
+        let shown = window_visible(Window { raw: usize(id) }, true)
+        if shown != ok { ret (none, Failed) }
+    }
+    ret (Window { raw: usize(id) }, ok)
+}
+
+fn x_simple(opcode: u8, window: u32) -> err {
+    var request: [8]u8 = zero
+    request[0usize] = opcode
+    x_put16(request[..], 2usize, 2u32)
+    x_put32(request[..], 4usize, window)
+    ret x_send(request[..])
 }
 
 fn window_close(w: Window) -> err {
-    ret NotFound
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    window_ids[slot] = 0u32
+    var kept = 0usize
+    var at = 0usize
+    while at < window_event_count {
+        let event = window_events[(window_event_head + at) % WINDOW_RING]
+        if event.window.raw != w.raw {
+            window_events[(window_event_head + kept) % WINDOW_RING] = event
+            kept += 1usize
+        }
+        at += 1usize
+    }
+    window_event_count = kept
+    let freed = x_simple(60u8, window_gcs[slot])
+    let destroyed = x_simple(4u8, u32(w.raw))
+    if destroyed != ok { ret Failed }
+    ret ok
 }
 
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
     var none: WindowEvent = zero
-    ret (none, false, Unsupported)
+    if !x_connected { ret (none, false, Unsupported) }
+    if window_event_count == 0usize {
+        var wait_ms = 0u32
+        if timeout_ns > 0i64 {
+            wait_ms = u32(timeout_ns / 1000000i64)
+            if timeout_ns % 1000000i64 != 0i64 { wait_ms += 1u32 }
+        }
+        let drain_error = x_drain(wait_ms)
+        if drain_error != ok { ret (none, false, drain_error) }
+    }
+    if window_event_count == 0usize { ret (none, false, ok) }
+    let event = window_events[window_event_head]
+    window_event_head = (window_event_head + 1usize) % WINDOW_RING
+    window_event_count = window_event_count - 1usize
+    ret (event, true, ok)
 }
 
 fn window_metrics(w: Window) -> (WindowMetrics, err) {
-    var none: WindowMetrics = zero
-    ret (none, NotFound)
+    var metrics: WindowMetrics = zero
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret (metrics, NotFound) }
+    // Whatever the server has said since: a resize or a focus change lands first.
+    let drained = x_drain(0u32)
+    metrics.width = window_widths[slot]
+    metrics.height = window_heights[slot]
+    metrics.scale_percent = 100u32
+    metrics.focused = window_focused[slot]
+    metrics.visible = window_mapped[slot]
+    ret (metrics, ok)
 }
 
 fn window_title(w: Window, value: str) -> err {
-    ret NotFound
+    if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
+    if x_change_property(u32(w.raw), 39u32, 31u32, 8u32, value, value.len) != ok { ret Failed }
+    ret ok
 }
 
 fn window_visible(w: Window, value: bool) -> err {
-    ret NotFound
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    var opcode = 10u8
+    if value { opcode = 8u8 }
+    if x_simple(opcode, u32(w.raw)) != ok { ret Failed }
+    window_mapped[slot] = value
+    ret ok
 }
 
 fn window_cursor(w: Window, shape: CursorShape) -> err {
-    ret NotFound
+    if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
+    ret ok
 }
 
 fn window_capture(w: Window, on: bool) -> err {
-    ret NotFound
+    if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret NotFound }
+    if !on {
+        var ungrab: [8]u8 = zero
+        ungrab[0usize] = 27u8
+        x_put16(ungrab[..], 2usize, 2u32)
+        if x_send(ungrab[..]) != ok { ret Failed }
+        ret ok
+    }
+    // GrabPointer: owner-events, the button and motion masks, asynchronous modes,
+    // no confinement, no cursor, current time; its reply is consumed.
+    var grab: [24]u8 = zero
+    grab[0usize] = 26u8
+    grab[1usize] = 1u8
+    x_put16(grab[..], 2usize, 6u32)
+    x_put32(grab[..], 4usize, u32(w.raw))
+    x_put16(grab[..], 8usize, 4u32 | 8u32 | 64u32)
+    grab[10usize] = 1u8
+    grab[11usize] = 1u8
+    if x_send(grab[..]) != ok { ret Failed }
+    if x_await_reply() != ok { ret Failed }
+    ret ok
 }
 
+// PutImage of BGRX rows in bands under the request-size ceiling.
 fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
-    ret NotFound
+    let slot = window_slot(u32(w.raw))
+    if w.raw == 0usize || slot >= WINDOW_TABLE { ret NotFound }
+    if width == 0u32 || height == 0u32 || pixels.len < usize(width) * usize(height) { ret Unsupported }
+    let row_bytes = usize(width) * 4usize
+    var rows_per_band = 200000usize / row_bytes
+    if rows_per_band == 0usize { ret Unsupported }
+    var row = 0usize
+    while row < usize(height) {
+        var rows = rows_per_band
+        if row + rows > usize(height) { rows = usize(height) - row }
+        let bytes = rows * row_bytes
+        var header: [24]u8 = zero
+        header[0usize] = 72u8
+        header[1usize] = 2u8
+        x_put16(header[..], 2usize, u32(6usize + bytes / 4usize))
+        x_put32(header[..], 4usize, u32(w.raw))
+        x_put32(header[..], 8usize, window_gcs[slot])
+        x_put16(header[..], 12usize, width)
+        x_put16(header[..], 14usize, u32(rows))
+        x_put16(header[..], 16usize, 0u32)
+        x_put16(header[..], 18usize, u32(row))
+        header[20usize] = 0u8
+        header[21usize] = x_root_depth
+        if x_send(header[..]) != ok { ret Failed }
+        // The pixel words are the bytes the server wants: little-endian BGRX.
+        let first = row * usize(width)
+        let view = mem.cast[*const u8](&pixels[first])
+        var sent = 0usize
+        while sent < bytes {
+            let written = syscall(SYS_WRITE, x_socket, mem.address_of(view) + sent, bytes - sent, 0usize, 0usize, 0usize)
+            if written < 0isize {
+                x_failed = true
+                ret Failed
+            }
+            sent += usize(written)
+        }
+        row += rows
+    }
+    ret ok
 }
 
 fn window_native(w: Window) -> (usize, usize, err) {
-    ret (0usize, 0usize, NotFound)
+    if w.raw == 0usize || window_slot(u32(w.raw)) >= WINDOW_TABLE { ret (0usize, 0usize, NotFound) }
+    ret (w.raw, x_socket, ok)
 }
 
 fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
     var nothing: []const MonitorInfo = zero
-    ret (nothing, Unsupported)
+    if limit == 0usize { ret (nothing, Unsupported) }
+    let connect_error = x_connect(a)
+    if connect_error != ok { ret (nothing, connect_error) }
+    let (found, found_error) = mem.alloc[MonitorInfo](a, 1usize)
+    if found_error != ok { ret (nothing, OutOfMemory) }
+    found[0usize] = MonitorInfo { x: 0i32, y: 0i32, width: x_screen_width, height: x_screen_height, scale_percent: 100u32, primary: true }
+    ret (found[0usize..1usize], ok)
 }
 
 fn clipboard_text(a: *mem.Arena) -> (str, err) {

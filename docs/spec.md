@@ -1409,8 +1409,9 @@ clipboard's text. `WindowEvent` carries the pointer position in client pixels, t
 button (0 primary, 1 secondary, 2 middle, 3 back, 4 forward), the host's virtual
 key, the modifier bits (1 shift, 2 control, 4 alt, 8 meta, 16 caps lock, 32 num
 lock), a scroll delta in 120ths of a notch and a code point for text. A host without
-windows -- Linux until its X11 connection lands -- answers `Unsupported` at
-`window_open`. IME composition is not delivered yet.
+windows answers `Unsupported` at `window_open`; Linux speaks X11 on the display's
+socket directly (D803), the clipboard and the cursor shape waiting there. IME
+composition is not delivered yet.
 
 ```
 type Window = struct { raw: usize }

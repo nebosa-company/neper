@@ -35,15 +35,15 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
   - `docs/spec.md:1109` Multiple return values
   - `docs/spec.md:1174` External functions
   - `docs/spec.md:1272` `e.os`
-- `docs/spec.md:4184` 13. Toolchain
-  - `docs/spec.md:4299` Diagnostics
-  - `docs/spec.md:4318` Program entry
-  - `docs/spec.md:4358` Testing
-  - `docs/spec.md:4522` Linking
-  - `docs/spec.md:4590` Target CPU levels
-  - `docs/spec.md:4647` Debug information
-  - `docs/spec.md:4741` Editor integration
-  - `docs/spec.md:4767` Standard library
+- `docs/spec.md:4185` 13. Toolchain
+  - `docs/spec.md:4300` Diagnostics
+  - `docs/spec.md:4319` Program entry
+  - `docs/spec.md:4359` Testing
+  - `docs/spec.md:4523` Linking
+  - `docs/spec.md:4591` Target CPU levels
+  - `docs/spec.md:4648` Debug information
+  - `docs/spec.md:4742` Editor integration
+  - `docs/spec.md:4768` Standard library
 
 ## Decisions to read first
 

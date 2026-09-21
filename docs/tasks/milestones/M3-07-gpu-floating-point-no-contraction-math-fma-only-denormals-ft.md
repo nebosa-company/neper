@@ -28,11 +28,11 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Spec sections
 
-- `docs/spec.md:3550` 11. Build modes and safety
-  - `docs/spec.md:3605` Trap protocol
-  - `docs/spec.md:3663` Resources: static rules
-  - `docs/spec.md:3922` Debug fills
-  - `docs/spec.md:3935` Floating point
+- `docs/spec.md:3551` 11. Build modes and safety
+  - `docs/spec.md:3606` Trap protocol
+  - `docs/spec.md:3664` Resources: static rules
+  - `docs/spec.md:3923` Debug fills
+  - `docs/spec.md:3936` Floating point
 
 ## Decisions to read first
 

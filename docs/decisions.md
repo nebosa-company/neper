@@ -15362,3 +15362,36 @@ the tree, a press through it and a stale window's refusal on both hosts;
 where `init` cannot open a window. Every planned module of the UI chain is
 written; what the framework still does not claim is accessibility, whose
 bridges are the open item, and a Linux window, whose X11 backend is.
+
+## D803 — The Linux window backend speaks X11 on the display's socket
+
+D795's Linux half answered `Unsupported`; it now speaks the X11 protocol
+directly on `/tmp/.X11-unix/X<n>` from `$DISPLAY`, the way `e.os` reaches
+every host through raw syscalls and nothing else: no Xlib, no xcb. The
+connection is made once -- the MIT-MAGIC-COOKIE-1 entry of `~/.Xauthority`
+in the setup request, the setup reply's resource base and mask, root
+window, root depth and screen size kept, WM_PROTOCOLS and WM_DELETE_WINDOW
+interned, the keyboard mapping fetched -- and every window is a
+`CreateWindow` on the root with the event mask the ring wants and the
+delete protocol on it, so a close is reported and not done. Events are read
+in their 32-byte units: Expose is `Paint`, ConfigureNotify a `Resize` when
+the size moved, FocusIn/Out, button press and release with buttons 4 and 5
+as a wheel notch, motion, key press and release carrying the keycode's
+keysym as `key` with a Latin-1 keysym under the shift state as `Text`, and
+the ClientMessage that is WM_DELETE_WINDOW as `Close`. A frame is
+`PutImage` of ZPixmap rows in bands under the request-size ceiling through
+a graphics context made with the window; capture is `GrabPointer`, its
+reply consumed, and `UngrabPointer`; the monitor is the root screen at
+100 per cent. A reply larger than the buffer is read past on the socket
+so the stream stays aligned. Not spoken: the selection protocol, so the
+clipboard answers `Unsupported`; a glyph cursor, so the shape is accepted
+and not shown; DPI; a second screen; Wayland, which a display without an X
+socket falls to as `Unsupported` at `window_open`. The three window
+fixtures -- `link/os_window`, `link/ui_window`, `link/ui_app` -- now run
+on Linux under WSLg as they do on Windows, and their "unsupported" answers
+are gone from the runner.
+
+Found on the way: the session's shell hook expands `$?` inside a command
+string before the shell runs it, so `echo "run $?"` after a Linux program
+had printed `0` all session; the real codes read `\$?`, and the fixtures'
+printed lines were the evidence that held.

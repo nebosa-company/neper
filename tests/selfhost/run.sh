@@ -1568,13 +1568,13 @@ gpu_present_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/gpu-present-selfhost"
 gpu_present_output=$("$test_build/gpu-present-selfhost")
 [ "$gpu_present_output" = 'gpu present ok' ]
-# The native window primitives (D795): declared on Linux and answering Unsupported
-# at window_open until the X11 connection lands.
+# The native window primitives (D795, D803): over the X11 socket of the display the
+# suite runs under (WSLg), the same surface as Windows.
 os_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_window/src/main.e" "$repo" x64 linux "$test_build/os-window-selfhost")
 [ "$os_window_written" = 'executable written' ]
 chmod +x "$test_build/os-window-selfhost"
 os_window_output=$("$test_build/os-window-selfhost")
-[ "$os_window_output" = 'os window unsupported' ]
+[ "$os_window_output" = 'os window ok' ]
 # `e.gfx.scene` (D796): the CPU reference renderer over an offscreen target -- fills,
 # an anti-aliased edge, clips, a gradient, a stroke, an image, a glyph, a layer, a
 # rotation -- checked pixel by pixel, and the refusals.
@@ -1583,12 +1583,12 @@ gfx_scene_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/gfx-scene-selfhost"
 gfx_scene_output=$("$test_build/gfx-scene-selfhost")
 [ "$gfx_scene_output" = 'gfx scene ok' ]
-# `e.ui.window` and `e.ui.input` (D797): Unsupported at open on a host without windows.
+# `e.ui.window` and `e.ui.input` (D797): a window over the X11 backend (D803).
 ui_window_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_window/src/main.e" "$repo" x64 linux "$test_build/ui-window-selfhost")
 [ "$ui_window_written" = 'executable written' ]
 chmod +x "$test_build/ui-window-selfhost"
 ui_window_output=$("$test_build/ui-window-selfhost")
-[ "$ui_window_output" = 'ui window unsupported' ]
+[ "$ui_window_output" = 'ui window ok' ]
 # `e.ui.asset` (D798): variants chosen by locale, theme and scale from the fixture
 # project's registry, a font from it, and the texture cache over a renderer.
 ui_asset_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_asset/src/main.e" "$repo" x64 linux "$test_build/ui-asset-selfhost")
@@ -1610,8 +1610,8 @@ ui_testing_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-testing-selfhost"
 ui_testing_output=$("$test_build/ui-testing-selfhost")
 [ "$ui_testing_output" = 'ui testing ok' ]
-# `e.ui.accessibility` and `e.ui.app` (D802): the semantic tree on both hosts; the app
-# fails at init on a host without windows.
+# `e.ui.accessibility` and `e.ui.app` (D802): the semantic tree, and the app over the
+# X11 backend (D803).
 ui_accessibility_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_accessibility/src/main.e" "$repo" x64 linux "$test_build/ui-accessibility-selfhost")
 [ "$ui_accessibility_written" = 'executable written' ]
 chmod +x "$test_build/ui-accessibility-selfhost"
@@ -1621,7 +1621,7 @@ ui_app_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$ui_app_written" = 'executable written' ]
 chmod +x "$test_build/ui-app-selfhost"
 ui_app_output=$("$test_build/ui-app-selfhost")
-[ "$ui_app_output" = 'ui app unsupported' ]
+[ "$ui_app_output" = 'ui app ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
