@@ -368,8 +368,11 @@
             "Select",
             "ListBox"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Select",
+            "ListBox"
+          ],
+          "evidence": "lib/e/ui/control.e (D824): select as an outlined button and a modal overlay menu of menu items with one action each and a toggle the caller keeps, list_box as a clamped viewport of tap rows with the selected state; tests/selfhost/fixtures/link/ui_choice on both hosts"
         },
         {
           "id": "P1-12",

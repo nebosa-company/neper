@@ -15876,3 +15876,19 @@ plain "Clear" button while it holds anything, the caller's action since
 the caller owns the buffer; the text area is the editor with rows, and
 does not scroll its overflow yet. `link/ui_field` drives all four
 through the fake IME on both hosts.
+
+## D824 — Basic choice: a select is a button and a modal overlay, a list box a viewport of rows
+
+P1-11 of the widget plan. A select keeps nothing: the caller holds
+`selected` and `open`, the button fires `toggle` and the caller flips
+`open`, and the open menu is D810's modal overlay below the button
+listing the options as menu items -- a button each, keyed `key + 2 +
+index`, firing its own action -- with a press outside firing `toggle`
+again through the overlay's dismiss, so a click elsewhere closes it the
+way every select closes. A list box is D817's scroll view of tap regions
+keyed `key + 1 + index`, the selected one in the selection colour, and
+the viewport itself is the list in the tree (D802 derives that role from
+the kind) while the group above carries the label; a second list role
+on the wrapper would have made two lists of one. Both take one action
+per option from a slice the caller keeps alive, D819's shape.
+`link/ui_choice` opens, picks, dismisses and scrolls on both hosts.

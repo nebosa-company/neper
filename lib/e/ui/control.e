@@ -932,3 +932,128 @@ fn text_area(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
     let (node, node_error) = field(a, key, t, label, buffer, len, change, zero, tall, false)
     ret (node, node_error)
 }
+
+// -------------------------------------------------------- basic choice (D824, P1-11)
+
+// A select: an outlined button showing the chosen option's label (keyed `key`),
+// which fires `toggle` -- the caller opens or closes it; open, a modal overlay
+// below the button (keyed `key + 1`) lists the options as menu items keyed
+// `key + 2 + index`, each firing its own action, and a press outside fires
+// `toggle` again to close. The caller keeps `selected` and `open`.
+fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+    if picks.len != options.len { ret (zero, TooLarge) }
+    var shown = label
+    if selected < options.len { shown = options[selected] }
+    var outlined = button_options()
+    outlined.variant = .Outlined
+    let (head, head_error) = button(a, key, t, shown, toggle, outlined)
+    if head_error != ok { ret (zero, head_error) }
+    var count = 1usize
+    if open { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    if open {
+        let (items, items_error) = mem.alloc[widget.Node](a, options.len)
+        if items_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < options.len {
+            var plain = button_options()
+            plain.variant = .Plain
+            if i == selected { plain.variant = .Filled }
+            let (item, item_error) = button(a, key + 2u64 + u64(i), t, options[i], &picks[i], plain)
+            if item_error != ok { ret (zero, item_error) }
+            var entry: widget.Semantics = zero
+            entry.role = 22u8
+            entry.label = options[i]
+            if i == selected { entry.states = accessibility.STATE_SELECTED }
+            let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+            if wrapped_error != ok { ret (zero, TooLarge) }
+            wrapped[0usize] = item
+            items[i] = widget.semantics(0u64, entry, style.defaults(), wrapped[0usize..1usize])
+            i += 1usize
+        }
+        var sheet = surface_options(t)
+        sheet.bordered = true
+        sheet.elevation = 2u8
+        sheet.radius = t.tokens.radii.sm
+        sheet.padding = t.tokens.spacing.xs
+        let (menu, menu_error) = mem.alloc[widget.Node](a, 1usize)
+        if menu_error != ok { ret (zero, TooLarge) }
+        menu[0usize] = widget.box(0u64, surface_style(t, sheet), items[0usize..options.len])
+        var menu_sem: widget.Semantics = zero
+        menu_sem.role = 21u8
+        menu_sem.label = label
+        let (popup, popup_error) = mem.alloc[widget.Node](a, 1usize)
+        if popup_error != ok { ret (zero, TooLarge) }
+        popup[0usize] = widget.semantics(0u64, menu_sem, style.defaults(), menu[0usize..1usize])
+        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: 0.0, y: t.tokens.spacing.xs }, modal: true, dismiss: *toggle }, style.defaults(), popup[0usize..1usize])
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    if open { sem.states = accessibility.STATE_EXPANDED }
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A list box: the options as rows in a clamped viewport `rows` tall (keyed `key`),
+// each a tap region keyed `key + 1 + index` firing its own action, the selected
+// one in the selection colour; the viewport is a list of list items in the tree,
+// the group above it labelled.
+fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    if picks.len != options.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, options.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    let row_height = t.tokens.metrics.control_height
+    var i = 0usize
+    while i < options.len {
+        var state = control_state(t, key + 1u64 + u64(i), true, i == selected)
+        let look = style.resolve(t.tokens, .Plain, state)
+        var row_style = style.defaults()
+        row_style.width = style.Length { Px: width }
+        row_style.height = style.Length { Px: row_height }
+        var background = look.background
+        if i == selected { background = style.color(t.tokens, .Selection) }
+        row_style.background = paint.Brush { Solid: background }
+        let pad = style.Length { Px: t.tokens.spacing.sm }
+        row_style.padding = style.EdgeLengths { left: pad, top: style.Length { Px: t.tokens.spacing.xs }, right: pad, bottom: style.Length { Px: t.tokens.spacing.xs } }
+        var caption = text_options()
+        caption.wrap = .None
+        let (text_item, text_error) = text_node(a, 0u64, options[i], t, caption)
+        if text_error != ok { ret (zero, text_error) }
+        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+        if body_error != ok { ret (zero, TooLarge) }
+        body[0usize] = text_item
+        let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
+        if region_error != ok { ret (zero, TooLarge) }
+        region[0usize] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, body[0usize..1usize])
+        var entry: widget.Semantics = zero
+        entry.role = 11u8
+        entry.label = options[i]
+        entry.row = u32(i + 1usize)
+        entry.row_count = u32(options.len)
+        if i == selected { entry.states = accessibility.STATE_SELECTED }
+        items[i] = widget.semantics(0u64, entry, style.defaults(), region[0usize..1usize])
+        i += 1usize
+    }
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: width }
+    view_style.height = style.Length { Px: f32(rows) * row_height }
+    view_style.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Border) }
+    view_style.radius = t.tokens.radii.sm
+    view_style.overflow = .Clip
+    let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
+    if view_error != ok { ret (zero, TooLarge) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = view
+    // The viewport is the list in the tree; the group above it carries the label.
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    sem.row_count = u32(options.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}

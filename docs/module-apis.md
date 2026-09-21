@@ -3697,6 +3697,8 @@ fn text_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffe
 fn password_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions) -> (widget.Node, err)
 fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, clear: *const widget.Submit, options: FieldOptions) -> (widget.Node, err)
 fn text_area(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], options: FieldOptions) -> (widget.Node, err)
+fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err)
+fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
@@ -3761,6 +3763,14 @@ and the invalid state; `text_field` is one line, `password_field` a secret edito
 `search_field` submits on Enter and shows a plain "Clear" button (keyed `key + 1`,
 the caller's action) while it holds anything, `text_area` is `rows` lines tall (two
 at least) and does not scroll its overflow.
+
+Basic choice (D824, P1-11): `select` is an outlined button showing the chosen
+option that fires `toggle` for the caller to open or close it; open, a modal
+overlay below it (keyed `key + 1`) lists the options as menu items keyed
+`key + 2 + index`, each firing its own action, a press outside firing `toggle`
+again; the caller keeps `selected` and `open`. `list_box` is a clamped viewport
+`rows` tall of tap regions keyed `key + 1 + index`, the selected one in the
+selection colour; the viewport is a list of list items in the tree.
 
 ### `e.ui.app`
 
