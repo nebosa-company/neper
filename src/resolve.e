@@ -63,6 +63,9 @@ type Resolver = struct {
     failure_has_context: bool,
     failure_name: str,
     failure_owner: str,
+    // The module a missing member was looked for in (D821), for the diagnostic
+    // to say which file that module is.
+    failure_target: usize,
     // The nearest name in scope to an unknown one (D445, H09): a local or a value of
     // the module within two edits, empty for none.
     failure_near: str,
@@ -604,6 +607,7 @@ fn note_unknown_member(r: *Resolver, module_index: usize, token: lex.Token, owne
     r.failure_has_token = true
     r.failure_owner = owner
     r.failure_name = member
+    r.failure_target = target_module
     var best = ""
     var best_distance = 3usize
     if member.len < 3usize {

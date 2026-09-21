@@ -15782,3 +15782,32 @@ switch that is on is the filled variant and not the selected tint, since
 is a light blue meant for text. `link/ui_selection` checks the roles and
 states, the taps through to the actions and the switch's track pixels on
 both hosts.
+
+## D821 — A record that names no declaration names none for good, and a replaced module is named
+
+Two defects, both found from library code that did what the runtime
+cannot. The context facts for `contract.main` on Linux named the thread
+start `e.mem.copy` and lost the `threads` fact once `lib/e/os.linux.e`
+called `mem.copy[u8]` anywhere: a call record for a synthesized
+intrinsic -- `os.thread_create` has no declaration to index -- encoded
+"no function" as the function count at the moment the record was made,
+and the count grew when `copy[u8]` was instantiated afterwards, so the
+record then named whichever function landed at that index. The sentinel
+is a fixed index past any function now, on both the records that named
+none and the check that reads them, and `link`/`tools/nested_instance`
+holds a thread start before the program's first instance on both hosts.
+An instance checked in the middle of a body also gets the caller's
+token table and call scope back when it is done: its own were left in
+the checker, which put an instance's offsets on the caller's later
+records and let the call cache answer a caller's call with an
+instance's; the generation counter is monotonic so a restored scope is
+never confused with a fresh one. The second defect was a diagnosis: a
+`mem` member missing from `lib/e/os.windows.e` under the `intrinsic_valid`
+fixture looked like an alias-resolution fault, and was the fixture's own
+`src/e/mem.e` -- a stub of `e.mem` with `Arena` alone -- replacing the
+toolchain's `e.mem` for every module of the program, the toolchain's
+own included, as spec 2 says a project's module does. The message now
+says so: "`e.mem` is `<path>`, the project's replacement of the
+toolchain's", checked by `check/replaced_module`; and the fixture's stub
+carries the rest of `e.mem`'s fence, so a library module may call
+`arena_from`, `copy` or `eq` without that fixture forbidding it.

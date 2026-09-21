@@ -3281,6 +3281,12 @@ for contract_subject in contract.main contract.bump contract.first contract.tota
 done
 cmp -s "$contract_actual" "$conformance_root/tools/contract.x64-linux.expected.jsonl" || { printf '%s
 ' "context-file --json contract facts differ from the conformance corpus" >&2; exit 1; }
+# A record naming no declaration keeps naming none after an instance is made
+# (D821): the thread start's call fact and the threads fact stand although
+# `helper.fill[u8]` landed at the index the function count had.
+nested_actual="$test_build/conformance-tools-nested-instance.jsonl"
+(cd "$conformance_root/tools/nested_instance" && $test_build/neper-self context-file src/main.e "$repo" x64 linux --json --symbol main.main --budget 16 > "$nested_actual")
+cmp -s "$nested_actual" "$conformance_root/tools/nested_instance.x64-linux.expected.jsonl" || { printf '%s\n' "context-file --json over a call before the first instance differs from the conformance corpus" >&2; exit 1; }
 # `query-batch --json --batch FILE` (D409, H16): six queries over one check, two refused.
 batch_status=0
 (cd "$conformance_root/tools" && $test_build/neper-self query-batch contract.e "$repo" x64 linux --json --batch batch.txt > "$test_build/conformance-tools-batch.jsonl") || batch_status=$?
@@ -4756,6 +4762,13 @@ constant_operators_checked=$($test_build/neper-self check-file "$check_root/cons
 [ "$constant_operators_checked" = 'module check ok' ]
 intrinsic_checked=$($test_build/neper-self check-file "$check_root/intrinsic_valid/src/main.e" "$repo" x64 linux)
 [ "$intrinsic_checked" = 'module check ok' ]
+# A toolchain module the project replaced (D821): the missing member's diagnostic
+# names the project's file, since every module is resolved against it.
+replaced_checked=$($test_build/neper-self check-file "$check_root/replaced_module/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$replaced_checked" in
+    *'`mem` has no member `arena_from`; `e.mem` is `'*replaced_module/src/e/mem.e*"the project's replacement of the toolchain's"*) ;;
+    *) printf '%s\n' "the replaced-module diagnostic did not name the project's file: $replaced_checked" >&2; exit 1 ;;
+esac
 multi_result_checked=$($test_build/neper-self check-file "$check_root/multi_result_valid/src/main.e" "$repo" x64 linux)
 [ "$multi_result_checked" = 'module check ok' ]
 try_checked=$($test_build/neper-self check-file "$check_root/try_valid/src/main.e" "$repo" x64 linux)

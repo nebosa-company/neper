@@ -3419,6 +3419,13 @@ foreach ($subject in @('contract.main', 'contract.bump', 'contract.first', 'cont
     if ($LASTEXITCODE -ne 0) { throw "context-file --json failed on $subject" }
 }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contractActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/contract.x64-windows.expected.jsonl')).Hash) { throw "context-file --json contract facts differ from the conformance corpus" }
+# A record naming no declaration keeps naming none after an instance is made
+# (D821): the thread start's call fact and the threads fact stand although
+# `helper.fill[u8]` landed at the index the function count had.
+$nestedActual = Join-Path $testBuild 'conformance-tools-nested-instance.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\nested_instance')`" && `"$compiler`" context-file src\main.e `"$repo`" x64 windows --json --symbol main.main --budget 16 > `"$nestedActual`""
+if ($LASTEXITCODE -ne 0) { throw "context-file --json failed on nested_instance" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $nestedActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/nested_instance.x64-windows.expected.jsonl')).Hash) { throw "context-file --json over a call before the first instance differs from the conformance corpus" }
 # `query-batch --json --batch FILE` (D409, H16): six queries over one check, each its own
 # stream in order, two refused, the process exiting 2 for them; byte for byte per host.
 $batchActual = Join-Path $testBuild 'conformance-tools-batch.jsonl'
@@ -4763,6 +4770,12 @@ $constantOperatorsChecked = & $compiler check-file (Join-Path $checkRoot 'consta
 if ($LASTEXITCODE -ne 0 -or $constantOperatorsChecked -ne 'module check ok') { throw 'compile-time integer operators did not produce exact values' }
 $intrinsicChecked = & $compiler check-file (Join-Path $checkRoot 'intrinsic_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $intrinsicChecked -ne 'module check ok') { throw 'fixed intrinsic signatures did not type-check' }
+# A toolchain module the project replaced (D821): the missing member's diagnostic
+# names the project's file, since every module is resolved against it.
+$replacedChecked = & $compiler check-file (Join-Path $checkRoot 'replaced_module\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -eq 0) { throw 'a member missing from a project replacement of e.mem was accepted' }
+$replacedJoined = ($replacedChecked | ForEach-Object { "$_" }) -join ' '
+if (-not ($replacedJoined -match "has no member .arena_from.; .e\.mem. is .*replaced_module.src.e.mem\.e., the project's replacement of the toolchain's")) { throw "the replaced-module diagnostic did not name the project's file: $replacedJoined" }
 $multiResultChecked = & $compiler check-file (Join-Path $checkRoot 'multi_result_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $multiResultChecked -ne 'module check ok') { throw 'multiple returns did not type-check' }
 $tryChecked = & $compiler check-file (Join-Path $checkRoot 'try_valid\src\main.e') $repo 'x64' 'windows'

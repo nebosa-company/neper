@@ -6978,6 +6978,20 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
         member_at = tool.nptest_copy(member_storage[..], member_at, "` has no member `")
         member_at = tool.nptest_copy(member_storage[..], member_at, resolver.failure_name)
         member_at = tool.nptest_copy(member_storage[..], member_at, "`")
+        // A toolchain module the project replaced (D821): the member is missing from
+        // the project's file, which the message names, since every module -- the
+        // toolchain's own included -- is resolved against the replacement (spec 2).
+        let owner_module = resolver.failure_target
+        if owner_module < g.count && g.modules[owner_module].name.len > 2usize && g.modules[owner_module].name[0usize] == 101u8 && g.modules[owner_module].name[1usize] == 46u8 {
+            let (toolchain_relative, under_toolchain) = project.relative_under(g.modules[owner_module].path, g.toolchain_root, "lib")
+            if !under_toolchain {
+                member_at = tool.nptest_copy(member_storage[..], member_at, "; `")
+                member_at = tool.nptest_copy(member_storage[..], member_at, g.modules[owner_module].name)
+                member_at = tool.nptest_copy(member_storage[..], member_at, "` is `")
+                member_at = tool.nptest_copy(member_storage[..], member_at, g.modules[owner_module].path)
+                member_at = tool.nptest_copy(member_storage[..], member_at, "`, the project's replacement of the toolchain's")
+            }
+        }
         if resolver.failure_near.len != 0usize {
             member_at = tool.nptest_copy(member_storage[..], member_at, "; did you mean `")
             member_at = tool.nptest_copy(member_storage[..], member_at, resolver.failure_near)

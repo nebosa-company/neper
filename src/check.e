@@ -712,6 +712,10 @@ type Checker = struct {
     // moves at each function and instance, since a name means something else there.
     call_cache: []CallCacheEntry,
     call_generation: usize,
+    // The generations handed out so far (D821): a scope nested in another -- an
+    // instance checked in the middle of a body -- gets a fresh one and gives the
+    // outer one back, and no generation is ever reused.
+    call_generation_next: usize,
     // Likewise an expression's type, keyed by the type it was expected to have as well,
     // since an untyped literal takes its type from that.
     expr_cache: []ExprCacheEntry,
@@ -9044,13 +9048,14 @@ fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         if c.explain_count < c.explains.len {
             var offset = 0usize
             if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
-            var callee = c.function_count
+            let no_function = NO_FUNCTION
+            var callee = no_function
             if !fresh.indirect { callee = explain_function_index(c, fresh.function) }
             // A synthesized intrinsic (`mem.alloc`, `os.thread_create`) has no
             // declaration to index (D396): the record carries its module and name.
             var intrinsic_name = ""
             var intrinsic_module = 0usize
-            if !fresh.indirect && callee == c.function_count {
+            if !fresh.indirect && callee == no_function {
                 intrinsic_name = fresh.function.name
                 intrinsic_module = fresh.function.module_index
             }
@@ -9066,7 +9071,9 @@ fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // The function or instance whose calls are being checked or lowered changed: what
 // the cache holds is no longer about this scope.
 fn begin_call_scope(c: *Checker) {
-    c.call_generation += 1usize
+    if c.call_generation_next < c.call_generation { c.call_generation_next = c.call_generation }
+    c.call_generation_next += 1usize
+    c.call_generation = c.call_generation_next
     c.active_noescape = ""
 }
 
@@ -9760,6 +9767,11 @@ fn protocol_receiver(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // declares the receiver type, and its first parameter is the type by value.
 // The index of a call's function, for a record that names it: the declared or
 // instance record with the same module and name and parameter range.
+// A record that names no declaration (D821): a fixed index past any function,
+// not the count at the time -- the count grows with every instance made after
+// the record, and the record would then name whichever function landed there.
+const NO_FUNCTION: usize = 4294967295usize
+
 fn explain_function_index(c: *Checker, function: Function) -> usize {
     var at = 0usize
     while at < c.function_count {
@@ -9773,7 +9785,7 @@ fn explain_function_index(c: *Checker, function: Function) -> usize {
         if c.functions[at].module_index == function.module_index && same(c.functions[at].name, function.name) { ret at }
         at += 1usize
     }
-    ret c.function_count
+    ret NO_FUNCTION
 }
 
 // A field accessed or named (D420, H17): the explain record of kind 6 carries the
@@ -13657,7 +13669,28 @@ fn check_function_swept(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree
 }
 
 fn check_instance(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_index: usize) -> err {
+    // An instance is checked in the middle of whatever body asked for it (D821):
+    // the caller's token table and call scope are given back when it is done, so
+    // the records the caller makes after the call carry its own offsets and its
+    // caches never answer with the instance's.
+    let outer_generation = c.call_generation
+    let outer_tokens = c.tokens
+    let outer_token_count = c.token_count
+    let outer_tokens_module = c.tokens_module
+    let outer_has_tokens = c.has_tokens_module
+    let outer_noescape = c.active_noescape
     begin_call_scope(c)
+    let result = check_instance_body(c, r, g, instance_index)
+    c.call_generation = outer_generation
+    c.tokens = outer_tokens
+    c.token_count = outer_token_count
+    c.tokens_module = outer_tokens_module
+    c.has_tokens_module = outer_has_tokens
+    c.active_noescape = outer_noescape
+    ret result
+}
+
+fn check_instance_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_index: usize) -> err {
     if instance_index >= c.function_count { ret UnknownCallable }
     let instance = c.functions[instance_index]
     let instance_generic = c.function_generics[instance_index]
