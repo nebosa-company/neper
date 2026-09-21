@@ -1829,6 +1829,13 @@ $uiPanesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $uiPanesWritten -ne 'executable written') { throw 'ui_panes emission failed' }
 $uiPanesOutput = & $uiPanesPath
 if ($LASTEXITCODE -ne 0 -or $uiPanesOutput -ne 'ui panes ok') { throw "the pane controls answered wrongly: exit $LASTEXITCODE" }
+# Transient UI (D827, widget plan P1-14): a tooltip, a menu button's modal menu, an
+# alert dialog.
+$uiTransientPath = Join-Path $testBuild 'ui-transient-selfhost.exe'
+$uiTransientWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_transient\src\main.e') $repo 'x64' 'windows' $uiTransientPath
+if ($LASTEXITCODE -ne 0 -or $uiTransientWritten -ne 'executable written') { throw 'ui_transient emission failed' }
+$uiTransientOutput = & $uiTransientPath
+if ($LASTEXITCODE -ne 0 -or $uiTransientOutput -ne 'ui transient ok') { throw "the transient UI answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

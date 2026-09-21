@@ -15946,3 +15946,29 @@ report without double counting. `split_view` is that pane over the
 split's own key with `min_second` as the reserve and the second child
 filling the rest. `link/ui_panes` toggles, picks, drags, nudges and
 clamps on both hosts.
+
+## D827 — e.ui.overlay opens: transient UI is an overlay the caller keeps open
+
+P1-14 of the widget plan, and the third of the proposal's four candidate
+modules (§9) becomes real: `e.ui.overlay` depends on `e.ui.control`
+for the theme, the text and the pressable, and on `e.ui.widget` for
+D810's overlay kind, and adds no runtime state of its own. A tooltip is
+a non-modal overlay below its anchor, a caption on a small raised
+surface, present only while `shown`; `tooltip_wanted` answers from
+D811's `interaction` whether the anchor is hovered, focused or held, so
+the caller decides the frame it appears and the delay if it wants one.
+A menu is a modal overlay below its anchor of plain buttons keyed
+`key + 1 + index` under menu items, in a scope whose cancel action is
+`dismiss`, which is also the overlay's dismiss: Escape and a press
+outside close it the same way, and the focus the modal takes lands on
+the first command, so Enter and Tab work it. `menu_button` is an
+outlined button offering the menu in the tree, expanded while open, its
+menu keyed `key + 1`. An alert dialog is a centred modal overlay of a
+title (a heading of level 1, keyed `key + 1`), a message (`key + 2`)
+and a row of buttons (`key + 3 + index`) whose kinds are data: the
+default one is filled and the scope's Enter, the cancel one is Escape
+and the dismiss, a destructive one is in the error colour; a modal
+dialog in the tree labelled by the title and described by the message.
+Every overlay function answers an empty box when closed, so the caller
+places it unconditionally. `link/ui_transient` hovers, opens, presses,
+tabs, escapes and taps outside on both hosts.

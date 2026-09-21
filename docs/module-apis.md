@@ -3785,6 +3785,20 @@ again; the caller keeps `selected` and `open`. `list_box` is a clamped viewport
 `rows` tall of tap regions keyed `key + 1 + index`, the selected one in the
 selection colour; the viewport is a list of list items in the tree.
 
+### `e.ui.overlay`
+
+```neper
+type MenuItem = struct { label: str, action: widget.Submit, enabled: bool }
+type DialogAction = enum u8 { Plain, Default, Cancel, Destructive }
+type DialogButton = struct { label: str, action: widget.Submit, kind: DialogAction }
+error TooLarge
+fn tooltip_wanted(t: *const control.Theme, anchor: widget.Key) -> bool
+fn tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, text: str, shown: bool) -> (widget.Node, err)
+fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, items: []const MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err)
+fn menu_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const MenuItem, open: bool, toggle: *const widget.Submit) -> (widget.Node, err)
+fn alert_dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: str, buttons: []const DialogButton, open: bool) -> (widget.Node, err)
+```
+
 ### `e.ui.app`
 
 ```neper

@@ -425,8 +425,12 @@
             "Menu",
             "AlertDialog"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Tooltip",
+            "Menu",
+            "AlertDialog"
+          ],
+          "evidence": "lib/e/ui/overlay.e (D827): tooltip as a non-modal overlay below its anchor while tooltip_wanted (hovered, focused or held) says so, menu and menu_button as a modal overlay of plain buttons under a menu whose scope's Escape and whose dismiss are the caller's toggle, alert_dialog as a centred modal overlay with a heading, a message and default/cancel/destructive buttons bound to Enter, Escape and the error colour; tests/selfhost/fixtures/link/ui_transient on both hosts"
         },
         {
           "id": "P1-15",

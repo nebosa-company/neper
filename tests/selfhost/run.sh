@@ -1765,6 +1765,13 @@ ui_panes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/ui-panes-selfhost"
 ui_panes_output=$("$test_build/ui-panes-selfhost")
 [ "$ui_panes_output" = 'ui panes ok' ]
+# Transient UI (D827, widget plan P1-14): a tooltip, a menu button's modal menu, an
+# alert dialog.
+ui_transient_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_transient/src/main.e" "$repo" x64 linux "$test_build/ui-transient-selfhost")
+[ "$ui_transient_written" = 'executable written' ]
+chmod +x "$test_build/ui-transient-selfhost"
+ui_transient_output=$("$test_build/ui-transient-selfhost")
+[ "$ui_transient_output" = 'ui transient ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
