@@ -1139,6 +1139,31 @@ fmt_html_template_written=$($test_build/neper-self emit-executable "$repo/tests/
 [ "$fmt_html_template_written" = 'executable written' ]
 chmod +x "$test_build/fmt-html-template-selfhost"
 "$test_build/fmt-html-template-selfhost"
+# `e.algo.search`: binary search and its bounds, the probe form, exponential, interpolation, ternary and saddleback search, quickselect and median of medians, and both cycle finders (D834).
+algo_search_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_search/src/main.e" "$repo" x64 linux "$test_build/algo-search-selfhost")
+[ "$algo_search_written" = 'executable written' ]
+chmod +x "$test_build/algo-search-selfhost"
+"$test_build/algo-search-selfhost"
+# `e.text.search`: KMP, Horspool, Boyer-Moore and Rabin-Karp against a naive scan, Aho-Corasick over nested patterns, the Z array, bitap with edits and Manacher (D834).
+text_search_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_search/src/main.e" "$repo" x64 linux "$test_build/text-search-selfhost")
+[ "$text_search_written" = 'executable written' ]
+chmod +x "$test_build/text-search-selfhost"
+"$test_build/text-search-selfhost"
+# `e.text.distance`: Levenshtein, Damerau, Hamming, Jaro-Winkler, the longest common substring and trigram similarity against reference values (D834).
+text_distance_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_distance/src/main.e" "$repo" x64 linux "$test_build/text-distance-selfhost")
+[ "$text_distance_written" = 'executable written' ]
+chmod +x "$test_build/text-distance-selfhost"
+"$test_build/text-distance-selfhost"
+# `e.algo.sketch`: Bloom and counting filters, Count-Min, HyperLogLog, Misra-Gries, Space-Saving, MinHash and SimHash over caller storage (D834).
+algo_sketch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sketch/src/main.e" "$repo" x64 linux "$test_build/algo-sketch-selfhost")
+[ "$algo_sketch_written" = 'executable written' ]
+chmod +x "$test_build/algo-sketch-selfhost"
+"$test_build/algo-sketch-selfhost"
+# `e.algo.coding`: run-length, LEB128, VLQ, ZigZag, deltas, bit packing, frame of reference, Elias gamma, Rice, move-to-front, Burrows-Wheeler and canonical Huffman (D834).
+algo_coding_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_coding/src/main.e" "$repo" x64 linux "$test_build/algo-coding-selfhost")
+[ "$algo_coding_written" = 'executable written' ]
+chmod +x "$test_build/algo-coding-selfhost"
+"$test_build/algo-coding-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

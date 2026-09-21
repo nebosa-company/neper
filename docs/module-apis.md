@@ -885,6 +885,127 @@ fn radix_u64_in_place(a: *mem.Arena, items: []u64) -> err
 fn is_sorted[T: type](items: []const T) -> bool
 ```
 
+### `e.algo.search`
+
+```neper
+fn binary[T: type](items: []const T, key: T) -> (usize, bool)
+fn binary_by[T: type, Ctx: type](items: []const T, ctx: *Ctx, probe: fn(*Ctx, T) -> i32) -> (usize, bool)
+fn lower_bound[T: type](items: []const T, key: T) -> usize
+fn upper_bound[T: type](items: []const T, key: T) -> usize
+fn equal_range[T: type](items: []const T, key: T) -> (usize, usize)
+fn linear[T: type](items: []const T, key: T) -> (usize, bool)
+fn exponential[T: type](items: []const T, key: T) -> (usize, bool)
+fn interpolation(items: []const i64, key: i64) -> (usize, bool)
+fn ternary_max[Ctx: type](low: i64, high: i64, ctx: *Ctx, f: fn(*Ctx, i64) -> i64) -> i64
+fn matrix_sorted[T: type](items: []const T, columns: usize, key: T) -> (usize, usize, bool)
+fn kth[T: type](items: []T, k: usize) -> T
+fn kth_deterministic[T: type](items: []T, k: usize) -> T
+fn cycle_floyd[Ctx: type](start: u64, ctx: *Ctx, next: fn(*Ctx, u64) -> u64) -> (usize, usize)
+fn cycle_brent[Ctx: type](start: u64, ctx: *Ctx, next: fn(*Ctx, u64) -> u64) -> (usize, usize)
+```
+
+Sorted-slice entry points order by `T.cmp` and answer an index; the `_by` form takes
+a probe comparing an element against the wanted key. `kth` and `kth_deterministic`
+reorder their slice. The cycle finders answer the tail length and the cycle length.
+
+### `e.algo.sketch`
+
+```neper
+type Bloom = struct { bits: []u64, hashes: u32 }
+type CountingBloom = struct { counts: []u8, hashes: u32 }
+type CountMin = struct { counts: []u32, width: usize, depth: usize }
+type HyperLogLog = struct { registers: []u8, precision: u8 }
+type Counter = struct { key: u64, count: u64 }
+error Invalid
+error TooSmall
+
+fn bloom_size(items: usize, rate: f64) -> (usize, u32)
+fn bloom_init(bits: []u64, hashes: u32) -> (Bloom, err)
+fn bloom_insert(b: *Bloom, item: []const u8)
+fn bloom_contains(b: *const Bloom, item: []const u8) -> bool
+fn bloom_merge(dst: *Bloom, src: *const Bloom) -> err
+fn counting_bloom_init(counts: []u8, hashes: u32) -> (CountingBloom, err)
+fn counting_bloom_insert(b: *CountingBloom, item: []const u8)
+fn counting_bloom_remove(b: *CountingBloom, item: []const u8) -> bool
+fn counting_bloom_contains(b: *const CountingBloom, item: []const u8) -> bool
+fn count_min_init(counts: []u32, width: usize, depth: usize) -> (CountMin, err)
+fn count_min_add(s: *CountMin, item: []const u8, amount: u32)
+fn count_min_add_conservative(s: *CountMin, item: []const u8, amount: u32)
+fn count_min_estimate(s: *const CountMin, item: []const u8) -> u32
+fn hll_init(registers: []u8, precision: u8) -> (HyperLogLog, err)
+fn hll_add(h: *HyperLogLog, item: []const u8)
+fn hll_estimate(h: *const HyperLogLog) -> f64
+fn hll_merge(dst: *HyperLogLog, src: *const HyperLogLog) -> err
+fn counters_clear(counters: []Counter)
+fn misra_gries_add(counters: []Counter, key: u64)
+fn space_saving_add(counters: []Counter, key: u64)
+fn counter_get(counters: []const Counter, key: u64) -> (u64, bool)
+fn minhash_mix(key: u64, permutation: u64) -> u64
+fn minhash(keys: []const u64, signature: []u64)
+fn minhash_similarity(a: []const u64, b: []const u64) -> f64
+fn simhash(features: []const u64, weights: []const u32) -> u64
+fn simhash_distance(a: u64, b: u64) -> u32
+```
+
+Every summary lives in caller storage; items are bytes hashed with
+`e.algo.hash.xxhash64`, and the heavy-hitter and signature entry points take `u64`
+keys. `hll_init` takes a precision in `4..=18` over `1 << precision` registers.
+`bloom_size` answers a bit count that is a multiple of 64.
+
+### `e.algo.coding`
+
+```neper
+type BitWriter = struct { out: []u8, bits: usize }
+type BitReader = struct { data: []const u8, bits: usize }
+type Huffman = struct { lengths: [256]u8, codes: [256]u32 }
+error TooSmall
+error Invalid
+
+fn rle_encode(src: []const u8, dst: []u8) -> (usize, err)
+fn rle_decode(src: []const u8, dst: []u8) -> (usize, err)
+fn varint_encode(value: u64, dst: []u8) -> (usize, err)
+fn varint_decode(src: []const u8) -> (u64, usize, err)
+fn vlq_encode(value: u64, dst: []u8) -> (usize, err)
+fn vlq_decode(src: []const u8) -> (u64, usize, err)
+fn zigzag_encode(value: i64) -> u64
+fn zigzag_decode(value: u64) -> i64
+fn delta_encode(values: []i64)
+fn delta_decode(values: []i64)
+fn delta_delta_encode(values: []i64)
+fn delta_delta_decode(values: []i64)
+fn bit_width(values: []const u64) -> u32
+fn bit_writer(out: []u8) -> BitWriter
+fn write_bits(w: *BitWriter, value: u64, width: u32) -> err
+fn written(w: *const BitWriter) -> usize
+fn bit_reader(data: []const u8) -> BitReader
+fn read_bits(r: *BitReader, width: u32) -> (u64, err)
+fn bits_left(r: *const BitReader) -> usize
+fn bit_pack(values: []const u64, width: u32, dst: []u8) -> (usize, err)
+fn bit_unpack(src: []const u8, width: u32, values: []u64) -> err
+fn for_encode(values: []const u64, dst: []u8) -> (usize, err)
+fn for_decode(src: []const u8, values: []u64) -> err
+fn elias_gamma_write(w: *BitWriter, value: u64) -> err
+fn elias_gamma_read(r: *BitReader) -> (u64, err)
+fn rice_write(w: *BitWriter, value: u64, k: u32) -> err
+fn rice_read(r: *BitReader, k: u32) -> (u64, err)
+fn move_to_front_encode(src: []const u8, dst: []u8) -> err
+fn move_to_front_decode(src: []const u8, dst: []u8) -> err
+fn bwt_encode(src: []const u8, dst: []u8, scratch: []usize) -> (usize, err)
+fn bwt_sift(src: []const u8, scratch: []usize, at: usize, end: usize)
+fn bwt_compare(src: []const u8, a: usize, b: usize) -> i32
+fn bwt_decode(src: []const u8, row: usize, dst: []u8, scratch: []usize) -> err
+fn huffman_build(frequencies: []const u64, limit: u32) -> (Huffman, err)
+fn huffman_canonical(h: *Huffman)
+fn huffman_encode(h: *const Huffman, src: []const u8, w: *BitWriter) -> err
+fn huffman_decode(h: *const Huffman, r: *BitReader, dst: []u8) -> err
+```
+
+Encoders write into caller storage and answer the length used; decoders answer
+`Invalid` for input they cannot read to the end. Bit-level codes share one
+`BitWriter`/`BitReader` cursor, most significant bit first. `huffman_build` yields
+canonical code lengths of at most `limit` bits (`1..=32`); a single used symbol
+gets a one-bit code.
+
 ### `e.algo.complex`
 
 ```neper
@@ -1051,6 +1172,51 @@ fn iterator(s: str) -> Iterator
 fn iterator_next(it: *Iterator) -> (u32, bool)
 fn iterator_next_err(it: *Iterator) -> (u32, bool, err)
 ```
+
+### `e.text.search`
+
+```neper
+type Automaton = struct { next: []u32, fail: []u32, output: []u32, length: []u32, states: usize }
+error TooLong
+error TooSmall
+
+fn kmp_table(pattern: str, table: []usize) -> err
+fn kmp(text: str, pattern: str, table: []const usize) -> (usize, bool)
+fn horspool(text: str, pattern: str) -> (usize, bool)
+fn boyer_moore_table(pattern: str, good_suffix: []usize) -> err
+fn boyer_moore(text: str, pattern: str, good_suffix: []const usize) -> (usize, bool)
+fn rabin_karp(text: str, pattern: str) -> (usize, bool)
+fn aho_corasick_build(a: *mem.Arena, patterns: []const str) -> (Automaton, err)
+fn aho_corasick_find[Ctx: type](m: *const Automaton, text: str, ctx: *Ctx, on_match: fn(*Ctx, usize, usize) -> bool) -> bool
+fn z_array(s: str, z: []usize) -> err
+fn bitap(text: str, pattern: str, errors: u32) -> (usize, bool)
+fn longest_palindrome(s: str, scratch: []usize) -> (usize, usize, err)
+```
+
+Every finder answers the byte offset of the leftmost match and whether one exists;
+an empty pattern matches at 0. `kmp_table` needs `pattern.len` entries and
+`boyer_moore_table` `2 * pattern.len + 2`. The automaton is arena-held and dense:
+`(total pattern bytes + 1) * 256` transitions. `bitap` allows `errors` edits over
+a pattern of at most 64 bytes.
+
+### `e.text.distance`
+
+```neper
+error TooSmall
+error Mismatch
+
+fn levenshtein(a: str, b: str, scratch: []usize) -> (usize, err)
+fn damerau_levenshtein(a: str, b: str, scratch: []usize) -> (usize, err)
+fn hamming(a: str, b: str) -> (usize, err)
+fn jaro(a: str, b: str, scratch: []u8) -> (f64, err)
+fn jaro_winkler(a: str, b: str, scale: f64, scratch: []u8) -> (f64, err)
+fn longest_common_substring(a: str, b: str, scratch: []usize) -> (usize, usize, usize, err)
+fn trigram(a: str, b: str, scratch: []u32) -> (f64, err)
+```
+
+All distances count bytes. Scratch sizes: `levenshtein` and
+`longest_common_substring` need `2 * (b.len + 1)`, `damerau_levenshtein`
+`3 * (b.len + 1)`, `jaro`/`jaro_winkler` and `trigram` `a.len + b.len`.
 
 ### `e.text.unicode`
 

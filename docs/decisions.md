@@ -16168,3 +16168,43 @@ current one (keyed by page index, so a page keeps its key as the window
 slides) and Next, the ends disabled; `carousel` is the view between
 Previous and Next over the indicator, one turn for all. `link/ui_paged`
 swipes, keys, taps and pages on both hosts.
+
+## D834 — The algos.md stream opens: five pure modules over caller storage
+
+`docs/algos.md` annotates 2,250 catalogued algorithms with a verdict:
+1,232 map to a library function, the rest are duplicates or skipped
+with a reason. The stream implements the mapped ones in batches of
+five modules, a fixture per module and both suites per batch, and this
+first batch is the dependency-free core: `e.algo.search` (binary search
+and its bounds, the probe form, exponential, interpolation, ternary and
+saddleback search, quickselect, median of medians, Floyd's and Brent's
+cycle finders), `e.text.search` (KMP, Horspool, full Boyer-Moore,
+Rabin-Karp, an arena-held dense Aho-Corasick automaton, the Z array,
+bitap with edits, Manacher), `e.text.distance` (Levenshtein, optimal
+string alignment, Hamming, Jaro-Winkler, longest common substring,
+trigram Jaccard), `e.algo.sketch` (Bloom and counting filters sized
+from a rate, Count-Min with the conservative update, HyperLogLog with
+linear-counting correction and merge, Misra-Gries, Space-Saving,
+MinHash, SimHash) and `e.algo.coding` (run-length, LEB128, VLQ, ZigZag,
+deltas, bit packing, frame of reference, Elias gamma, Rice, move-to-
+front, Burrows-Wheeler, canonical Huffman with a length limit).
+
+Three rules held across all five. Storage is the caller's: every table,
+row buffer, register file and counter slice is passed in and its
+required size is stated at the declaration, and `TooSmall` is the
+answer to a short one -- only the Aho-Corasick automaton takes an
+arena, because its size is a function of the whole pattern set. Items
+are bytes and keys are `u64`: the sketches hash bytes once with
+`xxhash64` and derive every position by double hashing, while the
+heavy-hitter and signature entry points take keys the caller has
+already reduced, so one hash feeds every summary. A helper is public
+(spec 12), so `bwt_sift`, `bwt_compare`, `huffman_canonical` and
+`minhash_mix` are fenced and documented rather than hidden. Two
+language facts cost a rebuild each: `shared` is a keyword, and a
+shift on a signed value is refused, so ZigZag is written over the
+unsigned bit pattern. Every fixture computes its expected values from
+a naive reference or a Python check kept in the fixture's header
+comment, not by hand; exits are per check on both hosts. The batch was
+built, tested and committed from a detached worktree because a
+concurrent session's commits in the shared tree swept edits of the
+shared files along; that is the rule for the stream from here.

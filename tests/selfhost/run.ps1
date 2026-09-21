@@ -1192,6 +1192,36 @@ $fmtHtmlTemplateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $fmtHtmlTemplateWritten -ne 'executable written') { throw 'fmt_html_template emission failed' }
 & $fmtHtmlTemplatePath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_html_template check failed: exit $LASTEXITCODE" }
+# `e.algo.search`: binary search and its bounds, the probe form, exponential, interpolation, ternary and saddleback search, quickselect and median of medians, and both cycle finders (D834).
+$algoSearchPath = Join-Path $testBuild 'algo-search-selfhost.exe'
+$algoSearchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_search\src\main.e') $repo 'x64' 'windows' $algoSearchPath
+if ($LASTEXITCODE -ne 0 -or $algoSearchWritten -ne 'executable written') { throw 'algo_search emission failed' }
+& $algoSearchPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_search check failed: exit $LASTEXITCODE" }
+# `e.text.search`: KMP, Horspool, Boyer-Moore and Rabin-Karp against a naive scan, Aho-Corasick over nested patterns, the Z array, bitap with edits and Manacher (D834).
+$textSearchPath = Join-Path $testBuild 'text-search-selfhost.exe'
+$textSearchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_search\src\main.e') $repo 'x64' 'windows' $textSearchPath
+if ($LASTEXITCODE -ne 0 -or $textSearchWritten -ne 'executable written') { throw 'text_search emission failed' }
+& $textSearchPath
+if ($LASTEXITCODE -ne 0) { throw "a text_search check failed: exit $LASTEXITCODE" }
+# `e.text.distance`: Levenshtein, Damerau, Hamming, Jaro-Winkler, the longest common substring and trigram similarity against reference values (D834).
+$textDistancePath = Join-Path $testBuild 'text-distance-selfhost.exe'
+$textDistanceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_distance\src\main.e') $repo 'x64' 'windows' $textDistancePath
+if ($LASTEXITCODE -ne 0 -or $textDistanceWritten -ne 'executable written') { throw 'text_distance emission failed' }
+& $textDistancePath
+if ($LASTEXITCODE -ne 0) { throw "a text_distance check failed: exit $LASTEXITCODE" }
+# `e.algo.sketch`: Bloom and counting filters, Count-Min, HyperLogLog, Misra-Gries, Space-Saving, MinHash and SimHash over caller storage (D834).
+$algoSketchPath = Join-Path $testBuild 'algo-sketch-selfhost.exe'
+$algoSketchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_sketch\src\main.e') $repo 'x64' 'windows' $algoSketchPath
+if ($LASTEXITCODE -ne 0 -or $algoSketchWritten -ne 'executable written') { throw 'algo_sketch emission failed' }
+& $algoSketchPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_sketch check failed: exit $LASTEXITCODE" }
+# `e.algo.coding`: run-length, LEB128, VLQ, ZigZag, deltas, bit packing, frame of reference, Elias gamma, Rice, move-to-front, Burrows-Wheeler and canonical Huffman (D834).
+$algoCodingPath = Join-Path $testBuild 'algo-coding-selfhost.exe'
+$algoCodingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_coding\src\main.e') $repo 'x64' 'windows' $algoCodingPath
+if ($LASTEXITCODE -ne 0 -or $algoCodingWritten -ne 'executable written') { throw 'algo_coding emission failed' }
+& $algoCodingPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_coding check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
