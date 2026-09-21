@@ -472,8 +472,14 @@
             "Chip",
             "Rating"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "SplitButton",
+            "MenuButton",
+            "SpeedDial",
+            "Chip",
+            "Rating"
+          ],
+          "evidence": "lib/e/ui/control.e (D829): split_button as a filled primary joined to a chevron button that toggles, says expanded and controls the menu the caller anchors to it; speed_dial as a round button expanding into a modal overlay of its actions above itself; chip in four kinds (a filter chip is a checkbox, an input chip carries a remove button); rating as painted stars set by a tap and stepped by the arrow keys from one focusable row, a slider with digits in the tree; menu_button is lib/e/ui/overlay.e (D827) beside the menu it opens; tests/selfhost/fixtures/link/ui_actions and ui_transient on both hosts"
         },
         {
           "id": "P2-02",

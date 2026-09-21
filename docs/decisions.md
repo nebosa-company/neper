@@ -16000,3 +16000,30 @@ control at every width, so the caller's picks never change with the
 form; where it goes and what lies beside it is the caller's layout.
 `link/ui_navigation` fires, pops, escapes and checks both forms on
 both hosts.
+
+## D829 — Advanced actions: a split button leaves its menu to the caller, a rating is one focus target
+
+P2-01 of the widget plan opens phase 2. `split_button` is a filled
+button joined to a narrower filled button of a chevron (D826's mark,
+pointing down) that fires `toggle`, says expanded while `open`, offers
+the menu and controls `key + 2` -- the menu itself is D827's
+`overlay.menu`, which the caller places anchored to `key + 1` and keyed
+`key + 2`, because `e.ui.control` cannot depend on `e.ui.overlay` and
+a menu that lives beside the menu button (D827) should not be written
+twice; MenuButton, which P2-01 lists under `e.ui.control`, is that
+`overlay.menu_button` and the plan's evidence says so. `speed_dial` is
+a round filled button expanding, while `open`, into a modal overlay
+above itself of its actions as filled buttons keyed `key + 2 + index`,
+a press outside firing `toggle` the way D824's select closes. `chip`
+is one pressable in four kinds: assist and suggestion chips are small
+rounded buttons (outlined and plain), a filter chip is a checkbox in
+the tree, filled and checked while `selected`, and an input chip
+carries a remove button keyed `key + 1` whose press is its own and not
+the chip's. `rating` paints `max` stars (five-pointed paths, filled
+through `value`), each a tap region keyed `key + 1 + index` setting the
+value to its number, and makes the row a single focusable region under
+a scope whose Left and Right step the caller's value by one within
+`0..max` -- one Tab stop, as a rating should be, with the stars
+themselves not focusable -- a slider in the tree named `label` with the
+value as digits. `link/ui_actions` taps, tabs, steps, toggles, opens,
+dismisses and removes on both hosts.

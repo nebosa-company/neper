@@ -1552,3 +1552,256 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
     sem.role = 2u8
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
 }
+
+// ------------------------------------------------- advanced actions (D829, P2-01)
+
+// A split button: the primary action as a filled button keyed `key`, joined to a
+// narrower filled button keyed `key + 1` firing `toggle` for the menu the caller
+// places (D827's `overlay.menu`, anchored to `key + 1` and keyed `key + 2`); the
+// second says expanded while `open`, offers the menu and controls it.
+fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (head, head_error) = button(a, key, t, label, action, button_options())
+    if head_error != ok { ret (zero, head_error) }
+    parts[0usize] = head
+    let look = style.resolve(t.tokens, .Filled, control_state(t, key + 1u64, true, false))
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    marks[0usize] = Mark { color: look.foreground, expanded: true, arena: a }
+    let size = t.tokens.spacing.md
+    var none: []const widget.Node = zero
+    let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint } }, style: sized_style(size, size), children: none }
+    let (tail, tail_error) = pressable_states(a, key + 1u64, t, 3u8, "More", look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
+    if tail_error != ok { ret (zero, tail_error) }
+    parts[1usize] = tail
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: t.tokens.borders.hairline }, style.defaults(), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// A speed dial: a round filled button keyed `key` firing `toggle`, and while
+// `open` a modal overlay above it (keyed `key + 1`) of the actions as filled
+// buttons keyed `key + 2 + index`, a press outside firing `toggle` again. The
+// button says expanded in the tree and controls the list.
+fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, actions: []const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
+    if actions.len != labels.len { ret (zero, TooLarge) }
+    var look = style.resolve(t.tokens, .Filled, control_state(t, key, true, false))
+    look.radius = t.tokens.metrics.hit_target * 0.5
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (head, head_error) = pressable_states(a, key, t, 3u8, label, look, true, false, states, accessibility.ACTION_EXPAND, key + 1u64, toggle, label_node)
+    if head_error != ok { ret (zero, head_error) }
+    var count = 1usize
+    if open { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    if open {
+        let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
+        if items_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < labels.len {
+            let (item, item_error) = button(a, key + 2u64 + u64(i), t, labels[i], &actions[i], button_options())
+            if item_error != ok { ret (zero, item_error) }
+            items[i] = item
+            i += 1usize
+        }
+        let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+        if column_error != ok { ret (zero, TooLarge) }
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .End, cross: .End, gap: t.tokens.spacing.xs }, style.defaults(), items[0usize..labels.len])
+        var sem: widget.Semantics = zero
+        sem.role = 2u8
+        sem.label = label
+        let (listed, listed_error) = mem.alloc[widget.Node](a, 1usize)
+        if listed_error != ok { ret (zero, TooLarge) }
+        listed[0usize] = widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize])
+        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 0.0, y: 0.0 - t.tokens.spacing.xs }, modal: true, dismiss: *toggle }, style.defaults(), listed[0usize..1usize])
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
+}
+
+// What a chip does: an assist chip is a small button, a filter chip a toggle the
+// caller keeps `selected`, an input chip a label with a remove button (keyed
+// `key + 1`, firing `remove`), a suggestion chip a plain button.
+type ChipKind = enum u8 { Assist, Filter, Input, Suggestion }
+
+fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipKind, selected: bool, action: *const widget.Submit, remove: *const widget.Submit) -> (widget.Node, err) {
+    var variant: style.ControlVariant = .Outlined
+    if kind == .Suggestion { variant = .Plain }
+    var chosen = false
+    if kind == .Filter && selected {
+        chosen = true
+        variant = .Filled
+    }
+    var look = style.resolve(t.tokens, variant, control_state(t, key, true, chosen))
+    look.radius = t.tokens.metrics.control_height * 0.5
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    var states = 0u32
+    if kind == .Filter && selected { states = accessibility.STATE_CHECKED }
+    var content = label_node
+    if kind == .Input {
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = label_node
+        var cross = text_options()
+        cross.role = .Label
+        cross.wrap = .None
+        let (cross_node, cross_error) = colored_text(a, 0u64, "x", t, cross, look.foreground)
+        if cross_error != ok { ret (zero, cross_error) }
+        let (removed, removed_error) = mem.alloc[widget.Node](a, 1usize)
+        if removed_error != ok { ret (zero, TooLarge) }
+        removed[0usize] = cross_node
+        let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
+        if hit_error != ok { ret (zero, TooLarge) }
+        var small = style.defaults()
+        small.min_width = style.Length { Px: t.tokens.spacing.lg }
+        small.min_height = style.Length { Px: t.tokens.spacing.lg }
+        hit[0usize] = widget.region(key + 1u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](remove), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, small, removed[0usize..1usize])
+        var remove_sem: widget.Semantics = zero
+        remove_sem.role = 3u8
+        remove_sem.label = "Remove"
+        remove_sem.actions = accessibility.ACTION_PRESS
+        parts[1usize] = widget.semantics(0u64, remove_sem, style.defaults(), hit[0usize..1usize])
+        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..2usize])
+    }
+    var role = 3u8
+    if kind == .Filter { role = 4u8 }
+    let (node, node_error) = pressable_states(a, key, t, role, label, look, true, chosen, states, 0u32, 0u64, action, content)
+    ret (node, node_error)
+}
+
+// A rating's star, painted: five points about the middle, filled or outlined in
+// the primary colour.
+type Star = struct { color: paint.Color, filled: bool, arena: *mem.Arena }
+
+fn star_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let star = mem.cast[*Star](ctx)
+    let (pb, pb_error) = geometry.path_builder(star.arena, 12usize, 12usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    var outer = area.width
+    if area.height < outer { outer = area.height }
+    outer = outer * 0.5 - 1.0
+    let inner = outer * 0.4
+    var i = 0usize
+    while i < 10usize {
+        // Ten vertices, from the top, alternating the outer and inner radius.
+        let angle = 0.0 - 1.5707964 + f32(i) * 0.62831855
+        var radius = outer
+        if i % 2usize == 1usize { radius = inner }
+        let p = geometry.Point { x: cx + math.cos[f32](angle) * radius, y: cy + math.sin[f32](angle) * radius }
+        if i == 0usize {
+            try geometry.move_to(&builder, p)
+        } else {
+            try geometry.line_to(&builder, p)
+        }
+        i += 1usize
+    }
+    try geometry.close_path(&builder)
+    let path = geometry.finish(&builder)
+    if star.filled { ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: star.color } } }) }
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: path, brush: paint.Brush { Solid: star.color }, stroke: paint.Stroke { width: 1.0, cap: .Butt, join: .Miter, miter_limit: 4.0 } } })
+}
+
+// A rating's keyboard: Left and Right move the value by one within `0..max`.
+type Rate = struct { value: u32, max: u32, up: bool, change: widget.Change[u32] }
+
+fn rate_step(ctx: *void) -> err {
+    let r = mem.cast[*Rate](ctx)
+    var next = r.value
+    if r.up {
+        if next < r.max { next += 1u32 }
+    } else {
+        if next > 0u32 { next = next - 1u32 }
+    }
+    ret widget.fire_change[u32](r.change, next)
+}
+
+// A tap on the star `index` sets the rating to it.
+type Rated = struct { value: u32, change: widget.Change[u32] }
+
+fn rate_tap(ctx: *void, g: widget.Gesture) -> err {
+    if g.tag != .Tap { ret ok }
+    let r = mem.cast[*Rated](ctx)
+    ret widget.fire_change[u32](r.change, r.value)
+}
+
+// A rating: `max` stars in a row, the first `value` filled, each a tap region
+// keyed `key + 1 + index` setting the value to its number; the row a focus
+// target whose Left and Right step the value; a slider in the tree named `label`
+// with the value as digits.
+fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u32, max: u32, change: widget.Change[u32]) -> (widget.Node, err) {
+    if max == 0u32 || max > 32u32 { ret (zero, TooLarge) }
+    let count = usize(max)
+    let (stars, stars_error) = mem.alloc[Star](a, count)
+    if stars_error != ok { ret (zero, TooLarge) }
+    let (rated, rated_error) = mem.alloc[Rated](a, count)
+    if rated_error != ok { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, count)
+    if items_error != ok { ret (zero, TooLarge) }
+    let size = t.tokens.metrics.control_height - 2.0 * t.tokens.spacing.xs
+    var none: []const widget.Node = zero
+    var i = 0usize
+    while i < count {
+        stars[i] = Star { color: style.color(t.tokens, .Primary), filled: u32(i) < value, arena: a }
+        rated[i] = Rated { value: u32(i) + 1u32, change: change }
+        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+        if body_error != ok { ret (zero, TooLarge) }
+        body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&stars[i]), measure: mark_measure, paint: star_paint } }, style: sized_style(size, size), children: none }
+        items[i] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, style.defaults(), body[0usize..1usize])
+        i += 1usize
+    }
+    let (steps, steps_error) = mem.alloc[Rate](a, 2usize)
+    if steps_error != ok { ret (zero, TooLarge) }
+    steps[0usize] = Rate { value: value, max: max, up: false, change: change }
+    steps[1usize] = Rate { value: value, max: max, up: true, change: change }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    shortcuts[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[0usize]), invoke: rate_step } }
+    shortcuts[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[1usize]), invoke: rate_step } }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), items[0usize..count])
+    // The row is one focus target so the keyboard reaches it; a press on a star
+    // lands on the star, whose region is under it.
+    var none_gesture: widget.GestureAction = zero
+    let (focus, focus_error) = mem.alloc[widget.Node](a, 1usize)
+    if focus_error != ok { ret (zero, TooLarge) }
+    focus[0usize] = widget.region(key, widget.Region { gesture: none_gesture, gestures: 0u8, enabled: true, focusable: true }, style.defaults(), row[0usize..1usize])
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero }, style.defaults(), focus[0usize..1usize])
+    let (digits, digits_error) = mem.alloc[u8](a, 2usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    var digit_count = 0usize
+    if value >= 10u32 {
+        digits[0usize] = u8(48u32 + value / 10u32)
+        digit_count = 1usize
+    }
+    digits[digit_count] = u8(48u32 + value % 10u32)
+    digit_count += 1usize
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    sem.value = digits[0usize..digit_count]
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}

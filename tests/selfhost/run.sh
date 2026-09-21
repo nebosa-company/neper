@@ -1779,6 +1779,12 @@ ui_navigation_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/ui-navigation-selfhost"
 ui_navigation_output=$("$test_build/ui-navigation-selfhost")
 [ "$ui_navigation_output" = 'ui navigation ok' ]
+# Advanced actions (D829, widget plan P2-01): rating, split button, speed dial, chips.
+ui_actions_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_actions/src/main.e" "$repo" x64 linux "$test_build/ui-actions-selfhost")
+[ "$ui_actions_written" = 'executable written' ]
+chmod +x "$test_build/ui-actions-selfhost"
+ui_actions_output=$("$test_build/ui-actions-selfhost")
+[ "$ui_actions_output" = 'ui actions ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

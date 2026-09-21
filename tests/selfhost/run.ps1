@@ -1843,6 +1843,12 @@ $uiNavigationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $uiNavigationWritten -ne 'executable written') { throw 'ui_navigation emission failed' }
 $uiNavigationOutput = & $uiNavigationPath
 if ($LASTEXITCODE -ne 0 -or $uiNavigationOutput -ne 'ui navigation ok') { throw "the navigation controls answered wrongly: exit $LASTEXITCODE" }
+# Advanced actions (D829, widget plan P2-01): rating, split button, speed dial, chips.
+$uiActionsPath = Join-Path $testBuild 'ui-actions-selfhost.exe'
+$uiActionsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_actions\src\main.e') $repo 'x64' 'windows' $uiActionsPath
+if ($LASTEXITCODE -ne 0 -or $uiActionsWritten -ne 'executable written') { throw 'ui_actions emission failed' }
+$uiActionsOutput = & $uiActionsPath
+if ($LASTEXITCODE -ne 0 -or $uiActionsOutput -ne 'ui actions ok') { throw "the action controls answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -3659,6 +3659,7 @@ type SurfaceOptions = struct { background: style.ColorRole, bordered: bool, radi
 type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32 }
 type Validity = enum u8 { Valid, Warning, Invalid }
 type Message = struct { validity: Validity, text: str }
+type ChipKind = enum u8 { Assist, Filter, Input, Suggestion }
 error TooLarge
 
 fn text_options() -> TextOptions
@@ -3712,6 +3713,10 @@ fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, se
 fn tab_view(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, pages: []const widget.Node) -> (widget.Node, err)
 fn resizable_pane(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node) -> (widget.Node, err)
 fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err)
+fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err)
+fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, actions: []const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err)
+fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipKind, selected: bool, action: *const widget.Submit, remove: *const widget.Submit) -> (widget.Node, err)
+fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u32, max: u32, change: widget.Change[u32]) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
