@@ -37,7 +37,17 @@ type Action = struct { ctx: *void, invoke: fn(*void, input.Event) -> err }
 type Text = struct { value: str, style: layout.Style, color: paint.Color }
 type Button = struct { action: Action, enabled: bool }
 type Image = struct { texture: scene.TextureId, fit: Fit }
-type Scroll = struct { axis: ui_layout.Axis, offset: f32 }
+// A scroll viewport (D808, widget plan P0-05): its children stacked and clipped,
+// moved along `axis` by the wheel, a drag of the content (with momentum after it
+// when asked), and `scroll_to`; `offset` follows D807's rule -- taken when the caller
+// changes it between frames -- and every move is reported through `change`. Past
+// its ends the offset is clamped, or overshoots and springs back. With a
+// `virtual_count` the viewport is lazy: `virtual_count` items of `virtual_extent`
+// each make the content, and the children are the items from `virtual_first` on --
+// the ones `visible_range` names -- keyed by the caller so the reconciler recycles
+// the rest. A scrollbar thumb is painted on the trailing edge when asked.
+type Overscroll = enum u8 { Clamp, Bounce }
+type Scroll = struct { axis: ui_layout.Axis, offset: f32, overscroll: Overscroll, momentum: bool, scrollbar: bool, thumb: paint.Color, change: Change[f32], virtual_first: usize, virtual_count: usize, virtual_extent: f32 }
 type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> geometry.Size, paint: fn(*void, *scene.Builder, geometry.Rect) -> err }
 // Typed actions (D806, widget plan P0-02): a change carries a value of its type, a
 // submit carries nothing; `ctx` outlives the element and never points into the
@@ -112,6 +122,15 @@ type Element = struct {
     enabled: bool,
     scroll_offset: f32,
     scroll_axis: ui_layout.Axis,
+    // A viewport's last node offset (D807's rule), its extents from the last
+    // placement, its momentum, and how it behaves past its ends.
+    node_offset: f32,
+    content_extent: f32,
+    viewport_extent: f32,
+    scroll_velocity: f32,
+    scroll_change: Change[f32],
+    overscroll: Overscroll,
+    momentum: bool,
     state_keys: [8]Key,
     state_ids: [8]StateId,
     state_count: usize,
@@ -535,6 +554,12 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.text_len = n
     case .Scroll as sc:
         e.scroll_axis = sc.axis
+        if sc.offset != e.node_offset { e.scroll_offset = sc.offset }
+        e.node_offset = sc.offset
+        e.scroll_change = sc.change
+        e.overscroll = sc.overscroll
+        e.momentum = sc.momentum
+        e.enabled = true
     case .Box:
         e.enabled = true
     case .Flex as f:
@@ -760,6 +785,11 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         if sc.axis == .Vertical { open.max_height = 3.0e38 } else { open.max_width = 3.0e38 }
         let (content, content_error) = measure_stack(s, a, node, open)
         if content_error != ok { ret (zero, content_error) }
+        if sc.virtual_count != 0usize {
+            let total = f32(sc.virtual_count) * sc.virtual_extent
+            if sc.axis == .Vertical { ret (ui_layout.constrain(geometry.Size { width: content.width, height: total }, inner), ok) }
+            ret (ui_layout.constrain(geometry.Size { width: total, height: content.height }, inner), ok)
+        }
         ret (ui_layout.constrain(content, inner), ok)
     }
     ret (zero, ok)
@@ -875,15 +905,7 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     case .Stack:
         try place_stack(s, a, node, element, inner, inner_limits, b, depth)
     case .Scroll as sc:
-        var open = inner_limits
-        if sc.axis == .Vertical { open.max_height = 3.0e38 } else { open.max_width = 3.0e38 }
-        let offset = s.elements[element].scroll_offset
-        var shifted = inner
-        if sc.axis == .Vertical { shifted.y = inner.y - offset } else { shifted.x = inner.x - offset }
-        try scene.push(b, save)
-        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: inner } })
-        try place_stack(s, a, node, element, shifted, open, b, depth)
-        try scene.push(b, restore)
+        try place_scroll(s, a, node, element, sc, inner, inner_limits, b, depth)
     }
     ret finish_place(b, clipped, layered)
 }
@@ -970,6 +992,64 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
         let c = layout.caret(&copies[0usize], e.caret + s.compose_len)
         try push_rect(b, geometry.Rect { x: c.x, y: c.y, width: 1.0, height: c.height }, origin, ed.color)
     }
+    ret ok
+}
+
+// A viewport: its content measured for the extents, the offset clamped to them
+// (unless it may overshoot), the children placed shifted and clipped -- a lazy
+// viewport's at their item positions -- and the scrollbar thumb over them.
+fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc: Scroll, inner: geometry.Rect, limits: ui_layout.Constraints, b: *scene.Builder, depth: usize) -> err {
+    var save: scene.Command = .Save
+    var restore: scene.Command = .Restore
+    let vertical = sc.axis == .Vertical
+    var open = limits
+    if vertical { open.max_height = 3.0e38 } else { open.max_width = 3.0e38 }
+    var content: f32 = 0.0
+    if sc.virtual_count != 0usize {
+        content = f32(sc.virtual_count) * sc.virtual_extent
+    } else {
+        let (measured, measure_error) = measure_stack(s, a, node, open)
+        if measure_error != ok { ret measure_error }
+        if vertical { content = measured.height } else { content = measured.width }
+    }
+    let e = &s.elements[element]
+    e.content_extent = content
+    if vertical { e.viewport_extent = inner.height } else { e.viewport_extent = inner.width }
+    let most = max_f(content - e.viewport_extent, 0.0)
+    if e.overscroll == .Clamp {
+        if e.scroll_offset > most { e.scroll_offset = most }
+        if e.scroll_offset < 0.0 { e.scroll_offset = 0.0 }
+    }
+    let offset = e.scroll_offset
+    try scene.push(b, save)
+    try scene.push(b, scene.Command { Clip: scene.Clip { Rect: inner } })
+    if sc.virtual_count != 0usize {
+        var i = 0usize
+        while i < node.children.len {
+            let at = f32(sc.virtual_first + i) * sc.virtual_extent - offset
+            var slot = geometry.Rect { x: inner.x, y: inner.y + at, width: inner.width, height: sc.virtual_extent }
+            if !vertical { slot = geometry.Rect { x: inner.x + at, y: inner.y, width: sc.virtual_extent, height: inner.height } }
+            try place(s, a, &node.children[i], child_element(s, element, i), slot, b, depth + 1usize)
+            i += 1usize
+        }
+    } else {
+        var shifted = inner
+        if vertical { shifted.y = inner.y - offset } else { shifted.x = inner.x - offset }
+        try place_stack(s, a, node, element, shifted, open, b, depth)
+    }
+    if sc.scrollbar && content > e.viewport_extent {
+        // ponytail: the thumb is painted, not dragged; a press on it scrolls the content.
+        let viewport = e.viewport_extent
+        var length = viewport * viewport / content
+        if length < 8.0 { length = 8.0 }
+        var at = offset / content * viewport
+        if at > viewport - length { at = viewport - length }
+        if at < 0.0 { at = 0.0 }
+        var thumb = geometry.Rect { x: inner.x + inner.width - 4.0, y: inner.y + at, width: 4.0, height: length }
+        if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 4.0, width: length, height: 4.0 } }
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: thumb, brush: paint.Brush { Solid: sc.thumb } } })
+    }
+    try scene.push(b, restore)
     ret ok
 }
 
@@ -1152,6 +1232,77 @@ fn hit_region(s: *State, index: usize, p: geometry.Point, wanted: u8) -> (usize,
 // since a module-scope constant has no float form.
 fn gesture_slop() -> f32 {
     ret 8.0
+}
+
+// The offset moved by `delta`: clamped to the content, or -- a soft move past an
+// end of a bouncing viewport -- at half speed up to half the viewport; reported.
+fn scroll_by(s: *State, element: usize, delta: f32, soft: bool) -> err {
+    let e = &s.elements[element]
+    let most = max_f(e.content_extent - e.viewport_extent, 0.0)
+    var next = e.scroll_offset + delta
+    if e.overscroll == .Bounce && soft {
+        let give = e.viewport_extent * 0.5
+        if next < 0.0 || next > most { next = e.scroll_offset + delta * 0.5 }
+        if next < 0.0 - give { next = 0.0 - give }
+        if next > most + give { next = most + give }
+    } else {
+        if next > most { next = most }
+        if next < 0.0 { next = 0.0 }
+    }
+    if next == e.scroll_offset { ret ok }
+    e.scroll_offset = next
+    e.invalid = true
+    ret fire_change[f32](e.scroll_change, next)
+}
+
+// The nearest scroll viewport at or above `index`, or none.
+fn scroll_ancestor(s: *State, index: usize) -> (usize, bool) {
+    var at = index
+    while true {
+        let e = &s.elements[at]
+        if e.kind == SCROLL_TAG { ret (at, true) }
+        if !e.has_parent { ret (0usize, false) }
+        at = usize(e.parent)
+    }
+    ret (0usize, false)
+}
+
+fn axis_of(e: *const Element, p: geometry.Point) -> f32 {
+    if e.scroll_axis == .Vertical { ret p.y }
+    ret p.x
+}
+
+// A frame's step for every viewport: momentum carries the offset and decays, an
+// offset past an end springs back once the pointer has let go.
+fn settle_scrolls(s: *State) -> err {
+    var i = 0usize
+    while i < s.elements.len {
+        let e = &s.elements[i]
+        if e.live && e.kind == SCROLL_TAG {
+            if e.scroll_velocity != 0.0 {
+                try scroll_by(s, i, e.scroll_velocity, e.overscroll == .Bounce)
+                e.scroll_velocity = e.scroll_velocity * 0.9
+                if e.scroll_velocity < 0.25 && e.scroll_velocity > -0.25 { e.scroll_velocity = 0.0 }
+            }
+            let held = s.arena_state.pressed && usize(s.arena_state.candidate) == i
+            if !held {
+                let most = max_f(e.content_extent - e.viewport_extent, 0.0)
+                var bound = e.scroll_offset
+                if e.scroll_offset < 0.0 { bound = 0.0 }
+                if e.scroll_offset > most { bound = most }
+                if bound != e.scroll_offset {
+                    var next = e.scroll_offset + (bound - e.scroll_offset) * 0.3
+                    if next - bound < 0.5 && bound - next < 0.5 { next = bound }
+                    e.scroll_velocity = 0.0
+                    e.scroll_offset = next
+                    e.invalid = true
+                    try fire_change[f32](e.scroll_change, next)
+                }
+            }
+        }
+        i += 1usize
+    }
+    ret ok
 }
 
 fn distance_sq(a: geometry.Point, b: geometry.Point) -> f32 {
@@ -1657,11 +1808,25 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             let action = s.elements[found].action
             ret action.invoke(action.ctx, event)
         }
+        let (viewport, has_viewport) = hit_scroll(s, usize(s.root), p.position)
+        if has_viewport {
+            s.arena_state.pressed = true
+            s.arena_state.candidate = u32(viewport)
+            s.arena_state.down = p.position
+            s.arena_state.last = p.position
+            s.arena_state.dragging = false
+            s.elements[viewport].scroll_velocity = 0.0
+        }
     case .PointerUp as p:
         if s.arena_state.pressed {
             s.arena_state.pressed = false
             let candidate = usize(s.arena_state.candidate)
             let e = &s.elements[candidate]
+            if e.live && e.kind == SCROLL_TAG {
+                if !e.momentum { e.scroll_velocity = 0.0 }
+                s.arena_state.dragging = false
+                ret ok
+            }
             if e.live && e.kind == REGION_TAG {
                 if s.arena_state.dragging {
                     s.arena_state.dragging = false
@@ -1685,6 +1850,16 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 edit_move(e, at, true)
                 ret ok
             }
+            if e.live && e.kind == SCROLL_TAG {
+                if !s.arena_state.dragging {
+                    if distance_sq(p.position, s.arena_state.down) <= gesture_slop() * gesture_slop() { ret ok }
+                    s.arena_state.dragging = true
+                }
+                let moved = axis_of(e, s.arena_state.last) - axis_of(e, p.position)
+                s.arena_state.last = p.position
+                e.scroll_velocity = moved
+                ret scroll_by(s, candidate, moved, true)
+            }
             if !e.live || e.kind != REGION_TAG {
                 s.arena_state.pressed = false
                 ret ok
@@ -1694,7 +1869,18 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                 // the pointer is released to whatever scrolls.
                 if distance_sq(p.position, s.arena_state.down) > gesture_slop() * gesture_slop() {
                     if (e.gestures & GESTURE_DRAG) == 0u8 {
+                        // Released to the viewport above the region, which drags from here.
+                        let (viewport, has_viewport) = scroll_ancestor(s, candidate)
                         s.arena_state.pressed = false
+                        if has_viewport {
+                            s.arena_state.pressed = true
+                            s.arena_state.candidate = u32(viewport)
+                            s.arena_state.dragging = true
+                            let moved = axis_of(&s.elements[viewport], s.arena_state.last) - axis_of(&s.elements[viewport], p.position)
+                            s.arena_state.last = p.position
+                            s.elements[viewport].scroll_velocity = moved
+                            ret scroll_by(s, viewport, moved, true)
+                        }
                         ret ok
                     }
                     s.arena_state.dragging = true
@@ -1730,11 +1916,9 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .Scroll as p:
         let (found, has_found) = hit_scroll(s, usize(s.root), p.position)
         if has_found {
-            let e = &s.elements[found]
             // The notch count rides in `device` as its bits (D797); a notch is 40 px.
             let notches = f32(mem.bitcast[i32](p.device)) / 120.0
-            e.scroll_offset = max_f(e.scroll_offset - notches * 40.0, 0.0)
-            e.invalid = true
+            ret scroll_by(s, found, 0.0 - notches * 40.0, false)
         }
     case .KeyDown as k:
         let (taken, key_error) = dispatch_key(s, k)
@@ -1760,7 +1944,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if has_editor { edit_compose(s, editor, c.text) }
         ret ok
     case .Frame as w:
-        ret ok
+        ret settle_scrolls(s)
     case .Close as w:
         ret ok
     case .Resize as m:
@@ -1790,6 +1974,43 @@ fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize,
     if !e.live || e.generation != element.generation || e.kind != EDIT_TAG { ret (0usize, 0usize, false) }
     let (lo, hi) = selection_of(e)
     ret (lo, hi, true)
+}
+
+// A viewport's offset, set (clamped to what was last placed) or read.
+fn scroll_to(widget_runtime: *Runtime, element: ElementId, offset: f32) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (index, found) = element_of(s, element)
+    if !found || s.elements[index].kind != SCROLL_TAG { ret InvalidTree }
+    let e = &s.elements[index]
+    var next = offset
+    let most = max_f(e.content_extent - e.viewport_extent, 0.0)
+    if next > most { next = most }
+    if next < 0.0 { next = 0.0 }
+    e.scroll_offset = next
+    e.scroll_velocity = 0.0
+    e.invalid = true
+    ret ok
+}
+
+fn scroll_offset_of(widget_runtime: *const Runtime, element: ElementId) -> (f32, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret (0.0, false) }
+    let (index, found) = element_of(s, element)
+    if !found || s.elements[index].kind != SCROLL_TAG { ret (0.0, false) }
+    ret (s.elements[index].scroll_offset, true)
+}
+
+// The items of a lazy viewport worth building at `offset`: the first and how many,
+// one beyond each end of the view for overscan.
+fn visible_range(offset: f32, viewport: f32, count: usize, extent: f32) -> (usize, usize) {
+    if count == 0usize || extent <= 0.0 { ret (0usize, 0usize) }
+    var first = 0usize
+    if offset > extent { first = usize(offset / extent) - 1usize }
+    var end = usize((offset + viewport) / extent) + 2usize
+    if end > count { end = count }
+    if first >= end { ret (first, 0usize) }
+    ret (first, end - first)
 }
 
 // The element that has the focus, for a harness or a control.

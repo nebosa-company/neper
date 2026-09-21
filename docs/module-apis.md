@@ -3281,7 +3281,8 @@ type Action = struct { ctx: *void, invoke: fn(*void, input.Event) -> err }
 type Text = struct { value: str, style: layout.Style, color: paint.Color }
 type Button = struct { action: Action, enabled: bool }
 type Image = struct { texture: scene.TextureId, fit: Fit }
-type Scroll = struct { axis: ui_layout.Axis, offset: f32 }
+type Overscroll = enum u8 { Clamp, Bounce }
+type Scroll = struct { axis: ui_layout.Axis, offset: f32, overscroll: Overscroll, momentum: bool, scrollbar: bool, thumb: paint.Color, change: Change[f32], virtual_first: usize, virtual_count: usize, virtual_extent: f32 }
 type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> geometry.Size, paint: fn(*void, *scene.Builder, geometry.Rect) -> err }
 type Change[T: type] = struct { ctx: *void, invoke: fn(*void, T) -> err }
 type Submit = struct { ctx: *void, invoke: fn(*void) -> err }
@@ -3328,6 +3329,9 @@ fn focus(widget_runtime: *Runtime, element: ElementId) -> err
 fn focused(widget_runtime: *const Runtime) -> (ElementId, bool)
 fn edit_value(widget_runtime: *const Runtime, element: ElementId) -> (str, bool)
 fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize, usize, bool)
+fn scroll_to(widget_runtime: *Runtime, element: ElementId, offset: f32) -> err
+fn scroll_offset_of(widget_runtime: *const Runtime, element: ElementId) -> (f32, bool)
+fn visible_range(offset: f32, viewport: f32, count: usize, extent: f32) -> (usize, usize)
 fn close(widget_runtime: *Runtime) -> err
 fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool)
 fn renderer_of(widget_runtime: *Runtime) -> *scene.Renderer
@@ -3376,6 +3380,19 @@ coalesces typed runs; a composition shows at the caret with an underline until i
 text commits it. A value that would not fit its buffer is left as it is. Key codes
 are Windows virtual codes; the X keysyms the editor and the scopes read map onto
 them.
+
+Viewports (D808, widget plan P0-05): a `Scroll` node stacks its children and clips
+them, moved along its axis by the wheel (40 px a notch), by a drag of the content
+past the slop -- including one a tap-only region released -- carried on by momentum
+over the frames after the drag when asked, and by `scroll_to`; its `offset` follows
+the editor's rule and every move is reported through `change`. Past its ends a
+clamped viewport stops and a bouncing one overshoots at half speed up to half its
+extent, springing back over the frames once let go. A `virtual_count` makes the
+viewport lazy: the content is that many items of `virtual_extent`, the children are
+the items from `virtual_first` on -- the ones `visible_range` names for the offset,
+with one of overscan beyond each end -- placed at their item positions, and the
+caller's keys let the reconciler recycle the elements that scrolled out. A
+`scrollbar` paints a thumb on the trailing edge, not dragged.
 
 ### `e.ui.animation`
 

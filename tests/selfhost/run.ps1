@@ -1707,6 +1707,13 @@ $uiEditWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $uiEditWritten -ne 'executable written') { throw 'ui_edit emission failed' }
 $uiEditOutput = & $uiEditPath
 if ($LASTEXITCODE -ne 0 -or $uiEditOutput -ne 'ui edit ok') { throw "the editable text answered wrongly: exit $LASTEXITCODE" }
+# Viewports (D808, widget plan P0-05): the wheel, a drag with momentum, a bounce
+# springing back, a scrollbar thumb, and a lazy viewport recycling its items.
+$uiScrollPath = Join-Path $testBuild 'ui-scroll-selfhost.exe'
+$uiScrollWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_scroll\src\main.e') $repo 'x64' 'windows' $uiScrollPath
+if ($LASTEXITCODE -ne 0 -or $uiScrollWritten -ne 'executable written') { throw 'ui_scroll emission failed' }
+$uiScrollOutput = & $uiScrollPath
+if ($LASTEXITCODE -ne 0 -or $uiScrollOutput -ne 'ui scroll ok') { throw "the viewports answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

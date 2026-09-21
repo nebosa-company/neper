@@ -1643,6 +1643,13 @@ ui_edit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/ui-edit-selfhost"
 ui_edit_output=$("$test_build/ui-edit-selfhost")
 [ "$ui_edit_output" = 'ui edit ok' ]
+# Viewports (D808, widget plan P0-05): the wheel, a drag with momentum, a bounce
+# springing back, a scrollbar thumb, and a lazy viewport recycling its items.
+ui_scroll_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_scroll/src/main.e" "$repo" x64 linux "$test_build/ui-scroll-selfhost")
+[ "$ui_scroll_written" = 'executable written' ]
+chmod +x "$test_build/ui-scroll-selfhost"
+ui_scroll_output=$("$test_build/ui-scroll-selfhost")
+[ "$ui_scroll_output" = 'ui scroll ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

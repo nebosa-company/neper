@@ -87,8 +87,11 @@
             "ScrollViewport",
             "LazyViewport"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "ScrollViewport",
+            "LazyViewport"
+          ],
+          "evidence": "lib/e/ui/widget.e (D808): Scroll with wheel, content drag through the gesture arena (tap-only regions hand over past the slop), per-frame momentum, Clamp/Bounce overscroll with a spring back, a scrollbar thumb, Change[f32] reports, scroll_to/scroll_offset_of; the lazy form places virtual_count items of virtual_extent from virtual_first with visible_range naming the items to build and the reconciler recycling by key; tests/selfhost/fixtures/link/ui_scroll on both hosts"
         },
         {
           "id": "P0-06",

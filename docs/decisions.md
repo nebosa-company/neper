@@ -15499,3 +15499,28 @@ untouched and unreported. An empty editor measures one line tall and
 paints its caret alone. Key codes are Windows virtual codes throughout the
 widget runtime now: the X keysyms the editor and D806's scopes read map
 onto them in one place. `link/ui_edit` runs every rule on both hosts.
+
+## D808 — Viewports in `e.ui.widget`: one `Scroll` kind, lazy by a count
+
+P0-05 of the widget plan. The scroll viewport and the lazy viewport are one
+node kind: a `Scroll` stacks and clips its children and moves them along its
+axis; given a `virtual_count` it is lazy -- the content is that many items
+of `virtual_extent`, its children are the items from `virtual_first` on,
+placed at their item positions, and `visible_range` tells the caller which
+items to build for an offset (one of overscan beyond each end), so the
+reconciler's key matching recycles the elements that scrolled out and
+nothing in the runtime holds an item it cannot see. One kind because the
+wheel, the drag, the momentum, the overscroll and the scrollbar are the
+same either way. The wheel moves 40 px a notch. A press on nothing else
+that travels past the slop drags the content from where it was pressed,
+and a tap-only region lets go of the pointer to the viewport above it at
+that moment (D806's release, now with a taker). Momentum is per frame, not
+per second: the last drag step carries into each `Frame` event and decays
+by a tenth until it is under a quarter pixel, which a harness can replay
+without a clock. Past its ends a clamped viewport stops; a bouncing one
+overshoots a drag at half speed up to half its extent and springs back by
+three tenths of the way each frame once let go. The offset follows D807's
+rule for the caller's value, every move is reported through a
+`Change[f32]`, `scroll_to` sets it clamped, and the scrollbar is a thumb
+on the trailing edge that is painted and not dragged. `link/ui_scroll`
+checks each of these on both hosts.
