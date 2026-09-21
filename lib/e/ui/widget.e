@@ -65,8 +65,10 @@ type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focu
 type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
 // A focus and shortcut scope: Tab and Shift+Tab travel its focusable descendants
 // (and, trapping, never leave it); a key down that matches one of its shortcuts
-// fires it; Enter fires the default action and Escape the cancel one.
-type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit }
+// fires it; Enter fires the default action and Escape the cancel one. A scope with
+// `keys` set takes every key down that reaches it instead (D830), for a control that
+// records keys.
+type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit, keys: Change[input.KeyEvent] }
 // An editable text (D807, widget plan P0-04): the caller owns `buffer` and `len`
 // bytes of it are the value; the runtime edits in place -- caret, selection, typed
 // text, IME composition, clipboard, undo -- and reports every change as the new
@@ -201,6 +203,7 @@ type Element = struct {
     shortcut_count: usize,
     default_action: Submit,
     cancel_action: Submit,
+    keys: Change[input.KeyEvent],
     // An editor's buffer and value length, caret and selection anchor (the selection
     // is between them), text style and actions, and where its text was last placed.
     edit_buffer: []u8,
@@ -814,6 +817,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.shortcut_count = sc.shortcuts.len
         e.default_action = sc.default_action
         e.cancel_action = sc.cancel_action
+        e.keys = sc.keys
     case .Edit as ed:
         // The node's length is taken when the caller changed it since the last
         // frame (or the buffer is another); else the runtime's edits stand, so a
@@ -2432,6 +2436,11 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
     while true {
         let e = &s.elements[at]
         if e.kind == SCOPE_TAG {
+            // A scope that takes every key (D830) takes this one before its shortcuts.
+            if change_set[input.KeyEvent](e.keys.invoke) {
+                let taken = fire_change[input.KeyEvent](e.keys, k)
+                ret (true, taken)
+            }
             var i = 0usize
             while i < e.shortcut_count {
                 let shortcut = e.shortcuts[i]

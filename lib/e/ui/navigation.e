@@ -180,7 +180,7 @@ fn navigation_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     var cancel: widget.Submit = zero
     if top > 0usize { cancel = *pop }
     var shortcuts: []const widget.Shortcut = zero
-    ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: cancel }, style.defaults(), column[0usize..1usize]), ok)
+    ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: cancel, keys: zero }, style.defaults(), column[0usize..1usize]), ok)
 }
 
 // The form the top-level destinations take at a width: a bar along the bottom on

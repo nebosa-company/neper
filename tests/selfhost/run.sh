@@ -1785,6 +1785,13 @@ ui_actions_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-actions-selfhost"
 ui_actions_output=$("$test_build/ui-actions-selfhost")
 [ "$ui_actions_output" = 'ui actions ok' ]
+# Numeric and shortcut input (D830, widget plan P2-02): stepper, spin box, dial,
+# shortcut recorder.
+ui_numeric_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_numeric/src/main.e" "$repo" x64 linux "$test_build/ui-numeric-selfhost")
+[ "$ui_numeric_written" = 'executable written' ]
+chmod +x "$test_build/ui-numeric-selfhost"
+ui_numeric_output=$("$test_build/ui-numeric-selfhost")
+[ "$ui_numeric_output" = 'ui numeric ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

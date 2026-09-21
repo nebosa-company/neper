@@ -92,7 +92,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var scope_style = style.defaults()
     scope_style.width = style.Length { Px: 32.0 }
     scope_style.height = style.Length { Px: 32.0 }
-    let root = widget.scope(1u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: widget.Submit { ctx: mem.cast[*void](&log), invoke: on_cancel } }, scope_style, zero)
+    let root = widget.scope(1u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: widget.Submit { ctx: mem.cast[*void](&log), invoke: on_cancel }, keys: zero }, scope_style, zero)
     let (frame_storage, storage_error) = mem.alloc[u8](a, 65536usize)
     if storage_error != ok { os.exit(19i32) }
     var frame = mem.arena_from(frame_storage)

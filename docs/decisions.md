@@ -16027,3 +16027,32 @@ a scope whose Left and Right step the caller's value by one within
 themselves not focusable -- a slider in the tree named `label` with the
 value as digits. `link/ui_actions` taps, tabs, steps, toggles, opens,
 dismisses and removes on both hosts.
+
+## D830 — Numeric and shortcut input: a scope may take every key, a dial reads the pointer's angle
+
+P2-02 of the widget plan. `stepper` is a "-" and a "+" button (keyed
+`key + 1` and `key + 2`, each disabled at its bound) around the value
+as text, under a scope whose Up and Down are the same two steps, so
+the keyboard works from either button; the caller's `value` moves by
+`step` within `low..high` through `change`; a slider in the tree with
+the digits as its value. `spin_box` puts D823's text field between the
+same buttons: the control writes the value's digits into the caller's
+buffer each frame (the editor keeps what was typed while the length
+does not change, D823's rule), typed text reaches `typed` for the
+caller to parse, and Up and Down in the field reach the scope because
+a single-line editor never took them. `dial` is a custom-painted knob
+-- a stroked circle and a pointer line -- whose value runs three
+quarters of a turn from the lower left clockwise; a press or a drag
+turns it to where the pointer points, read as `atan2` about the knob's
+middle and clamped to the turn, stateless across frames the way D826's
+handle is; the arrow keys turn it a hundredth of the range. The
+`shortcut_recorder` needed one runtime addition: `Scope.keys`, a
+`Change[input.KeyEvent]` which, when set, takes every key down that
+reaches the scope before its shortcuts, so a control can record what
+was pressed without the runtime knowing what a recorder is. While
+`recording`, the recorder's scope has it: a lone modifier is waited
+through, Escape captures a chord with no key, anything else captures
+D818's normalised key code with the modifiers held; the caller keeps
+the `Chord`, formats nothing (the control names it: "Ctrl+Shift+S",
+"Enter", "Key123") and stops recording when it likes. `link/ui_numeric`
+steps, types, turns, drags and records on both hosts.

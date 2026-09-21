@@ -491,8 +491,13 @@
             "Dial",
             "ShortcutRecorder"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "SpinBox",
+            "Stepper",
+            "Dial",
+            "ShortcutRecorder"
+          ],
+          "evidence": "lib/e/ui/control.e (D830): stepper as two bound-disabled buttons around the value with Up/Down as scope shortcuts, spin_box as a text field over the caller's buffer holding the value's digits with the same buttons and keys and typed text reported to the caller, dial as a custom-painted knob turned to where the pointer points (atan2 about its middle over three quarters of a turn) and by a hundredth on the arrow keys, shortcut_recorder naming a Chord and taking every key through the new Scope.keys while recording; tests/selfhost/fixtures/link/ui_numeric on both hosts"
         },
         {
           "id": "P2-03",

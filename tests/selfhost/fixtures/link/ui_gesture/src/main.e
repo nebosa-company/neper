@@ -111,7 +111,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { os.exit(7i32) }
     column_node[0usize] = widget.flex(4u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 10.0 }, column, children[0usize..3usize])
-    let root = widget.scope(5u64, widget.Scope { traps_focus: true, shortcuts: shortcuts[0usize..1usize], default_action: widget.Submit { ctx: ctx, invoke: on_submit }, cancel_action: widget.Submit { ctx: ctx, invoke: on_cancel } }, sized(64.0, 100.0), column_node[0usize..1usize])
+    let root = widget.scope(5u64, widget.Scope { traps_focus: true, shortcuts: shortcuts[0usize..1usize], default_action: widget.Submit { ctx: ctx, invoke: on_submit }, cancel_action: widget.Submit { ctx: ctx, invoke: on_cancel }, keys: zero }, sized(64.0, 100.0), column_node[0usize..1usize])
     let (frame_storage, storage_error) = mem.alloc[u8](a, 262144usize)
     if storage_error != ok { os.exit(8i32) }
     var frame = mem.arena_from(frame_storage)

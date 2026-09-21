@@ -2032,6 +2032,7 @@
     "e.text.layout",
     "e.text.shape",
     "e.ui.accessibility",
+    "e.ui.input",
     "e.ui.layout",
     "e.ui.style",
     "e.ui.widget"

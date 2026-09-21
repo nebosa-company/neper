@@ -17,6 +17,7 @@ use e.gfx.scene
 use e.text.layout
 use e.text.shape
 use e.ui.accessibility
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
@@ -1176,7 +1177,7 @@ fn form(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, width: f32,
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: none, default_action: submit, cancel_action: cancel }, style.defaults(), body[0usize..1usize])
+    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), body[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
@@ -1375,7 +1376,7 @@ fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, se
     }
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero }, style.defaults(), row[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), row[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 20u8
     sem.column_count = u32(labels.len)
@@ -1512,7 +1513,7 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     grip_node[0usize] = widget.region(key + 2u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&handles[0usize]), invoke: handle_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: true }, grip, zero)
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero }, style.defaults(), grip_node[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), grip_node[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 15u8
     sem.label = label
@@ -1788,7 +1789,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     focus[0usize] = widget.region(key, widget.Region { gesture: none_gesture, gestures: 0u8, enabled: true, focusable: true }, style.defaults(), row[0usize..1usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero }, style.defaults(), focus[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focus[0usize..1usize])
     let (digits, digits_error) = mem.alloc[u8](a, 2usize)
     if digits_error != ok { ret (zero, TooLarge) }
     var digit_count = 0usize
@@ -1803,5 +1804,366 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     sem.label = label
     sem.value = digits[0usize..digit_count]
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// ------------------------------------------ numeric and shortcut input (D830, P2-02)
+
+// A signed integer as decimal digits into `out`; the length written (0 when it
+// does not fit).
+fn write_i64(out: []u8, value: i64) -> usize {
+    var digits: [20]u8 = zero
+    var count = 0usize
+    var magnitude = value
+    let negative = value < 0i64
+    if negative { magnitude = 0i64 - value }
+    if magnitude == 0i64 {
+        digits[0usize] = 48u8
+        count = 1usize
+    }
+    while magnitude > 0i64 {
+        digits[count] = u8(48i64 + magnitude % 10i64)
+        magnitude = magnitude / 10i64
+        count += 1usize
+    }
+    var needed = count
+    if negative { needed += 1usize }
+    if needed > out.len { ret 0usize }
+    var at = 0usize
+    if negative {
+        out[0usize] = 45u8
+        at = 1usize
+    }
+    while count > 0usize {
+        count = count - 1usize
+        out[at] = digits[count]
+        at += 1usize
+    }
+    ret at
+}
+
+// A step of an integer value: what it is, its limits, the amount, whom to tell.
+type Step = struct { value: i64, low: i64, high: i64, amount: i64, change: widget.Change[i64] }
+
+fn step_fire(ctx: *void) -> err {
+    let s = mem.cast[*Step](ctx)
+    var next = s.value + s.amount
+    if next > s.high { next = s.high }
+    if next < s.low { next = s.low }
+    if next == s.value { ret ok }
+    ret widget.fire_change[i64](s.change, next)
+}
+
+// The two step buttons (keyed `less` and `more`) and the Up/Down shortcuts of a
+// stepper or a spin box, the steps allocated for the frame.
+fn step_pair(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.Key, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64]) -> ([]widget.Node, []widget.Shortcut, err) {
+    let (steps, steps_error) = mem.alloc[Step](a, 2usize)
+    if steps_error != ok { ret (zero, zero, TooLarge) }
+    steps[0usize] = Step { value: value, low: low, high: high, amount: 0i64 - step, change: change }
+    steps[1usize] = Step { value: value, low: low, high: high, amount: step, change: change }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 2usize)
+    if actions_error != ok { ret (zero, zero, TooLarge) }
+    actions[0usize] = widget.Submit { ctx: mem.cast[*void](&steps[0usize]), invoke: step_fire }
+    actions[1usize] = widget.Submit { ctx: mem.cast[*void](&steps[1usize]), invoke: step_fire }
+    let (buttons, buttons_error) = mem.alloc[widget.Node](a, 2usize)
+    if buttons_error != ok { ret (zero, zero, TooLarge) }
+    var down = button_options()
+    down.variant = .Outlined
+    down.enabled = value > low
+    let (minus, minus_error) = button(a, less, t, "-", &actions[0usize], down)
+    if minus_error != ok { ret (zero, zero, minus_error) }
+    buttons[0usize] = minus
+    var up = button_options()
+    up.variant = .Outlined
+    up.enabled = value < high
+    let (plus, plus_error) = button(a, more, t, "+", &actions[1usize], up)
+    if plus_error != ok { ret (zero, zero, plus_error) }
+    buttons[1usize] = plus
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, zero, TooLarge) }
+    shortcuts[0usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: actions[0usize] }
+    shortcuts[1usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: actions[1usize] }
+    ret (buttons, shortcuts, ok)
+}
+
+// The row of a stepper or a spin box under its scope and its slider semantics.
+fn stepped(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i64, middle: widget.Node, buttons: []widget.Node, shortcuts: []widget.Shortcut, role: u8) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = buttons[0usize]
+    parts[1usize] = middle
+    parts[2usize] = buttons[1usize]
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..3usize])
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), row[0usize..1usize])
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    let digit_count = write_i64(digits, value)
+    var sem: widget.Semantics = zero
+    sem.role = role
+    sem.label = label
+    sem.value = digits[0usize..digit_count]
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
+    ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// A stepper: the value as text between a "-" button (keyed `key + 1`) and a "+"
+// button (`key + 2`), each disabled at its bound, moving the caller's `value` by
+// `step` within `low..high`; Up and Down from either do the same. A slider in the
+// tree named `label` with the value as digits.
+fn stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64]) -> (widget.Node, err) {
+    let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
+    if pair_error != ok { ret (zero, pair_error) }
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    let digit_count = write_i64(digits, value)
+    var caption = text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    caption.align = .Center
+    let (shown, shown_error) = text_node(a, 0u64, digits[0usize..digit_count], t, caption)
+    if shown_error != ok { ret (zero, shown_error) }
+    var fixed = shown
+    fixed.style.min_width = style.Length { Px: t.tokens.metrics.hit_target }
+    let (made, made_error) = stepped(a, key, t, label, value, fixed, buttons, shortcuts, 15u8)
+    ret (made, made_error)
+}
+
+// A spin box: a text field (keyed `key`) over the caller's `buffer` showing
+// `value` as digits, between the stepper's buttons (`key + 1`, `key + 2`); typed
+// text reaches `typed` for the caller to parse, the buttons and Up/Down move
+// `value` through `change`. A group in the tree named `label`, the field inside
+// it labelled the same.
+fn spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str]) -> (widget.Node, err) {
+    let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
+    if pair_error != ok { ret (zero, pair_error) }
+    let len = write_i64(buffer, value)
+    var options = field_options()
+    options.width = 4.0 * t.tokens.spacing.lg
+    let (editor, editor_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
+    if editor_error != ok { ret (zero, editor_error) }
+    let (made, made_error) = stepped(a, key + 3u64, t, label, value, editor, buttons, shortcuts, 2u8)
+    ret (made, made_error)
+}
+
+// A dial's paint and pointer: the value's share of the turn, where it is, whom to
+// tell. The knob is a stroked circle with a line from the middle at the share's
+// angle, which runs three quarters of a turn from the lower left clockwise.
+type Knob = struct { runtime: *widget.Runtime, key: widget.Key, track: paint.Color, fill: paint.Color, share: f32, low: f32, high: f32, change: widget.Change[f32], arena: *mem.Arena }
+
+fn knob_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let k = mem.cast[*Knob](ctx)
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    var radius = area.width
+    if area.height < radius { radius = area.height }
+    radius = radius * 0.5 - 2.0
+    if radius <= 0.0 { ret ok }
+    let (ring, ring_error) = arc_path(k.arena, cx, cy, radius, 1.0)
+    if ring_error != ok { ret ring_error }
+    let stroke = paint.Stroke { width: 2.0, cap: .Round, join: .Round, miter_limit: 4.0 }
+    try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: ring, brush: paint.Brush { Solid: k.track }, stroke: stroke } })
+    let angle = 0.0 - 2.3561945 + k.share * 4.712389
+    let (pb, pb_error) = geometry.path_builder(k.arena, 2usize, 2usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    try geometry.move_to(&builder, geometry.Point { x: cx, y: cy })
+    try geometry.line_to(&builder, geometry.Point { x: cx + math.sin[f32](angle) * radius, y: cy - math.cos[f32](angle) * radius })
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&builder), brush: paint.Brush { Solid: k.fill }, stroke: stroke } })
+}
+
+// The pointer's angle about the knob's middle, clockwise from the top, becomes
+// the share of the three-quarter turn; outside the turn the share is the nearer end.
+fn knob_at(k: *const Knob, p: geometry.Point) -> err {
+    let (area, has_area) = keyed_bounds(k.runtime, k.key)
+    if !has_area { ret ok }
+    let dx = p.x - (area.x + area.width * 0.5)
+    let dy = p.y - (area.y + area.height * 0.5)
+    var angle = math.atan2[f32](dx, 0.0 - dy)
+    if angle < 0.0 - 2.3561945 { angle = 0.0 - 2.3561945 }
+    if angle > 2.3561945 { angle = 2.3561945 }
+    let share = (angle + 2.3561945) / 4.712389
+    ret widget.fire_change[f32](k.change, k.low + share * (k.high - k.low))
+}
+
+fn knob_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let k = mem.cast[*Knob](ctx)
+    switch g {
+    case .Tap as p:
+        ret knob_at(k, p)
+    case .DragMove as d:
+        ret knob_at(k, d.position)
+    default:
+        ret ok
+    }
+}
+
+// A dial's keyboard: a hundredth of the range either way.
+type Turn = struct { knob: *Knob, up: bool }
+
+fn turn_fire(ctx: *void) -> err {
+    let turn = mem.cast[*Turn](ctx)
+    let k = turn.knob
+    var share = k.share
+    if turn.up {
+        share += 0.01
+    } else {
+        share = share - 0.01
+    }
+    if share > 1.0 { share = 1.0 }
+    if share < 0.0 { share = 0.0 }
+    ret widget.fire_change[f32](k.change, k.low + share * (k.high - k.low))
+}
+
+// A dial: a knob of `size` whose pointer stands at `value` within `low..high`;
+// a press or a drag turns it to where the pointer points, the arrow keys turn it
+// a hundredth of the range. A slider in the tree named `label` with the value as
+// digits (rounded).
+fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, change: widget.Change[f32], size: f32) -> (widget.Node, err) {
+    if high <= low { ret (zero, TooLarge) }
+    var share = (value - low) / (high - low)
+    if share < 0.0 { share = 0.0 }
+    if share > 1.0 { share = 1.0 }
+    let (knobs, knobs_error) = mem.alloc[Knob](a, 1usize)
+    if knobs_error != ok { ret (zero, TooLarge) }
+    knobs[0usize] = Knob { runtime: t.runtime, key: key, track: style.color(t.tokens, .Border), fill: style.color(t.tokens, .Primary), share: share, low: low, high: high, change: change, arena: a }
+    let (turns, turns_error) = mem.alloc[Turn](a, 2usize)
+    if turns_error != ok { ret (zero, TooLarge) }
+    turns[0usize] = Turn { knob: &knobs[0usize], up: false }
+    turns[1usize] = Turn { knob: &knobs[0usize], up: true }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    let less = widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: turn_fire }
+    let more = widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: turn_fire }
+    shortcuts[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: less }
+    shortcuts[1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: less }
+    shortcuts[2usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: more }
+    shortcuts[3usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: more }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    var none: []const widget.Node = zero
+    body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&knobs[0usize]), measure: mark_measure, paint: knob_paint } }, style: sized_style(size, size), children: none }
+    let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
+    if hit_error != ok { ret (zero, TooLarge) }
+    hit[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&knobs[0usize]), invoke: knob_gesture }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: true }, sized_style(size, size), body[0usize..1usize])
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), hit[0usize..1usize])
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    var rounded = value + 0.5
+    if value < 0.0 { rounded = value - 0.5 }
+    let digit_count = write_i64(digits, i64(rounded))
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    sem.value = digits[0usize..digit_count]
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// A keyboard chord: a key code as `widget.key_code` normalises it (0 for none)
+// and its modifiers.
+type Chord = struct { key: u32, modifiers: input.Modifiers }
+
+// The chord as text into `out`: the modifiers first, then the key by name.
+fn write_chord(out: []u8, chord: Chord) -> usize {
+    var at = 0usize
+    if chord.key == 0u32 { ret write_word(out, at, "None") }
+    if chord.modifiers.control { at = write_word(out, at, "Ctrl+") }
+    if chord.modifiers.shift { at = write_word(out, at, "Shift+") }
+    if chord.modifiers.alt { at = write_word(out, at, "Alt+") }
+    if chord.modifiers.meta { at = write_word(out, at, "Meta+") }
+    let code = chord.key
+    if (code >= 65u32 && code <= 90u32) || (code >= 48u32 && code <= 57u32) {
+        if at < out.len {
+            out[at] = u8(code)
+            at += 1usize
+        }
+        ret at
+    }
+    if code == 13u32 { ret write_word(out, at, "Enter") }
+    if code == 27u32 { ret write_word(out, at, "Escape") }
+    if code == 32u32 { ret write_word(out, at, "Space") }
+    if code == 9u32 { ret write_word(out, at, "Tab") }
+    if code == 8u32 { ret write_word(out, at, "Backspace") }
+    if code == 46u32 { ret write_word(out, at, "Delete") }
+    if code == 37u32 { ret write_word(out, at, "Left") }
+    if code == 38u32 { ret write_word(out, at, "Up") }
+    if code == 39u32 { ret write_word(out, at, "Right") }
+    if code == 40u32 { ret write_word(out, at, "Down") }
+    if code == 36u32 { ret write_word(out, at, "Home") }
+    if code == 35u32 { ret write_word(out, at, "End") }
+    at = write_word(out, at, "Key")
+    let wrote = write_i64(out[at..out.len], i64(code))
+    ret at + wrote
+}
+
+fn write_word(out: []u8, at: usize, word: str) -> usize {
+    var n = at
+    var i = 0usize
+    while i < word.len && n < out.len {
+        out[n] = word[i]
+        n += 1usize
+        i += 1usize
+    }
+    ret n
+}
+
+// A recorder's capture: every key down while recording reaches it; a modifier on
+// its own is waited through, Escape captures nothing (a chord with no key), any
+// other key captures itself with the modifiers held.
+type Recorder = struct { capture: widget.Change[Chord] }
+
+fn record_key(ctx: *void, k: input.KeyEvent) -> err {
+    let r = mem.cast[*Recorder](ctx)
+    let physical = k.key.physical
+    if physical >= 65505u32 && physical <= 65518u32 { ret ok }
+    let code = widget.key_code(physical)
+    if code == 27u32 { ret widget.fire_change[Chord](r.capture, Chord { key: 0u32, modifiers: zero }) }
+    ret widget.fire_change[Chord](r.capture, Chord { key: code, modifiers: k.modifiers })
+}
+
+// A shortcut recorder: an outlined field (keyed `key`) showing `chord` by name,
+// or "Press keys" while `recording`; a press fires `start` (the caller then
+// records, and the focus is on the field), and while recording every key down
+// reaches `capture` as a chord -- Escape as none -- for the caller to keep and
+// stop on. A button in the tree named `label` with the chord as its value.
+fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chord: Chord, recording: bool, start: *const widget.Submit, capture: widget.Change[Chord]) -> (widget.Node, err) {
+    let (text_bytes, text_error) = mem.alloc[u8](a, 48usize)
+    if text_error != ok { ret (zero, TooLarge) }
+    var shown_len = write_chord(text_bytes, chord)
+    if recording { shown_len = write_word(text_bytes, 0usize, "Press keys") }
+    let shown: str = text_bytes[0usize..shown_len]
+    var state = control_state(t, key, true, recording)
+    let look = style.resolve(t.tokens, .Outlined, state)
+    var caption = text_options()
+    caption.role = .Body
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, shown, t, caption, look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    let (field_node, field_error) = pressable_states(a, key, t, 3u8, label, look, true, recording, 0u32, 0u32, 0u64, start, label_node)
+    if field_error != ok { ret (zero, field_error) }
+    var keys: widget.Change[input.KeyEvent] = zero
+    if recording {
+        let (recorders, recorders_error) = mem.alloc[Recorder](a, 1usize)
+        if recorders_error != ok { ret (zero, TooLarge) }
+        recorders[0usize] = Recorder { capture: capture }
+        keys = widget.Change[input.KeyEvent] { ctx: mem.cast[*void](&recorders[0usize]), invoke: record_key }
+    }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = field_node
+    var none: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: none, default_action: zero, cancel_action: zero, keys: keys }, style.defaults(), body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    sem.value = shown
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }

@@ -92,7 +92,7 @@ fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss }, style.defaults(), column[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), column[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 21u8
     sem.label = label
@@ -197,7 +197,7 @@ fn alert_dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel }, style.defaults(), card[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), card[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 23u8
     sem.label = title

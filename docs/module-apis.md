@@ -3326,7 +3326,7 @@ type Gesture = union enum u8 { Tap: geometry.Point, DragStart: geometry.Point, D
 type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
 type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
 type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
-type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit }
+type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit, keys: Change[input.KeyEvent] }
 type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool, secret: bool }
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
 type Placement = enum u8 { Below, Above, Right, Left, Center }
@@ -3660,6 +3660,7 @@ type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, i
 type Validity = enum u8 { Valid, Warning, Invalid }
 type Message = struct { validity: Validity, text: str }
 type ChipKind = enum u8 { Assist, Filter, Input, Suggestion }
+type Chord = struct { key: u32, modifiers: input.Modifiers }
 error TooLarge
 
 fn text_options() -> TextOptions
@@ -3717,6 +3718,10 @@ fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, act
 fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, actions: []const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err)
 fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipKind, selected: bool, action: *const widget.Submit, remove: *const widget.Submit) -> (widget.Node, err)
 fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u32, max: u32, change: widget.Change[u32]) -> (widget.Node, err)
+fn stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64]) -> (widget.Node, err)
+fn spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str]) -> (widget.Node, err)
+fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, change: widget.Change[f32], size: f32) -> (widget.Node, err)
+fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chord: Chord, recording: bool, start: *const widget.Submit, capture: widget.Change[Chord]) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
