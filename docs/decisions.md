@@ -15834,3 +15834,25 @@ slider role offering increment, decrement and set value. `link/ui_slider`
 checks the press, the snap, the drags past both ends, the keys, the
 caller's value, the painted fill and the range's nearer thumb on both
 hosts.
+
+## D822 — Progress: a bar of two boxes, a ring of stroked quarter turns
+
+P1-09 of the widget plan. A progress bar is two boxes: a rounded track
+in the variant surface that clips, and a filled part in the primary
+colour whose width is the value's share of the track -- keyed `key + 1`
+so a harness can measure it -- or, indeterminate, a quarter of the track
+a quarter in, since nothing animates it yet and a still segment says
+"working" better than an empty track. A ring is the first custom-painted
+control: a `Custom` node whose context lives in the frame arena, which
+is safe because a custom node's context is read during placement only,
+and whose paths are built in that same arena, because the scene copies
+a path when the frame is compiled and that is after the paint returned
+-- a path on the stack would have been gone. The circle and the arc are
+cubic quarter turns from the top, clockwise, with the control points
+kappa along the tangents, and a partial quarter is a fan of ten chords
+rather than a cubic cut short. Both say progress in the tree and busy
+when indeterminate. A percent margin resolves against the constraints
+when measured and against the outer box when placed, which put the
+segment at three eighths; the control offsets in pixels it computes
+from the width it was given. `link/ui_progress` measures the bars and
+reads the ring's pixels on both hosts.

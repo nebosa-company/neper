@@ -3688,6 +3688,8 @@ fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, o
 fn segmented_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, selected: usize, actions: []const widget.Submit, enabled: bool) -> (widget.Node, err)
 fn slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], enabled: bool) -> (widget.Node, err)
 fn range_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err)
+fn progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32) -> (widget.Node, err)
+fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
@@ -3735,6 +3737,14 @@ Range selection (D820, P1-08): `slider` and `range_slider` are a `widget.Slider`
 in the theme's colours -- the track in the border colour, the filled part and the
 thumbs in the primary -- 120 px long at the control height with the label beside,
 a slider in the tree offering increment, decrement and set value.
+
+Progress (D822, P1-09): `progress_bar` is a rounded track in the variant surface
+with the filled part (keyed `key + 1`) in the primary colour as wide as the value
+says, a quarter-wide segment a quarter in when indeterminate; `progress_ring` is a
+custom-painted ring, the track and the arc from the top through the value's share
+of the turn as stroked cubic quarter turns, a quarter when indeterminate. Both are
+progress in the tree, busy when indeterminate; neither animates -- an indeterminate
+one shows a still segment until the animation system drives it.
 
 ### `e.ui.app`
 

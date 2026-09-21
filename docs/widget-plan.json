@@ -336,8 +336,11 @@
             "ProgressBar",
             "ProgressRing"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "ProgressBar",
+            "ProgressRing"
+          ],
+          "evidence": "lib/e/ui/control.e (D822): progress_bar as a rounded track with a proportional fill or a still indeterminate segment, progress_ring as a custom-painted stroked arc of cubic quarter turns, both with the progress role and the busy state; tests/selfhost/fixtures/link/ui_progress on both hosts"
         },
         {
           "id": "P1-10",

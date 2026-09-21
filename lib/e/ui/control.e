@@ -9,6 +9,7 @@
 // editor over the caller's buffer, `rich_text` as spans on one line with links,
 // `icon` and `image` with a semantic label, `canvas` as custom paint with one.
 
+use e.math
 use e.mem
 use e.gfx.geometry
 use e.gfx.paint
@@ -647,4 +648,153 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
     if !enabled { sem.states = accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// ------------------------------------------------------------ progress (D822, P1-09)
+
+// A progress bar: a track in the variant surface, the filled part -- keyed
+// `key + 1` -- in the primary colour as wide as `value` (0..1) says; indeterminate,
+// a quarter-wide segment sits a quarter in and the tree says busy. A progress role
+// in the tree with the label.
+fn progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32) -> (widget.Node, err) {
+    var share = value
+    if share < 0.0 { share = 0.0 }
+    if share > 1.0 { share = 1.0 }
+    let height = t.tokens.spacing.sm
+    var track = sized_style(width, height)
+    track.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
+    track.radius = height * 0.5
+    track.overflow = .Clip
+    var filled = style.defaults()
+    filled.height = style.Length { Px: height }
+    filled.width = style.Length { Percent: share * 100.0 }
+    filled.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+    filled.radius = height * 0.5
+    if indeterminate {
+        filled.width = style.Length { Px: width * 0.25 }
+        filled.margin = style.EdgeLengths { left: style.Length { Px: width * 0.25 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    }
+    let (fill, fill_error) = mem.alloc[widget.Node](a, 1usize)
+    if fill_error != ok { ret (zero, TooLarge) }
+    fill[0usize] = widget.box(key + 1u64, filled, zero)
+    let (bar, bar_error) = mem.alloc[widget.Node](a, 1usize)
+    if bar_error != ok { ret (zero, TooLarge) }
+    bar[0usize] = widget.box(0u64, track, fill[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    if indeterminate { sem.states = accessibility.STATE_BUSY }
+    ret (widget.semantics(key, sem, style.defaults(), bar[0usize..1usize]), ok)
+}
+
+// What a ring paints: its colours and its share, kept in the frame arena, which
+// outlives the paint (a custom node's context is read during placement only), and
+// the arena its paths are built in -- the frame's, since the scene copies a path
+// when the frame is compiled, after the paint returned.
+type Ring = struct { track: paint.Color, fill: paint.Color, share: f32, thickness: f32, arena: *mem.Arena }
+
+fn ring_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+// A circle, or the arc from the top clockwise through `share` of it, as cubic
+// quarter turns and one shorter piece; `kappa` puts the control points on the circle.
+fn arc_path(a: *mem.Arena, cx: f32, cy: f32, radius: f32, share: f32) -> (geometry.Path, err) {
+    let (pb, pb_error) = geometry.path_builder(a, 12usize, 40usize)
+    if pb_error != ok { ret (zero, TooLarge) }
+    var builder = pb
+    var remaining = share * 4.0
+    if remaining > 4.0 { remaining = 4.0 }
+    // The quarter turns from the top, clockwise: (0,-1) -> (1,0) -> (0,1) -> (-1,0).
+    var xs: [5]f32 = zero
+    var ys: [5]f32 = zero
+    xs[0usize] = 0.0
+    ys[0usize] = 0.0 - 1.0
+    xs[1usize] = 1.0
+    ys[1usize] = 0.0
+    xs[2usize] = 0.0
+    ys[2usize] = 1.0
+    xs[3usize] = 0.0 - 1.0
+    ys[3usize] = 0.0
+    xs[4usize] = 0.0
+    ys[4usize] = 0.0 - 1.0
+    let kappa: f32 = 0.5522847
+    let moved = geometry.move_to(&builder, geometry.Point { x: cx, y: cy - radius })
+    if moved != ok { ret (zero, TooLarge) }
+    var q = 0usize
+    while q < 4usize && remaining > 0.0 {
+        let x0 = xs[q]
+        let y0 = ys[q]
+        let x1 = xs[q + 1usize]
+        let y1 = ys[q + 1usize]
+        // The tangent at the start of a clockwise quarter is the next point's
+        // direction; the control points lie kappa along each tangent.
+        var part = remaining
+        if part > 1.0 { part = 1.0 }
+        if part >= 1.0 {
+            let c1 = geometry.Point { x: cx + (x0 + kappa * x1) * radius, y: cy + (y0 + kappa * y1) * radius }
+            let c2 = geometry.Point { x: cx + (x1 + kappa * x0) * radius, y: cy + (y1 + kappa * y0) * radius }
+            let curved = geometry.cubic_to(&builder, c1, c2, geometry.Point { x: cx + x1 * radius, y: cy + y1 * radius })
+            if curved != ok { ret (zero, TooLarge) }
+        } else {
+            // A shorter piece: a fan of short chords through the arc, a chord per tenth.
+            var step = 0usize
+            let steps = 10usize
+            while step < steps {
+                let f = f32(step + 1usize) / f32(steps) * part
+                // The point at fraction f of the quarter, by the quarter's parametric arc.
+                let s = math.sin[f32](f * 1.5707964)
+                let c = math.cos[f32](f * 1.5707964)
+                let px = x0 * c + x1 * s
+                let py = y0 * c + y1 * s
+                let lined = geometry.line_to(&builder, geometry.Point { x: cx + px * radius, y: cy + py * radius })
+                if lined != ok { ret (zero, TooLarge) }
+                step += 1usize
+            }
+        }
+        remaining = remaining - part
+        q += 1usize
+    }
+    ret (geometry.finish(&builder), ok)
+}
+
+fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let ring = mem.cast[*Ring](ctx)
+    let scratch = ring.arena
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    var radius = area.width
+    if area.height < radius { radius = area.height }
+    radius = radius * 0.5 - ring.thickness * 0.5
+    if radius <= 0.0 { ret ok }
+    let stroke = paint.Stroke { width: ring.thickness, cap: .Butt, join: .Round, miter_limit: 4.0 }
+    let (track, track_error) = arc_path(scratch, cx, cy, radius, 1.0)
+    if track_error != ok { ret track_error }
+    try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: track, brush: paint.Brush { Solid: ring.track }, stroke: stroke } })
+    if ring.share <= 0.0 { ret ok }
+    let (arc, arc_error) = arc_path(scratch, cx, cy, radius, ring.share)
+    if arc_error != ok { ret arc_error }
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: arc, brush: paint.Brush { Solid: ring.fill }, stroke: stroke } })
+}
+
+// A progress ring of `size`: the track in the variant surface, the arc from the
+// top in the primary colour through `value` of the turn; indeterminate, a quarter
+// turn and busy in the tree. A progress role with the label.
+fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32) -> (widget.Node, err) {
+    var share = value
+    if share < 0.0 { share = 0.0 }
+    if share > 1.0 { share = 1.0 }
+    if indeterminate { share = 0.25 }
+    let (rings, rings_error) = mem.alloc[Ring](a, 1usize)
+    if rings_error != ok { ret (zero, TooLarge) }
+    rings[0usize] = Ring { track: style.color(t.tokens, .SurfaceVariant), fill: style.color(t.tokens, .Primary), share: share, thickness: t.tokens.spacing.xs, arena: a }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    var none: []const widget.Node = zero
+    body[0usize] = widget.Node { key: key + 1u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&rings[0usize]), measure: ring_measure, paint: ring_paint } }, style: sized_style(size, size), children: none }
+    var sem: widget.Semantics = zero
+    sem.role = 16u8
+    sem.label = label
+    if indeterminate { sem.states = accessibility.STATE_BUSY }
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
 }

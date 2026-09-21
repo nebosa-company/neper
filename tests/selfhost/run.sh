@@ -1733,6 +1733,12 @@ ui_slider_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/ui-slider-selfhost"
 ui_slider_output=$("$test_build/ui-slider-selfhost")
 [ "$ui_slider_output" = 'ui slider ok' ]
+# Progress (D822, widget plan P1-09): a bar, an indeterminate bar and a ring.
+ui_progress_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_progress/src/main.e" "$repo" x64 linux "$test_build/ui-progress-selfhost")
+[ "$ui_progress_written" = 'executable written' ]
+chmod +x "$test_build/ui-progress-selfhost"
+ui_progress_output=$("$test_build/ui-progress-selfhost")
+[ "$ui_progress_output" = 'ui progress ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

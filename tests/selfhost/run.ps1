@@ -1797,6 +1797,12 @@ $uiSliderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $uiSliderWritten -ne 'executable written') { throw 'ui_slider emission failed' }
 $uiSliderOutput = & $uiSliderPath
 if ($LASTEXITCODE -ne 0 -or $uiSliderOutput -ne 'ui slider ok') { throw "the sliders answered wrongly: exit $LASTEXITCODE" }
+# Progress (D822, widget plan P1-09): a bar, an indeterminate bar and a ring.
+$uiProgressPath = Join-Path $testBuild 'ui-progress-selfhost.exe'
+$uiProgressWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_progress\src\main.e') $repo 'x64' 'windows' $uiProgressPath
+if ($LASTEXITCODE -ne 0 -or $uiProgressWritten -ne 'executable written') { throw 'ui_progress emission failed' }
+$uiProgressOutput = & $uiProgressPath
+if ($LASTEXITCODE -ne 0 -or $uiProgressOutput -ne 'ui progress ok') { throw "the progress controls answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
