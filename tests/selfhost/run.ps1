@@ -1900,6 +1900,96 @@ $pointerFloatArgsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $pointerFloatArgsWritten -ne 'executable written') { throw 'pointer_float_args emission failed' }
 & $pointerFloatArgsPath
 if ($LASTEXITCODE -ne 0) { throw "a pointer_float_args check failed: exit $LASTEXITCODE" }
+# `e.game.nav`: region coverage and portals, funnel corners on three corridors, flow distances against Dijkstra, HPA* within 5% of BFS on 20 maps (D865).
+$gameNavPath = Join-Path $testBuild 'game-nav-selfhost.exe'
+$gameNavWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\game_nav\src\main.e') $repo 'x64' 'windows' $gameNavPath
+if ($LASTEXITCODE -ne 0 -or $gameNavWritten -ne 'executable written') { throw 'game_nav emission failed' }
+& $gameNavPath
+if ($LASTEXITCODE -ne 0) { throw "a game_nav check failed: exit $LASTEXITCODE" }
+# `e.game.procgen`: Perlin, simplex and Worley samples to 1e-12 against transcriptions, WFC on five seeds satisfying every adjacency with the replica's grid hash (D865).
+$gameProcgenPath = Join-Path $testBuild 'game-procgen-selfhost.exe'
+$gameProcgenWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\game_procgen\src\main.e') $repo 'x64' 'windows' $gameProcgenPath
+if ($LASTEXITCODE -ne 0 -or $gameProcgenWritten -ne 'executable written') { throw 'game_procgen emission failed' }
+& $gameProcgenPath
+if ($LASTEXITCODE -ne 0) { throw "a game_procgen check failed: exit $LASTEXITCODE" }
+# `e.game.physics`: a PBD chain at rest, XPBD, Gauss-Seidel, SPH and MAC steps equal to replicas, CCD against the analytic time, sweep-and-prune equal to brute force (D865).
+$gamePhysicsPath = Join-Path $testBuild 'game-physics-selfhost.exe'
+$gamePhysicsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\game_physics\src\main.e') $repo 'x64' 'windows' $gamePhysicsPath
+if ($LASTEXITCODE -ne 0 -or $gamePhysicsWritten -ne 'executable written') { throw 'game_physics emission failed' }
+& $gamePhysicsPath
+if ($LASTEXITCODE -ne 0) { throw "a game_physics check failed: exit $LASTEXITCODE" }
+# `e.game.anim`: quaternions against scipy, FABRIK and CCD tips against replicas, LBS against numpy and DQS equal to it on a single bone (D865).
+$gameAnimPath = Join-Path $testBuild 'game-anim-selfhost.exe'
+$gameAnimWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\game_anim\src\main.e') $repo 'x64' 'windows' $gameAnimPath
+if ($LASTEXITCODE -ne 0 -or $gameAnimWritten -ne 'executable written') { throw 'game_anim emission failed' }
+& $gameAnimPath
+if ($LASTEXITCODE -ne 0) { throw "a game_anim check failed: exit $LASTEXITCODE" }
+# `e.gfx.curve`: Bezier, B-spline, Catmull-Rom and NURBS points against scipy and numpy to 1e-12 (D865).
+$gfxCurvePath = Join-Path $testBuild 'gfx-curve-selfhost.exe'
+$gfxCurveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_curve\src\main.e') $repo 'x64' 'windows' $gfxCurvePath
+if ($LASTEXITCODE -ne 0 -or $gfxCurveWritten -ne 'executable written') { throw 'gfx_curve emission failed' }
+& $gfxCurvePath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_curve check failed: exit $LASTEXITCODE" }
+# `e.robot.kinematics`: odometry over 100 tick pairs, planar and six-axis forward kinematics, transpose and damped-least-squares IK against numpy (D866).
+$robotKinematicsPath = Join-Path $testBuild 'robot-kinematics-selfhost.exe'
+$robotKinematicsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\robot_kinematics\src\main.e') $repo 'x64' 'windows' $robotKinematicsPath
+if ($LASTEXITCODE -ne 0 -or $robotKinematicsWritten -ne 'executable written') { throw 'robot_kinematics emission failed' }
+& $robotKinematicsPath
+if ($LASTEXITCODE -ne 0) { throw "a robot_kinematics check failed: exit $LASTEXITCODE" }
+# `e.robot.motion`: profile samples, splines against scipy, trackers on a circle, DWA and VO choices, four-agent ORCA to 1e-9, potential fields and a smoothed band (D866).
+$robotMotionPath = Join-Path $testBuild 'robot-motion-selfhost.exe'
+$robotMotionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\robot_motion\src\main.e') $repo 'x64' 'windows' $robotMotionPath
+if ($LASTEXITCODE -ne 0 -or $robotMotionWritten -ne 'executable written') { throw 'robot_motion emission failed' }
+& $robotMotionPath
+if ($LASTEXITCODE -ne 0) { throw "a robot_motion check failed: exit $LASTEXITCODE" }
+# `e.robot.plan`: tree sizes, costs and waypoint hashes of six planners on two maps matched to a replica on the same generator stream; exact lattice and hybrid A* lengths (D866).
+$robotPlanPath = Join-Path $testBuild 'robot-plan-selfhost.exe'
+$robotPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\robot_plan\src\main.e') $repo 'x64' 'windows' $robotPlanPath
+if ($LASTEXITCODE -ne 0 -or $robotPlanWritten -ne 'executable written') { throw 'robot_plan emission failed' }
+& $robotPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a robot_plan check failed: exit $LASTEXITCODE" }
+# `e.robot.map`: cell counts after twenty scans, ICP to 1e-6, AMCL within 0.1 of the truth with matched weights, a ten-pose loop closed to 1e-31 (D866).
+$robotMapPath = Join-Path $testBuild 'robot-map-selfhost.exe'
+$robotMapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\robot_map\src\main.e') $repo 'x64' 'windows' $robotMapPath
+if ($LASTEXITCODE -ne 0 -or $robotMapWritten -ne 'executable written') { throw 'robot_map emission failed' }
+& $robotMapPath
+if ($LASTEXITCODE -ne 0) { throw "a robot_map check failed: exit $LASTEXITCODE" }
+# `e.dsp`: filter designs and outputs against scipy.signal to 1e-9, Remez on two band sets, an STFT round trip, MFCC, DTW, LPC, adaptive filters and resamplers against replicas (D866).
+$dspPath = Join-Path $testBuild 'dsp-selfhost.exe'
+$dspWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dsp\src\main.e') $repo 'x64' 'windows' $dspPath
+if ($LASTEXITCODE -ne 0 -or $dspWritten -ne 'executable written') { throw 'dsp emission failed' }
+& $dspPath
+if ($LASTEXITCODE -ne 0) { throw "a dsp check failed: exit $LASTEXITCODE" }
+# `e.gfx.mesh`: Euler characteristics and volumes through subdivision, decimation and booleans, marching cubes equal to scikit-image on a sphere, geodesics within a few percent of great circles, LSCM recovering a flat patch, Poisson and ball-pivot reconstructions closed (D868).
+$gfxMeshPath = Join-Path $testBuild 'gfx-mesh-selfhost.exe'
+$gfxMeshWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_mesh\src\main.e') $repo 'x64' 'windows' $gfxMeshPath
+if ($LASTEXITCODE -ne 0 -or $gfxMeshWritten -ne 'executable written') { throw 'gfx_mesh emission failed' }
+& $gfxMeshPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_mesh check failed: exit $LASTEXITCODE" }
+# `e.gfx.raster`: pixel sets equal to scikit-image for lines and circles, Wu coverage against a replica, two triangles partitioning a rectangle exactly (D868).
+$gfxRasterPath = Join-Path $testBuild 'gfx-raster-selfhost.exe'
+$gfxRasterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_raster\src\main.e') $repo 'x64' 'windows' $gfxRasterPath
+if ($LASTEXITCODE -ne 0 -or $gfxRasterWritten -ne 'executable written') { throw 'gfx_raster emission failed' }
+& $gfxRasterPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_raster check failed: exit $LASTEXITCODE" }
+# `e.gfx.shade`: thirty configurations to 1e-12 against numpy and a white furnace at roughness 0.5 integrating to 0.909 (D868).
+$gfxShadePath = Join-Path $testBuild 'gfx-shade-selfhost.exe'
+$gfxShadeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_shade\src\main.e') $repo 'x64' 'windows' $gfxShadePath
+if ($LASTEXITCODE -ne 0 -or $gfxShadeWritten -ne 'executable written') { throw 'gfx_shade emission failed' }
+& $gfxShadePath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_shade check failed: exit $LASTEXITCODE" }
+# `e.gfx.trace`: furnace tests exact in all three modes, sixty CSG queries against a membership oracle, 16x16 renders equal to the replica's image hash (D868).
+$gfxTracePath = Join-Path $testBuild 'gfx-trace-selfhost.exe'
+$gfxTraceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_trace\src\main.e') $repo 'x64' 'windows' $gfxTracePath
+if ($LASTEXITCODE -ne 0 -or $gfxTraceWritten -ne 'executable written') { throw 'gfx_trace emission failed' }
+& $gfxTracePath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_trace check failed: exit $LASTEXITCODE" }
+# `e.gfx.texture`: BC blocks against a replica and fifty astcenc blocks over six footprints decoded to astcenc's own output (D868).
+$gfxTexturePath = Join-Path $testBuild 'gfx-texture-selfhost.exe'
+$gfxTextureWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_texture\src\main.e') $repo 'x64' 'windows' $gfxTexturePath
+if ($LASTEXITCODE -ne 0 -or $gfxTextureWritten -ne 'executable written') { throw 'gfx_texture emission failed' }
+& $gfxTexturePath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_texture check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

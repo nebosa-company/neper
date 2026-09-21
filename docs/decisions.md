@@ -16888,6 +16888,44 @@ w = 3 is consistent", which is wrong (2 + 3 is not more than 5); the
 fixture asserts the truth, which is the reason the references are
 programs rather than sentences.
 
+## D865 — Game navigation, procedural generation, physics, animation and curves
+
+Batch twenty-five of the algos.md stream (D834): `e.game.nav` (a
+rectangle navmesh with portals, the funnel, flow fields, hierarchical
+A*), `e.game.procgen` (Perlin, simplex and Worley noise, wave function
+collapse), `e.game.physics` (position-based and extended position-based
+dynamics, projected Gauss-Seidel, conservative advancement, sweep and
+prune, SPH, a MAC-grid fluid step) and `e.game.anim` (FABRIK and CCD
+inverse kinematics, linear-blend and dual-quaternion skinning) and
+`e.gfx.curve` (Bezier, B-spline, Catmull-Rom, NURBS surfaces). Two
+agents found the same back-end fault from different sides -- a
+pointer-to-float parameter read from a neighbouring slot after float
+or excess integer arguments -- and worked around it by returning tuples
+or passing a record; the fault is filed as a task, not fixed here.
+
+## D866 — Robot kinematics, motion, planning and mapping, and a signal-processing library
+
+Batch twenty-six of the algos.md stream (D834): `e.robot.kinematics`
+(dead reckoning, odometry and Ackermann over one exact arc model,
+Denavit-Hartenberg forward kinematics, Jacobian-transpose and
+damped-least-squares inverse kinematics), `e.robot.motion` (trapezoid
+and S-curve profiles, natural cubic trajectories, minimum jerk, pure
+pursuit, Stanley, the dynamic window, velocity obstacles, ORCA with the
+RVO2 linear programs, potential fields, elastic bands),
+`e.robot.plan` (RRT, RRT*, informed and connect variants, kinodynamic
+RRT, PRM, hybrid A*, state lattices, with the generator draw order
+stated so a replica can follow), `e.robot.map` (occupancy grids by
+Bresenham log-odds, point-to-line ICP, adaptive Monte Carlo
+localisation, pose-graph optimisation by Gauss-Newton) and `e.dsp`
+(thirty-two entries: smoothing, FIR and IIR filters and their designs
+including elliptic prototypes through the complete Jacobi machinery,
+windows, Parks-McClellan, STFT and its inverse, MFCC, constant-Q,
+cepstrum, LPC, DTW, LMS/NLMS/RLS, polyphase and sinc resampling),
+measured against scipy.signal to 1e-9 wherever scipy has the function.
+The replica caught a sign error in the velocity-obstacle time to
+collision that both the Neper and the first Python version shared; two
+independent derivations agreeing is not evidence, a third is.
+
 ## D867 — The address of a float carries its pointer type
 
 An address instruction (`FieldAddress`, `IndexAddress`, a local's frame
@@ -16947,3 +16985,24 @@ snackbar shows the head of, kept whole and ordered by the caller -- as
 a viewport of rows, each with its action and its close, under a Clear
 all button, a polite group of list items. `link/ui_desktop` picks a
 family, a style and a size, undoes, closes and clears on both hosts.
+## D868 — Meshes, rasterisation, shading, path tracing and compressed textures
+
+Batch twenty-seven of the algos.md stream (D834): `e.gfx.mesh` (half
+edges, normals, Laplacian and Taubin smoothing, Loop and Catmull-Clark
+subdivision, quadric decimation, marching squares and cubes with a
+generated table, dual contouring, signed distance, fast-marching and
+heat geodesics, LSCM, ball-pivot and a one-grid Poisson reconstruction,
+BSP booleans, revolution), `e.gfx.raster` (Bresenham, Wu, midpoint
+circles and ellipses, top-left-rule triangles), `e.gfx.shade`
+(GGX/Smith/Schlick with importance sampling), `e.gfx.trace` (a sphere
+path tracer in three modes and interval CSG) and `e.gfx.texture` (the
+BC family and a complete LDR ASTC decoder measured against astcenc
+itself over fifty blocks). The mesh replica caught four errors before
+the first build -- the Catmull-Clark vertex rule, an in-place
+compaction, the LSCM pin residual and an unguarded quadric optimum --
+which is the argument for writing the replica first. The agent that
+wrote the mesh module also cleared the session scratchpad, taking the
+registration tooling and the batch descriptions with it; the tooling
+was rewritten from this conversation and the brief now says what a
+scratchpad is.
+

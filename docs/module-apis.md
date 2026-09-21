@@ -5144,6 +5144,280 @@ does not discover drivers or allocate hidden connection pools.
 
 ## 8. Declarative GPU UI
 
+### `e.gfx.curve`
+
+```neper
+type Point = struct { x: f64, y: f64, z: f64 }
+error Invalid
+error TooSmall
+const MAX_DEGREE: usize = 15usize
+
+fn point(x: f64, y: f64, z: f64) -> Point
+fn lerp(a: Point, b: Point, t: f64) -> Point
+fn distance(a: Point, b: Point) -> f64
+fn bezier(points: []const Point, scratch: []Point, t: f64) -> (Point, err)
+fn bezier_split(points: []const Point, t: f64, left: []Point, right: []Point) -> err
+fn span_of(knots: []const f64, degree: usize, count: usize, t: f64) -> usize
+fn bspline(points: []const Point, knots: []const f64, degree: usize, t: f64) -> (Point, err)
+fn uniform_knots(count: usize, degree: usize, out: []f64) -> err
+fn catmull_rom(points: []const Point, t: f64, alpha: f64) -> (Point, err)
+fn ratio(s: f64, lo: f64, hi: f64) -> f64
+fn basis(knots: []const f64, degree: usize, k: usize, t: f64, out: []f64)
+fn nurbs_surface(grid: []const Point, weights: []const f64, count_u: usize, count_v: usize, knots_u: []const f64, knots_v: []const f64, degree_u: usize, degree_v: usize, u: f64, v: f64) -> (Point, err)
+```
+
+`bezier` (de Casteljau) and `bezier_split`, `bspline` (de Boor) with `uniform_knots`,
+`catmull_rom` (Barry-Goldman, centripetal by default) and `nurbs_surface`.
+
+### `e.gfx.mesh`
+
+```neper
+type HalfEdge = struct { vertex: []u32, twin: []u32, next: []u32, face: []u32, count: usize, sides: usize }
+type BooleanOp = enum u8 { Union, Intersection, Difference }
+type Csg = struct { tri: []f64, plane: []f64, link: []u32, tri_count: usize, node_plane: []f64, node_front: []u32, node_back: []u32, node_polys: []u32, node_count: usize }
+type Operator = struct { triangles: []const u32, cot: []const f64, mass: []const f64, t: f64, kind: usize, pin_a: usize, pin_b: usize }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+const OP_HEAT: usize = 0usize
+const OP_POISSON: usize = 1usize
+const OP_LSCM: usize = 2usize
+
+fn infinity() -> f64
+fn csg_epsilon() -> f64
+fn point(v: []const f64, i: usize) -> g3.Vec3
+fn put(v: []f64, i: usize, p: g3.Vec3)
+fn add_to(v: []f64, i: usize, p: g3.Vec3)
+fn fill(v: []f64, x: f64)
+fn fill_u32(v: []u32, x: u32)
+fn face_normal(vertices: []const f64, triangles: []const u32, f: usize) -> g3.Vec3
+fn volume(vertices: []const f64, triangles: []const u32) -> f64
+fn soup_volume(soup: []const f64) -> f64
+fn half_edge(faces: []const u32, sides: usize, vertex: []u32, twin: []u32, next_he: []u32, face: []u32, scratch: []u32) -> (HalfEdge, err)
+fn edge_key(h: *HalfEdge, e: usize) -> u64
+fn edge_order(h: *HalfEdge, a: u32, b: u32) -> i32
+fn is_closed(h: *HalfEdge) -> bool
+fn number_edges(h: *HalfEdge, base: usize, ids: []u32) -> usize
+fn vertex_normals(vertices: []const f64, triangles: []const u32, normals: []f64) -> err
+fn estimate_normals(points: []const f64, k: usize, normals: []f64, near: []u32, near_d: []f64) -> err
+fn smallest_eigenvector(m: []f64) -> g3.Vec3
+fn laplacian_step(vertices: []f64, triangles: []const u32, factor: f64, scratch: []f64) -> err
+fn smooth_laplacian(vertices: []f64, triangles: []const u32, lambda: f64, iterations: usize, scratch: []f64) -> err
+fn smooth_taubin(vertices: []f64, triangles: []const u32, lambda: f64, mu: f64, iterations: usize, scratch: []f64) -> err
+fn boundary_rule(h: *HalfEdge, vertices: []const f64, acc: []f64, valence: []u32)
+fn subdivide_loop(vertices: []const f64, triangles: []const u32, out_vertices: []f64, out_triangles: []u32, scratch: []u32) -> (usize, usize, err)
+fn subdivide_catmull_clark(vertices: []const f64, quads: []const u32, out_vertices: []f64, out_quads: []u32, scratch: []u32) -> (usize, usize, err)
+fn quadric_optimum(q: []const f64, a: g3.Vec3, b: g3.Vec3) -> (g3.Vec3, f64)
+fn quadric_error(q: []const f64, p: g3.Vec3) -> f64
+fn decimate(vertices: []f64, triangles: []u32, goal: usize, quadrics: []f64, scratch: []u32) -> (usize, usize, err)
+fn marching_squares(field: []const f64, width: usize, height: usize, iso: f64, out: []f64) -> (usize, err)
+fn cube_corners() -> str
+fn cube_edges() -> str
+fn cube_table() -> str
+fn marching_cubes(field: []const f64, nx: usize, ny: usize, nz: usize, iso: f64, out: []f64) -> (usize, err)
+fn dual_contouring[Ctx: type](ctx: *Ctx, sdf: fn(*Ctx, f64, f64, f64) -> f64, nx: usize, ny: usize, nz: usize, x0: f64, y0: f64, z0: f64, cell: f64, out_vertices: []f64, out_triangles: []u32, field: []f64, scratch: []u32) -> (usize, usize, err)
+fn signed_distance(vertices: []const f64, triangles: []const u32, x: f64, y: f64, z: f64) -> f64
+fn fast_marching_update(vertices: []const f64, ta: f64, tb: f64, a: usize, b: usize, c: usize) -> f64
+fn geodesic_fast_marching(vertices: []const f64, triangles: []const u32, source: u32, distance: []f64, state: []u8) -> err
+fn cotangents(vertices: []const f64, triangles: []const u32, cot: []f64, mass: []f64)
+fn apply(op: *const Operator, x: []const f64, y: []f64)
+fn conjugate_gradient(op: *const Operator, b: []const f64, x: []f64, r: []f64, p: []f64, q: []f64, iterations: usize)
+fn geodesic_heat(vertices: []const f64, triangles: []const u32, source: u32, iterations: usize, distance: []f64, scratch: []f64) -> err
+fn parameterize_lscm(vertices: []const f64, triangles: []const u32, pin_a: u32, pin_b: u32, iterations: usize, uv: []f64, scratch: []f64) -> err
+fn ball_centre(points: []const f64, normals: []const f64, rho: f64, i: usize, j: usize, k: usize) -> (bool, g3.Vec3)
+fn ball_empty(points: []const f64, centre: g3.Vec3, rho: f64, i: usize, j: usize, k: usize) -> bool
+fn front_edge(edges: []u32, count: *usize, a: u32, b: u32, c: u32) -> err
+fn push_triangle(out: []u32, count: *usize, a: u32, b: u32, c: u32) -> err
+fn reconstruct_ball_pivot(points: []const f64, normals: []const f64, rho: f64, out_triangles: []u32, scratch: []u32) -> (usize, err)
+fn reconstruct_poisson(points: []const f64, normals: []const f64, nx: usize, ny: usize, nz: usize, x0: f64, y0: f64, z0: f64, cell: f64, iterations: usize, field: []f64, scratch: []f64) -> (f64, err)
+fn csg(tri: []f64, plane: []f64, link: []u32, node_plane: []f64, node_front: []u32, node_back: []u32, node_polys: []u32) -> Csg
+fn csg_triangle(c: *Csg, a: g3.Vec3, b: g3.Vec3, d: g3.Vec3) -> (u32, err)
+fn csg_node(c: *Csg) -> (u32, err)
+fn csg_push(c: *Csg, head: *u32, t: u32)
+fn csg_concat(c: *Csg, a: u32, b: u32) -> u32
+fn csg_has_plane(c: *Csg, node: u32) -> bool
+fn csg_split(c: *Csg, node: u32, t: u32, coplanar_front: *u32, coplanar_back: *u32, front: *u32, back: *u32) -> err
+fn csg_build(c: *Csg, node: u32, list: u32) -> err
+fn csg_invert(c: *Csg, node: u32)
+fn csg_clip_polygons(c: *Csg, node: u32, list: u32) -> (u32, err)
+fn csg_clip_to(c: *Csg, node: u32, other: u32) -> err
+fn csg_all_polygons(c: *Csg, node: u32, list: *u32)
+fn csg_load(c: *Csg, vertices: []const f64, triangles: []const u32) -> (u32, err)
+fn boolean_bsp(c: *Csg, a_vertices: []const f64, a_triangles: []const u32, b_vertices: []const f64, b_triangles: []const u32, op: BooleanOp, out: []f64) -> (usize, err)
+fn revolve(profile: []const f64, segments: usize, out_vertices: []f64, out_triangles: []u32) -> (usize, usize, err)
+```
+
+Over indexed triangle (and quad) meshes in caller arrays: `half_edge` with `is_closed`,
+`vertex_normals`, `estimate_normals` (PCA over k nearest), `smooth_laplacian`,
+`smooth_taubin`, `subdivide_loop`, `subdivide_catmull_clark`, `decimate` (quadric edge
+collapse), `marching_squares`, `marching_cubes` (a generated 256-case table),
+`dual_contouring` over a caller SDF, `signed_distance` (pseudo-normal sign),
+`geodesic_fast_marching`, `geodesic_heat`, `parameterize_lscm`,
+`reconstruct_ball_pivot`, `reconstruct_poisson` (one uniform grid), `boolean_bsp`
+(csg.js over caller pools), `revolve`, `volume`.
+
+### `e.gfx.raster`
+
+```neper
+type Pixel = struct { x: i32, y: i32 }
+type Coverage = struct { x: i32, y: i32, coverage: f64 }
+error TooSmall
+
+fn push(out: []Pixel, n: *usize, x: i32, y: i32) -> err
+fn abs32(v: i32) -> i32
+fn line(x0: i32, y0: i32, x1: i32, y1: i32, out: []Pixel) -> (usize, err)
+fn push_aa(out: []Coverage, n: *usize, x: i32, y: i32, c: f64) -> err
+fn floor64(v: f64) -> f64
+fn round64(v: f64) -> f64
+fn fpart(v: f64) -> f64
+fn rfpart(v: f64) -> f64
+fn pair(out: []Coverage, n: *usize, steep: bool, major: f64, minor: f64, gap: f64) -> err
+fn line_aa(x0: f64, y0: f64, x1: f64, y1: f64, out: []Coverage) -> (usize, err)
+fn octants(out: []Pixel, n: *usize, cx: i32, cy: i32, x: i32, y: i32) -> err
+fn circle(cx: i32, cy: i32, radius: i32, out: []Pixel) -> (usize, err)
+fn quadrants(out: []Pixel, n: *usize, cx: i32, cy: i32, x: i32, y: i32) -> err
+fn ellipse(cx: i32, cy: i32, rx: i32, ry: i32, out: []Pixel) -> (usize, err)
+fn edge(ax: f64, ay: f64, bx: f64, by: f64, px: f64, py: f64) -> f64
+fn top_left(ax: f64, ay: f64, bx: f64, by: f64) -> bool
+fn fill_triangle(x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64, out: []Pixel) -> (usize, err)
+```
+
+`line` (Bresenham), `line_aa` (Xiaolin Wu coverage), `circle` and `ellipse` (midpoint)
+and `fill_triangle` (edge functions with the top-left rule), each appending to a caller
+pixel list.
+
+### `e.gfx.shade`
+
+```neper
+type Vec3 = struct { x: f64, y: f64, z: f64 }
+type Rgb = struct { red: f64, green: f64, blue: f64 }
+
+fn pi() -> f64
+fn vec3(x: f64, y: f64, z: f64) -> Vec3
+fn rgb(red: f64, green: f64, blue: f64) -> Rgb
+fn add(a: Vec3, b: Vec3) -> Vec3
+fn sub(a: Vec3, b: Vec3) -> Vec3
+fn scale(a: Vec3, s: f64) -> Vec3
+fn dot(a: Vec3, b: Vec3) -> f64
+fn cross(a: Vec3, b: Vec3) -> Vec3
+fn length(a: Vec3) -> f64
+fn rgb_scale(c: Rgb, s: f64) -> Rgb
+fn rgb_mul(a: Rgb, b: Rgb) -> Rgb
+fn rgb_add(a: Rgb, b: Rgb) -> Rgb
+fn normalize(a: Vec3) -> Vec3
+fn alpha_of(roughness: f64) -> f64
+fn brdf_lambert(albedo: Rgb) -> Rgb
+fn fresnel_schlick(cos_theta: f64, f0: Rgb) -> Rgb
+fn ggx_d(n_dot_h: f64, roughness: f64) -> f64
+fn ggx_v(n_dot_v: f64, n_dot_l: f64, roughness: f64) -> f64
+fn brdf_ggx(n: Vec3, v: Vec3, l: Vec3, roughness: f64, f0: Rgb) -> Rgb
+fn onb(n: Vec3) -> (Vec3, Vec3)
+fn ggx_sample(r: *rand.Pcg64, roughness: f64, n: Vec3) -> Vec3
+fn reflect(v: Vec3, h: Vec3) -> Vec3
+fn ggx_pdf(n: Vec3, v: Vec3, h: Vec3, roughness: f64) -> f64
+```
+
+`brdf_ggx` (GGX distribution, height-correlated Smith visibility, Schlick Fresnel),
+`brdf_lambert`, `fresnel_schlick`, `ggx_sample` with `ggx_pdf`, `reflect` and an
+orthonormal basis.
+
+### `e.gfx.trace`
+
+```neper
+type Sphere = struct { center: shade.Vec3, radius: f64, albedo: shade.Rgb, emission: shade.Rgb }
+type Camera = struct { origin: shade.Vec3, forward: shade.Vec3, right: shade.Vec3, up: shade.Vec3, tan_half: f64 }
+type Ray = struct { origin: shade.Vec3, direction: shade.Vec3 }
+type Job = struct { spheres: []const Sphere, camera: Camera, width: usize, height: usize, samples: usize, max_depth: usize, roulette_depth: usize }
+type Mode = enum u8 { Naive, Nee, Mis }
+type CsgKind = enum u8 { Sphere, Box, Union, Intersection, Difference }
+type CsgNode = struct { kind: CsgKind, left: u32, right: u32, center: shade.Vec3, radius: f64, lo: shade.Vec3, hi: shade.Vec3 }
+type Interval = struct { enter: f64, exit: f64 }
+error Invalid
+error TooSmall
+
+fn epsilon() -> f64
+fn two_pi() -> f64
+fn sphere(center: shade.Vec3, radius: f64, albedo: shade.Rgb, emission: shade.Rgb) -> Sphere
+fn camera(origin: shade.Vec3, aim: shade.Vec3, up: shade.Vec3, vertical_fov: f64) -> Camera
+fn camera_ray(c: Camera, sx: f64, sy: f64, aspect: f64) -> Ray
+fn sphere_span(origin: shade.Vec3, direction: shade.Vec3, center: shade.Vec3, radius: f64) -> (bool, f64, f64)
+fn intersect(spheres: []const Sphere, ray: Ray) -> (bool, usize, f64)
+fn is_emissive(s: Sphere) -> bool
+fn max_channel(c: shade.Rgb) -> f64
+fn cone_cos(p: shade.Vec3, s: Sphere) -> (bool, f64)
+fn balance(a: f64, b: f64) -> f64
+fn direction_about(axis: shade.Vec3, cos_theta: f64, phi: f64) -> shade.Vec3
+fn direct_light(spheres: []const Sphere, p: shade.Vec3, n: shade.Vec3, albedo: shade.Rgb, r: *rand.Pcg64, mode: Mode) -> shade.Rgb
+fn radiance(job: *const Job, first: Ray, r: *rand.Pcg64, mode: Mode) -> shade.Rgb
+fn render(job: *const Job, r: *rand.Pcg64, out: []shade.Rgb, mode: Mode) -> err
+fn path_trace(job: *const Job, r: *rand.Pcg64, out: []shade.Rgb) -> err
+fn next_event_estimation(job: *const Job, r: *rand.Pcg64, out: []shade.Rgb) -> err
+fn multiple_importance(job: *const Job, r: *rand.Pcg64, out: []shade.Rgb) -> err
+fn csg_sphere(center: shade.Vec3, radius: f64) -> CsgNode
+fn csg_box(lo: shade.Vec3, hi: shade.Vec3) -> CsgNode
+fn csg_op(kind: CsgKind, left: u32, right: u32) -> CsgNode
+fn axis_of(v: shade.Vec3, axis: usize) -> f64
+fn box_span(origin: shade.Vec3, direction: shade.Vec3, lo: shade.Vec3, hi: shade.Vec3) -> (bool, f64, f64)
+fn inside_list(list: []const Interval, t: f64) -> bool
+fn admits(kind: CsgKind, in_left: bool, in_right: bool) -> bool
+fn combine(kind: CsgKind, out: []Interval, base: usize, nl: usize, nr: usize, scratch: []f64) -> (usize, err)
+fn evaluate(nodes: []const CsgNode, index: u32, origin: shade.Vec3, direction: shade.Vec3, out: []Interval, base: usize, scratch: []f64) -> (usize, err)
+fn csg(nodes: []const CsgNode, root: u32, origin: shade.Vec3, direction: shade.Vec3, out: []Interval, scratch: []f64) -> (usize, err)
+fn csg_hit(nodes: []const CsgNode, root: u32, origin: shade.Vec3, direction: shade.Vec3, out: []Interval, scratch: []f64) -> (bool, f64, err)
+```
+
+A sphere-scene path tracer over caller storage: `camera` and `camera_ray`, `intersect`,
+`radiance` in three modes (`path_trace`, `next_event_estimation`,
+`multiple_importance` with the balance heuristic), and CSG of spheres and boxes by
+interval lists (`csg`, `csg_hit`).
+
+### `e.gfx.texture`
+
+```neper
+type Format = enum u8 { Bc1, Bc3, Bc4, Bc5 }
+error Invalid
+error TooSmall
+error Unsupported
+
+fn nearest_third(x: u32) -> u32
+fn put4(out: []u8, at: usize, r: u32, g: u32, b: u32, a: u32)
+fn expand565(c: u32) -> (u32, u32, u32)
+fn bc_colors(block: []const u8, at: usize, four: bool, out: []u8)
+fn bc_ramp(block: []const u8, at: usize, channel: usize, out: []u8)
+fn bc_decode(block: []const u8, format: Format, out: []u8) -> err
+fn quant_bits(q: usize) -> u32
+fn quant_trit(q: usize) -> bool
+fn quant_quint(q: usize) -> bool
+fn ise_bits(n: usize, q: usize) -> usize
+fn bit_at(block: []const u8, i: usize) -> u32
+fn field(block: []const u8, lo: usize, n: usize) -> u32
+fn seq_bit(block: []const u8, base: usize, limit: usize, reversed: bool, i: usize) -> u32
+fn seq_bits(block: []const u8, base: usize, limit: usize, reversed: bool, pos: usize, n: u32) -> u32
+fn trits_of(t: u32, out: []u32)
+fn quints_of(q: u32, out: []u32)
+fn ise_decode(block: []const u8, base: usize, limit: usize, reversed: bool, n: usize, q: usize, values: []u32, extras: []u32)
+fn replicate(v: u32, bits: u32, width: u32) -> u32
+fn bit_of(v: u32, i: u32) -> u32
+fn unquant_color(v: u32, extra: u32, q: usize) -> u32
+fn unquant_weight(v: u32, extra: u32, q: usize) -> u32
+fn hash52(seed: u32) -> u32
+fn select_partition(index: u32, x0: u32, y0: u32, count: u32, small: bool) -> u32
+fn block_mode(m: u32) -> (u32, usize, usize, usize, bool)
+fn clamp8(v: i32) -> u32
+fn transfer(values: []i32, o: usize, b: usize)
+fn blue_contract(e: []i32, r: i32, g: i32, b: i32, a: i32)
+fn set4(e: []i32, r: i32, g: i32, b: i32, a: i32)
+fn endpoints(cem: u32, v: []i32, e0: []i32, e1: []i32) -> err
+fn clamp_all(e: []i32)
+fn astc_decode(block: []const u8, width: usize, height: usize, srgb: bool, out: []u8) -> err
+fn infill(weights: []const u32, count: usize, planes: usize, plane: usize, v0: usize, grid_w: usize, w00: usize, w01: usize, w10: usize, w11: usize) -> u32
+fn grid_weight(weights: []const u32, count: usize, planes: usize, plane: usize, i: usize) -> usize
+```
+
+`bc_decode` (BC1, BC3, BC4, BC5) and `astc_decode` (LDR 2-d: every footprint from 4x4
+to 12x12, void extents, partitions, trit and quint sequences, all ten colour endpoint
+modes, dual planes, infill).
+
 ### `e.gfx.scene`
 
 ```neper
@@ -7563,6 +7837,270 @@ fn gather(c: *Collective, root: usize) -> usize
 `all_reduce_ring` (reduce-scatter then all-gather, transfers and steps counted),
 binomial `broadcast`, `scatter` and `gather` over an n-by-d matrix.
 
+### `e.robot.kinematics`
+
+```neper
+type Pose = struct { x: f64, y: f64, theta: f64 }
+type Dh = struct { theta: f64, d: f64, a: f64, alpha: f64 }
+error TooSmall
+error Singular
+
+fn pose(x: f64, y: f64, theta: f64) -> Pose
+fn dh(theta: f64, d: f64, a: f64, alpha: f64) -> Dh
+fn wrap_angle(angle: f64) -> f64
+fn arc_step(p: Pose, distance: f64, turn: f64) -> Pose
+fn dead_reckon(p: Pose, speed: f64, heading_rate: f64, dt: f64) -> Pose
+fn odometry(p: Pose, left_ticks: i64, right_ticks: i64, ticks_per_metre: f64, wheel_base: f64) -> Pose
+fn differential_drive(v: f64, omega: f64, wheel_base: f64) -> (f64, f64)
+fn differential_drive_wheels(v_left: f64, v_right: f64, wheel_base: f64) -> (f64, f64)
+fn ackermann(speed: f64, steering_angle: f64, wheel_base: f64) -> (f64, f64)
+fn ackermann_step(p: Pose, speed: f64, steering_angle: f64, wheel_base: f64, dt: f64) -> Pose
+fn dh_transform(theta: f64, d: f64, a: f64, alpha: f64, out: []f64) -> err
+fn forward(params: []const Dh, joints: []const f64, out_pose: []f64, scratch: []f64) -> err
+fn jacobian(params: []const Dh, joints: []f64, goal: []const f64, jac: []f64, err_out: []f64, scratch: []f64) -> err
+fn norm3(v: []const f64) -> f64
+fn ik_jacobian(params: []const Dh, joints: []f64, goal: []const f64, iterations: usize, step: f64, scratch: []f64) -> (f64, err)
+fn ik_damped_least_squares(params: []const Dh, joints: []f64, goal: []const f64, iterations: usize, lambda: f64, scratch: []f64) -> (f64, err)
+```
+
+`Pose` and `Dh` records; `dead_reckon`, `odometry` and `ackermann_step` over one exact
+arc model; `differential_drive` and its inverse; `ackermann`; `dh_transform` and
+`forward` over 4x4 row-major matrices; `jacobian` by forward differences, `ik_jacobian`
+(transpose) and `ik_damped_least_squares`.
+
+### `e.robot.motion`
+
+```neper
+type Profile = struct { distance: f64, sign: f64, v_peak: f64, a_max: f64, t_acc: f64, t_flat: f64, total: f64 }
+type SCurve = struct { distance: f64, sign: f64, v_peak: f64, a_peak: f64, j_max: f64, tj: f64, ta: f64, tv: f64, total: f64 }
+type Agent = struct { x: f64, y: f64, vx: f64, vy: f64, radius: f64, pref_vx: f64, pref_vy: f64, v_max: f64 }
+type DwaState = struct { x: f64, y: f64, theta: f64, v: f64, omega: f64 }
+type DwaParams = struct { v_min: f64, v_max: f64, omega_max: f64, a_max: f64, alpha_max: f64, dt: f64, horizon: f64, v_samples: usize, omega_samples: usize, heading_weight: f64, clearance_weight: f64, velocity_weight: f64, radius: f64, clearance_cap: f64 }
+error TooSmall
+error Invalid
+
+fn agent(x: f64, y: f64, vx: f64, vy: f64, radius: f64, pref_vx: f64, pref_vy: f64, v_max: f64) -> Agent
+fn sign_of(x: f64) -> f64
+fn trapezoid_profile(distance: f64, v_max: f64, a_max: f64) -> Profile
+fn trapezoid_at(p: Profile, t: f64) -> (f64, f64)
+fn s_curve_profile(distance: f64, v_max: f64, a_max: f64, j_max: f64) -> SCurve
+fn s_curve_segment(p: SCurve, k: usize) -> (f64, f64)
+fn s_curve_at(p: SCurve, t: f64) -> (f64, f64, f64)
+fn min_jerk(start: f64, end: f64, duration: f64, t: f64) -> (f64, f64, f64)
+fn spline_trajectory(times: []const f64, waypoints: []const f64, n: usize, d: usize, m: []f64, scratch: []f64) -> err
+fn spline_at(times: []const f64, waypoints: []const f64, m: []const f64, n: usize, d: usize, t: f64, pos: []f64, vel: []f64) -> err
+fn nearest_point(p: kin.Pose, path: []const f64) -> usize
+fn pure_pursuit(p: kin.Pose, path: []const f64, lookahead: f64, wheel_base: f64) -> (f64, f64, err)
+fn stanley(p: kin.Pose, path: []const f64, k: f64, speed: f64) -> (f64, err)
+fn sample(lo: f64, hi: f64, index: usize, count: usize) -> f64
+fn dynamic_window(s: DwaState, goal_x: f64, goal_y: f64, obstacles: []const f64, params: DwaParams) -> (f64, f64)
+fn time_to_collision(a: Agent, b: Agent, vx: f64, vy: f64) -> f64
+fn velocity_obstacles(a: Agent, others: []const Agent, candidates: []const f64, horizon: f64) -> usize
+fn det(ax: f64, ay: f64, bx: f64, by: f64) -> f64
+fn lp1(lines: []const f64, line_no: usize, radius: f64, opt_x: f64, opt_y: f64, direction_opt: bool, result: []f64) -> bool
+fn lp2(lines: []const f64, count: usize, radius: f64, opt_x: f64, opt_y: f64, direction_opt: bool, result: []f64) -> usize
+fn lp3(lines: []const f64, count: usize, begin: usize, radius: f64, result: []f64, proj: []f64)
+fn orca(agents: []const Agent, i: usize, tau: f64, time_step: f64, out: []f64, scratch: []f64) -> err
+fn repulsive(x: f64, y: f64, obstacles: []const f64, k_rep: f64, rho0: f64) -> (f64, f64)
+fn potential_field(x: f64, y: f64, goal_x: f64, goal_y: f64, obstacles: []const f64, k_att: f64, k_rep: f64, rho0: f64) -> (f64, f64)
+fn elastic_band(path: []f64, obstacles: []const f64, iterations: usize, k_internal: f64, k_external: f64, rho0: f64)
+```
+
+`trapezoid_profile`/`trapezoid_at`, `s_curve_profile`/`s_curve_at` (seven segments with
+the triangular fallbacks), `min_jerk`, natural cubic `spline_trajectory`/`spline_at`,
+`pure_pursuit`, `stanley`, `dynamic_window`, `velocity_obstacles`, `orca` (the RVO2
+linear programs), `potential_field` and `elastic_band`.
+
+### `e.robot.plan`
+
+```neper
+type Circle = struct { x: f64, y: f64, r: f64 }
+type Pool = struct { xs: []f64, ys: []f64, th: []f64, parent: []u32, cost: []f64, used: usize }
+type Config = struct { min_x: f64, min_y: f64, max_x: f64, max_y: f64, step: f64, radius: f64, goal_bias: f64, goal_tolerance: f64, iterations: usize }
+type Kino = struct { v_min: f64, v_max: f64, omega_max: f64, dt: f64, substeps: usize, controls: usize }
+type Grid = struct { cell: f64, w: usize, h: usize, headings: usize, arc: f64, radius: f64, substeps: usize }
+type Heap = struct { key: []f64, node: []u32, used: usize }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn two_pi() -> f64
+fn pool(xs: []f64, ys: []f64, parent: []u32, cost: []f64) -> Pool
+fn pool_th(xs: []f64, ys: []f64, th: []f64, parent: []u32, cost: []f64) -> Pool
+fn add_node(p: *Pool, x: f64, y: f64, th: f64, parent: u32, cost: f64) -> (u32, err)
+fn distance(x0: f64, y0: f64, x1: f64, y1: f64) -> f64
+fn collision_free(x0: f64, y0: f64, x1: f64, y1: f64, obstacles: []const Circle) -> bool
+fn point_free(x: f64, y: f64, obstacles: []const Circle) -> bool
+fn nearest(p: *const Pool, x: f64, y: f64) -> u32
+fn sample(cfg: *const Config, rng: *rand.Pcg64, gx: f64, gy: f64) -> (f64, f64)
+fn steer(p: *const Pool, n: u32, sx: f64, sy: f64, step: f64) -> (f64, f64, f64)
+fn rrt(cfg: *const Config, obstacles: []const Circle, rng: *rand.Pcg64, p: *Pool, sx: f64, sy: f64, gx: f64, gy: f64) -> (u32, err)
+fn propagate(p: *Pool)
+fn best_goal(p: *const Pool, gx: f64, gy: f64, tolerance: f64) -> u32
+fn sample_ellipse(cfg: *const Config, rng: *rand.Pcg64, sx: f64, sy: f64, gx: f64, gy: f64, c_min: f64, c_best: f64) -> (f64, f64)
+fn rrt_star_run(cfg: *const Config, obstacles: []const Circle, rng: *rand.Pcg64, p: *Pool, sx: f64, sy: f64, gx: f64, gy: f64, informed: bool) -> (u32, err)
+fn rrt_star(cfg: *const Config, obstacles: []const Circle, rng: *rand.Pcg64, p: *Pool, sx: f64, sy: f64, gx: f64, gy: f64) -> (u32, err)
+fn rrt_informed(cfg: *const Config, obstacles: []const Circle, rng: *rand.Pcg64, p: *Pool, sx: f64, sy: f64, gx: f64, gy: f64) -> (u32, err)
+fn extend(cfg: *const Config, obstacles: []const Circle, t: *Pool, qx: f64, qy: f64) -> (u32, bool, err)
+fn connect_toward(cfg: *const Config, obstacles: []const Circle, t: *Pool, qx: f64, qy: f64) -> (u32, bool, err)
+fn rrt_connect(cfg: *const Config, obstacles: []const Circle, rng: *rand.Pcg64, a: *Pool, b: *Pool, sx: f64, sy: f64, gx: f64, gy: f64) -> (u32, u32, err)
+fn roll_out(kino: *const Kino, obstacles: []const Circle, x0: f64, y0: f64, th0: f64, v: f64, omega: f64) -> (bool, f64, f64, f64)
+fn rrt_kinodynamic(cfg: *const Config, kino: *const Kino, obstacles: []const Circle, rng: *rand.Pcg64, p: *Pool, sx: f64, sy: f64, sth: f64, gx: f64, gy: f64) -> (u32, err)
+fn node_distance(p: *const Pool, a: usize, b: usize) -> f64
+fn link(obstacles: []const Circle, p: *const Pool, n: usize, k: usize, who: usize, adj: []u32)
+fn prm_build(cfg: *const Config, obstacles: []const Circle, rng: *rand.Pcg64, p: *Pool, n: usize, k: usize, adj: []u32) -> err
+fn heap_push(h: *Heap, key: f64, node: u32) -> err
+fn heap_pop(h: *Heap) -> (f64, u32)
+fn relax(p: *Pool, h: *Heap, u: usize, v: usize) -> err
+fn prm_query(obstacles: []const Circle, p: *Pool, n: usize, k: usize, adj: []u32, sx: f64, sy: f64, gx: f64, gy: f64, heap_key: []f64, heap_node: []u32, closed: []u8) -> (u32, err)
+fn advance(x: f64, y: f64, th: f64, length: f64, curvature: f64) -> (f64, f64, f64)
+fn trace(grid: *const Grid, obstacles: []const Circle, x0: f64, y0: f64, th0: f64, curvature: f64) -> (bool, f64, f64, f64)
+fn wrap_heading(th: f64) -> f64
+fn cell_of(cfg: *const Config, grid: *const Grid, x: f64, y: f64, th: f64) -> (usize, bool)
+fn curvature_of(grid: *const Grid, which: usize) -> f64
+fn search_ready(p: *Pool, grid: *const Grid, closed: []u8, cell_node: []u32) -> err
+fn offer(p: *Pool, h: *Heap, closed: []u8, cell_node: []u32, c: usize, x: f64, y: f64, th: f64, parent: u32, g: f64, priority: f64) -> err
+fn hybrid_astar(cfg: *const Config, grid: *const Grid, obstacles: []const Circle, p: *Pool, closed: []u8, cell_node: []u32, heap_key: []f64, heap_node: []u32, sx: f64, sy: f64, sth: f64, gx: f64, gy: f64) -> (u32, err)
+fn lattice_primitives(grid: *const Grid, prims: []i64) -> err
+fn lattice_centre(cfg: *const Config, grid: *const Grid, ix: usize, iy: usize) -> (f64, f64)
+fn state_lattice(cfg: *const Config, grid: *const Grid, obstacles: []const Circle, prims: []const i64, p: *Pool, closed: []u8, cell_node: []u32, heap_key: []f64, heap_node: []u32, sx: f64, sy: f64, sh: usize, gx: f64, gy: f64) -> (u32, err)
+fn cell_node_of(cfg: *const Config, grid: *const Grid, p: *const Pool, u: usize) -> u32
+fn path_length(xs: []const f64, ys: []const f64, n: usize) -> f64
+fn path_extract(p: *const Pool, node: u32, out_x: []f64, out_y: []f64) -> (usize, f64, err)
+fn path_join(a: *const Pool, a_node: u32, b: *const Pool, b_node: u32, out_x: []f64, out_y: []f64) -> (usize, f64, err)
+```
+
+Sampling planners over circle obstacles and caller node pools with a stated draw
+order: `rrt`, `rrt_star`, `rrt_informed`, `rrt_connect` (with `path_join`),
+`rrt_kinodynamic`, `prm_build`/`prm_query`; `hybrid_astar` over heading bins and
+`state_lattice` over precomputed primitives; `path_extract`, `path_length`,
+`collision_free`.
+
+### `e.robot.map`
+
+```neper
+type Occupancy = struct { grid: []f64, w: usize, h: usize, resolution: f64 }
+type Segment = struct { x0: f64, y0: f64, x1: f64, y1: f64 }
+type Edge = struct { i: u32, j: u32, dx: f64, dy: f64, dth: f64, info_xy: f64, info_th: f64 }
+type Particles = struct { xs: []f64, ys: []f64, ths: []f64, weights: []f64, scratch: []f64, n: usize }
+type Motion = struct { dx: f64, dy: f64, dth: f64, noise_xy: f64, noise_th: f64 }
+type Sensor = struct { field: []const f64, max_range: f64, sigma: f64, off_grid: f64 }
+error TooSmall
+error Invalid
+
+fn two_pi() -> f64
+fn wrap_angle(th: f64) -> f64
+fn abs_i64(v: i64) -> i64
+fn occupancy(grid: []f64, w: usize, h: usize, resolution: f64) -> (Occupancy, err)
+fn cell_x(o: *const Occupancy, x: f64) -> i64
+fn inside(o: *const Occupancy, ix: i64, iy: i64) -> bool
+fn bump(o: *Occupancy, ix: i64, iy: i64, delta: f64)
+fn occupancy_update(o: *Occupancy, px: f64, py: f64, pth: f64, ranges: []const f64, angles: []const f64, max_range: f64, l_occ: f64, l_free: f64) -> err
+fn occupancy_probability(l: f64) -> f64
+fn occupied(o: *const Occupancy, ix: i64, iy: i64, threshold: f64) -> bool
+fn raycast(o: *const Occupancy, x: f64, y: f64, angle: f64, max_range: f64, threshold: f64) -> f64
+fn likelihood_field(o: *const Occupancy, threshold: f64, field: []f64) -> err
+fn nearest_on(s: Segment, x: f64, y: f64) -> (f64, f64)
+fn scan_match(px: []const f64, py: []const f64, lines: []const Segment, x: f64, y: f64, th: f64, iterations: usize) -> (f64, f64, f64, f64)
+fn target_of(lines: []const Segment, wx: f64, wy: f64) -> (f64, f64)
+fn particles(xs: []f64, ys: []f64, ths: []f64, weights: []f64, scratch: []f64, n: usize) -> (Particles, err)
+fn gaussian(rng: *rand.Pcg64) -> f64
+fn particles_init(s: *Particles, rng: *rand.Pcg64, x: f64, y: f64, th: f64, spread_xy: f64, spread_th: f64)
+fn amcl_predict(s: *Particles, m: *const Motion, rng: *rand.Pcg64)
+fn amcl_weigh(s: *Particles, o: *const Occupancy, sensor: *const Sensor, ranges: []const f64, angles: []const f64) -> err
+fn amcl_resample(s: *Particles, rng: *rand.Pcg64)
+fn amcl_mean(s: *const Particles) -> (f64, f64, f64)
+fn localize_amcl(s: *Particles, m: *const Motion, o: *const Occupancy, sensor: *const Sensor, ranges: []const f64, angles: []const f64, rng: *rand.Pcg64) -> (f64, f64, f64, err)
+fn edge_error(xs: []const f64, ys: []const f64, ths: []const f64, e: Edge) -> (f64, f64, f64)
+fn residual(xs: []const f64, ys: []const f64, ths: []const f64, edges: []const Edge) -> f64
+fn cholesky_solve(hm: []f64, b: []f64, m: usize) -> err
+fn accumulate(hm: []f64, b: []f64, m: usize, ja: []const f64, col_a: usize, jb: []const f64, col_b: usize, ex: f64, ey: f64, eth: f64, wxy: f64, wth: f64)
+fn pose_graph_optimize(xs: []f64, ys: []f64, ths: []f64, edges: []const Edge, iterations: usize, scratch: []f64) -> (f64, err)
+```
+
+`occupancy_update` (Bresenham log-odds) with `occupancy_probability`, `raycast` and
+`likelihood_field`; `scan_match` (point-to-line ICP); `localize_amcl` over `particles`
+with predict, weigh and low-variance resample; `pose_graph_optimize` (Gauss-Newton with
+analytic Jacobians and a dense Cholesky).
+
+### `e.dsp`
+
+```neper
+type Window = enum u8 { Rectangular, Hann, Hamming, Blackman }
+error Invalid
+error TooSmall
+error NoConvergence
+
+fn ipow(t: f64, e: usize) -> f64
+fn coefficient(c: []const f64, i: usize) -> f64
+fn sinc(t: f64) -> f64
+fn asinh(x: f64) -> f64
+fn clear(xs: []f64)
+fn moving_average(x: []const f64, k: usize, out: []f64) -> err
+fn ema(x: []const f64, alpha: f64, out: []f64) -> err
+fn savitzky_golay_coefficients(width: usize, order: usize, out: []f64, scratch: []f64) -> err
+fn savitzky_golay(x: []const f64, width: usize, order: usize, out: []f64, scratch: []f64) -> err
+fn zero_crossings(x: []const f64) -> usize
+fn fir(x: []const f64, taps: []const f64, out: []f64) -> err
+fn iir(x: []const f64, b: []const f64, a: []const f64, out: []f64, state: []f64) -> err
+fn one_pole(x: []const f64, c: f64, out: []f64) -> err
+fn comb(x: []const f64, delay: usize, gain: f64, out: []f64, feedforward: bool) -> err
+fn biquad(x: []const f64, c: []const f64, out: []f64, state: []f64) -> err
+fn biquad_cookbook(kind: u8, frequency: f64, q: f64, gain_db: f64, out: []f64) -> err
+fn biquad_lowpass(frequency: f64, q: f64, out: []f64) -> err
+fn biquad_highpass(frequency: f64, q: f64, out: []f64) -> err
+fn biquad_peak(frequency: f64, q: f64, gain_db: f64, out: []f64) -> err
+fn window(kind: Window, n: usize, out: []f64) -> err
+fn design_windowed_sinc(taps: usize, cutoff: f64, kind: Window, out: []f64) -> err
+fn remez_value(x: f64, xs: []const f64, ys: []const f64, ad: []const f64) -> f64
+fn design_parks_mcclellan(taps: usize, bands: []const f64, desired: []const f64, weights: []const f64, out: []f64, scratch: []f64) -> err
+fn cmul(ar: f64, ai: f64, br: f64, bi: f64) -> (f64, f64)
+fn cdiv(ar: f64, ai: f64, br: f64, bi: f64) -> (f64, f64)
+fn poly(rr: []const f64, ri: []const f64, cr: []f64, ci: []f64)
+fn bilinear_transform(zr: []const f64, zi: []const f64, pr: []const f64, pi: []const f64, gain: f64, fs: f64, b: []f64, a: []f64, scratch: []f64) -> err
+fn finish_lowpass(zr: []f64, zi: []f64, pr: []f64, pi: []f64, gain: f64, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err
+fn design_butterworth(order: usize, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err
+fn design_chebyshev(order: usize, ripple_db: f64, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err
+fn horner(c: []const f64, zr: f64, zi: f64) -> (f64, f64, f64, f64)
+fn poly_roots(c: []const f64, rr: []f64, ri: []f64) -> err
+fn design_bessel(order: usize, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err
+fn agm_k(b0: f64) -> f64
+fn ellipk(m: f64) -> f64
+fn ellipkm1(p: f64) -> f64
+fn ellipj(u: f64, m: f64) -> (f64, f64, f64)
+fn arc_sc1(w: f64, m: f64) -> f64
+fn ellipdeg(n: usize, m1: f64) -> f64
+fn design_elliptic(order: usize, ripple_db: f64, attenuation_db: f64, cutoff: f64, b: []f64, a: []f64, scratch: []f64) -> err
+fn stft(x: []const f64, frame: usize, hop: usize, win: []const f64, re: []f64, im: []f64) -> (usize, err)
+fn istft(re: []const f64, im: []const f64, frames: usize, frame: usize, hop: usize, win: []const f64, out: []f64, scratch: []f64) -> err
+fn hz_to_mel(f: f64) -> f64
+fn mel_to_hz(m: f64) -> f64
+fn mfcc(x: []const f64, sample_rate: f64, frame: usize, hop: usize, n_mels: usize, n_coeffs: usize, out: []f64, scratch: []f64) -> (usize, err)
+fn cqt(x: []const f64, sample_rate: f64, f_min: f64, bins_per_octave: usize, n_bins: usize, re: []f64, im: []f64) -> err
+fn cepstrum(x: []const f64, out: []f64, scratch: []f64) -> err
+fn spectral_subtract(magnitude: []const f64, noise: []const f64, alpha: f64, floor: f64, out: []f64) -> err
+fn wiener(x: []const f64, noise_variance: f64, frame: usize, out: []f64, scratch: []f64) -> err
+fn levinson_durbin(r: []const f64, order: usize, out: []f64, scratch: []f64) -> (f64, err)
+fn lpc(x: []const f64, order: usize, out: []f64, scratch: []f64) -> (f64, err)
+fn dtw(a: []const f64, b: []const f64, cost: []f64) -> (f64, err)
+fn dtw_path(cost: []const f64, na: usize, nb: usize, path_a: []usize, path_b: []usize) -> (usize, err)
+fn tap_input(x: []const f64, n: usize, k: usize) -> f64
+fn lms_core(x: []const f64, d: []const f64, mu: f64, eps: f64, normalised: bool, w: []f64, out_error: []f64) -> err
+fn lms(x: []const f64, d: []const f64, mu: f64, w: []f64, out_error: []f64) -> err
+fn nlms(x: []const f64, d: []const f64, mu: f64, eps: f64, w: []f64, out_error: []f64) -> err
+fn rls(x: []const f64, d: []const f64, lambda: f64, delta: f64, w: []f64, p: []f64, scratch: []f64, out_error: []f64) -> err
+fn resample_polyphase(x: []const f64, up: usize, down: usize, taps: []const f64, out: []f64) -> (usize, err)
+fn resample_sinc(x: []const f64, ratio: f64, half_width: usize, out: []f64) -> err
+```
+
+Smoothing (`moving_average`, `ema`, `savitzky_golay`), filters (`fir`, `iir`, `one_pole`,
+`comb`, `biquad` with cookbook makers), windows and FIR design (`window`,
+`design_windowed_sinc`, `design_parks_mcclellan`), IIR prototypes with
+`bilinear_transform` (`design_butterworth/chebyshev/bessel/elliptic`), spectral tools
+(`stft`, `istft`, `mfcc`, `cqt`, `cepstrum`, `spectral_subtract`, `wiener`), prediction
+and alignment (`levinson_durbin`, `lpc`, `dtw`, `dtw_path`, `zero_crossings`), adaptive
+filters (`lms`, `nlms`, `rls`) and resampling (`resample_polyphase`, `resample_sinc`).
+
 ### `e.grep`
 
 ```neper
@@ -8548,6 +9086,169 @@ fn combine(parts: []const Steer, weights: []const fixed.Fx) -> Steer
 fn run(tree: []const Behavior, at: u16, conditions: []const bool, action: *u16) -> Status
 fn path_grid(m: tilemap.Map, sx: i32, sy: i32, gx: i32, gy: i32, s: *Scratch, out: []u32) -> (usize, err)
 ```
+
+### `e.game.nav`
+
+```neper
+type Rect = struct { x: u32, y: u32, w: u32, h: u32 }
+type Portal = struct { a: u32, b: u32, x0: u32, y0: u32, x1: u32, y1: u32 }
+type Pt = struct { x: f64, y: f64 }
+type Hpa = struct { walk: []const u8, w: usize, h: usize, c: usize, node_cell: []u32, node_of: []u32, node_count: usize, edge_from: []u32, edge_to: []u32, edge_cost: []u32, edge_count: usize, dist: []u32, came: []u32, queue: []u32, adist: []u32, acame: []u32, heap: []u64 }
+error TooSmall
+error Invalid
+error Unreachable
+const NONE: u32 = 4294967295u32
+
+fn min_u32(a: u32, b: u32) -> u32
+fn max_u32(a: u32, b: u32) -> u32
+fn neighbour(w: usize, h: usize, cell: usize, d: usize) -> (usize, bool)
+fn portal_between(ia: u32, ra: Rect, ib: u32, rb: Rect) -> (Portal, bool)
+fn build_navmesh(walk: []const u8, w: usize, h: usize, regions: []Rect, portals: []Portal, region_of: []u32) -> (usize, usize, err)
+fn tri_area2(a: Pt, b: Pt, c: Pt) -> f64
+fn same(a: Pt, b: Pt) -> bool
+fn portal_at(start: Pt, goal: Pt, left: []const Pt, right: []const Pt, i: usize) -> (Pt, Pt)
+fn push_corner(out: []Pt, count: *usize, p: Pt) -> err
+fn funnel(start: Pt, goal: Pt, left: []const Pt, right: []const Pt, out: []Pt) -> (usize, err)
+fn heap_push(heap: []u64, count: *usize, v: u64) -> err
+fn heap_pop(heap: []u64, count: *usize) -> u64
+fn flow_field(cost: []const u8, w: usize, h: usize, goal: usize, dist: []u32, dir: []u8, heap: []u64) -> err
+fn cluster_of(g: *Hpa, cell: usize) -> usize
+fn add_edge(g: *Hpa, from: u32, to: u32, cost: u32) -> err
+fn node_at(g: *Hpa, cell: usize) -> (u32, err)
+fn entrance(g: *Hpa, ca: usize, cb: usize) -> err
+fn place(g: *Hpa, first: usize, last: usize, edge: usize, vertical: bool) -> err
+fn bfs_cluster(g: *Hpa, source: usize)
+fn connect(g: *Hpa, node: u32, source: usize, reverse: bool) -> err
+fn build_hpa(g: *Hpa) -> err
+fn abstract_search(g: *Hpa, s: u32, total: usize) -> err
+fn adjacent(w: usize, a: usize, b: usize) -> bool
+fn push_cell(out: []u32, count: *usize, cell: u32) -> err
+fn hierarchical_astar(g: *Hpa, start: usize, goal: usize, out: []u32) -> (u32, usize, err)
+fn query(g: *Hpa, s: u32, t: u32, start: usize, goal: usize, out: []u32) -> (u32, usize, err)
+```
+
+`build_navmesh` (greedy maximal rectangles with portals), `funnel` (simple stupid
+funnel), `flow_field` (Dijkstra distances and a direction per cell) and hierarchical
+A* over clusters (`build_hpa`, `hierarchical_astar`).
+
+### `e.game.procgen`
+
+```neper
+type Perm = struct { p: [512]u8 }
+error Invalid
+error TooSmall
+
+fn perm(seed: u64) -> Perm
+fn look(p: *const Perm, i: usize) -> usize
+fn fade(t: f64) -> f64
+fn lerp(t: f64, a: f64, b: f64) -> f64
+fn grad(hash: usize, x: f64, y: f64, z: f64) -> f64
+fn lattice(v: f64) -> (usize, f64)
+fn perlin3(p: *const Perm, xin: f64, yin: f64, zin: f64) -> f64
+fn perlin(p: *const Perm, x: f64, y: f64) -> f64
+fn grad2(gi: usize, x: f64, y: f64) -> f64
+fn corner(t0: f64, gi: usize, x: f64, y: f64) -> f64
+fn simplex(p: *const Perm, xin: f64, yin: f64) -> f64
+fn wrap(v: i64) -> u64
+fn cell_seed(ix: i64, iy: i64, seed: u64) -> u64
+fn worley(x: f64, y: f64, seed: u64) -> (f64, f64)
+fn neighbour(w: usize, h: usize, cell: usize, d: usize) -> (usize, bool)
+fn nth_bit(v: u64, k: u64) -> u32
+fn wave_function_collapse(allow: []const u64, tiles: usize, w: usize, h: usize, r: *rand.Pcg64, domains: []u64, stack: []u32, out: []u8) -> err
+```
+
+`perm` (the reference Perlin table or a seeded shuffle), `perlin`/`perlin3`,
+`simplex` (Gustavson), `worley` (F1 and F2) and `wave_function_collapse` over tile
+adjacency masks with a documented collapse and propagation order.
+
+### `e.game.physics`
+
+```neper
+type Constraint = struct { a: u32, b: u32, rest: f64, stiffness: f64, compliance: f64 }
+type Contact = struct { a: u32, b: u32, nx: f64, ny: f64, bias: f64, friction: f64 }
+type Aabb = struct { min_x: f64, min_y: f64, max_x: f64, max_y: f64 }
+type Pair = struct { a: u32, b: u32 }
+type Circle = struct { x: f64, y: f64, radius: f64, vx: f64, vy: f64 }
+type SphParams = struct { h: f64, mass: f64, rest_density: f64, stiffness: f64, viscosity: f64, gravity: f64 }
+type MacGrid = struct { w: usize, h: usize, u: []f64, v: []f64, p: []f64, div: []f64, u_next: []f64, v_next: []f64 }
+error TooSmall
+error Invalid
+
+fn pi() -> f64
+fn distance(pos: []const f64, a: usize, b: usize) -> (f64, f64, f64)
+fn predict(pos: []f64, vel: []f64, inv_mass: []const f64, prev: []f64, gravity_y: f64, dt: f64) -> err
+fn derive_velocity(pos: []const f64, vel: []f64, prev: []const f64, n: usize, dt: f64)
+fn check_constraints(constraints: []const Constraint, n: usize) -> err
+fn pbd_step(pos: []f64, vel: []f64, inv_mass: []const f64, prev: []f64, constraints: []const Constraint, gravity_y: f64, dt: f64, iterations: usize) -> err
+fn xpbd_step(pos: []f64, vel: []f64, inv_mass: []const f64, prev: []f64, lambda: []f64, constraints: []const Constraint, gravity_y: f64, dt: f64, iterations: usize) -> err
+fn clamp(x: f64, lo: f64, hi: f64) -> f64
+fn solve_gauss_seidel(contacts: []const Contact, vel: []f64, inv_mass: []const f64, normal: []f64, tangent: []f64, iterations: usize) -> err
+fn ccd_conservative(a: Circle, b: Circle, tolerance: f64) -> (f64, bool)
+fn sweep_and_prune(boxes: []const Aabb, order: []u32, out: []Pair) -> (usize, err)
+fn sph(pos: []f64, vel: []f64, density: []f64, pressure: []f64, fx: []f64, fy: []f64, params: SphParams, dt: f64) -> err
+fn mac_init(g: *MacGrid, w: usize, h: usize, u: []f64, v: []f64, p: []f64, div: []f64, u_next: []f64, v_next: []f64) -> err
+fn sample(field: []const f64, nx: usize, ny: usize, ox: f64, oy: f64, x: f64, y: f64) -> f64
+fn sample_u(g: *MacGrid, x: f64, y: f64) -> f64
+fn sample_v(g: *MacGrid, x: f64, y: f64) -> f64
+fn fluid_mac(g: *MacGrid, gravity_y: f64, dt: f64, iterations: usize) -> err
+fn mac_divergence(g: *MacGrid) -> f64
+```
+
+2-d dynamics over packed caller arrays: `pbd_step`, `xpbd_step` (compliance and
+multipliers), `solve_gauss_seidel` (projected impulses with friction),
+`ccd_conservative`, `sweep_and_prune`, `sph` (poly6, spiky, viscosity) and a MAC-grid
+fluid step (`mac_init`, `fluid_mac`, `mac_divergence`).
+
+### `e.game.anim`
+
+```neper
+type Vec3 = struct { x: f64, y: f64, z: f64 }
+type Quat = struct { x: f64, y: f64, z: f64, w: f64 }
+type DualQuat = struct { real: Quat, dual: Quat }
+error TooSmall
+error Invalid
+
+fn vec3(x: f64, y: f64, z: f64) -> Vec3
+fn add(a: Vec3, b: Vec3) -> Vec3
+fn sub(a: Vec3, b: Vec3) -> Vec3
+fn scale(a: Vec3, s: f64) -> Vec3
+fn dot(a: Vec3, b: Vec3) -> f64
+fn cross(a: Vec3, b: Vec3) -> Vec3
+fn length(a: Vec3) -> f64
+fn get(xs: []const f64, i: usize) -> Vec3
+fn put(xs: []f64, i: usize, v: Vec3)
+fn quat(x: f64, y: f64, z: f64, w: f64) -> Quat
+fn quat_identity() -> Quat
+fn quat_conjugate(q: Quat) -> Quat
+fn quat_dot(a: Quat, b: Quat) -> f64
+fn quat_add(a: Quat, b: Quat) -> Quat
+fn quat_scale(q: Quat, s: f64) -> Quat
+fn quat_mul(a: Quat, b: Quat) -> Quat
+fn quat_normalize(q: Quat) -> Quat
+fn quat_from_axis_angle(axis: Vec3, angle: f64) -> Quat
+fn quat_between(from: Vec3, to: Vec3) -> Quat
+fn quat_rotate(q: Quat, v: Vec3) -> Vec3
+fn dq_from(rotation: Quat, translation: Vec3) -> DualQuat
+fn dq_identity() -> DualQuat
+fn dq_add(a: DualQuat, b: DualQuat) -> DualQuat
+fn dq_scale(d: DualQuat, s: f64) -> DualQuat
+fn dq_mul(a: DualQuat, b: DualQuat) -> DualQuat
+fn dq_normalize(d: DualQuat) -> DualQuat
+fn dq_translation(d: DualQuat) -> Vec3
+fn dq_transform(d: DualQuat, v: Vec3) -> Vec3
+fn dq_blend(bones: []const DualQuat, indices: []const u32, weights: []const f64) -> (DualQuat, err)
+fn skin_dual_quaternion(bones: []const DualQuat, positions: []const f64, indices: []const u32, weights: []const f64, out: []f64) -> err
+fn transform_affine(m: []const f64, v: Vec3) -> Vec3
+fn skin_linear_blend(bones: []const f64, positions: []const f64, indices: []const u32, weights: []const f64, out: []f64) -> err
+fn measure(joints: []const f64, lengths: []f64) -> (usize, f64, err)
+fn straighten(joints: []f64, lengths: []const f64, n: usize, goal: Vec3)
+fn ik_fabrik(joints: []f64, lengths: []f64, goal: Vec3, iterations: usize, tolerance: f64) -> (f64, err)
+fn ik_ccd(joints: []f64, lengths: []f64, goal: Vec3, iterations: usize, tolerance: f64) -> (f64, err)
+```
+
+Quaternion and dual-quaternion helpers, `ik_fabrik` and `ik_ccd` over a joint chain,
+`skin_linear_blend` (3x4 bones) and `skin_dual_quaternion` (blended with a hemisphere
+flip).
 
 ### `e.game.dialog`
 

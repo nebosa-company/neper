@@ -264,7 +264,22 @@
     "e.dist.collective",
     "e.algo.ecc",
     "e.algo.rand.quasi",
-    "e.algo.geom3"
+    "e.algo.geom3",
+    "e.game.nav",
+    "e.game.procgen",
+    "e.game.physics",
+    "e.game.anim",
+    "e.gfx.curve",
+    "e.robot.kinematics",
+    "e.robot.motion",
+    "e.robot.plan",
+    "e.robot.map",
+    "e.dsp",
+    "e.gfx.mesh",
+    "e.gfx.raster",
+    "e.gfx.shade",
+    "e.gfx.trace",
+    "e.gfx.texture"
    ]
   },
   {
@@ -1821,6 +1836,52 @@
    "blocked_by": []
   },
   {
+   "name": "e.game.nav",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.procgen",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.bytes",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.physics",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.anim",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.gfx.geometry",
    "layer": 2,
    "surface": "partial",
@@ -1872,6 +1933,73 @@
     "e.text.layout",
     "e.text.shape"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.curve",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.mesh",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.geom3",
+    "e.algo.sort",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.raster",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.shade",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.trace",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.gfx.shade",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.texture",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {
@@ -3632,6 +3760,67 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.robot.kinematics",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.filter"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.robot.motion",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.robot.kinematics"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.robot.plan",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.robot.map",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dsp",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.fft",
+    "e.math.filter"
    ],
    "blocked_by": []
   }

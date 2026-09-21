@@ -1729,6 +1729,81 @@ pointer_float_args_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$pointer_float_args_written" = 'executable written' ]
 chmod +x "$test_build/pointer-float-args-selfhost"
 "$test_build/pointer-float-args-selfhost"
+# `e.game.nav`: region coverage and portals, funnel corners on three corridors, flow distances against Dijkstra, HPA* within 5% of BFS on 20 maps (D865).
+game_nav_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_nav/src/main.e" "$repo" x64 linux "$test_build/game-nav-selfhost")
+[ "$game_nav_written" = 'executable written' ]
+chmod +x "$test_build/game-nav-selfhost"
+"$test_build/game-nav-selfhost"
+# `e.game.procgen`: Perlin, simplex and Worley samples to 1e-12 against transcriptions, WFC on five seeds satisfying every adjacency with the replica's grid hash (D865).
+game_procgen_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_procgen/src/main.e" "$repo" x64 linux "$test_build/game-procgen-selfhost")
+[ "$game_procgen_written" = 'executable written' ]
+chmod +x "$test_build/game-procgen-selfhost"
+"$test_build/game-procgen-selfhost"
+# `e.game.physics`: a PBD chain at rest, XPBD, Gauss-Seidel, SPH and MAC steps equal to replicas, CCD against the analytic time, sweep-and-prune equal to brute force (D865).
+game_physics_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_physics/src/main.e" "$repo" x64 linux "$test_build/game-physics-selfhost")
+[ "$game_physics_written" = 'executable written' ]
+chmod +x "$test_build/game-physics-selfhost"
+"$test_build/game-physics-selfhost"
+# `e.game.anim`: quaternions against scipy, FABRIK and CCD tips against replicas, LBS against numpy and DQS equal to it on a single bone (D865).
+game_anim_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_anim/src/main.e" "$repo" x64 linux "$test_build/game-anim-selfhost")
+[ "$game_anim_written" = 'executable written' ]
+chmod +x "$test_build/game-anim-selfhost"
+"$test_build/game-anim-selfhost"
+# `e.gfx.curve`: Bezier, B-spline, Catmull-Rom and NURBS points against scipy and numpy to 1e-12 (D865).
+gfx_curve_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_curve/src/main.e" "$repo" x64 linux "$test_build/gfx-curve-selfhost")
+[ "$gfx_curve_written" = 'executable written' ]
+chmod +x "$test_build/gfx-curve-selfhost"
+"$test_build/gfx-curve-selfhost"
+# `e.robot.kinematics`: odometry over 100 tick pairs, planar and six-axis forward kinematics, transpose and damped-least-squares IK against numpy (D866).
+robot_kinematics_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/robot_kinematics/src/main.e" "$repo" x64 linux "$test_build/robot-kinematics-selfhost")
+[ "$robot_kinematics_written" = 'executable written' ]
+chmod +x "$test_build/robot-kinematics-selfhost"
+"$test_build/robot-kinematics-selfhost"
+# `e.robot.motion`: profile samples, splines against scipy, trackers on a circle, DWA and VO choices, four-agent ORCA to 1e-9, potential fields and a smoothed band (D866).
+robot_motion_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/robot_motion/src/main.e" "$repo" x64 linux "$test_build/robot-motion-selfhost")
+[ "$robot_motion_written" = 'executable written' ]
+chmod +x "$test_build/robot-motion-selfhost"
+"$test_build/robot-motion-selfhost"
+# `e.robot.plan`: tree sizes, costs and waypoint hashes of six planners on two maps matched to a replica on the same generator stream; exact lattice and hybrid A* lengths (D866).
+robot_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/robot_plan/src/main.e" "$repo" x64 linux "$test_build/robot-plan-selfhost")
+[ "$robot_plan_written" = 'executable written' ]
+chmod +x "$test_build/robot-plan-selfhost"
+"$test_build/robot-plan-selfhost"
+# `e.robot.map`: cell counts after twenty scans, ICP to 1e-6, AMCL within 0.1 of the truth with matched weights, a ten-pose loop closed to 1e-31 (D866).
+robot_map_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/robot_map/src/main.e" "$repo" x64 linux "$test_build/robot-map-selfhost")
+[ "$robot_map_written" = 'executable written' ]
+chmod +x "$test_build/robot-map-selfhost"
+"$test_build/robot-map-selfhost"
+# `e.dsp`: filter designs and outputs against scipy.signal to 1e-9, Remez on two band sets, an STFT round trip, MFCC, DTW, LPC, adaptive filters and resamplers against replicas (D866).
+dsp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dsp/src/main.e" "$repo" x64 linux "$test_build/dsp-selfhost")
+[ "$dsp_written" = 'executable written' ]
+chmod +x "$test_build/dsp-selfhost"
+"$test_build/dsp-selfhost"
+# `e.gfx.mesh`: Euler characteristics and volumes through subdivision, decimation and booleans, marching cubes equal to scikit-image on a sphere, geodesics within a few percent of great circles, LSCM recovering a flat patch, Poisson and ball-pivot reconstructions closed (D868).
+gfx_mesh_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_mesh/src/main.e" "$repo" x64 linux "$test_build/gfx-mesh-selfhost")
+[ "$gfx_mesh_written" = 'executable written' ]
+chmod +x "$test_build/gfx-mesh-selfhost"
+"$test_build/gfx-mesh-selfhost"
+# `e.gfx.raster`: pixel sets equal to scikit-image for lines and circles, Wu coverage against a replica, two triangles partitioning a rectangle exactly (D868).
+gfx_raster_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_raster/src/main.e" "$repo" x64 linux "$test_build/gfx-raster-selfhost")
+[ "$gfx_raster_written" = 'executable written' ]
+chmod +x "$test_build/gfx-raster-selfhost"
+"$test_build/gfx-raster-selfhost"
+# `e.gfx.shade`: thirty configurations to 1e-12 against numpy and a white furnace at roughness 0.5 integrating to 0.909 (D868).
+gfx_shade_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_shade/src/main.e" "$repo" x64 linux "$test_build/gfx-shade-selfhost")
+[ "$gfx_shade_written" = 'executable written' ]
+chmod +x "$test_build/gfx-shade-selfhost"
+"$test_build/gfx-shade-selfhost"
+# `e.gfx.trace`: furnace tests exact in all three modes, sixty CSG queries against a membership oracle, 16x16 renders equal to the replica's image hash (D868).
+gfx_trace_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_trace/src/main.e" "$repo" x64 linux "$test_build/gfx-trace-selfhost")
+[ "$gfx_trace_written" = 'executable written' ]
+chmod +x "$test_build/gfx-trace-selfhost"
+"$test_build/gfx-trace-selfhost"
+# `e.gfx.texture`: BC blocks against a replica and fifty astcenc blocks over six footprints decoded to astcenc's own output (D868).
+gfx_texture_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_texture/src/main.e" "$repo" x64 linux "$test_build/gfx-texture-selfhost")
+[ "$gfx_texture_written" = 'executable written' ]
+chmod +x "$test_build/gfx-texture-selfhost"
+"$test_build/gfx-texture-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
