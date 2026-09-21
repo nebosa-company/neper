@@ -1739,6 +1739,12 @@ ui_progress_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/ui-progress-selfhost"
 ui_progress_output=$("$test_build/ui-progress-selfhost")
 [ "$ui_progress_output" = 'ui progress ok' ]
+# Text fields (D823, widget plan P1-10): text, password, search and area fields.
+ui_field_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_field/src/main.e" "$repo" x64 linux "$test_build/ui-field-selfhost")
+[ "$ui_field_written" = 'executable written' ]
+chmod +x "$test_build/ui-field-selfhost"
+ui_field_output=$("$test_build/ui-field-selfhost")
+[ "$ui_field_output" = 'ui field ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -73,7 +73,7 @@ type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_ac
 // value through `change`; Enter in a single-line editor fires `submit`. A `len`
 // the caller changes between frames replaces the value; one it leaves alone keeps
 // the runtime's edits.
-type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool }
+type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool, secret: bool }
 // Semantics (D809, widget plan P0-06): what an element says of itself to the
 // accessibility tree beyond what its kind implies. `role` is `e.ui.accessibility`'s
 // role code (0 keeps the kind's); the label, value and hint are copied into the
@@ -213,6 +213,7 @@ type Element = struct {
     edit_submit: Submit,
     read_only: bool,
     multiline: bool,
+    secret: bool,
     text_origin: geometry.Point,
     text_width: f32,
     // What the element says of itself: its semantics with the label in `text` and
@@ -829,6 +830,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.enabled = ed.enabled
         e.read_only = ed.read_only
         e.multiline = ed.multiline
+        e.secret = ed.secret
         e.focusable = ed.enabled
         e.gestures = GESTURE_TAP | GESTURE_DRAG
     case .Semantics as sm:
@@ -1249,7 +1251,19 @@ fn edit_options(width: f32, multiline: bool) -> layout.Options {
 // The text an editor shows: its value, with the composition at the caret when it is
 // the focused one.
 fn edit_display(s: *State, a: *mem.Arena, e: *const Element, composing: bool) -> (str, err) {
-    let value: str = e.edit_buffer[0usize..e.edit_len]
+    var value: str = e.edit_buffer[0usize..e.edit_len]
+    if e.secret {
+        // A secret shows an asterisk per byte (D823), so every offset the caret,
+        // the selection and a hit test use stands where the value's does.
+        let (masked, masked_error) = mem.alloc[u8](a, e.edit_len)
+        if masked_error != ok { ret ("", TooLarge) }
+        var m = 0usize
+        while m < e.edit_len {
+            masked[m] = 42u8
+            m += 1usize
+        }
+        value = masked[..]
+    }
     if !composing || s.compose_len == 0usize { ret (value, ok) }
     let (d, d_error) = mem.alloc[u8](a, e.edit_len + s.compose_len)
     if d_error != ok { ret ("", TooLarge) }
@@ -2096,7 +2110,9 @@ fn line_end(e: *const Element, at: usize) -> usize {
 fn edit_layout(s: *State, e: *const Element) -> (layout.Layout, err) {
     if e.edit_style.fonts.len == 0usize || e.edit_len == 0usize { ret (zero, InvalidTree) }
     var scratch = mem.arena_from(s.scratch)
-    let (laid, layout_error) = layout.layout(&scratch, e.edit_buffer[0usize..e.edit_len], e.edit_style, edit_options(e.text_width, e.multiline))
+    let (shown, shown_error) = edit_display(s, &scratch, e, false)
+    if shown_error != ok { ret (zero, InvalidTree) }
+    let (laid, layout_error) = layout.layout(&scratch, shown, e.edit_style, edit_options(e.text_width, e.multiline))
     if layout_error != ok { ret (zero, InvalidTree) }
     ret (laid, ok)
 }
@@ -2226,6 +2242,8 @@ fn edit_redo(s: *State) -> err {
 
 // The selection to the host's clipboard, and to the fallback for a host without one.
 fn edit_copy(s: *State, e: *const Element) {
+    // A secret is never copied.
+    if e.secret { ret }
     let (lo, hi) = selection_of(e)
     var n = hi - lo
     if n > MAX_CLIP { n = MAX_CLIP }

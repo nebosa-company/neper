@@ -3327,7 +3327,7 @@ type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
 type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
 type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
 type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit }
-type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool }
+type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool, secret: bool }
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
 type Placement = enum u8 { Below, Above, Right, Left, Center }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
@@ -3444,7 +3444,8 @@ and Delete erase, Enter fires `submit` in a single line and breaks a multiline o
 Control with A, C, X, V, Z and Y (or Shift+Z) select all, copy, cut, paste, undo and
 redo, over the host clipboard with a runtime fallback and a bounded history that
 coalesces typed runs; a composition shows at the caret with an underline until its
-text commits it. A value that would not fit its buffer is left as it is. Key codes
+text commits it. A value that would not fit its buffer is left as it is. A `secret` editor (D823) shows an asterisk per byte, so every
+offset stands where the value's does, and never copies. Key codes
 are Windows virtual codes; the X keysyms the editor and the scopes read map onto
 them.
 
@@ -3655,6 +3656,7 @@ type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool }
 type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str }
 type Span = struct { value: str, role: style.TextRole, color: style.ColorRole, link: widget.Submit }
 type SurfaceOptions = struct { background: style.ColorRole, bordered: bool, radius: f32, elevation: u8, padding: f32 }
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32 }
 error TooLarge
 
 fn text_options() -> TextOptions
@@ -3690,6 +3692,11 @@ fn slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f3
 fn range_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err)
 fn progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32) -> (widget.Node, err)
 fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32) -> (widget.Node, err)
+fn field_options() -> FieldOptions
+fn text_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions) -> (widget.Node, err)
+fn password_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions) -> (widget.Node, err)
+fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, clear: *const widget.Submit, options: FieldOptions) -> (widget.Node, err)
+fn text_area(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], options: FieldOptions) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
@@ -3745,6 +3752,15 @@ custom-painted ring, the track and the arc from the top through the value's shar
 of the turn as stroked cubic quarter turns, a quarter when indeterminate. Both are
 progress in the tree, busy when indeterminate; neither animates -- an indeterminate
 one shows a still segment until the animation system drives it.
+
+Text fields (D823, P1-10): every one is a `field` -- an outlined surface in the
+resolved look (the border in the error colour when invalid, the focus ring when
+focused) holding the editor (keyed `key`, at least its rows tall) over a placeholder
+shown while the value is empty, the label above, a group in the tree with the label
+and the invalid state; `text_field` is one line, `password_field` a secret editor,
+`search_field` submits on Enter and shows a plain "Clear" button (keyed `key + 1`,
+the caller's action) while it holds anything, `text_area` is `rows` lines tall (two
+at least) and does not scroll its overflow.
 
 ### `e.ui.app`
 

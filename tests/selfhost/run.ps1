@@ -1803,6 +1803,12 @@ $uiProgressWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiProgressWritten -ne 'executable written') { throw 'ui_progress emission failed' }
 $uiProgressOutput = & $uiProgressPath
 if ($LASTEXITCODE -ne 0 -or $uiProgressOutput -ne 'ui progress ok') { throw "the progress controls answered wrongly: exit $LASTEXITCODE" }
+# Text fields (D823, widget plan P1-10): text, password, search and area fields.
+$uiFieldPath = Join-Path $testBuild 'ui-field-selfhost.exe'
+$uiFieldWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_field\src\main.e') $repo 'x64' 'windows' $uiFieldPath
+if ($LASTEXITCODE -ne 0 -or $uiFieldWritten -ne 'executable written') { throw 'ui_field emission failed' }
+$uiFieldOutput = & $uiFieldPath
+if ($LASTEXITCODE -ne 0 -or $uiFieldOutput -ne 'ui field ok') { throw "the text fields answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

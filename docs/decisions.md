@@ -15856,3 +15856,23 @@ when measured and against the outer box when placed, which put the
 segment at three eighths; the control offsets in pixels it computes
 from the width it was given. `link/ui_progress` measures the bars and
 reads the ring's pixels on both hosts.
+
+## D823 — Text fields: one field, four faces, and a secret that keeps its offsets
+
+P1-10 of the widget plan. The four fields are one `field`: an outlined
+surface in the look `resolve` gives the state -- the border in the error
+colour when the caller's validation says invalid, the focus ring when
+the editor has the focus -- holding D807's editor over a placeholder that
+shows while the value is empty, with the label above, a group in the
+tree carrying the label and the invalid state while the editor inside
+says text field. The editor stands its rows tall before it holds
+anything, since with no fonts it measures as nothing and a press would
+miss it. The password field is the editor with a `secret` flag: the
+display is an asterisk per byte rather than per character, which keeps
+every byte offset -- the caret's, the selection's, a hit test's -- where
+the value's is, so nothing else in the editor learns of the mask; and a
+secret is never copied. The search field submits on Enter and shows a
+plain "Clear" button while it holds anything, the caller's action since
+the caller owns the buffer; the text area is the editor with rows, and
+does not scroll its overflow yet. `link/ui_field` drives all four
+through the fake IME on both hosts.

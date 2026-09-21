@@ -352,8 +352,13 @@
             "SearchField",
             "TextArea"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "TextField",
+            "PasswordField",
+            "SearchField",
+            "TextArea"
+          ],
+          "evidence": "lib/e/ui/control.e and lib/e/ui/widget.e (D823): a shared field of an outlined surface, editor over placeholder and label; text_field, password_field over a secret editor (asterisk per byte, never copied), search_field with submit and a clear button, text_area rows tall; tests/selfhost/fixtures/link/ui_field on both hosts"
         },
         {
           "id": "P1-11",

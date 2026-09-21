@@ -78,7 +78,7 @@ fn text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: Te
 fn selectable_text(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *const Theme, options: TextOptions) -> (widget.Node, err) {
     let (text_look, style_error) = text_style(a, t, options.role)
     if style_error != ok { ret (zero, style_error) }
-    ret (widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, options.color), selection: style.color(t.tokens, .Selection), change: zero, submit: zero, enabled: true, read_only: true, multiline: options.wrap != .None }, style.defaults()), ok)
+    ret (widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, options.color), selection: style.color(t.tokens, .Selection), change: zero, submit: zero, enabled: true, read_only: true, multiline: options.wrap != .None, secret: false }, style.defaults()), ok)
 }
 
 fn link_tap(ctx: *void, g: widget.Gesture) -> err {
@@ -797,4 +797,138 @@ fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, va
     sem.label = label
     if indeterminate { sem.states = accessibility.STATE_BUSY }
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// ---------------------------------------------------------- text fields (D823, P1-10)
+
+// A field's look and behaviour: the placeholder shown while the value is empty,
+// whether it takes input, whether the caller's validation found it invalid, its
+// width, and for a text area the rows it shows.
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32 }
+
+fn field_options() -> FieldOptions {
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32 }
+}
+
+// The field every text field is: an outlined surface in the resolved look -- the
+// border in the error colour when invalid, the focus ring when focused -- holding
+// the editor (keyed `key`) over its placeholder, the label above; the editor says
+// text field in the tree, the label names it. The caller owns the buffer and
+// keeps the length (D807).
+fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, secret: bool) -> (widget.Node, err) {
+    var state = control_state(t, key, options.enabled, false)
+    state.invalid = options.invalid
+    state.read_only = options.read_only
+    let look = style.resolve(t.tokens, .Outlined, state)
+    let (text_look, style_error) = text_style(a, t, .Body)
+    if style_error != ok { ret (zero, style_error) }
+    var multiline = options.rows > 1u32
+    // The editor stands its rows tall even before it holds anything (and with no
+    // fonts, when it measures as nothing), so a press reaches it.
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: f32(options.rows) * t.tokens.text[0usize].line_height }
+    let (editor, editor_error) = mem.alloc[widget.Node](a, 2usize)
+    if editor_error != ok { ret (zero, TooLarge) }
+    var placeholder_count = 0usize
+    if len == 0usize && options.placeholder.len != 0usize { placeholder_count = 1usize }
+    var hint = text_options()
+    hint.color = .TextMuted
+    hint.wrap = .None
+    let (hint_node, hint_error) = text_node(a, 0u64, options.placeholder, t, hint)
+    if hint_error != ok { ret (zero, hint_error) }
+    var at = 0usize
+    if placeholder_count != 0usize {
+        editor[at] = hint_node
+        at += 1usize
+    }
+    editor[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: look.foreground, selection: style.color(t.tokens, .Selection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret }, editor_style)
+    at += 1usize
+    var frame_style = style.defaults()
+    frame_style.width = style.Length { Px: options.width }
+    var height = t.tokens.metrics.control_height
+    if multiline { height = f32(options.rows) * t.tokens.text[0usize].line_height + t.tokens.spacing.sm }
+    frame_style.min_height = style.Length { Px: height }
+    frame_style.background = paint.Brush { Solid: look.background }
+    frame_style.border = style.Border { width: look.border_width, color: look.border }
+    if look.focus_ring > 0.0 { frame_style.border = style.Border { width: look.focus_ring, color: style.color(t.tokens, .Focus) } }
+    frame_style.radius = t.tokens.radii.sm
+    frame_style.opacity = look.opacity
+    let pad_x = style.Length { Px: t.tokens.spacing.sm }
+    let pad_y = style.Length { Px: t.tokens.spacing.xs }
+    frame_style.padding = style.EdgeLengths { left: pad_x, top: pad_y, right: pad_x, bottom: pad_y }
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.stack(0u64, frame_style, editor[0usize..at])
+    var parts_count = 1usize
+    if label.len != 0usize { parts_count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, parts_count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    if label.len != 0usize {
+        var caption = text_options()
+        caption.role = .Label
+        caption.wrap = .None
+        if options.invalid { caption.color = .Error }
+        let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
+        if label_error != ok { ret (zero, label_error) }
+        parts[0usize] = label_node
+    }
+    parts[parts_count - 1usize] = framed[0usize]
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..parts_count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    if options.invalid { sem.states = accessibility.STATE_INVALID }
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A single-line text field.
+fn text_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    var single = options
+    single.rows = 1u32
+    let (node, node_error) = field(a, key, t, label, buffer, len, change, submit, single, false)
+    ret (node, node_error)
+}
+
+// A password field: the value shown as an asterisk per byte, and never copied.
+fn password_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    var single = options
+    single.rows = 1u32
+    let (node, node_error) = field(a, key, t, label, buffer, len, change, submit, single, true)
+    ret (node, node_error)
+}
+
+// A search field: a single line whose Enter is the search (`submit`), with a clear
+// button (keyed `key + 1`, the caller's `clear` action) beside it while it holds
+// anything, and "Search" for a placeholder when none is given.
+fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, clear: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    var single = options
+    single.rows = 1u32
+    if single.placeholder.len == 0usize { single.placeholder = "Search" }
+    let (box_node, box_error) = field(a, key, t, "", buffer, len, change, submit, single, false)
+    if box_error != ok { ret (zero, box_error) }
+    var count = 1usize
+    if len != 0usize { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = box_node
+    if len != 0usize {
+        var plain = button_options()
+        plain.variant = .Plain
+        let (clear_button, clear_error) = button(a, key + 1u64, t, "Clear", clear, plain)
+        if clear_error != ok { ret (zero, clear_error) }
+        parts[1usize] = clear_button
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..count]), ok)
+}
+
+// A text area: a multiline editor `rows` lines tall (two at least).
+// ponytail: a text area does not scroll its overflow; a viewport around it waits on the editor reporting its caret's line.
+fn text_area(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], options: FieldOptions) -> (widget.Node, err) {
+    var tall = options
+    if tall.rows < 2u32 { tall.rows = 2u32 }
+    let (node, node_error) = field(a, key, t, label, buffer, len, change, zero, tall, false)
+    ret (node, node_error)
 }
