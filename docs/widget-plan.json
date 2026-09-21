@@ -663,8 +663,15 @@
             "Calendar",
             "ColorPicker"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "DatePicker",
+            "DateRangePicker",
+            "TimePicker",
+            "DurationPicker",
+            "Calendar",
+            "ColorPicker"
+          ],
+          "evidence": "lib/e/ui/overlay.e (D842): calendar as a header of month turns over weeks of day buttons (Monday first, e.time's civil-day arithmetic, the selected day filled, a range tinted), date_picker and date_range_picker as an outlined button reading the value with the calendar in a light-dismissed flyout, time_picker and duration_picker as steppers per part reporting the whole value, color_picker as a swatch beside one slider per channel; tests/selfhost/fixtures/link/ui_pickers on both hosts"
         },
         {
           "id": "P2-11",

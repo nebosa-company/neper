@@ -2108,6 +2108,7 @@
     "e.gfx.geometry",
     "e.gfx.paint",
     "e.mem",
+    "e.time",
     "e.ui.accessibility",
     "e.ui.control",
     "e.ui.layout",

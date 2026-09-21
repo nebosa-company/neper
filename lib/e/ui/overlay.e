@@ -6,6 +6,7 @@
 // keyed so the harness and the tree can find it.
 
 use e.mem
+use e.time
 use e.gfx.geometry
 use e.gfx.paint
 use e.ui.accessibility
@@ -413,4 +414,384 @@ fn action_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     let height = f32(buttons.len + 2usize) * (t.tokens.metrics.control_height + t.tokens.spacing.xs) + 3.0 * t.tokens.spacing.md + t.tokens.text[0usize].line_height
     let (made, made_error) = edged(a, key, t, title, column, dismiss, .Below, 0.0, height)
     ret (made, made_error)
+}
+
+// ------------------------------------------------------------- pickers (D842, P2-10)
+
+// Two decimal digits of `value` (0..99) into `out` at `at`; the new position.
+fn write_two(out: []u8, at: usize, value: i64) -> usize {
+    if at + 2usize > out.len { ret at }
+    out[at] = u8(48i64 + value / 10i64 % 10i64)
+    out[at + 1usize] = u8(48i64 + value % 10i64)
+    ret at + 2usize
+}
+
+// A date as `YYYY-MM-DD` into `out`; the length.
+fn write_date(out: []u8, d: time.Date) -> usize {
+    let year_len = control.write_i64(out, i64(d.year))
+    if year_len == 0usize || year_len + 6usize > out.len { ret 0usize }
+    out[year_len] = 45u8
+    var at = write_two(out, year_len + 1usize, i64(d.month))
+    out[at] = 45u8
+    ret write_two(out, at + 1usize, i64(d.day))
+}
+
+// The weekday of a date, Monday 0 to Sunday 6.
+fn weekday_of(year: i64, month: i64, day: i64) -> i64 {
+    // 1970-01-01 was a Thursday, day 3 from Monday.
+    let days = time.days_from_civil(year, month, day) + 3i64
+    let w = days % 7i64
+    if w < 0i64 { ret w + 7i64 }
+    ret w
+}
+
+// A calendar's pick of one day, and a turn to another month.
+type DayPick = struct { day: time.Date, pick: widget.Change[time.Date] }
+
+fn day_fire(ctx: *void) -> err {
+    let p = mem.cast[*DayPick](ctx)
+    ret widget.fire_change[time.Date](p.pick, p.day)
+}
+
+// Whether `d` lies in `from..to` inclusive (both given), for a range's tint.
+fn within_range(d: time.Date, from: time.Date, to: time.Date) -> bool {
+    let n = time.days_from_civil(i64(d.year), i64(d.month), i64(d.day))
+    let lo = time.days_from_civil(i64(from.year), i64(from.month), i64(from.day))
+    let hi = time.days_from_civil(i64(to.year), i64(to.month), i64(to.day))
+    ret n >= lo && n <= hi
+}
+
+fn same_date(a: time.Date, b: time.Date) -> bool {
+    ret a.year == b.year && a.month == b.month && a.day == b.day
+}
+
+// A calendar of the month `shown` (its day is ignored): a header of a Previous
+// button (keyed `key + 1`), the year and month, and a Next button (`key + 2`),
+// each reporting the first of the neighbouring month through `show`; then the
+// weeks, Monday first, a plain button a day keyed `key + 3 + day` reporting its
+// date through `pick`, the day of `selected` filled and the days from `from` to
+// `to` (when `ranged`) tinted. A grid in the tree named `label`, seven columns.
+fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+    let year = i64(shown.year)
+    let month = i64(shown.month)
+    if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
+    let days = time.days_in_month(year, month)
+    let first_weekday = weekday_of(year, month, 1i64)
+    let (turns, turns_error) = mem.alloc[DayPick](a, 2usize + usize(days))
+    if turns_error != ok { ret (zero, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 2usize + usize(days))
+    if actions_error != ok { ret (zero, TooLarge) }
+    var previous = time.Date { year: shown.year, month: shown.month - 1u8, day: 1u8 }
+    if shown.month == 1u8 { previous = time.Date { year: shown.year - 1i32, month: 12u8, day: 1u8 } }
+    var next = time.Date { year: shown.year, month: shown.month + 1u8, day: 1u8 }
+    if shown.month == 12u8 { next = time.Date { year: shown.year + 1i32, month: 1u8, day: 1u8 } }
+    turns[0usize] = DayPick { day: previous, pick: show }
+    turns[1usize] = DayPick { day: next, pick: show }
+    actions[0usize] = widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: day_fire }
+    actions[1usize] = widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: day_fire }
+    // The header.
+    let (head, head_error) = mem.alloc[widget.Node](a, 3usize)
+    if head_error != ok { ret (zero, TooLarge) }
+    var plain = control.button_options()
+    plain.variant = .Plain
+    let (back, back_error) = control.button(a, key + 1u64, t, "<", &actions[0usize], plain)
+    if back_error != ok { ret (zero, back_error) }
+    head[0usize] = back
+    let (title_bytes, title_error) = mem.alloc[u8](a, 16usize)
+    if title_error != ok { ret (zero, TooLarge) }
+    let year_len = control.write_i64(title_bytes, year)
+    title_bytes[year_len] = 45u8
+    let title_len = write_two(title_bytes, year_len + 1usize, month)
+    var heading = control.text_options()
+    heading.role = .Label
+    heading.wrap = .None
+    heading.align = .Center
+    let (title_node, title_node_error) = control.text(a, 0u64, title_bytes[0usize..title_len], t, heading)
+    if title_node_error != ok { ret (zero, title_node_error) }
+    var spread = title_node
+    spread.style.width = style.Length { Flex: 1.0 }
+    head[1usize] = spread
+    let (forward, forward_error) = control.button(a, key + 2u64, t, ">", &actions[1usize], plain)
+    if forward_error != ok { ret (zero, forward_error) }
+    head[2usize] = forward
+    // The days: blanks before the first, then a button a day, in rows of seven.
+    let cell = t.tokens.metrics.hit_target
+    let slots = usize(first_weekday) + usize(days)
+    let weeks = (slots + 6usize) / 7usize
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 1usize + weeks)
+    if rows_error != ok { ret (zero, TooLarge) }
+    rows[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, control.sized_style(7.0 * cell, t.tokens.metrics.control_height), head[0usize..3usize])
+    var week = 0usize
+    while week < weeks {
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 7usize)
+        if cells_error != ok { ret (zero, TooLarge) }
+        var column = 0usize
+        while column < 7usize {
+            let slot = week * 7usize + column
+            var made = widget.box(0u64, control.sized_style(cell, cell), zero)
+            if slot >= usize(first_weekday) && slot < slots {
+                let day = slot - usize(first_weekday) + 1usize
+                let date = time.Date { year: shown.year, month: shown.month, day: u8(day) }
+                turns[1usize + day] = DayPick { day: date, pick: pick }
+                actions[1usize + day] = widget.Submit { ctx: mem.cast[*void](&turns[1usize + day]), invoke: day_fire }
+                let chosen = has_selected && same_date(date, selected)
+                var variant: style.ControlVariant = .Plain
+                if chosen { variant = .Filled }
+                let day_key = key + 3u64 + u64(day)
+                var look = style.resolve(t.tokens, variant, control.control_state(t, day_key, true, chosen))
+                if !chosen && ranged && within_range(date, from, to) { look.background = style.color(t.tokens, .Selection) }
+                let (digits, digits_error) = mem.alloc[u8](a, 4usize)
+                if digits_error != ok { ret (zero, TooLarge) }
+                let digit_count = control.write_i64(digits, i64(day))
+                var caption = control.text_options()
+                caption.role = .Label
+                caption.wrap = .None
+                let (label_node, label_error) = control.colored_text(a, 0u64, digits[0usize..digit_count], t, caption, look.foreground)
+                if label_error != ok { ret (zero, label_error) }
+                let (pressed, pressed_error) = control.pressable_states(a, day_key, t, 3u8, digits[0usize..digit_count], look, true, chosen, 0u32, 0u32, 0u64, &actions[1usize + day], label_node)
+                if pressed_error != ok { ret (zero, pressed_error) }
+                var sized = pressed
+                sized.style.width = style.Length { Px: cell }
+                sized.style.height = style.Length { Px: cell }
+                sized.style.min_width = style.Length { Px: cell }
+                made = sized
+            }
+            cells[column] = made
+            column += 1usize
+        }
+        rows[1usize + week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..7usize])
+        week += 1usize
+    }
+    let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..1usize + weeks])
+    var sem: widget.Semantics = zero
+    sem.role = 30u8
+    sem.label = label
+    sem.column_count = 7u32
+    sem.row_count = u32(weeks)
+    ret (widget.semantics(key, sem, style.defaults(), column_node[0usize..1usize]), ok)
+}
+
+// A date picker: an outlined button (keyed `key`) showing `value` as
+// `YYYY-MM-DD` (or the label while there is none) firing `toggle`, with a
+// calendar (keyed `key + 2`, in a flyout keyed `key + 1`) of the month `shown`
+// below it while `open`; a pick reaches `pick`, a month turn `show`, and the
+// flyout's dismissal is `toggle` again.
+fn date_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+    let (made, made_error) = dated(a, key, t, label, value, has_value, false, value, value, open, toggle, shown, show, pick)
+    ret (made, made_error)
+}
+
+// A date range picker: the same over `from` and `to`, the button showing both,
+// the days between tinted; a pick reaches `pick` and the caller decides which
+// end it sets.
+fn date_range_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, from: time.Date, to: time.Date, has_range: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+    let (made, made_error) = dated(a, key, t, label, from, has_range, true, from, to, open, toggle, shown, show, pick)
+    ret (made, made_error)
+}
+
+fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, ranged: bool, from: time.Date, to: time.Date, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+    let (text_bytes, text_error) = mem.alloc[u8](a, 32usize)
+    if text_error != ok { ret (zero, TooLarge) }
+    var caption: str = label
+    if has_value {
+        var n = write_date(text_bytes, value)
+        if ranged && n > 0usize && n + 13usize <= text_bytes.len {
+            text_bytes[n] = 32u8
+            text_bytes[n + 1usize] = 45u8
+            text_bytes[n + 2usize] = 32u8
+            n = n + 3usize + write_date(text_bytes[n + 3usize..text_bytes.len], to)
+        }
+        caption = text_bytes[0usize..n]
+    }
+    var outlined = control.button_options()
+    outlined.variant = .Outlined
+    let (head, head_error) = control.button(a, key, t, caption, toggle, outlined)
+    if head_error != ok { ret (zero, head_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    var popup_node = widget.box(0u64, style.defaults(), zero)
+    if open {
+        let (month, month_error) = calendar(a, key + 2u64, t, label, shown, value, has_value, ranged, from, to, show, pick)
+        if month_error != ok { ret (zero, month_error) }
+        let (lifted, lifted_error) = light_dismissed(a, key + 1u64, t, key, .Below, label, month, toggle)
+        if lifted_error != ok { ret (zero, lifted_error) }
+        popup_node = lifted
+    }
+    parts[1usize] = popup_node
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    if open { sem.states = accessibility.STATE_EXPANDED }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A part of a time of day stepped: which part, the whole value, whom to tell.
+type TimePart = struct { part: u8, value: time.Time, change: widget.Change[time.Time] }
+
+fn time_part_fire(ctx: *void, moved: i64) -> err {
+    let p = mem.cast[*TimePart](ctx)
+    var next = p.value
+    if p.part == 0u8 { next.hour = u8(moved) }
+    if p.part == 1u8 { next.minute = u8(moved) }
+    if p.part == 2u8 { next.second = u8(moved) }
+    ret widget.fire_change[time.Time](p.change, next)
+}
+
+// A time picker: D830's steppers for the hour (keyed `key + 1`), the minute
+// (`key + 4`) and, when `seconds`, the second (`key + 7`), colons between; each
+// step reaches `change` with the whole time. A group in the tree named `label`.
+fn time_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Time, seconds: bool, change: widget.Change[time.Time]) -> (widget.Node, err) {
+    var count = 3usize
+    if seconds { count = 5usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (ticks, ticks_error) = mem.alloc[TimePart](a, 3usize)
+    if ticks_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < 3usize {
+        ticks[i] = TimePart { part: u8(i), value: value, change: change }
+        i += 1usize
+    }
+    let (hours, hours_error) = control.stepper(a, key + 1u64, t, "Hour", i64(value.hour), 0i64, 23i64, 1i64, widget.Change[i64] { ctx: mem.cast[*void](&ticks[0usize]), invoke: time_part_fire })
+    if hours_error != ok { ret (zero, hours_error) }
+    parts[0usize] = hours
+    let (colon, colon_error) = control.text(a, 0u64, ":", t, control.text_options())
+    if colon_error != ok { ret (zero, colon_error) }
+    parts[1usize] = colon
+    let (minutes, minutes_error) = control.stepper(a, key + 4u64, t, "Minute", i64(value.minute), 0i64, 59i64, 1i64, widget.Change[i64] { ctx: mem.cast[*void](&ticks[1usize]), invoke: time_part_fire })
+    if minutes_error != ok { ret (zero, minutes_error) }
+    parts[2usize] = minutes
+    if seconds {
+        parts[3usize] = colon
+        let (secs, secs_error) = control.stepper(a, key + 7u64, t, "Second", i64(value.second), 0i64, 59i64, 1i64, widget.Change[i64] { ctx: mem.cast[*void](&ticks[2usize]), invoke: time_part_fire })
+        if secs_error != ok { ret (zero, secs_error) }
+        parts[4usize] = secs
+    }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// A part of a duration stepped: hours, minutes or seconds of the whole.
+type DurationPart = struct { part: u8, value: time.Duration, change: widget.Change[time.Duration] }
+
+fn duration_part_fire(ctx: *void, moved: i64) -> err {
+    let p = mem.cast[*DurationPart](ctx)
+    let second = 1000000000i64
+    let total = p.value.nanos / second
+    var hours = total / 3600i64
+    var minutes = total / 60i64 % 60i64
+    var secs = total % 60i64
+    if p.part == 0u8 { hours = moved }
+    if p.part == 1u8 { minutes = moved }
+    if p.part == 2u8 { secs = moved }
+    ret widget.fire_change[time.Duration](p.change, time.Duration { nanos: (hours * 3600i64 + minutes * 60i64 + secs) * second })
+}
+
+// A duration picker: steppers for the hours (keyed `key + 1`, up to 999), the
+// minutes (`key + 4`) and the seconds (`key + 7`) of `value`, each step reaching
+// `change` with the whole duration; a group in the tree named `label`.
+fn duration_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Duration, change: widget.Change[time.Duration]) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (ticks, ticks_error) = mem.alloc[DurationPart](a, 3usize)
+    if ticks_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < 3usize {
+        ticks[i] = DurationPart { part: u8(i), value: value, change: change }
+        i += 1usize
+    }
+    let total = value.nanos / 1000000000i64
+    let (hours, hours_error) = control.stepper(a, key + 1u64, t, "Hours", total / 3600i64, 0i64, 999i64, 1i64, widget.Change[i64] { ctx: mem.cast[*void](&ticks[0usize]), invoke: duration_part_fire })
+    if hours_error != ok { ret (zero, hours_error) }
+    parts[0usize] = hours
+    let (colon, colon_error) = control.text(a, 0u64, ":", t, control.text_options())
+    if colon_error != ok { ret (zero, colon_error) }
+    parts[1usize] = colon
+    let (minutes, minutes_error) = control.stepper(a, key + 4u64, t, "Minutes", total / 60i64 % 60i64, 0i64, 59i64, 1i64, widget.Change[i64] { ctx: mem.cast[*void](&ticks[1usize]), invoke: duration_part_fire })
+    if minutes_error != ok { ret (zero, minutes_error) }
+    parts[2usize] = minutes
+    parts[3usize] = colon
+    let (secs, secs_error) = control.stepper(a, key + 7u64, t, "Seconds", total % 60i64, 0i64, 59i64, 1i64, widget.Change[i64] { ctx: mem.cast[*void](&ticks[2usize]), invoke: duration_part_fire })
+    if secs_error != ok { ret (zero, secs_error) }
+    parts[4usize] = secs
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..5usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// A channel of a colour moved by its slider.
+type Channel = struct { channel: u8, value: paint.Color, change: widget.Change[paint.Color] }
+
+fn channel_fire(ctx: *void, moved: f32) -> err {
+    let c = mem.cast[*Channel](ctx)
+    var next = c.value
+    if c.channel == 0u8 { next.red = moved }
+    if c.channel == 1u8 { next.green = moved }
+    if c.channel == 2u8 { next.blue = moved }
+    if c.channel == 3u8 { next.alpha = moved }
+    ret widget.fire_change[paint.Color](c.change, next)
+}
+
+// A colour picker: a swatch of `value` beside D820's sliders for red (keyed
+// `key + 1`), green (`key + 2`), blue (`key + 3`) and, when `with_alpha`, alpha
+// (`key + 4`), each move reaching `change` with the whole colour; the colour
+// model is the runtime's own (straight RGBA in 0..1), a host's native picker
+// being the caller's to offer. A group in the tree named `label`.
+fn color_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], width: f32) -> (widget.Node, err) {
+    var count = 3usize
+    if with_alpha { count = 4usize }
+    let (channels, channels_error) = mem.alloc[Channel](a, 4usize)
+    if channels_error != ok { ret (zero, TooLarge) }
+    let (bars, bars_error) = mem.alloc[widget.Node](a, count)
+    if bars_error != ok { ret (zero, TooLarge) }
+    var names: [4]str = zero
+    names[0usize] = "Red"
+    names[1usize] = "Green"
+    names[2usize] = "Blue"
+    names[3usize] = "Alpha"
+    var levels: [4]f32 = zero
+    levels[0usize] = value.red
+    levels[1usize] = value.green
+    levels[2usize] = value.blue
+    levels[3usize] = value.alpha
+    var i = 0usize
+    while i < count {
+        channels[i] = Channel { channel: u8(i), value: value, change: change }
+        let (bar, bar_error) = control.slider(a, key + 1u64 + u64(i), t, names[i], levels[i], 0.0, 1.0, 0.01, widget.Change[f32] { ctx: mem.cast[*void](&channels[i]), invoke: channel_fire }, true)
+        if bar_error != ok { ret (zero, bar_error) }
+        var sized = bar
+        sized.style.width = style.Length { Px: width - t.tokens.metrics.hit_target - t.tokens.spacing.sm }
+        bars[i] = sized
+        i += 1usize
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var swatch = control.sized_style(t.tokens.metrics.hit_target, t.tokens.metrics.hit_target)
+    swatch.background = paint.Brush { Solid: value }
+    swatch.radius = t.tokens.radii.sm
+    swatch.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Border) }
+    parts[0usize] = widget.box(key + 5u64, swatch, zero)
+    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), bars[0usize..count])
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }

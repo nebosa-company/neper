@@ -16283,3 +16283,28 @@ button presses the button before the dialog's default action -- D818's
 rule, so a dialog's initial focus on Cancel makes Enter a cancel, and
 Tab reaches the default. `link/ui_presentation` places, dismisses,
 tabs and confirms on both hosts.
+
+## D842 — Pickers: a calendar is buttons over civil-day arithmetic, and every picker reports the whole value
+
+P2-10 of the widget plan; `e.ui.overlay` now depends on `e.time`. A
+`calendar` is a header -- Previous, the year and month, Next, the two
+reporting the first of the neighbouring month through `show` -- over
+the weeks of the month `shown`, Monday first, the first weekday from
+`days_from_civil` (1970-01-01 was a Thursday), a plain button a day
+keyed `key + 3 + day` reporting its date through `pick`, the selected
+day filled and, for a range, the days from `from` to `to` tinted; a
+grid of seven columns in the tree. The calendar keeps nothing: which
+month is shown and which day is chosen are the caller's, so a picker
+that wants "today" or a locale's first weekday supplies them. The
+`date_picker` and the `date_range_picker` are one `dated` helper: an
+outlined button reading the value as `YYYY-MM-DD` (both dates for a
+range, the caller deciding which end a pick sets) firing `toggle`, the
+calendar in D841's light-dismissed flyout below it while open. The
+`time_picker` and the `duration_picker` are D830's steppers, one per
+part, each step reporting the whole time or duration rebuilt from the
+part moved; the `color_picker` is a swatch beside D820's sliders, one
+per channel, each move reporting the whole colour in the runtime's
+straight RGBA -- a host's native picker, and any locale-aware
+formatting, are the caller's to offer over these. `link/ui_pickers`
+lays March 2026 out, picks, turns, opens, steps and slides on both
+hosts.
