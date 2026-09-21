@@ -18,6 +18,7 @@
 // the upgrade the frame-time numbers will ask for; a state cell is reused only by a
 // state of the same size and alignment.
 
+use e.gpu
 use e.mem
 use e.gfx.geometry
 use e.gfx.paint
@@ -934,6 +935,17 @@ fn find_by_text(s: *State, value: str) -> (ElementId, usize) {
         i += 1usize
     }
     ret (found, count)
+}
+
+// The renderer and its queue, for a harness that draws without a window.
+fn renderer_of(widget_runtime: *Runtime) -> *scene.Renderer {
+    let s = mem.cast[*State](widget_runtime.state)
+    ret s.renderer
+}
+
+fn queue_of(widget_runtime: *Runtime) -> *gpu.Queue {
+    let s = mem.cast[*State](widget_runtime.state)
+    ret scene.queue_of(s.renderer)
 }
 
 // The bounds of an element, for a harness or an accessibility tree.

@@ -72,6 +72,7 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `lib/e/ui/input.e`
 - `lib/e/ui/layout.e`
 - `lib/e/ui/style.e`
+- `lib/e/ui/widget.e`
 - `lib/e/ui/window.e`
 
 ## Verification

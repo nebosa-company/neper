@@ -4,7 +4,7 @@
 |---|---|
 | phase | P2 — Scalable application UI |
 | module | `e.ui.widget` |
-| module surface | `partial`, layer 6, deps `e.data.slot_map`, `e.mem`, `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.text.layout`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.window` |
+| module surface | `partial`, layer 6, deps `e.data.slot_map`, `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.gpu`, `e.mem`, `e.text.layout`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.window` |
 | blocked by | `P1` |
 | delivered | 0 of 4 |
 

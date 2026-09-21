@@ -4,7 +4,7 @@
 |---|---|
 | phase | P0 — Contracts and reference theme |
 | module | `e.ui.testing` |
-| module surface | `planned`, layer 6, deps `e.mem`, `e.test`, `e.time`, `e.gfx.image`, `e.gfx.scene`, `e.ui.input`, `e.ui.widget` |
+| module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.gfx.image`, `e.gfx.scene`, `e.gpu`, `e.mem`, `e.test`, `e.time`, `e.ui.input`, `e.ui.layout`, `e.ui.widget` |
 | blocked by | `e.gfx.scene`, `e.text.layout`, `e.ui.input` |
 | delivered | 0 of 2 |
 

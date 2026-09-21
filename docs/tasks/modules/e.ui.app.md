@@ -5,7 +5,7 @@
 | file to create | `lib/e/ui/app.e` |
 | plan row | layer 6, surface `planned`, milestone none, schedule `later` |
 | blocked by | `native-accessibility-api` |
-| unmet dependencies | `e.ui.accessibility`, `e.ui.animation` |
+| unmet dependencies | `e.ui.accessibility` |
 
 ## Definition of done
 
@@ -27,7 +27,7 @@ Blockers named in the plan must be resolved first; a blocked module is not eligi
 | `e.time` | partial | `lib/e/time.e` | 4 |
 | `e.gfx.scene` | partial | `lib/e/gfx/scene.e` | 6 |
 | `e.ui.accessibility` | planned | missing | 6 |
-| `e.ui.animation` | planned | missing | 6 |
+| `e.ui.animation` | partial | `lib/e/ui/animation.e` | 6 |
 | `e.ui.input` | partial | `lib/e/ui/input.e` | 6 |
 | `e.ui.widget` | partial | `lib/e/ui/widget.e` | 6 |
 | `e.ui.window` | partial | `lib/e/ui/window.e` | 6 |
@@ -85,6 +85,7 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `lib/e/ui/input.e`
 - `lib/e/ui/layout.e`
 - `lib/e/ui/style.e`
+- `lib/e/ui/widget.e`
 - `lib/e/ui/window.e`
 
 ## Verification

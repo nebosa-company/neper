@@ -1667,6 +1667,13 @@ $uiWidgetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $uiWidgetWritten -ne 'executable written') { throw 'ui_widget emission failed' }
 $uiWidgetOutput = & $uiWidgetPath
 if ($LASTEXITCODE -ne 0 -or $uiWidgetOutput -ne 'ui widget ok') { throw "the widget runtime answered wrongly: exit $LASTEXITCODE" }
+# `e.ui.testing` and `e.ui.animation` (D801): a harness pumping frames without a
+# window, elements by key, a press sent, a snapshot compared; curves and controllers.
+$uiTestingPath = Join-Path $testBuild 'ui-testing-selfhost.exe'
+$uiTestingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_testing\src\main.e') $repo 'x64' 'windows' $uiTestingPath
+if ($LASTEXITCODE -ne 0 -or $uiTestingWritten -ne 'executable written') { throw 'ui_testing emission failed' }
+$uiTestingOutput = & $uiTestingPath
+if ($LASTEXITCODE -ne 0 -or $uiTestingOutput -ne 'ui testing ok') { throw "the ui harness answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

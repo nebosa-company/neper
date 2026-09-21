@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/ui/animation.e` |
-| plan row | layer 6, surface `planned`, milestone none, schedule `later` |
+| plan row | layer 6, surface `partial`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
 | unmet dependencies | none — every dependency has source |
 
@@ -58,6 +58,7 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `lib/e/ui/input.e`
 - `lib/e/ui/layout.e`
 - `lib/e/ui/style.e`
+- `lib/e/ui/widget.e`
 - `lib/e/ui/window.e`
 
 ## Verification

@@ -3127,6 +3127,7 @@ fn render(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Si
 fn release_scene(r: *Renderer, scene: SceneId) -> err
 fn close(r: *Renderer) -> err
 fn target_of(a: *mem.Arena, t: *gpu.Target) -> (Target, err)
+fn queue_of(r: *Renderer) -> *gpu.Queue
 ```
 
 Display lists borrow their paths, gradients and text layouts until `compile`
@@ -3276,6 +3277,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err
 fn close(widget_runtime: *Runtime) -> err
 fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool)
+fn renderer_of(widget_runtime: *Runtime) -> *scene.Renderer
+fn queue_of(widget_runtime: *Runtime) -> *gpu.Queue
 ```
 
 `Node` is the declarative syntax: ordinary literals and the allocation-free convenience

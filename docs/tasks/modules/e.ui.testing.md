@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/ui/testing.e` |
-| plan row | layer 6, surface `planned`, milestone none, schedule `later` |
+| plan row | layer 6, surface `partial`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
 | unmet dependencies | none — every dependency has source |
 
@@ -19,12 +19,15 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 
 | dependency | surface | source file | layer |
 |---|---|---|---|
+| `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |
+| `e.gfx.image` | partial | `lib/e/gfx/image.e` | 2 |
+| `e.gfx.scene` | partial | `lib/e/gfx/scene.e` | 6 |
+| `e.gpu` | partial | `lib/e/gpu.e` | 5 |
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.test` | source | `lib/e/test.e` | 5 |
 | `e.time` | partial | `lib/e/time.e` | 4 |
-| `e.gfx.image` | partial | `lib/e/gfx/image.e` | 2 |
-| `e.gfx.scene` | partial | `lib/e/gfx/scene.e` | 6 |
 | `e.ui.input` | partial | `lib/e/ui/input.e` | 6 |
+| `e.ui.layout` | partial | `lib/e/ui/layout.e` | 2 |
 | `e.ui.widget` | partial | `lib/e/ui/widget.e` | 6 |
 
 The module may `use` only these (`scripts/check_module_plan.py` enforces it). Layer 6 may depend on layers [0, 1, 2, 3, 4, 5, 6].
@@ -75,6 +78,7 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `lib/e/ui/input.e`
 - `lib/e/ui/layout.e`
 - `lib/e/ui/style.e`
+- `lib/e/ui/widget.e`
 - `lib/e/ui/window.e`
 
 ## Verification

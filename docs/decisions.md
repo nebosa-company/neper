@@ -15307,3 +15307,25 @@ unchanged, since the stubs are small. Under D506's zero-growth arena rule
 the four arena cells are re-pinned to these exact eight-worker numbers with
 this row naming why; the growth is the surface, not a regression in the
 compiler, and the Linux cell will move again when its X11 backend lands.
+
+## D801 — `e.ui.animation` and `e.ui.testing`
+
+Two small modules close the unblocked half of the UI chain. A
+`Controller` is a start, a duration and a curve; `value` is the eased
+fraction of the way through at the instant given, held at the ends,
+mirrored on the way back for a reversing controller and wrapped for a
+repeating one; `finished` is the end of the round trip and never for a
+repeating one; `request` is `widget.invalidate` under the animation's
+name, since nothing runs by itself and a widget that reads a value asks
+for the next frame. The harness drives a widget runtime without a window:
+an offscreen target on the renderer's own queue -- `scene.queue_of` and
+`widget.renderer_of`/`queue_of` join the two fences for it -- frames
+pumped at the instant the test supplies under the surface's logical size,
+events sent straight to dispatch, elements found by key or by text through
+the widget module's finders, the last frame read back as premultiplied
+RGBA8 and compared against a golden channel by channel within a
+tolerance, a different size or format a mismatch too. `link/ui_testing`
+checks every curve at its half-way value, the repeat and the reverse,
+a pumped frame's pixels, a press reaching its action, and a snapshot that
+matches itself and fails a golden moved by one channel past the tolerance,
+on both hosts.

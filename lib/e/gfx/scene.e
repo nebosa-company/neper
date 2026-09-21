@@ -591,6 +591,12 @@ fn close(r: *Renderer) -> err {
     ret ok
 }
 
+// The queue a renderer draws on, for a target made beside it.
+fn queue_of(r: *Renderer) -> *gpu.Queue {
+    let s = mem.cast[*RendererState](r.state)
+    ret s.queue
+}
+
 // A presentation target over `e.gpu`'s: a window's, or an offscreen one for a test.
 fn target_of(a: *mem.Arena, t: *gpu.Target) -> (Target, err) {
     let (states, states_error) = mem.alloc[TargetState](a, 1usize)

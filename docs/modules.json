@@ -2006,7 +2006,7 @@
   {
    "name": "e.ui.animation",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -2093,16 +2093,19 @@
   {
    "name": "e.ui.testing",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.gfx.geometry",
+    "e.gfx.image",
+    "e.gfx.scene",
+    "e.gpu",
     "e.mem",
     "e.test",
     "e.time",
-    "e.gfx.image",
-    "e.gfx.scene",
     "e.ui.input",
+    "e.ui.layout",
     "e.ui.widget"
    ],
    "blocked_by": []
@@ -2115,10 +2118,11 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.data.slot_map",
-    "e.mem",
     "e.gfx.geometry",
     "e.gfx.paint",
     "e.gfx.scene",
+    "e.gpu",
+    "e.mem",
     "e.text.layout",
     "e.ui.input",
     "e.ui.layout",
