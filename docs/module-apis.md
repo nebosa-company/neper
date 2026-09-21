@@ -3293,13 +3293,14 @@ type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focu
 type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
 type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit }
 type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit }
+type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
 type Runtime = struct { state: *void }
 type Limits = struct { max_elements: usize, max_states: usize, state_bytes: usize, state_classes: u16, max_depth: u16, max_commands: usize }
-type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool }
+type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool, semantics: Semantics, has_semantics: bool, value: str, selection_start: usize, selection_end: usize, read_only: bool }
 error DuplicateKey
 error InvalidTree
 error TooDeep
@@ -3318,6 +3319,7 @@ fn scroll(key: Key, value: Scroll, value_style: style.Style, children: []const N
 fn region(key: Key, value: Region, value_style: style.Style, children: []const Node) -> Node
 fn scope(key: Key, value: Scope, value_style: style.Style, children: []const Node) -> Node
 fn edit(key: Key, value: Edit, value_style: style.Style) -> Node
+fn semantics(key: Key, value: Semantics, value_style: style.Style, children: []const Node) -> Node
 fn fire_change[T: type](c: Change[T], value: T) -> err
 fn fire_submit(a: Submit) -> err
 fn fire_gesture(a: GestureAction, g: Gesture) -> err
@@ -3332,6 +3334,9 @@ fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize,
 fn scroll_to(widget_runtime: *Runtime, element: ElementId, offset: f32) -> err
 fn scroll_offset_of(widget_runtime: *const Runtime, element: ElementId) -> (f32, bool)
 fn visible_range(offset: f32, viewport: f32, count: usize, extent: f32) -> (usize, usize)
+fn semantic_action(widget_runtime: *Runtime, element: ElementId, bit: u32) -> err
+fn edit_set(widget_runtime: *Runtime, element: ElementId, value: str) -> err
+fn edit_select(widget_runtime: *Runtime, element: ElementId, start: usize, end: usize) -> err
 fn close(widget_runtime: *Runtime) -> err
 fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool)
 fn renderer_of(widget_runtime: *Runtime) -> *scene.Renderer
@@ -3394,6 +3399,15 @@ with one of overscan beyond each end -- placed at their item positions, and the
 caller's keys let the reconciler recycle the elements that scrolled out. A
 `scrollbar` paints a thumb on the trailing edge, not dragged.
 
+Semantics (D809, widget plan P0-06): a `Semantics` node says what its subtree is to
+the accessibility tree beyond what the kinds imply -- `e.ui.accessibility`'s role
+code, a label, value and hint copied into the element, its state and action bits,
+live-region politeness, relationships to other elements by key, a place in a
+collection and a level -- and a hidden one leaves the tree with its subtree. A
+platform action it offers reaches `on_action` as its bit through `semantic_action`;
+`edit_set` and `edit_select` are the platform's way into an editor. The summary
+carries all of it, and an editor's value, selection and read-only state.
+
 ### `e.ui.animation`
 
 ```neper
@@ -3414,13 +3428,41 @@ Animation state is explicit. Sampling never reads a clock; the application suppl
 
 ```neper
 type Id = widget.ElementId
-type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar }
-type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool }
-type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll }
-type Node = struct { id: Id, role: Role, label: str, value: str, hint: str, state: State, bounds: geometry.Rect, actions: []const Action, children: []const Id }
+type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader }
+type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool, mixed: bool, busy: bool, invalid: bool, required: bool, read_only: bool, modal: bool, current: bool }
+type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll, Dismiss, Expand, Collapse, Select, ShowMenu, SetSelection }
+type Relations = struct { labelled_by: Id, described_by: Id, error_by: Id, controls: Id, active: Id }
+type Live = enum u8 { Off, Polite, Assertive }
+type Position = struct { row: u32, column: u32, row_count: u32, column_count: u32 }
+type Node = struct { id: Id, role: Role, label: str, value: str, hint: str, state: State, bounds: geometry.Rect, actions: []const Action, children: []const Id, relations: Relations, live: Live, position: Position, level: u8, selection_start: usize, selection_end: usize }
 type Tree = struct { root: Id, nodes: []const Node }
 error Unsupported
 error Invalid
+const STATE_DISABLED: u32 = 1u32
+const STATE_FOCUSED: u32 = 2u32
+const STATE_SELECTED: u32 = 4u32
+const STATE_CHECKED: u32 = 8u32
+const STATE_EXPANDED: u32 = 16u32
+const STATE_HIDDEN: u32 = 32u32
+const STATE_MIXED: u32 = 64u32
+const STATE_BUSY: u32 = 128u32
+const STATE_INVALID: u32 = 256u32
+const STATE_REQUIRED: u32 = 512u32
+const STATE_READ_ONLY: u32 = 1024u32
+const STATE_MODAL: u32 = 2048u32
+const STATE_CURRENT: u32 = 4096u32
+const ACTION_FOCUS: u32 = 1u32
+const ACTION_PRESS: u32 = 2u32
+const ACTION_INCREMENT: u32 = 4u32
+const ACTION_DECREMENT: u32 = 8u32
+const ACTION_SET_VALUE: u32 = 16u32
+const ACTION_SCROLL: u32 = 32u32
+const ACTION_DISMISS: u32 = 64u32
+const ACTION_EXPAND: u32 = 128u32
+const ACTION_COLLAPSE: u32 = 256u32
+const ACTION_SELECT: u32 = 512u32
+const ACTION_SHOW_MENU: u32 = 1024u32
+const ACTION_SET_SELECTION: u32 = 2048u32
 
 fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err)
 fn publish(window_value: window.Id, tree: *const Tree) -> err
@@ -3434,6 +3476,17 @@ no caller strings after returning.
 Delivered (D802) as the tree and the actions; `publish` flattens the tree into
 `os.AccessibleNode` records and answers `Unsupported` until a host bridge is written,
 so the framework does not claim accessibility yet.
+
+The semantics node (D809, widget plan P0-06): a `widget.Semantics` on an element
+sets its role from the role code, its label, value and hint, adds its state and
+action bits (the constants above), names its relationships by key, its live-region
+politeness, its place in a collection and its level; a hidden element and its
+subtree leave the tree. An editor is a `TextField` with its value and selection and
+the `SetValue` and `SetSelection` operations; `perform` routes them into the editor
+(`SetSelection` takes "start:end") and every other offered action to the semantics'
+callback as its bit. Not here: custom named actions, which wait on the host bridge
+whose record would carry the names; the `os.AccessibleNode` record keeps the six
+state and action bits it had until that bridge is written.
 
 ### `e.ui.testing`
 

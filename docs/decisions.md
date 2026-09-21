@@ -15524,3 +15524,29 @@ rule for the caller's value, every move is reported through a
 `Change[f32]`, `scroll_to` sets it clamped, and the scrollbar is a thumb
 on the trailing edge that is painted and not dragged. `link/ui_scroll`
 checks each of these on both hosts.
+
+## D809 — The semantics node: what an element says of itself, in the widget, read by the tree
+
+P0-06 of the widget plan. The accessibility tree was derived from the widget
+kinds alone (D802); a control that is a switch, a tab or a menu item had no
+way to say so. A `Semantics` node in `e.ui.widget` wraps a subtree and
+carries what the tree cannot derive: `e.ui.accessibility`'s role code (0
+keeps the kind's role), a label, value and hint copied into the element
+(64, 32 and 32 bytes, like a text's), state bits and action bits whose
+constants that module declares, live-region politeness, five relationships
+named by key and resolved to identities when the tree is built, a place in
+a collection and a level, and `hidden`, which takes the element and its
+subtree out of the tree and out of its parent's children. The widget module
+holds codes and bits rather than the accessibility enums because it cannot
+import the module that imports it; the accessibility module owns the
+meanings and the inverse maps. `e.ui.accessibility` grows the fifteen roles,
+seven states and six actions the proposal's section 5 lists, in that
+order, and an editor is a `TextField` carrying its value and selection with
+`SetValue` and `SetSelection` (a "start:end" value) that `perform` routes
+into the editor through `edit_set` and `edit_select`; any other offered
+action reaches the semantics' `on_action` as its bit, and one not offered
+is `Unsupported`. Not here: custom named actions, which wait on the host
+bridge whose record would carry the names, and the `os.AccessibleNode`
+record keeps its six state and action bits until that bridge is written,
+so the fixed `e.os` surface and its goldens stand. `link/ui_semantics`
+checks the tree and the operations on both hosts.

@@ -1714,6 +1714,13 @@ $uiScrollWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $uiScrollWritten -ne 'executable written') { throw 'ui_scroll emission failed' }
 $uiScrollOutput = & $uiScrollPath
 if ($LASTEXITCODE -ne 0 -or $uiScrollOutput -ne 'ui scroll ok') { throw "the viewports answered wrongly: exit $LASTEXITCODE" }
+# Semantics (D809, widget plan P0-06): roles, states, relationships, live regions,
+# collection places, hidden subtrees, an editor's value and platform actions.
+$uiSemanticsPath = Join-Path $testBuild 'ui-semantics-selfhost.exe'
+$uiSemanticsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_semantics\src\main.e') $repo 'x64' 'windows' $uiSemanticsPath
+if ($LASTEXITCODE -ne 0 -or $uiSemanticsWritten -ne 'executable written') { throw 'ui_semantics emission failed' }
+$uiSemanticsOutput = & $uiSemanticsPath
+if ($LASTEXITCODE -ne 0 -or $uiSemanticsOutput -ne 'ui semantics ok') { throw "the semantics answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

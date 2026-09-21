@@ -100,8 +100,10 @@
           "components": [
             "SemanticsNode"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "SemanticsNode"
+          ],
+          "evidence": "lib/e/ui/widget.e and lib/e/ui/accessibility.e (D809): Semantics node with role codes for the fifteen added roles, thirteen states, twelve actions, five relationships by key, live politeness, collection position and level, hidden subtrees left out; editors as text fields with value, selection, SetValue and SetSelection; perform routes offered actions to the semantics callback; tests/selfhost/fixtures/link/ui_semantics on both hosts"
         },
         {
           "id": "P0-07",

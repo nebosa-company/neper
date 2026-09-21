@@ -1650,6 +1650,13 @@ ui_scroll_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/ui-scroll-selfhost"
 ui_scroll_output=$("$test_build/ui-scroll-selfhost")
 [ "$ui_scroll_output" = 'ui scroll ok' ]
+# Semantics (D809, widget plan P0-06): roles, states, relationships, live regions,
+# collection places, hidden subtrees, an editor's value and platform actions.
+ui_semantics_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_semantics/src/main.e" "$repo" x64 linux "$test_build/ui-semantics-selfhost")
+[ "$ui_semantics_written" = 'executable written' ]
+chmod +x "$test_build/ui-semantics-selfhost"
+ui_semantics_output=$("$test_build/ui-semantics-selfhost")
+[ "$ui_semantics_output" = 'ui semantics ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

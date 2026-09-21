@@ -73,7 +73,16 @@ type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_ac
 // the caller changes between frames replaces the value; one it leaves alone keeps
 // the runtime's edits.
 type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit }
+// Semantics (D809, widget plan P0-06): what an element says of itself to the
+// accessibility tree beyond what its kind implies. `role` is `e.ui.accessibility`'s
+// role code (0 keeps the kind's); the label, value and hint are copied into the
+// element (64, 32 and 32 bytes); `states`, `actions` and `live` are that module's
+// bits and codes; relationships name other elements by key (0 for none); `row` and
+// `column` place the element in a collection of `row_count` by `column_count`;
+// `level` is a heading's or a tree item's depth; a hidden element and its subtree
+// leave the tree. A platform action the element offers reaches `on_action` as its bit.
+type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -92,6 +101,8 @@ const SCROLL_TAG: u8 = 7u8
 const REGION_TAG: u8 = 9u8
 const SCOPE_TAG: u8 = 10u8
 const EDIT_TAG: u8 = 11u8
+const SEMANTICS_TAG: u8 = 12u8
+const MAX_SHORT: usize = 32usize
 const MAX_HISTORY: usize = 32usize
 const HISTORY_BYTES: usize = 1024usize
 const MAX_COMPOSE: usize = 64usize
@@ -160,6 +171,14 @@ type Element = struct {
     multiline: bool,
     text_origin: geometry.Point,
     text_width: f32,
+    // What the element says of itself: its semantics with the label in `text` and
+    // the value and hint in their own buffers.
+    sem: Semantics,
+    has_semantics: bool,
+    value: [32]u8,
+    value_len: usize,
+    hint: [32]u8,
+    hint_len: usize,
 }
 // One undoable edit: the bytes it removed and inserted at `at`, in the history pool.
 type Undo = struct { element: u32, at: usize, removed_off: usize, removed_len: usize, inserted_off: usize, inserted_len: usize }
@@ -248,6 +267,10 @@ fn scope(key: Key, value: Scope, value_style: style.Style, children: []const Nod
 fn edit(key: Key, value: Edit, value_style: style.Style) -> Node {
     var none: []const Node = zero
     ret Node { key: key, kind: Kind { Edit: value }, style: value_style, children: none }
+}
+
+fn semantics(key: Key, value: Semantics, value_style: style.Style, children: []const Node) -> Node {
+    ret Node { key: key, kind: Kind { Semantics: value }, style: value_style, children: children }
 }
 
 // Whether a function value is set: its bits are not zero, read through a pun.
@@ -367,6 +390,8 @@ fn kind_tag(kind: Kind) -> u8 {
         ret SCOPE_TAG
     case .Edit as ed:
         ret EDIT_TAG
+    case .Semantics as sm:
+        ret SEMANTICS_TAG
     }
     ret 0u8
 }
@@ -524,6 +549,18 @@ fn retire_element(s: *State, index: usize) {
 
 // The node's subtree matched to elements: children rebuilt in the node's order,
 // the old children not matched retired.
+// `from` into `into`, at most `most` bytes; the count.
+fn copy_short(into: []u8, from: str, most: usize) -> usize {
+    var n = from.len
+    if n > most { n = most }
+    var i = 0usize
+    while i < n {
+        into[i] = from[i]
+        i += 1usize
+    }
+    ret n
+}
+
 fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool, position: usize, old_siblings: []const u32, depth: usize) -> (usize, err) {
     if depth > usize(s.limits.max_depth) { ret (0usize, TooDeep) }
     if style.validate(&node.style) != ok { ret (0usize, InvalidTree) }
@@ -538,6 +575,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     e.gestures = 0u8
     e.focusable = false
     e.shortcut_count = 0usize
+    e.has_semantics = false
     switch node.kind {
     case .Button as b:
         e.action = b.action
@@ -607,6 +645,13 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.multiline = ed.multiline
         e.focusable = ed.enabled
         e.gestures = GESTURE_TAP | GESTURE_DRAG
+    case .Semantics as sm:
+        e.enabled = true
+        e.sem = sm
+        e.has_semantics = true
+        e.text_len = copy_short(e.text[..], sm.label, MAX_TEXT)
+        e.value_len = copy_short(e.value[..], sm.value, MAX_SHORT)
+        e.hint_len = copy_short(e.hint[..], sm.hint, MAX_SHORT)
     }
     // Duplicate nonzero keys among siblings are refused.
     var i = 0usize
@@ -780,6 +825,9 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
     case .Scope as sc:
         let (scoped, scope_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner)
         ret (scoped, scope_error)
+    case .Semantics as sm:
+        let (described, describe_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner)
+        ret (described, describe_error)
     case .Scroll as sc:
         var open = inner
         if sc.axis == .Vertical { open.max_height = 3.0e38 } else { open.max_width = 3.0e38 }
@@ -899,6 +947,8 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     case .Region as r:
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
     case .Scope as sc:
+        try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
+    case .Semantics as sm:
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
     case .Grid as g:
         try place_grid(s, a, node, element, g, inner, inner_limits, b, depth)
@@ -2013,6 +2063,41 @@ fn visible_range(offset: f32, viewport: f32, count: usize, extent: f32) -> (usiz
     ret (first, end - first)
 }
 
+// A platform action performed on an element that offers it: its bit to `on_action`.
+fn semantic_action(widget_runtime: *Runtime, element: ElementId, bit: u32) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (index, found) = element_of(s, element)
+    if !found { ret InvalidTree }
+    let e = &s.elements[index]
+    if !e.has_semantics || (e.sem.actions & bit) == 0u32 { ret InvalidTree }
+    ret fire_change[u32](e.sem.on_action, bit)
+}
+
+// An editor's value replaced, and its selection set, by the platform.
+fn edit_set(widget_runtime: *Runtime, element: ElementId, value: str) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (index, found) = element_of(s, element)
+    if !found || s.elements[index].kind != EDIT_TAG || s.elements[index].read_only { ret InvalidTree }
+    if value.len > s.elements[index].edit_buffer.len { ret TooLarge }
+    s.compose_len = 0usize
+    ret edit_replace(s, index, 0usize, s.elements[index].edit_len, value, true)
+}
+
+fn edit_select(widget_runtime: *Runtime, element: ElementId, start: usize, end: usize) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (index, found) = element_of(s, element)
+    if !found || s.elements[index].kind != EDIT_TAG { ret InvalidTree }
+    let e = &s.elements[index]
+    if start > end || end > e.edit_len { ret InvalidTree }
+    e.anchor = start
+    e.caret = end
+    e.invalid = true
+    ret ok
+}
+
 // The element that has the focus, for a harness or a control.
 fn focused(widget_runtime: *const Runtime) -> (ElementId, bool) {
     let s = mem.cast[*State](widget_runtime.state)
@@ -2064,7 +2149,7 @@ fn find_by_text(s: *State, value: str) -> (ElementId, usize) {
 // What an accessibility tree needs of an element: its identity, kind tag, parent,
 // bounds, action, enabling, focus and text, the text borrowed from the runtime
 // until the element changes. `false` for a slot that holds no live element.
-type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool }
+type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool, semantics: Semantics, has_semantics: bool, value: str, selection_start: usize, selection_end: usize, read_only: bool }
 
 fn element_count(widget_runtime: *const Runtime) -> usize {
     let s = mem.cast[*State](widget_runtime.state)
@@ -2093,6 +2178,20 @@ fn summary_at(widget_runtime: *const Runtime, slot: usize) -> (Summary, bool) {
     summary.enabled = e.enabled
     summary.focused = s.has_focus && usize(s.focus) == slot
     summary.text = e.text[0usize..e.text_len]
+    summary.has_semantics = e.has_semantics
+    if e.has_semantics {
+        summary.semantics = e.sem
+        summary.semantics.label = e.text[0usize..e.text_len]
+        summary.semantics.value = e.value[0usize..e.value_len]
+        summary.semantics.hint = e.hint[0usize..e.hint_len]
+    }
+    if e.kind == EDIT_TAG {
+        summary.value = e.edit_buffer[0usize..e.edit_len]
+        let (lo, hi) = selection_of(e)
+        summary.selection_start = lo
+        summary.selection_end = hi
+        summary.read_only = e.read_only
+    }
     summary.has_child = e.has_child
     if e.has_child { summary.first_child = ElementId { slot: e.first_child, generation: s.elements[usize(e.first_child)].generation } }
     summary.has_sibling = e.has_sibling
