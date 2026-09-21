@@ -1610,6 +1610,18 @@ ui_testing_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-testing-selfhost"
 ui_testing_output=$("$test_build/ui-testing-selfhost")
 [ "$ui_testing_output" = 'ui testing ok' ]
+# `e.ui.accessibility` and `e.ui.app` (D802): the semantic tree on both hosts; the app
+# fails at init on a host without windows.
+ui_accessibility_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_accessibility/src/main.e" "$repo" x64 linux "$test_build/ui-accessibility-selfhost")
+[ "$ui_accessibility_written" = 'executable written' ]
+chmod +x "$test_build/ui-accessibility-selfhost"
+ui_accessibility_output=$("$test_build/ui-accessibility-selfhost")
+[ "$ui_accessibility_output" = 'ui accessibility ok' ]
+ui_app_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_app/src/main.e" "$repo" x64 linux "$test_build/ui-app-selfhost")
+[ "$ui_app_written" = 'executable written' ]
+chmod +x "$test_build/ui-app-selfhost"
+ui_app_output=$("$test_build/ui-app-selfhost")
+[ "$ui_app_output" = 'ui app unsupported' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

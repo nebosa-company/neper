@@ -1,11 +1,11 @@
-# e.ui.app — 10 of 10 declarations missing
+# e.ui.app — 11 of 11 declarations missing
 
 | field | value |
 |---|---|
 | file to create | `lib/e/ui/app.e` |
-| plan row | layer 6, surface `planned`, milestone none, schedule `later` |
-| blocked by | `native-accessibility-api` |
-| unmet dependencies | `e.ui.accessibility` |
+| plan row | layer 6, surface `partial`, milestone none, schedule `later` |
+| blocked by | nothing recorded in `modules.json` |
+| unmet dependencies | none — every dependency has source |
 
 ## Definition of done
 
@@ -15,20 +15,20 @@ Roadmap wave (`docs/roadmap.md`, 'Later toolchain-library waves'):
 
 > **Experimental declarative GPU UI and widget library:** extended pure image/geometry/paint values support experimental `e.text.shape`, `e.text.layout`, `e.ui.style`, `e.ui.layout`, `e.gfx.scene`, `e.asset`, `e.ui.asset`, `e.ui.window`, `e.ui.input`, `e.ui.widget`, `e.ui.animation`, `e.ui.accessibility`, `e.ui.testing` and `e.ui.app`. Delivery follows the staged vertical slice and exact lifetime/reconciliation contracts in [`ui-framework.md`](ui-framework.md) and the cross-platform catalogue in [`widget-library-proposal.md`](widget-library-proposal.md). The machine-readable pickup order is [`widget-plan.json`](widget-plan.json): a harness selects the first incomplete item in the lowest phase whose phase and item blockers are complete, then the first undelivered component in that item; blocked sibling items do not prevent an independent ready item from being selected. `python scripts/check_widget_plan.py --next` reports that blocker or component. Phase 0 freezes the candidate `e.ui.control`, `e.ui.collection`, `e.ui.overlay` and `e.ui.navigation` module identities and their phase-1 API fences before source implementation. Each delivery records evidence in the inventory and regenerates `progress.html`. Implementation remains blocked on reviewed embedded-asset linking, native-window, GPU-presentation and accessibility primitives. Phase 4 host-OS delivery additionally requires the reviewed shell, notification, data-exchange, file-access, activation, lifecycle, printing and permission blockers recorded in the widget plan to be resolved. It includes cross-application/desktop drag and drop, clipboard/share exchange, native file grants, associations and deep links, global shortcuts, background and power/session integration, printing, and permission-gated hardware/security services.
 
-Blockers named in the plan must be resolved first; a blocked module is not eligible. Search `docs/roadmap.md` and `docs/decisions.md` for each blocker id.
-
 ## Dependencies
 
 | dependency | surface | source file | layer |
 |---|---|---|---|
+| `e.gfx.geometry` | partial | `lib/e/gfx/geometry.e` | 2 |
+| `e.gfx.scene` | partial | `lib/e/gfx/scene.e` | 6 |
 | `e.gpu` | partial | `lib/e/gpu.e` | 5 |
 | `e.mem` | spec | `lib/e/mem.e` | 0 |
 | `e.os` | spec | `lib/e/os.e` | 3 |
 | `e.time` | partial | `lib/e/time.e` | 4 |
-| `e.gfx.scene` | partial | `lib/e/gfx/scene.e` | 6 |
-| `e.ui.accessibility` | planned | missing | 6 |
+| `e.ui.accessibility` | partial | `lib/e/ui/accessibility.e` | 6 |
 | `e.ui.animation` | partial | `lib/e/ui/animation.e` | 6 |
 | `e.ui.input` | partial | `lib/e/ui/input.e` | 6 |
+| `e.ui.layout` | partial | `lib/e/ui/layout.e` | 2 |
 | `e.ui.widget` | partial | `lib/e/ui/widget.e` | 6 |
 | `e.ui.window` | partial | `lib/e/ui/window.e` | 6 |
 
@@ -48,6 +48,7 @@ fn step(app: *App, timeout: time.Duration) -> (bool, err)
 fn run(app: *App) -> err
 fn stop(app: *App)
 fn close(app: *App) -> err
+fn frames_of(app: *const App) -> u64
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,
@@ -76,16 +77,19 @@ call. Streaming readers retain only their documented scratch state. Every writer
 - [ ] `run`
 - [ ] `stop`
 - [ ] `close`
+- [ ] `frames_of`
 
 ## Style references
 
 Delivered modules beside this one — copy their idioms (arena parameter first, `(value, err)` returns, no hidden allocation, `error` names as declared):
 
+- `lib/e/ui/animation.e`
 - `lib/e/ui/asset.e`
 - `lib/e/ui/input.e`
 - `lib/e/ui/layout.e`
 - `lib/e/ui/style.e`
-- `lib/e/ui/widget.e`
+- `lib/e/ui/testing.e`
+- `lib/e/ui/widget.e`†
 - `lib/e/ui/window.e`
 
 ## Verification
@@ -93,7 +97,7 @@ Delivered modules beside this one — copy their idioms (arena parameter first, 
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/ui/app.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/ui_app/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 10.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 11.
 
 ## Session procedure
 

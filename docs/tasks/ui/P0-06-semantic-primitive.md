@@ -4,7 +4,7 @@
 |---|---|
 | phase | P0 — Contracts and reference theme |
 | module | `e.ui.accessibility` |
-| module surface | `planned`, layer 6, deps `e.mem`, `e.os`, `e.gfx.geometry`, `e.ui.widget`, `e.ui.window` |
+| module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.mem`, `e.os`, `e.ui.input`, `e.ui.widget`, `e.ui.window` |
 | blocked by | `e.gfx.scene`, `e.text.layout`, `e.ui.input` |
 | delivered | 0 of 1 |
 

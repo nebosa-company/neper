@@ -3741,3 +3741,13 @@ fn set_clipboard_text(value: str) -> err {
     if set == 0usize { ret Failed }
     ret ok
 }
+
+// The accessibility bridge (D802): the semantic tree a window publishes to the
+// host's assistive technology, one flat record per node with its parent. No host
+// bridge is written yet -- UI Automation, AT-SPI -- so publication answers
+// `Unsupported` and a program learns so at the first publish.
+type AccessibleNode = struct { id: u32, parent: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u8, actions: u8, x: f32, y: f32, width: f32, height: f32 }
+
+fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
+    ret Unsupported
+}

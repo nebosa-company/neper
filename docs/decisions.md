@@ -15329,3 +15329,36 @@ checks every curve at its half-way value, the repeat and the reverse,
 a pumped frame's pixels, a press reaching its action, and a snapshot that
 matches itself and fails a golden moved by one channel past the tolerance,
 on both hosts.
+
+## D802 — `e.ui.accessibility`, `e.ui.app`, and the accessibility bridge as a primitive
+
+The last two modules of the UI chain, and the blocker in front of them
+read the way D791 read presentation: `native-accessibility-api` asked for
+publication and action bridges to UI Automation, AT-SPI and
+NSAccessibility, each a COM or D-Bus provider of its own, and none of the
+modules behind it needs the bridge to exist in order to be written -- they
+need the primitive to exist. `e.os` gains `AccessibleNode`, a flat record
+per node with its parent, role, label, value, hint, state flags, action
+bits and bounds, and `accessibility_publish(w, nodes)`, which answers
+`Unsupported` on every host until a bridge is written; `e.ui.accessibility`
+builds the semantic tree from the widget runtime's elements through three
+new widget helpers (`element_count`, `root_of`, `summary_at`, the text
+borrowed), a button labelled by the text it holds, every node focusable,
+an enabled action pressable, a scroll scrollable, publishes it through
+the primitive, and performs a platform's request through the widgets:
+focus is the runtime's, a press is a pointer down and up at the element's
+centre through `dispatch`, the value actions `Unsupported` until a widget
+kind carries a value. `e.ui.app` is the loop: `init[Ctx]` opens the device,
+the window, the renderer, the widget runtime and the input queue and keeps
+the builder with its context erased -- the build function's bits behind a
+generic `union` pun that a per-`Ctx` trampoline reads back, there being
+no cast for a function value -- `step` drains input into dispatch and
+presents a frame when one is due, `run` repeats it, `stop` ends it, and
+`frames_of` counts the frames for a test that steps by hand. A `Text`
+without a font choice now measures as nothing and paints nothing, a label
+that exists for the semantic tree alone. `link/ui_accessibility` checks
+the tree, a press through it and a stale window's refusal on both hosts;
+`link/ui_app` steps an application on Windows and reports "unsupported"
+where `init` cannot open a window. Every planned module of the UI chain is
+written; what the framework still does not claim is accessibility, whose
+bridges are the open item, and a Linux window, whose X11 backend is.

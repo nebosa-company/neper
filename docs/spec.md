@@ -1420,6 +1420,7 @@ type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, Pointe
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
 type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
+type AccessibleNode = struct { id: u32, parent: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u8, actions: u8, x: f32, y: f32, width: f32, height: f32 }
 ```
 
 | `fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err)` | a top-level window with a client area of the size asked, hidden unless `visible`; `Unsupported` where the host has no windows or the size is zero or past 16384 |
@@ -1435,6 +1436,7 @@ type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_perce
 | `fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err)` | the displays, the primary first, into `a`; zero `limit` is `Unsupported` |
 | `fn clipboard_text(a: *mem.Arena) -> (str, err)` | the clipboard's text as UTF-8 into `a`, empty when it holds none |
 | `fn set_clipboard_text(value: str) -> err` | replaces the clipboard's contents with `value` |
+| `fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err` | publishes a window's semantic tree -- one flat record per node, parents by id, roles, states and actions as the `e.ui.accessibility` enums' values -- to the host's assistive technology; `Unsupported` where no bridge is written, which is every host today (D802) |
 
 Every failing call returns one of the nine errors above after mapping the platform
 code; `Failed` is the catch-all, and `last_error_detail` gives an explicit portable

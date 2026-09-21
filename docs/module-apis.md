@@ -1548,6 +1548,7 @@ type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, Pointe
 type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
 type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
 type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, scale_percent: u32, primary: bool }
+type AccessibleNode = struct { id: u32, parent: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u8, actions: u8, x: f32, y: f32, width: f32, height: f32 }
 error NotFound
 error Denied
 error Exists
@@ -1662,6 +1663,7 @@ fn window_native(w: Window) -> (usize, usize, err)
 fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err)
 fn clipboard_text(a: *mem.Arena) -> (str, err)
 fn set_clipboard_text(value: str) -> err
+fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err
 fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err)
 fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err)
 fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail) -> (File, err)
@@ -3255,6 +3257,7 @@ type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
 type Runtime = struct { state: *void }
 type Limits = struct { max_elements: usize, max_states: usize, state_bytes: usize, state_classes: u16, max_depth: u16, max_commands: usize }
+type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool }
 error DuplicateKey
 error InvalidTree
 error TooDeep
@@ -3279,6 +3282,9 @@ fn close(widget_runtime: *Runtime) -> err
 fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool)
 fn renderer_of(widget_runtime: *Runtime) -> *scene.Renderer
 fn queue_of(widget_runtime: *Runtime) -> *gpu.Queue
+fn element_count(widget_runtime: *const Runtime) -> usize
+fn root_of(widget_runtime: *const Runtime) -> (ElementId, bool)
+fn summary_at(widget_runtime: *const Runtime, slot: usize) -> (Summary, bool)
 ```
 
 `Node` is the declarative syntax: ordinary literals and the allocation-free convenience
@@ -3333,6 +3339,10 @@ The semantics tree is separate from paint order but uses the same stable element
 identities. Publication crosses a reviewed `e.os` accessibility bridge and retains
 no caller strings after returning.
 
+Delivered (D802) as the tree and the actions; `publish` flattens the tree into
+`os.AccessibleNode` records and answers `Unsupported` until a host bridge is written,
+so the framework does not claim accessibility yet.
+
 ### `e.ui.testing`
 
 ```neper
@@ -3369,6 +3379,7 @@ fn step(app: *App, timeout: time.Duration) -> (bool, err)
 fn run(app: *App) -> err
 fn stop(app: *App)
 fn close(app: *App) -> err
+fn frames_of(app: *const App) -> u64
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,

@@ -235,7 +235,10 @@ The proposal records four blockers instead of weakening the platform-boundary ru
   passes, blending, synchronization, resize and device-loss recovery -- delivered as
   images, targets and frames over kernels (D791, spec section 10 "Presentation");
 - `native-accessibility-api`: reviewed publication and action bridges for Windows,
-  Linux and macOS accessibility systems.
+  Linux and macOS accessibility systems -- the primitive `os.accessibility_publish`
+  is declared and answers `Unsupported` on every host (D802); the bridges themselves
+  (UI Automation, AT-SPI, NSAccessibility) are not written, and the framework does
+  not claim accessibility until they are.
 - `embedded-asset-linking`: canonical manifest ingestion, incremental hashing,
   read-only executable sections and linker-generated `e.asset` registry symbols --
   delivered as the generated registry module (D777) and the manifest's `assets`

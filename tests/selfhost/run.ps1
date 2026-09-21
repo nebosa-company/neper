@@ -1674,6 +1674,18 @@ $uiTestingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiTestingWritten -ne 'executable written') { throw 'ui_testing emission failed' }
 $uiTestingOutput = & $uiTestingPath
 if ($LASTEXITCODE -ne 0 -or $uiTestingOutput -ne 'ui testing ok') { throw "the ui harness answered wrongly: exit $LASTEXITCODE" }
+# `e.ui.accessibility` and `e.ui.app` (D802): the semantic tree, a press performed
+# through it, publication refused for a stale window; the app's init, step, stop, close.
+$uiAccessibilityPath = Join-Path $testBuild 'ui-accessibility-selfhost.exe'
+$uiAccessibilityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_accessibility\src\main.e') $repo 'x64' 'windows' $uiAccessibilityPath
+if ($LASTEXITCODE -ne 0 -or $uiAccessibilityWritten -ne 'executable written') { throw 'ui_accessibility emission failed' }
+$uiAccessibilityOutput = & $uiAccessibilityPath
+if ($LASTEXITCODE -ne 0 -or $uiAccessibilityOutput -ne 'ui accessibility ok') { throw "the accessibility tree answered wrongly: exit $LASTEXITCODE" }
+$uiAppPath = Join-Path $testBuild 'ui-app-selfhost.exe'
+$uiAppWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_app\src\main.e') $repo 'x64' 'windows' $uiAppPath
+if ($LASTEXITCODE -ne 0 -or $uiAppWritten -ne 'executable written') { throw 'ui_app emission failed' }
+$uiAppOutput = & $uiAppPath
+if ($LASTEXITCODE -ne 0 -or $uiAppOutput -ne 'ui app ok') { throw "the ui app answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

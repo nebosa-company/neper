@@ -4,7 +4,7 @@
 |---|---|
 | phase | P4 — Host OS integration |
 | module | `e.ui.app` |
-| module surface | `planned`, layer 6, deps `e.gpu`, `e.mem`, `e.os`, `e.time`, `e.gfx.scene`, `e.ui.accessibility`, `e.ui.animation`, `e.ui.input`, `e.ui.widget`, `e.ui.window` |
+| module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.gfx.scene`, `e.gpu`, `e.mem`, `e.os`, `e.time`, `e.ui.accessibility`, `e.ui.animation`, `e.ui.input`, `e.ui.layout`, `e.ui.widget`, `e.ui.window` |
 | blocked by | `P3`, `native-data-exchange-api` |
 | delivered | 0 of 4 |
 

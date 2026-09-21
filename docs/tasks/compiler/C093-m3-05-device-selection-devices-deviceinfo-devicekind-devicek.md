@@ -36,7 +36,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `devices`: `lib/e/gpu.e`×7, `scripts/check_gpu_contracts.py`×1
 - `.Cpu`: `lib/e/gpu.e`×6
 - `NoDevice`: `lib/e/gpu.e`×3
-- `Unsupported`: `src/codegen_x64.e`×104‡, `src/check.e`×72‡, `src/lower.e`×55‡, `lib/e/crypto/x509.e`×17, `lib/e/net/tls.e`×14†, `lib/e/os.linux.e`×14‡, `lib/e/os.windows.e`×14‡, `lib/e/fmt/jpeg.e`×12†
+- `Unsupported`: `src/codegen_x64.e`×104‡, `src/check.e`×72‡, `src/lower.e`×55‡, `lib/e/crypto/x509.e`×17, `lib/e/os.linux.e`×16‡, `lib/e/os.windows.e`×16‡, `lib/e/net/tls.e`×14†, `lib/e/fmt/jpeg.e`×12†
 - `open_id`: `lib/e/gpu.e`×1
 - `AmbiguousDevice`: `lib/e/gpu.e`×1
 

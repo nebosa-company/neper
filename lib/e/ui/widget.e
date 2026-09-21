@@ -538,6 +538,9 @@ fn measure(s: *State, a: *mem.Arena, node: *const Node, limits: ui_layout.Constr
 fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout.Constraints) -> (geometry.Size, err) {
     switch node.kind {
     case .Text as t:
+        // A text with no font choice measures as nothing and paints nothing: a
+        // label that exists for the semantic tree alone.
+        if t.style.fonts.len == 0usize { ret (geometry.Size { width: 0.0, height: 0.0 }, ok) }
         let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.max_width, max_lines: 0u32, align: .Start, wrap: .Word, ellipsis: "" })
         if layout_error != ok { ret (zero, InvalidTree) }
         ret (geometry.Size { width: laid.bounds.width, height: laid.bounds.height }, ok)
@@ -652,6 +655,7 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     if paint_background { try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: bounds, brush: background } }) }
     switch node.kind {
     case .Text as t:
+        if t.style.fonts.len == 0usize { ret finish_place(b, clipped, layered) }
         let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.width, max_lines: 0u32, align: .Start, wrap: .Word, ellipsis: "" })
         if layout_error != ok { ret InvalidTree }
         let (copies, copies_error) = mem.alloc[layout.Layout](a, 1usize)
@@ -683,6 +687,12 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try place_stack(s, a, node, element, shifted, open, b, depth)
         try scene.push(b, restore)
     }
+    ret finish_place(b, clipped, layered)
+}
+
+// The Restores that close what `place` opened.
+fn finish_place(b: *scene.Builder, clipped: bool, layered: bool) -> err {
+    var restore: scene.Command = .Restore
     if clipped { try scene.push(b, restore) }
     if layered { try scene.push(b, restore) }
     ret ok
@@ -935,6 +945,45 @@ fn find_by_text(s: *State, value: str) -> (ElementId, usize) {
         i += 1usize
     }
     ret (found, count)
+}
+
+// What an accessibility tree needs of an element: its identity, kind tag, parent,
+// bounds, action, enabling, focus and text, the text borrowed from the runtime
+// until the element changes. `false` for a slot that holds no live element.
+type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool }
+
+fn element_count(widget_runtime: *const Runtime) -> usize {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize { ret 0usize }
+    ret s.elements.len
+}
+
+fn root_of(widget_runtime: *const Runtime) -> (ElementId, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || !s.has_root { ret (zero, false) }
+    ret (ElementId { slot: s.root, generation: s.elements[usize(s.root)].generation }, true)
+}
+
+fn summary_at(widget_runtime: *const Runtime, slot: usize) -> (Summary, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || slot >= s.elements.len { ret (zero, false) }
+    let e = &s.elements[slot]
+    if !e.live { ret (zero, false) }
+    var summary: Summary = zero
+    summary.id = ElementId { slot: u32(slot), generation: e.generation }
+    summary.kind = e.kind
+    summary.has_parent = e.has_parent
+    if e.has_parent { summary.parent = ElementId { slot: e.parent, generation: s.elements[usize(e.parent)].generation } }
+    summary.bounds = e.bounds
+    summary.has_action = e.has_action
+    summary.enabled = e.enabled
+    summary.focused = s.has_focus && usize(s.focus) == slot
+    summary.text = e.text[0usize..e.text_len]
+    summary.has_child = e.has_child
+    if e.has_child { summary.first_child = ElementId { slot: e.first_child, generation: s.elements[usize(e.first_child)].generation } }
+    summary.has_sibling = e.has_sibling
+    if e.has_sibling { summary.next_sibling = ElementId { slot: e.next_sibling, generation: s.elements[usize(e.next_sibling)].generation } }
+    ret (summary, true)
 }
 
 // The renderer and its queue, for a harness that draws without a window.

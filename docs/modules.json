@@ -1989,19 +1989,18 @@
   {
    "name": "e.ui.accessibility",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.gfx.geometry",
     "e.mem",
     "e.os",
-    "e.gfx.geometry",
+    "e.ui.input",
     "e.ui.widget",
     "e.ui.window"
    ],
-   "blocked_by": [
-    "native-accessibility-api"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.ui.animation",
@@ -2018,24 +2017,24 @@
   {
    "name": "e.ui.app",
    "layer": 6,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.gfx.geometry",
+    "e.gfx.scene",
     "e.gpu",
     "e.mem",
     "e.os",
     "e.time",
-    "e.gfx.scene",
     "e.ui.accessibility",
     "e.ui.animation",
     "e.ui.input",
+    "e.ui.layout",
     "e.ui.widget",
     "e.ui.window"
    ],
-   "blocked_by": [
-    "native-accessibility-api"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.ui.asset",
