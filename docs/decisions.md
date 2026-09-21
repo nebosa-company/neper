@@ -17006,3 +17006,37 @@ registration tooling and the batch descriptions with it; the tooling
 was rewritten from this conversation and the brief now says what a
 scratchpad is.
 
+## D885 — `e.os.shell` opens the host's shell: a capability record, never an emulation
+
+The widget plan's phase 4 waits on reviewed host primitives, and its
+first three items (P4-01, P4-02, P4-09) on `native-shell-api`. That
+primitive is a module rather than more of `e.os`: `e.os.shell`,
+written per target the way `e.os` is (`shell.windows.e`,
+`shell.linux.e`), so the fixed `e.os` surface the bootstrap seeds
+stays as it is. Its rule is the proposal's: `capabilities` names what
+this host answers, and a service the host has no standard for is
+`Unsupported` -- never a tray drawn in a window. On Windows a tray
+item is `Shell_NotifyIconW` with an icon made from the caller's
+pixels (a 32-bit colour bitmap and a zero mask carry the alpha), its
+callbacks arrive at a hidden window of the module's own class so that
+a program without a window loop still receives them from `tray_poll`,
+a popup menu is `TrackPopupMenuEx` with the documented foreground
+dance, the open verb is `ShellExecuteW`, a reveal is
+`SHOpenFolderAndSelectItems` and the trash `SHFileOperationW` with
+undo; the operation's own codes for a missing item are the shell's old
+table, so the item is looked for first. On Linux the open verb is
+`xdg-open` found on the PATH -- `execve` searches nothing -- with its
+exit code as the answer, a reveal opens the item's directory (selecting
+it is D-Bus, which the library does not speak, and the fence says so),
+the trash is the freedesktop specification by hand (the info file
+first, so an interrupted move orphans nothing; a counter on a taken
+name; UTC where the specification says local), and a tray or a menu is
+a StatusNotifier over D-Bus, so both are `Unsupported`. Taskbar
+progress, overlays and jump lists are COM, a call through a vtable
+that D32's `extern fn` pointer type describes and no `lib/e` file has
+yet used; they are P4-02's to add, not this primitive's to promise.
+`link/os_shell` checks the record per host, the refusals before the
+host is asked, a tray item added, updated and removed on Windows, and
+the trash under a scratch data home on Linux; the recycle bin, the
+reveal and the open verb were run by hand on Windows. The plan's
+`resolved_blockers` gains `native-shell-api`; `--next` now names P4-01.

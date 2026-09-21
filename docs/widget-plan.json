@@ -8,7 +8,9 @@
     "e.ui.overlay",
     "e.ui.navigation"
   ],
-  "resolved_blockers": [],
+  "resolved_blockers": [
+    "native-shell-api"
+  ],
   "phases": [
     {
       "id": "P0",

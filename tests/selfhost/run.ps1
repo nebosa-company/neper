@@ -2748,6 +2748,13 @@ $uiDesktopWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiDesktopWritten -ne 'executable written') { throw 'ui_desktop emission failed' }
 $uiDesktopOutput = & $uiDesktopPath
 if ($LASTEXITCODE -ne 0 -or $uiDesktopOutput -ne 'ui desktop ok') { throw "the desktop controls answered wrongly: exit $LASTEXITCODE" }
+# `e.os.shell` (D885, native-shell-api): the capability record per host, refusals before the
+# host is asked, and a tray item added, updated and removed on the real shell.
+$osShellPath = Join-Path $testBuild 'os-shell-selfhost.exe'
+$osShellWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_shell\src\main.e') $repo 'x64' 'windows' $osShellPath
+if ($LASTEXITCODE -ne 0 -or $osShellWritten -ne 'executable written') { throw 'os_shell emission failed' }
+$osShellOutput = & $osShellPath
+if ($LASTEXITCODE -ne 0 -or $osShellOutput -ne 'os shell ok') { throw "the shell services answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

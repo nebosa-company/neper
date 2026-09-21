@@ -54,7 +54,7 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Code anchors
 
-- `devices`: `lib/e/gpu.e`×7, `scripts/check_gpu_contracts.py`×1
+- `devices`: `lib/e/gpu.e`×7, `lib/e/os/shell.linux.e`×1, `scripts/check_gpu_contracts.py`×1
 - `DeviceInfo`: `lib/e/gpu.e`×6
 - `DeviceKind`: `lib/e/gpu.e`×2
 - `DeviceKey`: `lib/e/gpu.e`×3

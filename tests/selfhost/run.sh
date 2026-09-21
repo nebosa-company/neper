@@ -2551,6 +2551,15 @@ ui_desktop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-desktop-selfhost"
 ui_desktop_output=$("$test_build/ui-desktop-selfhost")
 [ "$ui_desktop_output" = 'ui desktop ok' ]
+# `e.os.shell` (D885, native-shell-api): the capability record per host, refusals before the
+# host is asked, and the freedesktop trash under a scratch data home.
+os_shell_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_shell/src/main.e" "$repo" x64 linux "$test_build/os-shell-selfhost")
+[ "$os_shell_written" = 'executable written' ]
+chmod +x "$test_build/os-shell-selfhost"
+rm -rf "$test_build/shell-home"
+mkdir -p "$test_build/shell-home"
+os_shell_output=$(XDG_DATA_HOME="$test_build/shell-home" NEPER_SHELL_TRASH_HOME="$test_build/shell-home" "$test_build/os-shell-selfhost")
+[ "$os_shell_output" = 'os shell ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

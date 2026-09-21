@@ -3804,6 +3804,41 @@ guarantees more. Process groups promise supported descendant containment, not a
 security sandbox; unsupported strict containment fails before spawning. SL05 names
 platform delivery requirements and escape limitations.
 
+### `e.os.shell`
+
+```neper
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool }
+type Icon = struct { width: u32, height: u32, pixels: []const u32 }
+type TrayEventKind = enum u8 { Select, Context, Open }
+type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
+type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
+error Unsupported
+error Invalid
+error NotFound
+error Failed
+fn capabilities() -> Capabilities
+fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err
+fn tray_update(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err
+fn tray_remove(a: *mem.Arena, id: u32) -> err
+fn tray_poll() -> (TrayEvent, bool)
+fn popup_menu(a: *mem.Arena, items: []const MenuItem, x: i32, y: i32) -> (u32, bool, err)
+fn open_uri(a: *mem.Arena, uri: str) -> err
+fn reveal(a: *mem.Arena, path: str) -> err
+fn trash(a: *mem.Arena, path: str) -> err
+```
+
+The host's shell services (D885, the widget plan's `native-shell-api`), written per
+target like `e.os`. `capabilities` says what this host answers; a service the host
+has no standard for is `Unsupported`, never emulated in a window. A tray item is the
+caller's pixels (`0xAARRGGBB`, rows top-down) and tooltip under a caller-chosen id;
+`tray_poll` pumps the item's messages and answers its activations at the cursor.
+`popup_menu` is the shell's own menu at a screen point, blocking until a choice or a
+dismissal; a zero id on anything but a separator is `Invalid`. `open_uri` is the
+shell's open verb (`ShellExecuteW`; `xdg-open` by its exit code), `reveal` the file
+manager at the item (selected on Windows; the item's directory on Linux) and `trash`
+the recycle bin or the freedesktop home trash with its `.trashinfo`. An empty
+argument is `Invalid` and a missing item `NotFound` before the host is asked.
+
 ### `e.cancel`
 
 ```neper
