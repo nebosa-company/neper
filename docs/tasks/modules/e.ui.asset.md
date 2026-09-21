@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | file to create | `lib/e/ui/asset.e` |
-| plan row | layer 6, surface `planned`, milestone none, schedule `later` |
+| plan row | layer 6, surface `partial`, milestone none, schedule `later` |
 | blocked by | nothing recorded in `modules.json` |
 | unmet dependencies | none — every dependency has source |
 
@@ -88,8 +88,10 @@ Read each line in context; they carry obligations (cancellation, bounded buffers
 
 Delivered modules beside this one — copy their idioms (arena parameter first, `(value, err)` returns, no hidden allocation, `error` names as declared):
 
+- `lib/e/ui/input.e`
 - `lib/e/ui/layout.e`
 - `lib/e/ui/style.e`
+- `lib/e/ui/window.e`
 
 ## Verification
 

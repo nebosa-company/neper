@@ -71,8 +71,10 @@ does not require a display server and never sleeps; tests supply frame time.
 
 Delivered modules beside this one — copy their idioms (arena parameter first, `(value, err)` returns, no hidden allocation, `error` names as declared):
 
+- `lib/e/ui/input.e`
 - `lib/e/ui/layout.e`
 - `lib/e/ui/style.e`
+- `lib/e/ui/window.e`
 
 ## Verification
 

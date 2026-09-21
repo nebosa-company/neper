@@ -1653,6 +1653,13 @@ $uiWindowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $uiWindowWritten -ne 'executable written') { throw 'ui_window emission failed' }
 $uiWindowOutput = & $uiWindowPath
 if ($LASTEXITCODE -ne 0 -or $uiWindowOutput -ne 'ui window ok') { throw "the ui window answered wrongly: exit $LASTEXITCODE" }
+# `e.ui.asset` (D798): variants chosen by locale, theme and scale from the fixture
+# project's registry, a font from it, and the texture cache over a renderer.
+$uiAssetPath = Join-Path $testBuild 'ui-asset-selfhost.exe'
+$uiAssetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_asset\src\main.e') $repo 'x64' 'windows' $uiAssetPath
+if ($LASTEXITCODE -ne 0 -or $uiAssetWritten -ne 'executable written') { throw 'ui_asset emission failed' }
+$uiAssetOutput = & $uiAssetPath
+if ($LASTEXITCODE -ne 0 -or $uiAssetOutput -ne 'ui asset ok') { throw "ui asset selection answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

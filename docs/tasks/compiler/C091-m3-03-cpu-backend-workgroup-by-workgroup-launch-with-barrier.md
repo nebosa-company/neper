@@ -42,7 +42,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `Stack`: `src/lower.e`×35‡, `lib/e/data/stack.e`×11, `src/codegen_x64.e`×9‡, `src/regalloc.e`×7, `src/nir.e`×4†, `lib/e/debug.e`×1, `lib/e/ui/style.e`×1, `src/em.e`×1‡
 - `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1, `src/lower.e`×1‡
 - `launch_run`: `lib/e/gpu.e`×3, `src/lower.e`×3‡
-- `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2†, `src/resolve.e`×2†, `lib/e/gpu.e`×1, `lib/e/gpu/tensor.e`×1, `scripts/check_module_plan.py`×1, `src/nir.e`×1†
+- `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2†, `src/resolve.e`×2†, `lib/e/gpu.e`×1, `lib/e/gpu/tensor.e`×1, `lib/e/ui/window.e`×1, `scripts/check_module_plan.py`×1
 
 ## Existing fixtures
 

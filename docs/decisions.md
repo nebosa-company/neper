@@ -15232,3 +15232,24 @@ a window, renders and shows a frame, reads its `Frame` event first, polls
 the host's, sets title, cursor and visibility, and finds the closed window
 stale on Windows; Linux answers "unsupported" at `open`. Not here: `Mode`
 and `transparent`, recorded and not acted on; a layout-aware logical key.
+
+## D798 — `e.ui.asset`: variants, fonts and a texture cache over the registry
+
+The fence's selection rule, written as stated: variants share a `base`
+attribute; the request is matched by locale first -- the variant's locale a
+prefix of the request by whole subtags, ranked by how many it shares, the
+empty locale the fallback -- then by theme, exact before `any`, then by
+scale, the smallest not below the request or else the largest, and a tie by
+the asset's name bytes; a `theme` or `scale` attribute that is not one of
+the words or not a positive decimal is `InvalidVariant`, since a manifest
+that says so is wrong rather than absent. `font` hands out the executable's
+bytes with an id from the digest's first four bytes, validated by the shaper
+so a wrong asset is `InvalidVariant` at the request. The cache decodes into
+the caller's scratch through the caller's decoder, uploads before it
+returns and resets the scratch, and keys an entry by the chosen asset's
+SHA-256 plus the decoder's identity -- its function's address read through
+a bare `union` pun, since `==` has no meaning for a function value and
+`mem.bitcast` takes none -- and its context; `evict` releases every entry of
+a base through the renderer, `clear` all, `close` both. `link/ui_asset`
+is a fixture project with one image in four variants and one font, checked
+on both hosts.

@@ -1,0 +1,23 @@
+schema: neper-project-1
+name: ui_asset_fixture
+version: 0.1.0
+language: "0.1"
+
+# One logical image in four variants, and one font.
+assets:
+  "images/logo@1x":
+    path: assets/logo1x.rgba
+    attributes: {base: images/logo, scale: "1"}
+  "images/logo@2x":
+    path: assets/logo2x.rgba
+    attributes: {base: images/logo, scale: "2"}
+  "images/logo@2x-dark":
+    path: assets/logo2xdark.rgba
+    attributes: {base: images/logo, scale: "2", theme: dark}
+  "images/logo-es":
+    path: assets/logoes.rgba
+    attributes: {base: images/logo, scale: "1", locale: es-ES}
+  fonts/square:
+    path: assets/square.ttf
+    media_type: font/ttf
+    attributes: {base: fonts/square}
