@@ -15442,3 +15442,31 @@ recorded. No selector, cascade or lookup by name. `link/ui_theme` checks
 every rule on both hosts. Not here: Material-like and Cupertino-like
 presentations, which are profiles the reference theme carries as names
 and an extension package would give values.
+
+## D806 — Typed actions, the gesture arena, and focus and shortcut scopes in `e.ui.widget`
+
+P0-02 and P0-03 of the widget plan. A `Change[T]` is an action that
+carries a value of its type and a `Submit` one that carries nothing;
+both are a context and a function, and firing an unset one is a no-op,
+so a control never asks whether its owner listens. The function is
+tested for being set through a union pun, since a function value
+compares with nothing (D802's shape). A `Region` node takes part in the
+gestures its mask names -- tap, drag, hover -- and the runtime keeps one
+gesture arena: a pointer down on the deepest region that taps or drags
+becomes its candidate and takes the focus when the region is focusable;
+a release inside it within the slop of eight logical pixels is a tap; a
+move past the slop is a drag when the region takes one -- start, moves
+with their delta, end -- and otherwise releases the pointer, so a
+scrolling ancestor may have it; a move with no press over a hovering
+region enters it and leaves the one entered last. Action elements under
+the old contract still answer when no region claims the pointer. A
+`Scope` node bounds the focus: Tab and Shift+Tab travel the focusable
+elements of the trapping scope the focus sits in (else the whole tree)
+in preorder and wrap; it holds up to eight shortcuts matched on physical
+key and the four modifiers; Enter fires its default action and Escape
+its cancel action. A key down walks the scopes from the focused element
+upward and the first that takes it wins, else the focused element's own
+action sees the event as before. `focused` answers the focused element
+for a harness. The slop is a function, not a constant: a float module
+constant fails type checking silently (a compiler defect recorded for a
+later fix). `link/ui_gesture` checks every rule on both hosts.

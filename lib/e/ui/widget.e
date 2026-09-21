@@ -38,7 +38,24 @@ type Button = struct { action: Action, enabled: bool }
 type Image = struct { texture: scene.TextureId, fit: Fit }
 type Scroll = struct { axis: ui_layout.Axis, offset: f32 }
 type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> geometry.Size, paint: fn(*void, *scene.Builder, geometry.Rect) -> err }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom }
+// Typed actions (D806, widget plan P0-02): a change carries a value of its type, a
+// submit carries nothing; `ctx` outlives the element and never points into the
+// frame arena. An unset action is a no-op.
+type Change[T: type] = struct { ctx: *void, invoke: fn(*void, T) -> err }
+type Submit = struct { ctx: *void, invoke: fn(*void) -> err }
+// A gesture the arena settled on: a tap, a drag from its start through its moves to
+// its end, a hover entering and leaving. Positions are logical pixels.
+type Drag = struct { start: geometry.Point, position: geometry.Point, delta: geometry.Point }
+type Gesture = union enum u8 { Tap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd }
+type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
+// The gestures a region takes part in, as bits: 1 tap, 2 drag, 4 hover.
+type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
+type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
+// A focus and shortcut scope: Tab and Shift+Tab travel its focusable descendants
+// (and, trapping, never leave it); a key down that matches one of its shortcuts
+// fires it; Enter fires the default action and Escape the cancel one.
+type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -54,6 +71,12 @@ const STATES_PER_ELEMENT: usize = 8usize
 const MAX_TEXT: usize = 64usize
 // `Kind`'s tags in declaration order; the one a scroll hit test looks for.
 const SCROLL_TAG: u8 = 7u8
+const REGION_TAG: u8 = 9u8
+const SCOPE_TAG: u8 = 10u8
+const MAX_SHORTCUTS: usize = 8usize
+const GESTURE_TAP: u8 = 1u8
+const GESTURE_DRAG: u8 = 2u8
+const GESTURE_HOVER: u8 = 4u8
 
 type Cell = struct { live: bool, generation: u32, offset: usize, size: usize, align: usize, owner: u32 }
 type Element = struct {
@@ -81,7 +104,19 @@ type Element = struct {
     text: [64]u8,
     text_len: usize,
     invalid: bool,
+    // A region's gesture action and mask; a scope's shortcuts and its two actions.
+    gesture: GestureAction,
+    gestures: u8,
+    focusable: bool,
+    traps_focus: bool,
+    shortcuts: [8]Shortcut,
+    shortcut_count: usize,
+    default_action: Submit,
+    cancel_action: Submit,
 }
+// The gesture arena: one pointer, the region it went down on, where, whether it has
+// become a drag, and the region hovered last.
+type Arena = struct { pressed: bool, candidate: u32, down: geometry.Point, last: geometry.Point, dragging: bool, hovered: u32, has_hovered: bool }
 type State = struct {
     arena: *mem.Arena,
     renderer: *scene.Renderer,
@@ -98,6 +133,7 @@ type State = struct {
     scene_id: scene.SceneId,
     has_scene: bool,
     closed: bool,
+    arena_state: Arena,
 }
 
 // ---------------------------------------------------------------- constructors
@@ -136,6 +172,53 @@ fn image(key: Key, value: Image, value_style: style.Style) -> Node {
 
 fn scroll(key: Key, value: Scroll, value_style: style.Style, children: []const Node) -> Node {
     ret Node { key: key, kind: Kind { Scroll: value }, style: value_style, children: children }
+}
+
+fn region(key: Key, value: Region, value_style: style.Style, children: []const Node) -> Node {
+    ret Node { key: key, kind: Kind { Region: value }, style: value_style, children: children }
+}
+
+fn scope(key: Key, value: Scope, value_style: style.Style, children: []const Node) -> Node {
+    ret Node { key: key, kind: Kind { Scope: value }, style: value_style, children: children }
+}
+
+// Whether a function value is set: its bits are not zero, read through a pun.
+type SubmitBits = union { function: fn(*void) -> err, bits: usize }
+type GestureBits = union { function: fn(*void, Gesture) -> err, bits: usize }
+type ChangeBits[T: type] = union { function: fn(*void, T) -> err, bits: usize }
+
+fn submit_set(f: fn(*void) -> err) -> bool {
+    var pun: SubmitBits = zero
+    pun.function = f
+    ret pun.bits != 0usize
+}
+
+fn gesture_set(f: fn(*void, Gesture) -> err) -> bool {
+    var pun: GestureBits = zero
+    pun.function = f
+    ret pun.bits != 0usize
+}
+
+fn change_set[T: type](f: fn(*void, T) -> err) -> bool {
+    var pun: ChangeBits[T] = zero
+    pun.function = f
+    ret pun.bits != 0usize
+}
+
+// An action fired, or nothing when it is unset.
+fn fire_change[T: type](c: Change[T], value: T) -> err {
+    if !change_set[T](c.invoke) { ret ok }
+    ret c.invoke(c.ctx, value)
+}
+
+fn fire_submit(a: Submit) -> err {
+    if !submit_set(a.invoke) { ret ok }
+    ret a.invoke(a.ctx)
+}
+
+fn fire_gesture(a: GestureAction, g: Gesture) -> err {
+    if !gesture_set(a.invoke) { ret ok }
+    ret a.invoke(a.ctx, g)
 }
 
 // ------------------------------------------------------------------ the runtime
@@ -207,6 +290,10 @@ fn kind_tag(kind: Kind) -> u8 {
         ret SCROLL_TAG
     case .Custom as c:
         ret 8u8
+    case .Region as r:
+        ret REGION_TAG
+    case .Scope as sc:
+        ret SCOPE_TAG
     }
     ret 0u8
 }
@@ -375,6 +462,9 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     e.has_parent = has_parent
     e.has_action = false
     e.text_len = 0usize
+    e.gestures = 0u8
+    e.focusable = false
+    e.shortcut_count = 0usize
     switch node.kind {
     case .Button as b:
         e.action = b.action
@@ -403,6 +493,23 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.enabled = true
     case .Custom as c:
         e.enabled = true
+    case .Region as r:
+        e.gesture = r.gesture
+        e.gestures = r.gestures
+        e.enabled = r.enabled
+        e.focusable = r.focusable
+    case .Scope as sc:
+        e.enabled = true
+        e.traps_focus = sc.traps_focus
+        if sc.shortcuts.len > MAX_SHORTCUTS { ret (0usize, TooLarge) }
+        var k = 0usize
+        while k < sc.shortcuts.len {
+            e.shortcuts[k] = sc.shortcuts[k]
+            k += 1usize
+        }
+        e.shortcut_count = sc.shortcuts.len
+        e.default_action = sc.default_action
+        e.cancel_action = sc.cancel_action
     }
     // Duplicate nonzero keys among siblings are refused.
     var i = 0usize
@@ -563,6 +670,12 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
     case .Button as b:
         let (buttoned, button_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner)
         ret (buttoned, button_error)
+    case .Region as r:
+        let (regioned, region_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner)
+        ret (regioned, region_error)
+    case .Scope as sc:
+        let (scoped, scope_error) = measure_flex(s, a, node, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner)
+        ret (scoped, scope_error)
     case .Scroll as sc:
         var open = inner
         if sc.axis == .Vertical { open.max_height = 3.0e38 } else { open.max_width = 3.0e38 }
@@ -671,6 +784,10 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     case .Box:
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
     case .Button as bt:
+        try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
+    case .Region as r:
+        try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
+    case .Scope as sc:
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
     case .Grid as g:
         try place_grid(s, a, node, element, g, inner, inner_limits, b, depth)
@@ -841,12 +958,174 @@ fn hit_scroll(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
     ret (0usize, false)
 }
 
+// The deepest region under `p` whose mask has one of `wanted`, front to back.
+fn hit_region(s: *State, index: usize, p: geometry.Point, wanted: u8) -> (usize, bool) {
+    let e = &s.elements[index]
+    if !e.live || !geometry.contains(e.bounds, p) { ret (0usize, false) }
+    var order: [64]u32 = zero
+    var count = 0usize
+    var at = e.first_child
+    var has = e.has_child
+    while has && count < 64usize {
+        order[count] = at
+        count += 1usize
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    while count > 0usize {
+        count = count - 1usize
+        let (found, has_found) = hit_region(s, usize(order[count]), p, wanted)
+        if has_found { ret (found, true) }
+    }
+    if e.kind == REGION_TAG && e.enabled && (e.gestures & wanted) != 0u8 { ret (index, true) }
+    ret (0usize, false)
+}
+
+// The slop a press may wander before it is a drag, in logical pixels; a function,
+// since a module-scope constant has no float form.
+fn gesture_slop() -> f32 {
+    ret 8.0
+}
+
+fn distance_sq(a: geometry.Point, b: geometry.Point) -> f32 {
+    let dx = a.x - b.x
+    let dy = a.y - b.y
+    ret dx * dx + dy * dy
+}
+
+// The nearest scope at or above `index`, or none.
+fn scope_of(s: *State, index: usize) -> (usize, bool) {
+    var at = index
+    while true {
+        let e = &s.elements[at]
+        if e.kind == SCOPE_TAG { ret (at, true) }
+        if !e.has_parent { ret (0usize, false) }
+        at = usize(e.parent)
+    }
+    ret (0usize, false)
+}
+
+fn focusable(e: *const Element) -> bool {
+    if !e.live || !e.enabled { ret false }
+    if e.kind == REGION_TAG { ret e.focusable }
+    ret e.has_action
+}
+
+// The focusable elements of a subtree in preorder, into `out`; the count.
+fn collect_focusable(s: *State, index: usize, out: []u32, count: usize) -> usize {
+    var n = count
+    let e = &s.elements[index]
+    if !e.live { ret n }
+    if focusable(e) && n < out.len {
+        out[n] = u32(index)
+        n += 1usize
+    }
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        n = collect_focusable(s, usize(at), out, n)
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    ret n
+}
+
+// Tab and Shift+Tab: the next or previous focusable element in preorder, within
+// the trapping scope's subtree when the focus sits in one, wrapping at the ends.
+fn move_focus(s: *State, backward: bool) {
+    var root = usize(s.root)
+    if s.has_focus {
+        let (found_scope, has_scope) = scope_of(s, usize(s.focus))
+        if has_scope && s.elements[found_scope].traps_focus { root = found_scope }
+    }
+    var order: [256]u32 = zero
+    let count = collect_focusable(s, root, order[..], 0usize)
+    if count == 0usize { ret }
+    var current = count
+    if s.has_focus {
+        var i = 0usize
+        while i < count {
+            if usize(order[i]) == usize(s.focus) { current = i }
+            i += 1usize
+        }
+    }
+    var next = 0usize
+    if current < count {
+        if backward {
+            next = (current + count - 1usize) % count
+        } else {
+            next = (current + 1usize) % count
+        }
+    } else {
+        if backward { next = count - 1usize }
+    }
+    s.focus = order[next]
+    s.has_focus = true
+}
+
+fn same_modifiers(a: input.Modifiers, b: input.Modifiers) -> bool {
+    ret a.shift == b.shift && a.control == b.control && a.alt == b.alt && a.meta == b.meta
+}
+
+// A key down walks the scopes from the focused element up: a matching shortcut
+// fires, Enter is the default action, Escape the cancel one; Tab moves focus first.
+fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
+    if k.key.physical == 9u32 {
+        move_focus(s, k.modifiers.shift)
+        ret (true, ok)
+    }
+    var at = usize(s.root)
+    if s.has_focus { at = usize(s.focus) }
+    while true {
+        let e = &s.elements[at]
+        if e.kind == SCOPE_TAG {
+            var i = 0usize
+            while i < e.shortcut_count {
+                let shortcut = e.shortcuts[i]
+                if shortcut.key == k.key.physical && same_modifiers(shortcut.modifiers, k.modifiers) {
+                    let fired = fire_submit(shortcut.action)
+                    ret (true, fired)
+                }
+                i += 1usize
+            }
+            if k.key.physical == 13u32 && submit_set(e.default_action.invoke) {
+                let fired = fire_submit(e.default_action)
+                ret (true, fired)
+            }
+            if k.key.physical == 27u32 && submit_set(e.cancel_action.invoke) {
+                let fired = fire_submit(e.cancel_action)
+                ret (true, fired)
+            }
+        }
+        if !e.has_parent { break }
+        at = usize(e.parent)
+    }
+    ret (false, ok)
+}
+
 fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     let (s, state_error) = state_of(widget_runtime)
     if state_error != ok { ret state_error }
     if !s.has_root { ret ok }
     switch event {
     case .PointerDown as p:
+        // The arena takes the pointer for the deepest region that taps or drags; an
+        // action element under it is the old contract and still answers.
+        let (region_index, has_region) = hit_region(s, usize(s.root), p.position, GESTURE_TAP | GESTURE_DRAG)
+        if has_region {
+            s.arena_state.pressed = true
+            s.arena_state.candidate = u32(region_index)
+            s.arena_state.down = p.position
+            s.arena_state.last = p.position
+            s.arena_state.dragging = false
+            if s.elements[region_index].focusable {
+                s.focus = u32(region_index)
+                s.has_focus = true
+            }
+            ret ok
+        }
         let (found, has_found) = hit_action(s, usize(s.root), p.position)
         if has_found {
             s.focus = u32(found)
@@ -855,12 +1134,65 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .PointerUp as p:
+        if s.arena_state.pressed {
+            s.arena_state.pressed = false
+            let candidate = usize(s.arena_state.candidate)
+            let e = &s.elements[candidate]
+            if e.live && e.kind == REGION_TAG {
+                if s.arena_state.dragging {
+                    s.arena_state.dragging = false
+                    ret fire_gesture(e.gesture, Gesture { DragEnd: p.position })
+                }
+                if (e.gestures & GESTURE_TAP) != 0u8 && geometry.contains(e.bounds, p.position) { ret fire_gesture(e.gesture, Gesture { Tap: p.position }) }
+            }
+            ret ok
+        }
         let (found, has_found) = hit_action(s, usize(s.root), p.position)
         if has_found {
             let action = s.elements[found].action
             ret action.invoke(action.ctx, event)
         }
     case .PointerMove as p:
+        if s.arena_state.pressed {
+            let candidate = usize(s.arena_state.candidate)
+            let e = &s.elements[candidate]
+            if !e.live || e.kind != REGION_TAG {
+                s.arena_state.pressed = false
+                ret ok
+            }
+            if !s.arena_state.dragging {
+                // Past the slop the gesture is a drag, if the region takes one; else
+                // the pointer is released to whatever scrolls.
+                if distance_sq(p.position, s.arena_state.down) > gesture_slop() * gesture_slop() {
+                    if (e.gestures & GESTURE_DRAG) == 0u8 {
+                        s.arena_state.pressed = false
+                        ret ok
+                    }
+                    s.arena_state.dragging = true
+                    s.arena_state.last = p.position
+                    ret fire_gesture(e.gesture, Gesture { DragStart: s.arena_state.down })
+                }
+                ret ok
+            }
+            let delta = geometry.Point { x: p.position.x - s.arena_state.last.x, y: p.position.y - s.arena_state.last.y }
+            s.arena_state.last = p.position
+            ret fire_gesture(e.gesture, Gesture { DragMove: Drag { start: s.arena_state.down, position: p.position, delta: delta } })
+        }
+        // Hover: entering one region leaves the last.
+        let (over, has_over) = hit_region(s, usize(s.root), p.position, GESTURE_HOVER)
+        if s.arena_state.has_hovered && (!has_over || over != usize(s.arena_state.hovered)) {
+            let previous = usize(s.arena_state.hovered)
+            s.arena_state.has_hovered = false
+            if s.elements[previous].live && s.elements[previous].kind == REGION_TAG {
+                var leave: Gesture = .HoverEnd
+                try fire_gesture(s.elements[previous].gesture, leave)
+            }
+        }
+        if has_over {
+            s.arena_state.hovered = u32(over)
+            s.arena_state.has_hovered = true
+            ret fire_gesture(s.elements[over].gesture, Gesture { Hover: p.position })
+        }
         let (found, has_found) = hit_action(s, usize(s.root), p.position)
         if has_found {
             let action = s.elements[found].action
@@ -876,6 +1208,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             e.invalid = true
         }
     case .KeyDown as k:
+        let (taken, key_error) = dispatch_key(s, k)
+        if taken || key_error != ok { ret key_error }
         if s.has_focus && s.elements[usize(s.focus)].has_action {
             let action = s.elements[usize(s.focus)].action
             ret action.invoke(action.ctx, event)
@@ -904,6 +1238,13 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         ret ok
     }
     ret ok
+}
+
+// The element that has the focus, for a harness or a control.
+fn focused(widget_runtime: *const Runtime) -> (ElementId, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || !s.has_focus { ret (zero, false) }
+    ret (ElementId { slot: s.focus, generation: s.elements[usize(s.focus)].generation }, true)
 }
 
 // ---------------------------------------------------------- the harness's view

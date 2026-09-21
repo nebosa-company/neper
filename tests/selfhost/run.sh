@@ -1629,6 +1629,13 @@ ui_theme_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/ui-theme-selfhost"
 ui_theme_output=$("$test_build/ui-theme-selfhost")
 [ "$ui_theme_output" = 'ui theme ok' ]
+# Typed actions, gesture regions and scopes (D806, widget plan P0-02/P0-03): the
+# arena settling taps, drags and hovers; Tab within a trapping scope; shortcuts.
+ui_gesture_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_gesture/src/main.e" "$repo" x64 linux "$test_build/ui-gesture-selfhost")
+[ "$ui_gesture_written" = 'executable written' ]
+chmod +x "$test_build/ui-gesture-selfhost"
+ui_gesture_output=$("$test_build/ui-gesture-selfhost")
+[ "$ui_gesture_output" = 'ui gesture ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

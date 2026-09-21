@@ -46,8 +46,12 @@
             "ActionGestureRegion",
             "GestureArena"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "TypedAction",
+            "ActionGestureRegion",
+            "GestureArena"
+          ],
+          "evidence": "lib/e/ui/widget.e (D806): Change[T] and Submit with fire_change/fire_submit as no-ops when unset; Region with a gesture mask and GestureAction; the runtime arena settling tap, drag start/move/end and hover enter/leave from raw pointer events with an 8 px slop; tests/selfhost/fixtures/link/ui_gesture on both hosts"
         },
         {
           "id": "P0-03",
@@ -57,8 +61,11 @@
             "FocusScope",
             "ShortcutScope"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "FocusScope",
+            "ShortcutScope"
+          ],
+          "evidence": "lib/e/ui/widget.e (D806): Scope with traps_focus bounding Tab/Shift+Tab traversal in preorder with wrapping, up to eight Shortcut entries matched on key and modifiers, Enter as the default action and Escape as the cancel action resolved from the focused element upward; focused() for harnesses; tests/selfhost/fixtures/link/ui_gesture on both hosts"
         },
         {
           "id": "P0-04",
@@ -592,7 +599,9 @@
           "id": "P4-01",
           "name": "System tray and status items",
           "module": "e.ui.app",
-          "blocked_by": ["native-shell-api"],
+          "blocked_by": [
+            "native-shell-api"
+          ],
           "components": [
             "SystemTray",
             "TrayMenu",
@@ -605,7 +614,9 @@
           "id": "P4-02",
           "name": "Windows shell integration",
           "module": "e.ui.app",
-          "blocked_by": ["native-shell-api"],
+          "blocked_by": [
+            "native-shell-api"
+          ],
           "components": [
             "JumpList",
             "TaskbarProgress",
@@ -618,7 +629,9 @@
           "id": "P4-03",
           "name": "Native notifications",
           "module": "e.ui.app",
-          "blocked_by": ["native-notification-api"],
+          "blocked_by": [
+            "native-notification-api"
+          ],
           "components": [
             "SystemNotification",
             "NotificationActions",
@@ -631,7 +644,9 @@
           "id": "P4-04",
           "name": "Typed host data exchange",
           "module": "e.ui.app",
-          "blocked_by": ["native-data-exchange-api"],
+          "blocked_by": [
+            "native-data-exchange-api"
+          ],
           "components": [
             "ContentType",
             "DataOffer",
@@ -645,7 +660,9 @@
           "id": "P4-05",
           "name": "Cross-application drag and drop",
           "module": "e.ui.app",
-          "blocked_by": ["native-data-exchange-api"],
+          "blocked_by": [
+            "native-data-exchange-api"
+          ],
           "components": [
             "SystemDragSource",
             "SystemDropTarget",
@@ -659,7 +676,9 @@
           "id": "P4-06",
           "name": "System clipboard and sharing",
           "module": "e.ui.app",
-          "blocked_by": ["native-data-exchange-api"],
+          "blocked_by": [
+            "native-data-exchange-api"
+          ],
           "components": [
             "SystemClipboard",
             "ClipboardMonitor",
@@ -673,7 +692,9 @@
           "id": "P4-07",
           "name": "File and document access",
           "module": "e.ui.app",
-          "blocked_by": ["native-file-access-api"],
+          "blocked_by": [
+            "native-file-access-api"
+          ],
           "components": [
             "OpenFileDialog",
             "SaveFileDialog",
@@ -688,7 +709,9 @@
           "id": "P4-08",
           "name": "Activation and associations",
           "module": "e.ui.app",
-          "blocked_by": ["native-activation-api"],
+          "blocked_by": [
+            "native-activation-api"
+          ],
           "components": [
             "ActivationEvent",
             "FileAssociation",
@@ -703,7 +726,9 @@
           "id": "P4-09",
           "name": "Shell file operations",
           "module": "e.ui.app",
-          "blocked_by": ["native-shell-api"],
+          "blocked_by": [
+            "native-shell-api"
+          ],
           "components": [
             "OpenUri",
             "RevealInFileManager",
@@ -716,7 +741,10 @@
           "id": "P4-10",
           "name": "Global input and lifecycle",
           "module": "e.ui.app",
-          "blocked_by": ["native-lifecycle-api", "native-shell-api"],
+          "blocked_by": [
+            "native-lifecycle-api",
+            "native-shell-api"
+          ],
           "components": [
             "GlobalShortcutSession",
             "BackgroundPermission",
@@ -732,7 +760,9 @@
           "id": "P4-11",
           "name": "Native printing",
           "module": "e.ui.app",
-          "blocked_by": ["native-print-api"],
+          "blocked_by": [
+            "native-print-api"
+          ],
           "components": [
             "PrintDialog",
             "PageSetupDialog",
@@ -745,7 +775,9 @@
           "id": "P4-12",
           "name": "Hardware and security services",
           "module": "e.ui.app",
-          "blocked_by": ["native-permission-api"],
+          "blocked_by": [
+            "native-permission-api"
+          ],
           "components": [
             "PermissionStatus",
             "CameraAccess",

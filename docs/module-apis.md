@@ -3283,7 +3283,15 @@ type Button = struct { action: Action, enabled: bool }
 type Image = struct { texture: scene.TextureId, fit: Fit }
 type Scroll = struct { axis: ui_layout.Axis, offset: f32 }
 type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> geometry.Size, paint: fn(*void, *scene.Builder, geometry.Rect) -> err }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom }
+type Change[T: type] = struct { ctx: *void, invoke: fn(*void, T) -> err }
+type Submit = struct { ctx: *void, invoke: fn(*void) -> err }
+type Drag = struct { start: geometry.Point, position: geometry.Point, delta: geometry.Point }
+type Gesture = union enum u8 { Tap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd }
+type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
+type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
+type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
+type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_action: Submit, cancel_action: Submit }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -3305,11 +3313,17 @@ fn text(key: Key, value: Text, value_style: style.Style) -> Node
 fn button(key: Key, value: Button, value_style: style.Style, children: []const Node) -> Node
 fn image(key: Key, value: Image, value_style: style.Style) -> Node
 fn scroll(key: Key, value: Scroll, value_style: style.Style, children: []const Node) -> Node
+fn region(key: Key, value: Region, value_style: style.Style, children: []const Node) -> Node
+fn scope(key: Key, value: Scope, value_style: style.Style, children: []const Node) -> Node
+fn fire_change[T: type](c: Change[T], value: T) -> err
+fn fire_submit(a: Submit) -> err
+fn fire_gesture(a: GestureAction, g: Gesture) -> err
 fn state[T: type](ctx: *BuildContext, key: Key, initial: T) -> (*T, StateId, err)
 fn invalidate(widget_runtime: *Runtime, element: ElementId)
 fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, constraints: ui_layout.Constraints) -> (scene.SceneId, err)
 fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err
+fn focused(widget_runtime: *const Runtime) -> (ElementId, bool)
 fn close(widget_runtime: *Runtime) -> err
 fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Rect, bool)
 fn renderer_of(widget_runtime: *Runtime) -> *scene.Renderer
@@ -3333,6 +3347,18 @@ Delivered (D799) over the CPU renderer: `reconcile` rebuilds, lays out and paint
 whole tree each frame and compiles it into the renderer, releasing the previous
 frame's scene; `bounds_of` answers an element's last laid-out bounds for a harness or
 an accessibility tree.
+
+Typed actions, gesture regions and scopes (D806, widget plan P0-02/P0-03): a
+`Change[T]` carries a value and a `Submit` nothing, and firing an unset one is a
+no-op. A `Region` takes part in the gestures its mask names (1 tap, 2 drag, 4
+hover) and the runtime's single gesture arena settles them from the raw pointer
+events: a press and release inside the region within the slop is a tap, a press
+that travels past the slop is a drag when the region takes one and is otherwise
+released to whatever scrolls, and a move over a hovering region enters it and
+leaves the last. A `Scope` bounds Tab and Shift+Tab to its focusable descendants
+when it traps focus, holds up to eight shortcuts, and answers Enter with its
+default action and Escape with its cancel action; a key down walks the scopes from
+the focused element upward and the first that takes it wins.
 
 ### `e.ui.animation`
 

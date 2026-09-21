@@ -1693,6 +1693,13 @@ $uiThemeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $uiThemeWritten -ne 'executable written') { throw 'ui_theme emission failed' }
 $uiThemeOutput = & $uiThemePath
 if ($LASTEXITCODE -ne 0 -or $uiThemeOutput -ne 'ui theme ok') { throw "the theme tokens answered wrongly: exit $LASTEXITCODE" }
+# Typed actions, gesture regions and scopes (D806, widget plan P0-02/P0-03): the
+# arena settling taps, drags and hovers; Tab within a trapping scope; shortcuts.
+$uiGesturePath = Join-Path $testBuild 'ui-gesture-selfhost.exe'
+$uiGestureWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_gesture\src\main.e') $repo 'x64' 'windows' $uiGesturePath
+if ($LASTEXITCODE -ne 0 -or $uiGestureWritten -ne 'executable written') { throw 'ui_gesture emission failed' }
+$uiGestureOutput = & $uiGesturePath
+if ($LASTEXITCODE -ne 0 -or $uiGestureOutput -ne 'ui gesture ok') { throw "the gesture arena answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
