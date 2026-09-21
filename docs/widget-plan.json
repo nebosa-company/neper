@@ -577,8 +577,13 @@
             "PageIndicator",
             "Pagination"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Carousel",
+            "PageView",
+            "PageIndicator",
+            "Pagination"
+          ],
+          "evidence": "lib/e/ui/collection.e (D835): page_view showing one page in a clipped drag region that turns once per swipe past a quarter of its width (the swipe's one flag kept in the view's widget state cell) and on Left/Right, page_indicator as tap dots under a tab list, pagination as Previous, a window of numbered pages and Next disabled at the ends, carousel composing the three over one turn; tests/selfhost/fixtures/link/ui_paged on both hosts"
         },
         {
           "id": "P2-07",

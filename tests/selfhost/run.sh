@@ -1813,6 +1813,13 @@ ui_collection_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/ui-collection-selfhost"
 ui_collection_output=$("$test_build/ui-collection-selfhost")
 [ "$ui_collection_output" = 'ui collection ok' ]
+# Paged collections (D835, widget plan P2-06): page view, page indicator, pagination,
+# carousel.
+ui_paged_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_paged/src/main.e" "$repo" x64 linux "$test_build/ui-paged-selfhost")
+[ "$ui_paged_written" = 'executable written' ]
+chmod +x "$test_build/ui-paged-selfhost"
+ui_paged_output=$("$test_build/ui-paged-selfhost")
+[ "$ui_paged_output" = 'ui paged ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

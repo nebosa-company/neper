@@ -16145,3 +16145,26 @@ that many cells and puts the rows in the lazy viewport, each row keyed
 `link/ui_collection` counts the builds -- seven rows of a thousand and
 four rows of three cells on the first frame, eight and twelve after a
 jump -- and checks the recycling by key on both hosts.
+
+## D835 — Paged collections: a swipe turns once, and the flag that says so lives in the element's state cell
+
+P2-06 of the widget plan. Every turn -- a swipe, an arrow key, a dot, a
+numbered page, Previous or Next -- reaches one `Change[usize]` with the
+index, and the caller keeps `current` (D807). `page_view` shows the
+current page alone in a clipped drag region: a horizontal drag past a
+quarter of the width turns to the neighbour, but only once per drag,
+however far the pointer goes on -- and that "once" needs a bit of state
+that outlives the frame, since the control is rebuilt every frame while
+the drag runs. It lives where D799 put such things: a `Swipe` cell on
+the view's own element, taken through `widget.state` against the
+element the previous frame left under the view's key, cleared on the
+drag's start and end, set when the turn fires. On the view's first
+frame there is no element yet and a drag that frame turns nothing; the
+fixture pins that too. The drag's `delta` is since the last move, so
+the distance is `position - start`, which the runtime carries in every
+move. `page_indicator` is a dot a page in a hit target, a tab list of
+tabs; `pagination` is Previous, a window of numbered pages around the
+current one (keyed by page index, so a page keeps its key as the window
+slides) and Next, the ends disabled; `carousel` is the view between
+Previous and Next over the indicator, one turn for all. `link/ui_paged`
+swipes, keys, taps and pages on both hosts.

@@ -1877,6 +1877,13 @@ $uiCollectionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $uiCollectionWritten -ne 'executable written') { throw 'ui_collection emission failed' }
 $uiCollectionOutput = & $uiCollectionPath
 if ($LASTEXITCODE -ne 0 -or $uiCollectionOutput -ne 'ui collection ok') { throw "the collections answered wrongly: exit $LASTEXITCODE" }
+# Paged collections (D835, widget plan P2-06): page view, page indicator, pagination,
+# carousel.
+$uiPagedPath = Join-Path $testBuild 'ui-paged-selfhost.exe'
+$uiPagedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_paged\src\main.e') $repo 'x64' 'windows' $uiPagedPath
+if ($LASTEXITCODE -ne 0 -or $uiPagedWritten -ne 'executable written') { throw 'ui_paged emission failed' }
+$uiPagedOutput = & $uiPagedPath
+if ($LASTEXITCODE -ne 0 -or $uiPagedOutput -ne 'ui paged ok') { throw "the paged collections answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
