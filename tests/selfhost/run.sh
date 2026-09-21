@@ -1806,6 +1806,13 @@ ui_feedback_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/ui-feedback-selfhost"
 ui_feedback_output=$("$test_build/ui-feedback-selfhost")
 [ "$ui_feedback_output" = 'ui feedback ok' ]
+# Virtual collections (D833, widget plan P2-05): list, virtual list, grid view,
+# virtual grid over a bounded source.
+ui_collection_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_collection/src/main.e" "$repo" x64 linux "$test_build/ui-collection-selfhost")
+[ "$ui_collection_written" = 'executable written' ]
+chmod +x "$test_build/ui-collection-selfhost"
+ui_collection_output=$("$test_build/ui-collection-selfhost")
+[ "$ui_collection_output" = 'ui collection ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

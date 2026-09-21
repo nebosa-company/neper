@@ -1870,6 +1870,13 @@ $uiFeedbackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiFeedbackWritten -ne 'executable written') { throw 'ui_feedback emission failed' }
 $uiFeedbackOutput = & $uiFeedbackPath
 if ($LASTEXITCODE -ne 0 -or $uiFeedbackOutput -ne 'ui feedback ok') { throw "the feedback controls answered wrongly: exit $LASTEXITCODE" }
+# Virtual collections (D833, widget plan P2-05): list, virtual list, grid view,
+# virtual grid over a bounded source.
+$uiCollectionPath = Join-Path $testBuild 'ui-collection-selfhost.exe'
+$uiCollectionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_collection\src\main.e') $repo 'x64' 'windows' $uiCollectionPath
+if ($LASTEXITCODE -ne 0 -or $uiCollectionWritten -ne 'executable written') { throw 'ui_collection emission failed' }
+$uiCollectionOutput = & $uiCollectionPath
+if ($LASTEXITCODE -ne 0 -or $uiCollectionOutput -ne 'ui collection ok') { throw "the collections answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

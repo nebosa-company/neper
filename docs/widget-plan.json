@@ -559,8 +559,13 @@
             "GridView",
             "VirtualGrid"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "List",
+            "VirtualList",
+            "GridView",
+            "VirtualGrid"
+          ],
+          "evidence": "lib/e/ui/collection.e (D833): a bounded Source (count, stable key, build into the arena) and a caller-owned selection of keys; list as static rows with separators under a list, virtual_list building only the rows widget.visible_range names at the offset into a lazy viewport keyed by the source, grid_view wrapping cells of a size across the width (as many columns as fit), virtual_grid building only the visible rows of cells with each row keyed for the reconciler; tests/selfhost/fixtures/link/ui_collection on both hosts counts the builds"
         },
         {
           "id": "P2-06",

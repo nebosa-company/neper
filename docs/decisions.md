@@ -16117,3 +16117,31 @@ plainly: an action slice a control keeps a pointer into must outlive
 the frame -- a local array in the caller's build function does not,
 and the button fires nothing. `link/ui_feedback` reads, undoes, closes,
 fires, starts and toggles on both hosts.
+
+## D833 — e.ui.collection opens: a source is three callbacks, and only what is in view is built
+
+P2-05 of the widget plan, and the last of the proposal's four candidate
+modules (§9): `e.ui.collection` depends on `e.ui.control` for the
+theme and the divider and on D808's lazy viewport for everything
+virtual. A `Source` is what §3.6 asks and no more: a count, a stable
+key for an item, and a build of one item into the frame arena (written
+to an out node, since a callback type does not return a tuple); it is
+never a slice of prebuilt nodes, and the selection is the caller's
+slice of keys, never row indices. `list` takes static children for a
+small collection -- rows over hairline separators, the selected ones in
+the selection colour, a list of list items in the tree with row
+positions -- and `virtual_list` takes a source: `widget.visible_range`
+names the rows in view at the offset plus one beyond each end, only
+those are built, each row is keyed by the source so the reconciler
+recycles the rest as the offset moves, and every move reaches
+`change`; the viewport is the list in the tree, with the full count.
+Rows are a fixed extent: the lazy viewport measures its content by one
+extent, so variable extents and sections wait for a viewport that can
+take a prefix sum. `grid_view` wraps cells of one size across the
+width, as many columns as fit, so the column count adapts to the width
+with nothing configured; `virtual_grid` cuts the source into rows of
+that many cells and puts the rows in the lazy viewport, each row keyed
+`key + 1 + row`, each cell a cell in the tree at its row and column.
+`link/ui_collection` counts the builds -- seven rows of a thousand and
+four rows of three cells on the first frame, eight and twelve after a
+jump -- and checks the recycling by key on both hosts.
