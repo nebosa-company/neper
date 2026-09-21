@@ -1384,6 +1384,66 @@ $mathOptConvexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $mathOptConvexWritten -ne 'executable written') { throw 'math_opt_convex emission failed' }
 & $mathOptConvexPath
 if ($LASTEXITCODE -ne 0) { throw "a math_opt_convex check failed: exit $LASTEXITCODE" }
+# `e.text.casing`: identifiers split at separators and case boundaries and convert between five conventions, slugs fold punctuation to hyphens, and title case spares the small words (D842).
+$textCasingPath = Join-Path $testBuild 'text-casing-selfhost.exe'
+$textCasingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_casing\src\main.e') $repo 'x64' 'windows' $textCasingPath
+if ($LASTEXITCODE -ne 0 -or $textCasingWritten -ne 'executable written') { throw 'text_casing emission failed' }
+& $textCasingPath
+if ($LASTEXITCODE -ne 0) { throw "a text_casing check failed: exit $LASTEXITCODE" }
+# `e.text.phonetic`: Soundex, the original Metaphone and NYSIIS agree with jellyfish on fifty-odd names (D842).
+$textPhoneticPath = Join-Path $testBuild 'text-phonetic-selfhost.exe'
+$textPhoneticWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_phonetic\src\main.e') $repo 'x64' 'windows' $textPhoneticPath
+if ($LASTEXITCODE -ne 0 -or $textPhoneticWritten -ne 'executable written') { throw 'text_phonetic emission failed' }
+& $textPhoneticPath
+if ($LASTEXITCODE -ne 0) { throw "a text_phonetic check failed: exit $LASTEXITCODE" }
+# `e.text.stem`: Porter and Lancaster agree with NLTK on Porter's own examples and a hundred more, and affix stripping keeps the minimum (D842).
+$textStemPath = Join-Path $testBuild 'text-stem-selfhost.exe'
+$textStemWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_stem\src\main.e') $repo 'x64' 'windows' $textStemPath
+if ($LASTEXITCODE -ne 0 -or $textStemWritten -ne 'executable written') { throw 'text_stem emission failed' }
+& $textStemPath
+if ($LASTEXITCODE -ne 0) { throw "a text_stem check failed: exit $LASTEXITCODE" }
+# `e.text.wrap`: greedy and optimal breaking agree where the greedy choice is even and differ where a short line costs (checked exhaustively), an overlong word stands alone, and justification spreads from the left (D842).
+$textWrapPath = Join-Path $testBuild 'text-wrap-selfhost.exe'
+$textWrapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_wrap\src\main.e') $repo 'x64' 'windows' $textWrapPath
+if ($LASTEXITCODE -ne 0 -or $textWrapWritten -ne 'executable written') { throw 'text_wrap emission failed' }
+& $textWrapPath
+if ($LASTEXITCODE -ne 0) { throw "a text_wrap check failed: exit $LASTEXITCODE" }
+# `e.text.metric`: BLEU against NLTK, ROUGE-1/2/L and exact-match METEOR against hand counts, and the degenerate cases (D842).
+$textMetricPath = Join-Path $testBuild 'text-metric-selfhost.exe'
+$textMetricWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_metric\src\main.e') $repo 'x64' 'windows' $textMetricPath
+if ($LASTEXITCODE -ne 0 -or $textMetricWritten -ne 'executable written') { throw 'text_metric emission failed' }
+& $textMetricPath
+if ($LASTEXITCODE -ne 0) { throw "a text_metric check failed: exit $LASTEXITCODE" }
+# `e.text.suffix`: suffix and LCP arrays against a naive sort on six texts, search ranges, the suffix automaton accepting exactly the substrings and counting them, and the suffix tree from the array with its node count (D843).
+$textSuffixPath = Join-Path $testBuild 'text-suffix-selfhost.exe'
+$textSuffixWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_suffix\src\main.e') $repo 'x64' 'windows' $textSuffixPath
+if ($LASTEXITCODE -ne 0 -or $textSuffixWritten -ne 'executable written') { throw 'text_suffix emission failed' }
+& $textSuffixPath
+if ($LASTEXITCODE -ne 0) { throw "a text_suffix check failed: exit $LASTEXITCODE" }
+# `e.text.diff`: Myers on the paper's example replayed by patch, patience diff anchored on unique lines, three-way merges taking, folding and marking, conflicts as base ranges, and the similarity ratio (D843).
+$textDiffPath = Join-Path $testBuild 'text-diff-selfhost.exe'
+$textDiffWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_diff\src\main.e') $repo 'x64' 'windows' $textDiffPath
+if ($LASTEXITCODE -ne 0 -or $textDiffWritten -ne 'executable written') { throw 'text_diff emission failed' }
+& $textDiffPath
+if ($LASTEXITCODE -ne 0) { throw "a text_diff check failed: exit $LASTEXITCODE" }
+# `e.text.rank`: TF-IDF and BM25 against the formulas worked in Python, reciprocal rank fusion with ties by id, and MMR skipping the near duplicate (D843).
+$textRankPath = Join-Path $testBuild 'text-rank-selfhost.exe'
+$textRankWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_rank\src\main.e') $repo 'x64' 'windows' $textRankPath
+if ($LASTEXITCODE -ne 0 -or $textRankWritten -ne 'executable written') { throw 'text_rank emission failed' }
+& $textRankPath
+if ($LASTEXITCODE -ne 0) { throw "a text_rank check failed: exit $LASTEXITCODE" }
+# `e.text.index`: an inverted index of four documents with hits and misses, AND and OR, and Elias-Fano on a worked example and a random list (D843).
+$textIndexPath = Join-Path $testBuild 'text-index-selfhost.exe'
+$textIndexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_index\src\main.e') $repo 'x64' 'windows' $textIndexPath
+if ($LASTEXITCODE -ne 0 -or $textIndexWritten -ne 'executable written') { throw 'text_index emission failed' }
+& $textIndexPath
+if ($LASTEXITCODE -ne 0) { throw "a text_index check failed: exit $LASTEXITCODE" }
+# `e.text.tokenize`: shingles, dictionary word breaking, BPE merges matching a Python replica, WordPiece on unaffable, and unigram Viterbi with a sampler whose draws follow the probabilities (D843).
+$textTokenizePath = Join-Path $testBuild 'text-tokenize-selfhost.exe'
+$textTokenizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_tokenize\src\main.e') $repo 'x64' 'windows' $textTokenizePath
+if ($LASTEXITCODE -ne 0 -or $textTokenizeWritten -ne 'executable written') { throw 'text_tokenize emission failed' }
+& $textTokenizePath
+if ($LASTEXITCODE -ne 0) { throw "a text_tokenize check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

@@ -16452,6 +16452,59 @@ formatting, are the caller's to offer over these. `link/ui_pickers`
 lays March 2026 out, picks, turns, opens, steps and slides on both
 hosts.
 
+## D843 — Text algorithms: phonetics, conventions, stemming, wrapping, scoring, suffix structures, diffs, retrieval and tokenisers
+
+Batches eight and nine of the algos.md stream (D834), ten `e.text`
+modules. `e.text.phonetic` (Soundex, the original Metaphone, NYSIIS),
+`e.text.casing` (identifier words and the five conventions, slugs, title
+case; `case` is a keyword, so the planned `e.text.case` is `casing`),
+`e.text.stem` (Porter as published, the Paice/Husk Lancaster rules kept
+as their original rule text and interpreted, caller affix stripping),
+`e.text.wrap` (greedy and Knuth minimum-raggedness breaking,
+justification), `e.text.metric` (BLEU, ROUGE-N and ROUGE-L, exact-match
+METEOR), `e.text.suffix` (the suffix array by prefix doubling, Kasai,
+range search, the suffix automaton, and the suffix tree derived from the
+array), `e.text.diff` (Myers with every frontier kept, patience diff,
+patch, three-way merge, conflict ranges, a similarity ratio),
+`e.text.rank` (TF-IDF, BM25, reciprocal rank fusion, MMR),
+`e.text.index` (an inverted index in the arena, AND and OR over
+postings, Elias-Fano) and `e.text.tokenize` (shingles, word breaking,
+byte-pair merges, WordPiece, unigram Viterbi and its sampler).
+
+What the fixtures found. Phonetic codes were compared with jellyfish on
+166 names and the stemmers with NLTK on 126 words before a single one
+went into a fixture, and the port reproduced both -- but jellyfish's
+Rust and Python implementations disagree (`Dumb`: TM against TMB), so
+the Rust one, which is what the package runs, is the reference. Myers
+needed a Python replica to find that the previous diagonal in the
+previous frontier's numbering is `k'` for the move down and `k' - 2`
+for the move right, not `k' ± 1`; the replica was then run against an
+LCS oracle on three thousand random pairs. The first three-way merge
+walked both edit scripts in step and silently skipped the other side's
+deletion inside a one-sided hunk; the merge now works on hunk regions
+(a side's maximal runs of non-keeps as base spans, unioned across sides
+until nothing overlaps), which also gives `conflicts` for free. A
+suffix tree built from the array without a terminator byte hangs a
+whole-suffix leaf under the next suffix; a leaf left on the stack top
+now becomes the first child of a new internal node. `0.0 - 0.0` is
+`+0`; a bash heredoc holding an apostrophe never reaches the file; and
+a Neper name may not be `case`, `error`, `target` or `text` in some
+positions -- the fixture and module names changed instead. The suffix
+array is prefix doubling rather than the planned SA-IS, and the tree
+comes from the array rather than Ukkonen's online construction; both
+are noted in algos.md's plan, whose annotations now point at the
+modules that actually hold a function when a planned module split
+(`e.algo.geom.clip`, `e.math.opt.meta`, `e.math.opt.convex`,
+`e.text.casing`).
+
+`docs/progress.html` now counts the selected algorithms: the Modules
+tile's denominator includes every `→ e.mod.fn` annotation of algos.md
+whose function does not yet exist (fenced or not, duplicates once), so
+the percentage measures the library against the plan the user chose
+rather than against the fences already written, and it is re-rendered
+with every batch of five modules. On this commit it reads 3,713 of
+4,605 declarations with 326 of 1,218 selected algorithms delivered.
+
 ## D844 — Content manipulation: a zoom view is a viewport with a transform, a drop is a gesture, the clipboard is a command set
 
 P2-11 of the widget plan, and the runtime's last phase-2 work (D843 is
@@ -16510,6 +16563,104 @@ columns off the tree's rows under the same header. Pinned columns wait
 for a horizontal viewport. `link/ui_tabular` sorts, reorders, resizes,
 picks, expands and collapses on both hosts.
 
+## D846 — Statistical learning opens: linear models, clustering, neighbours and naive Bayes
+
+Batch ten of the algos.md stream (D834), the first `e.ml` modules, all
+over row-major `f64` samples in caller storage and all checked against
+scikit-learn (installed for the purpose, with NumPy references where its
+estimators differ in convention). `e.ml.linear` (OLS and ridge by the
+normal equations with a pivoting solve, lasso by coordinate descent with
+soft thresholding, logistic regression by Newton with a ridge so that
+separable data stays finite), `e.ml.cluster` (k-means from caller
+centroids with k-means++ seeding, an online update and LBG splitting,
+PAM k-medoids, agglomerative clustering under three linkages over a
+caller distance matrix, a diagonal Gaussian mixture by EM, neighbour
+joining), `e.ml.cluster.density` (DBSCAN and OPTICS by full scans),
+`e.ml.knn` and `e.ml.bayes` (Gaussian and multinomial). scikit-learn
+counts a point among its own neighbours for `min_samples`, so the
+library does too; its ridge and lasso leave the intercept unpenalised
+through centring, which the coordinate descent reproduces by never
+thresholding the last coefficient; its logistic `C` is the reciprocal
+of the ridge here. A check for `k > n` must precede the storage check
+or the wrong error answers; neighbour joining splits the final distance
+evenly, where the textbook leaves it to the reader; BIRCH and the
+coreset stream were left for later, the online update standing in for
+the stream.
+
+## D847 — Trees, margins, updates, losses and decoders
+
+Batch eleven of the algos.md stream (D834): `e.ml.tree` (CART with Gini
+or squared error in the arena, random forests on bootstrap rows with a
+feature subset per split, gradient boosting on residuals), `e.ml.svm`
+(three kernels and the simplified SMO with a random partner),
+`e.ml.optim` (SGD, momentum, RMSprop, Adam and AdamW as single steps,
+the cosine schedule with warm restarts, online gradient descent),
+`e.ml.loss` (InfoNCE, the triplet hinge, distillation KL, CTC by the
+forward algorithm in log space) and `e.ml.sample` (softmax, top-k,
+nucleus, contrastive decoding, beam search over a caller's scoring
+step). CTC was checked against a brute-force sum over every alignment
+of four frames; the beam search against every four-token path of a toy
+chain, where greedy decoding takes a different road. scikit-learn
+breaks tied splits at random, so the classifier fixture accepts either
+tied root; a fixture cannot name a local `error`.
+
+## D848 — Networks, Markov models, tabular control, reduction and approximate search
+
+Batch twelve of the algos.md stream (D834): `e.ml.nn` (the perceptron,
+a scalar reverse-mode tape over caller arrays, scaled dot-product and
+multi-head attention, rotary embedding), `e.ml.hmm` (forward, Viterbi,
+one Baum-Welch pass, against a NumPy reference), `e.ml.rl` (Q-learning
+and SARSA updates with epsilon-greedy choice, converging on a corridor
+to the discounted goal values), `e.ml.reduce` (PCA by cyclic Jacobi,
+Oja's rule, frequent directions through the eigenpairs of the sketch's
+Gram matrix, exact t-SNE) and `e.ml.ann` (MinHash with LSH banding, a
+navigable small-world graph that is the base layer of HNSW, IVF-PQ over
+`e.ml.cluster`). The multi-head attention gathered each head's block
+into the output buffer, which is too small when there are fewer than
+three heads; the block now lives in scratch. `math.tanh` does not exist,
+so the tape's tanh goes through `exp`. HNSW's upper layers and a
+complete DABA are deferred (DABA was written from memory, did not
+survive scrutiny, and was removed rather than shipped unverified).
+
+## D849 — Node-pool structures: treaps, skip lists, splay trees, windows and a B+ tree
+
+Batch thirteen of the algos.md stream (D834): `e.data.treap` (keyed
+treaps by `K.cmp` with split and merge, the implicit treap over a
+sequence, persistent inserts by path copying), `e.data.skip_list`
+(geometric heights from the caller's generator, a free list for removed
+slots), `e.data.splay` (a positional splay tree with a lazy reversal
+flag; range reversal splits the range out by two splays), `e.data.window`
+(the monotonic queue, the two-stack window fold, the exponential
+histogram) and `e.data.btree` (a B+ tree with chained leaves, borrowing
+and merging on removal, freed nodes reused). Every structure was run
+against a plain array or sorted model through hundreds of random
+operations rather than a handful of hand cases. The B+ tree first had
+no free list, so three thousand random operations exhausted a pool of
+five hundred nodes; then its merge rule let two half-full nodes exceed
+the order, so merge and borrow are now chosen by whether both fit in
+one node. The monotonic queue expired its front one push early. Node
+pools use `0` (treap, splay) or `NONE` (skip list, B+ tree) as the empty
+link, and a function may not be named like a parameter (`at`, `next`).
+
+## D850 — Alignment, scheduling, time series, exact cover and metric search
+
+Batch fourteen of the algos.md stream (D834): `e.algo.align`
+(Needleman-Wunsch, Smith-Waterman, Gotoh, Hirschberg), `e.algo.schedule`
+(activity selection, interval covering, jobs with deadlines over
+disjoint slots, the cooldown bound), `e.algo.timeseries` (Holt-Winters,
+LOESS and a plain STL, CUSUM, Page-Hinkley and ADWIN as streaming
+states, GARCH(1,1) with a Nelder-Mead fit through `e.math.opt`, the
+Hawkes process with thinning), `e.algo.exact_cover` (dancing links and
+Algorithm X, Sudoku through the 729 × 324 cover) and `e.data.bk_tree`
+(metric search over the caller's distance). The alignment scores were
+checked against a NumPy dynamic programme and Hirschberg's operations
+replayed to both strings; the GARCH fit recovered simulated parameters
+within a few hundredths; the change detectors fired within a handful of
+samples of a shift and not before. The exact-cover fixture first carried
+a hand-typed matrix with a wrong bit, which the solver duly refused --
+the one-line generator that prints the bits from the matrix is the
+cure, as it was for every hand-typed constant before it.
+
 ## D851 — Property editing: the editor is the caller's, the grid only places it
 
 P3-02 of the widget plan (D846–D850 are the algos stream's). A
@@ -16556,3 +16707,92 @@ rule. The fixture found the drag contract's fine print: a drag reports
 from the move after the one that crosses the slop, so a short drag in
 few steps reports nothing. `link/ui_workspace` picks, closes, moves,
 chords and resizes on both hosts.
+## D855 — The graph family grows: centralities, colouring, communities, cuts and isomorphism
+
+Batch fifteen of the algos.md stream (D834), all over `e.data.graph`:
+`e.algo.graph.centrality` (PageRank, HITS, eigenvector, closeness,
+Brandes betweenness), `e.algo.graph.color` (Welsh-Powell, DSATUR),
+`e.algo.graph.community` (modularity, label propagation, Louvain with
+dense aggregation, edge betweenness and Girvan-Newman),
+`e.algo.graph.cut` (Stoer-Wagner, Karger) and `e.algo.graph.iso`
+(VF2-style subgraph and graph isomorphism). Every number was checked on
+Zachary's karate club against NetworkX -- whose club carries edge
+weights from the original paper, so the first references were the
+weighted answers (a PageRank of 0.0885 for node 0 against the
+unweighted 0.0970, a minimum cut of three edges against one); the
+references were regenerated on the unweighted edge list. Two formulas
+were wrong on the first run: modularity had summed only adjacent pairs,
+leaving out the `-k_v k_w / 2m` of the non-adjacent pairs of a
+community, and edge betweenness counted every unordered source pair
+twice, which NetworkX halves for an undirected graph. `shared` and
+`target` are keywords in fixture locals too; planarity (Boyer-Myrvold)
+and Leiden are left for later.
+
+## D856 — Combinatorial optimisation, satisfiability, constraints, minimisation and decision diagrams
+
+Batch sixteen of the algos.md stream (D834): `e.algo.combopt` (tour
+construction and 2-opt and Or-opt improvement, Held-Karp, greedy set
+cover, first-fit-decreasing, Clarke-Wright, knapsack branch and bound,
+a generic branch and bound over caller callbacks, large neighbourhood
+search), `e.algo.sat` (a CNF builder with Tseitin gates, the sequential
+counter and a decision-diagram pseudo-boolean encoding; DPLL with unit
+propagation, flipping backtrack and a learned clause per conflict;
+WalkSAT; unit preprocessing; equivalence by a miter), `e.algo.csp`
+(AC-3, MAC, limited discrepancy search, and the all-different, element,
+table and cumulative filters), `e.algo.logic` (Quine-McCluskey) and
+`e.algo.bdd` (ROBDDs with a unique table and apply). The encodings were
+checked against plain counting on every assignment of their inputs,
+which is the only honest test of an encoding; the tours against the
+brute-force optimum of eight cities; Quine-McCluskey on the textbook
+function. Christofides, Lin-Kernighan, bounded variable elimination and
+Régin's full filtering are left for later. The fixture lessons: five
+formulas built over one literal pool overwrite each other (the fixture
+rebuilds the one it reuses), and a hand-computed assignment optimum was
+wrong by four -- the brute-force check is the point of the fixture, not
+the confirmation of the author's arithmetic.
+
+## D857 — Spatial indexes, succinct structures, ropes, Cartesian trees and compressed bitmaps
+
+Batch seventeen of the algos.md stream (D834): `e.data.spatial` (an
+implicit k-d tree, quadtree and octree over node pools, a centred
+interval tree, a hash grid, an R-tree with quadratic splits and Hilbert
+bulk loading, a BVH with ray traversal, a two-dimensional range tree and
+a ball tree), `e.data.succinct` (bit vectors with rank and select over
+a count per word, LOUDS and balanced-parentheses trees, a wavelet
+matrix, a compressed suffix array as Psi plus sampled positions and an
+FM-index over a BWT held in the wavelet matrix), `e.data.rope`,
+`e.data.cartesian_tree` and `e.data.bitmap` (roaring containers and
+word-aligned hybrid vectors whose and/or run over the encoded streams).
+From this batch on the modules are written by parallel subagents, one
+module each, against the brief in the session scratchpad; the
+registration, decision rows, readiness page and suites stay serial.
+Every fixture takes its expected values from a Python reference over
+LCG-generated inputs. Two lessons: a LOUDS sequence has 2n + 1 bits,
+not 2n + 2 (one zero per node plus the super root), and the Hilbert
+rotation reflects about the full grid, not the current quadrant --
+both were caught by the fixture, not by reading. Deferred with
+`ponytail:` notes: fractional cascading in the range tree, a range-min-max
+tree for the parentheses, run containers and bitset demotion in roaring,
+Boehm's fibonacci rebalance for the rope.
+
+## D858 — Persistent tries, dynamic trees, event-time streams, rate limits and resilience
+
+Batch eighteen of the algos.md stream (D834), the first written entirely
+by parallel subagents: `e.data.hamt` (a persistent hash array mapped
+trie whose versions share every node off the changed path),
+`e.data.link_cut` (splay-based link-cut trees and a dynamic Euler tour
+tree), `e.data.stream` (bounded out-of-orderness watermarks, a merge
+over idle-aware sources, tumbling and sliding windows fired by the
+mark), `e.ratelimit` (token and leaky buckets, fixed window, sliding log
+and sliding window over the caller's clock in exact integers) and
+`e.resilience` (circuit breaker, jittered backoff, heartbeats, EWMA load
+shedding, bulkheads, health aggregation and stable rollout buckets).
+The fixtures replay a Python replica of each state machine on the same
+LCG inputs and compare hashes of every answer, which is how five modules
+by five agents can be trusted at once: nothing in the fixture is derived
+from the module under test. Subagent lessons worth keeping: `try`
+inside a tuple-returning function type-checks but does not lower, a
+discarded non-void call is refused (`let _ = f()`), fixed arrays are
+written `[N]T{ a, b }`, and a `usize` where a `u64` is wanted is reported
+at the enclosing `if`, not at the argument.
+

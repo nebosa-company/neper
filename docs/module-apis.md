@@ -1737,6 +1737,276 @@ All distances count bytes. Scratch sizes: `levenshtein` and
 `longest_common_substring` need `2 * (b.len + 1)`, `damerau_levenshtein`
 `3 * (b.len + 1)`, `jaro`/`jaro_winkler` and `trigram` `a.len + b.len`.
 
+### `e.text.casing`
+
+```neper
+type Style = enum u8 { Camel, Pascal, Snake, Kebab, Screaming }
+error TooSmall
+
+fn is_upper(c: u8) -> bool
+fn is_lower(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn is_alnum(c: u8) -> bool
+fn to_lower(c: u8) -> u8
+fn to_upper(c: u8) -> u8
+fn boundary(name: str, i: usize) -> bool
+fn words(name: str, bounds: []usize) -> (usize, err)
+fn convert(name: str, style: Style, out: []u8, bounds: []usize) -> (str, err)
+fn slug(text: str, out: []u8) -> (str, err)
+fn is_small_word(word: str) -> bool
+fn title(text: str, out: []u8) -> (str, err)
+```
+
+`words` splits an ASCII identifier at separators and case boundaries (`HTTPServer`
+is two words, digits stay with their neighbours) into (start, end) pairs; `convert`
+rewrites it as camelCase, PascalCase, snake_case, kebab-case or SCREAMING_SNAKE;
+`slug` folds text to lowercase alphanumerics joined by single hyphens; `title`
+capitalises every word but the small words of the usual style guides except at
+either end.
+
+### `e.text.phonetic`
+
+```neper
+error TooSmall
+
+fn upper(c: u8) -> u8
+fn lower(c: u8) -> u8
+fn is_vowel(c: u8) -> bool
+fn is_upper_vowel(c: u8) -> bool
+fn is_letter(c: u8) -> bool
+fn soundex_digit(c: u8) -> u8
+fn soundex(name: str, out: []u8) -> (str, err)
+fn at(s: str, i: usize) -> u8
+fn in_iey(c: u8) -> bool
+fn in_oa(c: u8) -> bool
+fn metaphone(name: str, out: []u8) -> (str, err)
+fn starts(s: []const u8, n: usize, p: str) -> bool
+fn ends(s: []const u8, n: usize, p: str) -> bool
+fn nysiis(name: str, out: []u8, scratch: []u8) -> (str, err)
+```
+
+`soundex` (a letter and three digits, doubles collapsed across H and W),
+`metaphone` (the original 1990 transformation table, `0` for TH) and `nysiis` (the
+1970 rules) code an ASCII name into `out`; the empty name codes to nothing.
+
+### `e.text.stem`
+
+```neper
+error TooSmall
+
+fn lower(c: u8) -> u8
+fn is_vowel_letter(c: u8) -> bool
+fn is_consonant(w: []const u8, i: usize) -> bool
+fn measure(w: []const u8, n: usize) -> usize
+fn contains_vowel(w: []const u8, n: usize) -> bool
+fn ends_double_consonant(w: []const u8, n: usize) -> bool
+fn ends_cvc(w: []const u8, n: usize) -> bool
+fn ends_with(w: []const u8, n: usize, suffix: str) -> bool
+fn append(w: []u8, n: usize, s: str) -> usize
+fn apply_rules(w: []u8, n: usize, rules: str, condition: u8) -> usize
+fn porter(word: str, out: []u8) -> (str, err)
+fn is_lancaster_vowel(c: u8) -> bool
+fn lancaster_acceptable(w: []const u8, n: usize, remove: usize) -> bool
+fn lancaster_rules() -> str
+fn lancaster(word: str, out: []u8) -> (str, err)
+fn strip_affixes(word: str, prefixes: []const str, suffixes: []const str, minimum: usize) -> str
+fn starts_at(word: str, start: usize, p: str) -> bool
+```
+
+`porter` is the 1980 algorithm as published, `lancaster` the Paice/Husk stemmer
+over its standard 115 rules (kept as the original rule text and interpreted), and
+`strip_affixes` removes the caller's prefixes and suffixes longest first, repeatedly,
+never below `minimum` bytes.
+
+### `e.text.wrap`
+
+```neper
+error TooSmall
+error Invalid
+
+fn words(text: str, bounds: []usize) -> (usize, err)
+fn greedy(text: str, width: usize, lines: []usize, scratch: []usize) -> (usize, err)
+fn optimal(text: str, width: usize, lines: []usize, scratch: []usize) -> (usize, err)
+fn justify(line: str, width: usize, out: []u8, scratch: []usize) -> (str, err)
+```
+
+`greedy` and `optimal` (Knuth's minimum-raggedness dynamic programme, the last line
+free) break space-separated words into lines answered as (start, end) byte pairs, an
+overlong word alone on its line; `justify` spreads a line's words to `width` columns
+with the extra spaces from the left.
+
+### `e.text.metric`
+
+```neper
+type Rouge = struct { precision: f64, recall: f64, f1: f64 }
+error TooSmall
+error Invalid
+
+fn split(text: str, bounds: []usize) -> (usize, err)
+fn word_equal(a: str, ab: []const usize, i: usize, b: str, bb: []const usize, j: usize) -> bool
+fn gram_equal(a: str, ab: []const usize, i: usize, b: str, bb: []const usize, j: usize, n: usize) -> bool
+fn clipped(c: str, cb: []const usize, cn: usize, r: str, rb: []const usize, rn: usize, n: usize) -> usize
+fn bounds_of(candidate: str, reference: str, scratch: []usize) -> (usize, usize, err)
+fn bleu(candidate: str, reference: str, max_n: usize, scratch: []usize) -> (f64, err)
+fn rouge_of(matched: usize, candidate_count: usize, reference_count: usize) -> Rouge
+fn rouge_n(candidate: str, reference: str, n: usize, scratch: []usize) -> (Rouge, err)
+fn rouge_l(candidate: str, reference: str, scratch: []usize) -> (Rouge, err)
+fn meteor(candidate: str, reference: str, scratch: []usize) -> (f64, err)
+```
+
+Over one reference of space-separated words: `bleu` (clipped n-gram precisions to
+`max_n`, geometric mean, brevity penalty, zero when an order has no match),
+`rouge_n` and `rouge_l` (precision, recall and F1 over n-grams and over the longest
+common subsequence) and `meteor` over exact matches with the fragmentation penalty.
+
+### `e.text.suffix`
+
+```neper
+type Automaton = struct { link: []u32, length: []u32, first_edge: []u32, edge_byte: []u8, edge_to: []u32, edge_next: []u32, states: usize, edges: usize }
+type Tree = struct { text: str, parent: []u32, depth: []u32, first_child: []u32, next_sibling: []u32, suffix: []u32, nodes: usize }
+error TooSmall
+error TooLong
+const NONE: u32 = 4294967295u32
+
+fn array_build(text: str, sa: []usize, scratch: []usize) -> err
+fn lcp_array(text: str, sa: []const usize, lcp: []usize, scratch: []usize) -> err
+fn compare_at(text: str, at: usize, pattern: str) -> i32
+fn array_search(text: str, sa: []const usize, pattern: str) -> (usize, usize)
+fn automaton_edge(m: *const Automaton, state: usize, c: u8) -> u32
+fn automaton_add_edge(m: *Automaton, from: usize, c: u8, to: u32)
+fn automaton_set_edge(m: *Automaton, from: usize, c: u8, to: u32)
+fn automaton_build(a: *mem.Arena, text: str) -> (Automaton, err)
+fn automaton_contains(m: *const Automaton, pattern: str) -> bool
+fn automaton_distinct_substrings(m: *const Automaton) -> u64
+fn tree_build(a: *mem.Arena, text: str, sa: []const usize, lcp: []const usize) -> (Tree, err)
+fn tree_detach(t: *Tree, parent: usize, child: usize)
+fn tree_edge(t: *const Tree, node: usize) -> str
+fn tree_contains(t: *const Tree, pattern: str) -> bool
+```
+
+`array_build` (prefix doubling with counting sorts) and `lcp_array` (Kasai) fill
+caller storage; `array_search` answers the range of the array whose suffixes start
+with a pattern; `automaton_build` is the suffix automaton in the arena (edges as
+sibling lists; `automaton_contains`, `automaton_distinct_substrings`) and
+`tree_build` the suffix tree derived from the array and LCP array (`tree_edge`,
+`tree_contains`; a suffix that prefixes another gets an internal node, as a
+terminator would give it).
+
+### `e.text.diff`
+
+```neper
+type Op = enum u8 { Keep, Delete, Insert }
+type Edit = struct { op: Op, line: str }
+type Range = struct { start: usize, end: usize }
+error TooSmall
+error Mismatch
+
+fn same(a: str, b: str) -> bool
+fn myers_scratch(n: usize, m: usize) -> usize
+fn myers(a: []const str, b: []const str, edits: []Edit, scratch: []usize) -> (usize, err)
+fn patch(text: []const str, edits: []const Edit, out: []str) -> (usize, err)
+fn patience(a: []const str, b: []const str, edits: []Edit, scratch: []usize) -> (usize, err)
+fn hunks_of(edits: []const Edit, produced: usize, hunks: []usize) -> (usize, err)
+fn side_lines(edits: []const Edit, produced: usize, s: usize, e: usize, out: []str, n: usize, write: bool) -> (usize, usize, err)
+fn next_line(edits: []const Edit, produced: usize, s: usize, e: usize, i: usize, base: usize) -> (bool, str, usize, usize)
+fn sides_agree(ours: []const Edit, our_count: usize, theirs: []const Edit, their_count: usize, s: usize, e: usize) -> bool
+fn walk(base: []const str, ours: []const Edit, our_count: usize, theirs: []const Edit, their_count: usize, out: []str, write: bool, found: []Range, record: bool, scratch: []usize) -> (usize, usize, err)
+fn both_scripts(base: []const str, ours: []const str, theirs: []const str, edits: []Edit, scratch: []usize) -> (usize, usize, err)
+fn merge3(base: []const str, ours: []const str, theirs: []const str, out: []str, edits: []Edit, scratch: []usize) -> (usize, usize, err)
+fn conflicts(base: []const str, ours: []const str, theirs: []const str, edits: []Edit, found: []Range, scratch: []usize) -> (usize, err)
+fn similarity(a: []const str, b: []const str, scratch: []usize) -> (f64, err)
+```
+
+Texts are slices of lines and a script is `Edit`s carrying their line: `myers` (the
+O(ND) greedy algorithm, every frontier kept for the trace back), `patience` (unique
+lines anchored by longest increasing subsequence, `myers` between anchors), `patch`
+(replays a script, checking every kept and deleted line), `merge3` (one-sided changes
+taken, identical ones once, the rest between `<<<<<<<`, `=======`, `>>>>>>>` lines),
+`conflicts` (the base ranges `merge3` would mark) and `similarity` (twice the common
+subsequence over the total).
+
+### `e.text.rank`
+
+```neper
+error TooSmall
+error Invalid
+
+fn same(a: str, b: str) -> bool
+fn word_count(doc: str) -> usize
+fn term_frequency(doc: str, term: str) -> usize
+fn document_frequency(docs: []const str, term: str) -> usize
+fn tf_idf(docs: []const str, index: usize, term: str) -> f64
+fn bm25(docs: []const str, index: usize, query: str, k1: f64, b: f64) -> f64
+fn reciprocal_rank_fusion(rankings: []const usize, starts: []const usize, k: f64, scores: []f64, order: []usize) -> (usize, err)
+fn maximal_marginal_relevance(relevance: []const f64, similarity: []const f64, lambda: f64, count: usize, order: []usize, scratch: []usize) -> (usize, err)
+```
+
+Documents are strings of space-separated words: `term_frequency`, `document_frequency`,
+`tf_idf` (share of the words times `ln(N / df)`), `bm25` (Okapi, Lucene's idf);
+`reciprocal_rank_fusion` merges flat rankings by `1 / (k + rank)` into scores and an
+order; `maximal_marginal_relevance` re-ranks by relevance minus the largest similarity
+to what is already chosen.
+
+### `e.text.index`
+
+```neper
+type Index = struct { terms: []str, starts: []usize, postings: []u32, documents: usize }
+error TooSmall
+error Invalid
+
+fn compare(a: str, b: str) -> i32
+fn count_words(doc: str) -> usize
+fn sort_pairs(words: []const str, docs: []const u32, order: []usize, scratch: []usize, low: usize, high: usize)
+fn build(a: *mem.Arena, docs: []const str) -> (Index, err)
+fn lookup(x: *const Index, term: str) -> []const u32
+fn intersect(a: []const u32, b: []const u32, out: []u32) -> (usize, err)
+fn unite(a: []const u32, b: []const u32, out: []u32) -> (usize, err)
+fn low_bits(n: usize, universe: u32) -> u32
+fn set_bit(bits: []u8, at: usize)
+fn get_bit(bits: []const u8, at: usize) -> bool
+fn elias_fano_size(n: usize, universe: u32) -> usize
+fn elias_fano_encode(values: []const u32, universe: u32, out: []u8) -> (usize, err)
+fn elias_fano_decode(bytes: []const u8, n: usize, universe: u32, values: []u32) -> err
+```
+
+`build` makes an inverted index in the arena (terms in byte order, sorted postings);
+`lookup` is a binary search, `intersect` and `unite` merge posting lists. Elias-Fano:
+`elias_fano_size`, `elias_fano_encode` (low bits packed, high bits unary) and
+`elias_fano_decode` over a sorted list below a universe.
+
+### `e.text.tokenize`
+
+```neper
+type Bpe = struct { left: []str, right: []str, count: usize }
+error TooSmall
+error Invalid
+error Unknown
+
+fn same(a: str, b: str) -> bool
+fn shingles(text: str, k: usize, out: []str) -> (usize, err)
+fn word_shingles(text: str, k: usize, out: []str, scratch: []usize) -> (usize, err)
+fn word_break(text: str, dictionary: []const str, breaks: []usize, scratch: []usize) -> (usize, err)
+fn bpe_train(a: *mem.Arena, corpus: []const str, merges: usize) -> (Bpe, err)
+fn token_at(word: str, starts: []const usize, base: usize, live: usize, t: usize) -> str
+fn pair_at(word: str, starts: []const usize, base: usize, live: usize, t: usize) -> (str, str)
+fn seen_before(corpus: []const str, starts: []const usize, first: []const usize, live: []const usize, w: usize, t: usize, l: str, r: str) -> bool
+fn count_pair(corpus: []const str, starts: []const usize, first: []const usize, live: []const usize, l: str, r: str) -> usize
+fn merge_word(word: str, starts: []usize, base: usize, live: usize, l: str, r: str) -> usize
+fn bpe_encode(b: *const Bpe, word: str, out: []str, scratch: []usize) -> (usize, err)
+fn wordpiece(word: str, vocabulary: []const str, out: []str) -> (usize, err)
+fn unigram(word: str, vocabulary: []const str, log_probability: []const f64, out: []str, scores: []f64, scratch: []usize) -> (usize, err)
+fn collect(word: str, from: []const usize, n: usize, out: []str) -> usize
+fn unigram_sample(word: str, vocabulary: []const str, log_probability: []const f64, temperature: f64, r: *rand.Pcg64, out: []str, scores: []f64, scratch: []usize) -> (usize, err)
+fn log_add(a: f64, b: f64) -> f64
+```
+
+`shingles` and `word_shingles` cut windows; `word_break` segments into dictionary
+words, fewest first; `bpe_train` learns byte-pair merges in the arena (most frequent
+pair, earliest seen on ties) and `bpe_encode` applies them; `wordpiece` is greedy
+longest-match-first over `##` continuation pieces; `unigram` is the Viterbi
+segmentation over log probabilities and `unigram_sample` draws one by forward
+filtering and backward sampling under a temperature.
+
 ### `e.text.unicode`
 
 ```neper

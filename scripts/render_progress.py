@@ -64,7 +64,7 @@ compiler, tooling = load_work_rows()
 # HEAD would make the page differ from itself the moment it is committed, so every
 # later run would show a spurious diff. Taking that commit's own date as well keeps
 # the output a pure function of its inputs.
-INPUTS = ['src', 'lib', 'docs/module-apis.md', 'docs/widget-plan.json']
+INPUTS = ['src', 'lib', 'docs/module-apis.md', 'docs/widget-plan.json', 'docs/algos.md']
 stamp = subprocess.run(['git', 'log', '-1', '--format=%h %cs', '--'] + INPUTS,
                        capture_output=True, text=True).stdout.split()
 rev, when = (stamp + ['unknown', str(datetime.date.today())])[:2]
@@ -114,6 +114,23 @@ for mod, body in blocks.items():
     present = impl.get(mod, set()) | seeded.get(mod, set())
     dtot += len(declarations)
     dgot += sum(1 for name in declarations if name in present)
+
+# The selected algorithms (docs/algos.md, D834): every entry annotated with a
+# library function is one more declaration the library owes until that function
+# exists, whether its module is fenced yet or not. Duplicates of one function
+# count once.
+planned = {}
+for mod, fn in re.findall(r'→ `(e\.[A-Za-z0-9_.]+)\.([A-Za-z_][A-Za-z0-9_]*)`',
+                          open('docs/algos.md', encoding='utf-8').read()):
+    planned.setdefault(mod, set()).add(fn)
+algos_total = sum(len(fns) for fns in planned.values())
+algos_missing = 0
+for mod, fns in planned.items():
+    present = impl.get(mod, set()) | seeded.get(mod, set())
+    if mod in blocks:
+        present |= set(decl_names(blocks[mod]))
+    algos_missing += sum(1 for fn in fns if fn not in present)
+dtot += algos_missing
 
 widget_plan, widget_errors = validate_widget_plan(Path('.'))
 if widget_errors:
@@ -166,7 +183,7 @@ def meter(label, pct, sub):
 
 kpi = '\n'.join([
     meter('Compiler', C, '%.2f of %d capabilities' % (c_sum, c_n)),
-    meter('Modules', M, '%d of %d declarations' % (dgot, dtot)),
+    meter('Modules', M, '%d of %d declarations, %d of %d selected algorithms' % (dgot, dtot, algos_total - algos_missing, algos_total)),
     meter('UI and host integration', W, '%d of %d capabilities' % (wgot, wtot)),
     meter('Tooling', T, '%.2f of %d capabilities' % (t_sum, t_n)),
 ])

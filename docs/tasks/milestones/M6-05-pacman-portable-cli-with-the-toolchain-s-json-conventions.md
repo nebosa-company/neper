@@ -23,7 +23,6 @@ The normative design is `docs/pacman.md`; the `packageManifest` shape is already
 
 - `task`: `benchmarks/llm_edit/jev_router.py`×22, `benchmarks/llm_edit/run.py`×17, `benchmarks/llm_edit/mega.py`×13, `benchmarks/llm_edit/semantic.py`×13, `lib/e/task.e`×13, `benchmarks/llm_gen/run.py`×11, `benchmarks/llm_edit/README.md`×9, `benchmarks/llm_gen/README.md`×2
 - `vendor`: `lib/e/os.linux.e`×2‡, `scripts/audit_repo_coverage.py`×2
-- `publish`: `lib/e/ui/accessibility.e`×6, `lib/e/os.linux.e`×3‡, `lib/e/os.windows.e`×3‡, `src/main.e`×3‡, `lib/e/math.e`×2†, `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×2, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×2, `lib/e/algo/rand.e`×1
 - nearest existing implementation: `docs/pacman.md`, `src/project.e`, `src/source.e`, `docs/schemas/neper-v1.schema.json`†, `lib/e/fmt/yaml.e`, `lib/e/crypto` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

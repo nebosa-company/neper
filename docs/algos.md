@@ -57,6 +57,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.algo.exact_cover` | new | #217, #417 |
 | `e.algo.geo` | new | #1672 |
 | `e.algo.geom` | new | 37 entries, first #429 |
+| `e.algo.geom.clip` | new (split from `e.algo.geom`) | #533, #534, #536, #537, #557, #558 |
 | `e.algo.geom3` | new | #522, #523, #524, #525, #526, #1032, #1168, #2015, #2045, #2046 |
 | `e.algo.graph` | existing | 25 entries, first #61 |
 | `e.algo.graph.centrality` | new (under `e.algo.graph`) | #90, #91, #173, #174, #175 |
@@ -217,6 +218,8 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.math.ntheory` | new (under `e.math`) | 21 entries, first #461 |
 | `e.math.ode` | new (under `e.math`) | #1018, #1019, #1020, #1021, #1047 |
 | `e.math.opt` | new (under `e.math`) | 14 entries, first #516 |
+| `e.math.opt.meta` | new (split from `e.math.opt`) | #770, #771, #772, #773, #774, #779, #780 |
+| `e.math.opt.convex` | new (split from `e.math.opt`) | #517, #1461 |
 | `e.math.root` | new (under `e.math`) | #496, #497, #498, #499, #500 |
 | `e.mem` | existing | #679, #680, #681, #682, #683 |
 | `e.ml.ann` | new | #1096, #1226, #1227 |
@@ -267,7 +270,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.test.sim` | new (under `e.test`) | #2221 |
 | `e.test.support` | existing | #2217, #2218, #2220, #2227 |
 | `e.text.bidi` | new | #2065 |
-| `e.text.case` | new | #359, #363, #364 |
+| `e.text.casing` | new | #359, #363, #364 |
 | `e.text.collab` | new | #1269, #2127, #2128 |
 | `e.text.collate` | existing | #2066 |
 | `e.text.diff` | new | #376, #377, #378, #974, #2242, #2244 |
@@ -703,12 +706,12 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 356. **String Padding** – Prepending or appending fill characters to meet target field widths. → `e.str.pad`
 357. **String Splitting** – Tokenizing strings using multi-character delimiter bounds. → `e.str.split`
 358. **String Joining / Interpolation** – Concatenating array elements with central glue strings. → `e.str.join`
-359. **Naming Convention Converter** – Transforming strings between camelCase, snake_case, and PascalCase. → `e.text.case.convert`
+359. **Naming Convention Converter** – Transforming strings between camelCase, snake_case, and PascalCase. → `e.text.casing.convert`
 360. **Knuth's Word Wrap Algorithm** – Dynamic programming line-breaking minimizing line raggedness. → `e.text.wrap.optimal`
 361. **Greedy Line Wrapping** – Breaking text lines immediately upon exceeding maximum column width. → `e.text.wrap.greedy`
 362. **Justified Text Alignment** – Distributing inter-word whitespace evenly to align both margins. → `e.text.wrap.justify`
-363. **Slugification** – Normalizing raw text into lowercase, clean, hyphenated URL-safe strings. → `e.text.case.slug`
-364. **Title Case Normalization** – Capitalizing principal words following linguistic style guides. → `e.text.case.title`
+363. **Slugification** – Normalizing raw text into lowercase, clean, hyphenated URL-safe strings. → `e.text.casing.slug`
+364. **Title Case Normalization** – Capitalizing principal words following linguistic style guides. → `e.text.casing.title`
 365. **Truncation with Ellipsis** – Shortening text to fixed length while appending ellipsis cleanly. → `e.text.layout.ellipsis`
 366. **K-Shingle Tokenization** – Breaking text documents into sets of k adjacent character/word slices. → `e.text.tokenize.shingles`
 367. **TF-IDF Calculation** – Scoring term frequency against inverse document frequency in information retrieval. → `e.text.rank.tf_idf`
@@ -870,7 +873,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 514. **Householder Reflection** – Constructing orthogonal matrices that reflect vectors across hyperplanes. → `e.algo.linalg.matrix.householder`
 515. **Givens Rotation** – Applying planar rotations to zero out specific off-diagonal matrix elements. → `e.algo.linalg.matrix.givens`
 516. **Simplex Algorithm** – Linear programming solver navigating vertices of a feasible polytope region. → `e.math.opt.simplex`
-517. **Interior Point Method (Karmarkar's)** – Polynomial-time linear programming solver traversing polytope interiors. → `e.math.opt.interior_point`
+517. **Interior Point Method (Karmarkar's)** – Polynomial-time linear programming solver traversing polytope interiors. → `e.math.opt.convex.interior_point`
 518. **Extended Kalman Filter (EKF)** – Non-linear state estimation using local first-order Taylor expansions. → `e.math.filter.ekf`
 519. **Unscented Kalman Filter (UKF)** – Non-linear state estimation using deterministic sigma-point sampling. → `e.math.filter.ukf`
 520. **Particle Filter (Sequential Monte Carlo)** – Non-parametric state estimation using weighted random particles. → `e.math.filter.particle`
@@ -886,11 +889,11 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 530. **Bowyer-Watson Algorithm** – Incremental generation of Delaunay triangulations in arbitrary dimensions. → `e.algo.geom.delaunay`
 531. **Flip Algorithm** – Converting arbitrary triangulations to Delaunay triangulations via edge flipping. → `e.algo.geom.delaunay_flip`
 532. **Winding Number Algorithm** – Exact point-in-polygon test calculating total signed rotation angle. → `e.algo.geom.winding_number`
-533. **Ear Clipping Algorithm** – O(N2) polygon triangulation repeatedly cutting off non-overlapping ears. → `e.algo.geom.triangulate_ear_clip`
-534. **Sutherland-Hodgman Algorithm** – Clipping arbitrary polygons against convex clipping boundaries. → `e.algo.geom.clip_convex`
+533. **Ear Clipping Algorithm** – O(N2) polygon triangulation repeatedly cutting off non-overlapping ears. → `e.algo.geom.clip.triangulate_ear_clip`
+534. **Sutherland-Hodgman Algorithm** – Clipping arbitrary polygons against convex clipping boundaries. → `e.algo.geom.clip.clip_convex`
 535. **Weiler-Atherton Algorithm** – Polygon clipping algorithm supporting non-convex polygons with holes. → `e.algo.geom.clip_polygon`
-536. **Cohen-Sutherland Line Clipping** – 2D line segment clipping using 4-bit outcodes. → `e.algo.geom.clip_line`
-537. **Liang-Barsky Line Clipping** – Parametric line segment clipping against rectangular viewports. → `e.algo.geom.clip_line_liang_barsky`
+536. **Cohen-Sutherland Line Clipping** – 2D line segment clipping using 4-bit outcodes. → `e.algo.geom.clip.clip_line`
+537. **Liang-Barsky Line Clipping** – Parametric line segment clipping against rectangular viewports. → `e.algo.geom.clip.clip_line_liang_barsky`
 538. **Line Segment Intersection Check** – Orientation-based cross-product test checking if two 2D segments cross. → `e.algo.geom.segments_intersect`
 539. **Welzl's Algorithm** – Randomized linear-time O(N) algorithm finding minimum enclosing circle. → `e.algo.geom.enclosing_circle`
 540. **Rotating Calipers** – Computing bounding boxes, maximum distance, or antipodal pairs in convex polygons. → `e.algo.geom.rotating_calipers`
@@ -910,8 +913,8 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 554. **De Boor's Algorithm** – Fast evaluation of B-spline curves at parametric position t. → `e.gfx.curve.bspline`
 555. **De Casteljau's Algorithm** – Recursive linear interpolation evaluating Bézier curves. → `e.gfx.curve.bezier`
 556. **NURBS Surface Evaluation** – Calculating surface coordinates for Non-Uniform Rational B-Splines. → `e.gfx.curve.nurbs_surface`
-557. **Douglas-Peucker Algorithm** – Polyline simplification reducing vertex count while maintaining topology tolerance. → `e.algo.geom.simplify_douglas_peucker`
-558. **Visvalingam-Whyatt Algorithm** – Line simplification incrementally removing vertices contributing least triangular area. → `e.algo.geom.simplify_visvalingam`
+557. **Douglas-Peucker Algorithm** – Polyline simplification reducing vertex count while maintaining topology tolerance. → `e.algo.geom.clip.simplify_douglas_peucker`
+558. **Visvalingam-Whyatt Algorithm** – Line simplification incrementally removing vertices contributing least triangular area. → `e.algo.geom.clip.simplify_visvalingam`
 559. **Rapidly-Exploring Random Tree (RRT)** – Sampling-based path planning searching high-dimensional spaces. → `e.robot.plan.rrt`
 560. **RRT*** – Asymptotically optimal RRT rewiring tree branches to find shortest paths. → `e.robot.plan.rrt_star`
 
@@ -1132,17 +1135,17 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 767. **Proximal Policy Optimization (PPO)** – Policy gradient RL optimizing clipped surrogate objectives. → skip: a trained ML model or training recipe
 768. **Trust Region Policy Optimization (TRPO)** – Policy gradient method enforcing KL-divergence constraints on updates. → skip: a trained ML model or training recipe
 769. **Asynchronous Advantage Actor-Critic (A3C)** – Parallel asynchronous worker threads updating global policy networks. → skip: a trained ML model or training recipe
-770. **Simulated Annealing** – Probabilistic optimization accepting worse states controlled by a cooling temperature parameter. → `e.math.opt.simulated_annealing`
-771. **Genetic Algorithm** – Population-based optimization employing selection, crossover, and mutation operations. → `e.math.opt.genetic`
-772. **Particle Swarm Optimization (PSO)** – Population optimization navigating search spaces using velocity vectors. → `e.math.opt.particle_swarm`
-773. **Ant Colony Optimization (ACO)** – Probabilistic graph search guided by simulated pheromone decay and deposition. → `e.math.opt.ant_colony`
-774. **Differential Evolution** – Vector-based stochastic optimization mutating population candidates via differences. → `e.math.opt.differential_evolution`
+770. **Simulated Annealing** – Probabilistic optimization accepting worse states controlled by a cooling temperature parameter. → `e.math.opt.meta.simulated_annealing`
+771. **Genetic Algorithm** – Population-based optimization employing selection, crossover, and mutation operations. → `e.math.opt.meta.genetic`
+772. **Particle Swarm Optimization (PSO)** – Population optimization navigating search spaces using velocity vectors. → `e.math.opt.meta.particle_swarm`
+773. **Ant Colony Optimization (ACO)** – Probabilistic graph search guided by simulated pheromone decay and deposition. → `e.math.opt.meta.ant_colony`
+774. **Differential Evolution** – Vector-based stochastic optimization mutating population candidates via differences. → `e.math.opt.meta.differential_evolution`
 775. **Nelder-Mead Simplex Method** – Direct search optimization using geometric simplex transformations without derivatives. → `e.math.opt.nelder_mead`
 776. **Conjugate Gradient Method** – Iterative solver for linear systems and non-linear optimization along orthogonal directions. → `e.math.opt.conjugate_gradient`
 777. **BFGS Algorithm** – Quasi-Newton optimization method approximating the inverse Hessian matrix. → `e.math.opt.bfgs`
 778. **L-BFGS Algorithm** – Limited-memory quasi-Newton optimization storing recent position/gradient updates. → `e.math.opt.lbfgs`
-779. **Hill Climbing** – Local search algorithm continuously moving in the direction of increasing value. → `e.math.opt.hill_climb`
-780. **Tabu Search** – Metaheuristic search employing short-term memory lists to avoid previously visited local optima. → `e.math.opt.tabu`
+779. **Hill Climbing** – Local search algorithm continuously moving in the direction of increasing value. → `e.math.opt.meta.hill_climb`
+780. **Tabu Search** – Metaheuristic search employing short-term memory lists to avoid previously visited local optima. → `e.math.opt.meta.tabu`
 
 ## 11. Image Processing, Computer Vision & Signal Processing (781–820)
 
@@ -1868,7 +1871,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 1458. **Parametric Value at Risk (VaR)** – Computing portfolio loss distribution bounds using portfolio return means, standard deviations, and covariance matrices. → skip: quantitative-finance domain
 1459. **Monte Carlo Value at Risk (VaR)** – Simulating thousands of forward market paths to estimate non-linear portfolio loss distributions. → skip: quantitative-finance domain
 1460. **Conditional Value at Risk (CVaR / Expected Shortfall)** – Measuring expected tail losses exceeding specified Value at Risk thresholds. → `e.algo.stat.expected_shortfall`
-1461. **Markowitz Mean-Variance Optimization** – Constructing efficient investment portfolios that maximize expected return for given levels of target portfolio variance. → `e.math.opt.quadratic_program`
+1461. **Markowitz Mean-Variance Optimization** – Constructing efficient investment portfolios that maximize expected return for given levels of target portfolio variance. → `e.math.opt.convex.quadratic_program`
 1462. **Black-Litterman Portfolio Model** – Blending market equilibrium returns with subjective investor views using Bayesian updating to produce stable portfolio weights. → skip: quantitative-finance domain
 1463. **Limit Order Book (LOB) Matching Engine** – Executing financial trades by maintaining price-time priority arrays across bid and ask queues. → skip: quantitative-finance domain
 1464. **Order Flow Imbalance (OFI) Signal Computation** – Measuring net order flow changes across top-of-book quotes to forecast short-term price movements. → skip: quantitative-finance domain

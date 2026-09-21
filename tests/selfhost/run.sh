@@ -1299,6 +1299,56 @@ math_opt_convex_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$math_opt_convex_written" = 'executable written' ]
 chmod +x "$test_build/math-opt-convex-selfhost"
 "$test_build/math-opt-convex-selfhost"
+# `e.text.casing`: identifiers split at separators and case boundaries and convert between five conventions, slugs fold punctuation to hyphens, and title case spares the small words (D842).
+text_casing_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_casing/src/main.e" "$repo" x64 linux "$test_build/text-casing-selfhost")
+[ "$text_casing_written" = 'executable written' ]
+chmod +x "$test_build/text-casing-selfhost"
+"$test_build/text-casing-selfhost"
+# `e.text.phonetic`: Soundex, the original Metaphone and NYSIIS agree with jellyfish on fifty-odd names (D842).
+text_phonetic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_phonetic/src/main.e" "$repo" x64 linux "$test_build/text-phonetic-selfhost")
+[ "$text_phonetic_written" = 'executable written' ]
+chmod +x "$test_build/text-phonetic-selfhost"
+"$test_build/text-phonetic-selfhost"
+# `e.text.stem`: Porter and Lancaster agree with NLTK on Porter's own examples and a hundred more, and affix stripping keeps the minimum (D842).
+text_stem_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_stem/src/main.e" "$repo" x64 linux "$test_build/text-stem-selfhost")
+[ "$text_stem_written" = 'executable written' ]
+chmod +x "$test_build/text-stem-selfhost"
+"$test_build/text-stem-selfhost"
+# `e.text.wrap`: greedy and optimal breaking agree where the greedy choice is even and differ where a short line costs (checked exhaustively), an overlong word stands alone, and justification spreads from the left (D842).
+text_wrap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_wrap/src/main.e" "$repo" x64 linux "$test_build/text-wrap-selfhost")
+[ "$text_wrap_written" = 'executable written' ]
+chmod +x "$test_build/text-wrap-selfhost"
+"$test_build/text-wrap-selfhost"
+# `e.text.metric`: BLEU against NLTK, ROUGE-1/2/L and exact-match METEOR against hand counts, and the degenerate cases (D842).
+text_metric_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_metric/src/main.e" "$repo" x64 linux "$test_build/text-metric-selfhost")
+[ "$text_metric_written" = 'executable written' ]
+chmod +x "$test_build/text-metric-selfhost"
+"$test_build/text-metric-selfhost"
+# `e.text.suffix`: suffix and LCP arrays against a naive sort on six texts, search ranges, the suffix automaton accepting exactly the substrings and counting them, and the suffix tree from the array with its node count (D843).
+text_suffix_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_suffix/src/main.e" "$repo" x64 linux "$test_build/text-suffix-selfhost")
+[ "$text_suffix_written" = 'executable written' ]
+chmod +x "$test_build/text-suffix-selfhost"
+"$test_build/text-suffix-selfhost"
+# `e.text.diff`: Myers on the paper's example replayed by patch, patience diff anchored on unique lines, three-way merges taking, folding and marking, conflicts as base ranges, and the similarity ratio (D843).
+text_diff_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_diff/src/main.e" "$repo" x64 linux "$test_build/text-diff-selfhost")
+[ "$text_diff_written" = 'executable written' ]
+chmod +x "$test_build/text-diff-selfhost"
+"$test_build/text-diff-selfhost"
+# `e.text.rank`: TF-IDF and BM25 against the formulas worked in Python, reciprocal rank fusion with ties by id, and MMR skipping the near duplicate (D843).
+text_rank_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_rank/src/main.e" "$repo" x64 linux "$test_build/text-rank-selfhost")
+[ "$text_rank_written" = 'executable written' ]
+chmod +x "$test_build/text-rank-selfhost"
+"$test_build/text-rank-selfhost"
+# `e.text.index`: an inverted index of four documents with hits and misses, AND and OR, and Elias-Fano on a worked example and a random list (D843).
+text_index_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_index/src/main.e" "$repo" x64 linux "$test_build/text-index-selfhost")
+[ "$text_index_written" = 'executable written' ]
+chmod +x "$test_build/text-index-selfhost"
+"$test_build/text-index-selfhost"
+# `e.text.tokenize`: shingles, dictionary word breaking, BPE merges matching a Python replica, WordPiece on unaffable, and unigram Viterbi with a sampler whose draws follow the probabilities (D843).
+text_tokenize_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_tokenize/src/main.e" "$repo" x64 linux "$test_build/text-tokenize-selfhost")
+[ "$text_tokenize_written" = 'executable written' ]
+chmod +x "$test_build/text-tokenize-selfhost"
+"$test_build/text-tokenize-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
