@@ -1712,6 +1712,13 @@ ui_scroll_view_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/ui-scroll-view-selfhost"
 ui_scroll_view_output=$("$test_build/ui-scroll-view-selfhost")
 [ "$ui_scroll_view_output" = 'ui scroll view ok' ]
+# The button family (D818, widget plan P1-06): button, icon button, toggle and link
+# under a theme, pressed by tap, Enter and Space, hovered, disabled.
+ui_button_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_button/src/main.e" "$repo" x64 linux "$test_build/ui-button-selfhost")
+[ "$ui_button_written" = 'executable written' ]
+chmod +x "$test_build/ui-button-selfhost"
+ui_button_output=$("$test_build/ui-button-selfhost")
+[ "$ui_button_output" = 'ui button ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

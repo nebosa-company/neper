@@ -203,10 +203,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     fonts[0usize] = shape.Font { id: 7u32, data: font_bytes, face_index: 0u32 }
     if scene.register_font(&renderer, fonts[0usize]) != ok { os.exit(6i32) }
     let tokens = style.reference(.Light)
-    let theme = control.Theme { tokens: &tokens, fonts: fonts[0usize..1usize], language: "" }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 64usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 8u16, max_commands: 256usize })
     if runtime_error != ok { os.exit(7i32) }
     var runtime = rt
+    let theme = control.Theme { tokens: &tokens, fonts: fonts[0usize..1usize], language: "", runtime: &runtime }
     let (h, harness_error) = testing.harness(a, &runtime, 64u32, 200u32, 1.0)
     if harness_error != ok { os.exit(8i32) }
     var harness = h

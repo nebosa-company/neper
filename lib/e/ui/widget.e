@@ -2432,6 +2432,14 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret scroll_by(s, found, 0.0 - notches * 40.0, false)
         }
     case .KeyDown as k:
+        // Enter or Space on a focused tap region is a tap at its centre.
+        if s.has_focus {
+            let code = key_code(k.key.physical)
+            let f = &s.elements[usize(s.focus)]
+            if f.live && f.kind == REGION_TAG && f.enabled && (f.gestures & GESTURE_TAP) != 0u8 && (code == 13u32 || code == 32u32) {
+                ret fire_gesture(f.gesture, Gesture { Tap: geometry.Point { x: f.bounds.x + f.bounds.width * 0.5, y: f.bounds.y + f.bounds.height * 0.5 } })
+            }
+        }
         let (taken, key_error) = dispatch_key(s, k)
         if taken || key_error != ok { ret key_error }
         if s.has_focus && s.elements[usize(s.focus)].has_action {
@@ -2574,6 +2582,20 @@ fn overlay_bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geo
     let (index, found) = element_of(s, element)
     if !found || s.elements[index].kind != OVERLAY_TAG { ret (zero, false) }
     ret (s.elements[index].overlay_bounds, true)
+}
+
+// What the pointer and the focus are doing to an element, for the look a control
+// resolves from its state (D818): hovered, pressed (the arena's candidate while the
+// pointer is down) and focused; nothing for an element that is not there.
+type Interaction = struct { hovered: bool, pressed: bool, focused: bool }
+
+fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret zero }
+    let (found, count) = find_by_key(s, key)
+    if count == 0usize { ret zero }
+    let index = usize(found.slot)
+    ret Interaction { hovered: s.arena_state.has_hovered && usize(s.arena_state.hovered) == index, pressed: s.arena_state.pressed && usize(s.arena_state.candidate) == index, focused: s.has_focus && usize(s.focus) == index }
 }
 
 // The element that has the focus, for a harness or a control.

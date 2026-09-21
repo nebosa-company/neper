@@ -1776,6 +1776,13 @@ $uiScrollViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $uiScrollViewWritten -ne 'executable written') { throw 'ui_scroll_view emission failed' }
 $uiScrollViewOutput = & $uiScrollViewPath
 if ($LASTEXITCODE -ne 0 -or $uiScrollViewOutput -ne 'ui scroll view ok') { throw "the scroll view answered wrongly: exit $LASTEXITCODE" }
+# The button family (D818, widget plan P1-06): button, icon button, toggle and link
+# under a theme, pressed by tap, Enter and Space, hovered, disabled.
+$uiButtonPath = Join-Path $testBuild 'ui-button-selfhost.exe'
+$uiButtonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_button\src\main.e') $repo 'x64' 'windows' $uiButtonPath
+if ($LASTEXITCODE -ne 0 -or $uiButtonWritten -ne 'executable written') { throw 'ui_button emission failed' }
+$uiButtonOutput = & $uiButtonPath
+if ($LASTEXITCODE -ne 0 -or $uiButtonOutput -ne 'ui button ok') { throw "the buttons answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

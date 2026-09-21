@@ -3333,6 +3333,7 @@ type Placement = enum u8 { Below, Above, Right, Left, Center }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
 type Alignment = enum u8 { Start, Center, End }
 type Scrollbar = struct { viewport: Key, axis: ui_layout.Axis }
+type Interaction = struct { hovered: bool, pressed: bool, focused: bool }
 type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap, Aspect: f32, Fitted, Scrollbar: Scrollbar }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
@@ -3385,6 +3386,7 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
 fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err
 fn focused(widget_runtime: *const Runtime) -> (ElementId, bool)
+fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction
 fn edit_value(widget_runtime: *const Runtime, element: ElementId) -> (str, bool)
 fn edit_selection(widget_runtime: *const Runtime, element: ElementId) -> (usize, usize, bool)
 fn scroll_to(widget_runtime: *Runtime, element: ElementId, offset: f32) -> err
@@ -3495,6 +3497,11 @@ apart from the viewport it names by key -- its style's background the track and
 its border colour the thumb -- and a drag of it moves the viewport by the content's
 share of the distance along the bar; `safe_area` and `keyboard_avoiding` pad by
 the host's insets (D811) rather than scroll.
+
+`interaction` (D818) answers what the pointer and the focus are doing to a keyed
+element -- hovered, pressed while the pointer is down on it, focused -- for the look
+a control resolves; and Enter or Space on a focused tap region is a tap at its
+centre, before the scopes see the key.
 
 ### `e.ui.animation`
 
@@ -3633,7 +3640,8 @@ and its state in a `Gallery` the caller owns.
 ### `e.ui.control`
 
 ```neper
-type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str }
+type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str, runtime: *widget.Runtime }
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool }
 type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str }
 type Span = struct { value: str, role: style.TextRole, color: style.ColorRole, link: widget.Submit }
 type SurfaceOptions = struct { background: style.ColorRole, bordered: bool, radius: f32, elevation: u8, padding: f32 }
@@ -3657,6 +3665,12 @@ fn divider(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis
 fn badge(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str) -> (widget.Node, err)
 fn avatar(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, size: f32, label: str) -> (widget.Node, err)
 fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32) -> (widget.Node, err)
+fn button_options() -> ButtonOptions
+fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool) -> style.ControlState
+fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err)
+fn icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err)
+fn toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err)
+fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
@@ -3682,6 +3696,14 @@ level, rounded and hairline-bordered; `group_box` labels a bordered surface as a
 group; `divider` is a hairline the tree leaves out; `badge` is a status pill in the
 primary colour; `avatar` clips an image to a circle; `placeholder` is a rounded block
 that is busy in the tree.
+
+The button family (D818, P1-06): the theme carries the page's runtime, and
+`control_state` reads what the pointer and the focus are doing to a keyed element
+(`widget.interaction`) with what the caller says of it, so a control resolves its
+look from its state each frame; `button`, `icon_button` and `toggle_button` are a
+tap-and-hover region in the resolved look, at least the control height and the hit
+target, with a button's semantics, and `link` a region with the link role; each
+fires the `Submit` the caller keeps alive on a tap and, focused, on Enter or Space.
 
 ### `e.ui.app`
 

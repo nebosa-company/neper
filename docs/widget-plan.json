@@ -286,8 +286,13 @@
             "ToggleButton",
             "Link"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Button",
+            "IconButton",
+            "ToggleButton",
+            "Link"
+          ],
+          "evidence": "lib/e/ui/control.e and lib/e/ui/widget.e (D818): button, icon_button, toggle_button and link as tap-and-hover regions in the look style.resolve gives their state, read through widget.interaction under the theme's runtime; Enter and Space tap a focused region; tests/selfhost/fixtures/link/ui_button on both hosts"
         },
         {
           "id": "P1-07",

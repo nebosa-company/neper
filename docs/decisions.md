@@ -15734,3 +15734,29 @@ its edges by what the host covers is the whole of what a desktop needs
 and the first thing a mobile host will. `link/ui_scroll_view` checks the
 wheel, the painted thumb, the drag both ways and the two paddings on
 both hosts.
+
+## D818 — The button family: a control's look comes from what the runtime is doing to it
+
+P1-06 of the widget plan, and the first controls with a state of their
+own. A control is a pure function of its inputs each frame (D813), yet a
+button's look depends on whether the pointer hovers or presses it and
+whether it has the focus, which only the runtime knows. The runtime now
+answers `interaction` for a keyed element -- hovered, pressed while the
+pointer is down on it, focused -- and the `Theme` carries the page's
+runtime so a control can ask without a second argument threaded through
+every call; a theme with no runtime resolves every control at rest,
+which is what a static render wants. `button`, `icon_button` and
+`toggle_button` are one `pressable`: a tap-and-hover region in the look
+`style.resolve` gives the state (D805), at least the control height and
+the hit target so an empty or short one is still reachable, its content
+centred, with a button's semantics and the disabled and selected states;
+`link` is the same region under the link role in the primary colour. The
+action is a `Submit` the caller keeps alive and the region fires on a
+tap through one trampoline, the shape D813's spans set. Enter or Space
+on a focused tap region is now a tap at its centre, before the scopes
+see the key: a focused button presses on Enter as every toolkit's does,
+and a scope's default action fires when the focus is on something that
+is not a button, which `link/ui_gesture` now checks by focusing the
+scope itself. `link/ui_button` checks the tap, the keys, the hovered
+pixels, the disabled button, the toggle's selection, the icon button
+and the link on both hosts.

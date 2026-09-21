@@ -158,7 +158,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Shortcuts and the two actions, from the focused element up to the scope.
     if widget.dispatch(&runtime, key(83u32, false, true)) != ok || log.saves != 1usize { os.exit(36i32) }
     if widget.dispatch(&runtime, key(83u32, false, false)) != ok || log.saves != 1usize { os.exit(37i32) }
-    if widget.dispatch(&runtime, key(13u32, false, false)) != ok || log.submits != 1usize { os.exit(38i32) }
+    // Enter and Space on the focused tap region tap it (D818); with the focus on
+    // the scope itself, Enter is its default action.
+    if widget.dispatch(&runtime, key(13u32, false, false)) != ok || log.taps != 3usize || log.submits != 0usize { os.exit(38i32) }
+    if widget.dispatch(&runtime, key(32u32, false, false)) != ok || log.taps != 4usize { os.exit(44i32) }
+    let (scope_id, scope_count) = widget.find_by_key(mem.cast[*widget.State](runtime.state), 5u64)
+    if scope_count != 1usize || widget.focus(&runtime, scope_id) != ok { os.exit(45i32) }
+    if widget.dispatch(&runtime, key(13u32, false, false)) != ok || log.submits != 1usize { os.exit(46i32) }
     if widget.dispatch(&runtime, key(27u32, false, false)) != ok || log.cancels != 1usize { os.exit(39i32) }
     // Typed actions: a change carries its value; an unset one is quiet.
     let change = widget.Change[i32] { ctx: ctx, invoke: on_change }

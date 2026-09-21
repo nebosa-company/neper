@@ -21,8 +21,12 @@ use e.ui.style
 use e.ui.widget
 
 // What a page is set in: the theme's tokens, the fonts in preference order, the
-// language for shaping. The fonts and the tokens outlive every frame.
-type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str }
+// language for shaping, and the page's runtime, from which a control reads what the
+// pointer and the focus are doing to it (none: every control is at rest). The fonts
+// and the tokens outlive every frame.
+type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str, runtime: *widget.Runtime }
+// A button's look: its fill, and whether it takes presses.
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool }
 type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str }
 // A span of rich text; a linked span fires `link` when tapped, so the spans must
 // outlive the element the way an action's context does.
@@ -52,9 +56,14 @@ fn text_style(a: *mem.Arena, t: *const Theme, role: style.TextRole) -> (layout.S
 }
 
 fn text_node(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions) -> (widget.Node, err) {
+    let (node, node_error) = colored_text(a, key, value, t, options, style.color(t.tokens, options.color))
+    ret (node, node_error)
+}
+
+fn colored_text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions, color: paint.Color) -> (widget.Node, err) {
     let (text_look, style_error) = text_style(a, t, options.role)
     if style_error != ok { ret (zero, style_error) }
-    ret (widget.text(key, widget.Text { value: value, style: text_look, color: style.color(t.tokens, options.color), wrap: options.wrap, align: options.align, max_lines: options.max_lines, ellipsis: options.ellipsis }, style.defaults()), ok)
+    ret (widget.text(key, widget.Text { value: value, style: text_look, color: color, wrap: options.wrap, align: options.align, max_lines: options.max_lines, ellipsis: options.ellipsis }, style.defaults()), ok)
 }
 
 // A text: shaped, wrapped and aligned by its options, in the role's style.
@@ -97,13 +106,13 @@ fn rich_text(a: *mem.Arena, key: widget.Key, spans: []const Span, t: *const Them
             let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
             if body_error != ok { ret (zero, TooLarge) }
             body[0usize] = piece
-            var link: widget.Semantics = zero
-            link.role = ROLE_LINK
-            link.label = span.value
+            var linked: widget.Semantics = zero
+            linked.role = ROLE_LINK
+            linked.label = span.value
             let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
             if region_error != ok { ret (zero, TooLarge) }
             region[0usize] = widget.region(0u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&span.link), invoke: link_tap }, gestures: 1u8, enabled: true, focusable: true }, style.defaults(), body[0usize..1usize])
-            children[i] = widget.semantics(0u64, link, style.defaults(), region[0usize..1usize])
+            children[i] = widget.semantics(0u64, linked, style.defaults(), region[0usize..1usize])
         }
         i += 1usize
     }
@@ -304,4 +313,118 @@ fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
     var sem: widget.Semantics = zero
     sem.states = accessibility.STATE_BUSY
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// ------------------------------------------------------- the button family (D818, P1-06)
+
+fn button_options() -> ButtonOptions {
+    ret ButtonOptions { variant: .Filled, enabled: true }
+}
+
+// The control state of a keyed element under the page's runtime, with what the
+// caller says of it.
+fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool) -> style.ControlState {
+    var state: style.ControlState = zero
+    state.disabled = !enabled
+    state.selected = selected
+    if mem.address_of(t.runtime) != 0usize {
+        let now = widget.interaction(t.runtime, key)
+        state.hovered = now.hovered
+        state.pressed = now.pressed
+        state.focused = now.focused
+    }
+    ret state
+}
+
+fn press_tap(ctx: *void, g: widget.Gesture) -> err {
+    if g.tag != .Tap { ret ok }
+    let action = mem.cast[*const widget.Submit](ctx)
+    ret widget.fire_submit(*action)
+}
+
+// The pressable surface every button is: a tap-and-hover region in the resolved
+// look, its content centred, the semantics on top. `action` outlives the element.
+fn pressable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, look: style.ResolvedControl, enabled: bool, selected: bool, action: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
+    var s = style.defaults()
+    s.background = paint.Brush { Solid: look.background }
+    s.border = style.Border { width: look.border_width, color: look.border }
+    s.radius = look.radius
+    s.opacity = look.opacity
+    s.min_height = style.Length { Px: t.tokens.metrics.control_height }
+    s.min_width = style.Length { Px: t.tokens.metrics.hit_target }
+    let pad_x = style.Length { Px: t.tokens.spacing.md }
+    let pad_y = style.Length { Px: t.tokens.spacing.xs }
+    s.padding = style.EdgeLengths { left: pad_x, top: pad_y, right: pad_x, bottom: pad_y }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, s, body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = role
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    if selected { sem.states = sem.states | accessibility.STATE_SELECTED }
+    ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
+}
+
+// A button: its label in the resolved foreground; Enter and Space press it too.
+fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    let look = style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, false))
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, label_node)
+    ret (node, node_error)
+}
+
+// An icon button: the icon in place of the label, the label for the tree alone.
+fn icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    let look = style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, false))
+    let size = t.tokens.metrics.control_height - 2.0 * t.tokens.spacing.xs
+    let picture = widget.image(0u64, widget.Image { texture: texture, fit: .Contain }, sized_style(size, size))
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, picture)
+    ret (node, node_error)
+}
+
+// A toggle button: pressed to switch `selected`, which the caller keeps and the look
+// and the tree show.
+fn toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    let look = style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, selected))
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, selected, action, label_node)
+    ret (node, node_error)
+}
+
+// A link: its text in the primary colour, a tap region with the link role.
+fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .Body
+    caption.color = .Primary
+    caption.wrap = .None
+    let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
+    if label_error != ok { ret (zero, label_error) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = label_node
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    // A link is at least the hit target, so a short one is still reachable.
+    var target_style = style.defaults()
+    target_style.min_width = style.Length { Px: t.tokens.metrics.hit_target }
+    target_style.min_height = style.Length { Px: t.tokens.metrics.hit_target }
+    inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, target_style, body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = ROLE_LINK
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
 }

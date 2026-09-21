@@ -90,10 +90,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
-    let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "" }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 64usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 8u16, max_commands: 256usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
+    let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
     let (h, harness_error) = testing.harness(a, &runtime, 100u32, 200u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
