@@ -2085,6 +2085,7 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.gfx.geometry",
     "e.gfx.paint"
    ],
    "blocked_by": []

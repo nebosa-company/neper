@@ -1622,6 +1622,13 @@ ui_app_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 chmod +x "$test_build/ui-app-selfhost"
 ui_app_output=$("$test_build/ui-app-selfhost")
 [ "$ui_app_output" = 'ui app ok' ]
+# Theme tokens (D805, widget plan P0-01): the reference palettes, role lookups, control
+# state resolution, size classes and host adaptation.
+ui_theme_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_theme/src/main.e" "$repo" x64 linux "$test_build/ui-theme-selfhost")
+[ "$ui_theme_written" = 'executable written' ]
+chmod +x "$test_build/ui-theme-selfhost"
+ui_theme_output=$("$test_build/ui-theme-selfhost")
+[ "$ui_theme_output" = 'ui theme ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

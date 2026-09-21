@@ -10,7 +10,7 @@
 
 ## Eligibility
 
-`python scripts/check_widget_plan.py --next` names the single eligible component; it currently reports: `BLOCKED: P0 by e.gfx.scene, e.text.layout, e.ui.input`. An item is eligible only when its phase and item blockers are complete and every earlier item in the phase is delivered or independently blocked. The UI family is blocked as a whole on reviewed embedded-asset linking, native-window, GPU-presentation and accessibility primitives (`docs/roadmap.md`, 'Experimental declarative GPU UI'); the `e.ui.*`, `e.gfx.*` and `e.text.*` modules under `docs/tasks/modules/` come first.
+`python scripts/check_widget_plan.py --next` names the single eligible component; it currently reports: `NEXT: P0 P0-02 TypedAction (e.ui.widget)`. An item is eligible only when its phase and item blockers are complete and every earlier item in the phase is delivered or independently blocked. The UI family is blocked as a whole on reviewed embedded-asset linking, native-window, GPU-presentation and accessibility primitives (`docs/roadmap.md`, 'Experimental declarative GPU UI'); the `e.ui.*`, `e.gfx.*` and `e.text.*` modules under `docs/tasks/modules/` come first.
 
 ## Definition of done
 

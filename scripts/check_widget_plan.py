@@ -27,7 +27,9 @@ def validate_blockers(blockers, phase_ids, known_modules, owner, errors):
 def unresolved_blockers(blockers, complete_phases, surfaces, resolved_blockers):
     return [blocker for blocker in blockers
             if (blocker.startswith("P") and blocker not in complete_phases)
-            or (blocker.startswith("e.") and surfaces.get(blocker) != "source")
+            # A module at `partial` has every fence name delivered and helpers
+            # beside them (D805); the fence it promises is what a phase waits on.
+            or (blocker.startswith("e.") and surfaces.get(blocker) not in ("source", "partial"))
             or (not blocker.startswith(("P", "e."))
                 and blocker not in resolved_blockers)]
 

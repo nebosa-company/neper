@@ -1309,12 +1309,44 @@ type Overflow = enum u8 { Visible, Clip, Scroll }
 type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow }
 error Invalid
 
+type ColorRole = enum u8 { Background, Surface, SurfaceVariant, Primary, OnPrimary, Secondary, OnSecondary, Text, TextMuted, Border, Focus, Error, OnError, Selection }
+type TextRole = enum u8 { Body, BodySmall, Title, Heading, Label, Caption, Code }
+type TextStyle = struct { size: f32, line_height: f32, weight: u16, italic: bool }
+type Spacing = struct { xs: f32, sm: f32, md: f32, lg: f32, xl: f32 }
+type Radii = struct { sm: f32, md: f32, lg: f32, full: f32 }
+type Borders = struct { hairline: f32, regular: f32, thick: f32 }
+type Motion = struct { fast_ms: u32, normal_ms: u32, slow_ms: u32, reduced: bool }
+type Metrics = struct { hit_target: f32, control_height: f32, density: f32, focus_ring: f32, focus_offset: f32 }
+type Palette = enum u8 { Light, Dark, HighContrast, Custom }
+type Profile = enum u8 { Neper, DesktopDense, Touch, MaterialLike, CupertinoLike }
+type Direction = enum u8 { LeftToRight, RightToLeft }
+type ThemeTokens = struct { palette: Palette, profile: Profile, direction: Direction, colors: [14]paint.Color, text: [7]TextStyle, spacing: Spacing, radii: Radii, borders: Borders, elevation: [4]f32, motion: Motion, metrics: Metrics }
+type ControlState = struct { hovered: bool, pressed: bool, focused: bool, selected: bool, disabled: bool, read_only: bool, invalid: bool }
+type ControlVariant = enum u8 { Filled, Outlined, Plain }
+type ResolvedControl = struct { background: paint.Color, foreground: paint.Color, border: paint.Color, border_width: f32, focus_ring: f32, opacity: f32, radius: f32 }
+type SizeClass = enum u8 { Compact, Medium, Expanded }
+type Capabilities = struct { hover: bool, fine_pointer: bool, keyboard: bool, touch: bool, pen: bool, resizable: bool, multi_window: bool, insets: geometry.Insets }
+type Adaptation = struct { size: SizeClass, capabilities: Capabilities, profile: Profile }
+
 fn defaults() -> Style
 fn validate(value: *const Style) -> err
+fn color(t: *const ThemeTokens, role: ColorRole) -> paint.Color
+fn text_style(t: *const ThemeTokens, role: TextRole) -> TextStyle
+fn reference(palette: Palette) -> ThemeTokens
+fn validate_theme(t: *const ThemeTokens) -> err
+fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) -> ResolvedControl
+fn size_class(width: f32) -> SizeClass
+fn adapt(t: *const ThemeTokens, a: Adaptation) -> ThemeTokens
 ```
 
 Styles are ordinary immutable values. There is no selector engine, cascading global
 sheet or reflective property lookup in version 1.
+
+Theme tokens (D805, widget plan P0-01) are values too: `reference` makes the Neper
+profile in a palette, `resolve` a control's look under its state, `adapt` a theme for
+a size class, a host's capabilities and a presentation profile, and `validate_theme`
+the guard. A component resolves its look during build from the tokens it is handed;
+nothing is looked up by name.
 
 ### `e.ui.layout`
 

@@ -15411,3 +15411,34 @@ alias breaking resolution of a source-defined `e.mem` member inside another
 library module, and an explain record of a `mem.copy[u8]` instance made
 inside `e.os` landing on another module's call site in the context tool's
 facts; `e.os` keeps to `copy_bytes` and local blocks until they are fixed.
+
+## D805 — The widget catalogue opens: a delivered `partial` module resolves a phase blocker, and P0-01's theme tokens
+
+The widget plan (`docs/widget-plan.json`) held its first phase behind
+`e.gfx.scene`, `e.text.layout` and `e.ui.input` at `surface: source`, and
+each of the three is delivered at `partial` -- every fence name in place,
+helpers beside them, which section 12's lack of visibility makes the only
+way to write a module with private working parts. The checker now takes
+`partial` as delivered for a phase blocker: the fence a phase waits on is
+what a partial module promises and the surface check holds it to. With
+that, P0-01 is written into `e.ui.style`, the proposal's section 6 as
+values: `ThemeTokens` -- fourteen colour roles and seven text roles as
+enums indexing fixed arrays, spacing, radii, borders, four elevation
+levels, motion in milliseconds with the reduced flag, and the control
+metrics (hit target, control height, density, focus ring) -- with the
+palette, presentation profile and text direction it was made for;
+`reference` makes the Neper profile in Light, Dark or HighContrast, and
+`Custom` starts from Light; `validate_theme` is the guard; `resolve` is
+the control-state resolution, a look under the seven states for the
+three fills the catalogue builds from (filled, outlined, plain), pressed
+toward the background, hovered toward the text, selected tinted,
+invalid bordered in the error colour, focused with the ring, disabled
+at half opacity, read-only on the variant surface with muted text;
+`size_class` is compact, medium or expanded at 600 and 840; and `adapt`
+is the capability profile -- touch, or touch without a fine pointer,
+grows the hit target to 44 and the spacing with it, the dense desktop
+profile shrinks both, a compact width tightens spacing, the profile is
+recorded. No selector, cascade or lookup by name. `link/ui_theme` checks
+every rule on both hosts. Not here: Material-like and Cupertino-like
+presentations, which are profiles the reference theme carries as names
+and an extension package would give values.

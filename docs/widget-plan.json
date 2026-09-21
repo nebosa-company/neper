@@ -29,8 +29,13 @@
             "AdaptiveCapabilityProfile",
             "ReferenceTheme"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "ThemeTokens",
+            "ControlStateResolution",
+            "AdaptiveCapabilityProfile",
+            "ReferenceTheme"
+          ],
+          "evidence": "lib/e/ui/style.e (D805): ThemeTokens with fourteen colour roles, seven text roles, spacing, radii, borders, elevation, motion and metrics; resolve for the seven control states over three variants; size_class and adapt for touch, dense desktop and compact; reference in Light, Dark and HighContrast; tests/selfhost/fixtures/link/ui_theme on both hosts"
         },
         {
           "id": "P0-02",

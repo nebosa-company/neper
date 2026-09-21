@@ -1686,6 +1686,13 @@ $uiAppWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $uiAppWritten -ne 'executable written') { throw 'ui_app emission failed' }
 $uiAppOutput = & $uiAppPath
 if ($LASTEXITCODE -ne 0 -or $uiAppOutput -ne 'ui app ok') { throw "the ui app answered wrongly: exit $LASTEXITCODE" }
+# Theme tokens (D805, widget plan P0-01): the reference palettes, role lookups, control
+# state resolution, size classes and host adaptation.
+$uiThemePath = Join-Path $testBuild 'ui-theme-selfhost.exe'
+$uiThemeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_theme\src\main.e') $repo 'x64' 'windows' $uiThemePath
+if ($LASTEXITCODE -ne 0 -or $uiThemeWritten -ne 'executable written') { throw 'ui_theme emission failed' }
+$uiThemeOutput = & $uiThemePath
+if ($LASTEXITCODE -ne 0 -or $uiThemeOutput -ne 'ui theme ok') { throw "the theme tokens answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
