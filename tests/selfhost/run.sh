@@ -2015,6 +2015,12 @@ ui_manipulation_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/ui-manipulation-selfhost"
 ui_manipulation_output=$("$test_build/ui-manipulation-selfhost")
 [ "$ui_manipulation_output" = 'ui manipulation ok' ]
+# Rich tabular data (D845, widget plan P3-01): table, data grid, tree, outline, tree table.
+ui_tabular_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_tabular/src/main.e" "$repo" x64 linux "$test_build/ui-tabular-selfhost")
+[ "$ui_tabular_written" = 'executable written' ]
+chmod +x "$test_build/ui-tabular-selfhost"
+ui_tabular_output=$("$test_build/ui-tabular-selfhost")
+[ "$ui_tabular_output" = 'ui tabular ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

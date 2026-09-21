@@ -16479,3 +16479,33 @@ clipboard with the runtime's own fallback. Adding a gesture member
 made `link/ui_gesture`'s exhaustive switch name it, as the checker
 insists. `link/ui_manipulation` zooms, pans, bounds, drags, drops and
 copies on both hosts.
+
+## D845 — Rich tabular data: a header's sort, reorder and resize are requests, a tree asks only the expanded
+
+P3-01 of the widget plan opens phase 3 (D843 and D846–D850 are the
+algos stream's; the UI stream continues at D851). A `table` is D833's
+lazy viewport of rows under a header row, over a `TableSource` that
+adds what §3.6 asks of tables -- a cell built by row and column -- to
+the count and the stable key. The header does no sorting: a tap on a
+column header reports the column through `sort` and the caller sorts
+its model and says which column is sorted and how; a header dragged
+onto another is D844's drag with the column as its payload and reports
+a `Reorder` of columns; a handle after each header reports a
+`ColumnResize` from the pointer's distance to the header's origin; the
+columns are the caller's slice throughout. A row is a focusable tap
+region keyed by its row key reporting it through `pick`, marked from a
+selection of keys; a table of rows of cells in the tree, with the full
+count, or a grid for `data_grid`, whose cells the source may build as
+fields so the caller edits in place. A `tree` takes a `TreeSource` --
+a parent's child count and a child's key (the root under key 0),
+whether a node has children, and a node's row -- and flattens only the
+expanded nodes' children (the caller keeps `expanded`), so a lazy
+model is asked for nothing it has not opened; each row is indented by
+its depth with a disclosure mark whose tap and whose Left and Right
+report the node through `toggle`, the row itself a tap region reporting
+it through `pick`; tree items in the tree with level, expanded state
+and position among siblings. An `outline` is the tree with a guide
+line down each level's indent; a `tree_table` hangs `CellSource`
+columns off the tree's rows under the same header. Pinned columns wait
+for a horizontal viewport. `link/ui_tabular` sorts, reorders, resizes,
+picks, expands and collapses on both hosts.

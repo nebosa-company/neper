@@ -768,3 +768,467 @@ fn reveal_more(ctx: *void) -> err {
     let r = mem.cast[*Revealing](ctx)
     ret widget.fire_change[bool](r.reveal, true)
 }
+
+// ------------------------------------------------------ rich tabular data (D845, P3-01)
+
+// A column of a table: its title and its width.
+type Column = struct { title: str, width: f32 }
+
+// A table's source: the row count, a row's stable key, and one cell built into
+// the arena (the row by index, the column by index).
+type TableSource = struct { ctx: *void, count: fn(*void) -> usize, key: fn(*void, usize) -> widget.Key, cell: fn(*void, *mem.Arena, usize, usize, *widget.Node) -> err }
+
+// A column resized: which and to what.
+type ColumnResize = struct { column: usize, width: f32 }
+
+// A header's gestures: a tap asks to sort by its column, a drag begins a reorder
+// carrying the column (D844), a drop of another's ends one.
+type HeaderDrag = struct { runtime: *widget.Runtime, column: usize, sort: widget.Change[usize], reorder: widget.Change[Reorder] }
+
+fn header_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let h = mem.cast[*HeaderDrag](ctx)
+    switch g {
+    case .Tap as at:
+        ret widget.fire_change[usize](h.sort, h.column)
+    case .DragStart as at:
+        ret widget.begin_drag(h.runtime, u64(h.column) + 1u64)
+    case .Drop as d:
+        if d.payload == 0u64 || usize(d.payload - 1u64) == h.column { ret ok }
+        ret widget.fire_change[Reorder](h.reorder, Reorder { from: usize(d.payload - 1u64), to: h.column })
+    default:
+        ret ok
+    }
+}
+
+type Resizing = struct { runtime: *widget.Runtime, header: widget.Key, column: usize, low: f32, resize: widget.Change[ColumnResize] }
+
+fn resize_drag(ctx: *void, g: widget.Gesture) -> err {
+    let r = mem.cast[*Resizing](ctx)
+    switch g {
+    case .DragMove as d:
+        let (area, has_area) = keyed_bounds_of(r.runtime, r.header)
+        if !has_area { ret ok }
+        var width = d.position.x - area.x
+        if width < r.low { width = r.low }
+        ret widget.fire_change[ColumnResize](r.resize, ColumnResize { column: r.column, width: width })
+    default:
+        ret ok
+    }
+}
+
+// The header row: a column header a column (keyed `key + 1 + index`), a tap
+// reporting the column through `sort` and a drag of one dropped on another
+// reporting a `Reorder`; the sorted column marked with its direction; a resize
+// handle after each (keyed `key + 64 + index`) whose drag reports the width.
+fn header_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize]) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len)
+    if cells_error != ok { ret (zero, TooLarge) }
+    let (drags, drags_error) = mem.alloc[HeaderDrag](a, columns.len)
+    if drags_error != ok { ret (zero, TooLarge) }
+    let (resizes, resizes_error) = mem.alloc[Resizing](a, columns.len)
+    if resizes_error != ok { ret (zero, TooLarge) }
+    let grip = t.tokens.spacing.xs
+    var i = 0usize
+    while i < columns.len {
+        let header_key = key + 1u64 + u64(i)
+        drags[i] = HeaderDrag { runtime: t.runtime, column: i, sort: sort, reorder: reorder }
+        resizes[i] = Resizing { runtime: t.runtime, header: header_key, column: i, low: 2.0 * t.tokens.spacing.lg, resize: resize }
+        // The title, with the sort direction after the sorted column's.
+        let (title_bytes, title_error) = mem.alloc[u8](a, columns[i].title.len + 2usize)
+        if title_error != ok { ret (zero, TooLarge) }
+        var n = 0usize
+        while n < columns[i].title.len {
+            title_bytes[n] = columns[i].title[n]
+            n += 1usize
+        }
+        if i == sort_column {
+            title_bytes[n] = 32u8
+            title_bytes[n + 1usize] = 94u8
+            if descending { title_bytes[n + 1usize] = 118u8 }
+            n += 2usize
+        }
+        var caption = control.text_options()
+        caption.role = .Label
+        caption.wrap = .None
+        caption.ellipsis = "..."
+        caption.max_lines = 1u32
+        let (title_node, title_node_error) = control.text(a, 0u64, title_bytes[0usize..n], t, caption)
+        if title_node_error != ok { ret (zero, title_node_error) }
+        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+        if body_error != ok { ret (zero, TooLarge) }
+        body[0usize] = title_node
+        // A tap sorts; a drag begins a reorder; a drop on it ends one.
+        var head_style = control.sized_style(columns[i].width - grip, t.tokens.metrics.control_height)
+        head_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
+        let pad = style.Length { Px: t.tokens.spacing.xs }
+        head_style.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+        head_style.overflow = .Clip
+        let (tapped, tapped_error) = mem.alloc[widget.Node](a, 1usize)
+        if tapped_error != ok { ret (zero, TooLarge) }
+        tapped[0usize] = widget.region(header_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[i]), invoke: header_gesture }, gestures: 1u8 | 2u8 | 8u8, enabled: true, focusable: true }, head_style, body[0usize..1usize])
+        var sem: widget.Semantics = zero
+        sem.role = 32u8
+        sem.label = columns[i].title
+        sem.column = u32(i + 1usize)
+        sem.column_count = u32(columns.len)
+        sem.actions = accessibility.ACTION_PRESS
+        if i == sort_column { sem.states = accessibility.STATE_SELECTED }
+        cells[2usize * i] = widget.semantics(0u64, sem, style.defaults(), tapped[0usize..1usize])
+        var handle = control.sized_style(grip, t.tokens.metrics.control_height)
+        handle.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
+        cells[2usize * i + 1usize] = widget.region(key + 64u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&resizes[i]), invoke: resize_drag }, gestures: 2u8, enabled: true, focusable: false }, handle, zero)
+        i += 1usize
+    }
+    let (row_node, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), cells[0usize..2usize * columns.len])
+    var sem: widget.Semantics = zero
+    sem.role = 13u8
+    ret (widget.semantics(0u64, sem, style.defaults(), row_node[0usize..1usize]), ok)
+}
+
+// A row's tap reporting its key.
+type RowPick = struct { key: widget.Key, pick: widget.Change[widget.Key] }
+
+fn row_pick_gesture(ctx: *void, g: widget.Gesture) -> err {
+    if g.tag != .Tap { ret ok }
+    let r = mem.cast[*RowPick](ctx)
+    ret widget.fire_change[widget.Key](r.pick, r.key)
+}
+
+// One row of cells `extent` tall: the cells sized by their columns in a row, the
+// row a focusable tap region keyed by the row's key reporting it through `pick`,
+// selected in the selection colour; a row of cells in the tree at `index`.
+fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], role: u8) -> (widget.Node, err) {
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, columns.len)
+    if boxed_error != ok { ret (zero, TooLarge) }
+    var c = 0usize
+    while c < columns.len {
+        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+        if body_error != ok { ret (zero, TooLarge) }
+        body[0usize] = cells[c]
+        var cell_style = control.sized_style(columns[c].width, extent)
+        cell_style.overflow = .Clip
+        let pad = style.Length { Px: t.tokens.spacing.xs }
+        cell_style.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+        let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+        if framed_error != ok { ret (zero, TooLarge) }
+        framed[0usize] = widget.box(0u64, cell_style, body[0usize..1usize])
+        var cell_sem: widget.Semantics = zero
+        cell_sem.role = 14u8
+        cell_sem.row = u32(index + 1usize)
+        cell_sem.column = u32(c + 1usize)
+        boxed[c] = widget.semantics(0u64, cell_sem, style.defaults(), framed[0usize..1usize])
+        c += 1usize
+    }
+    let (picks, picks_error) = mem.alloc[RowPick](a, 1usize)
+    if picks_error != ok { ret (zero, TooLarge) }
+    picks[0usize] = RowPick { key: row_key, pick: pick }
+    var row_style = style.defaults()
+    row_style.height = style.Length { Px: extent }
+    if selected { row_style.background = paint.Brush { Solid: style.color(t.tokens, .Selection) } }
+    let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
+    if lined_error != ok { ret (zero, TooLarge) }
+    lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), boxed[0usize..columns.len])
+    let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
+    if region_error != ok { ret (zero, TooLarge) }
+    region[0usize] = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[0usize]), invoke: row_pick_gesture }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, lined[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = role
+    sem.row = u32(index + 1usize)
+    sem.row_count = u32(count)
+    if selected { sem.states = accessibility.STATE_SELECTED }
+    ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
+}
+
+// A table: the header row over the source's rows in a lazy viewport (keyed
+// `key`), `extent` each, only those in view built; a header tap reports the
+// column to sort by (the caller sorts its model), a header dragged onto another
+// reports a `Reorder` of columns, a handle dragged reports a `ColumnResize` (the
+// caller keeps the columns); a row tap reports the row's key through `pick` and
+// `selected` marks rows. A table in the tree named `label`.
+fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32) -> (widget.Node, err) {
+    let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 12u8)
+    ret (made, made_error)
+}
+
+// A data grid: the table as a grid in the tree, whose cells the source may build
+// as fields, so the caller edits in place; the same contract otherwise.
+fn data_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32) -> (widget.Node, err) {
+    let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 30u8)
+    ret (made, made_error)
+}
+
+fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, role: u8) -> (widget.Node, err) {
+    if columns.len == 0usize || columns.len > 60usize || extent <= 0.0 { ret (zero, TooLarge) }
+    var width: f32 = 0.0
+    var c = 0usize
+    while c < columns.len {
+        width += columns[c].width
+        c += 1usize
+    }
+    let (head, head_error) = header_row(a, key, t, columns, sort_column, descending, sort, reorder, resize)
+    if head_error != ok { ret (zero, head_error) }
+    let total = source.count(source.ctx)
+    let body_height = height - t.tokens.metrics.control_height
+    let (first, count) = widget.visible_range(offset, body_height, total, extent)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, count)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < count {
+        let index = first + i
+        let row_key = source.key(source.ctx, index)
+        let (cells, cells_error) = mem.alloc[widget.Node](a, columns.len)
+        if cells_error != ok { ret (zero, TooLarge) }
+        c = 0usize
+        while c < columns.len {
+            var built: widget.Node = zero
+            let built_error = source.cell(source.ctx, a, index, c, &built)
+            if built_error != ok { ret (zero, built_error) }
+            cells[c] = built
+            c += 1usize
+        }
+        let (made, made_error) = table_row(a, t, columns, cells, row_key, index, total, extent, is_selected(selected, row_key), pick, 13u8)
+        if made_error != ok { ret (zero, made_error) }
+        rows[i] = made
+        i += 1usize
+    }
+    var view_style = style.defaults()
+    view_style.width = style.Length { Px: width }
+    view_style.height = style.Length { Px: body_height }
+    view_style.overflow = .Clip
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    parts[1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Border), change: change, virtual_first: first, virtual_count: total, virtual_extent: extent }, view_style, rows[0usize..count])
+    let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = role
+    sem.label = label
+    sem.row_count = u32(total)
+    sem.column_count = u32(columns.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
+}
+
+// A cell builder for a tree table's columns past the first: one cell into the
+// arena for a row's key and a column.
+type CellSource = struct { ctx: *void, cell: fn(*void, *mem.Arena, widget.Key, usize, *widget.Node) -> err }
+
+// A tree's source: a parent's child count (the root under key 0), a child's
+// stable key, whether a node has children, and a node's row built into the arena.
+type TreeSource = struct { ctx: *void, count: fn(*void, widget.Key) -> usize, key: fn(*void, widget.Key, usize) -> widget.Key, has_children: fn(*void, widget.Key) -> bool, build: fn(*void, *mem.Arena, widget.Key, *widget.Node) -> err }
+
+// A visible tree row: its key, its depth, its index among its siblings and their
+// count, and whether it may expand.
+type TreeRow = struct { key: widget.Key, depth: usize, index: usize, siblings: usize, branch: bool }
+
+// The visible rows of a tree, depth first, only the expanded nodes' children
+// asked for; the count (at most `out.len`).
+fn flatten(source: TreeSource, expanded: []const widget.Key, parent: widget.Key, depth: usize, out: []TreeRow, at: usize) -> usize {
+    var n = at
+    let count = source.count(source.ctx, parent)
+    var i = 0usize
+    while i < count && n < out.len {
+        let child = source.key(source.ctx, parent, i)
+        let branch = source.has_children(source.ctx, child)
+        out[n] = TreeRow { key: child, depth: depth, index: i, siblings: count, branch: branch }
+        n += 1usize
+        if branch && is_selected(expanded, child) { n = flatten(source, expanded, child, depth + 1usize, out, n) }
+        i += 1usize
+    }
+    ret n
+}
+
+// A tree row's keys: Left collapses (or nothing), Right expands, through `toggle`.
+type TreeKeys = struct { key: widget.Key, open: bool, toggle: widget.Change[widget.Key] }
+
+fn tree_expand(ctx: *void) -> err {
+    let k = mem.cast[*TreeKeys](ctx)
+    if k.open { ret ok }
+    ret widget.fire_change[widget.Key](k.toggle, k.key)
+}
+
+fn tree_collapse(ctx: *void) -> err {
+    let k = mem.cast[*TreeKeys](ctx)
+    if !k.open { ret ok }
+    ret widget.fire_change[widget.Key](k.toggle, k.key)
+}
+
+// The rows of a tree or a tree table: each indented by its depth with a
+// disclosure mark (keyed `key + 1 + 2 * position`, a tap reporting the node through
+// `toggle`) before the content, the row itself (keyed by the node) a focusable tap
+// region reporting the node through `pick`, Left and Right on it collapsing and
+// expanding; a tree item in the tree with its level, expanded state and position.
+fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, columns: []const Column, cells_of: CellSource, extent: f32, width: f32) -> ([]widget.Node, err) {
+    var none: []widget.Node = zero
+    let (visible, visible_error) = mem.alloc[TreeRow](a, 512usize)
+    if visible_error != ok { ret (none, TooLarge) }
+    let count = flatten(source, expanded, 0u64, 0usize, visible, 0usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, count)
+    if rows_error != ok { ret (none, TooLarge) }
+    let (marks, marks_error) = mem.alloc[control.Mark](a, count)
+    if marks_error != ok { ret (none, TooLarge) }
+    let (toggles, toggles_error) = mem.alloc[RowPick](a, count)
+    if toggles_error != ok { ret (none, TooLarge) }
+    let (picks, picks_error) = mem.alloc[RowPick](a, count)
+    if picks_error != ok { ret (none, TooLarge) }
+    let (keys, keys_error) = mem.alloc[TreeKeys](a, count)
+    if keys_error != ok { ret (none, TooLarge) }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize * count)
+    if shortcuts_error != ok { ret (none, TooLarge) }
+    let indent = t.tokens.spacing.lg
+    let mark_size = t.tokens.text[0usize].line_height
+    var i = 0usize
+    while i < count {
+        let entry = visible[i]
+        let open = entry.branch && is_selected(expanded, entry.key)
+        let chosen = is_selected(selected, entry.key)
+        // The disclosure mark, or its blank for a leaf.
+        var mark_node = widget.box(0u64, control.sized_style(mark_size, mark_size), zero)
+        if entry.branch {
+            marks[i] = control.Mark { color: style.color(t.tokens, .Text), expanded: open, arena: a }
+            toggles[i] = RowPick { key: entry.key, pick: toggle }
+            let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)
+            if drawn_error != ok { ret (none, TooLarge) }
+            var no_children: []const widget.Node = zero
+            drawn[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[i]), measure: control.mark_measure, paint: control.mark_paint } }, style: control.sized_style(mark_size, mark_size), children: no_children }
+            mark_node = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(mark_size, mark_size), drawn[0usize..1usize])
+        }
+        // The first column: the indent, the mark and the node's own row.
+        var built: widget.Node = zero
+        let built_error = source.build(source.ctx, a, entry.key, &built)
+        if built_error != ok { ret (none, built_error) }
+        let (lead, lead_error) = mem.alloc[widget.Node](a, 3usize)
+        if lead_error != ok { ret (none, TooLarge) }
+        var indent_style = control.sized_style(f32(entry.depth) * indent, mark_size)
+        if guides && entry.depth > 0usize {
+            // An outline's guide: a hairline down the indent's last step.
+            let (guide, guide_error) = mem.alloc[widget.Node](a, 1usize)
+            if guide_error != ok { ret (none, TooLarge) }
+            var line = style.defaults()
+            line.width = style.Length { Px: t.tokens.borders.hairline }
+            line.height = style.Length { Percent: 100.0 }
+            line.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
+            line.margin = style.EdgeLengths { left: style.Length { Px: f32(entry.depth) * indent - indent * 0.5 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+            guide[0usize] = widget.box(0u64, line, zero)
+            lead[0usize] = widget.box(0u64, indent_style, guide[0usize..1usize])
+        } else {
+            lead[0usize] = widget.box(0u64, indent_style, zero)
+        }
+        lead[1usize] = mark_node
+        lead[2usize] = built
+        let first_cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), lead[0usize..3usize])
+        // The row's cells: the first column's, then the table's, or the one alone.
+        var cell_count = 1usize
+        if columns.len > 0usize { cell_count = columns.len }
+        let (cells, cells_error) = mem.alloc[widget.Node](a, cell_count)
+        if cells_error != ok { ret (none, TooLarge) }
+        cells[0usize] = first_cell
+        var c = 1usize
+        while c < cell_count {
+            var extra: widget.Node = zero
+            let extra_error = cells_of.cell(cells_of.ctx, a, entry.key, c, &extra)
+            if extra_error != ok { ret (none, extra_error) }
+            cells[c] = extra
+            c += 1usize
+        }
+        var whole: [1]Column = zero
+        whole[0usize] = Column { title: "", width: width }
+        var shaped: []const Column = whole[..]
+        if columns.len > 0usize { shaped = columns }
+        picks[i] = RowPick { key: entry.key, pick: pick }
+        let (made, made_error) = table_row(a, t, shaped, cells[0usize..cell_count], entry.key, entry.index, entry.siblings, extent, chosen, pick, 2u8)
+        if made_error != ok { ret (none, made_error) }
+        // The keyboard: Left collapses, Right expands, from the focused row.
+        keys[i] = TreeKeys { key: entry.key, open: open, toggle: toggle }
+        shortcuts[2usize * i] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&keys[i]), invoke: tree_collapse } }
+        shortcuts[2usize * i + 1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&keys[i]), invoke: tree_expand } }
+        let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+        if scoped_error != ok { ret (none, TooLarge) }
+        scoped[0usize] = made
+        var item_sem: widget.Semantics = zero
+        item_sem.role = 29u8
+        item_sem.level = u8(entry.depth + 1usize)
+        item_sem.row = u32(entry.index + 1usize)
+        item_sem.row_count = u32(entry.siblings)
+        if open { item_sem.states = accessibility.STATE_EXPANDED }
+        if chosen { item_sem.states = item_sem.states | accessibility.STATE_SELECTED }
+        let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+        if framed_error != ok { ret (none, TooLarge) }
+        framed[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[2usize * i..2usize * i + 2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), scoped[0usize..1usize])
+        rows[i] = widget.semantics(0u64, item_sem, style.defaults(), framed[0usize..1usize])
+        i += 1usize
+    }
+    ret (rows[0usize..count], ok)
+}
+
+// A tree: the visible rows (the expanded nodes' children only) in a column
+// `width` wide, each a tap region keyed by its node reporting it through `pick`,
+// its disclosure mark and Left/Right reporting it through `toggle` (the caller
+// keeps `expanded`), `selected` marking any number; a tree of tree items in the
+// tree named `label`.
+fn tree(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], extent: f32, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = treed(a, key, t, label, source, expanded, selected, toggle, pick, false, extent, width)
+    ret (made, made_error)
+}
+
+// An outline: a tree with a guide line down each level's indent.
+fn outline(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], extent: f32, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = treed(a, key, t, label, source, expanded, selected, toggle, pick, true, extent, width)
+    ret (made, made_error)
+}
+
+fn no_cell(ctx: *void, a: *mem.Arena, row_key: widget.Key, column: usize, out: *widget.Node) -> err {
+    *out = widget.box(0u64, style.defaults(), zero)
+    ret ok
+}
+
+fn treed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], guides: bool, extent: f32, width: f32) -> (widget.Node, err) {
+    var no_columns: []const Column = zero
+    var none_ctx: *void = zero
+    let (rows, rows_error) = tree_rows(a, key, t, source, expanded, selected, toggle, pick, guides, no_columns, CellSource { ctx: none_ctx, cell: no_cell }, extent, width)
+    if rows_error != ok { ret (zero, rows_error) }
+    var column_style = style.defaults()
+    column_style.width = style.Length { Px: width }
+    let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column_node[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, rows)
+    var sem: widget.Semantics = zero
+    sem.role = 28u8
+    sem.label = label
+    ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
+}
+
+// A tree table: the tree's rows under a header of `columns` (the first column
+// holding the tree, the others' cells built by `cell` for a row's key), the header
+// sorting, reordering and resizing as a table's; a tree in the tree named `label`
+// whose items are rows of cells.
+fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TreeSource, cells_of: CellSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], extent: f32) -> (widget.Node, err) {
+    if columns.len == 0usize { ret (zero, TooLarge) }
+    let (head, head_error) = header_row(a, key, t, columns, sort_column, descending, sort, reorder, resize)
+    if head_error != ok { ret (zero, head_error) }
+    var width: f32 = 0.0
+    var c = 0usize
+    while c < columns.len {
+        width += columns[c].width
+        c += 1usize
+    }
+    let (rows, rows_error) = tree_rows(a, key + 128u64, t, source, expanded, selected, toggle, pick, false, columns, cells_of, extent, width)
+    if rows_error != ok { ret (zero, rows_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows)
+    var column_style = style.defaults()
+    column_style.width = style.Length { Px: width }
+    let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 28u8
+    sem.label = label
+    sem.column_count = u32(columns.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
+}
