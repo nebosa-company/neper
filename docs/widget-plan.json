@@ -9,7 +9,8 @@
     "e.ui.navigation"
   ],
   "resolved_blockers": [
-    "native-shell-api"
+    "native-shell-api",
+    "native-notification-api"
   ],
   "phases": [
     {
@@ -843,8 +844,12 @@
             "NotificationActions",
             "NotificationPermission"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "SystemNotification",
+            "NotificationActions",
+            "NotificationPermission"
+          ],
+          "evidence": "lib/e/os/shell.windows.e, lib/e/os/shell.linux.e and lib/e/ui/app.e (D889): notify/notification_update/notification_remove over the shell's balloon on the app's tray item (Windows, activation and dismissal routed through tray_poll as NoticeSelect and NoticeDismiss) and the desktop daemon through notify-send (Linux, the daemon's id replaced in place, removal Unsupported); notification_permission is the host's answer (Granted, Denied, Unavailable) asked before the first notice; notification_actions_supported is the honest false on both hosts, since neither offers buttons this way; tests/selfhost/fixtures/link/ui_notification on both hosts"
         },
         {
           "id": "P4-04",

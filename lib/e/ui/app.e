@@ -200,7 +200,7 @@ fn frames_of(app: *const App) -> u64 {
 // before one is opened.
 
 type Tray = struct { id: u32, width: u32, height: u32, source: []const u32, composed: []u32, tooltip: str, badge: u32, menu: []const shell.MenuItem, open: bool }
-type TrayActivationKind = enum u8 { Select, Open, Command, Dismissed }
+type TrayActivationKind = enum u8 { Select, Open, Command, Dismissed, NoticeSelect, NoticeDismiss }
 type TrayActivation = struct { kind: TrayActivationKind, command: u32, x: i32, y: i32 }
 
 const BADGE_COLOUR: u32 = 4293281869u32
@@ -314,6 +314,14 @@ fn tray_poll(a: *mem.Arena, t: *Tray) -> (TrayActivation, bool, err) {
             activation.kind = .Open
             ret (activation, true, ok)
         }
+        if event.kind == .NoticeSelect {
+            activation.kind = .NoticeSelect
+            ret (activation, true, ok)
+        }
+        if event.kind == .NoticeDismiss {
+            activation.kind = .NoticeDismiss
+            ret (activation, true, ok)
+        }
         if t.menu.len == 0usize {
             activation.kind = .Dismissed
             ret (activation, true, ok)
@@ -403,4 +411,42 @@ fn reveal_in_file_manager(a: *mem.Arena, path: str) -> err {
 
 fn move_to_trash(a: *mem.Arena, path: str) -> err {
     ret shell.trash(a, path)
+}
+
+// ------------------------------------------------------- notifications (D889)
+//
+// Widget plan P4-03 over `e.os.shell`'s notices: a `Notification` published on
+// the app's tray item (the shell's balloon on Windows; the desktop's daemon on
+// Linux, where the tray is not consulted), updated in place by its id and
+// removed where the host can. Its activation and dismissal come back through
+// `tray_poll` as `.NoticeSelect` and `.NoticeDismiss`. Buttons on a notice are
+// what neither host offers this way, so `notification_actions_supported` is
+// false and the record says so before a caller designs for them; the permission
+// is the host's answer, asked before the first notice.
+
+type Notification = struct { title: str, body: str, silent: bool }
+
+fn notification_permission(a: *mem.Arena) -> shell.NoticePermission {
+    ret shell.notice_permission(a)
+}
+
+fn notification_supported() -> bool {
+    ret shell.capabilities().notices
+}
+
+fn notification_actions_supported() -> bool {
+    ret shell.capabilities().notice_actions
+}
+
+fn notify(a: *mem.Arena, t: *const Tray, n: Notification) -> (u32, err) {
+    let (id, publish_error) = shell.notice_publish(a, t.id, n.title, n.body, n.silent)
+    ret (id, publish_error)
+}
+
+fn notification_update(a: *mem.Arena, t: *const Tray, notice_id: u32, n: Notification) -> err {
+    ret shell.notice_update(a, t.id, notice_id, n.title, n.body, n.silent)
+}
+
+fn notification_remove(a: *mem.Arena, t: *const Tray, notice_id: u32) -> err {
+    ret shell.notice_remove(a, t.id, notice_id)
 }

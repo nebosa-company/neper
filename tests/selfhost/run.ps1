@@ -2847,6 +2847,13 @@ $uiShellOpsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiShellOpsWritten -ne 'executable written') { throw 'ui_shell_ops emission failed' }
 $uiShellOpsOutput = & $uiShellOpsPath
 if ($LASTEXITCODE -ne 0 -or $uiShellOpsOutput -ne 'ui shell ops ok') { throw "the shell file operations answered wrongly: exit $LASTEXITCODE" }
+# Notifications (D889, widget plan P4-03): a silent balloon on a real tray item, updated and
+# taken down, and the refusals around it.
+$uiNotificationPath = Join-Path $testBuild 'ui-notification-selfhost.exe'
+$uiNotificationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_notification\src\main.e') $repo 'x64' 'windows' $uiNotificationPath
+if ($LASTEXITCODE -ne 0 -or $uiNotificationWritten -ne 'executable written') { throw 'ui_notification emission failed' }
+$uiNotificationOutput = & $uiNotificationPath
+if ($LASTEXITCODE -ne 0 -or $uiNotificationOutput -ne 'ui notification ok') { throw "the notifications answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

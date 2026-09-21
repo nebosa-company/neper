@@ -2643,6 +2643,13 @@ rm -rf "$test_build/shell-home"
 mkdir -p "$test_build/shell-home"
 ui_shell_ops_output=$(XDG_DATA_HOME="$test_build/shell-home" NEPER_SHELL_TRASH_HOME="$test_build/shell-home" "$test_build/ui-shell-ops-selfhost")
 [ "$ui_shell_ops_output" = 'ui shell ops ok' ]
+# Notifications (D889, widget plan P4-03): the permission asked first, a notice through the
+# desktop's daemon where there is one, and the refusals either way.
+ui_notification_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_notification/src/main.e" "$repo" x64 linux "$test_build/ui-notification-selfhost")
+[ "$ui_notification_written" = 'executable written' ]
+chmod +x "$test_build/ui-notification-selfhost"
+ui_notification_output=$("$test_build/ui-notification-selfhost")
+[ "$ui_notification_output" = 'ui notification ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

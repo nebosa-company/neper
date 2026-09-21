@@ -19,10 +19,11 @@ error Invalid
 error NotFound
 error Failed
 
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
-type TrayEventKind = enum u8 { Select, Context, Open }
+type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
+type NoticePermission = enum u8 { Granted, Denied, Unavailable }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
@@ -43,6 +44,12 @@ const WM_LBUTTONUP: u32 = 514u32
 const WM_LBUTTONDBLCLK: u32 = 515u32
 const WM_RBUTTONUP: u32 = 517u32
 const PM_REMOVE: u32 = 1u32
+const NIN_BALLOONHIDE: u32 = 1027u32
+const NIN_BALLOONTIMEOUT: u32 = 1028u32
+const NIN_BALLOONUSERCLICK: u32 = 1029u32
+const NIF_INFO: u32 = 16u32
+const NIIF_INFO: u32 = 1u32
+const NIIF_NOSOUND: u32 = 16u32
 const NIM_ADD: u32 = 0u32
 const NIM_MODIFY: u32 = 1u32
 const NIM_DELETE: u32 = 2u32
@@ -149,7 +156,7 @@ extern fn raw_file_operation(operation: *FileOperation) -> i32
 extern fn raw_co_initialize(reserved: usize, model: u32) -> i32
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: true }
 }
 
 // UTF-16 with a terminator, in the arena; the pages are touched first because the
@@ -196,7 +203,15 @@ fn shell_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) ->
             if mouse == WM_LBUTTONDBLCLK {
                 event.kind = .Open
             } else {
-                ret 0isize
+                if mouse == NIN_BALLOONUSERCLICK {
+                    event.kind = .NoticeSelect
+                } else {
+                    if mouse == NIN_BALLOONHIDE || mouse == NIN_BALLOONTIMEOUT {
+                        event.kind = .NoticeDismiss
+                    } else {
+                        ret 0isize
+                    }
+                }
             }
         }
     }
@@ -765,5 +780,77 @@ fn jump_list_clear(a: *mem.Arena) -> err {
     let deleted = call_object(list, LIST_DELETE, 0usize)
     com_release(list)
     if deleted < 0i32 { ret Failed }
+    ret ok
+}
+
+// ------------------------------------------------------------------ notices
+//
+// A notification (D889, widget plan `native-notification-api`) is the shell's
+// balloon on a tray item the caller holds: `Shell_NotifyIconW` with `NIF_INFO`
+// on the item's id, which the shell shows as a toast and keeps in the action
+// centre; its activation and dismissal arrive at the hidden window as tray events
+// of the item. A balloon has no permission to ask for and no buttons, so
+// `notice_permission` is `Granted` and `notice_actions` is false. ponytail: the
+// balloon; WinRT toasts carry buttons and need an AppUserModelID and a Start menu
+// shortcut, which a Win32 program running from its build directory has not got.
+
+fn notice_permission(a: *mem.Arena) -> NoticePermission {
+    ret .Granted
+}
+
+fn copy_units(out: []u16, units: []const u16, limit: usize) {
+    var count = 0usize
+    while count < limit && units[count] != 0u16 { count += 1usize }
+    if count == limit && units[limit - 1usize] >= 55296u16 && units[limit - 1usize] < 56320u16 { count = limit - 1usize }
+    var at = 0usize
+    while at < count {
+        out[at] = units[at]
+        at += 1usize
+    }
+    out[count] = 0u16
+}
+
+fn balloon(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bool) -> err {
+    if tray_slot(tray_id) == TRAY_TABLE { ret NotFound }
+    let (title_units, title_error) = widen(a, title)
+    if title_error != ok { ret title_error }
+    let (body_units, body_error) = widen(a, body)
+    if body_error != ok { ret body_error }
+    var data: NotifyIconData = zero
+    data.size = NOTIFY_ICON_DATA_SIZE
+    data.window = shell_window
+    data.id = tray_id
+    data.flags = NIF_INFO
+    data.info_flags = NIIF_INFO
+    if silent { data.info_flags = data.info_flags | NIIF_NOSOUND }
+    copy_units(data.info_title[..], title_units, 63usize)
+    copy_units(data.info[..], body_units, 255usize)
+    if raw_notify_icon(NIM_MODIFY, &data) == 0i32 { ret Failed }
+    ret ok
+}
+
+// The notice's id is the tray item's: one balloon per item at a time, a second
+// replacing the first.
+fn notice_publish(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bool) -> (u32, err) {
+    if body.len == 0usize { ret (0u32, Invalid) }
+    let shown = balloon(a, tray_id, title, body, silent)
+    if shown != ok { ret (0u32, shown) }
+    ret (tray_id, ok)
+}
+
+fn notice_update(a: *mem.Arena, tray_id: u32, notice_id: u32, title: str, body: str, silent: bool) -> err {
+    if body.len == 0usize { ret Invalid }
+    ret balloon(a, tray_id, title, body, silent)
+}
+
+// An empty balloon text takes the shown one down.
+fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err {
+    if tray_slot(tray_id) == TRAY_TABLE { ret NotFound }
+    var data: NotifyIconData = zero
+    data.size = NOTIFY_ICON_DATA_SIZE
+    data.window = shell_window
+    data.id = tray_id
+    data.flags = NIF_INFO
+    if raw_notify_icon(NIM_MODIFY, &data) == 0i32 { ret Failed }
     ret ok
 }

@@ -17146,3 +17146,30 @@ is the record a caller reads before offering a verb. `link/ui_shell_ops`
 checks the refusals on both hosts and, under the runner's scratch
 data home on Linux, that a file the app trashes is gone from where it
 was and present in the trash.
+
+## D889 — A notice is the shell's balloon or the desktop's daemon, and buttons are nobody's
+
+P4-03 of the widget plan, and the `native-notification-api` primitive
+it waits on, which lives in `e.os.shell` beside the tray it rides on
+rather than in a module of its own. On Windows a notice is
+`Shell_NotifyIconW` with `NIF_INFO` on a tray item the caller holds:
+the shell shows it as a toast and keeps it in the action centre, its
+click and its dismissal come back through the hidden window as the
+item's `NoticeSelect` and `NoticeDismiss` events, an empty text takes
+it down, and there is no permission to ask for. WinRT toasts would
+carry buttons, but need an AppUserModelID and a Start menu shortcut a
+program running from its build directory has not got, so the balloon
+is the honest primitive and `notice_actions` is false. On Linux the
+service is `org.freedesktop.Notifications` over the session bus, which
+the library does not speak; `notify-send` does, prints the daemon's id
+under `--print-id` and replaces by it under `--replace-id`, so a notice
+is one spawn with its output on a pipe; closing and buttons are the
+daemon's calls the tool does not expose without blocking, so removal
+is `Unsupported` there and the permission is `Granted` when the tool
+and a session bus exist, `Unavailable` otherwise. `e.ui.app` wraps the
+three on its `Tray`, and `tray_poll` routes the two events. The first
+Linux build found the ownership rule at the pipe: a `File` handed to
+`SpawnOptions` is moved, and is closed from there, not from the name
+it had. `link/ui_notification` publishes, updates and removes a silent
+notice on Windows, publishes and updates one through WSL's daemon on
+Linux, and checks the refusals on both.

@@ -3807,9 +3807,10 @@ platform delivery requirements and escape limitations.
 ### `e.os.shell`
 
 ```neper
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool }
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
-type TrayEventKind = enum u8 { Select, Context, Open }
+type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
+type NoticePermission = enum u8 { Granted, Denied, Unavailable }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
@@ -3831,6 +3832,10 @@ fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed
 fn taskbar_overlay(a: *mem.Arena, w: os.Window, icon: Icon, description: str) -> err
 fn jump_list(a: *mem.Arena, tasks: []const JumpTask) -> err
 fn jump_list_clear(a: *mem.Arena) -> err
+fn notice_permission(a: *mem.Arena) -> NoticePermission
+fn notice_publish(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bool) -> (u32, err)
+fn notice_update(a: *mem.Arena, tray_id: u32, notice_id: u32, title: str, body: str, silent: bool) -> err
+fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err
 ```
 
 The host's shell services (D885, the widget plan's `native-shell-api`), written per
@@ -3853,6 +3858,16 @@ spoken description, cleared by an icon of no width; `jump_list` the application'
 tasks replaced whole, each a title, a program, its arguments and a description, and
 `jump_list_clear` the list removed. Linux has no desktop standard for any of the
 three, so they are `Unsupported` and the record says so.
+
+A notice (D889, the plan's `native-notification-api`) is the shell's balloon on a
+tray item the caller holds on Windows -- shown as a toast, kept in the action
+centre, its activation and dismissal arriving as the item's `NoticeSelect` and
+`NoticeDismiss` tray events, taken down by `notice_remove` -- and the desktop's
+notification daemon through `notify-send` on Linux, where the tray id is ignored,
+`notice_publish` answers the daemon's id, `notice_update` replaces by it and
+`notice_remove` is `Unsupported`. `notice_permission` is `Granted` where nothing
+gates a notice and `Unavailable` where the tool or the session bus is missing; a
+notice with no body is `Invalid`; buttons are `notice_actions`, false on both.
 
 ### `e.cancel`
 
@@ -6408,7 +6423,8 @@ fn stop(app: *App)
 fn close(app: *App) -> err
 fn frames_of(app: *const App) -> u64
 type Tray = struct { id: u32, width: u32, height: u32, source: []const u32, composed: []u32, tooltip: str, badge: u32, menu: []const shell.MenuItem, open: bool }
-type TrayActivationKind = enum u8 { Select, Open, Command, Dismissed }
+type TrayActivationKind = enum u8 { Select, Open, Command, Dismissed, NoticeSelect, NoticeDismiss }
+type Notification = struct { title: str, body: str, silent: bool }
 type TrayActivation = struct { kind: TrayActivationKind, command: u32, x: i32, y: i32 }
 fn tray_supported() -> bool
 fn tray_open(a: *mem.Arena, id: u32, icon: shell.Icon, tooltip: str) -> (Tray, err)
@@ -6428,6 +6444,12 @@ fn shell_capabilities() -> shell.Capabilities
 fn open_uri(a: *mem.Arena, uri: str) -> err
 fn reveal_in_file_manager(a: *mem.Arena, path: str) -> err
 fn move_to_trash(a: *mem.Arena, path: str) -> err
+fn notification_permission(a: *mem.Arena) -> shell.NoticePermission
+fn notification_supported() -> bool
+fn notification_actions_supported() -> bool
+fn notify(a: *mem.Arena, t: *const Tray, n: Notification) -> (u32, err)
+fn notification_update(a: *mem.Arena, t: *const Tray, notice_id: u32, n: Notification) -> err
+fn notification_remove(a: *mem.Arena, t: *const Tray, notice_id: u32) -> err
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,
