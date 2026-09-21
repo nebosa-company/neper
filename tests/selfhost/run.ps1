@@ -1749,6 +1749,13 @@ $uiContentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiContentWritten -ne 'executable written') { throw 'ui_content emission failed' }
 $uiContentOutput = & $uiContentPath
 if ($LASTEXITCODE -ne 0 -or $uiContentOutput -ne 'ui content ok') { throw "the content controls answered wrongly: exit $LASTEXITCODE" }
+# Surfaces (D814, widget plan P1-02): card, panel, group box, divider, badge, avatar
+# and placeholder under a theme, with borders, radii and shadows painted.
+$uiSurfacePath = Join-Path $testBuild 'ui-surface-selfhost.exe'
+$uiSurfaceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_surface\src\main.e') $repo 'x64' 'windows' $uiSurfacePath
+if ($LASTEXITCODE -ne 0 -or $uiSurfaceWritten -ne 'executable written') { throw 'ui_surface emission failed' }
+$uiSurfaceOutput = & $uiSurfacePath
+if ($LASTEXITCODE -ne 0 -or $uiSurfaceOutput -ne 'ui surface ok') { throw "the surfaces answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

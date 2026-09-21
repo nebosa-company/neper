@@ -1685,6 +1685,13 @@ ui_content_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-content-selfhost"
 ui_content_output=$("$test_build/ui-content-selfhost")
 [ "$ui_content_output" = 'ui content ok' ]
+# Surfaces (D814, widget plan P1-02): card, panel, group box, divider, badge, avatar
+# and placeholder under a theme, with borders, radii and shadows painted.
+ui_surface_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_surface/src/main.e" "$repo" x64 linux "$test_build/ui-surface-selfhost")
+[ "$ui_surface_written" = 'executable written' ]
+chmod +x "$test_build/ui-surface-selfhost"
+ui_surface_output=$("$test_build/ui-surface-selfhost")
+[ "$ui_surface_output" = 'ui surface ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

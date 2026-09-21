@@ -194,8 +194,17 @@
             "Avatar",
             "Placeholder"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Surface",
+            "Panel",
+            "Card",
+            "GroupBox",
+            "Divider",
+            "Badge",
+            "Avatar",
+            "Placeholder"
+          ],
+          "evidence": "lib/e/ui/control.e and lib/e/ui/style.e (D814): Style gained border, radius and shadow which the widget runtime paints (rounded fills and clips, an inside stroke, an offset shadow); surface/panel/card/group_box/divider/badge/avatar/placeholder as functions under a Theme; tests/selfhost/fixtures/link/ui_surface on both hosts"
         },
         {
           "id": "P1-03",

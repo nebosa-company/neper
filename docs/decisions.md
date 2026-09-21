@@ -15649,3 +15649,29 @@ caller's custom paint with a label. The square-glyph font has no space,
 so `link/ui_content` wraps by character; it checks the roles' sizes, the
 line budget, the read-only selection, the link, the images and a
 rendered canvas on both hosts.
+
+## D814 — Borders, radii and shadows are style, painted by the runtime; the surface controls
+
+P1-02 of the widget plan. The proposal's section 8 asks `e.ui.style` for
+borders and corner radii, and a surface needs a shadow too; all three are
+fields of `Style` rather than paint the controls do themselves, so every
+box can have them and the runtime paints them in one place: the shadow
+is the background's shape filled in its colour at its offset under
+everything, the background and a clip are rounded by the radius, and the
+border is stroked inside the bounds on the rounded shape -- a closed path
+of lines and quadratic corners, since the scene's paths are what the
+rasteriser fills and strokes. The surface controls are that style under
+the theme: `surface_style` turns a background role, a border, a radius,
+an elevation level and padding into a style, and the elevation level
+maps to the theme's shadow strengths (D805 gave them as opacities) with
+the shadow falling two pixels a level; `panel`, `card`, `group_box`,
+`divider`, `badge`, `avatar` and `placeholder` are the composites the
+proposal calls cheap, with what each is to the tree said through a
+semantics node -- a divider hidden, a badge a status, an avatar an image,
+a placeholder busy. Stroking a border at the left edge of the surface
+put an edge a rounding short of column zero and the rasteriser's column
+index trapped on it; a row's span is now kept inside the surface, which
+also covers an edge clipped in y whose extrapolated x left the surface.
+`link/ui_surface` checks the layout, the tree and the painted pixels --
+the surface colour inside a card, the shadow two pixels below it, the
+avatar's corner the page and its centre the image -- on both hosts.

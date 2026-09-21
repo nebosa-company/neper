@@ -1306,7 +1306,9 @@ type EdgeLengths = struct { left: Length, top: Length, right: Length, bottom: Le
 type Display = enum u8 { Flex, Grid, Stack, None }
 type Position = enum u8 { Flow, Absolute }
 type Overflow = enum u8 { Visible, Clip, Scroll }
-type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow }
+type Border = struct { width: f32, color: paint.Color }
+type Shadow = struct { offset: geometry.Point, color: paint.Color }
+type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow, border: Border, radius: f32, shadow: Shadow }
 error Invalid
 
 type ColorRole = enum u8 { Background, Surface, SurfaceVariant, Primary, OnPrimary, Secondary, OnSecondary, Text, TextMuted, Border, Focus, Error, OnError, Selection }
@@ -1341,6 +1343,11 @@ fn adapt(t: *const ThemeTokens, a: Adaptation) -> ThemeTokens
 
 Styles are ordinary immutable values. There is no selector engine, cascading global
 sheet or reflective property lookup in version 1.
+
+A style's border, radius and shadow (D814) are painted by the widget runtime: the
+shadow is the background's shape filled in its colour at its offset under everything,
+the background and a clip are rounded by the radius, and the border is stroked inside
+the bounds on the rounded shape.
 
 Theme tokens (D805, widget plan P0-01) are values too: `reference` makes the Neper
 profile in a palette, `resolve` a control's look under its state, `adapt` a theme for
@@ -3588,6 +3595,7 @@ and its state in a `Gallery` the caller owns.
 type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str }
 type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str }
 type Span = struct { value: str, role: style.TextRole, color: style.ColorRole, link: widget.Submit }
+type SurfaceOptions = struct { background: style.ColorRole, bordered: bool, radius: f32, elevation: u8, padding: f32 }
 error TooLarge
 
 fn text_options() -> TextOptions
@@ -3598,6 +3606,16 @@ fn rich_text(a: *mem.Arena, key: widget.Key, spans: []const Span, t: *const Them
 fn icon(a: *mem.Arena, key: widget.Key, texture: scene.TextureId, size: f32, label: str) -> (widget.Node, err)
 fn image(a: *mem.Arena, key: widget.Key, texture: scene.TextureId, width: f32, height: f32, fit: widget.Fit, label: str) -> (widget.Node, err)
 fn canvas(a: *mem.Arena, key: widget.Key, custom: widget.Custom, label: str) -> (widget.Node, err)
+fn surface_options(t: *const Theme) -> SurfaceOptions
+fn surface_style(t: *const Theme, options: SurfaceOptions) -> style.Style
+fn surface(a: *mem.Arena, key: widget.Key, t: *const Theme, options: SurfaceOptions, children: []const widget.Node) -> (widget.Node, err)
+fn panel(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widget.Node) -> (widget.Node, err)
+fn card(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widget.Node) -> (widget.Node, err)
+fn group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, children: []const widget.Node) -> (widget.Node, err)
+fn divider(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis, length: f32) -> (widget.Node, err)
+fn badge(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str) -> (widget.Node, err)
+fn avatar(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, size: f32, label: str) -> (widget.Node, err)
+fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node
@@ -3614,6 +3632,15 @@ sit on one line until a span-aware layout wraps them); `icon` and `image` carry 
 semantic label, an unlabelled image leaving the tree; `canvas` is the caller's
 custom paint with a label. An icon is not tinted until the renderer has an image
 brush.
+
+Surfaces (D814, P1-02): `surface_style` turns a `SurfaceOptions` -- a background
+role, a border, a radius, an elevation level (the theme's shadow strength, falling
+two pixels a level) and padding -- into a style, and `surface` is a box with it;
+`panel` is the variant surface bordered and square, `card` the surface raised one
+level, rounded and hairline-bordered; `group_box` labels a bordered surface as a
+group; `divider` is a hairline the tree leaves out; `badge` is a status pill in the
+primary colour; `avatar` clips an image to a circle; `placeholder` is a rounded block
+that is busy in the tree.
 
 ### `e.ui.app`
 

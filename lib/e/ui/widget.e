@@ -956,9 +956,19 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         layered = true
     }
     var clipped = node.style.overflow != .Visible
+    let radius = node.style.radius
+    // The shadow lies under everything, the background's shape at its offset.
+    if node.style.shadow.color.alpha > 0.0 {
+        let shifted = geometry.Rect { x: bounds.x + node.style.shadow.offset.x, y: bounds.y + node.style.shadow.offset.y, width: bounds.width, height: bounds.height }
+        try fill_shape(a, b, shifted, radius, paint.Brush { Solid: node.style.shadow.color })
+    }
     if clipped {
         try scene.push(b, save)
-        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: bounds } })
+        if radius > 0.0 {
+            try scene.push(b, scene.Command { Clip: scene.Clip { Rounded: rounded(bounds, radius) } })
+        } else {
+            try scene.push(b, scene.Command { Clip: scene.Clip { Rect: bounds } })
+        }
     }
     let background = node.style.background
     var paint_background = true
@@ -970,7 +980,15 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     case .Radial as radial:
         paint_background = true
     }
-    if paint_background { try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: bounds, brush: background } }) }
+    if paint_background { try fill_shape(a, b, bounds, radius, background) }
+    // The border is stroked inside the bounds, on the rounded shape when there is one.
+    if node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
+        let half = node.style.border.width * 0.5
+        let inset = geometry.Rect { x: bounds.x + half, y: bounds.y + half, width: max_f(bounds.width - node.style.border.width, 0.0), height: max_f(bounds.height - node.style.border.width, 0.0) }
+        let (outline, outline_error) = rounded_path(a, inset, max_f(radius - half, 0.0))
+        if outline_error != ok { ret TooLarge }
+        try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: outline, brush: paint.Brush { Solid: node.style.border.color }, stroke: paint.Stroke { width: node.style.border.width, cap: .Butt, join: .Miter, miter_limit: 4.0 } } })
+    }
     switch node.kind {
     case .Text as t:
         if t.style.fonts.len == 0usize { ret finish_place(b, clipped, layered) }
@@ -1220,6 +1238,50 @@ fn overlay_at(s: *State, p: geometry.Point) -> (usize, bool, bool) {
         if e.live && e.modal { ret (element, false, true) }
     }
     ret (0usize, false, false)
+}
+
+fn rounded(r: geometry.Rect, radius: f32) -> geometry.RRect {
+    var c = radius
+    if c > r.width * 0.5 { c = r.width * 0.5 }
+    if c > r.height * 0.5 { c = r.height * 0.5 }
+    let corner = geometry.Radius { x: c, y: c }
+    ret geometry.RRect { rect: r, top_left: corner, top_right: corner, bottom_right: corner, bottom_left: corner }
+}
+
+// A rectangle with rounded corners as a closed path of lines and quadratic corners.
+fn trace_rounded(builder: *geometry.PathBuilder, r: geometry.Rect, c: f32) -> err {
+    let x0 = r.x
+    let y0 = r.y
+    let x1 = r.x + r.width
+    let y1 = r.y + r.height
+    try geometry.move_to(builder, geometry.Point { x: x0 + c, y: y0 })
+    try geometry.line_to(builder, geometry.Point { x: x1 - c, y: y0 })
+    if c > 0.0 { try geometry.quad_to(builder, geometry.Point { x: x1, y: y0 }, geometry.Point { x: x1, y: y0 + c }) }
+    try geometry.line_to(builder, geometry.Point { x: x1, y: y1 - c })
+    if c > 0.0 { try geometry.quad_to(builder, geometry.Point { x: x1, y: y1 }, geometry.Point { x: x1 - c, y: y1 }) }
+    try geometry.line_to(builder, geometry.Point { x: x0 + c, y: y1 })
+    if c > 0.0 { try geometry.quad_to(builder, geometry.Point { x: x0, y: y1 }, geometry.Point { x: x0, y: y1 - c }) }
+    try geometry.line_to(builder, geometry.Point { x: x0, y: y0 + c })
+    if c > 0.0 { try geometry.quad_to(builder, geometry.Point { x: x0, y: y0 }, geometry.Point { x: x0 + c, y: y0 }) }
+    ret geometry.close_path(builder)
+}
+
+fn rounded_path(a: *mem.Arena, r: geometry.Rect, radius: f32) -> (geometry.Path, err) {
+    let rr = rounded(r, radius)
+    let (pb, pb_error) = geometry.path_builder(a, 10usize, 16usize)
+    if pb_error != ok { ret (zero, TooLarge) }
+    var builder = pb
+    let traced = trace_rounded(&builder, r, rr.top_left.x)
+    if traced != ok { ret (zero, TooLarge) }
+    ret (geometry.finish(&builder), ok)
+}
+
+// A rectangle filled, rounded when it has a radius.
+fn fill_shape(a: *mem.Arena, b: *scene.Builder, r: geometry.Rect, radius: f32, brush: paint.Brush) -> err {
+    if radius <= 0.0 { ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: r, brush: brush } }) }
+    let (outline, outline_error) = rounded_path(a, r, radius)
+    if outline_error != ok { ret TooLarge }
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: outline, brush: brush } })
 }
 
 // The Restores that close what `place` opened.

@@ -13,7 +13,12 @@ type EdgeLengths = struct { left: Length, top: Length, right: Length, bottom: Le
 type Display = enum u8 { Flex, Grid, Stack, None }
 type Position = enum u8 { Flow, Absolute }
 type Overflow = enum u8 { Visible, Clip, Scroll }
-type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow }
+// A border is painted inside the bounds; a radius rounds the background, the border
+// and a clip alike; a shadow is the background's shape filled in its colour at its
+// offset, under everything (D814).
+type Border = struct { width: f32, color: paint.Color }
+type Shadow = struct { offset: geometry.Point, color: paint.Color }
+type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow, border: Border, radius: f32, shadow: Shadow }
 error Invalid
 
 fn finite(v: f32) -> bool {
@@ -77,6 +82,9 @@ fn defaults() -> Style {
         background: paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) },
         opacity: 1.0,
         overflow: .Visible,
+        border: Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) },
+        radius: 0.0,
+        shadow: Shadow { offset: geometry.Point { x: 0.0, y: 0.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.0) },
     }
 }
 
@@ -93,6 +101,8 @@ fn validate(value: *const Style) -> err {
     if has_min_h && has_max_h && min_h > max_h { ret Invalid }
     if !finite(value.opacity) || value.opacity < 0.0 || value.opacity > 1.0 { ret Invalid }
     if paint.validate(&value.background) != ok { ret Invalid }
+    if !finite(value.border.width) || value.border.width < 0.0 || !finite(value.radius) || value.radius < 0.0 { ret Invalid }
+    if !finite(value.shadow.offset.x) || !finite(value.shadow.offset.y) { ret Invalid }
     ret ok
 }
 

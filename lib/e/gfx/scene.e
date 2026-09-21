@@ -947,6 +947,12 @@ fn accumulate_edge(acc: []f32, width: usize, height: usize, e: Edge) {
             xa = xnext
             xb = x
         }
+        // A row's span is kept inside the surface: an edge clipped in y, or one a
+        // rounding away from the left edge, would otherwise reach a column before 0.
+        if xa < 0.0 { xa = 0.0 }
+        if xb < 0.0 { xb = 0.0 }
+        if xa > limit { xa = limit }
+        if xb > limit { xb = limit }
         let xa_floor = math.floor[f32](xa)
         let xa_i = usize(xa_floor)
         var xb_ceil = math.ceil[f32](xb)

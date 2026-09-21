@@ -153,3 +153,155 @@ fn canvas(a: *mem.Arena, key: widget.Key, custom: widget.Custom, label: str) -> 
     let (node, node_error) = labelled(a, key, ROLE_IMAGE, label, widget.Node { key: 0u64, kind: widget.Kind { Custom: custom }, style: style.defaults(), children: none })
     ret (node, node_error)
 }
+
+// ------------------------------------------------------- surfaces (D814, P1-02)
+
+// A surface's look: its background role, whether it is bordered, its corner radius,
+// its elevation level (0 for none, up to 3, the theme's shadow strengths), padding.
+type SurfaceOptions = struct { background: style.ColorRole, bordered: bool, radius: f32, elevation: u8, padding: f32 }
+
+fn surface_options(t: *const Theme) -> SurfaceOptions {
+    ret SurfaceOptions { background: .Surface, bordered: false, radius: 0.0, elevation: 0u8, padding: t.tokens.spacing.md }
+}
+
+fn surface_style(t: *const Theme, options: SurfaceOptions) -> style.Style {
+    var s = style.defaults()
+    s.background = paint.Brush { Solid: style.color(t.tokens, options.background) }
+    if options.bordered { s.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Border) } }
+    s.radius = options.radius
+    if options.elevation != 0u8 {
+        var level = usize(options.elevation)
+        if level > 3usize { level = 3usize }
+        // The elevation level is the shadow's strength; it falls two pixels a level.
+        s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(level) * 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[level]) }
+    }
+    let pad = style.Length { Px: options.padding }
+    s.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    if options.radius > 0.0 { s.overflow = .Clip }
+    ret s
+}
+
+// A surface: a box with the look, its children in a column; a group in the tree.
+fn surface(a: *mem.Arena, key: widget.Key, t: *const Theme, options: SurfaceOptions, children: []const widget.Node) -> (widget.Node, err) {
+    ret (widget.box(key, surface_style(t, options), children), ok)
+}
+
+// A panel: the variant surface, bordered, square.
+fn panel(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widget.Node) -> (widget.Node, err) {
+    var options = surface_options(t)
+    options.background = .SurfaceVariant
+    options.bordered = true
+    ret (widget.box(key, surface_style(t, options), children), ok)
+}
+
+// A card: the surface raised one level, rounded, with a hairline border.
+fn card(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widget.Node) -> (widget.Node, err) {
+    var options = surface_options(t)
+    options.radius = t.tokens.radii.md
+    options.elevation = 1u8
+    let (made, made_error) = surface(a, key, t, options, children)
+    if made_error != ok { ret (zero, made_error) }
+    var raised = made
+    raised.style.border = style.Border { width: t.tokens.borders.hairline, color: style.color(t.tokens, .Border) }
+    ret (raised, ok)
+}
+
+// A group box: a label above a bordered surface, a labelled group in the tree.
+fn group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, children: []const widget.Node) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var caption = text_options()
+    caption.role = .Label
+    let (heading, heading_error) = text_node(a, 0u64, label, t, caption)
+    if heading_error != ok { ret (zero, heading_error) }
+    parts[0usize] = heading
+    var options = surface_options(t)
+    options.bordered = true
+    options.radius = t.tokens.radii.sm
+    parts[1usize] = widget.box(0u64, surface_style(t, options), children)
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A divider: a hairline in the border colour across the axis, `length` long (0 to
+// fill), a decoration the tree leaves out.
+fn divider(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis, length: f32) -> (widget.Node, err) {
+    var s = style.defaults()
+    s.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
+    let thick = style.Length { Px: t.tokens.borders.hairline }
+    var span: style.Length = style.Length { Percent: 100.0 }
+    if length > 0.0 { span = style.Length { Px: length } }
+    if axis == .Horizontal {
+        s.height = thick
+        s.width = span
+    } else {
+        s.width = thick
+        s.height = span
+    }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.box(0u64, s, zero)
+    var sem: widget.Semantics = zero
+    sem.hidden = true
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// A badge: a small pill in the primary colour with a caption, a status in the tree.
+fn badge(a: *mem.Arena, key: widget.Key, t: *const Theme, value: str) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .Caption
+    caption.color = .OnPrimary
+    let (label, label_error) = text_node(a, 0u64, value, t, caption)
+    if label_error != ok { ret (zero, label_error) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = label
+    var options = surface_options(t)
+    options.background = .Primary
+    options.radius = t.tokens.radii.full
+    options.padding = t.tokens.spacing.xs
+    let (pill, pill_error) = mem.alloc[widget.Node](a, 1usize)
+    if pill_error != ok { ret (zero, TooLarge) }
+    pill[0usize] = widget.box(0u64, surface_style(t, options), body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 26u8
+    sem.label = value
+    ret (widget.semantics(key, sem, style.defaults(), pill[0usize..1usize]), ok)
+}
+
+// An avatar: an image clipped to a circle of `size`, an image with a label in the tree.
+fn avatar(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, size: f32, label: str) -> (widget.Node, err) {
+    let (picture, picture_error) = mem.alloc[widget.Node](a, 1usize)
+    if picture_error != ok { ret (zero, TooLarge) }
+    picture[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: .Cover }, sized_style(size, size))
+    var ring = sized_style(size, size)
+    ring.radius = size * 0.5
+    ring.overflow = .Clip
+    ring.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
+    let (disc, disc_error) = mem.alloc[widget.Node](a, 1usize)
+    if disc_error != ok { ret (zero, TooLarge) }
+    disc[0usize] = widget.box(0u64, ring, picture[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = ROLE_IMAGE
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), disc[0usize..1usize]), ok)
+}
+
+// A placeholder: a rounded block in the variant surface colour standing in for
+// content to come, busy in the tree.
+fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32) -> (widget.Node, err) {
+    var block = sized_style(width, height)
+    block.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
+    block.radius = t.tokens.radii.sm
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.box(0u64, block, zero)
+    var sem: widget.Semantics = zero
+    sem.states = accessibility.STATE_BUSY
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
