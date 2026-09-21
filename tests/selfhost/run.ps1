@@ -1856,6 +1856,13 @@ $uiNumericWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiNumericWritten -ne 'executable written') { throw 'ui_numeric emission failed' }
 $uiNumericOutput = & $uiNumericPath
 if ($LASTEXITCODE -ne 0 -or $uiNumericOutput -ne 'ui numeric ok') { throw "the numeric controls answered wrongly: exit $LASTEXITCODE" }
+# Advanced text and choice input (D831, widget plan P2-03): formatted field,
+# autocomplete, combo box, token field, picker sheet, multi-select list.
+$uiEntryPath = Join-Path $testBuild 'ui-entry-selfhost.exe'
+$uiEntryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_entry\src\main.e') $repo 'x64' 'windows' $uiEntryPath
+if ($LASTEXITCODE -ne 0 -or $uiEntryWritten -ne 'executable written') { throw 'ui_entry emission failed' }
+$uiEntryOutput = & $uiEntryPath
+if ($LASTEXITCODE -ne 0 -or $uiEntryOutput -ne 'ui entry ok') { throw "the entry controls answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

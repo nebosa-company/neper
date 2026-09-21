@@ -1014,19 +1014,32 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
 // one in the selection colour; the viewport is a list of list items in the tree,
 // the group above it labelled.
 fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
-    if picks.len != options.len { ret (zero, TooLarge) }
+    let (chosen, chosen_error) = mem.alloc[bool](a, options.len)
+    if chosen_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < options.len {
+        chosen[i] = i == selected
+        i += 1usize
+    }
+    let (made, made_error) = listed(a, key, t, label, options, chosen, picks, rows, width)
+    ret (made, made_error)
+}
+
+// The rows of a list box or a multi-select list: `chosen` says which are selected.
+fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, options.len)
     if items_error != ok { ret (zero, TooLarge) }
     let row_height = t.tokens.metrics.control_height
     var i = 0usize
     while i < options.len {
-        var state = control_state(t, key + 1u64 + u64(i), true, i == selected)
+        var state = control_state(t, key + 1u64 + u64(i), true, chosen[i])
         let look = style.resolve(t.tokens, .Plain, state)
         var row_style = style.defaults()
         row_style.width = style.Length { Px: width }
         row_style.height = style.Length { Px: row_height }
         var background = look.background
-        if i == selected { background = style.color(t.tokens, .Selection) }
+        if chosen[i] { background = style.color(t.tokens, .Selection) }
         row_style.background = paint.Brush { Solid: background }
         let pad = style.Length { Px: t.tokens.spacing.sm }
         row_style.padding = style.EdgeLengths { left: pad, top: style.Length { Px: t.tokens.spacing.xs }, right: pad, bottom: style.Length { Px: t.tokens.spacing.xs } }
@@ -1045,7 +1058,7 @@ fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options
         entry.label = options[i]
         entry.row = u32(i + 1usize)
         entry.row_count = u32(options.len)
-        if i == selected { entry.states = accessibility.STATE_SELECTED }
+        if chosen[i] { entry.states = accessibility.STATE_SELECTED }
         items[i] = widget.semantics(0u64, entry, style.defaults(), region[0usize..1usize])
         i += 1usize
     }
@@ -1625,10 +1638,10 @@ fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, label
         var sem: widget.Semantics = zero
         sem.role = 2u8
         sem.label = label
-        let (listed, listed_error) = mem.alloc[widget.Node](a, 1usize)
-        if listed_error != ok { ret (zero, TooLarge) }
-        listed[0usize] = widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize])
-        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 0.0, y: 0.0 - t.tokens.spacing.xs }, modal: true, dismiss: *toggle }, style.defaults(), listed[0usize..1usize])
+        let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+        if lifted_error != ok { ret (zero, TooLarge) }
+        lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize])
+        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 0.0, y: 0.0 - t.tokens.spacing.xs }, modal: true, dismiss: *toggle }, style.defaults(), lifted[0usize..1usize])
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
 }
@@ -2166,4 +2179,302 @@ fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     sem.label = label
     sem.value = shown
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// ------------------------------------- advanced text and choice input (D831, P2-03)
+
+// A formatted field's adapter: whether a text is acceptable, and how to write it
+// back formatted (into `out`, the length written). Both are the caller's.
+type Format = struct { ctx: *void, accept: fn(*void, str) -> bool, format: fn(*void, []u8, str) -> usize }
+
+// What a formatted field's submit needs: where the text is, the adapter, whom to
+// tell once formatted.
+type Formatting = struct { runtime: *widget.Runtime, key: widget.Key, buffer: []u8, adapter: Format, change: widget.Change[str], arena: *mem.Arena }
+
+fn format_submit(ctx: *void) -> err {
+    let f = mem.cast[*Formatting](ctx)
+    let (s, state_error) = widget.state_of(f.runtime)
+    if state_error != ok { ret ok }
+    let (id, count) = widget.find_by_key(s, f.key)
+    if count == 0usize { ret ok }
+    let (current, has_current) = widget.edit_value(f.runtime, id)
+    if !has_current { ret ok }
+    if !f.adapter.accept(f.adapter.ctx, current) { ret ok }
+    let (scratch, scratch_error) = mem.alloc[u8](f.arena, f.buffer.len)
+    if scratch_error != ok { ret TooLarge }
+    let n = f.adapter.format(f.adapter.ctx, scratch, current)
+    if n > f.buffer.len { ret TooLarge }
+    var i = 0usize
+    while i < n {
+        f.buffer[i] = scratch[i]
+        i += 1usize
+    }
+    ret widget.fire_change[str](f.change, f.buffer[0usize..n])
+}
+
+// A formatted field: D823's text field whose text is invalid while the adapter
+// does not accept it, and whose Enter, when it does, writes the formatted text
+// into the caller's buffer and reports it through `change` (the caller takes the
+// new length from there). A mask edit is this with an adapter that formats.
+fn formatted_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, adapter: Format, typed: widget.Change[str], change: widget.Change[str], options: FieldOptions) -> (widget.Node, err) {
+    let (formats, formats_error) = mem.alloc[Formatting](a, 1usize)
+    if formats_error != ok { ret (zero, TooLarge) }
+    formats[0usize] = Formatting { runtime: t.runtime, key: key, buffer: buffer, adapter: adapter, change: change, arena: a }
+    var shown = options
+    shown.invalid = options.invalid || !adapter.accept(adapter.ctx, buffer[0usize..len])
+    let (made, made_error) = text_field(a, key, t, label, buffer, len, typed, widget.Submit { ctx: mem.cast[*void](&formats[0usize]), invoke: format_submit }, shown)
+    ret (made, made_error)
+}
+
+// A move of the active suggestion, for Up and Down.
+type Move = struct { index: usize, activate: widget.Change[usize] }
+
+fn move_fire(ctx: *void) -> err {
+    let m = mem.cast[*Move](ctx)
+    ret widget.fire_change[usize](m.activate, m.index)
+}
+
+// A field with suggestions: the field (keyed `key`) and, while `open`, a
+// non-modal overlay (keyed `list_key`) below it of the suggestions as plain
+// buttons keyed `first + index`, the active one filled; under a scope whose Up
+// and Down move the active one through `activate`, whose Enter is the active
+// pick and whose Escape is `dismiss`. A group in the tree named `label`, expanded
+// while open, its active descendant the active suggestion.
+fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field_node: widget.Node, extra: []const widget.Node, list_key: widget.Key, first: widget.Key, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit) -> (widget.Node, err) {
+    if picks.len != suggestions.len { ret (zero, TooLarge) }
+    let listing = open && suggestions.len > 0usize
+    var count = 1usize + extra.len
+    if listing { count += 1usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = field_node
+    var i = 0usize
+    while i < extra.len {
+        parts[1usize + i] = extra[i]
+        i += 1usize
+    }
+    var default_action: widget.Submit = zero
+    if listing {
+        let (items, items_error) = mem.alloc[widget.Node](a, suggestions.len)
+        if items_error != ok { ret (zero, TooLarge) }
+        i = 0usize
+        while i < suggestions.len {
+            var plain = button_options()
+            plain.variant = .Plain
+            if i == active { plain.variant = .Filled }
+            let (item, item_error) = button(a, first + u64(i), t, suggestions[i], &picks[i], plain)
+            if item_error != ok { ret (zero, item_error) }
+            var entry: widget.Semantics = zero
+            entry.role = 11u8
+            entry.label = suggestions[i]
+            if i == active { entry.states = accessibility.STATE_SELECTED }
+            let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+            if wrapped_error != ok { ret (zero, TooLarge) }
+            wrapped[0usize] = item
+            var stretched = style.defaults()
+            stretched.width = style.Length { Percent: 100.0 }
+            items[i] = widget.semantics(0u64, entry, stretched, wrapped[0usize..1usize])
+            i += 1usize
+        }
+        var sheet = surface_options(t)
+        sheet.bordered = true
+        sheet.elevation = 2u8
+        sheet.radius = t.tokens.radii.sm
+        sheet.padding = t.tokens.spacing.xs
+        let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+        if column_error != ok { ret (zero, TooLarge) }
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, surface_style(t, sheet), items[0usize..suggestions.len])
+        var list_sem: widget.Semantics = zero
+        list_sem.role = 10u8
+        list_sem.label = label
+        list_sem.row_count = u32(suggestions.len)
+        let (popup, popup_error) = mem.alloc[widget.Node](a, 1usize)
+        if popup_error != ok { ret (zero, TooLarge) }
+        popup[0usize] = widget.semantics(0u64, list_sem, style.defaults(), column[0usize..1usize])
+        parts[count - 1usize] = widget.overlay(list_key, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: 0.0, y: t.tokens.spacing.xs }, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
+        if active < picks.len { default_action = picks[active] }
+    }
+    let (moves, moves_error) = mem.alloc[Move](a, 2usize)
+    if moves_error != ok { ret (zero, TooLarge) }
+    var previous = active
+    if active > 0usize { previous = active - 1usize }
+    var next = active
+    if active + 1usize < suggestions.len { next = active + 1usize }
+    moves[0usize] = Move { index: previous, activate: activate }
+    moves[1usize] = Move { index: next, activate: activate }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    shortcuts[0usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: move_fire } }
+    shortcuts[1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: move_fire } }
+    var bound = 0usize
+    if listing { bound = 2usize }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..count])
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: default_action, cancel_action: *dismiss, keys: zero }, style.defaults(), row[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    if listing {
+        sem.states = accessibility.STATE_EXPANDED
+        sem.active = first + u64(active)
+    }
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// An autocomplete: a text field (keyed `key`) with the caller's filtered
+// suggestions below it (list `key + 1`, items `key + 2 + index`) while `open`.
+fn autocomplete(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    let (field_node, field_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
+    if field_error != ok { ret (zero, field_error) }
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting(a, key, t, label, field_node, none, key + 1u64, key + 2u64, suggestions, active, open, picks, activate, dismiss)
+    ret (made, made_error)
+}
+
+// A combo box: an autocomplete with a chevron button (keyed `key + 1`) firing
+// `toggle` beside the field; the list is `key + 2`, its items `key + 3 + index`.
+fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], choices: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
+    let (field_node, field_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
+    if field_error != ok { ret (zero, field_error) }
+    let look = style.resolve(t.tokens, .Outlined, control_state(t, key + 1u64, true, false))
+    let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    marks[0usize] = Mark { color: look.foreground, expanded: true, arena: a }
+    let size = t.tokens.spacing.md
+    var none: []const widget.Node = zero
+    let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint } }, style: sized_style(size, size), children: none }
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (opener, opener_error) = pressable_states(a, key + 1u64, t, 3u8, "Choices", look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
+    if opener_error != ok { ret (zero, opener_error) }
+    let (extra, extra_error) = mem.alloc[widget.Node](a, 1usize)
+    if extra_error != ok { ret (zero, TooLarge) }
+    extra[0usize] = opener
+    let (made, made_error) = suggesting(a, key, t, label, field_node, extra[0usize..1usize], key + 2u64, key + 3u64, choices, active, open, picks, activate, toggle)
+    ret (made, made_error)
+}
+
+// A token field: the tokens as input chips (keyed `key + 1 + 2 * index`, their
+// remove buttons `key + 2 + 2 * index`, at most 30) before a text field (keyed
+// `key`) whose Enter is `add` (the caller pushes the typed text and clears it),
+// wrapped to `width`; suggestions as an autocomplete's (list `key + 62`, items
+// `key + 63 + index`).
+fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if removes.len != tokens.len || tokens.len > 30usize { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, tokens.len + 1usize)
+    if items_error != ok { ret (zero, TooLarge) }
+    var none_action: widget.Submit = zero
+    let (still, still_error) = mem.alloc[widget.Submit](a, 1usize)
+    if still_error != ok { ret (zero, TooLarge) }
+    still[0usize] = none_action
+    var i = 0usize
+    while i < tokens.len {
+        let (token, token_error) = chip(a, key + 1u64 + 2u64 * u64(i), t, tokens[i], .Input, false, &still[0usize], &removes[i])
+        if token_error != ok { ret (zero, token_error) }
+        items[i] = token
+        i += 1usize
+    }
+    var options = field_options()
+    options.width = 4.0 * t.tokens.spacing.lg
+    let (field_node, field_error) = text_field(a, key, t, label, buffer, len, typed, add, options)
+    if field_error != ok { ret (zero, field_error) }
+    items[tokens.len] = field_node
+    var wrapped = style.defaults()
+    wrapped.width = style.Length { Px: width }
+    let flow = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: t.tokens.spacing.xs, cross_gap: t.tokens.spacing.xs }, wrapped, items[0usize..tokens.len + 1usize])
+    var none: []const widget.Node = zero
+    let (made, made_error) = suggesting(a, key, t, label, flow, none, key + 62u64, key + 63u64, suggestions, active, open, picks, activate, dismiss)
+    ret (made, made_error)
+}
+
+// How a picker presents its choice: D824's popup select, or a sheet -- a modal
+// overlay in the middle of the window listing the options as full-width rows
+// under a title, for a touch host.
+type PickerForm = enum u8 { Popup, Sheet }
+
+fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, presentation: PickerForm) -> (widget.Node, err) {
+    if presentation == .Popup {
+        let (popup, popup_error) = select(a, key, t, label, options, selected, open, toggle, picks)
+        ret (popup, popup_error)
+    }
+    if picks.len != options.len { ret (zero, TooLarge) }
+    var shown = label
+    if selected < options.len { shown = options[selected] }
+    var outlined = button_options()
+    outlined.variant = .Outlined
+    let (head, head_error) = button(a, key, t, shown, toggle, outlined)
+    if head_error != ok { ret (zero, head_error) }
+    var count = 1usize
+    if open { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    if open {
+        let (rows, rows_error) = mem.alloc[widget.Node](a, options.len + 1usize)
+        if rows_error != ok { ret (zero, TooLarge) }
+        var heading = text_options()
+        heading.role = .Title
+        let (title_node, title_error) = text_node(a, 0u64, label, t, heading)
+        if title_error != ok { ret (zero, title_error) }
+        rows[0usize] = title_node
+        var i = 0usize
+        while i < options.len {
+            var plain = button_options()
+            plain.variant = .Plain
+            if i == selected { plain.variant = .Filled }
+            let (item, item_error) = button(a, key + 2u64 + u64(i), t, options[i], &picks[i], plain)
+            if item_error != ok { ret (zero, item_error) }
+            var entry: widget.Semantics = zero
+            entry.role = 11u8
+            entry.label = options[i]
+            if i == selected { entry.states = accessibility.STATE_SELECTED }
+            let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+            if wrapped_error != ok { ret (zero, TooLarge) }
+            wrapped[0usize] = item
+            var stretched = style.defaults()
+            stretched.width = style.Length { Percent: 100.0 }
+            rows[1usize + i] = widget.semantics(0u64, entry, stretched, wrapped[0usize..1usize])
+            i += 1usize
+        }
+        var sheet = surface_options(t)
+        sheet.bordered = true
+        sheet.elevation = 3u8
+        sheet.radius = t.tokens.radii.md
+        sheet.padding = t.tokens.spacing.md
+        var sheet_style = surface_style(t, sheet)
+        sheet_style.min_width = style.Length { Px: 8.0 * t.tokens.spacing.lg }
+        let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+        if column_error != ok { ret (zero, TooLarge) }
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: t.tokens.spacing.xs }, sheet_style, rows[0usize..options.len + 1usize])
+        var none: []const widget.Shortcut = zero
+        let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+        if scoped_error != ok { ret (zero, TooLarge) }
+        scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *toggle, keys: zero }, style.defaults(), column[0usize..1usize])
+        var list_sem: widget.Semantics = zero
+        list_sem.role = 23u8
+        list_sem.label = label
+        list_sem.states = accessibility.STATE_MODAL
+        let (dialog, dialog_error) = mem.alloc[widget.Node](a, 1usize)
+        if dialog_error != ok { ret (zero, TooLarge) }
+        dialog[0usize] = widget.semantics(0u64, list_sem, style.defaults(), scoped[0usize..1usize])
+        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *toggle }, style.defaults(), dialog[0usize..1usize])
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    if open { sem.states = accessibility.STATE_EXPANDED }
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A multi-select list: D824's list box with any number of rows selected, each
+// row's tap firing its own toggle; the caller keeps `selected`, one flag a row.
+fn multi_select_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: []const bool, toggles: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = listed(a, key, t, label, options, selected, toggles, rows, width)
+    ret (made, made_error)
 }

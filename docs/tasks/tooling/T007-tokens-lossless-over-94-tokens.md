@@ -45,7 +45,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `INVALID`: `lib/e/os.windows.e`×15‡, `tests/conformance/tokens/hostile.expected.jsonl`×7, `lib/e/ui/control.e`×3†, `lib/e/ui/accessibility.e`×2, `src/tool.e`×2‡
+- `INVALID`: `lib/e/os.windows.e`×15‡, `tests/conformance/tokens/hostile.expected.jsonl`×7, `lib/e/ui/control.e`×3‡, `lib/e/ui/accessibility.e`×2, `src/tool.e`×2‡
 
 ## Verification
 

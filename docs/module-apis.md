@@ -3661,6 +3661,8 @@ type Validity = enum u8 { Valid, Warning, Invalid }
 type Message = struct { validity: Validity, text: str }
 type ChipKind = enum u8 { Assist, Filter, Input, Suggestion }
 type Chord = struct { key: u32, modifiers: input.Modifiers }
+type Format = struct { ctx: *void, accept: fn(*void, str) -> bool, format: fn(*void, []u8, str) -> usize }
+type PickerForm = enum u8 { Popup, Sheet }
 error TooLarge
 
 fn text_options() -> TextOptions
@@ -3722,6 +3724,12 @@ fn stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i
 fn spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str]) -> (widget.Node, err)
 fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, change: widget.Change[f32], size: f32) -> (widget.Node, err)
 fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, chord: Chord, recording: bool, start: *const widget.Submit, capture: widget.Change[Chord]) -> (widget.Node, err)
+fn formatted_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, adapter: Format, typed: widget.Change[str], change: widget.Change[str], options: FieldOptions) -> (widget.Node, err)
+fn autocomplete(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, options: FieldOptions) -> (widget.Node, err)
+fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], choices: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], toggle: *const widget.Submit, options: FieldOptions) -> (widget.Node, err)
+fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, tokens: []const str, removes: []const widget.Submit, buffer: []u8, len: usize, typed: widget.Change[str], add: widget.Submit, suggestions: []const str, active: usize, open: bool, picks: []const widget.Submit, activate: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err)
+fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, presentation: PickerForm) -> (widget.Node, err)
+fn multi_select_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: []const bool, toggles: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node

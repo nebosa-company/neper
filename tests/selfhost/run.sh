@@ -1792,6 +1792,13 @@ ui_numeric_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-numeric-selfhost"
 ui_numeric_output=$("$test_build/ui-numeric-selfhost")
 [ "$ui_numeric_output" = 'ui numeric ok' ]
+# Advanced text and choice input (D831, widget plan P2-03): formatted field,
+# autocomplete, combo box, token field, picker sheet, multi-select list.
+ui_entry_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_entry/src/main.e" "$repo" x64 linux "$test_build/ui-entry-selfhost")
+[ "$ui_entry_written" = 'executable written' ]
+chmod +x "$test_build/ui-entry-selfhost"
+ui_entry_output=$("$test_build/ui-entry-selfhost")
+[ "$ui_entry_output" = 'ui entry ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

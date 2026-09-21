@@ -16056,3 +16056,34 @@ D818's normalised key code with the modifiers held; the caller keeps
 the `Chord`, formats nothing (the control names it: "Ctrl+Shift+S",
 "Enter", "Key123") and stops recording when it likes. `link/ui_numeric`
 steps, types, turns, drags and records on both hosts.
+
+## D831 — Advanced text and choice: the adapter is the caller's, the suggestions are one helper
+
+P2-03 of the widget plan. A `formatted_field` is D823's text field with
+a `Format` adapter of two caller functions: `accept` decides the
+invalid state each frame (the field is invalid while the text is
+refused), and on Enter, when accepted, `format` writes the formatted
+text into a frame scratch, the control copies it into the caller's
+buffer and reports it through `change`, from which the caller takes the
+new length -- the buffer is the caller's, D807, so the control never
+grows it; a mask edit is this with a formatting adapter. Every field
+that suggests goes through one helper, `suggesting`: the field, any
+extra controls beside it, and while open a non-modal overlay below the
+field of the suggestions as plain buttons (the active one filled, a
+list of list items in the tree), under a scope whose Up and Down move
+the active index through `activate`, whose Enter is the active pick --
+reachable because a single-line editor lets Enter through (D825) --
+and whose Escape is `dismiss`; the group says expanded and names the
+active descendant. `autocomplete` is that over a field; `combo_box`
+adds a chevron button that toggles; `token_field` wraps D829's input
+chips (keyed two apart, a chip and its remove) before a narrow field
+whose Enter is `add` -- so there Enter adds rather than picks, and a
+suggestion is taken by a tap. `picker` presents a choice as D824's
+popup select or as a sheet: a centred modal dialog of full-width rows
+under a title, for a touch host; the wheel presentation waits for a
+snapping viewport. `multi_select_list` is the list box's rows with a
+selected flag each and a toggle each, through a `listed` helper the
+list box now shares. `link/ui_entry` formats, activates, picks,
+dismisses, toggles, removes, adds and selects on both hosts -- and
+found that a fixture must close an overlay before tapping what lay
+under it.

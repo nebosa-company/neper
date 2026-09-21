@@ -511,8 +511,15 @@
             "Picker",
             "MultiSelectList"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "FormattedField",
+            "Autocomplete",
+            "TokenField",
+            "ComboBox",
+            "Picker",
+            "MultiSelectList"
+          ],
+          "evidence": "lib/e/ui/control.e (D831): formatted_field invalid while its Format adapter refuses the text and writing the formatted text back on Enter, autocomplete and combo_box over one suggesting helper (a non-modal list below the field, Up/Down activating, Enter picking, Escape dismissing, the chevron toggling), token_field as input chips wrapped before a field whose Enter adds, picker as the popup select or a centred modal sheet of rows, multi_select_list as the list box's rows with a flag each; tests/selfhost/fixtures/link/ui_entry on both hosts"
         },
         {
           "id": "P2-04",
