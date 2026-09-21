@@ -2366,6 +2366,8 @@ fn edit_key(s: *State, element: usize, k: input.KeyEvent) -> (bool, err) {
             let broken = edit_replace(s, element, lo, hi, "\n", true)
             ret (true, broken)
         }
+        // No submit of its own: Enter is the enclosing scope's default action (D825).
+        if !submit_set(e.edit_submit.invoke) { ret (false, ok) }
         let submitted = fire_submit(e.edit_submit)
         ret (true, submitted)
     }

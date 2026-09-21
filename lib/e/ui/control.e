@@ -1057,3 +1057,165 @@ fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options
     sem.row_count = u32(options.len)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
 }
+
+
+// ---------------------------------------------------------------- forms (D825, P1-12)
+
+// Validation is data: how a field stands and what to tell the person.
+type Validity = enum u8 { Valid, Warning, Invalid }
+type Message = struct { validity: Validity, text: str }
+
+// A field's label: the label role, an asterisk after a required one, controlling
+// the field it is for (by key).
+fn field_label(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, for_key: widget.Key, required: bool) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    var parts_count = 1usize
+    if required { parts_count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, parts_count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
+    if label_error != ok { ret (zero, label_error) }
+    parts[0usize] = label_node
+    if required {
+        caption.color = .Error
+        let (star, star_error) = text_node(a, 0u64, "*", t, caption)
+        if star_error != ok { ret (zero, star_error) }
+        parts[1usize] = star
+    }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..parts_count])
+    var sem: widget.Semantics = zero
+    sem.role = 6u8
+    sem.label = label
+    sem.controls = for_key
+    ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// A field's message: the caption in the error colour when invalid, muted when
+// valid or a warning; a status in the tree, controlling the field, live so a
+// reader hears it change. Nothing at all for an empty text.
+fn field_message(a: *mem.Arena, key: widget.Key, t: *const Theme, message: Message, for_key: widget.Key) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .Caption
+    caption.color = .TextMuted
+    if message.validity == .Invalid { caption.color = .Error }
+    if message.validity == .Warning { caption.color = .Text }
+    let (text_item, text_error) = text_node(a, 0u64, message.text, t, caption)
+    if text_error != ok { ret (zero, text_error) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = text_item
+    var sem: widget.Semantics = zero
+    sem.role = 26u8
+    sem.label = message.text
+    sem.controls = for_key
+    sem.live = 1u8
+    if message.validity == .Invalid {
+        sem.live = 2u8
+        sem.states = accessibility.STATE_INVALID
+    }
+    sem.hidden = message.text.len == 0usize
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// A form field: the label (keyed `key + 1`) above the control, the help or the
+// message (keyed `key + 2`) below; a group in the tree labelled by the label,
+// described by the help, its error the message when invalid, required and invalid
+// as states. `control_key` is the control's own key, for the relationships.
+fn form_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, control_key: widget.Key, control_node: widget.Node, help: str, message: Message, required: bool) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (label_node, label_error) = field_label(a, key + 1u64, t, label, control_key, required)
+    if label_error != ok { ret (zero, label_error) }
+    parts[0usize] = label_node
+    parts[1usize] = control_node
+    var shown = message
+    if shown.text.len == 0usize { shown = Message { validity: .Valid, text: help } }
+    let (message_node, message_error) = field_message(a, key + 2u64, t, shown, control_key)
+    if message_error != ok { ret (zero, message_error) }
+    parts[2usize] = message_node
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..3usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    sem.labelled_by = key + 1u64
+    if help.len != 0usize && message.text.len == 0usize { sem.described_by = key + 2u64 }
+    if message.validity == .Invalid && message.text.len != 0usize { sem.error_by = key + 2u64 }
+    if required { sem.states = accessibility.STATE_REQUIRED }
+    if message.validity == .Invalid { sem.states = sem.states | accessibility.STATE_INVALID }
+    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A form: its fields in a column -- or, wide enough for the expanded size class,
+// in a wrap of two-column width -- under a scope whose Enter is `submit` and whose
+// Escape is `cancel`; a group in the tree.
+fn form(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, width: f32, fields: []const widget.Node, submit: widget.Submit, cancel: widget.Submit) -> (widget.Node, err) {
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    var layout_style = style.defaults()
+    layout_style.width = style.Length { Px: width }
+    if style.size_class(width) == .Expanded {
+        body[0usize] = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: t.tokens.spacing.lg, cross_gap: t.tokens.spacing.md }, layout_style, fields)
+    } else {
+        body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.md }, layout_style, fields)
+    }
+    var none: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: none, default_action: submit, cancel_action: cancel }, style.defaults(), body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// A validation summary: the invalid messages as links, each firing the caller's
+// action for its field (one per message) and controlling that field; an alert in
+// the tree, assertive, and nothing when every message is valid.
+fn validation_summary(a: *mem.Arena, key: widget.Key, t: *const Theme, messages: []const Message, field_keys: []const widget.Key, jumps: []const widget.Submit) -> (widget.Node, err) {
+    if field_keys.len != messages.len || jumps.len != messages.len { ret (zero, TooLarge) }
+    var count = 0usize
+    var i = 0usize
+    while i < messages.len {
+        if messages[i].validity == .Invalid && messages[i].text.len != 0usize { count += 1usize }
+        i += 1usize
+    }
+    let (items, items_error) = mem.alloc[widget.Node](a, count)
+    if items_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    i = 0usize
+    while i < messages.len {
+        if messages[i].validity == .Invalid && messages[i].text.len != 0usize {
+            let (item, item_error) = link(a, key + 1u64 + u64(i), t, messages[i].text, &jumps[i])
+            if item_error != ok { ret (zero, item_error) }
+            var entry: widget.Semantics = zero
+            entry.controls = field_keys[i]
+            let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+            if wrapped_error != ok { ret (zero, TooLarge) }
+            wrapped[0usize] = item
+            items[at] = widget.semantics(0u64, entry, style.defaults(), wrapped[0usize..1usize])
+            at += 1usize
+        }
+        i += 1usize
+    }
+    var options = surface_options(t)
+    options.bordered = true
+    options.radius = t.tokens.radii.sm
+    options.padding = t.tokens.spacing.sm
+    var sheet = surface_style(t, options)
+    sheet.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Error) }
+    if count == 0usize { sheet = style.defaults() }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, sheet, items[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 24u8
+    sem.live = 2u8
+    sem.hidden = count == 0usize
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}

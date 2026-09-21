@@ -15892,3 +15892,28 @@ the kind) while the group above carries the label; a second list role
 on the wrapper would have made two lists of one. Both take one action
 per option from a slice the caller keeps alive, D819's shape.
 `link/ui_choice` opens, picks, dismisses and scrolls on both hosts.
+
+## D825 — Forms: validation is data, a field is a labelled group, Enter reaches the form
+
+P1-12 of the widget plan. A `Message` is a validity and a text, nothing
+more: the caller decides what is invalid and the controls only show it.
+`field_label` is the label text with an asterisk in the error colour
+after a required one, a text in the tree controlling the field it is
+for by key; `field_message` is a caption in the error colour when
+invalid and muted otherwise, a status in the tree, polite, or assertive
+and invalid when the message is -- and hidden when its text is empty,
+so `form_field` can always place one (keyed `key + 2`) and show the help
+through it while no message stands. `form_field` is a group labelled by
+its label (`key + 1`), described by its help, errored by its message,
+required and invalid as states, the control between them. `form` is
+D803's scope with the caller's submit as the default action and cancel
+as the cancel action, its fields in a column -- or in a wrap when the
+width reaches the expanded size class -- and a group named by its
+label. `validation_summary` lists the invalid messages as links (D813)
+each controlling its field and firing the caller's jump for it, an
+assertive alert bordered in the error colour, hidden and unstyled when
+nothing is invalid. One runtime change made the form's Enter reachable:
+a single-line editor with no submit of its own now lets Enter fall
+through to the enclosing scope instead of swallowing it, so a field in
+a form submits the form. `link/ui_form` checks the states, the
+relationships, both keys, the summary's jump and the wrap on both hosts.
