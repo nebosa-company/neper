@@ -1222,6 +1222,168 @@ $algoCodingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $algoCodingWritten -ne 'executable written') { throw 'algo_coding emission failed' }
 & $algoCodingPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_coding check failed: exit $LASTEXITCODE" }
+# `e.math.ntheory`: gcd and modular arithmetic at the top of the 64-bit range, Miller-Rabin, three sieves, trial, rho and p-1 factoring, Garner's CRT, three discrete logarithms, Tonelli-Shanks, Stern-Brocot and Farey, against SymPy values (D836).
+$mathNtheoryPath = Join-Path $testBuild 'math-ntheory-selfhost.exe'
+$mathNtheoryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_ntheory\src\main.e') $repo 'x64' 'windows' $mathNtheoryPath
+if ($LASTEXITCODE -ne 0 -or $mathNtheoryWritten -ne 'executable written') { throw 'math_ntheory emission failed' }
+& $mathNtheoryPath
+if ($LASTEXITCODE -ne 0) { throw "a math_ntheory check failed: exit $LASTEXITCODE" }
+# `e.math.root`: bisection, Newton, Halley, secant and Brent on sqrt(2), the Dottie number and a flat-shouldered cubic, with refusals for a bracket without a sign change and a flat slope (D836).
+$mathRootPath = Join-Path $testBuild 'math-root-selfhost.exe'
+$mathRootWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_root\src\main.e') $repo 'x64' 'windows' $mathRootPath
+if ($LASTEXITCODE -ne 0 -or $mathRootWritten -ne 'executable written') { throw 'math_root emission failed' }
+& $mathRootPath
+if ($LASTEXITCODE -ne 0) { throw "a math_root check failed: exit $LASTEXITCODE" }
+# `e.algo.combin`: binomials to the last that fits a u64, lexicographic permutations and combinations, Heap's algorithm, subsets and submasks by mask, Gosper's hack and the subset-sum transforms (D836).
+$algoCombinPath = Join-Path $testBuild 'algo-combin-selfhost.exe'
+$algoCombinWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_combin\src\main.e') $repo 'x64' 'windows' $algoCombinPath
+if ($LASTEXITCODE -ne 0 -or $algoCombinWritten -ne 'executable written') { throw 'algo_combin emission failed' }
+& $algoCombinPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_combin check failed: exit $LASTEXITCODE" }
+# `e.data.fenwick` and `e.data.sparse_table`: prefix and range sums under point updates and the lower-bound descent; range minimum, maximum and disjoint-table sums over every window of a 13-element array (D836).
+$dataRangeQueryPath = Join-Path $testBuild 'data-range-query-selfhost.exe'
+$dataRangeQueryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_range_query\src\main.e') $repo 'x64' 'windows' $dataRangeQueryPath
+if ($LASTEXITCODE -ne 0 -or $dataRangeQueryWritten -ne 'executable written') { throw 'data_range_query emission failed' }
+& $dataRangeQueryPath
+if ($LASTEXITCODE -ne 0) { throw "a data_range_query check failed: exit $LASTEXITCODE" }
+# `e.algo.dp`: three knapsacks, LIS, LCS and derived lengths, coin change, subset sum, Kadane and the product form, matrix chain, optimal BST, the histogram rectangle, the monotonic stack, Li Chao and the convex hull trick against a scan (D836).
+$algoDpPath = Join-Path $testBuild 'algo-dp-selfhost.exe'
+$algoDpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_dp\src\main.e') $repo 'x64' 'windows' $algoDpPath
+if ($LASTEXITCODE -ne 0 -or $algoDpWritten -ne 'executable written') { throw 'algo_dp emission failed' }
+& $algoDpPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_dp check failed: exit $LASTEXITCODE" }
+# `e.data.segment_tree`: a max tree under point updates, the lazy tree's sums and minima under overlapping range additions, and the persistent tree answering every old version (D836).
+$dataSegmentTreePath = Join-Path $testBuild 'data-segment-tree-selfhost.exe'
+$dataSegmentTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_segment_tree\src\main.e') $repo 'x64' 'windows' $dataSegmentTreePath
+if ($LASTEXITCODE -ne 0 -or $dataSegmentTreeWritten -ne 'executable written') { throw 'data_segment_tree emission failed' }
+& $dataSegmentTreePath
+if ($LASTEXITCODE -ne 0) { throw "a data_segment_tree check failed: exit $LASTEXITCODE" }
+# `e.data.cache`: the keyed LRU through hits, overwrites, removals, evictions and a long churn, and the FIFO, Clock, LFU, SLRU and 2Q policies' victims against their definitions (D836).
+$dataCachePath = Join-Path $testBuild 'data-cache-selfhost.exe'
+$dataCacheWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_cache\src\main.e') $repo 'x64' 'windows' $dataCachePath
+if ($LASTEXITCODE -ne 0 -or $dataCacheWritten -ne 'executable written') { throw 'data_cache emission failed' }
+& $dataCachePath
+if ($LASTEXITCODE -ne 0) { throw "a data_cache check failed: exit $LASTEXITCODE" }
+# `e.data.trie` and `e.algo.consistent_hash`: insert, lookup, prefix and longest-prefix queries and an ordered walk; a ring and rendezvous hashing that move only a leaving node's keys, and the jump hash against a transcription of the paper (D836).
+$dataTrieHashPath = Join-Path $testBuild 'data-trie-hash-selfhost.exe'
+$dataTrieHashWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_trie_hash\src\main.e') $repo 'x64' 'windows' $dataTrieHashPath
+if ($LASTEXITCODE -ne 0 -or $dataTrieHashWritten -ne 'executable written') { throw 'data_trie_hash emission failed' }
+& $dataTrieHashPath
+if ($LASTEXITCODE -ne 0) { throw "a data_trie_hash check failed: exit $LASTEXITCODE" }
+# `e.algo.geom` and `e.algo.geom.clip`: predicates, segment intersection, polygon area, convexity and containment, two hulls, closest and farthest pairs, the enclosing circle and rectangle, Pick and Morton; clipping by three algorithms, ear clipping and two simplifiers (D837).
+$algoGeomPath = Join-Path $testBuild 'algo-geom-selfhost.exe'
+$algoGeomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_geom\src\main.e') $repo 'x64' 'windows' $algoGeomPath
+if ($LASTEXITCODE -ne 0 -or $algoGeomWritten -ne 'executable written') { throw 'algo_geom emission failed' }
+& $algoGeomPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_geom check failed: exit $LASTEXITCODE" }
+# `e.math.special`: log-gamma, erf and erfc, the regularised incomplete gamma and beta, the normal, t, chi-squared and F distribution functions and the normal quantile against SciPy (D837).
+$mathSpecialPath = Join-Path $testBuild 'math-special-selfhost.exe'
+$mathSpecialWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_special\src\main.e') $repo 'x64' 'windows' $mathSpecialPath
+if ($LASTEXITCODE -ne 0 -or $mathSpecialWritten -ne 'executable written') { throw 'math_special emission failed' }
+& $mathSpecialPath
+if ($LASTEXITCODE -ne 0) { throw "a math_special check failed: exit $LASTEXITCODE" }
+# `e.algo.rand.dist` and the sampling added to `e.algo.rand`: variate moments over 20,000 draws, Dirichlet, a multivariate normal's covariance, inverse-transform and rejection sampling, the alias table, weighted reservoir, shuffles, reservoir sampling, stratified, Latin hypercube, Halton and Sobol against SciPy (D837).
+$algoRandDistPath = Join-Path $testBuild 'algo-rand-dist-selfhost.exe'
+$algoRandDistWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rand_dist\src\main.e') $repo 'x64' 'windows' $algoRandDistPath
+if ($LASTEXITCODE -ne 0 -or $algoRandDistWritten -ne 'executable written') { throw 'algo_rand_dist emission failed' }
+& $algoRandDistPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_rand_dist check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.test`: t-tests, Welch, Mann-Whitney, Wilcoxon, chi-squared, Fisher's exact, Kolmogorov-Smirnov, ANOVA, Kruskal-Wallis, a permutation test and the Bonferroni and Benjamini-Hochberg corrections against SciPy (D837).
+$algoStatTestPath = Join-Path $testBuild 'algo-stat-test-selfhost.exe'
+$algoStatTestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_test\src\main.e') $repo 'x64' 'windows' $algoStatTestPath
+if ($LASTEXITCODE -ne 0 -or $algoStatTestWritten -ne 'executable written') { throw 'algo_stat_test emission failed' }
+& $algoStatTestPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_test check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
+$algoGraphFlowPath = Join-Path $testBuild 'algo-graph-flow-selfhost.exe'
+$algoGraphFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_flow\src\main.e') $repo 'x64' 'windows' $algoGraphFlowPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphFlowWritten -ne 'executable written') { throw 'algo_graph_flow emission failed' }
+& $algoGraphFlowPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_flow check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.match`: Hopcroft-Karp, the Hungarian algorithm against SciPy's assignment, Gale-Shapley stability and the blossom algorithm on two odd cycles and the Petersen graph (D837).
+$algoGraphMatchPath = Join-Path $testBuild 'algo-graph-match-selfhost.exe'
+$algoGraphMatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_match\src\main.e') $repo 'x64' 'windows' $algoGraphMatchPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphMatchWritten -ne 'executable written') { throw 'algo_graph_match emission failed' }
+& $algoGraphMatchPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_match check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.path`: Bellman-Ford, Floyd-Warshall and Johnson against Dijkstra with a negative edge and a refused negative cycle, Dial, A*, IDA*, bidirectional search, IDDFS and path reconstruction (D837).
+$algoGraphPathPath = Join-Path $testBuild 'algo-graph-path-selfhost.exe'
+$algoGraphPathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_path\src\main.e') $repo 'x64' 'windows' $algoGraphPathPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphPathWritten -ne 'executable written') { throw 'algo_graph_path emission failed' }
+& $algoGraphPathPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_path check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.tree`: rooting, binary-lifting and offline LCAs against NetworkX, the Euler tour, heavy-light path ranges, centroid decomposition, Prüfer codes both ways and AHU labels (D837).
+$algoGraphTreePath = Join-Path $testBuild 'algo-graph-tree-selfhost.exe'
+$algoGraphTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_tree\src\main.e') $repo 'x64' 'windows' $algoGraphTreePath
+if ($LASTEXITCODE -ne 0 -or $algoGraphTreeWritten -ne 'executable written') { throw 'algo_graph_tree emission failed' }
+& $algoGraphTreePath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_tree check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.span`: Kruskal, Prim and Borůvka on CLRS's graph and a forest, bridges and articulation points, Hierholzer's circuit and path, and Warshall's closure (D837).
+$algoGraphSpanPath = Join-Path $testBuild 'algo-graph-span-selfhost.exe'
+$algoGraphSpanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_span\src\main.e') $repo 'x64' 'windows' $algoGraphSpanPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphSpanWritten -ne 'executable written') { throw 'algo_graph_span emission failed' }
+& $algoGraphSpanPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_span check failed: exit $LASTEXITCODE" }
+# `e.math.fft`: the transform of an impulse and a cosine, round trips, convolution against direct multiplication, the number-theoretic transform and its convolution, Walsh-Hadamard and the cosine transforms against SciPy (D838).
+$mathFftPath = Join-Path $testBuild 'math-fft-selfhost.exe'
+$mathFftWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_fft\src\main.e') $repo 'x64' 'windows' $mathFftPath
+if ($LASTEXITCODE -ne 0 -or $mathFftWritten -ne 'executable written') { throw 'math_fft emission failed' }
+& $mathFftPath
+if ($LASTEXITCODE -ne 0) { throw "a math_fft check failed: exit $LASTEXITCODE" }
+# `e.math.ode`: exponential decay and the harmonic oscillator by Euler, RK4 and adaptive RKF45, symplectic energy conservation over a thousand periods, Yoshida against leapfrog, and Euler-Maruyama's Brownian variance (D838).
+$mathOdePath = Join-Path $testBuild 'math-ode-selfhost.exe'
+$mathOdeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_ode\src\main.e') $repo 'x64' 'windows' $mathOdePath
+if ($LASTEXITCODE -ne 0 -or $mathOdeWritten -ne 'executable written') { throw 'math_ode emission failed' }
+& $mathOdePath
+if ($LASTEXITCODE -ne 0) { throw "a math_ode check failed: exit $LASTEXITCODE" }
+# `e.math.filter`: a constant-velocity Kalman filter over a noisy line, the extended and unscented filters over a range observation, a particle filter that resamples, and the complementary, Madgwick and Mahony attitude filters converging on a tilt (D838).
+$mathFilterPath = Join-Path $testBuild 'math-filter-selfhost.exe'
+$mathFilterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_filter\src\main.e') $repo 'x64' 'windows' $mathFilterPath
+if ($LASTEXITCODE -ne 0 -or $mathFilterWritten -ne 'executable written') { throw 'math_filter emission failed' }
+& $mathFilterPath
+if ($LASTEXITCODE -ne 0) { throw "a math_filter check failed: exit $LASTEXITCODE" }
+# `e.math.opt`: every descent method and Nelder-Mead reach Rosenbrock's minimum, a five-dimensional bowl converges by all of them, and the simplex solves two small linear programmes against SciPy and reports an unbounded and an infeasible one (D838).
+$mathOptPath = Join-Path $testBuild 'math-opt-selfhost.exe'
+$mathOptWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_opt\src\main.e') $repo 'x64' 'windows' $mathOptPath
+if ($LASTEXITCODE -ne 0 -or $mathOptWritten -ne 'executable written') { throw 'math_opt emission failed' }
+& $mathOptPath
+if ($LASTEXITCODE -ne 0) { throw "a math_opt check failed: exit $LASTEXITCODE" }
+# `e.math.opt.meta`: annealing and tabu search escape Rastrigin's local minima where hill climbing settles, the genetic algorithm, particle swarm and differential evolution minimise Rosenbrock in a box, and ant colony finds the octagon tour (D838).
+$mathOptMetaPath = Join-Path $testBuild 'math-opt-meta-selfhost.exe'
+$mathOptMetaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_opt_meta\src\main.e') $repo 'x64' 'windows' $mathOptMetaPath
+if ($LASTEXITCODE -ne 0 -or $mathOptMetaWritten -ne 'executable written') { throw 'math_opt_meta emission failed' }
+& $mathOptMetaPath
+if ($LASTEXITCODE -ne 0) { throw "a math_opt_meta check failed: exit $LASTEXITCODE" }
+# `e.math.float`: fields unpack and pack back, binary16 against NumPy on normals, ties, subnormals and the specials with every finite half round-tripping, and bfloat16 rounding the top half to even (D838).
+$mathFloatPath = Join-Path $testBuild 'math-float-selfhost.exe'
+$mathFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_float\src\main.e') $repo 'x64' 'windows' $mathFloatPath
+if ($LASTEXITCODE -ne 0 -or $mathFloatWritten -ne 'executable written') { throw 'math_float emission failed' }
+& $mathFloatPath
+if ($LASTEXITCODE -ne 0) { throw "a math_float check failed: exit $LASTEXITCODE" }
+# `e.math.gf`: the AES worked example and inverse, generator orders and tables agreeing with `mul` everywhere, carry-less products and reductions against a Python polynomial reference (D838).
+$mathGfPath = Join-Path $testBuild 'math-gf-selfhost.exe'
+$mathGfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_gf\src\main.e') $repo 'x64' 'windows' $mathGfPath
+if ($LASTEXITCODE -ne 0 -or $mathGfWritten -ne 'executable written') { throw 'math_gf emission failed' }
+& $mathGfPath
+if ($LASTEXITCODE -ne 0) { throw "a math_gf check failed: exit $LASTEXITCODE" }
+# `e.math.mc`: a Black-Scholes call by the plain estimator within its standard error, antithetic pairs and a terminal-price control variate cutting that error, and an odd payoff estimated exactly by antithesis (D838).
+$mathMcPath = Join-Path $testBuild 'math-mc-selfhost.exe'
+$mathMcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_mc\src\main.e') $repo 'x64' 'windows' $mathMcPath
+if ($LASTEXITCODE -ne 0 -or $mathMcWritten -ne 'executable written') { throw 'math_mc emission failed' }
+& $mathMcPath
+if ($LASTEXITCODE -ne 0) { throw "a math_mc check failed: exit $LASTEXITCODE" }
+# `e.math.mcmc`: Metropolis-Hastings, Gibbs, HMC and NUTS each recover the moments of a correlated bivariate normal from a far start, with the random walk rejecting about half and the gradient samplers nearly none (D838).
+$mathMcmcPath = Join-Path $testBuild 'math-mcmc-selfhost.exe'
+$mathMcmcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_mcmc\src\main.e') $repo 'x64' 'windows' $mathMcmcPath
+if ($LASTEXITCODE -ne 0 -or $mathMcmcWritten -ne 'executable written') { throw 'math_mcmc emission failed' }
+& $mathMcmcPath
+if ($LASTEXITCODE -ne 0) { throw "a math_mcmc check failed: exit $LASTEXITCODE" }
+# `e.math.opt.convex`: the interior-point method reaches the simplex fixture's optima, a Markowitz portfolio against SciPy, and stalls on the unbounded and the infeasible programme (D838).
+$mathOptConvexPath = Join-Path $testBuild 'math-opt-convex-selfhost.exe'
+$mathOptConvexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_opt_convex\src\main.e') $repo 'x64' 'windows' $mathOptConvexPath
+if ($LASTEXITCODE -ne 0 -or $mathOptConvexWritten -ne 'executable written') { throw 'math_opt_convex emission failed' }
+& $mathOptConvexPath
+if ($LASTEXITCODE -ne 0) { throw "a math_opt_convex check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

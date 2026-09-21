@@ -149,7 +149,37 @@
     "e.text.search",
     "e.text.distance",
     "e.algo.sketch",
-    "e.algo.coding"
+    "e.algo.coding",
+    "e.math.ntheory",
+    "e.math.root",
+    "e.algo.combin",
+    "e.data.fenwick",
+    "e.data.sparse_table",
+    "e.algo.dp",
+    "e.data.segment_tree",
+    "e.data.cache",
+    "e.data.trie",
+    "e.algo.consistent_hash",
+    "e.algo.geom",
+    "e.algo.geom.clip",
+    "e.math.special",
+    "e.algo.rand.dist",
+    "e.algo.stat.test",
+    "e.algo.graph.flow",
+    "e.algo.graph.match",
+    "e.algo.graph.path",
+    "e.algo.graph.tree",
+    "e.algo.graph.span",
+    "e.math.fft",
+    "e.math.ode",
+    "e.math.filter",
+    "e.math.opt",
+    "e.math.opt.meta",
+    "e.math.float",
+    "e.math.gf",
+    "e.math.mc",
+    "e.math.mcmc",
+    "e.math.opt.convex"
    ]
   },
   {
@@ -430,6 +460,42 @@
   },
   {
    "name": "e.algo.coding",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.combin",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.dp",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.consistent_hash",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.geom",
    "layer": 2,
    "surface": "source",
    "milestone": null,
@@ -822,6 +888,51 @@
    "direct_dependencies": [
     "e.mem"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.fenwick",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.sparse_table",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.segment_tree",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.cache",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.trie",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {
@@ -1576,6 +1687,80 @@
    "blocked_by": []
   },
   {
+   "name": "e.math.ntheory",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.root",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.special",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.fft",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.ode",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.filter",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.opt",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.mem",
    "layer": 0,
    "surface": "spec",
@@ -2291,6 +2476,174 @@
     "e.mem",
     "e.os",
     "e.ui.style"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.geom.clip",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.geom"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.rand.dist",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.test",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.graph.flow",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.data.graph"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.graph.match",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.data.graph"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.graph.path",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.data.graph",
+    "e.algo.graph"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.graph.tree",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.data.graph",
+    "e.algo.disjoint_set"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.graph.span",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.data.graph",
+    "e.algo.disjoint_set"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.opt.meta",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.opt.convex",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.float",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.gf",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.mc",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.algo.rand.dist",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.mcmc",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.algo.rand.dist",
+    "e.math"
    ],
    "blocked_by": []
   }

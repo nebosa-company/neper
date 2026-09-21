@@ -531,6 +531,168 @@ fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
 The default heap is a min-heap under `T.cmp`; `HeapBy` uses `cmp`. Bulk construction
 is linear time. Iteration exposes internal heap order, not sorted order.
 
+### `e.data.fenwick`
+
+```neper
+type Fenwick = struct { tree: []i64 }
+error TooSmall
+
+fn init(tree: []i64) -> Fenwick
+fn from_values(tree: []i64) -> Fenwick
+fn len(f: *const Fenwick) -> usize
+fn add(f: *Fenwick, index: usize, delta: i64)
+fn prefix_sum(f: *const Fenwick, count: usize) -> i64
+fn range_sum(f: *const Fenwick, low: usize, high: usize) -> i64
+fn get(f: *const Fenwick, index: usize) -> i64
+fn set(f: *Fenwick, index: usize, value: i64)
+fn lower_bound(f: *const Fenwick, total: i64) -> usize
+```
+
+`tree.len` is the element count and the storage; `from_values` builds in place in
+`O(n)`. `lower_bound` assumes non-negative elements and answers `len + 1` when no
+prefix reaches the total.
+
+### `e.data.sparse_table`
+
+```neper
+type SparseTable[T: type] = struct { table: []T, count: usize, levels: usize, prefer_max: bool }
+type DisjointTable = struct { table: []i64, count: usize, levels: usize }
+error TooSmall
+error Invalid
+
+fn levels_for(count: usize) -> usize
+fn build[T: type](storage: []T, values: []const T, prefer_max: bool) -> (SparseTable[T], err)
+fn query[T: type](t: *const SparseTable[T], low: usize, high: usize) -> (T, err)
+fn disjoint_build(storage: []i64, values: []const i64) -> (DisjointTable, err)
+fn disjoint_query(t: *const DisjointTable, low: usize, high: usize) -> (i64, err)
+```
+
+`storage.len >= n * levels_for(n)`. `build` orders by `T.cmp` (min, or max with
+`prefer_max`) and `query` is `O(1)` over a half-open range; the disjoint table answers
+sums, which are not idempotent, in the same time.
+
+### `e.data.segment_tree`
+
+```neper
+type SegmentTree[T: type] = struct { nodes: []T, count: usize, identity: T }
+type Lazy = struct { sums: []i64, mins: []i64, pending: []i64, count: usize }
+type Persistent = struct { left: []u32, right: []u32, sums: []i64, used: usize, count: usize }
+error TooSmall
+error Invalid
+
+fn build[T: type, Ctx: type](nodes: []T, values: []const T, identity: T, ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> (SegmentTree[T], err)
+fn build_node[T: type, Ctx: type](t: *SegmentTree[T], node: usize, low: usize, high: usize, values: []const T, ctx: *Ctx, combine: fn(*Ctx, T, T) -> T)
+fn update[T: type, Ctx: type](t: *SegmentTree[T], index: usize, value: T, ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> err
+fn query[T: type, Ctx: type](t: *const SegmentTree[T], low: usize, high: usize, ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> (T, err)
+fn query_node[T: type, Ctx: type](t: *const SegmentTree[T], node: usize, low: usize, high: usize, from: usize, to: usize, ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> T
+fn lazy_build(sums: []i64, mins: []i64, pending: []i64, values: []const i64) -> (Lazy, err)
+fn lazy_build_node(t: *Lazy, node: usize, low: usize, high: usize, values: []const i64)
+fn lazy_apply(t: *Lazy, node: usize, width: usize, delta: i64)
+fn lazy_push(t: *Lazy, node: usize, low: usize, high: usize)
+fn lazy_add(t: *Lazy, low: usize, high: usize, delta: i64) -> err
+fn lazy_add_node(t: *Lazy, node: usize, low: usize, high: usize, from: usize, to: usize, delta: i64)
+fn lazy_sum(t: *Lazy, low: usize, high: usize) -> (i64, err)
+fn lazy_sum_node(t: *Lazy, node: usize, low: usize, high: usize, from: usize, to: usize) -> i64
+fn lazy_min(t: *Lazy, low: usize, high: usize) -> (i64, err)
+fn lazy_min_node(t: *Lazy, node: usize, low: usize, high: usize, from: usize, to: usize) -> i64
+fn persistent_build(left: []u32, right: []u32, sums: []i64, values: []const i64) -> (Persistent, u32, err)
+fn persistent_build_node(t: *Persistent, low: usize, high: usize, values: []const i64) -> u32
+fn persistent_add(t: *Persistent, root: u32, index: usize, delta: i64) -> (u32, err)
+fn persistent_add_node(t: *Persistent, old: u32, low: usize, high: usize, index: usize, delta: i64) -> u32
+fn persistent_sum(t: *const Persistent, root: u32, low: usize, high: usize) -> (i64, err)
+fn persistent_sum_node(t: *const Persistent, node: u32, low: usize, high: usize, from: usize, to: usize) -> i64
+```
+
+`SegmentTree[T]` folds any associative `combine` with an identity over `4 * n`
+nodes; `Lazy` is the `i64` tree with range addition and range sum and minimum;
+`Persistent` keeps every version in a node pool (`2 * n` for the build plus
+`ceil(log2 n) + 1` per update) and answers a root per version.
+
+### `e.data.cache`
+
+```neper
+type Lru = struct { keys: []u64, values: []u64, prev: []u32, next: []u32, index: []u32, head: u32, tail: u32, len: usize, free: u32 }
+type Fifo = struct { order: []u32, head: usize, len: usize }
+type Clock = struct { referenced: []u8, filled: []u8, hand: usize }
+type Lfu = struct { hits: []u64, filled: []u8 }
+type Slru = struct { prev: []u32, next: []u32, protected: []u8, probation_head: u32, probation_tail: u32, protected_head: u32, protected_tail: u32, protected_len: usize, protected_cap: usize }
+type TwoQueue = struct { prev: []u32, next: []u32, main: []u8, ghosts: []u64, ghost_at: usize, in_head: u32, in_tail: u32, in_len: usize, in_cap: usize, main_head: u32, main_tail: u32 }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn lru_init(keys: []u64, values: []u64, prev: []u32, next: []u32, index: []u32, capacity: usize) -> (Lru, err)
+fn lru_len(c: *const Lru) -> usize
+fn lru_hash(key: u64) -> u64
+fn lru_find(c: *const Lru, key: u64) -> (usize, bool)
+fn lru_unlink(c: *Lru, slot: u32)
+fn lru_push_front(c: *Lru, slot: u32)
+fn lru_get(c: *Lru, key: u64) -> (u64, bool)
+fn lru_contains(c: *const Lru, key: u64) -> bool
+fn lru_index_remove(c: *Lru, cell: usize)
+fn lru_put(c: *Lru, key: u64, value: u64) -> (u64, bool)
+fn lru_remove(c: *Lru, key: u64) -> bool
+fn lru_oldest(c: *const Lru) -> (u64, bool)
+fn fifo_init(order: []u32, capacity: usize) -> (Fifo, err)
+fn fifo_evict(f: *const Fifo) -> (u32, bool)
+fn fifo_insert(f: *Fifo, slot: u32)
+fn clock_init(referenced: []u8, filled: []u8, capacity: usize) -> (Clock, err)
+fn clock_touch(k: *Clock, slot: u32)
+fn clock_insert(k: *Clock, slot: u32)
+fn clock_evict(k: *Clock) -> u32
+fn lfu_init(hits: []u64, filled: []u8, capacity: usize) -> (Lfu, err)
+fn lfu_touch(l: *Lfu, slot: u32)
+fn lfu_insert(l: *Lfu, slot: u32)
+fn lfu_evict(l: *const Lfu) -> u32
+fn slru_init(prev: []u32, next: []u32, protected: []u8, capacity: usize, protected_cap: usize) -> (Slru, err)
+fn slru_unlink(s: *Slru, slot: u32)
+fn slru_push_probation(s: *Slru, slot: u32)
+fn slru_push_protected(s: *Slru, slot: u32)
+fn slru_insert(s: *Slru, slot: u32)
+fn slru_touch(s: *Slru, slot: u32)
+fn slru_evict(s: *Slru) -> u32
+fn slru_is_protected(s: *const Slru, slot: u32) -> bool
+fn two_queue_init(prev: []u32, next: []u32, main: []u8, ghosts: []u64, capacity: usize, in_cap: usize) -> (TwoQueue, err)
+fn two_queue_remembers(q: *const TwoQueue, key: u64) -> bool
+fn two_queue_unlink(q: *TwoQueue, slot: u32)
+fn two_queue_push(q: *TwoQueue, slot: u32, to_main: bool)
+fn two_queue_insert(q: *TwoQueue, slot: u32, key: u64)
+fn two_queue_touch(q: *TwoQueue, slot: u32)
+fn two_queue_evict(q: *TwoQueue, keys: []const u64) -> u32
+fn two_queue_in_main(q: *const TwoQueue, slot: u32) -> bool
+```
+
+`Lru` is a complete keyed cache (`u64` to `u64`, an open-addressing index in the
+same storage); the other policies order slot numbers `0..capacity` for a caller that
+keeps its own key index: `evict` names the slot to reuse, `insert` and `touch` report
+fills and hits. `Lfu` scans linearly.
+
+### `e.data.trie`
+
+```neper
+type Trie = struct { bytes: []u8, first: []u32, next: []u32, terminal: []u8, values: []u64, used: usize }
+error TooSmall
+error Invalid
+const NONE: u32 = 4294967295u32
+
+fn init(bytes: []u8, first: []u32, next: []u32, terminal: []u8, values: []u64, capacity: usize) -> (Trie, err)
+fn len(t: *const Trie) -> usize
+fn child(t: *const Trie, node: u32, b: u8) -> u32
+fn insert(t: *Trie, key: []const u8, value: u64) -> (bool, err)
+fn get(t: *const Trie, key: []const u8) -> (u64, bool)
+fn contains(t: *const Trie, key: []const u8) -> bool
+fn has_prefix(t: *const Trie, prefix: []const u8) -> bool
+fn any_terminal(t: *const Trie, node: u32) -> bool
+fn remove(t: *Trie, key: []const u8) -> bool
+fn longest_prefix(t: *const Trie, text: []const u8) -> (usize, u64, bool)
+fn prefix_iter[Ctx: type](t: *const Trie, prefix: []const u8, scratch: []u8, ctx: *Ctx, visit: fn(*Ctx, []const u8, u64) -> bool) -> (bool, err)
+fn walk[Ctx: type](t: *const Trie, node: u32, depth: usize, scratch: []u8, ctx: *Ctx, visit: fn(*Ctx, []const u8, u64) -> bool) -> (bool, err)
+```
+
+Node 0 is the root; the five slices need `capacity` entries. Children hang off a
+sibling list, `remove` clears a terminal without reclaiming nodes, and `prefix_iter`
+visits keys in byte order with the key assembled in caller scratch.
+
 ### `e.data.tree`
 
 ```neper
@@ -695,12 +857,141 @@ accumulator alongside an error. Ordinary for never silently consumes next_err.
 
 ## 4. Pure algorithms, text and cryptography
 
+### `e.algo.combin`
+
+```neper
+error Invalid
+error TooSmall
+
+fn binomial(n: u64, k: u64) -> (u64, bool)
+fn gcd(a: u64, b: u64) -> u64
+fn factorial(n: u64) -> (u64, bool)
+fn next_permutation[T: type](items: []T) -> bool
+fn reverse[T: type](items: []T)
+fn permutations[T: type, Ctx: type](items: []T, scratch: []usize, ctx: *Ctx, visit: fn(*Ctx, []const T) -> bool) -> (bool, err)
+fn next_combination(indices: []usize, n: usize) -> bool
+fn subsets[Ctx: type](count: u32, ctx: *Ctx, visit: fn(*Ctx, u64) -> bool) -> (bool, err)
+fn next_subset_same_popcount(mask: u64) -> u64
+fn next_submask(sub: u64, mask: u64) -> (u64, bool)
+fn subsets_of_mask[Ctx: type](mask: u64, ctx: *Ctx, visit: fn(*Ctx, u64) -> bool) -> bool
+fn subset_sums(values: []i64, bits: u32) -> err
+fn subset_sums_inverse(values: []i64, bits: u32) -> err
+fn superset_sums(values: []i64, bits: u32) -> err
+```
+
+Enumerators either step caller-held state in place (`next_*`, `false` when exhausted,
+leaving the first element) or call a visitor per element and stop on `false`. Masks are
+`u64`; the transforms work in place over `1 << bits` entries.
+
+### `e.algo.dp`
+
+```neper
+type Line = struct { slope: i64, intercept: i64 }
+type LiChao = struct { lines: []Line, filled: []u8, low: i64, high: i64 }
+error TooSmall
+error Invalid
+
+fn knapsack(weights: []const u64, values: []const i64, capacity: usize, table: []i64) -> (i64, err)
+fn knapsack_unbounded(weights: []const u64, values: []const i64, capacity: usize, table: []i64) -> (i64, err)
+fn knapsack_fractional(weights: []const f64, values: []const f64, capacity: f64, order: []usize) -> (f64, err)
+fn lis(values: []const i64, tails: []i64) -> (usize, err)
+fn lcs[T: type](a: []const T, b: []const T, scratch: []usize) -> (usize, err)
+fn shortest_common_supersequence[T: type](a: []const T, b: []const T, scratch: []usize) -> (usize, err)
+fn longest_palindromic_subsequence(s: []const u8, scratch: []usize) -> (usize, err)
+fn coin_change_min(coins: []const u64, amount: usize, table: []u64) -> (u64, bool, err)
+fn coin_change_ways(coins: []const u64, amount: usize, table: []u64) -> (u64, err)
+fn subset_sum(values: []const u64, wanted: usize, table: []u8) -> (bool, err)
+fn partition_equal(values: []const u64, table: []u8) -> (bool, err)
+fn max_subarray(values: []const i64) -> (i64, usize, usize)
+fn max_product_subarray(values: []const i64) -> i64
+fn matrix_chain(dims: []const u64, table: []u64) -> (u64, err)
+fn optimal_bst(frequencies: []const u64, table: []u64) -> (u64, err)
+fn largest_rectangle_histogram(heights: []const u64, stack: []usize) -> (u64, usize, usize, err)
+fn previous_smaller(values: []const i64, out: []usize, stack: []usize) -> err
+fn li_chao_init(lines: []Line, filled: []u8, low: i64, high: i64) -> (LiChao, err)
+fn li_chao_insert(t: *LiChao, line: Line)
+fn li_chao_query(t: *const LiChao, x: i64) -> (i64, bool)
+fn hull_add(hull: []Line, count: usize, line: Line) -> (usize, err)
+fn hull_query(hull: []const Line, count: usize, pointer: *usize, x: i64) -> (i64, bool)
+```
+
+Each routine states the scratch it needs and answers `TooSmall` when short; values
+are `i64` and never checked for overflow. The Li Chao tree covers an integer domain
+with `4 * (high - low + 1)` nodes; the convex hull trick wants lines in decreasing
+slope order and queries at increasing `x`.
+
+### `e.algo.geom`
+
+```neper
+type Point = struct { x: f64, y: f64 }
+type Circle = struct { center: Point, radius: f64 }
+error TooSmall
+error Invalid
+
+fn point(x: f64, y: f64) -> Point
+fn orient(a: Point, b: Point, c: Point) -> f64
+fn distance_squared(a: Point, b: Point) -> f64
+fn in_circle(a: Point, b: Point, c: Point, d: Point) -> bool
+fn on_segment(a: Point, b: Point, p: Point) -> bool
+fn segments_intersect(a: Point, b: Point, c: Point, d: Point) -> bool
+fn segment_intersection(a: Point, b: Point, c: Point, d: Point) -> (Point, bool)
+fn polygon_area(polygon: []const Point) -> f64
+fn is_convex(polygon: []const Point) -> bool
+fn point_in_polygon(polygon: []const Point, p: Point) -> bool
+fn winding_number(polygon: []const Point, p: Point) -> i32
+fn hull(points: []Point, out: []Point) -> (usize, err)
+fn sort_points(points: []Point)
+fn hull_jarvis(points: []const Point, out: []Point) -> (usize, err)
+fn closest_pair(points: []Point) -> (usize, usize, f64, err)
+fn farthest_pair(hull_points: []const Point) -> (usize, usize, f64, err)
+fn min_bounding_rect(hull_points: []const Point, out: []Point) -> (f64, err)
+fn sqrt_f64(x: f64) -> f64
+fn enclosing_circle(points: []const Point) -> Circle
+fn circle_contains(c: Circle, p: Point) -> bool
+fn circle_two(a: Point, b: Point) -> Circle
+fn circle_three(a: Point, b: Point, c: Point) -> Circle
+fn lattice_points(polygon: []const Point) -> (i64, i64)
+fn morton_encode(x: u32, y: u32) -> u64
+fn spread(v: u32) -> u64
+fn morton_decode(code: u64) -> (u32, u32)
+fn compact(v: u64) -> u32
+```
+
+Points are `f64` pairs; polygons are point slices in either winding and
+`polygon_area` is signed (positive counter-clockwise). `hull` sorts its input in
+place and needs `out.len >= points.len + 1`; `closest_pair` also sorts. Predicates
+are plain floating point.
+
+### `e.algo.geom.clip`
+
+```neper
+type Rect = struct { min: geom.Point, max: geom.Point }
+error TooSmall
+error Invalid
+
+fn clip_convex(subject: []const geom.Point, window: []const geom.Point, out: []geom.Point, scratch: []geom.Point) -> (usize, err)
+fn line_intersection(a: geom.Point, b: geom.Point, c: geom.Point, d: geom.Point) -> (geom.Point, bool)
+fn outcode(r: Rect, p: geom.Point) -> u32
+fn clip_line(r: Rect, a: geom.Point, b: geom.Point) -> (geom.Point, geom.Point, bool)
+fn clip_line_liang_barsky(r: Rect, a: geom.Point, b: geom.Point) -> (geom.Point, geom.Point, bool)
+fn triangulate_ear_clip(polygon: []const geom.Point, triangles: []usize, scratch: []usize) -> (usize, err)
+fn simplify_douglas_peucker(points: []const geom.Point, tolerance: f64, keep: []u8, stack: []usize) -> err
+fn point_segment_distance_squared(p: geom.Point, a: geom.Point, b: geom.Point) -> f64
+fn simplify_visvalingam(points: []const geom.Point, min_area: f64, keep: []u8) -> err
+```
+
+`clip_convex` wants a convex counter-clockwise window and `2 * subject.len +
+window.len` points of `out` and `scratch`; `triangulate_ear_clip` writes
+`3 * (n - 2)` indices for a simple polygon in either winding; the simplifiers
+mark kept points with 1 in `keep`.
+
 ### `e.algo.rand`
 
 ```neper
 type Pcg64 = struct { state: u64, stream: u64 }
 type Xoshiro256 = struct { s0: u64, s1: u64, s2: u64, s3: u64 }
 type Mt19937 = struct { state: [624]u32, index: u32 }
+type Reservoir[T: type] = struct { items: []T, seen: u64 }
 
 fn pcg64(seed: u64, stream: u64) -> Pcg64
 fn pcg64_next(r: *Pcg64) -> u64
@@ -712,6 +1003,11 @@ fn xoshiro256_bounded(r: *Xoshiro256, upper: u64) -> u64
 fn xoshiro256_f64(r: *Xoshiro256) -> f64
 fn mt19937(seed: u32) -> Mt19937
 fn mt19937_next(r: *Mt19937) -> u32
+fn shuffle[T: type](r: *Pcg64, items: []T)
+fn cycle_permutation[T: type](r: *Pcg64, items: []T)
+fn reservoir[T: type](items: []T) -> Reservoir[T]
+fn reservoir_offer[T: type](s: *Reservoir[T], r: *Pcg64, item: T)
+fn reservoir_sample[T: type](s: *const Reservoir[T]) -> []T
 ```
 
 `bounded(..., 0)` returns zero; otherwise it is unbiased rejection sampling.
@@ -736,6 +1032,154 @@ fn uuid_format(uuid: Uuid, b: *str.Builder) -> err
 
 `format` writes the 36-byte lowercase hyphenated form. Entropy and time are supplied
 by the caller; this module never reads `e.os`.
+
+### `e.algo.consistent_hash`
+
+```neper
+type Point = struct { position: u64, node: u64 }
+error TooSmall
+error Invalid
+
+fn mix(x: u64) -> u64
+fn ring_position(node: u64, replica: u32) -> u64
+fn ring_build(points: []Point, nodes: []const u64, replicas: u32) -> ([]Point, err)
+fn point_before(a: Point, b: Point) -> bool
+fn ring_sift(ring: []Point, at: usize, end: usize)
+fn ring_lookup(ring: []const Point, key: u64) -> (u64, bool)
+fn ring_successors(ring: []const Point, key: u64, out: []u64) -> usize
+fn rendezvous(nodes: []const u64, key: u64) -> (usize, bool)
+fn jump(key: u64, buckets: u32) -> u32
+```
+
+Nodes are `u64` identifiers and keys are hashes the caller computed. `ring_build`
+places `replicas` points per node in caller storage and sorts them; `rendezvous`
+needs no state; `jump` numbers buckets `0..count`.
+
+### `e.algo.graph.flow`
+
+```neper
+type Network = struct { head: []u32, next: []u32, to: []u32, capacity: []i64, arcs: usize, nodes: usize, source: u32, sink: u32 }
+error InvalidNode
+error InvalidCapacity
+const NONE: u32 = 4294967295u32
+
+fn build[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], source: graph.NodeId, sink: graph.NodeId, ctx: *Ctx, capacity: fn(*Ctx, graph.Edge[E]) -> i64) -> (Network, err)
+fn add_arc(net: *Network, from: u32, to: u32, capacity: i64)
+fn edmonds_karp(a: *mem.Arena, net: *Network) -> (i64, err)
+fn dinic(a: *mem.Arena, net: *Network) -> (i64, err)
+fn push_relabel(a: *mem.Arena, net: *Network) -> (i64, err)
+fn min_cut(a: *mem.Arena, net: *const Network, side: []u8) -> err
+fn edge_flow(net: *const Network, edge_index: usize) -> i64
+```
+
+`build` turns a graph and a capacity function into a residual network in the
+arena; `edmonds_karp`, `dinic` and `push_relabel` each compute the maximum flow on
+it (a saturated network answers 0 to a second call), `min_cut` marks the source
+side afterwards and `edge_flow` reads the flow on an input edge by its CSR index.
+
+### `e.algo.graph.match`
+
+```neper
+error Invalid
+error TooSmall
+const NONE: u32 = 4294967295u32
+const NONE_USIZE: usize = 18446744073709551615usize
+
+fn hopcroft_karp[E: type](a: *mem.Arena, g: *const graph.Graph[E], left: usize, match_left: []u32, match_right: []u32) -> (usize, err)
+fn hungarian(costs: []const f64, n: usize, assignment: []usize, scratch: []f64, used: []usize) -> (f64, err)
+fn stable_marriage(proposer_prefs: []const usize, receiver_prefs: []const usize, n: usize, match_proposer: []usize, scratch: []usize) -> err
+fn blossom[E: type](a: *mem.Arena, g: *const graph.Graph[E], mate: []u32) -> (usize, err)
+fn lowest_common_base(base: []u32, parent: []u32, mate: []u32, a: u32, b: u32, root: u32, mark: []u8, n: usize) -> u32
+fn mark_path(base: []u32, parent: []u32, mate: []u32, in_blossom: []u8, from: u32, common: u32, child: u32)
+```
+
+`hopcroft_karp` reads edges from left nodes `0..left` to right nodes; `hungarian`
+minimises over a row-major cost matrix (scratch `4 * (n + 1)` floats and `2 * (n + 1)`
+indices); `stable_marriage` is proposer-optimal over preference lists; `blossom`
+matches a general graph. `NONE` marks an unmatched node.
+
+### `e.algo.graph.path`
+
+```neper
+type Route = struct { nodes: []const graph.NodeId, cost: f64 }
+error NegativeCycle
+error InvalidNode
+error TooSmall
+error NoPath
+
+fn infinity() -> f64
+fn path_to(a: *mem.Arena, previous: []const graph.NodeId, start: graph.NodeId, goal: graph.NodeId) -> ([]const graph.NodeId, err)
+fn bellman_ford[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (algo.Paths, err)
+fn floyd_warshall[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> ([]f64, err)
+fn dial[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, max_weight: usize, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> usize) -> ([]usize, err)
+fn johnson[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> ([]f64, err)
+fn astar[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64, heuristic: fn(*Ctx, graph.NodeId) -> f64) -> (Route, err)
+fn bidirectional[E: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId) -> (Route, err)
+fn iddfs[E: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, max_depth: usize) -> (Route, err)
+fn ida_star[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, max_depth: usize, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64, heuristic: fn(*Ctx, graph.NodeId) -> f64) -> (Route, err)
+```
+
+Distances are `f64` with `infinity()` for unreachable; `bellman_ford`,
+`floyd_warshall` and `johnson` answer `NegativeCycle`; `dial` wants non-negative
+integer weights at most `max_weight`; `astar` and `ida_star` take a heuristic over
+nodes; `bidirectional` and `iddfs` count edges.
+
+### `e.algo.graph.tree`
+
+```neper
+type Rooted = struct { parent: []graph.NodeId, depth: []u32, size: []u32, order: []graph.NodeId }
+type Lifting = struct { up: []graph.NodeId, depth: []const u32, levels: usize, count: usize }
+type EulerTour = struct { entry: []u32, exit: []u32, sequence: []graph.NodeId }
+type HeavyLight = struct { head: []graph.NodeId, position: []u32, parent: []graph.NodeId, depth: []const u32 }
+error InvalidNode
+error NotATree
+error TooSmall
+
+fn root_at[E: type](a: *mem.Arena, g: *const graph.Graph[E], root: graph.NodeId) -> (Rooted, err)
+fn lifting(a: *mem.Arena, tree: *const Rooted) -> (Lifting, err)
+fn ancestor(l: *const Lifting, v: graph.NodeId, steps: u32) -> graph.NodeId
+fn lca(l: *const Lifting, a: graph.NodeId, b: graph.NodeId) -> graph.NodeId
+fn distance(l: *const Lifting, a: graph.NodeId, b: graph.NodeId) -> u32
+fn lca_offline[E: type](a: *mem.Arena, g: *const graph.Graph[E], tree: *const Rooted, queries: []const graph.NodeId, out: []graph.NodeId) -> err
+fn euler_tour[E: type](a: *mem.Arena, g: *const graph.Graph[E], tree: *const Rooted) -> (EulerTour, err)
+fn heavy_light(a: *mem.Arena, tree: *const Rooted) -> (HeavyLight, err)
+fn path_ranges(h: *const HeavyLight, a: graph.NodeId, b: graph.NodeId, out: []u32) -> (usize, err)
+fn centroid_decompose[E: type](a: *mem.Arena, g: *const graph.Graph[E], centroid_parent: []graph.NodeId, centroid_level: []u32) -> err
+fn prufer_encode[E: type](a: *mem.Arena, g: *const graph.Graph[E], out: []graph.NodeId) -> err
+fn prufer_decode(a: *mem.Arena, code: []const graph.NodeId, edges: []graph.NodeId) -> err
+fn ahu_labels[E: type](a: *mem.Arena, g: *const graph.Graph[E], tree: *const Rooted, label: []u64, scratch: []u64) -> err
+```
+
+`root_at` turns an undirected tree into parents, depths, sizes and a BFS order
+(`NotATree` for a cycle or a disconnected node); `lifting` and `lca` answer
+ancestors in `O(log n)`, `lca_offline` a batch in one walk; `euler_tour`,
+`heavy_light` with `path_ranges`, `centroid_decompose`, Prüfer codes and AHU
+labels each work over that rooting.
+
+### `e.algo.graph.span`
+
+```neper
+type Forest = struct { edges: []const usize, weight: f64, trees: usize }
+error InvalidNode
+error TooSmall
+error NotEulerian
+
+fn kruskal[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Forest, err)
+fn sort_by_weight(order: []usize, weights: []const f64)
+fn lighter(weights: []const f64, a: usize, b: usize) -> bool
+fn sift(order: []usize, weights: []const f64, at: usize, end: usize)
+fn prim[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Forest, err)
+fn boruvka[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Forest, err)
+fn twin[E: type](g: *const graph.Graph[E], k: usize) -> usize
+fn bridges_and_cuts[E: type](a: *mem.Arena, g: *const graph.Graph[E], is_bridge: []u8, is_cut: []u8) -> err
+fn euler_path[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> ([]const graph.NodeId, err)
+fn transitive_closure[E: type](g: *const graph.Graph[E], reach: []u8) -> err
+```
+
+Undirected input is the `add_undirected` form (both copies present); the MSTs
+answer one CSR index per chosen edge (the `from < to` copy) and the tree count;
+`bridges_and_cuts` marks the same copies; `euler_path` works on a digraph and
+answers the node sequence; `transitive_closure` fills an `n x n` byte matrix.
 
 ### `e.algo.hash`
 
@@ -823,6 +1267,81 @@ fn reset(s: *DisjointSet)
 The caller supplies storage. `count` must fit `u32` and both slices. `find` performs
 path compression and `join` uses union by rank (it is not spelled `union`: that is a
 keyword, D161); indices outside `count` follow the ordinary bounds-trap rule.
+
+### `e.algo.rand.dist`
+
+```neper
+type Alias = struct { probability: []f64, alias: []usize }
+type WeightedReservoir = struct { items: []u64, keys: []f64, count: usize }
+error TooSmall
+error Invalid
+
+fn uniform_open(r: *rand.Pcg64) -> f64
+fn normal(r: *rand.Pcg64) -> f64
+fn normal_box_muller(r: *rand.Pcg64) -> (f64, f64)
+fn exponential(r: *rand.Pcg64, rate: f64) -> f64
+fn poisson(r: *rand.Pcg64, mean: f64) -> u64
+fn binomial(r: *rand.Pcg64, n: u64, p: f64) -> u64
+fn gamma(r: *rand.Pcg64, shape: f64, scale: f64) -> f64
+fn beta(r: *rand.Pcg64, alpha: f64, b: f64) -> f64
+fn dirichlet(r: *rand.Pcg64, alphas: []const f64, out: []f64) -> err
+fn cholesky(covariance: []const f64, n: usize, factor: []f64) -> err
+fn multivariate_normal(r: *rand.Pcg64, mean: []const f64, factor: []const f64, n: usize, out: []f64, scratch: []f64) -> err
+fn inverse_transform[Ctx: type](r: *rand.Pcg64, ctx: *Ctx, quantile: fn(*Ctx, f64) -> f64) -> f64
+fn rejection[Ctx: type](r: *rand.Pcg64, low: f64, high: f64, bound: f64, max_tries: u32, ctx: *Ctx, density: fn(*Ctx, f64) -> f64) -> (f64, bool)
+fn importance_weight[Ctx: type](x: f64, ctx: *Ctx, target_density: fn(*Ctx, f64) -> f64, proposal_density: fn(*Ctx, f64) -> f64) -> f64
+fn alias_build(weights: []const f64, probability: []f64, alias: []usize, scratch: []usize) -> (Alias, err)
+fn alias_sample(t: *const Alias, r: *rand.Pcg64) -> usize
+fn weighted_reservoir(items: []u64, keys: []f64) -> (WeightedReservoir, err)
+fn weighted_reservoir_offer(s: *WeightedReservoir, r: *rand.Pcg64, item: u64, weight: f64)
+fn stratified(r: *rand.Pcg64, out: []f64)
+fn latin_hypercube(r: *rand.Pcg64, points: usize, dims: usize, out: []f64, scratch: []usize) -> err
+fn radical_inverse(index: u64, base: u64) -> f64
+fn halton(index: u64, out: []f64) -> err
+fn sobol(index: u64, out: []f64) -> err
+fn direction(d: usize, bit: u64) -> u64
+```
+
+Variates draw from a `*rand.Pcg64`. `binomial` inverts the CDF below a mean of 30
+and uses the normal approximation above; `poisson` likewise past 500. The alias
+table and weighted reservoir live in caller storage; `sobol` covers four
+dimensions from Joe-Kuo direction numbers and `halton` sixteen.
+
+### `e.algo.stat.test`
+
+```neper
+type Result = struct { statistic: f64, p_value: f64 }
+error TooSmall
+error Invalid
+
+fn mean(values: []const f64) -> f64
+fn sample_variance(values: []const f64) -> f64
+fn two_sided_t(t: f64, df: f64) -> f64
+fn two_sided_normal(z: f64) -> f64
+fn t_test(values: []const f64, mu: f64) -> (Result, err)
+fn t_test_two(a: []const f64, b: []const f64) -> (Result, err)
+fn welch(a: []const f64, b: []const f64) -> (Result, err)
+fn ranks(values: []const f64, out: []f64, order: []usize) -> (f64, err)
+fn mann_whitney(a: []const f64, b: []const f64, scratch: []f64, order: []usize) -> (Result, err)
+fn wilcoxon(a: []const f64, b: []const f64, scratch: []f64, order: []usize) -> (Result, err)
+fn chi_squared(observed: []const f64, expected: []const f64) -> (Result, err)
+fn fisher_exact(a: u64, b: u64, c: u64, d: u64) -> Result
+fn table_log_probability(x: u64, row1: u64, row2: u64, col1: u64, log_total: f64) -> f64
+fn sort_floats(values: []f64)
+fn kolmogorov_smirnov(a: []f64, b: []f64) -> (Result, err)
+fn anova(values: []const f64, sizes: []const usize) -> (Result, err)
+fn kruskal_wallis(values: []const f64, sizes: []const usize, scratch: []f64, order: []usize) -> (Result, err)
+fn permutation(r: *rand.Pcg64, a: []const f64, b: []const f64, rounds: u32, scratch: []f64) -> (Result, err)
+fn bonferroni(p_values: []f64)
+fn benjamini_hochberg(p_values: []f64, order: []usize) -> err
+```
+
+Every test answers a statistic and a two-sided p-value. The rank tests use the
+normal approximation with continuity and tie correction; `kolmogorov_smirnov`
+sorts its inputs and uses the Numerical Recipes small-sample correction;
+`fisher_exact` sums every table at least as unlikely as the observed one.
+Scratch: `mann_whitney` `2 * (a.len + b.len)` floats, `wilcoxon` `3 * a.len`,
+`kruskal_wallis` the total, each with as many indices in `order`.
 
 ### `e.algo.stat`
 
@@ -4827,6 +5346,336 @@ fn frame_count(d: Decoder) -> usize
 fn decode_into(d: *Decoder, out: *audio.Frames) -> (usize, err)
 fn seek(d: *Decoder, frame: usize) -> err
 ```
+
+### `e.math.ntheory`
+
+```neper
+error TooSmall
+error Invalid
+
+fn gcd(a: u64, b: u64) -> u64
+fn lcm(a: u64, b: u64) -> u64
+fn extended_gcd(a: i64, b: i64) -> (i64, i64, i64)
+fn add_mod(a: u64, b: u64, m: u64) -> u64
+fn mul_mod(a: u64, b: u64, m: u64) -> u64
+fn pow_mod(base: u64, exponent: u64, m: u64) -> u64
+fn inverse_mod(a: u64, m: u64) -> (u64, bool)
+fn is_prime(n: u64) -> bool
+fn sieve(limit: usize, flags: []u8) -> err
+fn sieve_segmented(low: u64, high: u64, flags: []u8, scratch: []u8) -> err
+fn sieve_linear(limit: usize, spf: []u32, primes: []u32) -> (usize, err)
+fn factor_trial(n: u64, factors: []u64, exponents: []u32) -> (usize, err)
+fn factor_rho(n: u64) -> u64
+fn factor_p_minus_1(n: u64, bound: u64) -> (u64, bool)
+fn crt_garner(residues: []const u64, moduli: []const u64, mixed: []u64) -> (u64, bool)
+fn crt(residues: []const u64, moduli: []const u64) -> (u64, u64, bool)
+fn totient(n: u64) -> u64
+fn discrete_log_bsgs(base: u64, wanted: u64, m: u64, bound: u64, scratch: []u64) -> (u64, bool)
+fn pairs_swap(pairs: []u64, a: usize, b: usize)
+fn pairs_sift(pairs: []u64, at: usize, end: usize)
+fn discrete_log_pohlig_hellman(base: u64, wanted: u64, p: u64, scratch: []u64) -> (u64, bool)
+fn discrete_log_kangaroo(base: u64, wanted: u64, m: u64, low: u64, high: u64) -> (u64, bool)
+fn sqrt_mod(n: u64, p: u64) -> (u64, bool)
+fn stern_brocot_search(x: f64, tolerance: f64, max_den: u64) -> (u64, u64)
+fn farey_next(a: u64, c: u64, b: u64, d: u64, n: u64) -> (u64, u64)
+fn farey(n: u64, out: []u64) -> (usize, err)
+```
+
+Exact over the full `u64` range: `mul_mod` never overflows and `is_prime` is the
+deterministic Miller-Rabin test. Tables are caller storage: `sieve` needs
+`flags.len > limit`, `sieve_segmented` `flags.len > high - low` and `scratch.len > sqrt(high)`,
+`factor_trial` fifteen slots for any 64-bit value, `discrete_log_bsgs` `2 * ceil(sqrt(bound))`
+words. `crt` takes pairwise coprime moduli whose product fits a `u64`.
+
+### `e.math.root`
+
+```neper
+type Result = struct { x: f64, iterations: u32, converged: bool }
+
+fn bisect[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, low: f64, high: f64, tolerance: f64, max_iterations: u32) -> Result
+fn newton[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, df: fn(*Ctx, f64) -> f64, start: f64, tolerance: f64, max_iterations: u32) -> Result
+fn halley[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, df: fn(*Ctx, f64) -> f64, d2f: fn(*Ctx, f64) -> f64, start: f64, tolerance: f64, max_iterations: u32) -> Result
+fn secant[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, first: f64, second: f64, tolerance: f64, max_iterations: u32) -> Result
+fn brent[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, low: f64, high: f64, tolerance: f64, max_iterations: u32) -> Result
+```
+
+Every method takes the function as a value over borrowed context and stops when
+successive estimates are within `tolerance` or `f(x)` is exactly zero. The bracketing
+methods answer `converged: false` without iterating when `f(low)` and `f(high)` share a
+sign; the open methods answer `false` on a vanishing derivative or an exhausted budget.
+
+### `e.math.special`
+
+```neper
+fn nan() -> f64
+fn lgamma(x: f64) -> f64
+fn gamma(x: f64) -> f64
+fn erf(x: f64) -> f64
+fn erfc(x: f64) -> f64
+fn gamma_p(a: f64, x: f64) -> f64
+fn gamma_q(a: f64, x: f64) -> f64
+fn beta_i(a: f64, b: f64, x: f64) -> f64
+fn beta_fraction(a: f64, b: f64, x: f64) -> f64
+fn normal_cdf(z: f64) -> f64
+fn normal_quantile(p: f64) -> f64
+fn t_cdf(t: f64, df: f64) -> f64
+fn chi_squared_cdf(x: f64, df: f64) -> f64
+fn f_cdf(x: f64, d1: f64, d2: f64) -> f64
+fn choose(n: f64, k: f64) -> f64
+```
+
+Lanczos log-gamma, series and continued-fraction incomplete gamma and beta,
+Acklam's normal quantile refined by a Newton step; arguments outside a domain
+answer NaN. Accurate to about fifteen digits away from the tails.
+
+### `e.math.fft`
+
+```neper
+error Invalid
+error TooSmall
+const MODULUS: u64 = 998244353u64
+const ROOT: u64 = 3u64
+
+fn is_power_of_two(n: usize) -> bool
+fn bit_reverse(re: []f64, im: []f64)
+fn fft(re: []f64, im: []f64) -> err
+fn ifft(re: []f64, im: []f64) -> err
+fn transform(re: []f64, im: []f64, inverse: bool)
+fn convolve(x: []const f64, y: []const f64, out: []f64, scratch: []f64) -> err
+fn mul_mod(a: u64, b: u64) -> u64
+fn pow_mod(base: u64, exponent: u64) -> u64
+fn ntt(values: []u64) -> err
+fn intt(values: []u64) -> err
+fn ntt_transform(values: []u64, inverse: bool)
+fn convolve_mod(x: []const u64, y: []const u64, out: []u64, scratch: []u64) -> err
+fn fwht(values: []i64) -> err
+fn dct2(x: []const f64, out: []f64) -> err
+fn dct3(x: []const f64, out: []f64) -> err
+```
+
+`fft`/`ifft` transform split real and imaginary arrays of a power-of-two length in
+place (`Invalid` otherwise); `convolve` multiplies two real sequences through them over
+caller scratch; `ntt`/`intt` and `convolve_mod` are the same over the prime
+998244353; `fwht` is the Walsh-Hadamard transform over `i64` and `dct2`/`dct3` the
+cosine transforms of any length, unnormalised, `dct3` the inverse of `dct2` up to `2 / N`.
+
+### `e.math.ode`
+
+```neper
+error TooSmall
+
+fn euler[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, scratch: []f64) -> err
+fn rk4[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, scratch: []f64) -> err
+fn rkf45[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, tolerance: f64, scratch: []f64) -> (f64, f64, err)
+fn root4(x: f64) -> f64
+fn sqrt_f64(x: f64) -> f64
+fn verlet[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: []f64, v: []f64, h: f64, scratch: []f64) -> err
+fn leapfrog[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: []f64, v: []f64, h: f64, scratch: []f64) -> err
+fn yoshida[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: []f64, v: []f64, h: f64, scratch: []f64) -> err
+fn euler_maruyama[Ctx: type](ctx: *Ctx, drift: fn(*Ctx, f64, []const f64, []f64), diffusion: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, noise: []const f64, scratch: []f64) -> err
+```
+
+Every stepper advances the caller's state by one step of `h` in place over caller
+scratch: `euler` and `rk4` for `y' = f(t, y)`, `rkf45` adaptively (answering the step
+taken, 0 when rejected, and the step to try next), `verlet`, `leapfrog` and `yoshida`
+for second-order `x'' = a(x)` over separate position and velocity, and
+`euler_maruyama` for `dy = drift dt + diffusion dW` with the caller's normal draws.
+
+### `e.math.filter`
+
+```neper
+error TooSmall
+error Singular
+
+fn mat_mul(a: []const f64, b: []const f64, c: []f64, r: usize, k: usize, cols: usize)
+fn mat_transpose(a: []const f64, out: []f64, r: usize, c: usize)
+fn mat_inverse(a: []const f64, out: []f64, n: usize, scratch: []f64) -> err
+fn kalman_predict(x: []f64, p: []f64, f: []const f64, q: []const f64, n: usize, scratch: []f64) -> err
+fn kalman_update(x: []f64, p: []f64, h: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err
+fn ekf_predict[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), jacobian: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, n: usize, scratch: []f64) -> err
+fn ekf_update[Ctx: type](ctx: *Ctx, observe: fn(*Ctx, []const f64, []f64), jacobian: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err
+fn ukf_step[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), observe: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err
+fn cholesky(p: []const f64, n: usize, out: []f64) -> err
+fn particle_step[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, propagate: fn(*Ctx, *rand.Pcg64, []f64), likelihood: fn(*Ctx, []const f64, []const f64) -> f64, particles: []f64, weights: []f64, count: usize, n: usize, z: []const f64, scratch: []f64) -> err
+fn particle_mean(particles: []const f64, weights: []const f64, count: usize, n: usize, out: []f64) -> err
+fn complementary(angle: f64, rate: f64, accelerometer_angle: f64, dt: f64, alpha: f64) -> f64
+fn quaternion_normalize(q: []f64)
+fn madgwick(q: []f64, gx: f64, gy: f64, gz: f64, ax: f64, ay: f64, az: f64, dt: f64, beta: f64) -> err
+fn mahony(q: []f64, integral: []f64, gx: f64, gy: f64, gz: f64, ax: f64, ay: f64, az: f64, dt: f64, kp: f64, ki: f64) -> err
+fn quaternion_to_euler(q: []const f64) -> (f64, f64, f64)
+```
+
+Row-major matrices in caller storage: `kalman_predict`/`kalman_update` are the linear
+filter, `ekf_*` take the caller's transition, observation and Jacobians, `ukf_step` the
+unscented form over sigma points (with `cholesky` as its square root); `particle_step`
+propagates, weights and resamples a particle set and `particle_mean` reads it; the
+attitude filters `complementary`, `madgwick` and `mahony` update an angle or a
+quaternion from gyroscope and accelerometer readings, `quaternion_to_euler` reads it.
+
+### `e.math.opt`
+
+```neper
+type Result = struct { value: f64, iterations: u32, converged: bool }
+error TooSmall
+error Infeasible
+error Unbounded
+error Invalid
+
+fn dot(a: []const f64, b: []const f64) -> f64
+fn norm(a: []const f64) -> f64
+fn line_search[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, x: []const f64, fx: f64, gradient: []const f64, direction: []const f64, trial: []f64, initial: f64) -> f64
+fn line_search_wolfe[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), x: []const f64, fx: f64, gradient: []const f64, direction: []const f64, trial: []f64, trial_gradient: []f64) -> f64
+fn gradient_descent[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), x: []f64, step: f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn conjugate_gradient[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), x: []f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn bfgs[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), x: []f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn lbfgs[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), x: []f64, memory: usize, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn nelder_mead[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, x: []f64, scale: f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn replace_vertex(vertices: []f64, values: []f64, index: usize, point: []const f64, value: f64, n: usize)
+fn simplex(c: []const f64, a: []const f64, b: []const f64, m: usize, n: usize, x: []f64, tableau: []f64, basis: []usize) -> (f64, err)
+fn pivot(t: []f64, width: usize, rows: usize, leave: usize, enter: usize)
+```
+
+An objective is `f(ctx, x)` with gradient `g(ctx, x, out)`; `gradient_descent`,
+`conjugate_gradient` (Polak-Ribière), `bfgs` (dense inverse Hessian) and `lbfgs`
+(`memory` pairs, Wolfe line search) improve the caller's `x` in place until the
+gradient norm is under `tolerance`; `nelder_mead` needs no gradient; `simplex` solves
+`max c·x, A x <= b, x >= 0` by the two-phase dense method, answering `Infeasible` or
+`Unbounded`. Scratch is sized per declaration.
+
+### `e.math.opt.meta`
+
+```neper
+type Result = struct { value: f64, iterations: u32 }
+error TooSmall
+error Invalid
+
+fn copy(out: []f64, from: []const f64)
+fn distance2(a: []const f64, b: []const f64) -> f64
+fn seed_population(r: *rand.Pcg64, population: []f64, count: usize, n: usize, low: []const f64, high: []const f64) -> err
+fn clamp(x: []f64, low: []const f64, high: []const f64)
+fn simulated_annealing[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, neighbor: fn(*Ctx, *rand.Pcg64, []const f64, []f64), r: *rand.Pcg64, x: []f64, start: f64, finish: f64, steps: u32, scratch: []f64) -> (Result, err)
+fn hill_climb[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, neighbor: fn(*Ctx, *rand.Pcg64, []const f64, []f64), r: *rand.Pcg64, x: []f64, patience: u32, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn tabu[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, neighbor: fn(*Ctx, *rand.Pcg64, []const f64, []f64), r: *rand.Pcg64, x: []f64, candidates: usize, tenure: usize, radius: f64, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn evaluate_all[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, population: []const f64, count: usize, n: usize, values: []f64)
+fn best_of(values: []const f64, count: usize) -> usize
+fn genetic[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, r: *rand.Pcg64, population: []f64, count: usize, n: usize, low: []const f64, high: []const f64, mutation_rate: f64, mutation_scale: f64, generations: u32, x: []f64, scratch: []f64) -> (Result, err)
+fn tournament(r: *rand.Pcg64, values: []const f64, count: usize) -> usize
+fn particle_swarm[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, r: *rand.Pcg64, positions: []f64, count: usize, n: usize, low: []const f64, high: []const f64, inertia: f64, cognitive: f64, social: f64, iterations: u32, x: []f64, scratch: []f64) -> (Result, err)
+fn differential_evolution[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64, r: *rand.Pcg64, population: []f64, count: usize, n: usize, low: []const f64, high: []const f64, weight: f64, crossover: f64, generations: u32, x: []f64, scratch: []f64) -> (Result, err)
+fn ant_colony(r: *rand.Pcg64, distance: []const f64, n: usize, ants: usize, alpha: f64, beta: f64, evaporation: f64, iterations: u32, tour: []usize, scratch: []f64, marks: []usize) -> (f64, err)
+```
+
+Minimisers needing no gradient: `simulated_annealing`, `hill_climb` and `tabu` move
+by the caller's `neighbor(ctx, r, x, out)`; `genetic`, `particle_swarm` and
+`differential_evolution` evolve a caller population seeded by `seed_population` in a
+box; `ant_colony` builds a short closed tour over a distance matrix. Every method
+draws from a `*rand.Pcg64` and leaves the best point in `x`.
+
+### `e.math.float`
+
+```neper
+type Fields = struct { negative: bool, exponent: u32, mantissa: u64 }
+
+fn unpack64(x: f64) -> Fields
+fn unpack32(x: f32) -> Fields
+fn pack64(f: Fields) -> f64
+fn pack32(f: Fields) -> f32
+fn exponent_of(x: f64) -> i32
+fn round_shift(bits: u32, shift: u32) -> u32
+fn to_f16(x: f32) -> u16
+fn from_f16(h: u16) -> f32
+fn to_bf16(x: f32) -> u16
+fn from_bf16(h: u16) -> f32
+```
+
+`unpack64`/`unpack32` split a float into sign, biased exponent and mantissa and
+`pack64`/`pack32` rebuild it; `exponent_of` is the unbiased exponent. `to_f16`/`from_f16`
+convert `f32` and binary16 (round to nearest even, subnormals, infinities, a quiet NaN),
+`to_bf16`/`from_bf16` the same for bfloat16.
+
+### `e.math.gf`
+
+```neper
+error Invalid
+error TooSmall
+
+fn add(a: u8, b: u8) -> u8
+fn mul(a: u8, b: u8, polynomial: u8) -> u8
+fn pow(a: u8, exponent: u32, polynomial: u8) -> u8
+fn inverse(a: u8, polynomial: u8) -> (u8, err)
+fn tables(generator: u8, polynomial: u8, exp: []u8, log: []u8) -> err
+fn mul_table(a: u8, b: u8, exp: []const u8, log: []const u8) -> u8
+fn clmul(a: u64, b: u64) -> (u64, u64)
+fn reduce(high: u64, low: u64, polynomial: u64) -> u64
+```
+
+GF(2^8) with the caller's reducing polynomial (0x1b AES, 0x1d Reed-Solomon): `add`,
+`mul`, `pow`, `inverse`, and `tables` over a generator for `mul_table`. `clmul` is the
+128-bit carry-less product of two 64-bit polynomials and `reduce` folds it modulo
+`x^64 + polynomial`.
+
+### `e.math.mc`
+
+```neper
+type Estimate = struct { mean: f64, standard_error: f64, count: usize }
+error Invalid
+
+fn estimate[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, r: *rand.Pcg64, count: usize) -> (Estimate, err)
+fn antithetic[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, r: *rand.Pcg64, count: usize) -> (Estimate, err)
+fn control_variate[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, g: fn(*Ctx, f64) -> f64, g_mean: f64, r: *rand.Pcg64, count: usize, samples: []f64) -> (Estimate, err)
+fn finish(sum: f64, sum2: f64, count: usize) -> Estimate
+```
+
+`estimate`, `antithetic` and `control_variate` estimate `E[f(Z)]` over a standard
+normal `Z` from the caller's PCG draws, answering the mean, its standard error and the
+count; the control variate's coefficient is estimated from the same sample, kept in
+`samples` (`2 * count`).
+
+### `e.math.mcmc`
+
+```neper
+type Chain = struct { accepted: usize, proposed: usize }
+error TooSmall
+error Invalid
+
+fn copy(out: []f64, from: []const f64)
+fn dot(a: []const f64, b: []const f64) -> f64
+fn metropolis_hastings[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, r: *rand.Pcg64, x: []f64, step: f64, samples: []f64, count: usize, scratch: []f64) -> (Chain, err)
+fn gibbs[Ctx: type](ctx: *Ctx, draw: fn(*Ctx, *rand.Pcg64, usize, []f64), r: *rand.Pcg64, x: []f64, samples: []f64, count: usize) -> err
+fn leapfrog[Ctx: type](ctx: *Ctx, g: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, gradient: []f64, step: f64)
+fn hmc[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []f64, step: f64, leaps: usize, samples: []f64, count: usize, scratch: []f64) -> (Chain, err)
+fn tree_row(record: []f64, row: usize, n: usize) -> []f64
+fn no_u_turn(record: []f64, n: usize) -> bool
+fn build_tree[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []const f64, p: []const f64, log_slice: f64, direction: f64, depth: usize, step: f64, out: []f64, regions: []f64, gradient: []f64, momentum: []f64, n: usize) -> (usize, bool)
+fn nuts[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []f64, step: f64, max_depth: usize, samples: []f64, count: usize, scratch: []f64) -> (Chain, err)
+```
+
+Every sampler starts at the caller's `x`, writes `count` rows into `samples` and leaves
+`x` at the last state: `metropolis_hastings` with an isotropic normal proposal, `gibbs`
+through the caller's conditional draw, `hmc` with a fixed leapfrog trajectory, and
+`nuts` (algorithm 3, slice form, trees of at most `max_depth` doublings over
+`(5 * max_depth + 14) * n` scratch). A `Chain` counts accepted and proposed moves.
+
+### `e.math.opt.convex`
+
+```neper
+type Result = struct { value: f64, iterations: u32 }
+error TooSmall
+error Invalid
+error Stalled
+error Singular
+
+fn interior_point(c: []const f64, a: []const f64, b: []const f64, m: usize, n: usize, x: []f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn quadratic_program(q: []const f64, c: []const f64, a: []const f64, b: []const f64, m: usize, n: usize, x: []f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn solve(q: []const f64, c: []const f64, a: []const f64, b: []const f64, m: usize, n: usize, linear: bool, x: []f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Result, err)
+fn objective(q: []const f64, c: []const f64, n: usize, linear: bool, x: []const f64) -> f64
+fn gaussian_solve(matrix: []f64, rhs: []f64, n: usize) -> err
+```
+
+One infeasible-start primal-dual interior-point method behind `interior_point`
+(`max c·x`) and `quadratic_program` (`min ½ x·Q x + c·x`), both subject to `A x <= b`,
+`x >= 0`; an equality is two inequalities. A programme that is infeasible or unbounded
+is `Stalled` when `max_iterations` runs out; scratch is `(n + m)^2 + 4 (n + m)`.
 
 ### `e.math.fixed`
 

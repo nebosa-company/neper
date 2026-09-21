@@ -1164,6 +1164,141 @@ algo_coding_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$algo_coding_written" = 'executable written' ]
 chmod +x "$test_build/algo-coding-selfhost"
 "$test_build/algo-coding-selfhost"
+# `e.math.ntheory`: gcd and modular arithmetic at the top of the 64-bit range, Miller-Rabin, three sieves, trial, rho and p-1 factoring, Garner's CRT, three discrete logarithms, Tonelli-Shanks, Stern-Brocot and Farey, against SymPy values (D836).
+math_ntheory_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_ntheory/src/main.e" "$repo" x64 linux "$test_build/math-ntheory-selfhost")
+[ "$math_ntheory_written" = 'executable written' ]
+chmod +x "$test_build/math-ntheory-selfhost"
+"$test_build/math-ntheory-selfhost"
+# `e.math.root`: bisection, Newton, Halley, secant and Brent on sqrt(2), the Dottie number and a flat-shouldered cubic, with refusals for a bracket without a sign change and a flat slope (D836).
+math_root_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_root/src/main.e" "$repo" x64 linux "$test_build/math-root-selfhost")
+[ "$math_root_written" = 'executable written' ]
+chmod +x "$test_build/math-root-selfhost"
+"$test_build/math-root-selfhost"
+# `e.algo.combin`: binomials to the last that fits a u64, lexicographic permutations and combinations, Heap's algorithm, subsets and submasks by mask, Gosper's hack and the subset-sum transforms (D836).
+algo_combin_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_combin/src/main.e" "$repo" x64 linux "$test_build/algo-combin-selfhost")
+[ "$algo_combin_written" = 'executable written' ]
+chmod +x "$test_build/algo-combin-selfhost"
+"$test_build/algo-combin-selfhost"
+# `e.data.fenwick` and `e.data.sparse_table`: prefix and range sums under point updates and the lower-bound descent; range minimum, maximum and disjoint-table sums over every window of a 13-element array (D836).
+data_range_query_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_range_query/src/main.e" "$repo" x64 linux "$test_build/data-range-query-selfhost")
+[ "$data_range_query_written" = 'executable written' ]
+chmod +x "$test_build/data-range-query-selfhost"
+"$test_build/data-range-query-selfhost"
+# `e.algo.dp`: three knapsacks, LIS, LCS and derived lengths, coin change, subset sum, Kadane and the product form, matrix chain, optimal BST, the histogram rectangle, the monotonic stack, Li Chao and the convex hull trick against a scan (D836).
+algo_dp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_dp/src/main.e" "$repo" x64 linux "$test_build/algo-dp-selfhost")
+[ "$algo_dp_written" = 'executable written' ]
+chmod +x "$test_build/algo-dp-selfhost"
+"$test_build/algo-dp-selfhost"
+# `e.data.segment_tree`: a max tree under point updates, the lazy tree's sums and minima under overlapping range additions, and the persistent tree answering every old version (D836).
+data_segment_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_segment_tree/src/main.e" "$repo" x64 linux "$test_build/data-segment-tree-selfhost")
+[ "$data_segment_tree_written" = 'executable written' ]
+chmod +x "$test_build/data-segment-tree-selfhost"
+"$test_build/data-segment-tree-selfhost"
+# `e.data.cache`: the keyed LRU through hits, overwrites, removals, evictions and a long churn, and the FIFO, Clock, LFU, SLRU and 2Q policies' victims against their definitions (D836).
+data_cache_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_cache/src/main.e" "$repo" x64 linux "$test_build/data-cache-selfhost")
+[ "$data_cache_written" = 'executable written' ]
+chmod +x "$test_build/data-cache-selfhost"
+"$test_build/data-cache-selfhost"
+# `e.data.trie` and `e.algo.consistent_hash`: insert, lookup, prefix and longest-prefix queries and an ordered walk; a ring and rendezvous hashing that move only a leaving node's keys, and the jump hash against a transcription of the paper (D836).
+data_trie_hash_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_trie_hash/src/main.e" "$repo" x64 linux "$test_build/data-trie-hash-selfhost")
+[ "$data_trie_hash_written" = 'executable written' ]
+chmod +x "$test_build/data-trie-hash-selfhost"
+"$test_build/data-trie-hash-selfhost"
+# `e.algo.geom` and `e.algo.geom.clip`: predicates, segment intersection, polygon area, convexity and containment, two hulls, closest and farthest pairs, the enclosing circle and rectangle, Pick and Morton; clipping by three algorithms, ear clipping and two simplifiers (D837).
+algo_geom_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_geom/src/main.e" "$repo" x64 linux "$test_build/algo-geom-selfhost")
+[ "$algo_geom_written" = 'executable written' ]
+chmod +x "$test_build/algo-geom-selfhost"
+"$test_build/algo-geom-selfhost"
+# `e.math.special`: log-gamma, erf and erfc, the regularised incomplete gamma and beta, the normal, t, chi-squared and F distribution functions and the normal quantile against SciPy (D837).
+math_special_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_special/src/main.e" "$repo" x64 linux "$test_build/math-special-selfhost")
+[ "$math_special_written" = 'executable written' ]
+chmod +x "$test_build/math-special-selfhost"
+"$test_build/math-special-selfhost"
+# `e.algo.rand.dist` and the sampling added to `e.algo.rand`: variate moments over 20,000 draws, Dirichlet, a multivariate normal's covariance, inverse-transform and rejection sampling, the alias table, weighted reservoir, shuffles, reservoir sampling, stratified, Latin hypercube, Halton and Sobol against SciPy (D837).
+algo_rand_dist_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rand_dist/src/main.e" "$repo" x64 linux "$test_build/algo-rand-dist-selfhost")
+[ "$algo_rand_dist_written" = 'executable written' ]
+chmod +x "$test_build/algo-rand-dist-selfhost"
+"$test_build/algo-rand-dist-selfhost"
+# `e.algo.stat.test`: t-tests, Welch, Mann-Whitney, Wilcoxon, chi-squared, Fisher's exact, Kolmogorov-Smirnov, ANOVA, Kruskal-Wallis, a permutation test and the Bonferroni and Benjamini-Hochberg corrections against SciPy (D837).
+algo_stat_test_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_test/src/main.e" "$repo" x64 linux "$test_build/algo-stat-test-selfhost")
+[ "$algo_stat_test_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-test-selfhost"
+"$test_build/algo-stat-test-selfhost"
+# `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
+algo_graph_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_flow/src/main.e" "$repo" x64 linux "$test_build/algo-graph-flow-selfhost")
+[ "$algo_graph_flow_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-flow-selfhost"
+"$test_build/algo-graph-flow-selfhost"
+# `e.algo.graph.match`: Hopcroft-Karp, the Hungarian algorithm against SciPy's assignment, Gale-Shapley stability and the blossom algorithm on two odd cycles and the Petersen graph (D837).
+algo_graph_match_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_match/src/main.e" "$repo" x64 linux "$test_build/algo-graph-match-selfhost")
+[ "$algo_graph_match_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-match-selfhost"
+"$test_build/algo-graph-match-selfhost"
+# `e.algo.graph.path`: Bellman-Ford, Floyd-Warshall and Johnson against Dijkstra with a negative edge and a refused negative cycle, Dial, A*, IDA*, bidirectional search, IDDFS and path reconstruction (D837).
+algo_graph_path_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_path/src/main.e" "$repo" x64 linux "$test_build/algo-graph-path-selfhost")
+[ "$algo_graph_path_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-path-selfhost"
+"$test_build/algo-graph-path-selfhost"
+# `e.algo.graph.tree`: rooting, binary-lifting and offline LCAs against NetworkX, the Euler tour, heavy-light path ranges, centroid decomposition, Prüfer codes both ways and AHU labels (D837).
+algo_graph_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_tree/src/main.e" "$repo" x64 linux "$test_build/algo-graph-tree-selfhost")
+[ "$algo_graph_tree_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-tree-selfhost"
+"$test_build/algo-graph-tree-selfhost"
+# `e.algo.graph.span`: Kruskal, Prim and Borůvka on CLRS's graph and a forest, bridges and articulation points, Hierholzer's circuit and path, and Warshall's closure (D837).
+algo_graph_span_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_span/src/main.e" "$repo" x64 linux "$test_build/algo-graph-span-selfhost")
+[ "$algo_graph_span_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-span-selfhost"
+"$test_build/algo-graph-span-selfhost"
+# `e.math.fft`: the transform of an impulse and a cosine, round trips, convolution against direct multiplication, the number-theoretic transform and its convolution, Walsh-Hadamard and the cosine transforms against SciPy (D838).
+math_fft_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_fft/src/main.e" "$repo" x64 linux "$test_build/math-fft-selfhost")
+[ "$math_fft_written" = 'executable written' ]
+chmod +x "$test_build/math-fft-selfhost"
+"$test_build/math-fft-selfhost"
+# `e.math.ode`: exponential decay and the harmonic oscillator by Euler, RK4 and adaptive RKF45, symplectic energy conservation over a thousand periods, Yoshida against leapfrog, and Euler-Maruyama's Brownian variance (D838).
+math_ode_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_ode/src/main.e" "$repo" x64 linux "$test_build/math-ode-selfhost")
+[ "$math_ode_written" = 'executable written' ]
+chmod +x "$test_build/math-ode-selfhost"
+"$test_build/math-ode-selfhost"
+# `e.math.filter`: a constant-velocity Kalman filter over a noisy line, the extended and unscented filters over a range observation, a particle filter that resamples, and the complementary, Madgwick and Mahony attitude filters converging on a tilt (D838).
+math_filter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_filter/src/main.e" "$repo" x64 linux "$test_build/math-filter-selfhost")
+[ "$math_filter_written" = 'executable written' ]
+chmod +x "$test_build/math-filter-selfhost"
+"$test_build/math-filter-selfhost"
+# `e.math.opt`: every descent method and Nelder-Mead reach Rosenbrock's minimum, a five-dimensional bowl converges by all of them, and the simplex solves two small linear programmes against SciPy and reports an unbounded and an infeasible one (D838).
+math_opt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_opt/src/main.e" "$repo" x64 linux "$test_build/math-opt-selfhost")
+[ "$math_opt_written" = 'executable written' ]
+chmod +x "$test_build/math-opt-selfhost"
+"$test_build/math-opt-selfhost"
+# `e.math.opt.meta`: annealing and tabu search escape Rastrigin's local minima where hill climbing settles, the genetic algorithm, particle swarm and differential evolution minimise Rosenbrock in a box, and ant colony finds the octagon tour (D838).
+math_opt_meta_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_opt_meta/src/main.e" "$repo" x64 linux "$test_build/math-opt-meta-selfhost")
+[ "$math_opt_meta_written" = 'executable written' ]
+chmod +x "$test_build/math-opt-meta-selfhost"
+"$test_build/math-opt-meta-selfhost"
+# `e.math.float`: fields unpack and pack back, binary16 against NumPy on normals, ties, subnormals and the specials with every finite half round-tripping, and bfloat16 rounding the top half to even (D838).
+math_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_float/src/main.e" "$repo" x64 linux "$test_build/math-float-selfhost")
+[ "$math_float_written" = 'executable written' ]
+chmod +x "$test_build/math-float-selfhost"
+"$test_build/math-float-selfhost"
+# `e.math.gf`: the AES worked example and inverse, generator orders and tables agreeing with `mul` everywhere, carry-less products and reductions against a Python polynomial reference (D838).
+math_gf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_gf/src/main.e" "$repo" x64 linux "$test_build/math-gf-selfhost")
+[ "$math_gf_written" = 'executable written' ]
+chmod +x "$test_build/math-gf-selfhost"
+"$test_build/math-gf-selfhost"
+# `e.math.mc`: a Black-Scholes call by the plain estimator within its standard error, antithetic pairs and a terminal-price control variate cutting that error, and an odd payoff estimated exactly by antithesis (D838).
+math_mc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_mc/src/main.e" "$repo" x64 linux "$test_build/math-mc-selfhost")
+[ "$math_mc_written" = 'executable written' ]
+chmod +x "$test_build/math-mc-selfhost"
+"$test_build/math-mc-selfhost"
+# `e.math.mcmc`: Metropolis-Hastings, Gibbs, HMC and NUTS each recover the moments of a correlated bivariate normal from a far start, with the random walk rejecting about half and the gradient samplers nearly none (D838).
+math_mcmc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_mcmc/src/main.e" "$repo" x64 linux "$test_build/math-mcmc-selfhost")
+[ "$math_mcmc_written" = 'executable written' ]
+chmod +x "$test_build/math-mcmc-selfhost"
+"$test_build/math-mcmc-selfhost"
+# `e.math.opt.convex`: the interior-point method reaches the simplex fixture's optima, a Markowitz portfolio against SciPy, and stalls on the unbounded and the infeasible programme (D838).
+math_opt_convex_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_opt_convex/src/main.e" "$repo" x64 linux "$test_build/math-opt-convex-selfhost")
+[ "$math_opt_convex_written" = 'executable written' ]
+chmod +x "$test_build/math-opt-convex-selfhost"
+"$test_build/math-opt-convex-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

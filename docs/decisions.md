@@ -16209,6 +16209,149 @@ built, tested and committed from a detached worktree because a
 concurrent session's commits in the shared tree swept edits of the
 shared files along; that is the rule for the stream from here.
 
+## D836 — Ten more modules: number theory, roots, combinatorics, range queries, DP, caches, tries and consistent hashing
+
+Batches two and three of the algos.md stream (D834), landed together
+because the suites were the long pole and the modules share no code:
+`e.math.ntheory` (binary gcd, extended gcd, overflow-free `mul_mod` and
+`pow_mod`, the deterministic twelve-base Miller-Rabin, three sieves,
+trial, Brent-rho and p-1 factoring, Garner's CRT, baby-step giant-step,
+Pohlig-Hellman and the kangaroo, Tonelli-Shanks, Stern-Brocot and
+Farey), `e.math.root` (bisection, Newton, Halley, secant, Brent over a
+function passed as a value), `e.algo.combin` (checked binomials,
+lexicographic permutations and combinations, Heap's algorithm, subsets
+and submasks, Gosper's hack, the subset-sum zeta and Möbius
+transforms), `e.data.fenwick` and `e.data.sparse_table` (prefix sums
+with the lower-bound descent; `O(1)` range extremes and the disjoint
+table for sums), `e.algo.dp` (three knapsacks, LIS, generic LCS, coin
+change, subset sum, Kadane, matrix chain, optimal BST, the histogram
+rectangle, a monotonic stack, the Li Chao tree and the convex hull
+trick), `e.data.segment_tree` (a generic fold tree, the lazy `i64` tree
+with range add and range sum/min, and a persistent tree over a node
+pool), `e.data.cache` (a keyed LRU with its own open-addressing index,
+plus FIFO, Clock, LFU, SLRU and 2Q as slot policies over a caller's key
+index), `e.data.trie` (a sibling-list byte trie with prefix queries and
+an ordered walk) and `e.algo.consistent_hash` (a sorted ring of virtual
+nodes, rendezvous, and jump).
+
+What the fixtures found. Every expected value was computed by Python or
+SymPy before it went into a fixture, and the ones written from memory
+were wrong five times (an unbounded knapsack, a product of negatives, an
+optimal BST cost, two jump-hash outputs and a node count), which is the
+argument for the rule. The kangaroo needs its wild walk uncapped -- the
+distance to the trap is the interval plus the tame walk, not the
+interval -- and p-1's bound is on prime powers, so `2^16 - 1` needs a
+bound of 65536, not 16. A Fenwick `lower_bound` that returns `len` for
+"never" is ambiguous with "the whole array"; it answers `len + 1`. The
+persistent tree's pool grows by the depth of the updated leaf, so seven
+updates over seven values took 27 nodes, not 28. A slot policy's
+`evict` names free slots first, which makes the SLRU "protected tail"
+branch unreachable from a caller that refills what it evicts; the
+fixture says so rather than pretending. Three more language facts: a
+local may not share a name with a module-scope function (`main` in a
+fixture), `target` is reserved everywhere, and a two-value call cannot
+be forwarded with `ret f()` -- bind it first.
+
+## D837 — Geometry, special functions, random variates, statistical tests and the graph family
+
+Batches four and five of the algos.md stream (D834). `e.algo.geom`
+(orientation and segment predicates, the monotone-chain and Jarvis
+hulls, closest and farthest pairs, the minimum enclosing circle,
+minimum-area rectangle, Pick's theorem and Morton codes) and, because a
+single file crossed the parser's token budget at 782 lines,
+`e.algo.geom.clip` (Sutherland-Hodgman, Cohen-Sutherland and
+Liang-Barsky clipping, ear-clipping triangulation, Douglas-Peucker and
+Visvalingam simplification); `e.math.special` (log-gamma, gamma, erf,
+the regularised incomplete gamma and beta functions, and the normal,
+Student, chi-squared and F distributions on top of them);
+`e.algo.rand.dist` (normal by polar method and Box-Muller,
+exponential, Poisson, binomial, gamma, beta, Dirichlet, a multivariate
+normal by Cholesky, inverse-transform and rejection sampling, the alias
+table, weighted reservoirs, stratified and Latin-hypercube designs,
+Halton and Sobol) with `e.algo.rand` gaining shuffles, a cycle
+permutation and the plain reservoir; `e.algo.stat.test` (one- and
+two-sample and Welch t tests, Mann-Whitney, Wilcoxon, chi-squared,
+Fisher's exact, Kolmogorov-Smirnov, one-way ANOVA, Kruskal-Wallis, a
+permutation test, Bonferroni and Benjamini-Hochberg). The graph family
+sits under `e.algo.graph`: `flow` (Edmonds-Karp, Dinic, push-relabel,
+the minimum cut, per-edge flow), `match` (Hopcroft-Karp, the Hungarian
+algorithm, Gale-Shapley, the blossom algorithm), `path` (Bellman-Ford,
+Floyd-Warshall, Dial, Johnson, A*, bidirectional search, IDDFS,
+IDA*), `tree` (binary lifting, LCA online and offline, Euler tour,
+heavy-light decomposition, centroid decomposition, Prüfer codes, AHU
+canonical labels) and `span` (Kruskal, Prim, Borůvka, second-best
+tree, bridges and articulation points, Euler paths, transitive
+closure).
+
+What the fixtures found. Every expected value came from Python, SciPy
+or a hand-built reference again, and the disagreements were on the
+fixture's side each time: the KS p-value uses the Numerical Recipes
+small-sample correction, a hull output array must not be reused for
+the second hull, a point cloud sorted in place is no longer the input,
+and the unscented filter of the next batch showed the same trap. The
+fixed `lca_offline` is Tarjan's, so it needs a real DFS postorder over
+an explicit stack rather than the reverse of a preorder. A module
+constant of type `f64` is refused at the top of the file, so `path`
+answers its unreachable distance through `fn infinity()`;
+`e.algo.sort` has no `cmp` for `f64`, so ranks in `stat.test` sort by
+hand. A bool-returning call cannot stand alone as a statement
+(`dsu.join`), a generic helper called from a generic needs its argument
+spelled (`twin[E]`), and `capacity` and `main` collide with
+module-scope names in a fixture.
+
+## D838 — Transforms, integrators, estimators, optimisers, samplers and bit formats
+
+Batches six and seven of the algos.md stream (D834). Six: `e.math.fft` (the radix-2
+transform over split real and imaginary arrays, real convolution
+through it, the number-theoretic transform over 998244353 and its
+convolution, Walsh-Hadamard, and the unnormalised DCT-II and DCT-III),
+`e.math.ode` (Euler, RK4, adaptive RKF45 answering the step taken and
+the next to try, Störmer-Verlet, leapfrog, the fourth-order Yoshida
+composition, Euler-Maruyama with the caller's normal draws),
+`e.math.filter` (the linear, extended and unscented Kalman filters over
+row-major caller matrices, a resampling particle filter, and the
+complementary, Madgwick and Mahony attitude filters), `e.math.opt`
+(steepest descent, Polak-Ribière conjugate gradient, BFGS, L-BFGS,
+Nelder-Mead, and the two-phase dense simplex) and `e.math.opt.meta`
+(simulated annealing, hill climbing, tabu search, a genetic algorithm,
+particle swarm, differential evolution, ant colony). `opt` was near the
+token budget, so the metaheuristics are a submodule. Seven:
+`e.math.opt.convex` (one infeasible-start primal-dual interior-point
+method with a dense pivoting Newton solve behind `interior_point` for
+linear and `quadratic_program` for convex quadratic programmes; an
+equality is two inequalities and a programme that never reaches the
+tolerance is `Stalled`), `e.math.mcmc` (random-walk Metropolis-Hastings,
+Gibbs through the caller's conditional draw, HMC, and NUTS as Hoffman
+and Gelman's algorithm 3 with the recursion's records laid out one per
+depth in caller scratch), `e.math.mc` (plain, antithetic and
+control-variate estimators over a standard normal), `e.math.float`
+(IEEE 754 fields, binary16 and bfloat16 conversions rounding to nearest
+even through subnormals) and `e.math.gf` (GF(2^8) over the caller's
+polynomial with tables, carry-less 64-bit multiplication and reduction).
+
+What the fixtures found. L-BFGS with the same Armijo backtracking that
+serves BFGS never converged on Rosenbrock: a Python replica showed 497
+of 500 curvature pairs rejected, so the limited memory was empty and
+the method was steepest descent. It now uses a weak-Wolfe search by
+bisection on the bracket the two conditions close, and converges in
+under forty iterations; a rejected pair also must not overwrite the
+oldest stored one, so the pair is tested before it is stored. The DCT
+convention is SciPy's up to `2 / N`; the particle step needs
+`count * (n + 1)` scratch, which the fixture learned by sizing; the
+unscented filter over a range observation is even in position, so the
+prior starts on the right side of the origin. Tabu search over a
+continuous space needs a move wide enough to cross a basin, which
+Python parameter sweeps showed before the fixture pinned the seed.
+Batch seven's finds: `0.0 - 0.0` is `+0`, so a negative zero must be
+built from its bits; a fixture written by a heredoc that fails a
+preceding `&&` step silently does not exist, and the compiler then
+reports the missing file as an internal `os.NotFound` rather than naming
+it. And a compiler bug worth its own row: a module-scope function in
+the fixture named `gradient`, passed as a value into a generic library
+function whose body has a local `gradient`, fails lowering with
+E-TYPE-9999 (the single-module shape is refused up front as
+E-NAME-0003); the fixture calls its function `grad` meanwhile.
+
 ## D839 — Collection interaction: a drop is an explicit move, and every touch behaviour has a button
 
 P2-07 of the widget plan (D836–D838 belong to the algos stream). A

@@ -23,6 +23,9 @@ type Mt19937 = struct {
     index: u32,
 }
 
+// A reservoir sample in progress: `items` is the sample, `seen` the stream length.
+type Reservoir[T: type] = struct { items: []T, seen: u64 }
+
 // PCG, `setseq_64_rxs_m_xs_64`: 64 bits of state, 64 bits out, and a stream selector
 // that picks one of 2**63 distinct sequences. `stream` holds the odd increment the
 // selector becomes, which is what makes two streams from one seed independent.
@@ -155,4 +158,48 @@ fn mt19937_next(r: *Mt19937) -> u32 {
     word = word ^ ((word << 7u32) & 2636928640u32)
     word = word ^ ((word << 15u32) & 4022730752u32)
     ret word ^ (word >> 18u32)
+}
+
+// Fisher-Yates (Durstenfeld): an unbiased uniform permutation in place.
+fn shuffle[T: type](r: *Pcg64, items: []T) {
+    var i = items.len
+    while i > 1usize {
+        let j = usize(pcg64_bounded(r, u64(i)))
+        i -= 1usize
+        let swap = items[i]
+        items[i] = items[j]
+        items[j] = swap
+    }
+}
+
+// Sattolo's algorithm: a uniform random permutation with a single cycle.
+fn cycle_permutation[T: type](r: *Pcg64, items: []T) {
+    var i = items.len
+    while i > 1usize {
+        i -= 1usize
+        let j = usize(pcg64_bounded(r, u64(i)))
+        let swap = items[i]
+        items[i] = items[j]
+        items[j] = swap
+    }
+}
+
+// Reservoir sampling: `items` holds the sample and fills first; after that each
+// offered item replaces a random slot with probability `items.len / seen`.
+fn reservoir[T: type](items: []T) -> Reservoir[T] { ret Reservoir[T] { items: items, seen: 0u64 } }
+
+fn reservoir_offer[T: type](s: *Reservoir[T], r: *Pcg64, item: T) {
+    s.seen += 1u64
+    if s.seen <= u64(s.items.len) {
+        s.items[usize(s.seen - 1u64)] = item
+        ret
+    }
+    let slot = pcg64_bounded(r, s.seen)
+    if slot < u64(s.items.len) { s.items[usize(slot)] = item }
+}
+
+// The sample so far: all of `items` once `seen` reached its length.
+fn reservoir_sample[T: type](s: *const Reservoir[T]) -> []T {
+    if s.seen < u64(s.items.len) { ret s.items[..usize(s.seen)] }
+    ret s.items
 }
