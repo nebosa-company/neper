@@ -1928,6 +1928,13 @@ $uiAdaptiveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiAdaptiveWritten -ne 'executable written') { throw 'ui_adaptive emission failed' }
 $uiAdaptiveOutput = & $uiAdaptivePath
 if ($LASTEXITCODE -ne 0 -or $uiAdaptiveOutput -ne 'ui adaptive ok') { throw "the adaptive navigation answered wrongly: exit $LASTEXITCODE" }
+# Transient presentation (D841, widget plan P2-09): popup, flyout, popover, dialog,
+# sheet, bottom sheet, action sheet.
+$uiPresentationPath = Join-Path $testBuild 'ui-presentation-selfhost.exe'
+$uiPresentationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_presentation\src\main.e') $repo 'x64' 'windows' $uiPresentationPath
+if ($LASTEXITCODE -ne 0 -or $uiPresentationWritten -ne 'executable written') { throw 'ui_presentation emission failed' }
+$uiPresentationOutput = & $uiPresentationPath
+if ($LASTEXITCODE -ne 0 -or $uiPresentationOutput -ne 'ui presentation ok') { throw "the transient presentation answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

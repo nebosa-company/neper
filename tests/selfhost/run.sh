@@ -1859,6 +1859,13 @@ ui_adaptive_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/ui-adaptive-selfhost"
 ui_adaptive_output=$("$test_build/ui-adaptive-selfhost")
 [ "$ui_adaptive_output" = 'ui adaptive ok' ]
+# Transient presentation (D841, widget plan P2-09): popup, flyout, popover, dialog,
+# sheet, bottom sheet, action sheet.
+ui_presentation_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_presentation/src/main.e" "$repo" x64 linux "$test_build/ui-presentation-selfhost")
+[ "$ui_presentation_written" = 'executable written' ]
+chmod +x "$test_build/ui-presentation-selfhost"
+ui_presentation_output=$("$test_build/ui-presentation-selfhost")
+[ "$ui_presentation_output" = 'ui presentation ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

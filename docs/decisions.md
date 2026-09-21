@@ -16254,3 +16254,32 @@ caller that chooses (§3.7: adaptation is never forced). `breadcrumbs`
 link every name but the last, which is the current place as text.
 `link/ui_adaptive` opens, escapes, nudges, picks and re-lays out at
 700 and 400 wide on both hosts.
+
+## D841 — Transient presentation: light dismissal is a modal overlay plus a scope, and a modal bounds the keyboard
+
+P2-09 of the widget plan. Every transient surface is D810's overlay and
+nothing more: `popup` is the caller's content on a raised surface
+against an anchor, non-modal, so presses elsewhere pass through and
+only the caller closes it; `flyout` is the same made modal, with a
+scope whose cancel action and the overlay's dismiss are one `dismiss`,
+so Escape and a press outside close it alike and the focus goes back
+where it was; `popover` adds a title row -- a heading and a close
+button -- above the content; `dialog` is what `alert_dialog` was, over
+any content, the alert now a dialog over a message; `sheet` and
+`bottom_sheet` are modal panels along the right and the bottom edge
+through one `edged` helper, the window's height or width, a title row
+above the content; `action_sheet` is a bottom sheet of the actions as
+full-width buttons (destructive ones in the error colour) with Cancel
+last. One runtime rule was missing: a key walk starts at the focus,
+and a modal whose content has nothing focusable, or whose focus was
+left outside it, never reached its own scope, so Escape did not close
+a flyout of plain text. Now, while a modal overlay is live, the walk
+starts at that overlay's scope whenever the focus is not under it
+(`topmost_modal`, `scope_under`), which is what a modal means for the
+keyboard. Two lessons the fixture taught: a flex share inside an
+overlay grows to the window under the overlay's loose measure (the
+title row spreads with SpaceBetween instead), and Enter on a focused
+button presses the button before the dialog's default action -- D818's
+rule, so a dialog's initial focus on Cancel makes Enter a cancel, and
+Tab reaches the default. `link/ui_presentation` places, dismisses,
+tabs and confirms on both hosts.

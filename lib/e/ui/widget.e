@@ -1455,6 +1455,37 @@ fn place_overlays(s: *State, a: *mem.Arena, b: *scene.Builder) -> err {
 
 // The topmost overlay under `p`, or the topmost modal one that keeps `p` from
 // what is under it: (element, inside, found).
+// The topmost live modal overlay, if any.
+fn topmost_modal(s: *State) -> (usize, bool) {
+    var i = s.overlay_count
+    while i > 0usize {
+        i -= 1usize
+        let element = usize(s.overlays[i])
+        if s.elements[element].live && s.elements[element].modal { ret (element, true) }
+    }
+    ret (0usize, false)
+}
+
+// Whether `top` is an ancestor of `index`.
+fn descends_from(s: *State, index: usize, top: usize) -> bool {
+    var at = index
+    while s.elements[at].has_parent {
+        at = usize(s.elements[at].parent)
+        if at == top { ret true }
+    }
+    ret false
+}
+
+// The first live scope in the subtree of `top`, if any.
+fn scope_under(s: *State, top: usize) -> (usize, bool) {
+    var i = 0usize
+    while i < s.elements.len {
+        if s.elements[i].live && s.elements[i].kind == SCOPE_TAG && descends_from(s, i, top) { ret (i, true) }
+        i += 1usize
+    }
+    ret (0usize, false)
+}
+
 fn overlay_at(s: *State, p: geometry.Point) -> (usize, bool, bool) {
     var i = s.overlay_count
     while i > 0usize {
@@ -2433,6 +2464,14 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
     }
     var at = usize(s.root)
     if s.has_focus { at = usize(s.focus) }
+    // A modal overlay bounds the keyboard to itself: with nothing focused under it
+    // (its content may not be focusable), or the focus left outside it, the walk
+    // starts at its scope, so its Escape still dismisses it (D841).
+    let (modal, has_modal) = topmost_modal(s)
+    if has_modal && (!s.has_focus || !descends_from(s, usize(s.focus), modal)) {
+        let (inner, has_inner) = scope_under(s, modal)
+        if has_inner { at = inner }
+    }
     while true {
         let e = &s.elements[at]
         if e.kind == SCOPE_TAG {

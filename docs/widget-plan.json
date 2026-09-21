@@ -640,8 +640,16 @@
             "BottomSheet",
             "ActionSheet"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Popup",
+            "Popover",
+            "Flyout",
+            "Dialog",
+            "Sheet",
+            "BottomSheet",
+            "ActionSheet"
+          ],
+          "evidence": "lib/e/ui/overlay.e (D841): popup as a non-modal raised surface against an anchor, flyout and popover as light-dismissed modal popups (Escape and a press outside fire dismiss, the popover with a heading and a close), dialog generalising alert_dialog over any content, sheet and bottom_sheet as modal panels along the right and bottom edges through one edged helper, action_sheet as a bottom sheet of full-width action buttons with Cancel last; widget.e's key walk now starts at the topmost modal overlay's scope when the focus is not inside it; tests/selfhost/fixtures/link/ui_presentation on both hosts"
         },
         {
           "id": "P2-10",
