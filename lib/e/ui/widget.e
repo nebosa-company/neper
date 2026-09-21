@@ -91,7 +91,7 @@ type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u
 // `dismiss`. Overlays stack in tree order; the last is on top.
 type Placement = enum u8 { Below, Above, Right, Left, Center }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -112,6 +112,7 @@ const SCOPE_TAG: u8 = 10u8
 const EDIT_TAG: u8 = 11u8
 const SEMANTICS_TAG: u8 = 12u8
 const OVERLAY_TAG: u8 = 13u8
+const WRAP_TAG: u8 = 14u8
 const MAX_OVERLAYS: usize = 8usize
 const MAX_SHORT: usize = 32usize
 const MAX_HISTORY: usize = 32usize
@@ -302,6 +303,28 @@ fn overlay(key: Key, value: Overlay, value_style: style.Style, children: []const
     ret Node { key: key, kind: Kind { Overlay: value }, style: value_style, children: children }
 }
 
+// The primary layouts as constructors (D815): a row and a column are flexes along
+// an axis; a wrap breaks lines; a positioned child sits at an offset in a stack --
+// its margin, which the stack places it by.
+fn row(key: Key, gap: f32, value_style: style.Style, children: []const Node) -> Node {
+    ret flex(key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: gap }, value_style, children)
+}
+
+fn column(key: Key, gap: f32, value_style: style.Style, children: []const Node) -> Node {
+    ret flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: gap }, value_style, children)
+}
+
+fn wrap(key: Key, spec: ui_layout.Wrap, value_style: style.Style, children: []const Node) -> Node {
+    ret Node { key: key, kind: Kind { Wrap: spec }, style: value_style, children: children }
+}
+
+fn positioned(key: Key, x: f32, y: f32, value_style: style.Style, children: []const Node) -> Node {
+    var placed = value_style
+    placed.position = .Absolute
+    placed.margin = style.EdgeLengths { left: style.Length { Px: x }, top: style.Length { Px: y }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    ret box(key, placed, children)
+}
+
 // Whether a function value is set: its bits are not zero, read through a pun.
 type SubmitBits = union { function: fn(*void) -> err, bits: usize }
 type GestureBits = union { function: fn(*void, Gesture) -> err, bits: usize }
@@ -423,6 +446,8 @@ fn kind_tag(kind: Kind) -> u8 {
         ret SEMANTICS_TAG
     case .Overlay as ov:
         ret OVERLAY_TAG
+    case .Wrap as w:
+        ret WRAP_TAG
     }
     ret 0u8
 }
@@ -688,6 +713,8 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.text_len = copy_short(e.text[..], sm.label, MAX_TEXT)
         e.value_len = copy_short(e.value[..], sm.value, MAX_SHORT)
         e.hint_len = copy_short(e.hint[..], sm.hint, MAX_SHORT)
+    case .Wrap as w:
+        e.enabled = true
     case .Overlay as ov:
         e.enabled = true
         e.modal = ov.modal
@@ -876,6 +903,12 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         ret (described, describe_error)
     case .Overlay as ov:
         ret (geometry.Size { width: 0.0, height: 0.0 }, ok)
+    case .Wrap as w:
+        let (children, children_error) = children_of(s, a, node, inner, w.axis == .Horizontal)
+        if children_error != ok { ret (zero, children_error) }
+        let (result, layout_error) = ui_layout.wrap(a, w, ui_layout.Constraints { min_width: 0.0, max_width: inner.max_width, min_height: 0.0, max_height: inner.max_height }, children)
+        if layout_error != ok { ret (zero, InvalidTree) }
+        ret (result.size, ok)
     case .Scroll as sc:
         var open = inner
         if sc.axis == .Vertical { open.max_height = 3.0e38 } else { open.max_width = 3.0e38 }
@@ -1016,6 +1049,8 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
     case .Semantics as sm:
         try place_flex(s, a, node, element, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, inner, inner_limits, b, depth)
+    case .Wrap as w:
+        try place_wrap(s, a, node, element, w, inner, inner_limits, b, depth)
     case .Overlay as ov:
         if s.overlay_count >= MAX_OVERLAYS { ret TooLarge }
         s.overlays[s.overlay_count] = u32(element)
@@ -1032,9 +1067,9 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
 }
 
 fn edit_options(width: f32, multiline: bool) -> layout.Options {
-    var wrap: layout.Wrap = .None
-    if multiline { wrap = .Word }
-    ret layout.Options { width: width, max_lines: 0u32, align: .Start, wrap: wrap, ellipsis: "" }
+    var wrapping: layout.Wrap = .None
+    if multiline { wrapping = .Word }
+    ret layout.Options { width: width, max_lines: 0u32, align: .Start, wrap: wrapping, ellipsis: "" }
 }
 
 // The text an editor shows: its value, with the composition at the caret when it is
@@ -1308,6 +1343,21 @@ fn place_flex(s: *State, a: *mem.Arena, node: *const Node, element: usize, spec:
     let (children, children_error) = children_of(s, a, node, limits, spec.axis == .Horizontal)
     if children_error != ok { ret children_error }
     let (result, layout_error) = ui_layout.flex(a, spec, limits, children)
+    if layout_error != ok { ret InvalidTree }
+    var i = 0usize
+    while i < node.children.len {
+        let r = result.children[i]
+        try place(s, a, &node.children[i], child_element(s, element, i), geometry.Rect { x: inner.x + r.x, y: inner.y + r.y, width: r.width, height: r.height }, b, depth + 1usize)
+        i += 1usize
+    }
+    ret ok
+}
+
+fn place_wrap(s: *State, a: *mem.Arena, node: *const Node, element: usize, spec: ui_layout.Wrap, inner: geometry.Rect, limits: ui_layout.Constraints, b: *scene.Builder, depth: usize) -> err {
+    if node.children.len == 0usize { ret ok }
+    let (children, children_error) = children_of(s, a, node, limits, spec.axis == .Horizontal)
+    if children_error != ok { ret children_error }
+    let (result, layout_error) = ui_layout.wrap(a, spec, limits, children)
     if layout_error != ok { ret InvalidTree }
     var i = 0usize
     while i < node.children.len {

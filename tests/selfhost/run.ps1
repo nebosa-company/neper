@@ -1756,6 +1756,12 @@ $uiSurfaceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiSurfaceWritten -ne 'executable written') { throw 'ui_surface emission failed' }
 $uiSurfaceOutput = & $uiSurfacePath
 if ($LASTEXITCODE -ne 0 -or $uiSurfaceOutput -ne 'ui surface ok') { throw "the surfaces answered wrongly: exit $LASTEXITCODE" }
+# Primary layouts (D815, widget plan P1-03): row, column, wrap and positioned.
+$uiLayoutPrimaryPath = Join-Path $testBuild 'ui-layout-primary-selfhost.exe'
+$uiLayoutPrimaryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_layout_primary\src\main.e') $repo 'x64' 'windows' $uiLayoutPrimaryPath
+if ($LASTEXITCODE -ne 0 -or $uiLayoutPrimaryWritten -ne 'executable written') { throw 'ui_layout_primary emission failed' }
+$uiLayoutPrimaryOutput = & $uiLayoutPrimaryPath
+if ($LASTEXITCODE -ne 0 -or $uiLayoutPrimaryOutput -ne 'ui layout primary ok') { throw "the primary layouts answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

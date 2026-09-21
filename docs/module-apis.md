@@ -1365,6 +1365,7 @@ type Constraints = struct { min_width: f32, max_width: f32, min_height: f32, max
 type Flex = struct { axis: Axis, main: MainAlign, cross: CrossAlign, gap: f32 }
 type GridTrack = union enum u8 { Px: f32, Flex: f32, Auto }
 type Grid = struct { columns: []const GridTrack, rows: []const GridTrack, column_gap: f32, row_gap: f32 }
+type Wrap = struct { axis: Axis, main_gap: f32, cross_gap: f32 }
 type Child = struct { desired: geometry.Size, flex: f32 }
 type Result = struct { size: geometry.Size, children: []const geometry.Rect }
 error Invalid
@@ -1372,6 +1373,7 @@ error Overflow
 
 fn constrain(value: geometry.Size, limits: Constraints) -> geometry.Size
 fn flex(a: *mem.Arena, spec: Flex, limits: Constraints, children: []const Child) -> (Result, err)
+fn wrap(a: *mem.Arena, spec: Wrap, limits: Constraints, children: []const Child) -> (Result, err)
 fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child) -> (Result, err)
 ```
 
@@ -3329,7 +3331,7 @@ type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint
 type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u32, actions: u32, live: u8, level: u8, labelled_by: Key, described_by: Key, error_by: Key, controls: Key, active: Key, row: u32, column: u32, row_count: u32, column_count: u32, hidden: bool, on_action: Change[u32] }
 type Placement = enum u8 { Below, Above, Right, Left, Center }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
-type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom, Region: Region, Scope: Scope, Edit: Edit, Semantics: Semantics, Overlay: Overlay, Wrap: ui_layout.Wrap }
 type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
 type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
@@ -3356,6 +3358,10 @@ fn scope(key: Key, value: Scope, value_style: style.Style, children: []const Nod
 fn edit(key: Key, value: Edit, value_style: style.Style) -> Node
 fn semantics(key: Key, value: Semantics, value_style: style.Style, children: []const Node) -> Node
 fn overlay(key: Key, value: Overlay, value_style: style.Style, children: []const Node) -> Node
+fn row(key: Key, gap: f32, value_style: style.Style, children: []const Node) -> Node
+fn column(key: Key, gap: f32, value_style: style.Style, children: []const Node) -> Node
+fn wrap(key: Key, spec: ui_layout.Wrap, value_style: style.Style, children: []const Node) -> Node
+fn positioned(key: Key, x: f32, y: f32, value_style: style.Style, children: []const Node) -> Node
 fn fire_change[T: type](c: Change[T], value: T) -> err
 fn fire_submit(a: Submit) -> err
 fn fire_gesture(a: GestureAction, g: Gesture) -> err
@@ -3454,6 +3460,11 @@ modal one keeps the pointer from what is under it, firing `dismiss` on a press
 outside instead. A modal overlay takes the focus into its first focusable element
 when it appears, bounds Tab to its subtree, and gives the focus back to the element
 that had it when it goes.
+
+The primary layouts (D815, widget plan P1-03): `row` and `column` are flexes along
+an axis with a gap; `wrap` is `ui_layout.wrap`, lines broken where the next child
+would pass the main limit; `positioned` is a box whose margin is its offset, which a
+stack places it by; `box`, `flex`, `grid` and `stack` are D799's.
 
 ### `e.ui.animation`
 

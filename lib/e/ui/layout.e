@@ -28,6 +28,10 @@ type Constraints = struct { min_width: f32, max_width: f32, min_height: f32, max
 type Flex = struct { axis: Axis, main: MainAlign, cross: CrossAlign, gap: f32 }
 type GridTrack = union enum u8 { Px: f32, Flex: f32, Auto }
 type Grid = struct { columns: []const GridTrack, rows: []const GridTrack, column_gap: f32, row_gap: f32 }
+// A wrapping flow (D815): children laid along the axis at their desired sizes and
+// broken into a new line when the next would pass the main limit; `main_gap`
+// between children, `cross_gap` between lines.
+type Wrap = struct { axis: Axis, main_gap: f32, cross_gap: f32 }
 type Child = struct { desired: geometry.Size, flex: f32 }
 type Result = struct { size: geometry.Size, children: []const geometry.Rect }
 error Invalid
@@ -242,6 +246,53 @@ fn resolve_tracks(tracks: []const GridTrack, sizes: []f32, gap: f32, min: f32, m
         t += 1usize
     }
     ret ok
+}
+
+fn wrap(a: *mem.Arena, spec: Wrap, limits: Constraints, children: []const Child) -> (Result, err) {
+    if !limits_ok(limits) || !bounded(spec.main_gap) || spec.main_gap < 0.0 || !bounded(spec.cross_gap) || spec.cross_gap < 0.0 || !children_ok(children) { ret (zero, Invalid) }
+    let horizontal = spec.axis == .Horizontal
+    var main_max = limits.max_height
+    if horizontal { main_max = limits.max_width }
+    let n = children.len
+    let (rects, rects_error) = mem.alloc[geometry.Rect](a, n)
+    if rects_error != ok { ret (zero, rects_error) }
+    var line_start = 0usize
+    var main_at: f32 = 0.0
+    var cross_at: f32 = 0.0
+    var line_cross: f32 = 0.0
+    var widest: f32 = 0.0
+    var i = 0usize
+    while i < n {
+        var m = children[i].desired.height
+        var c = children[i].desired.width
+        if horizontal {
+            m = children[i].desired.width
+            c = children[i].desired.height
+        }
+        // The line breaks before a child that would pass the limit, never before
+        // its first child.
+        if i > line_start && main_at + spec.main_gap + m > main_max {
+            if main_at > widest { widest = main_at }
+            cross_at += line_cross + spec.cross_gap
+            main_at = 0.0
+            line_cross = 0.0
+            line_start = i
+        }
+        if i > line_start { main_at += spec.main_gap }
+        if horizontal {
+            rects[i] = geometry.Rect { x: main_at, y: cross_at, width: m, height: c }
+        } else {
+            rects[i] = geometry.Rect { x: cross_at, y: main_at, width: c, height: m }
+        }
+        main_at += m
+        if c > line_cross { line_cross = c }
+        i += 1usize
+    }
+    if main_at > widest { widest = main_at }
+    var total = geometry.Size { width: widest, height: cross_at + line_cross }
+    if !horizontal { total = geometry.Size { width: cross_at + line_cross, height: widest } }
+    if n == 0usize { total = geometry.Size { width: 0.0, height: 0.0 } }
+    ret (Result { size: constrain(total, limits), children: rects }, ok)
 }
 
 fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child) -> (Result, err) {

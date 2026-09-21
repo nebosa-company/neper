@@ -15675,3 +15675,19 @@ also covers an edge clipped in y whose extrapolated x left the surface.
 `link/ui_surface` checks the layout, the tree and the painted pixels --
 the surface colour inside a card, the shadow two pixels below it, the
 avatar's corner the page and its centre the image -- on both hosts.
+
+## D815 — The primary layouts: two constructors, one new layout, and a margin that is a position
+
+P1-03 of the widget plan. Of the eight components four were D799's; the
+rest are what they are made of. `row` and `column` are `flex` along an
+axis with a gap, constructors and nothing more. `wrap` is the one new
+layout, in `e.ui.layout` beside `flex` and `grid`: children at their
+desired sizes along the axis, a line broken before the child that would
+pass the main limit and never before a line's first, lines stacked with
+a cross gap, each line as tall as its tallest child; a `Wrap` node kind
+in the widget runtime measures and places by it. `positioned` is a box
+whose margin is its offset: a stack places each child at its origin
+plus the child's margin box, so an absolute position needs no new field
+or kind, only the style's `position` set to say so. `link/ui_layout_primary`
+checks the row, the column, the wrap's line break and the positioned
+box on both hosts.

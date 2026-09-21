@@ -220,8 +220,17 @@
             "Stack",
             "Positioned"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Box",
+            "Row",
+            "Column",
+            "Flex",
+            "Wrap",
+            "Grid",
+            "Stack",
+            "Positioned"
+          ],
+          "evidence": "lib/e/ui/widget.e and lib/e/ui/layout.e (D815): row and column as flexes with a gap, wrap as a new layout and node kind breaking lines at the main limit, positioned as a box offset by its margin inside a stack; box, flex, grid and stack from D799; tests/selfhost/fixtures/link/ui_layout_primary on both hosts"
         },
         {
           "id": "P1-04",
