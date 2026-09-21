@@ -15972,3 +15972,31 @@ dialog in the tree labelled by the title and described by the message.
 Every overlay function answers an empty box when closed, so the caller
 places it unconditionally. `link/ui_transient` hovers, opens, presses,
 tabs, escapes and taps outside on both hosts.
+
+## D828 — e.ui.navigation opens: navigation state is the caller's path, the bars only place it
+
+P1-15 of the widget plan, and the last of the proposal's candidate
+modules (§9) that phase 1 needs: `e.ui.navigation` depends on
+`e.ui.control` and adds no state. An `Action` is a label, a submit, an
+optional icon and an enabled flag; a bar places each as a plain button
+-- the icon when there is one, the label otherwise -- keyed from the
+bar's key. `app_bar` is the leading actions (`key + 1 + index`, at most
+eight), the title as a heading of level 1 growing to fill, and the
+trailing actions (`key + 9 + index`) on the primary colour; a group
+named by the title. `toolbar` is a row of actions on the surface
+variant, a group named by its label; `status_bar` spreads its sections
+across its width, a polite status named by the first. A
+`navigation_stack` is given the whole path -- titles and pages, the
+last the top -- and shows the top page under an app bar (`key + 1`)
+whose back button (`key + 2`) fires `pop` while there is somewhere to
+go back to; the stack is a scope whose cancel action is the same `pop`,
+so Escape pops, and D811's host back gesture, which the runtime already
+turns into Escape, pops with it. `destination_form` names the form the
+width calls for (§3.7): the bottom bar below 600, the rail below 840,
+the sidebar beyond; `destination_bar` places the destinations as tabs
+(`key + 1 + index`) in a row for the bottom bar and a column otherwise,
+the current one filled and selected, under a tab list -- the same
+control at every width, so the caller's picks never change with the
+form; where it goes and what lies beside it is the caller's layout.
+`link/ui_navigation` fires, pops, escapes and checks both forms on
+both hosts.

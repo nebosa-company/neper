@@ -3799,6 +3799,20 @@ fn menu_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 fn alert_dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: str, buttons: []const DialogButton, open: bool) -> (widget.Node, err)
 ```
 
+### `e.ui.navigation`
+
+```neper
+type Action = struct { label: str, action: widget.Submit, icon: scene.TextureId, enabled: bool }
+type DestinationForm = enum u8 { Bottom, Rail, Sidebar }
+error TooLarge
+fn app_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, leading: []const Action, trailing: []const Action, width: f32) -> (widget.Node, err)
+fn toolbar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const Action) -> (widget.Node, err)
+fn status_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, sections: []const str, width: f32) -> (widget.Node, err)
+fn navigation_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, width: f32) -> (widget.Node, err)
+fn destination_form(width: f32) -> DestinationForm
+fn destination_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labels: []const str, selected: usize, picks: []const widget.Submit, form: DestinationForm, extent: f32) -> (widget.Node, err)
+```
+
 ### `e.ui.app`
 
 ```neper

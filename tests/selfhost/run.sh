@@ -1772,6 +1772,13 @@ ui_transient_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/ui-transient-selfhost"
 ui_transient_output=$("$test_build/ui-transient-selfhost")
 [ "$ui_transient_output" = 'ui transient ok' ]
+# Application navigation (D828, widget plan P1-15): app bar, toolbar, status bar, a
+# navigation stack and the adaptive destination bar.
+ui_navigation_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_navigation/src/main.e" "$repo" x64 linux "$test_build/ui-navigation-selfhost")
+[ "$ui_navigation_written" = 'executable written' ]
+chmod +x "$test_build/ui-navigation-selfhost"
+ui_navigation_output=$("$test_build/ui-navigation-selfhost")
+[ "$ui_navigation_output" = 'ui navigation ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

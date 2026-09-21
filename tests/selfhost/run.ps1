@@ -1836,6 +1836,13 @@ $uiTransientWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $uiTransientWritten -ne 'executable written') { throw 'ui_transient emission failed' }
 $uiTransientOutput = & $uiTransientPath
 if ($LASTEXITCODE -ne 0 -or $uiTransientOutput -ne 'ui transient ok') { throw "the transient UI answered wrongly: exit $LASTEXITCODE" }
+# Application navigation (D828, widget plan P1-15): app bar, toolbar, status bar, a
+# navigation stack and the adaptive destination bar.
+$uiNavigationPath = Join-Path $testBuild 'ui-navigation-selfhost.exe'
+$uiNavigationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_navigation\src\main.e') $repo 'x64' 'windows' $uiNavigationPath
+if ($LASTEXITCODE -ne 0 -or $uiNavigationWritten -ne 'executable written') { throw 'ui_navigation emission failed' }
+$uiNavigationOutput = & $uiNavigationPath
+if ($LASTEXITCODE -ne 0 -or $uiNavigationOutput -ne 'ui navigation ok') { throw "the navigation controls answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
