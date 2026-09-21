@@ -5,21 +5,21 @@
  "host": "linux",
  "jobs": 8,
  "compiler": "build/linux/tests/selfhost/neper-own",
- "revision": "ba091e51de1d87450d899d36f56f3d549c303c6a",
+ "revision": "7e6379717105eb42a1ddb79acceb0fbe839b7c4a",
  "cells": [
   {
    "workload": "sc500k",
    "mode": "debug",
    "command": "/mnt/d/repos/neper/build/linux/tests/selfhost/neper-own emit-executable /mnt/d/repos/neper/build/linux/tests/selfhost/baseline-fixtures/sc500k/src/main.e /mnt/d/repos/neper x64 linux /mnt/d/repos/neper/build/linux/tests/selfhost/baseline-fixtures/sc500k/static-debug -j 8 --stats --json",
-   "arena_mb": 2284,
-   "image_bytes": 2980096
+   "arena_mb": 2285,
+   "image_bytes": 3015369
   },
   {
    "workload": "sc500k",
    "mode": "release",
    "command": "/mnt/d/repos/neper/build/linux/tests/selfhost/neper-own emit-executable /mnt/d/repos/neper/build/linux/tests/selfhost/baseline-fixtures/sc500k/src/main.e /mnt/d/repos/neper x64 linux /mnt/d/repos/neper/build/linux/tests/selfhost/baseline-fixtures/sc500k/static-release --release -j 8 --stats --json",
-   "arena_mb": 2990,
-   "image_bytes": 2079472
+   "arena_mb": 2992,
+   "image_bytes": 2114745
   }
  ]
 }

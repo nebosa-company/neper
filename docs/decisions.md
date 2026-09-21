@@ -15395,3 +15395,19 @@ Found on the way: the session's shell hook expands `$?` inside a command
 string before the shell runs it, so `echo "run $?"` after a Linux program
 had printed `0` all session; the real codes read `\$?`, and the fixtures'
 printed lines were the evidence that held.
+
+## D804 — The static gate re-pinned for the X11 backend and the accessibility primitive
+
+The Linux sc500k cells moved with D802 and D803: `e.os` on Linux grew by
+the accessibility record and the X11 backend, some fifty functions of
+protocol over the display socket. Debug arena 2,284 to 2,285 MB, release
+2,990 to 2,992 MB, images +35 KB (+1.2%, +1.7%), inside the image budget;
+the Windows cells are unchanged since D800, its variant having gained only
+the accessibility primitive and lost an arena. Under D506's zero-growth
+arena rule the two Linux arena cells are re-pinned with this row naming
+why. On the way, two checker faults met in library code were left to their
+own sessions rather than hidden here: a root module's `use e.mem as mem`
+alias breaking resolution of a source-defined `e.mem` member inside another
+library module, and an explain record of a `mem.copy[u8]` instance made
+inside `e.os` landing on another module's call site in the context tool's
+facts; `e.os` keeps to `copy_bytes` and local blocks until they are fixed.

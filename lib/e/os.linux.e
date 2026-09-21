@@ -3203,9 +3203,9 @@ fn x_cookie(a: *mem.Arena, cookie: []u8) -> (usize, err) {
         mem.reset(a, checkpoint)
         ret (0usize, OutOfMemory)
     }
-    mem.copy[u8](path[0usize..home.len], home)
+    copy_bytes(path[0usize..home.len], home)
     let suffix = "/.Xauthority"
-    mem.copy[u8](path[home.len..home.len + 12usize], suffix)
+    copy_bytes(path[home.len..home.len + 12usize], suffix)
     path[home.len + 12usize] = 0u8
     let descriptor = syscall(SYS_OPENAT, AT_FDCWD, mem.address_of(&path[0usize]), OPEN_READ_ONLY, 0usize, 0usize, 0usize)
     if descriptor < 0isize {
@@ -3303,7 +3303,7 @@ fn x_connect(a: *mem.Arena) -> err {
     var address: [110]u8 = zero
     address[0usize] = 1u8
     let prefix = "/tmp/.X11-unix/X"
-    mem.copy[u8](address[2usize..2usize + prefix.len], prefix)
+    copy_bytes(address[2usize..2usize + prefix.len], prefix)
     var number = x_display_number(a)
     var digits: [8]u8 = zero
     var digit_count = 0usize
@@ -3343,9 +3343,9 @@ fn x_connect(a: *mem.Arena) -> err {
     x_put16(setup[..], 8usize, u32(cookie_len))
     var at = 12usize
     if name_len != 0usize {
-        mem.copy[u8](setup[at..at + name_len], name)
+        copy_bytes(setup[at..at + name_len], name)
         at += x_pad4(name_len)
-        mem.copy[u8](setup[at..at + cookie_len], cookie[0usize..cookie_len])
+        copy_bytes(setup[at..at + cookie_len], cookie[0usize..cookie_len])
         at += x_pad4(cookie_len)
     }
     try x_send(setup[0usize..at])
@@ -3393,7 +3393,7 @@ fn x_intern_atom(name: str) -> (u32, err) {
     request[1usize] = 0u8
     x_put16(request[..], 2usize, u32(units))
     x_put16(request[..], 4usize, u32(name.len))
-    mem.copy[u8](request[8usize..8usize + name.len], name)
+    copy_bytes(request[8usize..8usize + name.len], name)
     let send_error = x_send(request[0usize..units * 4usize])
     if send_error != ok { ret (0u32, send_error) }
     let reply_error = x_await_reply()
@@ -3434,7 +3434,7 @@ fn x_change_property(window: u32, property: u32, kind: u32, format: u32, data: [
     x_put32(request[..], 12usize, kind)
     request[16usize] = u8(format)
     x_put32(request[..], 20usize, u32(count))
-    mem.copy[u8](request[24usize..24usize + data.len], data)
+    copy_bytes(request[24usize..24usize + data.len], data)
     ret x_send(request[0usize..units * 4usize])
 }
 

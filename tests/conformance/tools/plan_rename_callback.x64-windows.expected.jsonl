@@ -4,4 +4,4 @@
 {"record":"edit","op":"rename-symbol","symbol":"main.twice","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":494,"byte_end":499,"line":16,"column":16,"end_line":16,"end_column":21,"column_utf16":16,"end_column_utf16":21},"replacement":"double"}
 {"record":"edit","op":"rename-symbol","symbol":"main.twice","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":544,"byte_end":549,"line":17,"column":45,"end_line":17,"end_column":50,"column_utf16":45,"end_column_utf16":50},"replacement":"double"}
 {"record":"postcondition","check":"check-file passes; uses-file --symbol main.double reports uses at 2 sites and main.twice names no function"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":1,"complete":true,"snapshot":"c761652d7730022b"}}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":1,"complete":true,"snapshot":"c93e7d9d780ac7c1"}}
