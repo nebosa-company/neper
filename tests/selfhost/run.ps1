@@ -2117,6 +2117,12 @@ $uiTabularWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $uiTabularWritten -ne 'executable written') { throw 'ui_tabular emission failed' }
 $uiTabularOutput = & $uiTabularPath
 if ($LASTEXITCODE -ne 0 -or $uiTabularOutput -ne 'ui tabular ok') { throw "the tabular data answered wrongly: exit $LASTEXITCODE" }
+# Property editing (D851, widget plan P3-02): property grid, key-value editor.
+$uiPropertyPath = Join-Path $testBuild 'ui-property-selfhost.exe'
+$uiPropertyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_property\src\main.e') $repo 'x64' 'windows' $uiPropertyPath
+if ($LASTEXITCODE -ne 0 -or $uiPropertyWritten -ne 'executable written') { throw 'ui_property emission failed' }
+$uiPropertyOutput = & $uiPropertyPath
+if ($LASTEXITCODE -ne 0 -or $uiPropertyOutput -ne 'ui property ok') { throw "the property editing answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

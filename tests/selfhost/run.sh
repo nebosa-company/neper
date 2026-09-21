@@ -2021,6 +2021,12 @@ ui_tabular_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/ui-tabular-selfhost"
 ui_tabular_output=$("$test_build/ui-tabular-selfhost")
 [ "$ui_tabular_output" = 'ui tabular ok' ]
+# Property editing (D851, widget plan P3-02): property grid, key-value editor.
+ui_property_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_property/src/main.e" "$repo" x64 linux "$test_build/ui-property-selfhost")
+[ "$ui_property_written" = 'executable written' ]
+chmod +x "$test_build/ui-property-selfhost"
+ui_property_output=$("$test_build/ui-property-selfhost")
+[ "$ui_property_output" = 'ui property ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

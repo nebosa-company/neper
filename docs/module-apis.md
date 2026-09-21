@@ -4573,6 +4573,10 @@ type TableSource = struct { ctx: *void, count: fn(*void) -> usize, key: fn(*void
 type ColumnResize = struct { column: usize, width: f32 }
 type CellSource = struct { ctx: *void, cell: fn(*void, *mem.Arena, widget.Key, usize, *widget.Node) -> err }
 type TreeSource = struct { ctx: *void, count: fn(*void, widget.Key) -> usize, key: fn(*void, widget.Key, usize) -> widget.Key, has_children: fn(*void, widget.Key) -> bool, build: fn(*void, *mem.Arena, widget.Key, *widget.Node) -> err }
+type Property = struct { key: widget.Key, name: str, group: str }
+type PropertySource = struct { ctx: *void, count: fn(*void) -> usize, property: fn(*void, usize) -> Property, editor: fn(*void, *mem.Arena, usize, *widget.Node) -> err }
+type Pair = struct { name: []u8, name_len: usize, value: []u8, value_len: usize }
+type PairEdit = struct { index: usize, value: bool, text: str }
 error TooLarge
 fn list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const widget.Node, keys: []const widget.Key, selected: []const widget.Key, separators: bool, width: f32) -> (widget.Node, err)
 fn virtual_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: Source, selected: []const widget.Key, extent: f32, offset: f32, change: widget.Change[f32], separators: bool, width: f32, height: f32) -> (widget.Node, err)
@@ -4590,6 +4594,8 @@ fn data_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 fn tree(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], extent: f32, width: f32) -> (widget.Node, err)
 fn outline(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TreeSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], extent: f32, width: f32) -> (widget.Node, err)
 fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TreeSource, cells_of: CellSource, expanded: []const widget.Key, selected: []const widget.Key, toggle: widget.Change[widget.Key], pick: widget.Change[widget.Key], sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], extent: f32) -> (widget.Node, err)
+fn property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32) -> (widget.Node, err)
+fn key_value_editor(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32) -> (widget.Node, err)
 ```
 
 ### `e.ui.app`

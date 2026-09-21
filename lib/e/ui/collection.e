@@ -1232,3 +1232,217 @@ fn tree_table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     sem.column_count = u32(columns.len)
     ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
 }
+
+// ------------------------------------------------------- property editing (D851, P3-02)
+
+// A property of a property grid: its stable key, its name and its group.
+type Property = struct { key: widget.Key, name: str, group: str }
+
+// A property grid's source: the count, a property by index, and its editor built
+// into the arena -- a field, a checkbox, a select, whatever the caller edits it
+// with, keyed by the caller.
+type PropertySource = struct { ctx: *void, count: fn(*void) -> usize, property: fn(*void, usize) -> Property, editor: fn(*void, *mem.Arena, usize, *widget.Node) -> err }
+
+fn same_text(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// A group's toggle reporting the group's key.
+type GroupToggle = struct { key: widget.Key, toggle: widget.Change[widget.Key] }
+
+fn group_toggle_fire(ctx: *void) -> err {
+    let g = mem.cast[*GroupToggle](ctx)
+    ret widget.fire_change[widget.Key](g.toggle, g.key)
+}
+
+// A property grid: the properties in source order, a group heading (D826's
+// disclosure, keyed `key + 1 + index` of the group's first property, its group
+// key that index plus one) wherever the group changes, shut while its key is in
+// `collapsed`, its header reporting the key through `toggle`; under it a row a
+// property, the name in the left column (`name_width` wide, a row header in the
+// tree) and the editor in the right, `width` wide in all. A table of two columns
+// in the tree named `label`.
+fn property_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32) -> (widget.Node, err) {
+    let total = source.count(source.ctx)
+    if total > 256usize { ret (zero, TooLarge) }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, total)
+    if rows_error != ok { ret (zero, TooLarge) }
+    let (blocks, blocks_error) = mem.alloc[widget.Node](a, total)
+    if blocks_error != ok { ret (zero, TooLarge) }
+    let (toggles, toggles_error) = mem.alloc[GroupToggle](a, total)
+    if toggles_error != ok { ret (zero, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, total)
+    if actions_error != ok { ret (zero, TooLarge) }
+    var block_count = 0usize
+    var i = 0usize
+    while i < total {
+        // The group from `i` on: its rows into `rows`, then one block of them.
+        let head = source.property(source.ctx, i)
+        var end = i
+        while end < total && same_text(source.property(source.ctx, end).group, head.group) { end += 1usize }
+        let group_key = u64(i) + 1u64
+        let open = !is_selected(collapsed, group_key)
+        var r = i
+        while r < end {
+            let p = source.property(source.ctx, r)
+            var caption = control.text_options()
+            caption.role = .Label
+            caption.wrap = .None
+            caption.ellipsis = "..."
+            caption.max_lines = 1u32
+            let (name_node, name_error) = control.text(a, 0u64, p.name, t, caption)
+            if name_error != ok { ret (zero, name_error) }
+            let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
+            if named_error != ok { ret (zero, TooLarge) }
+            named[0usize] = name_node
+            var name_sem: widget.Semantics = zero
+            name_sem.role = 31u8
+            name_sem.label = p.name
+            name_sem.row = u32(r + 1usize)
+            name_sem.column = 1u32
+            var name_style = style.defaults()
+            name_style.width = style.Length { Px: name_width }
+            name_style.overflow = .Clip
+            let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+            if pair_error != ok { ret (zero, TooLarge) }
+            pair[0usize] = widget.semantics(0u64, name_sem, name_style, named[0usize..1usize])
+            var editor: widget.Node = zero
+            let editor_error = source.editor(source.ctx, a, r, &editor)
+            if editor_error != ok { ret (zero, editor_error) }
+            let (valued, valued_error) = mem.alloc[widget.Node](a, 1usize)
+            if valued_error != ok { ret (zero, TooLarge) }
+            valued[0usize] = editor
+            var value_sem: widget.Semantics = zero
+            value_sem.role = 14u8
+            value_sem.row = u32(r + 1usize)
+            value_sem.column = 2u32
+            var value_style = style.defaults()
+            value_style.width = style.Length { Px: width - name_width }
+            pair[1usize] = widget.semantics(0u64, value_sem, value_style, valued[0usize..1usize])
+            let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
+            if lined_error != ok { ret (zero, TooLarge) }
+            lined[0usize] = widget.flex(p.key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), pair[0usize..2usize])
+            var row_sem: widget.Semantics = zero
+            row_sem.role = 13u8
+            row_sem.row = u32(r + 1usize)
+            row_sem.row_count = u32(total)
+            rows[r] = widget.semantics(0u64, row_sem, style.defaults(), lined[0usize..1usize])
+            r += 1usize
+        }
+        let group_rows = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), rows[i..end])
+        if head.group.len == 0usize {
+            blocks[block_count] = group_rows
+        } else {
+            toggles[block_count] = GroupToggle { key: group_key, toggle: toggle }
+            actions[block_count] = widget.Submit { ctx: mem.cast[*void](&toggles[block_count]), invoke: group_toggle_fire }
+            let (opened, opened_error) = control.disclosure(a, key + 1u64 + u64(i), t, head.group, open, &actions[block_count], group_rows)
+            if opened_error != ok { ret (zero, opened_error) }
+            blocks[block_count] = opened
+        }
+        block_count += 1usize
+        i = end
+    }
+    var column_style = style.defaults()
+    column_style.width = style.Length { Px: width }
+    let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column_node[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.sm }, column_style, blocks[0usize..block_count])
+    var sem: widget.Semantics = zero
+    sem.role = 12u8
+    sem.label = label
+    sem.row_count = u32(total)
+    sem.column_count = 2u32
+    ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
+}
+
+// A pair of a key-value editor: the caller's two buffers and their lengths.
+type Pair = struct { name: []u8, name_len: usize, value: []u8, value_len: usize }
+
+// An edit of a pair: which, whether the value (else the name), the text typed.
+type PairEdit = struct { index: usize, value: bool, text: str }
+
+type PairChange = struct { index: usize, value: bool, edit: widget.Change[PairEdit] }
+
+fn pair_change_fire(ctx: *void, text: str) -> err {
+    let c = mem.cast[*PairChange](ctx)
+    ret widget.fire_change[PairEdit](c.edit, PairEdit { index: c.index, value: c.value, text: text })
+}
+
+type PairRemove = struct { index: usize, remove: widget.Change[usize] }
+
+fn pair_remove_fire(ctx: *void) -> err {
+    let r = mem.cast[*PairRemove](ctx)
+    ret widget.fire_change[usize](r.remove, r.index)
+}
+
+// A key-value editor: a row a pair -- a name field (keyed `key + 1 + 3 * index`),
+// a value field (`key + 2 + 3 * index`) and a remove button (`key + 3 + 3 * index`)
+// -- every keystroke reaching `edit` with the pair, the side and the text, a
+// remove reaching `remove` with the index, and an Add button (keyed
+// `key + 3 * pairs.len + 4`) firing `add`; the caller keeps the pairs. A table
+// of two columns in the tree named `label`.
+fn key_value_editor(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, pairs: []const Pair, edit: widget.Change[PairEdit], remove: widget.Change[usize], add: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if pairs.len > 128usize { ret (zero, TooLarge) }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, pairs.len + 1usize)
+    if rows_error != ok { ret (zero, TooLarge) }
+    let (changes, changes_error) = mem.alloc[PairChange](a, 2usize * pairs.len)
+    if changes_error != ok { ret (zero, TooLarge) }
+    let (removes, removes_error) = mem.alloc[PairRemove](a, pairs.len)
+    if removes_error != ok { ret (zero, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, pairs.len)
+    if actions_error != ok { ret (zero, TooLarge) }
+    let field_width = (width - t.tokens.metrics.hit_target - 2.0 * t.tokens.spacing.xs) * 0.5
+    var i = 0usize
+    while i < pairs.len {
+        changes[2usize * i] = PairChange { index: i, value: false, edit: edit }
+        changes[2usize * i + 1usize] = PairChange { index: i, value: true, edit: edit }
+        removes[i] = PairRemove { index: i, remove: remove }
+        actions[i] = widget.Submit { ctx: mem.cast[*void](&removes[i]), invoke: pair_remove_fire }
+        let (cells, cells_error) = mem.alloc[widget.Node](a, 3usize)
+        if cells_error != ok { ret (zero, TooLarge) }
+        var options = control.field_options()
+        options.width = field_width
+        let (name_field, name_error) = control.text_field(a, key + 1u64 + 3u64 * u64(i), t, "Key", pairs[i].name, pairs[i].name_len, widget.Change[str] { ctx: mem.cast[*void](&changes[2usize * i]), invoke: pair_change_fire }, zero, options)
+        if name_error != ok { ret (zero, name_error) }
+        cells[0usize] = name_field
+        let (value_field, value_error) = control.text_field(a, key + 2u64 + 3u64 * u64(i), t, "Value", pairs[i].value, pairs[i].value_len, widget.Change[str] { ctx: mem.cast[*void](&changes[2usize * i + 1usize]), invoke: pair_change_fire }, zero, options)
+        if value_error != ok { ret (zero, value_error) }
+        cells[1usize] = value_field
+        var plain = control.button_options()
+        plain.variant = .Plain
+        let (gone, gone_error) = control.button(a, key + 3u64 + 3u64 * u64(i), t, "x", &actions[i], plain)
+        if gone_error != ok { ret (zero, gone_error) }
+        cells[2usize] = gone
+        let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
+        if lined_error != ok { ret (zero, TooLarge) }
+        lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: t.tokens.spacing.xs }, style.defaults(), cells[0usize..3usize])
+        var row_sem: widget.Semantics = zero
+        row_sem.role = 13u8
+        row_sem.row = u32(i + 1usize)
+        row_sem.row_count = u32(pairs.len)
+        rows[i] = widget.semantics(0u64, row_sem, style.defaults(), lined[0usize..1usize])
+        i += 1usize
+    }
+    var outlined = control.button_options()
+    outlined.variant = .Outlined
+    let (more, more_error) = control.button(a, key + 3u64 * u64(pairs.len) + 4u64, t, "Add", add, outlined)
+    if more_error != ok { ret (zero, more_error) }
+    rows[pairs.len] = more
+    var column_style = style.defaults()
+    column_style.width = style.Length { Px: width }
+    let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column_node[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, column_style, rows[0usize..pairs.len + 1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 12u8
+    sem.label = label
+    sem.row_count = u32(pairs.len)
+    sem.column_count = 2u32
+    ret (widget.semantics(0u64, sem, style.defaults(), column_node[0usize..1usize]), ok)
+}

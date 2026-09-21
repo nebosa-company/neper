@@ -16509,3 +16509,25 @@ line down each level's indent; a `tree_table` hangs `CellSource`
 columns off the tree's rows under the same header. Pinned columns wait
 for a horizontal viewport. `link/ui_tabular` sorts, reorders, resizes,
 picks, expands and collapses on both hosts.
+
+## D851 — Property editing: the editor is the caller's, the grid only places it
+
+P3-02 of the widget plan (D846–D850 are the algos stream's). A
+`property_grid` takes a `PropertySource` -- a count, a property (its
+stable key, name and group) by index, and an editor built into the
+arena by the caller: a text field, a checkbox, a select, a colour
+picker, keyed as the caller likes -- and places a row a property, the
+name in a fixed left column as a row header and the editor in the
+right, under a group heading wherever the group changes: D826's
+disclosure, keyed from the group's first property, whose key (that
+index plus one) the caller keeps in `collapsed` and hears through
+`toggle`; ungrouped properties stand bare. The grid knows no value
+types; the proposal's typed editors are what the source builds. A
+`key_value_editor` is a row a `Pair` -- two of D823's text fields over
+the caller's own buffers and a remove button -- with every keystroke
+reported as a `PairEdit` naming the pair, the side and the text, a
+remove reported by index and an Add button firing `add`; the caller
+grows, shrinks and stores the pairs, so the editor holds nothing. Both
+are tables of two columns in the tree. `link/ui_property` checks the
+rows, the headers, a collapse, the checkbox, the edits, a remove and
+an add on both hosts.

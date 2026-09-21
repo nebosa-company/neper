@@ -728,8 +728,11 @@
             "PropertyGrid",
             "KeyValueEditor"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "PropertyGrid",
+            "KeyValueEditor"
+          ],
+          "evidence": "lib/e/ui/collection.e (D851): property_grid over a PropertySource (count, property with key/name/group, editor built by the caller) as name and editor rows under disclosure group headings the caller collapses by key, a table of two columns with row headers; key_value_editor as a row a Pair of two text fields over the caller's buffers and a remove, every keystroke reported as a PairEdit with the index and the side, removes by index, an Add button; tests/selfhost/fixtures/link/ui_property on both hosts"
         },
         {
           "id": "P3-03",
