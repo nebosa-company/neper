@@ -744,3 +744,265 @@ fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Th
     sem.label = label
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
+
+// ------------------------------------------------- productivity navigation (D853, P3-04)
+
+// A wizard: the steps' names in a row at the top (the done ones marked, the
+// current one in the primary colour), the current step's content between, and
+// a footer of Cancel (keyed `key + 1`), Back (`key + 2`, disabled on the first
+// step) and Next (`key + 3`, disabled while the caller says the step cannot be
+// left) -- Finish (`key + 4`) in Next's place on the last step; under a scope
+// whose Enter is Next or Finish and whose Escape is Cancel, `width` by `height`.
+// The caller keeps `current` and validates. A group in the tree named by the title.
+fn wizard(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, steps: []const str, current: usize, content: widget.Node, can_advance: bool, back: *const widget.Submit, next: *const widget.Submit, finish: *const widget.Submit, cancel: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
+    if steps.len == 0usize || current >= steps.len { ret (zero, TooLarge) }
+    let last = current + 1usize == steps.len
+    // The steps.
+    let (names, names_error) = mem.alloc[widget.Node](a, steps.len)
+    if names_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < steps.len {
+        var caption = control.text_options()
+        caption.role = .Label
+        caption.wrap = .None
+        caption.color = .TextMuted
+        if i == current { caption.color = .Primary }
+        if i < current { caption.color = .Text }
+        let (name_bytes, name_error) = mem.alloc[u8](a, steps[i].len + 2usize)
+        if name_error != ok { ret (zero, TooLarge) }
+        var n = 0usize
+        if i < current {
+            name_bytes[0usize] = 43u8
+            name_bytes[1usize] = 32u8
+            n = 2usize
+        }
+        var k = 0usize
+        while k < steps[i].len {
+            name_bytes[n + k] = steps[i][k]
+            k += 1usize
+        }
+        n += steps[i].len
+        let (name_node, name_node_error) = control.text(a, 0u64, name_bytes[0usize..n], t, caption)
+        if name_node_error != ok { ret (zero, name_node_error) }
+        let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
+        if named_error != ok { ret (zero, TooLarge) }
+        named[0usize] = name_node
+        var step_sem: widget.Semantics = zero
+        step_sem.role = 11u8
+        step_sem.label = steps[i]
+        step_sem.row = u32(i + 1usize)
+        step_sem.row_count = u32(steps.len)
+        if i == current { step_sem.states = accessibility.STATE_CURRENT }
+        names[i] = widget.semantics(0u64, step_sem, style.defaults(), named[0usize..1usize])
+        i += 1usize
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var head = style.defaults()
+    head.width = style.Length { Percent: 100.0 }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.md }, head, names[0usize..steps.len])
+    // The content, growing.
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    var page = style.defaults()
+    page.width = style.Length { Percent: 100.0 }
+    page.height = style.Length { Flex: 1.0 }
+    page.overflow = .Clip
+    var page_sem: widget.Semantics = zero
+    page_sem.role = 2u8
+    page_sem.label = steps[current]
+    parts[1usize] = widget.semantics(key + 5u64, page_sem, page, body[0usize..1usize])
+    // The footer.
+    let (foot, foot_error) = mem.alloc[widget.Node](a, 3usize)
+    if foot_error != ok { ret (zero, TooLarge) }
+    var plain = control.button_options()
+    plain.variant = .Plain
+    let (cancel_button, cancel_error) = control.button(a, key + 1u64, t, "Cancel", cancel, plain)
+    if cancel_error != ok { ret (zero, cancel_error) }
+    foot[0usize] = cancel_button
+    var outlined = control.button_options()
+    outlined.variant = .Outlined
+    outlined.enabled = current > 0usize
+    let (back_button, back_error) = control.button(a, key + 2u64, t, "Back", back, outlined)
+    if back_error != ok { ret (zero, back_error) }
+    foot[1usize] = back_button
+    var forward = control.button_options()
+    forward.enabled = can_advance
+    var default_action: widget.Submit = zero
+    if last {
+        let (finish_button, finish_error) = control.button(a, key + 4u64, t, "Finish", finish, forward)
+        if finish_error != ok { ret (zero, finish_error) }
+        foot[2usize] = finish_button
+        if can_advance { default_action = *finish }
+    } else {
+        let (next_button, next_error) = control.button(a, key + 3u64, t, "Next", next, forward)
+        if next_error != ok { ret (zero, next_error) }
+        foot[2usize] = next_button
+        if can_advance { default_action = *next }
+    }
+    var footer = style.defaults()
+    footer.width = style.Length { Percent: 100.0 }
+    parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: t.tokens.spacing.sm }, footer, foot[0usize..3usize])
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: t.tokens.spacing.md }, control.sized_style(width, height), parts[0usize..3usize])
+    var none: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: none, default_action: default_action, cancel_action: *cancel, keys: zero }, style.defaults(), column[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = title
+    sem.row = u32(current + 1usize)
+    sem.row_count = u32(steps.len)
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// A pick of an index through a change, for a row.
+type IndexPick = struct { index: usize, pick: widget.Change[usize] }
+
+fn index_pick_fire(ctx: *void) -> err {
+    let p = mem.cast[*IndexPick](ctx)
+    ret widget.fire_change[usize](p.pick, p.index)
+}
+
+// The rows of a switcher or a palette: plain buttons keyed `first + index`, the
+// active one filled and selected, each reporting its index through `pick`.
+fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names: []const str, active: usize, pick: widget.Change[usize]) -> ([]widget.Node, err) {
+    var none: []widget.Node = zero
+    let (rows, rows_error) = mem.alloc[widget.Node](a, names.len)
+    if rows_error != ok { ret (none, TooLarge) }
+    let (picks, picks_error) = mem.alloc[IndexPick](a, names.len)
+    if picks_error != ok { ret (none, TooLarge) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, names.len)
+    if actions_error != ok { ret (none, TooLarge) }
+    var i = 0usize
+    while i < names.len {
+        picks[i] = IndexPick { index: i, pick: pick }
+        actions[i] = widget.Submit { ctx: mem.cast[*void](&picks[i]), invoke: index_pick_fire }
+        var plain = control.button_options()
+        plain.variant = .Plain
+        if i == active { plain.variant = .Filled }
+        let (made, made_error) = control.button(a, first + u64(i), t, names[i], &actions[i], plain)
+        if made_error != ok { ret (none, made_error) }
+        var stretched = made
+        stretched.style.width = style.Length { Percent: 100.0 }
+        var entry: widget.Semantics = zero
+        entry.role = 11u8
+        entry.label = names[i]
+        entry.row = u32(i + 1usize)
+        entry.row_count = u32(names.len)
+        if i == active { entry.states = accessibility.STATE_SELECTED }
+        let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+        if wrapped_error != ok { ret (none, TooLarge) }
+        wrapped[0usize] = stretched
+        var full = style.defaults()
+        full.width = style.Length { Percent: 100.0 }
+        rows[i] = widget.semantics(0u64, entry, full, wrapped[0usize..1usize])
+        i += 1usize
+    }
+    ret (rows[0usize..names.len], ok)
+}
+
+// The Up and Down shortcuts moving `active` through `activate`, and Enter
+// picking it, for a switcher or a palette.
+fn choice_scope(a: *mem.Arena, key: widget.Key, count: usize, active: usize, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
+    let (moves, moves_error) = mem.alloc[IndexPick](a, 3usize)
+    if moves_error != ok { ret (zero, TooLarge) }
+    var previous = active
+    if active > 0usize { previous = active - 1usize }
+    var next = active
+    if active + 1usize < count { next = active + 1usize }
+    moves[0usize] = IndexPick { index: previous, pick: activate }
+    moves[1usize] = IndexPick { index: next, pick: activate }
+    moves[2usize] = IndexPick { index: active, pick: pick }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    shortcuts[0usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: index_pick_fire } }
+    shortcuts[1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: index_pick_fire } }
+    var default_action: widget.Submit = zero
+    if count > 0usize { default_action = widget.Submit { ctx: mem.cast[*void](&moves[2usize]), invoke: index_pick_fire } }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    ret (widget.scope(key, widget.Scope { traps_focus: true, shortcuts: shortcuts[0usize..2usize], default_action: default_action, cancel_action: *dismiss, keys: zero }, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// A modal panel in the middle of the window holding `content` (keyed `key`),
+// Escape and a press outside firing `dismiss`; a modal dialog in the tree named
+// `label`.
+fn centred_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, content: widget.Node, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    var options = control.surface_options(t)
+    options.bordered = true
+    options.elevation = 3u8
+    options.radius = t.tokens.radii.md
+    options.padding = t.tokens.spacing.sm
+    var panel = control.surface_style(t, options)
+    panel.width = style.Length { Px: width }
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
+    if boxed_error != ok { ret (zero, TooLarge) }
+    boxed[0usize] = widget.box(0u64, panel, body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 23u8
+    sem.label = label
+    sem.states = accessibility.STATE_MODAL
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.semantics(0u64, sem, style.defaults(), boxed[0usize..1usize])
+    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
+}
+
+// A window switcher: the application's windows or documents by name in a modal
+// panel in the middle of the window while `open`, the active one filled; Up and
+// Down move the active one through `activate` (the caller keeps it), Enter and a
+// tap pick through `pick`, Escape and a press outside fire `dismiss`. The rows
+// are keyed `key + 2 + index`, the scope `key + 1`. The caller opens it from
+// whatever chord its host lets it hear.
+fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (rows, rows_error) = choice_rows(a, key + 2u64, t, names, active, pick)
+    if rows_error != ok { ret (zero, rows_error) }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows)
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, names.len, active, activate, pick, dismiss, column)
+    if scoped_error != ok { ret (zero, scoped_error) }
+    let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width)
+    ret (made, made_error)
+}
+
+// A command palette: a search field (keyed `key + 2`, over the caller's buffer,
+// typed text reaching `typed` for the caller to filter by) over the matching
+// commands' names in a modal panel in the middle of the window while `open`, the
+// active one filled; Up and Down move it through `activate`, Enter and a tap run
+// one through `run`, Escape and a press outside fire `dismiss`. The rows are keyed
+// `key + 3 + index`, the scope `key + 1`.
+fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var options = control.field_options()
+    options.placeholder = "Type a command"
+    options.width = width - 2.0 * t.tokens.spacing.sm
+    let (no_clear, no_clear_error) = mem.alloc[widget.Submit](a, 1usize)
+    if no_clear_error != ok { ret (zero, TooLarge) }
+    var none_action: widget.Submit = zero
+    no_clear[0usize] = none_action
+    let (field, field_error) = control.search_field(a, key + 2u64, t, buffer, len, typed, zero, &no_clear[0usize], options)
+    if field_error != ok { ret (zero, field_error) }
+    let (rows, rows_error) = choice_rows(a, key + 3u64, t, commands, active, run)
+    if rows_error != ok { ret (zero, rows_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 1usize + commands.len)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = field
+    var i = 0usize
+    while i < commands.len {
+        parts[1usize + i] = rows[i]
+        i += 1usize
+    }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..1usize + commands.len])
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, commands.len, active, activate, run, dismiss, column)
+    if scoped_error != ok { ret (zero, scoped_error) }
+    let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width)
+    ret (made, made_error)
+}
