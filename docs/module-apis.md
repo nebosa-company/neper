@@ -3533,6 +3533,7 @@ state and action bits it had until that bridge is written.
 ```neper
 type Harness = struct { state: *void }
 type Match = struct { element: widget.ElementId, count: usize }
+type Gallery = struct { presses: usize, checked: bool, field: [32]u8, field_len: usize, scrolled: f32 }
 error NotFound
 error Ambiguous
 error GoldenMismatch
@@ -3544,11 +3545,42 @@ fn by_key(h: *const Harness, key: widget.Key) -> Match
 fn by_text(h: *const Harness, text: str) -> Match
 fn snapshot(h: *Harness, a: *mem.Arena) -> (image.Image, err)
 fn compare(actual: image.ConstImage, expected: image.ConstImage, tolerance: u8) -> err
+fn tap(h: *Harness, x: f32, y: f32) -> err
+fn drag(h: *Harness, from: geometry.Point, to: geometry.Point, steps: usize) -> err
+fn hover(h: *Harness, x: f32, y: f32) -> err
+fn wheel(h: *Harness, x: f32, y: f32, notches: i32) -> err
+fn press_key(h: *Harness, code: u32, modifiers: input.Modifiers) -> err
+fn tab(h: *Harness, backward: bool) -> err
+fn focused(h: *const Harness) -> (widget.ElementId, bool)
+fn type_text(h: *Harness, text: str) -> err
+fn compose(h: *Harness, text: str) -> err
+fn commit(h: *Harness, text: str) -> err
+fn semantics(h: *const Harness) -> (accessibility.Tree, err)
+fn by_role(h: *const Harness, role: accessibility.Role) -> Match
+fn by_label(h: *const Harness, label: str) -> Match
+fn overlay_of(h: *const Harness, element: widget.ElementId) -> (geometry.Rect, bool)
+fn visible(h: *const Harness, element: widget.ElementId) -> bool
+fn fake_host(h: *Harness, host: style.Capabilities, safe: geometry.Insets, keyboard: geometry.Insets) -> err
+fn capabilities(h: *const Harness) -> style.Capabilities
+fn insets(h: *const Harness) -> (geometry.Insets, geometry.Insets)
+fn gallery(a: *mem.Arena, t: *const style.ThemeTokens, text_style: layout.Style, gallery_state: *Gallery) -> (widget.Node, err)
 fn close(h: *Harness) -> err
 ```
 
 The harness uses the deterministic CPU rendering backend and a synthetic window. It
 does not require a display server and never sleeps; tests supply frame time.
+
+The widget harness (D812, widget plan P0-09) adds what the proposal's section 8
+asks of it: gesture sequences (`tap`, `drag` in steps, `hover`, `wheel`), keys and
+focus traversal (`press_key`, `tab`, `focused`), the fake IME (`type_text` one code
+point at a time, `compose`, `commit`), semantic queries over the tree built now
+(`semantics`, `by_role`, `by_label` -- the first match in slot order and the count),
+overlay lookup, viewport visibility (inside the surface and every viewport above),
+and the host fixture (`fake_host` sets the capabilities and insets the harness
+stands in for and sends the insets event). `gallery` is the reference page: one of
+each primitive under a theme -- a heading, a filled button, an outlined field, a
+checkbox, a list in a viewport, a tooltip overlay -- with stable keys 1..9 and 20..25
+and its state in a `Gallery` the caller owns.
 
 ### `e.ui.app`
 

@@ -143,8 +143,11 @@
             "WidgetHarness",
             "WidgetGallery"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "WidgetHarness",
+            "WidgetGallery"
+          ],
+          "evidence": "lib/e/ui/testing.e (D812): gesture sequences, keys and focus traversal, the fake IME, semantic queries by role and label, overlay lookup, viewport visibility and the faked host with insets; gallery builds the reference page of every primitive under a theme with its state in Gallery; tests/selfhost/fixtures/link/ui_gallery on both hosts"
         }
       ]
     },

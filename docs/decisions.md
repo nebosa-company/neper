@@ -15596,3 +15596,29 @@ treats `Back` as Escape, so the nearest scope's cancel action is what a
 back gesture reaches with nothing more written. `link/ui_host` checks the
 model and the events on both hosts and says so where windows are not
 supported.
+
+## D812 — The widget harness grows the proposal's queries and sequences, and the gallery is a function
+
+P0-09 of the widget plan, and the close of phase 0. The harness of D801
+drove a runtime with raw events and found elements by key or text; the
+proposal's section 8 asks more of it, and each item is a function over
+what the runtime already answers: gesture sequences are the events a tap,
+a stepped drag, a hover and a wheel notch are made of; focus traversal is
+Tab and `widget.focused`; the fake IME types a string one code point at a
+time and shows a composition before its text commits it; semantic queries
+build the accessibility tree into the harness's own storage and answer
+the first element of a role or a label in slot order with the count, so a
+test reads what a screen reader would; overlay lookup and viewport
+visibility read D810's bounds and D808's viewports up the parent chain;
+and the host fixture sets the capabilities and insets the harness stands
+in for and sends the insets event, so a touch layout is tested on a
+desktop. The gallery is not an application but a function: `gallery`
+builds the reference page -- a heading, a filled button, an outlined
+field, a checkbox, a list in a viewport and a tooltip overlay, each
+styled from the theme's resolved looks -- into the caller's frame arena
+with its state in a `Gallery` the caller owns, so every fixture and
+every later component test can pump the same page under any theme and
+compare the frames. `link/ui_gallery` drives all of it and checks that
+two frames of the page are the same pixels. The key helper is
+`press_key`, since `key` is `by_key`'s parameter and a module-scope
+function's name is reserved from its parameters (D806's rule, met again).

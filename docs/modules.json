@@ -2099,14 +2099,19 @@
    "direct_dependencies": [
     "e.gfx.geometry",
     "e.gfx.image",
+    "e.gfx.paint",
     "e.gfx.scene",
     "e.gpu",
     "e.mem",
     "e.test",
+    "e.text.layout",
     "e.time",
+    "e.ui.accessibility",
     "e.ui.input",
     "e.ui.layout",
-    "e.ui.widget"
+    "e.ui.style",
+    "e.ui.widget",
+    "e.ui.window"
    ],
    "blocked_by": []
   },

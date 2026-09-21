@@ -1735,6 +1735,13 @@ $uiHostWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $uiHostWritten -ne 'executable written') { throw 'ui_host emission failed' }
 $uiHostOutput = & $uiHostPath
 if ($LASTEXITCODE -ne 0 -or $uiHostOutput -ne 'ui host ok') { throw "the host capabilities answered wrongly: exit $LASTEXITCODE" }
+# The widget harness and the gallery (D812, widget plan P0-09): semantic queries,
+# gestures, focus traversal, the fake IME, viewport visibility, overlays, a faked host.
+$uiGalleryPath = Join-Path $testBuild 'ui-gallery-selfhost.exe'
+$uiGalleryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_gallery\src\main.e') $repo 'x64' 'windows' $uiGalleryPath
+if ($LASTEXITCODE -ne 0 -or $uiGalleryWritten -ne 'executable written') { throw 'ui_gallery emission failed' }
+$uiGalleryOutput = & $uiGalleryPath
+if ($LASTEXITCODE -ne 0 -or $uiGalleryOutput -ne 'ui gallery ok') { throw "the gallery answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
