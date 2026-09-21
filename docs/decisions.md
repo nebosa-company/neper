@@ -15917,3 +15917,32 @@ a single-line editor with no submit of its own now lets Enter fall
 through to the enclosing scope instead of swallowing it, so a field in
 a form submits the form. `link/ui_form` checks the states, the
 relationships, both keys, the summary's jump and the wrap on both hosts.
+
+## D826 — Disclosure and panes: expanded is the caller's, tabs pick, a handle reports a size
+
+P1-13 of the widget plan. `disclosure` keeps nothing: the caller holds
+`expanded`, the header button fires `toggle`, and the content is placed
+only while expanded, as a group keyed `key + 1` labelled by the header;
+the header says expanded in the tree, offers the other action, and
+controls the group. `pressable` grew a `pressable_states` form that
+takes further state bits, actions and a controlled key, so the header
+is an ordinary button in every other way. The mark is a Custom-painted
+triangle (D822's shape for what the tree does not need). `expander` is
+the disclosure on a bordered surface. `tabs` is a row of plain tab
+buttons keyed `key + 1 + index`, the selected one underlined in the
+primary colour and selected in the tree, under a scope whose Left and
+Right shortcuts are the neighbours' picks -- D803's scope makes the
+arrow keys a matter of data, no runtime change -- and a tab list;
+`tab_view` stands the tabs (keyed `key + 1`) above the selected page
+alone, a group labelled by the selected tab. A `resizable_pane` sizes
+its content along its axis and follows it with a focusable drag handle
+in the border colour, a slider named `label` in the tree offering
+increment and decrement: a drag reports the pointer's distance from the
+pane's origin, the pointer taken as the handle's middle, and Left/Right
+(Up/Down) nudge the size by a medium space, both clamped to `low..high`
+or, with no `high`, to the enclosing element's extent less a reserve.
+The pointer, not the drag's delta, is what a frame-rebuilt control can
+report without double counting. `split_view` is that pane over the
+split's own key with `min_second` as the reserve and the second child
+filling the rest. `link/ui_panes` toggles, picks, drags, nudges and
+clamps on both hosts.

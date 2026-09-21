@@ -1822,6 +1822,13 @@ $uiFormWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $uiFormWritten -ne 'executable written') { throw 'ui_form emission failed' }
 $uiFormOutput = & $uiFormPath
 if ($LASTEXITCODE -ne 0 -or $uiFormOutput -ne 'ui form ok') { throw "the form controls answered wrongly: exit $LASTEXITCODE" }
+# Disclosure and panes (D826, widget plan P1-13): a disclosure and an expander, tabs
+# and a tab view, a split view's dragged and nudged handle.
+$uiPanesPath = Join-Path $testBuild 'ui-panes-selfhost.exe'
+$uiPanesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_panes\src\main.e') $repo 'x64' 'windows' $uiPanesPath
+if ($LASTEXITCODE -ne 0 -or $uiPanesWritten -ne 'executable written') { throw 'ui_panes emission failed' }
+$uiPanesOutput = & $uiPanesPath
+if ($LASTEXITCODE -ne 0 -or $uiPanesOutput -ne 'ui panes ok') { throw "the pane controls answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

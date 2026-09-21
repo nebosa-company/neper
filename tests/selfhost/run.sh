@@ -1758,6 +1758,13 @@ ui_form_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/ui-form-selfhost"
 ui_form_output=$("$test_build/ui-form-selfhost")
 [ "$ui_form_output" = 'ui form ok' ]
+# Disclosure and panes (D826, widget plan P1-13): a disclosure and an expander, tabs
+# and a tab view, a split view's dragged and nudged handle.
+ui_panes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_panes/src/main.e" "$repo" x64 linux "$test_build/ui-panes-selfhost")
+[ "$ui_panes_written" = 'executable written' ]
+chmod +x "$test_build/ui-panes-selfhost"
+ui_panes_output=$("$test_build/ui-panes-selfhost")
+[ "$ui_panes_output" = 'ui panes ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

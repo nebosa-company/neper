@@ -346,6 +346,13 @@ fn press_tap(ctx: *void, g: widget.Gesture) -> err {
 // The pressable surface every button is: a tap-and-hover region in the resolved
 // look, its content centred, the semantics on top. `action` outlives the element.
 fn pressable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, look: style.ResolvedControl, enabled: bool, selected: bool, action: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
+    let (node, node_error) = pressable_states(a, key, t, role, label, look, enabled, selected, 0u32, 0u32, 0u64, action, content)
+    ret (node, node_error)
+}
+
+// The same with more for the tree: further state bits, further actions, and an
+// element the button controls (0 for none).
+fn pressable_states(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, look: style.ResolvedControl, enabled: bool, selected: bool, states: u32, actions: u32, controls: widget.Key, action: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
     var s = style.defaults()
     s.background = paint.Brush { Solid: look.background }
     s.border = style.Border { width: look.border_width, color: look.border }
@@ -365,8 +372,10 @@ fn pressable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: s
     var sem: widget.Semantics = zero
     sem.role = role
     sem.label = label
-    sem.actions = accessibility.ACTION_PRESS
-    if !enabled { sem.states = accessibility.STATE_DISABLED }
+    sem.actions = accessibility.ACTION_PRESS | actions
+    sem.states = states
+    sem.controls = controls
+    if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
     if selected { sem.states = sem.states | accessibility.STATE_SELECTED }
     ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
 }
@@ -1217,5 +1226,329 @@ fn validation_summary(a: *mem.Arena, key: widget.Key, t: *const Theme, messages:
     sem.role = 24u8
     sem.live = 2u8
     sem.hidden = count == 0usize
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// ------------------------------------------- disclosure and panes (D826, P1-13)
+
+// The disclosure mark: a triangle pointing right, or down when expanded, in the
+// text colour, painted into the frame arena.
+type Mark = struct { color: paint.Color, expanded: bool, arena: *mem.Arena }
+
+fn mark_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
+    ret geometry.Size { width: 0.0, height: 0.0 }
+}
+
+fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let m = mem.cast[*Mark](ctx)
+    let (pb, pb_error) = geometry.path_builder(m.arena, 4usize, 4usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    let inset = area.width * 0.25
+    let x0 = area.x + inset
+    let y0 = area.y + inset
+    let x1 = area.x + area.width - inset
+    let y1 = area.y + area.height - inset
+    let xm = area.x + area.width * 0.5
+    let ym = area.y + area.height * 0.5
+    if m.expanded {
+        try geometry.move_to(&builder, geometry.Point { x: x0, y: y0 })
+        try geometry.line_to(&builder, geometry.Point { x: x1, y: y0 })
+        try geometry.line_to(&builder, geometry.Point { x: xm, y: y1 })
+    } else {
+        try geometry.move_to(&builder, geometry.Point { x: x0, y: y0 })
+        try geometry.line_to(&builder, geometry.Point { x: x1, y: ym })
+        try geometry.line_to(&builder, geometry.Point { x: x0, y: y1 })
+    }
+    try geometry.close_path(&builder)
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: m.color } } })
+}
+
+// A disclosure: a plain header button of the mark and the label firing `toggle`,
+// the content below it only while `expanded` (the caller keeps that); the header
+// says expanded or not in the tree, offers the other, and controls the content,
+// a group keyed `key + 1`.
+fn disclosure(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
+    let look = style.resolve(t.tokens, .Plain, control_state(t, key, true, false))
+    let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    marks[0usize] = Mark { color: look.foreground, expanded: expanded, arena: a }
+    let (head, head_error) = mem.alloc[widget.Node](a, 2usize)
+    if head_error != ok { ret (zero, TooLarge) }
+    let size = t.tokens.text[0usize].line_height
+    var none: []const widget.Node = zero
+    head[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint } }, style: sized_style(size, size), children: none }
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    head[1usize] = label_node
+    let header = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), head[0usize..2usize])
+    var states = 0u32
+    var actions = accessibility.ACTION_EXPAND
+    if expanded {
+        states = accessibility.STATE_EXPANDED
+        actions = accessibility.ACTION_COLLAPSE
+    }
+    let (button_node, button_error) = pressable_states(a, key, t, 3u8, label, look, true, false, states, actions, key + 1u64, toggle, header)
+    if button_error != ok { ret (zero, button_error) }
+    var count = 1usize
+    if expanded { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = button_node
+    if expanded {
+        let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+        if body_error != ok { ret (zero, TooLarge) }
+        body[0usize] = content
+        var sem: widget.Semantics = zero
+        sem.role = 2u8
+        sem.labelled_by = key
+        var padded = style.defaults()
+        padded.padding = style.EdgeLengths { left: style.Length { Px: size + t.tokens.spacing.xs }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        parts[1usize] = widget.semantics(key + 1u64, sem, padded, body[0usize..1usize])
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..count]), ok)
+}
+
+// An expander: a disclosure on a bordered, rounded, padded surface.
+fn expander(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
+    let (opened, opened_error) = disclosure(a, key, t, label, expanded, toggle, content)
+    if opened_error != ok { ret (zero, opened_error) }
+    let (sheet, sheet_error) = mem.alloc[widget.Node](a, 1usize)
+    if sheet_error != ok { ret (zero, TooLarge) }
+    sheet[0usize] = opened
+    var options = surface_options(t)
+    options.bordered = true
+    options.radius = t.tokens.radii.sm
+    options.padding = t.tokens.spacing.sm
+    ret (widget.box(0u64, surface_style(t, options), sheet[0usize..1usize]), ok)
+}
+
+// A tab list: a row of plain tab buttons keyed `key + 1 + index`, the selected one
+// underlined in the primary colour and selected in the tree, each firing its own
+// pick; Left and Right on a focused tab pick its neighbours.
+fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit) -> (widget.Node, err) {
+    if picks.len != labels.len { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < labels.len {
+        let chosen = i == selected
+        let tab_key = key + 1u64 + u64(i)
+        let look = style.resolve(t.tokens, .Plain, control_state(t, tab_key, true, chosen))
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        var caption = text_options()
+        caption.role = .Label
+        caption.wrap = .None
+        var ink = look.foreground
+        if chosen { ink = style.color(t.tokens, .Primary) }
+        let (label_node, label_error) = colored_text(a, 0u64, labels[i], t, caption, ink)
+        if label_error != ok { ret (zero, label_error) }
+        parts[0usize] = label_node
+        var line = style.defaults()
+        line.width = style.Length { Percent: 100.0 }
+        line.height = style.Length { Px: t.tokens.borders.thick }
+        if chosen { line.background = paint.Brush { Solid: style.color(t.tokens, .Primary) } }
+        parts[1usize] = widget.box(0u64, line, zero)
+        let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .End, cross: .Stretch, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..2usize])
+        let (tab, tab_error) = pressable_states(a, tab_key, t, 19u8, labels[i], look, true, chosen, 0u32, 0u32, 0u64, &picks[i], column)
+        if tab_error != ok { ret (zero, tab_error) }
+        items[i] = tab
+        i += 1usize
+    }
+    let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 0.0 }, style.defaults(), items[0usize..labels.len])
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var bound = 0usize
+    if selected > 0usize && selected < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: 37u32, modifiers: zero, action: picks[selected - 1usize] }
+        bound += 1usize
+    }
+    if selected + 1usize < labels.len {
+        shortcuts[bound] = widget.Shortcut { key: 39u32, modifiers: zero, action: picks[selected + 1usize] }
+        bound += 1usize
+    }
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero }, style.defaults(), row[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 20u8
+    sem.column_count = u32(labels.len)
+    ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// A tab view: the tab list (keyed `key + 1`) above the selected page alone, a group
+// labelled by the selected tab.
+fn tab_view(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, pages: []const widget.Node) -> (widget.Node, err) {
+    if pages.len != labels.len || selected >= labels.len { ret (zero, TooLarge) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (strip, strip_error) = tabs(a, key + 1u64, t, labels, selected, picks)
+    if strip_error != ok { ret (zero, strip_error) }
+    parts[0usize] = strip
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = pages[selected]
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.labelled_by = key + 2u64 + u64(selected)
+    parts[1usize] = widget.semantics(key, sem, style.defaults(), body[0usize..1usize])
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+// A pane handle's state for the frame: where the pane is, its limits, and whom to
+// tell. A drag reports the pointer's distance from the pane's origin, the pointer
+// taken as the handle's middle; a nudge
+// reports the size moved by a step; both are clamped to `low..high`, and with no
+// `high` to the extent of the element `bound` names less `reserve` (no bound: no
+// upper limit).
+type Handle = struct { runtime: *widget.Runtime, pane: widget.Key, bound: widget.Key, vertical: bool, size: f32, thick: f32, low: f32, high: f32, reserve: f32, change: widget.Change[f32] }
+type Nudge = struct { handle: *Handle, amount: f32 }
+
+fn keyed_bounds(runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
+    let (s, state_error) = widget.state_of(runtime)
+    if state_error != ok { ret (zero, false) }
+    let (id, count) = widget.find_by_key(s, key)
+    if count == 0usize { ret (zero, false) }
+    let (area, has_area) = widget.bounds_of(runtime, id)
+    ret (area, has_area)
+}
+
+fn handle_report(h: *const Handle, wanted: f32) -> err {
+    var value = wanted
+    if h.high > 0.0 {
+        if value > h.high { value = h.high }
+    } else {
+        if h.bound != 0u64 {
+            let (area, has_area) = keyed_bounds(h.runtime, h.bound)
+            if has_area {
+                var extent = area.width
+                if h.vertical { extent = area.height }
+                if value > extent - h.reserve { value = extent - h.reserve }
+            }
+        }
+    }
+    if value < h.low { value = h.low }
+    ret widget.fire_change[f32](h.change, value)
+}
+
+fn handle_drag(ctx: *void, g: widget.Gesture) -> err {
+    let h = mem.cast[*Handle](ctx)
+    switch g {
+    case .DragMove as d:
+        let (area, has_area) = keyed_bounds(h.runtime, h.pane)
+        if !has_area { ret ok }
+        if h.vertical { ret handle_report(h, d.position.y - area.y - h.thick * 0.5) }
+        ret handle_report(h, d.position.x - area.x - h.thick * 0.5)
+    default:
+        ret ok
+    }
+}
+
+fn handle_nudge(ctx: *void) -> err {
+    let n = mem.cast[*Nudge](ctx)
+    ret handle_report(n.handle, n.handle.size + n.amount)
+}
+
+// A resizable pane: the content sized `size` along `axis` (the caller keeps the
+// size and hears each change), a handle after it in the border colour, focusable,
+// dragged or moved by the arrow keys a medium space at a time, between `low` and
+// `high` (0: no limit). The handle is a slider in the
+// tree named `label`. The pane is keyed `key + 1`, the handle `key + 2`.
+fn resizable_pane(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node) -> (widget.Node, err) {
+    let (made, made_error) = pane_with_reserve(a, key, t, label, axis, size, low, high, 0u64, 0.0, change, content)
+    ret (made, made_error)
+}
+
+fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node) -> (widget.Node, err) {
+    let vertical = axis == .Vertical
+    let (handles, handles_error) = mem.alloc[Handle](a, 1usize)
+    if handles_error != ok { ret (zero, TooLarge) }
+    handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: t.tokens.spacing.xs, low: low, high: high, reserve: reserve, change: change }
+    let (nudges, nudges_error) = mem.alloc[Nudge](a, 2usize)
+    if nudges_error != ok { ret (zero, TooLarge) }
+    nudges[0usize] = Nudge { handle: &handles[0usize], amount: 0.0 - t.tokens.spacing.md }
+    nudges[1usize] = Nudge { handle: &handles[0usize], amount: t.tokens.spacing.md }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    var pane_style = style.defaults()
+    pane_style.overflow = .Clip
+    var grip = style.defaults()
+    grip.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
+    let thick = style.Length { Px: t.tokens.spacing.xs }
+    let full = style.Length { Percent: 100.0 }
+    if vertical {
+        pane_style.height = style.Length { Px: size }
+        pane_style.width = full
+        grip.height = thick
+        grip.width = full
+    } else {
+        pane_style.width = style.Length { Px: size }
+        pane_style.height = full
+        grip.width = thick
+        grip.height = full
+    }
+    parts[0usize] = widget.box(key + 1u64, pane_style, body[0usize..1usize])
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var less = 37u32
+    var more = 39u32
+    if vertical {
+        less = 38u32
+        more = 40u32
+    }
+    shortcuts[0usize] = widget.Shortcut { key: less, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&nudges[0usize]), invoke: handle_nudge } }
+    shortcuts[1usize] = widget.Shortcut { key: more, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&nudges[1usize]), invoke: handle_nudge } }
+    let (grip_node, grip_error) = mem.alloc[widget.Node](a, 1usize)
+    if grip_error != ok { ret (zero, TooLarge) }
+    grip_node[0usize] = widget.region(key + 2u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&handles[0usize]), invoke: handle_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: true }, grip, zero)
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero }, style.defaults(), grip_node[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
+    sem.controls = key + 1u64
+    parts[1usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    ret (widget.flex(key, ui_layout.Flex { axis: axis, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+// A split view: `first` in a resizable pane sized `position` along `axis`, then
+// `second` filling the rest; the handle between them keeps `min_first` and
+// `min_second` of each. The pane is keyed `key + 1` (its content `key + 2`, its
+// handle `key + 3`); a group in the tree.
+fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (pane, pane_error) = pane_with_reserve(a, key + 1u64, t, "Divider", axis, position, min_first, 0.0, key, min_second, change, first)
+    if pane_error != ok { ret (zero, pane_error) }
+    parts[0usize] = pane
+    let (rest, rest_error) = mem.alloc[widget.Node](a, 1usize)
+    if rest_error != ok { ret (zero, TooLarge) }
+    rest[0usize] = second
+    var rest_style = style.defaults()
+    rest_style.overflow = .Clip
+    if axis == .Vertical {
+        rest_style.height = style.Length { Flex: 1.0 }
+        rest_style.width = style.Length { Percent: 100.0 }
+    } else {
+        rest_style.width = style.Length { Flex: 1.0 }
+        rest_style.height = style.Length { Percent: 100.0 }
+    }
+    parts[1usize] = widget.box(0u64, rest_style, rest[0usize..1usize])
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Stretch, gap: 0.0 }, sized_style(width, height), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
 }

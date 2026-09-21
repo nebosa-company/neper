@@ -3706,6 +3706,12 @@ fn field_message(a: *mem.Arena, key: widget.Key, t: *const Theme, message: Messa
 fn form_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, control_key: widget.Key, control_node: widget.Node, help: str, message: Message, required: bool) -> (widget.Node, err)
 fn form(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, width: f32, fields: []const widget.Node, submit: widget.Submit, cancel: widget.Submit) -> (widget.Node, err)
 fn validation_summary(a: *mem.Arena, key: widget.Key, t: *const Theme, messages: []const Message, field_keys: []const widget.Key, jumps: []const widget.Submit) -> (widget.Node, err)
+fn disclosure(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, content: widget.Node) -> (widget.Node, err)
+fn expander(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, content: widget.Node) -> (widget.Node, err)
+fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit) -> (widget.Node, err)
+fn tab_view(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, pages: []const widget.Node) -> (widget.Node, err)
+fn resizable_pane(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node) -> (widget.Node, err)
+fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err)
 ```
 
 The catalogue's controls (D813, widget plan phase 1) are functions that return node

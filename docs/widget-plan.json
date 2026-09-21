@@ -406,8 +406,15 @@
             "SplitView",
             "ResizablePane"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "Disclosure",
+            "Expander",
+            "Tabs",
+            "TabView",
+            "SplitView",
+            "ResizablePane"
+          ],
+          "evidence": "lib/e/ui/control.e (D826): disclosure as a header button with a painted triangle, expanded and controlling its content group, expander the same on a surface; tabs as plain tab buttons under a tab list with Left and Right as scope shortcuts picking the neighbours, tab_view showing the selected page labelled by its tab; resizable_pane and split_view with a focusable drag handle (a slider in the tree) reporting the pane size clamped to its limits, nudged by the arrow keys; tests/selfhost/fixtures/link/ui_panes on both hosts"
         },
         {
           "id": "P1-14",
