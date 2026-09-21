@@ -80,6 +80,14 @@
 {"record":"inline","symbol":"e.os.random","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.target_absolute","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"e.os.set_current_dir","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_slot","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_push","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_cursor_handle","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_visible","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_cursor","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_capture","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_native","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.clipboard_open","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"contract.bump","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"contract.first","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"contract.total","decision":"inlinable","reason":"at or under the cap","pass":2}
@@ -126,4 +134,10 @@
 {"record":"inline","symbol":"e.os.socket_shutdown","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.random","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.set_current_dir","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_slot","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_push","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_visible","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_cursor","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_capture","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.clipboard_open","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"result","ok":true,"exit_code":0,"data":{"executable":"conformance-tools-explain-inline.out","diagnostics":0}}
