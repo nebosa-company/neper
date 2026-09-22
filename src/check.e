@@ -147,6 +147,7 @@ type DiagnosticKind = enum u8 {
     // `@reorder` on something other than a struct or a union, or on a type that
     // crosses an FFI boundary (D239).
     ReorderBoundary,
+    LayoutAttribute,
     // `@gpu` without a usable workgroup size, or a kernel called outside `gpu.launch`
     // (D778): the detail is the function, the second detail says what was wrong.
     GpuAttribute,
@@ -353,6 +354,10 @@ type Aggregate = struct {
     // `@reorder` (D239): the fields are laid out by descending alignment instead of in
     // declaration order, which `layout` does and nothing else needs to know about.
     reorder: bool,
+    // Section 4's `@packed` and `@align(N)` (D925): every field at alignment one with
+    // no padding, and the aggregate's alignment raised to `N`; zero is no `@align`.
+    packed: bool,
+    align: usize,
 }
 
 type AggregateField = struct {
@@ -2452,15 +2457,25 @@ fn register_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.G
         ret InvalidType
     }
     if reorder { c.has_reorder = true }
+    // `@packed` on a struct, `@align(N)` once on a struct or a union with `N` a power
+    // of two (section 4, D925); neither with `@reorder`, whose layout is its own.
+    let packed = declaration_has_attribute(c, g, tree, module_index, node_index, "packed")
+    let (align, align_count, align_valid) = declaration_align(c, g, tree, module_index, node_index)
+    if (packed && kind != .Struct) || (align_count != 0usize && kind != .Struct && kind != .Union) || align_count > 1usize || !align_valid || (reorder && (packed || align_count != 0usize)) {
+        record_failure(c, module_index, node, .LayoutAttribute, "", "")
+        ret InvalidType
+    }
     let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
     let aggregate_index = c.aggregate_count
-    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: 0usize, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[usize(node.token_start)], resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
+    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: 0usize, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[usize(node.token_start)], resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false, packed: false, align: 0usize }
     // `resource` and its cleanup sit between the `=` and the body (D348).
     let (is_resource, cleanup) = resource_declaration(c, g.modules[module_index].text, node, tree.nodes[body_index])
     aggregate.resource = is_resource
     aggregate.cleanup = cleanup
     aggregate.reorder = reorder
+    aggregate.packed = packed
+    aggregate.align = align
     c.aggregates[aggregate_index] = aggregate
     c.aggregate_count += 1usize
     let end = usize(node.first_child) + usize(node.child_count)
@@ -2633,7 +2648,7 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
 fn seed_target_enum(c: *Checker, name: str, members: []const str) -> err {
     if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + members.len > c.aggregate_fields.len { ret Capacity }
     let backing = make_type(.Integer, "u8", 0usize)
-    c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: 0usize, kind: .Enum, first_field: c.aggregate_field_count, field_count: members.len, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: backing, token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
+    c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: 0usize, kind: .Enum, first_field: c.aggregate_field_count, field_count: members.len, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: backing, token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false, packed: false, align: 0usize }
     var at = 0usize
     while at < members.len {
         c.aggregate_fields[c.aggregate_field_count + at] = AggregateField { name: members[at], ty: backing, enum_value: at, enum_negative: false, has_enum_value: true, token: zero }
@@ -2683,7 +2698,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
     if has_memory {
         if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + 2usize > c.aggregate_fields.len { ret Capacity }
         let usize_type = make_type(.Integer, "usize", memory_module)
-        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false, packed: false, align: 0usize }
         c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "used", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_fields[c.aggregate_field_count + 1usize] = AggregateField { name: "capacity", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_field_count += 2usize
@@ -2703,7 +2718,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
         var element = make_type(.TypeParameter, "T", atomic_module)
         element.element = parameter_index
         element.has_element = true
-        c.aggregates[c.aggregate_count] = Aggregate { name: "Atomic", module_index: atomic_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 1usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Atomic", module_index: atomic_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 1usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false, packed: false, align: 0usize }
         c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "value", ty: element, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_field_count += 1usize
         c.aggregate_count += 1usize
@@ -2745,7 +2760,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
             lanes.has_length = false
             var name = "Vec"
             if which == 1usize { name = "Mask" }
-            c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: simd_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 2usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false }
+            c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: simd_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 2usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8, reorder: false, packed: false, align: 0usize }
             c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "lanes", ty: lanes, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
             c.aggregate_field_count += 1usize
             c.aggregate_count += 1usize
@@ -2920,7 +2935,54 @@ fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
     try collect_aggregate_pass(c, r, g, true)
     try collect_aggregate_pass(c, r, g, false)
     try refill_aggregate_instances(c)
-    ret refuse_union_members(c)
+    try refuse_union_members(c)
+    ret refuse_packed_atomics(c, g)
+}
+
+// An `Atomic[T]` in a `@packed` struct (D925) could sit at an address its width does
+// not divide, and an atomic load or store is a plain move, atomic only when naturally
+// aligned: refused at the struct.
+fn refuse_packed_atomics(c: *Checker, g: *graph.Graph) -> err {
+    let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
+    if !has_atomic { ret ok }
+    var aggregate_at = 0usize
+    while aggregate_at < c.aggregate_count {
+        let aggregate = c.aggregates[aggregate_at]
+        if aggregate.packed {
+            var field_at = 0usize
+            while field_at < aggregate.field_count {
+                if holds_atomic(c, c.aggregate_fields[aggregate.first_field + field_at].ty, atomic_module, 0usize) {
+                    record_failure_token(c, aggregate.module_index, aggregate.token, .LayoutAttribute, aggregate.name, "")
+                    ret InvalidType
+                }
+                field_at += 1usize
+            }
+        }
+        aggregate_at += 1usize
+    }
+    ret ok
+}
+
+// Whether a value of the type holds an `Atomic[T]`, in an array or a nested struct.
+fn holds_atomic(c: *Checker, ty: Type, atomic_module: usize, depth: usize) -> bool {
+    let (subject, canonical_error) = canonical_type(c, ty)
+    if canonical_error != ok || depth >= c.aggregate_count { ret false }
+    if subject.kind == .Array {
+        if !subject.has_element || subject.element >= c.type_count { ret false }
+        ret holds_atomic(c, c.types[subject.element], atomic_module, depth + 1usize)
+    }
+    if subject.kind != .Named { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, subject)
+    if !found { ret false }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.module_index == atomic_module && same(aggregate.name, "Atomic") { ret true }
+    if aggregate.kind != .Struct && aggregate.kind != .Union { ret false }
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        if holds_atomic(c, c.aggregate_fields[aggregate.first_field + field_at].ty, atomic_module, depth + 1usize) { ret true }
+        field_at += 1usize
+    }
+    ret false
 }
 
 // An untagged `union` reads one field's bytes as another's (D921, H03): a field of a
@@ -3960,6 +4022,60 @@ fn declaration_has_attribute(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
 // attribute is there, and its dimensions when they are one to three positive integer
 // literals whose product is at most 1024 -- `valid` is false for a bare `@gpu`, a
 // fourth axis, a zero, an overflow or an option the CPU backend does not take yet.
+// The `@align(N)` above a declaration (section 4, D925): its `N`, how many there are,
+// and whether each is one integer literal that is a power of two.
+fn declaration_align(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, bool) {
+    let text = g.modules[module_index].text
+    var align = 0usize
+    var count = 0usize
+    var valid = true
+    var at = node_index
+    while at > 1usize {
+        at = at - 1usize
+        let node = tree.nodes[at]
+        if !node.top_level { continue }
+        if node.kind != .Attribute { break }
+        var name = ""
+        var token_at = usize(node.token_start)
+        while token_at < usize(node.token_end) && token_at < c.token_count {
+            let token = c.tokens[token_at]
+            if token.kind == .Identifier {
+                name = text[token.start..token.end]
+                break
+            }
+            token_at += 1usize
+        }
+        if !same(name, "align") { continue }
+        count += 1usize
+        var arguments = 0usize
+        var value = 0usize
+        let child_end = usize(node.first_child) + usize(node.child_count)
+        var child_at = usize(node.first_child)
+        while child_at < child_end {
+            if parse.child_is_node_at(tree, child_at) {
+                let argument = tree.nodes[parse.child_index_at(tree, child_at)]
+                arguments += 1usize
+                let literal = c.tokens[usize(argument.token_start)]
+                if argument.kind != .LiteralExpr || literal.kind != .Integer { valid = false }
+                var digit_at = literal.start
+                while valid && digit_at < literal.end {
+                    let digit = text[digit_at]
+                    if digit < 48u8 || digit > 57u8 || value > 429496729usize {
+                        valid = false
+                    } else {
+                        value = value * 10usize + usize(digit - 48u8)
+                    }
+                    digit_at += 1usize
+                }
+            }
+            child_at += 1usize
+        }
+        if arguments != 1usize || value == 0usize || (value & (value - 1usize)) != 0usize { valid = false }
+        align = value
+    }
+    ret (align, count, valid)
+}
+
 fn declaration_gpu(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, usize, bool, bool) {
     let text = g.modules[module_index].text
     var dims: [3]usize = zero
@@ -14413,6 +14529,7 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .BorrowContract { ret "@borrows must name one borrowed pointer-bearing parameter of a function with a pointer-bearing result" }
     if kind == .NoEscapeContract { ret "@noescape must name borrowed pointer-bearing parameters and the body must not let them escape" }
     if kind == .ReorderBoundary { ret "@reorder is legal on a struct or a union that crosses no FFI boundary: its layout is neper's, not C's" }
+    if kind == .LayoutAttribute { ret "@packed is legal on a struct holding no Atomic, and @align(N) once on a struct or a union with N a power of two; neither combines with @reorder" }
     ret "type checking failed"
 }
 

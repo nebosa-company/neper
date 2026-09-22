@@ -18280,3 +18280,27 @@ two generic unions pun a function value with a `usize` and are unaffected.
 A same-block elision of repeated bounds checks was measured on the way and not
 kept: it left out 204 more of the compiler's checks and about four kilobytes of
 its image, which is not worth a second pass over every function.
+
+## D925 — `@packed` and `@align(N)` lay out as section 4 says
+
+Writing H03's audit of emitted loads and stores found that section 4's two layout
+attributes were accepted and ignored: `@packed` on a struct left every field at its
+natural alignment with its padding, and `@align(N)` changed nothing. A packed wire
+header declared to match a C one was laid out as a different struct, silently.
+
+Both now do what section 4 says. A `@packed` struct's fields each sit at alignment one
+with no padding between or after them, and the struct's alignment is one;
+`@align(N)` raises a struct's or a union's alignment to `N` and rounds its size to it,
+and with `@packed` it keeps the packed offsets. `layout.type_info` and `layout.field`
+are the one place both answers are made, so `mem.size_of`, `mem.align_of`, field
+access, copies and the C ABI all see the same offsets. Refused at the declaration,
+with one message: `@packed` on anything but a struct, `@align(N)` on anything but a
+struct or a union, two `@align`s, an `N` that is not a power of two, either one with
+`@reorder` -- whose layout is its own -- and a `@packed` struct holding an
+`Atomic[T]` at any depth, since an atomic load or store is a plain move, atomic only
+when naturally aligned. A field access into a packed struct is an unaligned move,
+which x86-64 performs; no instruction the compiler emits for a scalar or an aggregate
+needs alignment.
+
+`link/layout_packed` checks four layouts' sizes and alignments and a packed value's
+bytes, in debug and release, on both hosts; `reject/layout_attribute.e` is `@align(12)`.

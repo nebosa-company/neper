@@ -142,10 +142,13 @@ fn type_info_depth(c: *check.Checker, ty: check.Type, depth: usize) -> (Info, er
             let (field_info, field_error) = type_info_depth(c, member.ty, depth + 1usize)
             if field_error != ok { ret (invalid, field_error) }
             if aggregate.kind == .Struct {
-                let (field_start, field_start_error) = align_up(size, field_info.alignment)
+                // A `@packed` field sits at alignment one (D925).
+                var field_alignment = field_info.alignment
+                if aggregate.packed { field_alignment = 1usize }
+                let (field_start, field_start_error) = align_up(size, field_alignment)
                 if field_start_error != ok || field_start > 18446744073709551615usize - field_info.size { ret (invalid, Overflow) }
                 size = field_start + field_info.size
-                if field_info.alignment > alignment { alignment = field_info.alignment }
+                if field_alignment > alignment { alignment = field_alignment }
             } else {
                 if field_info.size > payload_size { payload_size = field_info.size }
                 if field_info.alignment > payload_alignment { payload_alignment = field_info.alignment }
@@ -157,11 +160,14 @@ fn type_info_depth(c: *check.Checker, ty: check.Type, depth: usize) -> (Info, er
         if aggregate.field_count == 0usize { size = 1usize }
         // Section 4: a `Vec[T, N]` or `Mask[T, N]` is aligned to its own width.
         if c.has_simd && aggregate.module_index == c.simd_module && (check.same(aggregate.name, "Vec") || check.same(aggregate.name, "Mask")) { alignment = size }
+        // `@align(N)` raises the aggregate's alignment and its tail rounding (D925).
+        if aggregate.align > alignment { alignment = aggregate.align }
         let (rounded, rounded_error) = align_up(size, alignment)
         if rounded_error != ok { ret (invalid, rounded_error) }
         ret (Info { size: rounded, alignment: alignment }, ok)
     }
     if aggregate.kind == .Union {
+        if aggregate.align > payload_alignment { payload_alignment = aggregate.align }
         let (rounded, rounded_error) = align_up(payload_size, payload_alignment)
         if rounded_error != ok { ret (invalid, rounded_error) }
         ret (Info { size: rounded, alignment: payload_alignment }, ok)
@@ -210,7 +216,9 @@ fn field(c: *check.Checker, ty: check.Type, name: str) -> (Field, err) {
         if aggregate.kind == .Struct {
             let (candidate_info, candidate_info_error) = type_info(c, candidate.ty)
             if candidate_info_error != ok { ret (invalid, candidate_info_error) }
-            let (field_offset, field_offset_error) = align_up(offset, candidate_info.alignment)
+            var candidate_alignment = candidate_info.alignment
+            if aggregate.packed { candidate_alignment = 1usize }
+            let (field_offset, field_offset_error) = align_up(offset, candidate_alignment)
             if field_offset_error != ok { ret (invalid, field_offset_error) }
             offset = field_offset
             if check.same(candidate.name, name) { ret (Field { offset: offset, ty: candidate.ty }, ok) }

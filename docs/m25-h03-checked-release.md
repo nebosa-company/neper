@@ -103,8 +103,8 @@ exist only as artifacts.
 - The arithmetic rows' debug/release divergence (trap against wrap) is unchanged
   and recorded as build-mode context, as H03 allows; reconciling it is a versioned
   language change, not this record's.
-- Foreign callbacks, packed records and the optimizer's assumptions: the audit of
-  emitted loads and stores is not written.
+- Foreign callbacks, packed records and the optimizer's assumptions: audited in
+  section 6 below (D925).
 
 ## 5. Measurement (D355)
 
@@ -157,3 +157,39 @@ D923 is the first such proof over NIR: a null check branches on the pointer, and
 check that a check of the same SSA value dominates is not made, with the verifier's
 dominators as the proof; a check of a stack object's address, which inlining makes,
 is not made either. The checked compiler is then 8,778,240 bytes, +10.0%.
+
+## 6. The load and store audit (D925)
+
+What the x86-64 code generator emits to touch memory, and what each form assumes.
+
+- **Scalars.** `emit_x64.load_memory` and `store_memory` are `mov`, `movzx`, `movsx`
+  and `movsxd` at eight, sixteen, thirty-two and sixty-four bits through an address in
+  a register. None needs alignment on this target, so a field of a `@packed` struct, a
+  value cast out of a byte buffer, or a foreign struct's field at any offset reads and
+  writes correctly; stack slots and incoming arguments are `rbp`-relative moves of
+  eight bytes.
+- **Aggregates.** Copies and fills run eight bytes at a time with a byte loop for the
+  tail (D306); neither needs alignment.
+- **Vectors.** Sixteen bytes move through `movups`, eight through `movlps`, four
+  through `movd` -- the unaligned forms, since a vector's stack slot is eight-aligned;
+  `simd.load_aligned` and `store_aligned` carry section 11's `align` check instead.
+- **Atomics.** A load is a plain move, a sequentially consistent store an `xchg`, and
+  compare-and-swap and read-modify-write `lock`-prefixed; each is atomic only at a
+  naturally aligned address. `Atomic[T]` is laid out at its width, and a `@packed`
+  struct may not hold one (D925). A `*Atomic[T]` made by `mem.cast` from misaligned
+  bytes is outside this: D919 leaves a type that admits any bytes to the program.
+- **Packed records.** `@packed` and `@align(N)` were accepted and ignored until D925;
+  they now lay out as section 4 says, in the one layout function every consumer asks.
+- **Foreign callbacks.** A `@cc` function receives its parameters in the target ABI's
+  registers and stack and stores them to slots before its body; it keeps an `rbp`
+  frame (D212) and saves the callee-saved registers it uses (D235). Since D920 no
+  parameter or pointee it is handed is a type that admits only its members.
+- **The optimizer's assumptions.** Every NIR load and store is emitted, once, in
+  program order: there is no load elimination, store sinking or reordering, so memory
+  a foreign caller or another thread writes is read where the source reads it. What
+  the compiler does assume: a by-value aggregate argument goes by address only when
+  nothing can write the caller's storage during the call (D358); a function's code is
+  shared with a byte-identical one (D130); a pointer that passed a null check is
+  non-nil wherever that check dominates, since an SSA value never changes (D923); and
+  a bounds check under one of section 1's proofs is left out. None of them reads
+  memory the program did not.
