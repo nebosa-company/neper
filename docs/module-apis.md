@@ -3807,10 +3807,14 @@ platform delivery requirements and escape limitations.
 ### `e.os.shell`
 
 ```neper
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool }
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
+type ContentKind = enum u8 { Text, Files, Image, Bytes }
+type Content = struct { kind: ContentKind, mime: str, text: str, paths: []const str, image: Icon, bytes: []const u8 }
+type Drop = struct { x: i32, y: i32, items: []const Content }
+type DragResult = enum u8 { Copied, Moved, Cancelled }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
@@ -3836,6 +3840,14 @@ fn notice_permission(a: *mem.Arena) -> NoticePermission
 fn notice_publish(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bool) -> (u32, err)
 fn notice_update(a: *mem.Arena, tray_id: u32, notice_id: u32, title: str, body: str, silent: bool) -> err
 fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err
+fn clipboard_write(a: *mem.Arena, items: []const Content) -> err
+fn clipboard_has(a: *mem.Arena, kind: ContentKind, mime: str) -> bool
+fn clipboard_read(a: *mem.Arena, kind: ContentKind, mime: str) -> (Content, err)
+fn clipboard_sequence() -> u32
+fn drop_target_register(a: *mem.Arena, w: os.Window, storage: *mem.Arena) -> err
+fn drop_target_unregister(a: *mem.Arena, w: os.Window) -> err
+fn drop_poll() -> (Drop, bool)
+fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragResult, err)
 ```
 
 The host's shell services (D885, the widget plan's `native-shell-api`), written per
@@ -3868,6 +3880,20 @@ notification daemon through `notify-send` on Linux, where the tray id is ignored
 `notice_remove` is `Unsupported`. `notice_permission` is `Granted` where nothing
 gates a notice and `Unavailable` where the tool or the session bus is missing; a
 notice with no body is `Invalid`; buttons are `notice_actions`, false on both.
+
+Data exchange (D890, the plan's `native-data-exchange-api`) is one `Content` per
+representation -- text, paths, an image as pixels, or bytes under a MIME name --
+and on Windows the shell's clipboard and OLE: `clipboard_write` replaces the
+clipboard with one global block per item (`CF_UNICODETEXT`, an `HDROP`, a 32-bit
+`CF_DIB`, a format registered under the name), `clipboard_has` asks without
+reading, `clipboard_read` copies one representation into the arena (`NotFound`
+when absent, `Unsupported` for a DIB it does not decode) and `clipboard_sequence`
+is the shell's change counter for a monitor to poll. `drop_target_register` puts
+an `IDropTarget` on the caller's window and copies each representation a drop
+carries into `storage`, `drop_poll` answers the drops in order, and `drag_start`
+offers items as an `IDataObject` to `DoDragDrop`, blocking until the receiver
+copies, moves or the drag is cancelled. Linux has no selection in `e.os` and no
+XDND here, so every verb is `Unsupported` and the record says so.
 
 ### `e.cancel`
 

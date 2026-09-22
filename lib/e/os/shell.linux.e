@@ -19,18 +19,24 @@ error Invalid
 error NotFound
 error Failed
 
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
+// One representation of transferred data: text, a list of paths, an image as
+// pixels, or bytes under a MIME name the other side registers the same way.
+type ContentKind = enum u8 { Text, Files, Image, Bytes }
+type Content = struct { kind: ContentKind, mime: str, text: str, paths: []const str, image: Icon, bytes: []const u8 }
+type Drop = struct { x: i32, y: i32, items: []const Content }
+type DragResult = enum u8 { Copied, Moved, Cancelled }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
 type JumpTask = struct { title: str, program: str, arguments: str, description: str }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false }
+    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: false, clipboard_typed: false, drop_target: false, drag_source: false }
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
@@ -413,4 +419,49 @@ fn notice_update(a: *mem.Arena, tray_id: u32, notice_id: u32, title: str, body: 
 
 fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err {
     ret Unsupported
+}
+
+// ------------------------------------------------------------- data exchange
+//
+// D890. `e.os` on Linux answers `Unsupported` for the selection -- the X11
+// backend speaks windows, not selections, and there is no Wayland one -- so the
+// clipboard is `Unsupported` here and the record says so; drag and drop between
+// programs is XDND, a protocol of its own the library does not speak. Every
+// operation is written so that the day `e.os` learns the selection, these follow.
+
+fn clipboard_write(a: *mem.Arena, items: []const Content) -> err {
+    if items.len == 0usize { ret Invalid }
+    ret Unsupported
+}
+
+fn clipboard_has(a: *mem.Arena, kind: ContentKind, mime: str) -> bool {
+    ret false
+}
+
+fn clipboard_read(a: *mem.Arena, kind: ContentKind, mime: str) -> (Content, err) {
+    var item: Content = zero
+    if kind == .Bytes && mime.len == 0usize { ret (item, Invalid) }
+    ret (item, Unsupported)
+}
+
+fn clipboard_sequence() -> u32 {
+    ret 0u32
+}
+
+fn drop_target_register(a: *mem.Arena, w: os.Window, storage: *mem.Arena) -> err {
+    ret Unsupported
+}
+
+fn drop_target_unregister(a: *mem.Arena, w: os.Window) -> err {
+    ret Unsupported
+}
+
+fn drop_poll() -> (Drop, bool) {
+    var none: Drop = zero
+    ret (none, false)
+}
+
+fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragResult, err) {
+    if items.len == 0usize { ret (.Cancelled, Invalid) }
+    ret (.Cancelled, Unsupported)
 }

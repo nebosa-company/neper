@@ -2854,6 +2854,13 @@ $uiNotificationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $uiNotificationWritten -ne 'executable written') { throw 'ui_notification emission failed' }
 $uiNotificationOutput = & $uiNotificationPath
 if ($LASTEXITCODE -ne 0 -or $uiNotificationOutput -ne 'ui notification ok') { throw "the notifications answered wrongly: exit $LASTEXITCODE" }
+# Data exchange (D890, native-data-exchange-api): text, paths, an image and named bytes through
+# the real clipboard and back, the sequence moving, and the refusals.
+$osExchangePath = Join-Path $testBuild 'os-exchange-selfhost.exe'
+$osExchangeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_exchange\src\main.e') $repo 'x64' 'windows' $osExchangePath
+if ($LASTEXITCODE -ne 0 -or $osExchangeWritten -ne 'executable written') { throw 'os_exchange emission failed' }
+$osExchangeOutput = & $osExchangePath
+if ($LASTEXITCODE -ne 0 -or $osExchangeOutput -ne 'os exchange ok') { throw "the data exchange answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -17173,3 +17173,36 @@ Linux build found the ownership rule at the pipe: a `File` handed to
 it had. `link/ui_notification` publishes, updates and removes a silent
 notice on Windows, publishes and updates one through WSL's daemon on
 Linux, and checks the refusals on both.
+
+## D890 — Data exchange is one representation per block, and OLE objects are slot tables of `@cc(c)` functions
+
+The widget plan's `native-data-exchange-api`, which P4-04, P4-05 and
+P4-06 wait on. A `Content` is one representation -- text, paths, an
+image as pixels, or bytes under a MIME name -- and on Windows the
+clipboard is one global block per representation under the shell's
+format for it, the MIME name registered as the format for bytes so
+that two programs agreeing on the name agree on the format; the block
+is allocated at exactly the payload's size, because a moveable block's
+size is what was asked and that is how a receiver learns a custom
+format's length. Drag and drop is OLE, which needs objects this side
+implements rather than calls: an `IDropTarget`, an `IDataObject` and
+an `IDropSource` are each a table of slots filled with the bits of
+`@cc(c)` functions read through a union, the object a pointer to the
+table, and the interface's methods the slot numbers the IDL fixes --
+the same shape D887 calls through, now provided. A drop copies every
+representation it understands into the storage arena the caller
+registered, since the callback runs inside the other program's drag;
+a drag blocks in `DoDragDrop` until the receiver copies, moves or the
+escape is pressed, and the `IDataObject` builds each block only when
+asked. Linux has no selection in `e.os` (its X11 backend speaks
+windows, not selections) and no XDND, so every verb is `Unsupported`
+and the record says so at every one. Four rules of the dialect paid
+for on the way: a global initialised with `false` rather than `zero`,
+the address of a module-scope variable (an element of a one-element
+array is addressable, the variable is not), an assignment of `zero`
+to an existing name, and `*p = v` for a scalar pointee are all refused
+by the checker without a location; a typed local or a one-field struct
+stands in for each. `link/os_exchange` sends text, two paths, a
+three-by-two image and eight named bytes through the real clipboard
+and back on Windows, sees the sequence move and the refusals hold,
+and sees every verb `Unsupported` on Linux.

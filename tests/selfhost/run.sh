@@ -2650,6 +2650,12 @@ ui_notification_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/ui-notification-selfhost"
 ui_notification_output=$("$test_build/ui-notification-selfhost")
 [ "$ui_notification_output" = 'ui notification ok' ]
+# Data exchange (D890, native-data-exchange-api): a host without a selection says so at every verb.
+os_exchange_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_exchange/src/main.e" "$repo" x64 linux "$test_build/os-exchange-selfhost")
+[ "$os_exchange_written" = 'executable written' ]
+chmod +x "$test_build/os-exchange-selfhost"
+os_exchange_output=$("$test_build/os-exchange-selfhost")
+[ "$os_exchange_output" = 'os exchange ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -10,7 +10,8 @@
   ],
   "resolved_blockers": [
     "native-shell-api",
-    "native-notification-api"
+    "native-notification-api",
+    "native-data-exchange-api"
   ],
   "phases": [
     {
