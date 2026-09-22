@@ -306,7 +306,12 @@
     "e.fmt.avro",
     "e.fmt.flatbuffers",
     "e.fmt.jwt",
-    "e.net.idna"
+    "e.net.idna",
+    "e.fmt.arrow",
+    "e.net.balance",
+    "e.net.reliable",
+    "e.ui.state",
+    "e.ui.undo"
    ]
   },
   {
@@ -2425,6 +2430,27 @@
    "blocked_by": []
   },
   {
+   "name": "e.net.balance",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.reliable",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
    "name": "e.os",
    "layer": 3,
    "surface": "spec",
@@ -3212,6 +3238,24 @@
     "e.os",
     "e.ui.style"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.state",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.undo",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {
@@ -4106,6 +4150,18 @@
     "e.crypto.sign",
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.arrow",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.fmt.flatbuffers"
    ],
    "blocked_by": []
   },

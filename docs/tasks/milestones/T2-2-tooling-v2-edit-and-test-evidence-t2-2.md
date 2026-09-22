@@ -23,7 +23,6 @@ The v1 precursors already in the queue (`docs/tasks/compiler/`, titles ending 'p
 ## Code anchors
 
 - `incomplete`: `scripts/check_gpu_contracts.py`×11, `lib/e/math/special.e`×6, `benchmarks/llm_edit/jev_router.py`×1, `scripts/algos/decisions-pending.md`×1†, `scripts/check_module_surfaces.py`×1, `src/main.e`×1‡
-- `verified`: `src/tool.e`×13‡, `src/main.e`×9‡, `scripts/render_card.py`×8, `src/nir.e`×5†, `src/em.e`×4‡, `scripts/algos/decisions-pending.md`×3†, `tests/conformance/tools/catalog_verified.x64-linux.expected.jsonl`×2, `tests/conformance/tools/catalog_verified.x64-windows.expected.jsonl`×2
 - nearest existing implementation: `src/tool.e`‡, `src/main.e`‡, `docs/tooling.md`, `docs/tooling-v2-draft.md`, `docs/schemas/neper-v1.schema.json`†, `tests/conformance/tools` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

@@ -3413,6 +3413,76 @@ fn selection(a: *mem.Arena, value: *const Layout, start: usize, end: usize) -> (
 The module performs Unicode bidi resolution, line breaking, fallback and visual
 placement. Byte offsets always identify UTF-8 boundaries in `source`.
 
+### `e.ui.state`
+
+```neper
+type Graph[Ctx: type] = struct { ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32, edge_count: usize, used: usize, running: u32, batch: u32, lost: usize }
+error TooSmall
+error Invalid
+
+fn kind_signal() -> u8
+fn kind_memo() -> u8
+fn kind_effect() -> u8
+fn kind_disposed() -> u8
+fn graph[Ctx: type](ctx: *Ctx, value: []i64, kind: []u8, height: []u32, dirty: []u8, runs: []u32, compute: []fn(*Ctx, *Graph[Ctx]) -> i64, run: []fn(*Ctx, *Graph[Ctx]), from: []u32, to: []u32) -> (Graph[Ctx], err)
+fn new_node[Ctx: type](g: *Graph[Ctx], kind: u8) -> (u32, err)
+fn signal[Ctx: type](g: *Graph[Ctx], initial: i64) -> (u32, err)
+fn get[Ctx: type](g: *Graph[Ctx], id: u32) -> i64
+fn record_edge[Ctx: type](g: *Graph[Ctx], from: u32, to: u32)
+fn drop_edges[Ctx: type](g: *Graph[Ctx], id: u32, into: bool)
+fn mark_dependents[Ctx: type](g: *Graph[Ctx], id: u32)
+fn set[Ctx: type](g: *Graph[Ctx], id: u32, value: i64) -> err
+fn raise_dependents[Ctx: type](g: *Graph[Ctx], id: u32)
+fn run_node[Ctx: type](g: *Graph[Ctx], id: u32) -> bool
+fn memo[Ctx: type](g: *Graph[Ctx], compute: fn(*Ctx, *Graph[Ctx]) -> i64) -> (u32, err)
+fn effect[Ctx: type](g: *Graph[Ctx], run: fn(*Ctx, *Graph[Ctx])) -> (u32, err)
+fn batch_begin[Ctx: type](g: *Graph[Ctx])
+fn batch_end[Ctx: type](g: *Graph[Ctx]) -> err
+fn schedule_effects[Ctx: type](g: *Graph[Ctx]) -> err
+fn dispose[Ctx: type](g: *Graph[Ctx], id: u32) -> err
+fn run_count[Ctx: type](g: *const Graph[Ctx], id: u32) -> u32
+fn height_of[Ctx: type](g: *const Graph[Ctx], id: u32) -> u32
+fn edge_count[Ctx: type](g: *const Graph[Ctx]) -> usize
+```
+
+Signals over caller arrays: `signal`, `get` (recording the dependency of the running
+computation), `set`, `memo` (skipping dependents when unchanged), `effect`, batches and
+`schedule_effects` running dirty nodes once each in height order with dynamic
+dependencies; `dispose`, `run_count`.
+
+### `e.ui.undo`
+
+```neper
+type Command = struct { kind: u32, a: i64, b: i64, group: u32 }
+type Stack = struct { items: []Command, len: usize, cursor: usize, group_open: bool, group_id: u32, saved: usize, saved_valid: bool }
+error Invalid
+error TooSmall
+
+fn stack(items: []Command) -> Stack
+fn stamp(s: *const Stack) -> u32
+fn push(s: *Stack, c: Command) -> err
+fn can_undo(s: *const Stack) -> bool
+fn can_redo(s: *const Stack) -> bool
+fn len(s: *const Stack) -> usize
+fn undo_depth(s: *const Stack) -> usize
+fn redo_depth(s: *const Stack) -> usize
+fn undo(s: *Stack) -> (Command, bool)
+fn redo(s: *Stack) -> (Command, bool)
+fn last(s: *const Stack) -> (Command, bool)
+fn begin_group(s: *Stack) -> err
+fn end_group(s: *Stack) -> err
+fn undo_group(s: *Stack, out: []Command) -> (usize, err)
+fn redo_group(s: *Stack, out: []Command) -> (usize, err)
+fn merge_last(s: *Stack, c: Command, merge: fn(*Command, *const Command) -> bool) -> (bool, err)
+fn clear(s: *Stack)
+fn mark_saved(s: *Stack)
+fn is_dirty(s: *const Stack) -> bool
+```
+
+An undo/redo stack of caller-interpreted commands: `push` (dropping the redo tail and the
+oldest entry when full), `undo`/`redo`, groups (`begin_group`, `end_group`, `undo_group`,
+`redo_group`), `merge_last` through a caller merge callback, `mark_saved`/`is_dirty`.
+
 ### `e.ui.style`
 
 ```neper
@@ -5477,6 +5547,76 @@ fn to_unicode(domain: str, out: []u8) -> (usize, err)
 RFC 3492 `punycode_encode`/`punycode_decode` and IDNA labels: `to_ascii` (NFC, simple
 lowercase, `xn--` A-labels, length and hyphen rules), `to_unicode`, `is_ascii_label`,
 `label_valid`.
+
+### `e.net.balance`
+
+```neper
+type Wrr = struct { weights: []const u32, current: []i64 }
+error Invalid
+error TooSmall
+
+fn round_robin(state: *u32, n: usize) -> usize
+fn wrr(weights: []const u32, current: []i64) -> (Wrr, err)
+fn weighted_round_robin(w: *Wrr) -> usize
+fn total_weight(weights: []const u32) -> u64
+fn least_connections(loads: []const u64) -> usize
+fn power_of_two(loads: []const u64, r: *rand.Pcg64) -> usize
+fn weighted_random(weights: []const u32, draw: u64) -> usize
+fn maglev_prime(n: usize) -> usize
+fn is_prime(n: usize) -> bool
+fn maglev_build(names: []const str, table: []u32, scratch: []u32, m: usize) -> err
+fn fnv1a64_basis(data: []const u8, basis: u64) -> u64
+fn maglev_lookup(table: []const u32, key_hash: u64) -> u32
+fn maglev_disruption(old_table: []const u32, new_table: []const u32) -> usize
+```
+
+`round_robin`, nginx's smooth `weighted_round_robin`, `least_connections`,
+`power_of_two`, `weighted_random`, and Maglev (`maglev_prime`, `maglev_build` over
+two FNV-1a permutations, `maglev_lookup`, `maglev_disruption`).
+
+### `e.net.reliable`
+
+```neper
+type Sender = struct { base: u64, next_seq: u64, window: usize, timeout: u64, sent_at: []u64, bits: u32 }
+type SrSender = struct { base: u64, next_seq: u64, window: usize, timeout: u64, sent_at: []u64, acked: []u8, bits: u32 }
+type SrReceiver = struct { rcv_base: u64, window: usize, present: []u8, bits: u32 }
+type Rtt = struct { srtt: u64, rttvar: u64, rto: u64, min_rto: u64, max_rto: u64, has_sample: bool, backed_off: bool }
+error Full
+error Invalid
+error TooSmall
+
+fn seq_mask(bits: u32) -> u64
+fn seq_wrap(seq: u64, bits: u32) -> u64
+fn seq_less(a: u64, b: u64, bits: u32) -> bool
+fn sender(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> Sender
+fn sender_in_flight(s: *const Sender) -> usize
+fn sender_can_send(s: *const Sender) -> bool
+fn sender_send(s: *Sender, now: u64) -> (u64, err)
+fn sender_ack(s: *Sender, ack_seq: u64) -> bool
+fn sender_timeouts(s: *Sender, now: u64, out: []u64) -> usize
+fn receiver_go_back_n(expected: *u64, seq: u64, bits: u32) -> (bool, u64)
+fn half_space_ok(window: usize, bits: u32) -> bool
+fn sr_sender(window: usize, timeout: u64, sent_at: []u64, acked: []u8, bits: u32) -> (SrSender, err)
+fn sr_can_send(s: *const SrSender) -> bool
+fn sr_send(s: *SrSender, now: u64) -> (u64, err)
+fn sr_ack(s: *SrSender, seq: u64) -> bool
+fn sr_timeouts(s: *SrSender, now: u64, out: []u64) -> usize
+fn sr_receiver(window: usize, present: []u8, bits: u32) -> (SrReceiver, err)
+fn sr_receive(r: *SrReceiver, seq: u64) -> (usize, bool)
+fn rtt_clamp(e: *Rtt)
+fn rtt(min_rto: u64, max_rto: u64) -> Rtt
+fn rtt_estimate(e: *Rtt, sample_us: u64)
+fn rtt_backoff(e: *Rtt)
+fn rtt_karn(e: *Rtt, sample_us: u64, was_retransmitted: bool) -> bool
+fn rtt_rto(e: *const Rtt) -> u64
+fn aimd_ack(cwnd: u64, ssthresh: u64, mss: u64) -> u64
+fn aimd_loss(cwnd: u64, mss: u64, timeout: bool) -> (u64, u64)
+```
+
+Clock-free state machines: Go-Back-N (`sender_send`, `sender_ack`, `sender_timeouts`,
+`receiver_go_back_n`), Selective Repeat (`sr_send`, `sr_ack`, `sr_timeouts`, `sr_receive`),
+RFC 1982 `seq_less`, RFC 6298 `rtt_estimate` with `rtt_backoff` and Karn's `rtt_karn`,
+and RFC 5681 `aimd_ack`/`aimd_loss`.
 
 ### `e.net.tls`
 
@@ -7709,6 +7849,44 @@ JSON member scanner), `algorithm`, `verify` (HS256/384/512 and EdDSA; the header
 `alg` must equal the caller's expectation, `none` is never accepted), `verify_ed25519`,
 `claims_check` (exp, nbf, iat, iss, aud with leeway) and `sign_hmac`/`sign_hs256`/
 `sign_ed25519`.
+
+### `e.fmt.arrow`
+
+```neper
+type Kind = enum u8 { Bool, Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, Float32, Float64, Utf8, Binary, List, Struct }
+type Column = struct { kind: Kind, len: usize, null_count: usize, validity: []const u8, offsets: []const u8, data: []const u8, child: u32, child_count: u32 }
+type Message = struct { header_type: u8, header: usize, meta: []const u8, body: []const u8, next: usize }
+error Malformed
+error Unsupported
+error TooSmall
+error Invalid
+
+fn is_valid(c: *const Column, i: usize) -> bool
+fn count_nulls(c: *const Column) -> usize
+fn width(kind: Kind) -> usize
+fn fixed[T: type](c: *const Column, i: usize) -> (T, err)
+fn get_i64(c: *const Column, i: usize) -> (i64, bool, err)
+fn get_i32(c: *const Column, i: usize) -> (i32, bool, err)
+fn get_f64(c: *const Column, i: usize) -> (f64, bool, err)
+fn get_bool(c: *const Column, i: usize) -> (bool, bool, err)
+fn offset_at(c: *const Column, i: usize) -> (usize, err)
+fn list_range(c: *const Column, i: usize) -> (usize, usize, err)
+fn get_utf8(c: *const Column, i: usize) -> (str, bool, err)
+fn get_binary(c: *const Column, i: usize) -> ([]const u8, bool, err)
+fn subtree(cols: []const Column, i: usize) -> usize
+fn struct_child(cols: []const Column, i: usize, k: usize) -> (usize, err)
+fn message(stream: []const u8, pos: usize) -> (Message, err)
+fn describe(meta: []const u8, field: usize, cols: []Column, names: []str, count: *usize) -> err
+fn buffer(m: *const Message, buffers: fb.Vector, k: usize) -> ([]const u8, err)
+fn bind(m: *const Message, cols: []Column, count: usize) -> err
+fn columns(stream: []const u8, cols: []Column, names: []str) -> (usize, err)
+```
+
+The Arrow columnar layout over caller buffers (`Column` with validity, offsets and data;
+`is_valid`, `count_nulls`, typed `get_*`, `get_utf8`, `get_binary`, `list_range`,
+`struct_child`) and the IPC streaming reader `columns` (Schema and the first
+RecordBatch through `e.fmt.flatbuffers`, zero-copy over the body; compression and
+dictionaries answer `Unsupported`).
 
 ### `e.fmt.asn1`
 

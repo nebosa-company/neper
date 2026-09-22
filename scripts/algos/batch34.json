@@ -1,0 +1,20 @@
+{
+ "decision": "D876",
+ "modules": [
+  {"name": "e.fmt.arrow", "deps": ["e.bytes", "e.fmt.flatbuffers"], "fixture": "fmt_arrow", "anchor": "### `e.fmt.asn1`\n",
+   "note": "The Arrow columnar layout over caller buffers (`Column` with validity, offsets and data;\n`is_valid`, `count_nulls`, typed `get_*`, `get_utf8`, `get_binary`, `list_range`,\n`struct_child`) and the IPC streaming reader `columns` (Schema and the first\nRecordBatch through `e.fmt.flatbuffers`, zero-copy over the body; compression and\ndictionaries answer `Unsupported`).",
+   "comment": "`e.fmt.arrow`: a seven-row pyarrow stream of ten columns including nulls, a list and a struct read value for value, a dictionary stream refused, truncation reported"},
+  {"name": "e.net.balance", "deps": ["e.algo.hash", "e.algo.rand"], "fixture": "net_balance", "anchor": "### `e.net.tls`\n",
+   "note": "`round_robin`, nginx's smooth `weighted_round_robin`, `least_connections`,\n`power_of_two`, `weighted_random`, and Maglev (`maglev_prime`, `maglev_build` over\ntwo FNV-1a permutations, `maglev_lookup`, `maglev_disruption`).",
+   "comment": "`e.net.balance`: the `aabacaa` sequence, P2C picks equal to a PCG replica, a 65537-slot Maglev table equal to the replica with one backend's removal moving a fifth of the slots"},
+  {"name": "e.net.reliable", "deps": [], "fixture": "net_reliable", "anchor": "### `e.net.tls`\n",
+   "note": "Clock-free state machines: Go-Back-N (`sender_send`, `sender_ack`, `sender_timeouts`,\n`receiver_go_back_n`), Selective Repeat (`sr_send`, `sr_ack`, `sr_timeouts`, `sr_receive`),\nRFC 1982 `seq_less`, RFC 6298 `rtt_estimate` with `rtt_backoff` and Karn's `rtt_karn`,\nand RFC 5681 `aimd_ack`/`aimd_loss`.",
+   "comment": "`e.net.reliable`: a twenty-packet transfer losing two packets under Go-Back-N and Selective Repeat with the replica's retransmission lists, Jacobson's estimator step for step, Karn holding the backed-off RTO"},
+  {"name": "e.ui.state", "deps": [], "fixture": "ui_state", "anchor": "### `e.ui.style`\n",
+   "note": "Signals over caller arrays: `signal`, `get` (recording the dependency of the running\ncomputation), `set`, `memo` (skipping dependents when unchanged), `effect`, batches and\n`schedule_effects` running dirty nodes once each in height order with dynamic\ndependencies; `dispose`, `run_count`.",
+   "comment": "`e.ui.state`: the diamond running its sink once per change, a threshold memo, a batch collapsing three sets, a dependency dropped when a flag clears, run counts equal to a replica"},
+  {"name": "e.ui.undo", "deps": [], "fixture": "ui_undo", "anchor": "### `e.ui.style`\n",
+   "note": "An undo/redo stack of caller-interpreted commands: `push` (dropping the redo tail and the\noldest entry when full), `undo`/`redo`, groups (`begin_group`, `end_group`, `undo_group`,\n`redo_group`), `merge_last` through a caller merge callback, `mark_saved`/`is_dirty`.",
+   "comment": "`e.ui.undo`: a 200-step scripted document equal to a replica's hash, capacity eviction, groups undone as one, coalesced typing, the dirty flag across the save point"}
+ ]
+}

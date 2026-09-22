@@ -685,3 +685,26 @@ Reserved words met this batch: `default` (struct fields and parameters
 became `fallback`) and `at`; an enum literal in a `var` needs its type
 annotation (`var x: jwt.Alg = .HS256`). Every agent reported a first-build
 pass on both compilers.
+
+## D876 — Batch 34: Arrow, load balancing, reliable transport, signals and undo
+
+Five modules from `docs/algos.md`: `e.fmt.arrow` (the columnar layout and
+an IPC stream reader built on the FlatBuffers reader of D875, read against
+a pyarrow 23 stream), `e.net.balance` (smooth weighted round-robin,
+power-of-two choices, Maglev; ring, rendezvous and jump hashing stay in
+`e.algo.consistent_hash`), `e.net.reliable` (Go-Back-N, Selective Repeat,
+RFC 1982 serial comparison, RFC 6298 with Karn's rule and RFC 5681 AIMD,
+all as clock-free state machines the caller drives with `now`, so the
+fixture replays a scripted loss pattern deterministically), `e.ui.state`
+(a signals runtime: memos and effects scheduled once each in height order,
+dynamic dependencies re-recorded on every run; the graph is generic over
+one context type and stores `fn` pointers in slices inside the generic
+struct, which type-checks and runs on both compilers) and `e.ui.undo` (a
+command stack whose merge callback rewrites the previous entry in place,
+Qt's `mergeWith` shape, because a pure predicate cannot produce the merged
+record). Compiler notes from the agents: an indexed function pointer must
+be bound to a local before it is called (`g.compute[id](...)` is
+UnknownCallable), a top-level `let` name stays bound for the whole
+function so a sibling block cannot rebind it, and `target` and `at` are
+reserved locals. No compiler change was needed; every module passed its
+first build on both compilers.

@@ -2158,6 +2158,36 @@ $netIdnaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netIdnaWritten -ne 'executable written') { throw 'net_idna emission failed' }
 & $netIdnaPath
 if ($LASTEXITCODE -ne 0) { throw "a net_idna check failed: exit $LASTEXITCODE" }
+# `e.fmt.arrow`: a seven-row pyarrow stream of ten columns including nulls, a list and a struct read value for value, a dictionary stream refused, truncation reported (D876).
+$fmtArrowPath = Join-Path $testBuild 'fmt-arrow-selfhost.exe'
+$fmtArrowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_arrow\src\main.e') $repo 'x64' 'windows' $fmtArrowPath
+if ($LASTEXITCODE -ne 0 -or $fmtArrowWritten -ne 'executable written') { throw 'fmt_arrow emission failed' }
+& $fmtArrowPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_arrow check failed: exit $LASTEXITCODE" }
+# `e.net.balance`: the `aabacaa` sequence, P2C picks equal to a PCG replica, a 65537-slot Maglev table equal to the replica with one backend's removal moving a fifth of the slots (D876).
+$netBalancePath = Join-Path $testBuild 'net-balance-selfhost.exe'
+$netBalanceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_balance\src\main.e') $repo 'x64' 'windows' $netBalancePath
+if ($LASTEXITCODE -ne 0 -or $netBalanceWritten -ne 'executable written') { throw 'net_balance emission failed' }
+& $netBalancePath
+if ($LASTEXITCODE -ne 0) { throw "a net_balance check failed: exit $LASTEXITCODE" }
+# `e.net.reliable`: a twenty-packet transfer losing two packets under Go-Back-N and Selective Repeat with the replica's retransmission lists, Jacobson's estimator step for step, Karn holding the backed-off RTO (D876).
+$netReliablePath = Join-Path $testBuild 'net-reliable-selfhost.exe'
+$netReliableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_reliable\src\main.e') $repo 'x64' 'windows' $netReliablePath
+if ($LASTEXITCODE -ne 0 -or $netReliableWritten -ne 'executable written') { throw 'net_reliable emission failed' }
+& $netReliablePath
+if ($LASTEXITCODE -ne 0) { throw "a net_reliable check failed: exit $LASTEXITCODE" }
+# `e.ui.state`: the diamond running its sink once per change, a threshold memo, a batch collapsing three sets, a dependency dropped when a flag clears, run counts equal to a replica (D876).
+$uiStatePath = Join-Path $testBuild 'ui-state-selfhost.exe'
+$uiStateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_state\src\main.e') $repo 'x64' 'windows' $uiStatePath
+if ($LASTEXITCODE -ne 0 -or $uiStateWritten -ne 'executable written') { throw 'ui_state emission failed' }
+& $uiStatePath
+if ($LASTEXITCODE -ne 0) { throw "a ui_state check failed: exit $LASTEXITCODE" }
+# `e.ui.undo`: a 200-step scripted document equal to a replica's hash, capacity eviction, groups undone as one, coalesced typing, the dirty flag across the save point (D876).
+$uiUndoPath = Join-Path $testBuild 'ui-undo-selfhost.exe'
+$uiUndoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_undo\src\main.e') $repo 'x64' 'windows' $uiUndoPath
+if ($LASTEXITCODE -ne 0 -or $uiUndoWritten -ne 'executable written') { throw 'ui_undo emission failed' }
+& $uiUndoPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_undo check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

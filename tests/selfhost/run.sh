@@ -1944,6 +1944,31 @@ net_idna_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$net_idna_written" = 'executable written' ]
 chmod +x "$test_build/net-idna-selfhost"
 "$test_build/net-idna-selfhost"
+# `e.fmt.arrow`: a seven-row pyarrow stream of ten columns including nulls, a list and a struct read value for value, a dictionary stream refused, truncation reported (D876).
+fmt_arrow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_arrow/src/main.e" "$repo" x64 linux "$test_build/fmt-arrow-selfhost")
+[ "$fmt_arrow_written" = 'executable written' ]
+chmod +x "$test_build/fmt-arrow-selfhost"
+"$test_build/fmt-arrow-selfhost"
+# `e.net.balance`: the `aabacaa` sequence, P2C picks equal to a PCG replica, a 65537-slot Maglev table equal to the replica with one backend's removal moving a fifth of the slots (D876).
+net_balance_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_balance/src/main.e" "$repo" x64 linux "$test_build/net-balance-selfhost")
+[ "$net_balance_written" = 'executable written' ]
+chmod +x "$test_build/net-balance-selfhost"
+"$test_build/net-balance-selfhost"
+# `e.net.reliable`: a twenty-packet transfer losing two packets under Go-Back-N and Selective Repeat with the replica's retransmission lists, Jacobson's estimator step for step, Karn holding the backed-off RTO (D876).
+net_reliable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_reliable/src/main.e" "$repo" x64 linux "$test_build/net-reliable-selfhost")
+[ "$net_reliable_written" = 'executable written' ]
+chmod +x "$test_build/net-reliable-selfhost"
+"$test_build/net-reliable-selfhost"
+# `e.ui.state`: the diamond running its sink once per change, a threshold memo, a batch collapsing three sets, a dependency dropped when a flag clears, run counts equal to a replica (D876).
+ui_state_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_state/src/main.e" "$repo" x64 linux "$test_build/ui-state-selfhost")
+[ "$ui_state_written" = 'executable written' ]
+chmod +x "$test_build/ui-state-selfhost"
+"$test_build/ui-state-selfhost"
+# `e.ui.undo`: a 200-step scripted document equal to a replica's hash, capacity eviction, groups undone as one, coalesced typing, the dirty flag across the save point (D876).
+ui_undo_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_undo/src/main.e" "$repo" x64 linux "$test_build/ui-undo-selfhost")
+[ "$ui_undo_written" = 'executable written' ]
+chmod +x "$test_build/ui-undo-selfhost"
+"$test_build/ui-undo-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
