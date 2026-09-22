@@ -874,3 +874,27 @@ the WSL VM was being torn down mid-build once C: fell to two gigabytes
 free -- the Windows commit charge could no longer back a VM allowed eight
 gigabytes -- and `.wslconfig` now caps it at five with the eight-gigabyte
 swap on D:, after which the same build runs in nine seconds.
+
+## D883 — Batch 41: planned functions for game AI, heaps, caches, coding and DP
+
+Five modules brought up to their planned names: `e.game.ai` (a generic
+game-tree family over a record of function pointers -- minimax, alpha-beta,
+principal variation search, iterative deepening on a node budget,
+quiescence, expectimax, a transposition table -- plus UCT search whose
+confidence bound is integer Q16 so lockstep simulations stay
+deterministic, resumable behaviour trees, GOAP over bitmask world states,
+utility curves and boids over the existing steering), `e.data.heap`
+(heapify, a min-max heap, and leftist, skew, randomized meldable, pairing
+and binomial heaps sharing one caller node pool where the popped node id
+is the caller's payload handle), `e.data.cache` (one access operation per
+existing policy and ARC in full with its adaptive target), `e.algo.coding`
+(an adaptive arithmetic coder, rANS with a caller-side frequency table,
+LZ78 as the in-memory dictionary coder so `e.fmt.lzw` keeps the streaming
+form, simple8b, and the whole-buffer entries for the coders that already
+existed as write/read pairs) and `e.algo.dp` (both-direction monotonic
+stacks, the convex hull trick and a batched Li Chao tree). `e.data.heap`
+is one of the modules whose declaration list the suites pin literally;
+`scripts/algos/pin_surface.py` now regenerates such a pin from the source
+in both runners, and the rule for extending a pinned module is to append
+only. Lesson: ARC, LFU and 2Q all beat LRU on the hot-set-plus-scan trace
+the fixture constructs, which is the property that justifies their place.

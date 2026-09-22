@@ -1,0 +1,15 @@
+{
+ "decision": "D883",
+ "modules": [
+  {"name": "e.algo.coding", "refresh": true, "fixture": "algo_coding_dp_plan",
+   "comment": "`e.algo.coding` and `e.algo.dp` planned functions: whole-buffer Elias-gamma, Rice, move-to-front and BWT entries, an adaptive arithmetic coder and a rANS coder byte-exact with replicas, LZ78 through a table reset, simple8b words; both-direction monotonic stacks, the convex hull trick and a batched Li Chao tree against brute force"},
+  {"name": "e.algo.dp", "refresh": true,
+   "comment": "`e.algo.dp` (shared fixture with e.algo.coding)"},
+  {"name": "e.data.cache", "refresh": true, "fixture": "data_cache_plan",
+   "comment": "`e.data.cache` planned functions: one access operation per policy over the existing steps, and ARC in full, seven policies replayed over Zipf and hot-plus-scan traces with hit counts and resident sets equal to replicas and ARC ahead of LRU"},
+  {"name": "e.data.heap", "refresh": true, "fixture": "data_heap_plan",
+   "comment": "`e.data.heap` planned functions: heapify under its planned name, a min-max heap, and leftist, skew, randomized meldable, pairing and binomial heaps over one caller node pool, two thousand scripted operations each popping the replica's sequence with invariants checked throughout"},
+  {"name": "e.game.ai", "refresh": true, "fixture": "game_ai_plan", "deps": ["e.algo.rand", "e.bytes", "e.game.tilemap", "e.math.fixed", "e.mem"],
+   "comment": "`e.game.ai` planned functions: minimax, alpha-beta, PVS, iterative deepening and quiescence agreeing on a forced tic-tac-toe win with the replica's node counts, expectimax, a transposition table, UCT search with integer confidence bounds and a bit-exact rollout stream, resumable behaviour trees, GOAP plans, utility curves and boids in fixed point"}
+ ]
+}

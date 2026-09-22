@@ -1,7 +1,8 @@
 // Classic dynamic programmes over caller storage: knapsacks, subsequences,
 // coin change, matrix-chain and optimal-search-tree orderings, subarray extremes,
-// the largest rectangle under a histogram, the monotonic stack, and the convex
-// hull trick with the Li Chao tree for line minima.
+// the largest rectangle under a histogram, the monotonic stacks, and the convex
+// hull trick with the Li Chao tree for line minima, each also as a whole-batch
+// call over slopes, intercepts and queries.
 //
 // Each routine states the scratch it needs and answers `TooSmall` when it is
 // short; values are `i64` and never checked for overflow.
@@ -552,4 +553,135 @@ fn hull_query(hull: []const Line, count: usize, pointer: *usize, x: i64) -> (i64
         if next <= here { *pointer += 1usize } else { break }
     }
     ret (hull[*pointer].slope * x + hull[*pointer].intercept, true)
+}
+
+// Both directions of the monotonic stack: the nearest strictly smaller element
+// before and after each one, `values.len` when there is none; `stack.len` and
+// both outputs at least `values.len`.
+fn monotonic_stack(values: []const i64, prev_smaller: []usize, next_smaller: []usize, stack: []usize) -> err {
+    let prev_error = previous_smaller(values, prev_smaller, stack)
+    if prev_error != ok { ret prev_error }
+    if next_smaller.len < values.len { ret TooSmall }
+    var top = 0usize
+    var i = values.len
+    while i > 0usize {
+        i -= 1usize
+        while top > 0usize && values[stack[top - 1usize]] >= values[i] { top -= 1usize }
+        if top > 0usize { next_smaller[i] = stack[top - 1usize] } else { next_smaller[i] = values.len }
+        stack[top] = i
+        top += 1usize
+    }
+    ret ok
+}
+
+// The index of the nearest following strictly greater element, or `values.len`.
+fn next_greater(values: []const i64, out: []usize, stack: []usize) -> err {
+    if out.len < values.len || stack.len < values.len { ret TooSmall }
+    var top = 0usize
+    var i = values.len
+    while i > 0usize {
+        i -= 1usize
+        while top > 0usize && values[stack[top - 1usize]] <= values[i] { top -= 1usize }
+        if top > 0usize { out[i] = stack[top - 1usize] } else { out[i] = values.len }
+        stack[top] = i
+        top += 1usize
+    }
+    ret ok
+}
+
+// The minimum of `slopes[i] * x + intercepts[i]` over every line at each query
+// (negate both to get the maximum). The lines are sorted by decreasing slope
+// into `scratch` (`scratch.len >= slopes.len`), the lower hull is built there
+// in place, and each query walks it with the pointer when the queries never
+// decrease, else finds its line by binary search.
+fn convex_hull_trick(slopes: []const i64, intercepts: []const i64, queries: []const i64, out: []i64, scratch: []Line) -> err {
+    let n = slopes.len
+    if intercepts.len != n || out.len < queries.len || scratch.len < n { ret TooSmall }
+    if n == 0usize { ret Invalid }
+    // ponytail: insertion sort, O(n^2); a merge sort when the line count grows.
+    var i = 0usize
+    while i < n {
+        let line = Line { slope: slopes[i], intercept: intercepts[i] }
+        var j = i
+        while j > 0usize && (scratch[j - 1usize].slope < line.slope || (scratch[j - 1usize].slope == line.slope && scratch[j - 1usize].intercept > line.intercept)) {
+            scratch[j] = scratch[j - 1usize]
+            j -= 1usize
+        }
+        scratch[j] = line
+        i += 1usize
+    }
+    // The hull never holds more lines than were consumed, so it fits in front.
+    var count = 0usize
+    var last_slope = 0i64
+    i = 0usize
+    while i < n {
+        let line = scratch[i]
+        if i == 0usize || line.slope != last_slope {
+            let (added, add_error) = hull_add(scratch, count, line)
+            if add_error != ok { ret add_error }
+            count = added
+        }
+        last_slope = line.slope
+        i += 1usize
+    }
+    var monotone = true
+    i = 1usize
+    while i < queries.len {
+        if queries[i] < queries[i - 1usize] { monotone = false }
+        i += 1usize
+    }
+    var pointer = 0usize
+    i = 0usize
+    while i < queries.len {
+        let x = queries[i]
+        if monotone {
+            let (value, _) = hull_query(scratch[..count], count, &pointer, x)
+            out[i] = value
+        } else {
+            var lo = 0usize
+            var hi = count - 1usize
+            while lo < hi {
+                let mid = lo + (hi - lo) / 2usize
+                let here = scratch[mid].slope * x + scratch[mid].intercept
+                let after = scratch[mid + 1usize].slope * x + scratch[mid + 1usize].intercept
+                if after <= here { lo = mid + 1usize } else { hi = mid }
+            }
+            out[i] = scratch[lo].slope * x + scratch[lo].intercept
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// The same minima by a Li Chao tree over the span of the queries; `lines.len`
+// and `filled.len` at least `4 * (max query - min query + 1)`.
+fn li_chao_tree(slopes: []const i64, intercepts: []const i64, queries: []const i64, out: []i64, lines: []Line, filled: []u8) -> err {
+    let n = slopes.len
+    if intercepts.len != n || out.len < queries.len { ret TooSmall }
+    if queries.len == 0usize { ret ok }
+    if n == 0usize { ret Invalid }
+    var low = queries[0usize]
+    var high = queries[0usize]
+    var i = 1usize
+    while i < queries.len {
+        if queries[i] < low { low = queries[i] }
+        if queries[i] > high { high = queries[i] }
+        i += 1usize
+    }
+    let (built, init_error) = li_chao_init(lines, filled, low, high)
+    if init_error != ok { ret init_error }
+    var tree = built
+    i = 0usize
+    while i < n {
+        li_chao_insert(&tree, Line { slope: slopes[i], intercept: intercepts[i] })
+        i += 1usize
+    }
+    i = 0usize
+    while i < queries.len {
+        let (value, found) = li_chao_query(&tree, queries[i])
+        if !found { ret Invalid }
+        out[i] = value
+        i += 1usize
+    }
+    ret ok
 }

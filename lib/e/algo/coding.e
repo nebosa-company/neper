@@ -1,6 +1,7 @@
 // Entropy and integer codings over byte slices: run lengths, variable-length
 // integers, deltas and bit packing, Elias-gamma and Rice codes, move-to-front,
-// the Burrows-Wheeler transform and canonical Huffman codes.
+// the Burrows-Wheeler transform, canonical Huffman codes, an adaptive arithmetic
+// coder, rANS over a static table, LZ78 dictionary coding and simple8b words.
 //
 // Every encoder writes into caller storage and answers the length used, or
 // `TooSmall` when the output would not fit; every decoder answers `Invalid` for
@@ -687,4 +688,498 @@ fn huffman_decode(h: *const Huffman, r: *BitReader, dst: []u8) -> err {
         out += 1usize
     }
     ret ok
+}
+
+// Whole-buffer Elias gamma: every value written in turn through one cursor, the
+// last byte zero-padded; the decoder reads `values.len` of them.
+fn elias_gamma(values: []const u32, dst: []u8) -> (usize, err) {
+    var w = bit_writer(dst)
+    var i = 0usize
+    while i < values.len {
+        let write_error = elias_gamma_write(&w, u64(values[i]))
+        if write_error != ok { ret (0usize, write_error) }
+        i += 1usize
+    }
+    ret (written(&w), ok)
+}
+
+fn elias_gamma_decode(src: []const u8, values: []u32) -> err {
+    var r = bit_reader(src)
+    var i = 0usize
+    while i < values.len {
+        let (value, read_error) = elias_gamma_read(&r)
+        if read_error != ok { ret read_error }
+        if value > 4294967295u64 { ret Invalid }
+        values[i] = u32(value)
+        i += 1usize
+    }
+    ret ok
+}
+
+// Whole-buffer Rice code with one parameter `k` for every value.
+fn rice_encode(values: []const u32, k: u32, dst: []u8) -> (usize, err) {
+    var w = bit_writer(dst)
+    var i = 0usize
+    while i < values.len {
+        let write_error = rice_write(&w, u64(values[i]), k)
+        if write_error != ok { ret (0usize, write_error) }
+        i += 1usize
+    }
+    ret (written(&w), ok)
+}
+
+fn rice_decode(src: []const u8, k: u32, values: []u32) -> err {
+    var r = bit_reader(src)
+    var i = 0usize
+    while i < values.len {
+        let (value, read_error) = rice_read(&r, k)
+        if read_error != ok { ret read_error }
+        if value > 4294967295u64 { ret Invalid }
+        values[i] = u32(value)
+        i += 1usize
+    }
+    ret ok
+}
+
+// The planned names of the two transforms: `move_to_front` is the encoder
+// (`move_to_front_decode` inverts it) and `bwt` is `bwt_encode`.
+fn move_to_front(src: []const u8, dst: []u8) -> err { ret move_to_front_encode(src, dst) }
+
+fn bwt(src: []const u8, dst: []u8, scratch: []usize) -> (usize, err) {
+    let (row, encode_error) = bwt_encode(src, dst, scratch)
+    ret (row, encode_error)
+}
+
+// Arithmetic coding after Witten, Neal and Cleary: a 32-bit low/high interval
+// with the three scalings (E1 below the half, E2 above it, E3 straddling the
+// middle with the bit held pending), driven by an adaptive order-0 model of 256
+// byte frequencies that start at one, grow by 32 per occurrence and halve when
+// the total passes 2^16. The stream is the source length as a varint and then
+// the code bits, most significant first, zero-padded to a byte.
+fn arithmetic_encode(src: []const u8, dst: []u8) -> (usize, err) {
+    let (head, head_error) = varint_encode(u64(src.len), dst)
+    if head_error != ok { ret (0usize, head_error) }
+    var w = bit_writer(dst[head..])
+    var freq: [256]u32 = zero
+    var total = 256u64
+    var s = 0usize
+    while s < 256usize {
+        freq[s] = 1u32
+        s += 1usize
+    }
+    var low = 0u64
+    var high = 4294967295u64
+    var pending = 0u64
+    var i = 0usize
+    while i < src.len {
+        let sym = usize(src[i])
+        var cum = 0u64
+        s = 0usize
+        while s < sym {
+            cum += u64(freq[s])
+            s += 1usize
+        }
+        let span = high - low + 1u64
+        high = low + span * (cum + u64(freq[sym])) / total - 1u64
+        low = low + span * cum / total
+        while true {
+            if high < 2147483648u64 {
+                if arith_emit(&w, 0u64, &pending) != ok { ret (0usize, TooSmall) }
+            } else if low >= 2147483648u64 {
+                if arith_emit(&w, 1u64, &pending) != ok { ret (0usize, TooSmall) }
+                low -= 2147483648u64
+                high -= 2147483648u64
+            } else if low >= 1073741824u64 && high < 3221225472u64 {
+                pending += 1u64
+                low -= 1073741824u64
+                high -= 1073741824u64
+            } else { break }
+            low = low << 1u64
+            high = (high << 1u64) | 1u64
+        }
+        total = arith_update(freq[..], sym, total)
+        i += 1usize
+    }
+    pending += 1u64
+    var last = 1u64
+    if low < 1073741824u64 { last = 0u64 }
+    if arith_emit(&w, last, &pending) != ok { ret (0usize, TooSmall) }
+    ret (head + written(&w), ok)
+}
+
+// A bit and then the pending opposite bits.
+fn arith_emit(w: *BitWriter, bit: u64, pending: *u64) -> err {
+    if write_bits(w, bit, 1u32) != ok { ret TooSmall }
+    while *pending > 0u64 {
+        if write_bits(w, 1u64 - bit, 1u32) != ok { ret TooSmall }
+        *pending -= 1u64
+    }
+    ret ok
+}
+
+// Counts `sym`, halving every frequency when the total would pass 2^16; answers the new total.
+fn arith_update(freq: []u32, sym: usize, total: u64) -> u64 {
+    freq[sym] += 32u32
+    var sum = total + 32u64
+    if sum > 65536u64 {
+        sum = 0u64
+        var s = 0usize
+        while s < 256usize {
+            freq[s] = (freq[s] + 1u32) / 2u32
+            sum += u64(freq[s])
+            s += 1usize
+        }
+    }
+    ret sum
+}
+
+// The next code bit, zero once the stream is spent.
+fn arith_bit(r: *BitReader) -> u64 {
+    if bits_left(r) == 0usize { ret 0u64 }
+    let (bit, _) = read_bits(r, 1u32)
+    ret bit
+}
+
+// Decodes a stream from `arithmetic_encode`; answers the byte count.
+fn arithmetic_decode(src: []const u8, dst: []u8) -> (usize, err) {
+    let (count, head, head_error) = varint_decode(src)
+    if head_error != ok { ret (0usize, head_error) }
+    let n = usize(count)
+    if dst.len < n { ret (0usize, TooSmall) }
+    var r = bit_reader(src[head..])
+    var freq: [256]u32 = zero
+    var total = 256u64
+    var s = 0usize
+    while s < 256usize {
+        freq[s] = 1u32
+        s += 1usize
+    }
+    var low = 0u64
+    var high = 4294967295u64
+    var value = 0u64
+    var k = 0usize
+    while k < 32usize {
+        value = (value << 1u64) | arith_bit(&r)
+        k += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        if value < low || value > high { ret (0usize, Invalid) }
+        let span = high - low + 1u64
+        let wanted = ((value - low + 1u64) * total - 1u64) / span
+        var cum = 0u64
+        var sym = 0usize
+        while sym < 255usize && cum + u64(freq[sym]) <= wanted {
+            cum += u64(freq[sym])
+            sym += 1usize
+        }
+        if cum + u64(freq[sym]) <= wanted { ret (0usize, Invalid) }
+        dst[i] = u8(sym)
+        high = low + span * (cum + u64(freq[sym])) / total - 1u64
+        low = low + span * cum / total
+        while true {
+            // Neither half nor the middle: the interval is wide enough.
+            if high >= 2147483648u64 && low < 2147483648u64 && (low < 1073741824u64 || high >= 3221225472u64) { break }
+            if low >= 2147483648u64 {
+                low -= 2147483648u64
+                high -= 2147483648u64
+                value -= 2147483648u64
+            } else if high >= 2147483648u64 {
+                low -= 1073741824u64
+                high -= 1073741824u64
+                value -= 1073741824u64
+            }
+            low = low << 1u64
+            high = (high << 1u64) | 1u64
+            value = (value << 1u64) | arith_bit(&r)
+        }
+        total = arith_update(freq[..], sym, total)
+        i += 1usize
+    }
+    ret (n, ok)
+}
+
+// A static table of 256 frequencies summing to 2^12 from the bytes of `src`:
+// every present byte gets at least one, the remainder lands on the commonest.
+fn ans_frequencies(src: []const u8, freqs: []u32) -> err {
+    if freqs.len < 256usize { ret TooSmall }
+    if src.len == 0usize { ret Invalid }
+    var counts: [256]u64 = zero
+    var i = 0usize
+    while i < src.len {
+        counts[usize(src[i])] += 1u64
+        i += 1usize
+    }
+    var top = 0usize
+    var sum = 0u64
+    var s = 0usize
+    while s < 256usize {
+        freqs[s] = 0u32
+        if counts[s] != 0u64 {
+            var f = counts[s] * 4096u64 / u64(src.len)
+            if f == 0u64 { f = 1u64 }
+            freqs[s] = u32(f)
+            sum += f
+            if counts[s] > counts[top] { top = s }
+        }
+        s += 1usize
+    }
+    if sum < 4096u64 { freqs[top] += u32(4096u64 - sum) }
+    if sum > 4096u64 { freqs[top] -= u32(sum - 4096u64) }
+    ret ok
+}
+
+// The cumulative starts of a table; `false` when it does not sum to 2^12.
+fn ans_cumulative(freqs: []const u32, cum: []u32) -> bool {
+    var sum = 0u32
+    var s = 0usize
+    while s < 256usize {
+        cum[s] = sum
+        sum += freqs[s]
+        s += 1usize
+    }
+    ret sum == 4096u32
+}
+
+// rANS with a 32-bit state renormalised a byte at a time (the state stays in
+// `[2^23, 2^31)`), over a static table from `ans_frequencies`. The symbols are
+// coded last to first; the stream is the source length as a varint, the final
+// state little-endian, then the renormalisation bytes in decoding order.
+fn ans_encode(src: []const u8, freqs: []const u32, dst: []u8) -> (usize, err) {
+    if freqs.len < 256usize { ret (0usize, Invalid) }
+    var cum: [256]u32 = zero
+    if !ans_cumulative(freqs, cum[..]) { ret (0usize, Invalid) }
+    let (head, head_error) = varint_encode(u64(src.len), dst)
+    if head_error != ok { ret (0usize, head_error) }
+    if dst.len < head + 4usize { ret (0usize, TooSmall) }
+    var x = 8388608u64
+    var out = head + 4usize
+    var i = src.len
+    while i > 0usize {
+        i -= 1usize
+        let sym = usize(src[i])
+        let f = u64(freqs[sym])
+        if f == 0u64 { ret (0usize, Invalid) }
+        let x_max = f << 19u64
+        while x >= x_max {
+            if out >= dst.len { ret (0usize, TooSmall) }
+            dst[out] = u8(x & 255u64)
+            out += 1usize
+            x = x >> 8u64
+        }
+        x = ((x / f) << 12u64) + (x % f) + u64(cum[sym])
+    }
+    var lo = head + 4usize
+    var hi = out
+    while lo + 1usize < hi {
+        hi -= 1usize
+        let swap = dst[lo]
+        dst[lo] = dst[hi]
+        dst[hi] = swap
+        lo += 1usize
+    }
+    dst[head] = u8(x & 255u64)
+    dst[head + 1usize] = u8((x >> 8u64) & 255u64)
+    dst[head + 2usize] = u8((x >> 16u64) & 255u64)
+    dst[head + 3usize] = u8((x >> 24u64) & 255u64)
+    ret (out, ok)
+}
+
+// Decodes a stream from `ans_encode` over the same table; answers the byte count.
+fn ans_decode(src: []const u8, freqs: []const u32, dst: []u8) -> (usize, err) {
+    if freqs.len < 256usize { ret (0usize, Invalid) }
+    var cum: [256]u32 = zero
+    if !ans_cumulative(freqs, cum[..]) { ret (0usize, Invalid) }
+    let (count, head, head_error) = varint_decode(src)
+    if head_error != ok { ret (0usize, head_error) }
+    let n = usize(count)
+    if dst.len < n { ret (0usize, TooSmall) }
+    if src.len < head + 4usize { ret (0usize, Invalid) }
+    var x = u64(src[head]) | (u64(src[head + 1usize]) << 8u64) | (u64(src[head + 2usize]) << 16u64) | (u64(src[head + 3usize]) << 24u64)
+    var at = head + 4usize
+    var i = 0usize
+    while i < n {
+        let slot = x & 4095u64
+        // ponytail: a linear scan over the table; a 4096-entry symbol lookup would answer in one step.
+        var sym = 0usize
+        while sym < 255usize && u64(cum[sym + 1usize]) <= slot { sym += 1usize }
+        let f = u64(freqs[sym])
+        if f == 0u64 { ret (0usize, Invalid) }
+        dst[i] = u8(sym)
+        x = f * (x >> 12u64) + slot - u64(cum[sym])
+        while x < 8388608u64 {
+            if at >= src.len { ret (0usize, Invalid) }
+            x = (x << 8u64) | u64(src[at])
+            at += 1usize
+        }
+        i += 1usize
+    }
+    ret (n, ok)
+}
+
+// LZ78 dictionary coding with 12-bit phrase codes, the in-memory cousin of the
+// LZW stream reader in `e.fmt.lzw`: each token is the index of the longest known
+// phrase (0 is the empty one) and the byte that follows it, 20 bits most
+// significant first, after the source length as a varint; a final token may be
+// a bare index. The table holds 4096 phrases and starts over when full, on both
+// sides alike. `scratch.len >= 12288` (keys, first children, siblings).
+fn dictionary_encode(src: []const u8, dst: []u8, scratch: []u32) -> (usize, err) {
+    if scratch.len < 12288usize { ret (0usize, TooSmall) }
+    let (head, head_error) = varint_encode(u64(src.len), dst)
+    if head_error != ok { ret (0usize, head_error) }
+    var w = bit_writer(dst[head..])
+    var keys = scratch[..4096usize]
+    var first = scratch[4096usize..8192usize]
+    var sibling = scratch[8192usize..12288usize]
+    var count = 1usize
+    first[0usize] = 0u32
+    var current = 0usize
+    var i = 0usize
+    while i < src.len {
+        let b = u32(src[i])
+        var child = usize(first[current])
+        while child != 0usize && (keys[child] & 255u32) != b { child = usize(sibling[child]) }
+        if child != 0usize {
+            current = child
+        } else {
+            if write_bits(&w, u64(current), 12u32) != ok { ret (0usize, TooSmall) }
+            if write_bits(&w, u64(b), 8u32) != ok { ret (0usize, TooSmall) }
+            if count < 4096usize {
+                keys[count] = (u32(current) << 8u32) | b
+                first[count] = 0u32
+                sibling[count] = first[current]
+                first[current] = u32(count)
+                count += 1usize
+            } else {
+                count = 1usize
+                first[0usize] = 0u32
+            }
+            current = 0usize
+        }
+        i += 1usize
+    }
+    if current != 0usize {
+        if write_bits(&w, u64(current), 12u32) != ok { ret (0usize, TooSmall) }
+    }
+    ret (head + written(&w), ok)
+}
+
+// Decodes a stream from `dictionary_encode`; `scratch.len >= 4096` holds the
+// phrase keys. Answers the byte count.
+fn dictionary_decode(src: []const u8, dst: []u8, scratch: []u32) -> (usize, err) {
+    if scratch.len < 4096usize { ret (0usize, TooSmall) }
+    let (total, head, head_error) = varint_decode(src)
+    if head_error != ok { ret (0usize, head_error) }
+    let n = usize(total)
+    if dst.len < n { ret (0usize, TooSmall) }
+    var r = bit_reader(src[head..])
+    var count = 1usize
+    var out = 0usize
+    while out < n {
+        let (index, index_error) = read_bits(&r, 12u32)
+        if index_error != ok { ret (0usize, Invalid) }
+        let phrase = usize(index)
+        if phrase >= count { ret (0usize, Invalid) }
+        var length = 0usize
+        var at = phrase
+        while at != 0usize {
+            length += 1usize
+            at = usize(scratch[at] >> 8u32)
+        }
+        if out + length > n { ret (0usize, Invalid) }
+        at = phrase
+        var k = length
+        while at != 0usize {
+            k -= 1usize
+            dst[out + k] = u8(scratch[at] & 255u32)
+            at = usize(scratch[at] >> 8u32)
+        }
+        out += length
+        if out < n {
+            let (b, byte_error) = read_bits(&r, 8u32)
+            if byte_error != ok { ret (0usize, Invalid) }
+            dst[out] = u8(b)
+            out += 1usize
+            if count < 4096usize {
+                scratch[count] = (u32(phrase) << 8u32) | u32(b)
+                count += 1usize
+            } else {
+                count = 1usize
+            }
+        }
+    }
+    ret (n, ok)
+}
+
+// Simple8b: each 64-bit word carries a 4-bit selector and then as many equal-width
+// values as fit, the first at the low end. Selectors 0 and 1 stand for 240 and
+// 120 ones; the rest pack 60 values of one bit down to a single 60-bit value.
+// The encoder takes the first selector that fits (the most values per word);
+// a value of 2^60 or more is `Invalid`. Answers the word count.
+fn simple8b_encode(values: []const u64, dst: []u64) -> (usize, err) {
+    let counts = [16]usize{ 240usize, 120usize, 60usize, 30usize, 20usize, 15usize, 12usize, 10usize, 8usize, 7usize, 6usize, 5usize, 4usize, 3usize, 2usize, 1usize }
+    let widths = [16]u32{ 0u32, 0u32, 1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32, 10u32, 12u32, 15u32, 20u32, 30u32, 60u32 }
+    var at = 0usize
+    var out = 0usize
+    while at < values.len {
+        var selector = 0usize
+        var packed = false
+        while selector < 16usize && !packed {
+            let n = counts[selector]
+            let width = widths[selector]
+            if at + n <= values.len {
+                var fits = true
+                var k = 0usize
+                while k < n && fits {
+                    if width == 0u32 {
+                        if values[at + k] != 1u64 { fits = false }
+                    } else if (values[at + k] >> u64(width)) != 0u64 { fits = false }
+                    k += 1usize
+                }
+                if fits {
+                    if out >= dst.len { ret (0usize, TooSmall) }
+                    var word = u64(selector) << 60u64
+                    k = 0usize
+                    while k < n {
+                        if width != 0u32 { word = word | (values[at + k] << (u64(k) * u64(width))) }
+                        k += 1usize
+                    }
+                    dst[out] = word
+                    out += 1usize
+                    at += n
+                    packed = true
+                }
+            }
+            selector += 1usize
+        }
+        if !packed { ret (0usize, Invalid) }
+    }
+    ret (out, ok)
+}
+
+// Unpacks words from `simple8b_encode`; answers the value count.
+fn simple8b_decode(src: []const u64, values: []u64) -> (usize, err) {
+    let counts = [16]usize{ 240usize, 120usize, 60usize, 30usize, 20usize, 15usize, 12usize, 10usize, 8usize, 7usize, 6usize, 5usize, 4usize, 3usize, 2usize, 1usize }
+    let widths = [16]u32{ 0u32, 0u32, 1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32, 10u32, 12u32, 15u32, 20u32, 30u32, 60u32 }
+    var out = 0usize
+    var i = 0usize
+    while i < src.len {
+        let word = src[i]
+        let selector = usize(word >> 60u64)
+        let n = counts[selector]
+        let width = widths[selector]
+        if out + n > values.len { ret (0usize, TooSmall) }
+        var k = 0usize
+        while k < n {
+            if width == 0u32 {
+                values[out + k] = 1u64
+            } else {
+                values[out + k] = (word >> (u64(k) * u64(width))) & ((1u64 << u64(width)) - 1u64)
+            }
+            k += 1usize
+        }
+        out += n
+        i += 1usize
+    }
+    ret (out, ok)
 }

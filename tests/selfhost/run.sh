@@ -2099,6 +2099,26 @@ bytes_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$bytes_plan_written" = 'executable written' ]
 chmod +x "$test_build/bytes-plan-selfhost"
 "$test_build/bytes-plan-selfhost"
+# `e.algo.coding` and `e.algo.dp` planned functions: whole-buffer Elias-gamma, Rice, move-to-front and BWT entries, an adaptive arithmetic coder and a rANS coder byte-exact with replicas, LZ78 through a table reset, simple8b words; both-direction monotonic stacks, the convex hull trick and a batched Li Chao tree against brute force (D883).
+algo_coding_dp_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_coding_dp_plan/src/main.e" "$repo" x64 linux "$test_build/algo-coding-dp-plan-selfhost")
+[ "$algo_coding_dp_plan_written" = 'executable written' ]
+chmod +x "$test_build/algo-coding-dp-plan-selfhost"
+"$test_build/algo-coding-dp-plan-selfhost"
+# `e.data.cache` planned functions: one access operation per policy over the existing steps, and ARC in full, seven policies replayed over Zipf and hot-plus-scan traces with hit counts and resident sets equal to replicas and ARC ahead of LRU (D883).
+data_cache_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_cache_plan/src/main.e" "$repo" x64 linux "$test_build/data-cache-plan-selfhost")
+[ "$data_cache_plan_written" = 'executable written' ]
+chmod +x "$test_build/data-cache-plan-selfhost"
+"$test_build/data-cache-plan-selfhost"
+# `e.data.heap` planned functions: heapify under its planned name, a min-max heap, and leftist, skew, randomized meldable, pairing and binomial heaps over one caller node pool, two thousand scripted operations each popping the replica's sequence with invariants checked throughout (D883).
+data_heap_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_heap_plan/src/main.e" "$repo" x64 linux "$test_build/data-heap-plan-selfhost")
+[ "$data_heap_plan_written" = 'executable written' ]
+chmod +x "$test_build/data-heap-plan-selfhost"
+"$test_build/data-heap-plan-selfhost"
+# `e.game.ai` planned functions: minimax, alpha-beta, PVS, iterative deepening and quiescence agreeing on a forced tic-tac-toe win with the replica's node counts, expectimax, a transposition table, UCT search with integer confidence bounds and a bit-exact rollout stream, resumable behaviour trees, GOAP plans, utility curves and boids in fixed point (D883).
+game_ai_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_ai_plan/src/main.e" "$repo" x64 linux "$test_build/game-ai-plan-selfhost")
+[ "$game_ai_plan_written" = 'executable written' ]
+chmod +x "$test_build/game-ai-plan-selfhost"
+"$test_build/game-ai-plan-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
@@ -5513,7 +5533,41 @@ heapify_in_place
 heapify_in_place_by
 iter
 iter_by
-iter_next'
+iter_next
+TooSmall
+MinMax
+Pool
+heapify
+heapify_by
+min_max
+min_max_level
+min_max_down
+min_max_push
+peek_min
+peek_max
+pop_min
+pop_max
+pool
+pool_node
+leftist_merge
+leftist_insert
+leftist_pop
+skew_merge
+skew_insert
+skew_pop
+meldable
+meldable_merge
+meldable_insert
+meldable_pop
+pairing_merge
+pairing_insert
+pairing_pop
+pairing_decrease_key
+binomial_link
+binomial_merge
+binomial_insert
+binomial_peek
+binomial_pop'
 [ "$heap_surface" = "$expected_heap_surface" ]
 heap_parsed=$($test_build/neper-self parse-file "$repo/lib/e/data/heap.e")
 [ "$heap_parsed" = 'parse file ok' ]

@@ -1870,10 +1870,11 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.mem",
-    "e.math.fixed",
     "e.algo.rand",
-    "e.game.tilemap"
+    "e.bytes",
+    "e.game.tilemap",
+    "e.math.fixed",
+    "e.mem"
    ],
    "blocked_by": []
   },

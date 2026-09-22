@@ -11,6 +11,14 @@
 // hit twice into a protected segment, and `TwoQueue` keeps a ghost list of
 // recently evicted keys so a key seen again is admitted straight to the main
 // queue.
+//
+// Each policy also has a whole-policy access `lru(c, key)`, `fifo(f, keys, key)`,
+// ... that finds the key, touches it on a hit or evicts and inserts it on a miss,
+// answering `(hit, evicted key, whether one was evicted)`; the slot policies keep
+// the key of every slot in a caller `keys` slice of `capacity` entries. `Arc` is
+// the adaptive replacement cache: resident lists T1 (seen once) and T2 (seen
+// again), ghost lists B1 and B2 of recently evicted keys, and a target `p` for
+// T1's size that a B1 hit raises and a B2 hit lowers.
 
 type Lru = struct { keys: []u64, values: []u64, prev: []u32, next: []u32, index: []u32, head: u32, tail: u32, len: usize, free: u32 }
 type Fifo = struct { order: []u32, head: usize, len: usize }
@@ -18,6 +26,7 @@ type Clock = struct { referenced: []u8, filled: []u8, hand: usize }
 type Lfu = struct { hits: []u64, filled: []u8 }
 type Slru = struct { prev: []u32, next: []u32, protected: []u8, probation_head: u32, probation_tail: u32, protected_head: u32, protected_tail: u32, protected_len: usize, protected_cap: usize }
 type TwoQueue = struct { prev: []u32, next: []u32, main: []u8, ghosts: []u64, ghost_at: usize, in_head: u32, in_tail: u32, in_len: usize, in_cap: usize, main_head: u32, main_tail: u32 }
+type Arc = struct { keys: []u64, prev: []u32, next: []u32, list: []u8, t1: usize, t2: usize, b1: usize, b2: usize, p: usize, free: u32 }
 error TooSmall
 error Invalid
 
@@ -447,3 +456,277 @@ fn two_queue_evict(q: *TwoQueue, keys: []const u64) -> u32 {
 }
 
 fn two_queue_in_main(q: *const TwoQueue, slot: u32) -> bool { ret q.main[usize(slot)] == 1u8 }
+
+// Touches `key` or inserts it (value 0) under LRU: `(hit, evicted key, evicted)`.
+fn lru(c: *Lru, key: u64) -> (bool, u64, bool) {
+    let (_, hit) = lru_get(c, key)
+    if hit { ret (true, 0u64, false) }
+    let (evicted, did_evict) = lru_put(c, key, 0u64)
+    ret (false, evicted, did_evict)
+}
+
+// The slot among those not marked `free_mark` that holds `key`, or NONE.
+// ponytail: a linear scan per access; index the keys (as `Lru` does) if it matters.
+fn find_slot(keys: []const u64, marks: []const u8, free_mark: u8, key: u64) -> u32 {
+    var i = 0usize
+    while i < marks.len {
+        if marks[i] != free_mark && keys[i] == key { ret u32(i) }
+        i += 1usize
+    }
+    ret NONE
+}
+
+// FIFO access: a hit changes nothing; a miss fills the next free slot or the oldest.
+fn fifo(f: *Fifo, keys: []u64, key: u64) -> (bool, u64, bool) {
+    var j = 0usize
+    while j < f.len {
+        if keys[usize(f.order[(f.head + j) % f.order.len])] == key { ret (true, 0u64, false) }
+        j += 1usize
+    }
+    let (victim, full) = fifo_evict(f)
+    var slot = u32(f.len)
+    var evicted = 0u64
+    if full {
+        slot = victim
+        evicted = keys[usize(slot)]
+    }
+    keys[usize(slot)] = key
+    fifo_insert(f, slot)
+    ret (false, evicted, full)
+}
+
+// Clock access: a hit sets the reference bit; a miss takes the hand's victim.
+fn clock(k: *Clock, keys: []u64, key: u64) -> (bool, u64, bool) {
+    let slot = find_slot(keys, k.filled, 0u8, key)
+    if slot != NONE {
+        clock_touch(k, slot)
+        ret (true, 0u64, false)
+    }
+    let victim = clock_evict(k)
+    let was_filled = k.filled[usize(victim)] == 1u8
+    let evicted = keys[usize(victim)]
+    keys[usize(victim)] = key
+    clock_insert(k, victim)
+    ret (false, evicted, was_filled)
+}
+
+// LFU access: a hit counts; a miss replaces the least frequently hit slot.
+fn lfu(l: *Lfu, keys: []u64, key: u64) -> (bool, u64, bool) {
+    let slot = find_slot(keys, l.filled, 0u8, key)
+    if slot != NONE {
+        lfu_touch(l, slot)
+        ret (true, 0u64, false)
+    }
+    let victim = lfu_evict(l)
+    let was_filled = l.filled[usize(victim)] == 1u8
+    let evicted = keys[usize(victim)]
+    keys[usize(victim)] = key
+    lfu_insert(l, victim)
+    ret (false, evicted, was_filled)
+}
+
+// SLRU access: a hit promotes or refreshes; a miss enters probation.
+fn slru(s: *Slru, keys: []u64, key: u64) -> (bool, u64, bool) {
+    let slot = find_slot(keys, s.protected, 2u8, key)
+    if slot != NONE {
+        slru_touch(s, slot)
+        ret (true, 0u64, false)
+    }
+    var was_filled = true
+    var i = 0usize
+    while i < s.protected.len {
+        if s.protected[i] == 2u8 { was_filled = false }
+        i += 1usize
+    }
+    let victim = slru_evict(s)
+    let evicted = keys[usize(victim)]
+    keys[usize(victim)] = key
+    slru_insert(s, victim)
+    ret (false, evicted, was_filled)
+}
+
+// 2Q access: a hit refreshes a main-queue slot; a miss evicts (remembering the
+// victim's key) and admits `key` to the main queue when it is remembered.
+fn two_queue(q: *TwoQueue, keys: []u64, key: u64) -> (bool, u64, bool) {
+    let slot = find_slot(keys, q.main, 2u8, key)
+    if slot != NONE {
+        two_queue_touch(q, slot)
+        ret (true, 0u64, false)
+    }
+    var was_filled = true
+    var i = 0usize
+    while i < q.main.len {
+        if q.main[i] == 2u8 { was_filled = false }
+        i += 1usize
+    }
+    let victim = two_queue_evict(q, keys)
+    let evicted = keys[usize(victim)]
+    keys[usize(victim)] = key
+    two_queue_insert(q, victim, key)
+    ret (false, evicted, was_filled)
+}
+
+// ARC over `capacity` resident entries: `keys` and `list` need `2 * capacity`
+// entries (residents plus ghosts), `prev` and `next` four more (list sentinels).
+fn arc_init(keys: []u64, prev: []u32, next: []u32, list: []u8, capacity: usize) -> (Arc, err) {
+    if capacity == 0usize || capacity >= 1073741823usize { ret (zero, Invalid) }
+    let n = 2usize * capacity
+    if keys.len < n || list.len < n || prev.len < n + 4usize || next.len < n + 4usize { ret (zero, TooSmall) }
+    var c = Arc { keys: keys[..n], prev: prev[..n + 4usize], next: next[..n + 4usize], list: list[..n], t1: 0usize, t2: 0usize, b1: 0usize, b2: 0usize, p: 0usize, free: 0u32 }
+    var i = 0usize
+    while i < n {
+        c.list[i] = 0u8
+        c.next[i] = u32(i + 1usize)
+        i += 1usize
+    }
+    c.next[n - 1usize] = NONE
+    while i < n + 4usize {
+        c.next[i] = u32(i)
+        c.prev[i] = u32(i)
+        i += 1usize
+    }
+    ret (c, ok)
+}
+
+// `list[node]`: 0 free, 1 T1, 2 T2, 3 B1, 4 B2; each list is circular through
+// its sentinel node `2 * capacity + list - 1`, MRU first.
+fn arc_sentinel(c: *const Arc, l: u8) -> u32 { ret u32(c.keys.len + usize(l) - 1usize) }
+
+fn arc_count(c: *const Arc, l: u8) -> usize {
+    if l == 1u8 { ret c.t1 }
+    if l == 2u8 { ret c.t2 }
+    if l == 3u8 { ret c.b1 }
+    ret c.b2
+}
+
+fn arc_set_count(c: *Arc, l: u8, n: usize) {
+    if l == 1u8 { c.t1 = n } else if l == 2u8 { c.t2 = n } else if l == 3u8 { c.b1 = n } else { c.b2 = n }
+}
+
+fn arc_unlink(c: *Arc, node: u32) {
+    let p = c.prev[usize(node)]
+    let n = c.next[usize(node)]
+    c.next[usize(p)] = n
+    c.prev[usize(n)] = p
+    let l = c.list[usize(node)]
+    arc_set_count(c, l, arc_count(c, l) - 1usize)
+}
+
+fn arc_push(c: *Arc, node: u32, l: u8) {
+    let s = arc_sentinel(c, l)
+    let n = c.next[usize(s)]
+    c.prev[usize(node)] = s
+    c.next[usize(node)] = n
+    c.next[usize(s)] = node
+    c.prev[usize(n)] = node
+    c.list[usize(node)] = l
+    arc_set_count(c, l, arc_count(c, l) + 1usize)
+}
+
+// The least recently used node of list `l` (its sentinel when empty).
+fn arc_lru(c: *const Arc, l: u8) -> u32 { ret c.prev[usize(arc_sentinel(c, l))] }
+
+fn arc_release(c: *Arc, node: u32) {
+    arc_unlink(c, node)
+    c.list[usize(node)] = 0u8
+    c.next[usize(node)] = c.free
+    c.free = node
+}
+
+// ponytail: a linear scan over 2 * capacity nodes per access.
+fn arc_find(c: *const Arc, key: u64) -> u32 {
+    var i = 0usize
+    while i < c.keys.len {
+        if c.list[i] != 0u8 && c.keys[i] == key { ret u32(i) }
+        i += 1usize
+    }
+    ret NONE
+}
+
+// REPLACE: moves the LRU of T1 to B1 when T1 is over its target `p` (or at it
+// on a B2 hit), else the LRU of T2 to B2; answers the key that left.
+fn arc_replace(c: *Arc, in_b2: bool) -> (u64, bool) {
+    var from = 2u8
+    if c.t1 > 0usize && (c.t1 > c.p || (in_b2 && c.t1 == c.p)) { from = 1u8 }
+    if from == 2u8 && c.t2 == 0usize { from = 1u8 }
+    if arc_count(c, from) == 0usize { ret (0u64, false) }
+    let victim = arc_lru(c, from)
+    arc_unlink(c, victim)
+    arc_push(c, victim, from + 2u8)
+    ret (c.keys[usize(victim)], true)
+}
+
+// ARC access: `(hit, evicted key, evicted)`. A resident key moves to the front
+// of T2; a ghost hit adapts `p` toward the list that was hit and re-admits the
+// key to T2; a new key enters T1, making room per the paper's cases.
+fn arc(c: *Arc, key: u64) -> (bool, u64, bool) {
+    let cap = c.keys.len / 2usize
+    let node = arc_find(c, key)
+    if node != NONE {
+        let l = c.list[usize(node)]
+        if l == 1u8 || l == 2u8 {
+            arc_unlink(c, node)
+            arc_push(c, node, 2u8)
+            ret (true, 0u64, false)
+        }
+        if l == 3u8 {
+            var delta = c.b2 / c.b1
+            if delta < 1usize { delta = 1usize }
+            c.p += delta
+            if c.p > cap { c.p = cap }
+        } else {
+            var delta = c.b1 / c.b2
+            if delta < 1usize { delta = 1usize }
+            if c.p > delta { c.p -= delta } else { c.p = 0usize }
+        }
+        let (ghost_evicted, ghost_did) = arc_replace(c, l == 4u8)
+        arc_unlink(c, node)
+        arc_push(c, node, 2u8)
+        ret (false, ghost_evicted, ghost_did)
+    }
+    var evicted = 0u64
+    var did_evict = false
+    let l1 = c.t1 + c.b1
+    let l2 = c.t2 + c.b2
+    if l1 == cap {
+        if c.t1 < cap {
+            arc_release(c, arc_lru(c, 3u8))
+            let (e1, d1) = arc_replace(c, false)
+            evicted = e1
+            did_evict = d1
+        } else {
+            let victim = arc_lru(c, 1u8)
+            evicted = c.keys[usize(victim)]
+            did_evict = true
+            arc_release(c, victim)
+        }
+    } else if l1 + l2 >= cap {
+        if l1 + l2 == 2usize * cap { arc_release(c, arc_lru(c, 4u8)) }
+        let (e2, d2) = arc_replace(c, false)
+        evicted = e2
+        did_evict = d2
+    }
+    let fresh = c.free
+    c.free = c.next[usize(fresh)]
+    c.keys[usize(fresh)] = key
+    arc_push(c, fresh, 1u8)
+    ret (false, evicted, did_evict)
+}
+
+// Resident entries (T1 plus T2).
+fn arc_len(c: *const Arc) -> usize { ret c.t1 + c.t2 }
+
+// The adaptive target for T1's size, in `0..=capacity`.
+fn arc_p(c: *const Arc) -> usize { ret c.p }
+
+// Whether `key` is resident (ghosts do not count).
+fn arc_contains(c: *const Arc, key: u64) -> bool {
+    let node = arc_find(c, key)
+    ret node != NONE && c.list[usize(node)] <= 2u8
+}
+
+// Hits over accesses; 0 when nothing was accessed.
+fn hit_rate(hits: u64, accesses: u64) -> f64 {
+    if accesses == 0u64 { ret 0.0f64 }
+    ret f64(hits) / f64(accesses)
+}

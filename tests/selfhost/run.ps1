@@ -2344,6 +2344,30 @@ $bytesPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $bytesPlanWritten -ne 'executable written') { throw 'bytes_plan emission failed' }
 & $bytesPlanPath
 if ($LASTEXITCODE -ne 0) { throw "a bytes_plan check failed: exit $LASTEXITCODE" }
+# `e.algo.coding` and `e.algo.dp` planned functions: whole-buffer Elias-gamma, Rice, move-to-front and BWT entries, an adaptive arithmetic coder and a rANS coder byte-exact with replicas, LZ78 through a table reset, simple8b words; both-direction monotonic stacks, the convex hull trick and a batched Li Chao tree against brute force (D883).
+$algoCodingDpPlanPath = Join-Path $testBuild 'algo-coding-dp-plan-selfhost.exe'
+$algoCodingDpPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_coding_dp_plan\src\main.e') $repo 'x64' 'windows' $algoCodingDpPlanPath
+if ($LASTEXITCODE -ne 0 -or $algoCodingDpPlanWritten -ne 'executable written') { throw 'algo_coding_dp_plan emission failed' }
+& $algoCodingDpPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_coding_dp_plan check failed: exit $LASTEXITCODE" }
+# `e.data.cache` planned functions: one access operation per policy over the existing steps, and ARC in full, seven policies replayed over Zipf and hot-plus-scan traces with hit counts and resident sets equal to replicas and ARC ahead of LRU (D883).
+$dataCachePlanPath = Join-Path $testBuild 'data-cache-plan-selfhost.exe'
+$dataCachePlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_cache_plan\src\main.e') $repo 'x64' 'windows' $dataCachePlanPath
+if ($LASTEXITCODE -ne 0 -or $dataCachePlanWritten -ne 'executable written') { throw 'data_cache_plan emission failed' }
+& $dataCachePlanPath
+if ($LASTEXITCODE -ne 0) { throw "a data_cache_plan check failed: exit $LASTEXITCODE" }
+# `e.data.heap` planned functions: heapify under its planned name, a min-max heap, and leftist, skew, randomized meldable, pairing and binomial heaps over one caller node pool, two thousand scripted operations each popping the replica's sequence with invariants checked throughout (D883).
+$dataHeapPlanPath = Join-Path $testBuild 'data-heap-plan-selfhost.exe'
+$dataHeapPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_heap_plan\src\main.e') $repo 'x64' 'windows' $dataHeapPlanPath
+if ($LASTEXITCODE -ne 0 -or $dataHeapPlanWritten -ne 'executable written') { throw 'data_heap_plan emission failed' }
+& $dataHeapPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a data_heap_plan check failed: exit $LASTEXITCODE" }
+# `e.game.ai` planned functions: minimax, alpha-beta, PVS, iterative deepening and quiescence agreeing on a forced tic-tac-toe win with the replica's node counts, expectimax, a transposition table, UCT search with integer confidence bounds and a bit-exact rollout stream, resumable behaviour trees, GOAP plans, utility curves and boids in fixed point (D883).
+$gameAiPlanPath = Join-Path $testBuild 'game-ai-plan-selfhost.exe'
+$gameAiPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\game_ai_plan\src\main.e') $repo 'x64' 'windows' $gameAiPlanPath
+if ($LASTEXITCODE -ne 0 -or $gameAiPlanWritten -ne 'executable written') { throw 'game_ai_plan emission failed' }
+& $gameAiPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a game_ai_plan check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
@@ -5608,7 +5632,7 @@ $heapSurface = Get-Content (Join-Path $repo 'lib\e\data\heap.e') |
         if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.data.heap contains an unreadable public declaration' }
         $Matches[1]
     }
-$expectedHeapSurface = @('Heap', 'HeapBy', 'Iter', 'init', 'from_slice', 'len', 'push', 'peek', 'pop', 'clear', 'init_by', 'from_slice_by', 'len_by', 'push_by', 'peek_by', 'pop_by', 'clear_by', 'heapify_in_place', 'heapify_in_place_by', 'iter', 'iter_by', 'iter_next')
+$expectedHeapSurface = @('Heap', 'HeapBy', 'Iter', 'init', 'from_slice', 'len', 'push', 'peek', 'pop', 'clear', 'init_by', 'from_slice_by', 'len_by', 'push_by', 'peek_by', 'pop_by', 'clear_by', 'heapify_in_place', 'heapify_in_place_by', 'iter', 'iter_by', 'iter_next', 'TooSmall', 'MinMax', 'Pool', 'heapify', 'heapify_by', 'min_max', 'min_max_level', 'min_max_down', 'min_max_push', 'peek_min', 'peek_max', 'pop_min', 'pop_max', 'pool', 'pool_node', 'leftist_merge', 'leftist_insert', 'leftist_pop', 'skew_merge', 'skew_insert', 'skew_pop', 'meldable', 'meldable_merge', 'meldable_insert', 'meldable_pop', 'pairing_merge', 'pairing_insert', 'pairing_pop', 'pairing_decrease_key', 'binomial_link', 'binomial_merge', 'binomial_insert', 'binomial_peek', 'binomial_pop')
 if (($heapSurface -join "`n") -ne ($expectedHeapSurface -join "`n")) { throw 'e.data.heap public declarations differ from module-apis.md' }
 $heapParsed = & $compiler parse-file (Join-Path $repo 'lib\e\data\heap.e')
 if ($LASTEXITCODE -ne 0 -or $heapParsed -ne 'parse file ok') { throw 'e.data.heap failed CLI parsing' }

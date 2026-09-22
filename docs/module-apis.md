@@ -539,6 +539,9 @@ fn set_iter_next[K: type](it: *SetIter[K]) -> (K, bool)
 type Heap[T: type] = struct { items: list.List[T] }
 type HeapBy[T: type, Ctx: type] = struct { items: list.List[T], ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32 }
 type Iter[T: type] = struct { items: []const T, index: usize }
+type MinMax[T: type] = struct { items: []T, count: usize }
+type Pool[K: type] = struct { keys: []K, left: []u32, right: []u32, up: []u32, rank: []u32, used: usize }
+error TooSmall
 
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (Heap[T], err)
 fn from_slice[T: type](a: *mem.Arena, source: []const T) -> (Heap[T], err)
@@ -559,6 +562,37 @@ fn heapify_in_place_by[T: type, Ctx: type](items: []T, ctx: *Ctx, cmp: fn(*Ctx, 
 fn iter[T: type](h: *const Heap[T]) -> Iter[T]
 fn iter_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> Iter[T]
 fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
+fn heapify[T: type](items: []T)
+fn heapify_by[T: type, Ctx: type](items: []T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32)
+fn min_max[T: type](items: []T) -> MinMax[T]
+fn min_max_level(index: usize) -> bool
+fn min_max_down[T: type](items: []T, count: usize, start: usize, sign: i32)
+fn min_max_push[T: type](h: *MinMax[T], v: T) -> err
+fn peek_min[T: type](h: *const MinMax[T]) -> (T, bool)
+fn peek_max[T: type](h: *const MinMax[T]) -> (T, bool)
+fn pop_min[T: type](h: *MinMax[T]) -> (T, bool)
+fn pop_max[T: type](h: *MinMax[T]) -> (T, bool)
+fn pool[K: type](keys: []K, left: []u32, right: []u32, up: []u32, rank: []u32) -> Pool[K]
+fn pool_node[K: type](p: *Pool[K], key: K) -> (u32, err)
+fn leftist_merge[K: type](p: *Pool[K], a: u32, b: u32) -> u32
+fn leftist_insert[K: type](p: *Pool[K], root: u32, key: K) -> (u32, err)
+fn leftist_pop[K: type](p: *Pool[K], root: u32) -> (u32, u32)
+fn skew_merge[K: type](p: *Pool[K], a: u32, b: u32) -> u32
+fn skew_insert[K: type](p: *Pool[K], root: u32, key: K) -> (u32, err)
+fn skew_pop[K: type](p: *Pool[K], root: u32) -> (u32, u32)
+fn meldable(seed: u64) -> u64
+fn meldable_merge[K: type](p: *Pool[K], a: u32, b: u32, coin: *u64) -> u32
+fn meldable_insert[K: type](p: *Pool[K], root: u32, key: K, coin: *u64) -> (u32, err)
+fn meldable_pop[K: type](p: *Pool[K], root: u32, coin: *u64) -> (u32, u32)
+fn pairing_merge[K: type](p: *Pool[K], a: u32, b: u32) -> u32
+fn pairing_insert[K: type](p: *Pool[K], root: u32, key: K) -> (u32, err)
+fn pairing_pop[K: type](p: *Pool[K], root: u32) -> (u32, u32)
+fn pairing_decrease_key[K: type](p: *Pool[K], root: u32, node: u32, key: K) -> u32
+fn binomial_link[K: type](p: *Pool[K], child: u32, parent: u32)
+fn binomial_merge[K: type](p: *Pool[K], a: u32, b: u32) -> u32
+fn binomial_insert[K: type](p: *Pool[K], root: u32, key: K) -> (u32, err)
+fn binomial_peek[K: type](p: *const Pool[K], root: u32) -> u32
+fn binomial_pop[K: type](p: *Pool[K], root: u32) -> (u32, u32)
 ```
 
 The default heap is a min-heap under `T.cmp`; `HeapBy` uses `cmp`. Bulk construction
@@ -1129,6 +1163,7 @@ type Clock = struct { referenced: []u8, filled: []u8, hand: usize }
 type Lfu = struct { hits: []u64, filled: []u8 }
 type Slru = struct { prev: []u32, next: []u32, protected: []u8, probation_head: u32, probation_tail: u32, protected_head: u32, protected_tail: u32, protected_len: usize, protected_cap: usize }
 type TwoQueue = struct { prev: []u32, next: []u32, main: []u8, ghosts: []u64, ghost_at: usize, in_head: u32, in_tail: u32, in_len: usize, in_cap: usize, main_head: u32, main_tail: u32 }
+type Arc = struct { keys: []u64, prev: []u32, next: []u32, list: []u8, t1: usize, t2: usize, b1: usize, b2: usize, p: usize, free: u32 }
 error TooSmall
 error Invalid
 const NONE: u32 = 4294967295u32
@@ -1172,6 +1207,28 @@ fn two_queue_insert(q: *TwoQueue, slot: u32, key: u64)
 fn two_queue_touch(q: *TwoQueue, slot: u32)
 fn two_queue_evict(q: *TwoQueue, keys: []const u64) -> u32
 fn two_queue_in_main(q: *const TwoQueue, slot: u32) -> bool
+fn lru(c: *Lru, key: u64) -> (bool, u64, bool)
+fn find_slot(keys: []const u64, marks: []const u8, free_mark: u8, key: u64) -> u32
+fn fifo(f: *Fifo, keys: []u64, key: u64) -> (bool, u64, bool)
+fn clock(k: *Clock, keys: []u64, key: u64) -> (bool, u64, bool)
+fn lfu(l: *Lfu, keys: []u64, key: u64) -> (bool, u64, bool)
+fn slru(s: *Slru, keys: []u64, key: u64) -> (bool, u64, bool)
+fn two_queue(q: *TwoQueue, keys: []u64, key: u64) -> (bool, u64, bool)
+fn arc_init(keys: []u64, prev: []u32, next: []u32, list: []u8, capacity: usize) -> (Arc, err)
+fn arc_sentinel(c: *const Arc, l: u8) -> u32
+fn arc_count(c: *const Arc, l: u8) -> usize
+fn arc_set_count(c: *Arc, l: u8, n: usize)
+fn arc_unlink(c: *Arc, node: u32)
+fn arc_push(c: *Arc, node: u32, l: u8)
+fn arc_lru(c: *const Arc, l: u8) -> u32
+fn arc_release(c: *Arc, node: u32)
+fn arc_find(c: *const Arc, key: u64) -> u32
+fn arc_replace(c: *Arc, in_b2: bool) -> (u64, bool)
+fn arc(c: *Arc, key: u64) -> (bool, u64, bool)
+fn arc_len(c: *const Arc) -> usize
+fn arc_p(c: *const Arc) -> usize
+fn arc_contains(c: *const Arc, key: u64) -> bool
+fn hit_rate(hits: u64, accesses: u64) -> f64
 ```
 
 `Lru` is a complete keyed cache (`u64` to `u64`, an open-addressing index in the
@@ -1425,6 +1482,10 @@ fn li_chao_insert(t: *LiChao, line: Line)
 fn li_chao_query(t: *const LiChao, x: i64) -> (i64, bool)
 fn hull_add(hull: []Line, count: usize, line: Line) -> (usize, err)
 fn hull_query(hull: []const Line, count: usize, pointer: *usize, x: i64) -> (i64, bool)
+fn monotonic_stack(values: []const i64, prev_smaller: []usize, next_smaller: []usize, stack: []usize) -> err
+fn next_greater(values: []const i64, out: []usize, stack: []usize) -> err
+fn convex_hull_trick(slopes: []const i64, intercepts: []const i64, queries: []const i64, out: []i64, scratch: []Line) -> err
+fn li_chao_tree(slopes: []const i64, intercepts: []const i64, queries: []const i64, out: []i64, lines: []Line, filled: []u8) -> err
 ```
 
 Each routine states the scratch it needs and answers `TooSmall` when short; values
@@ -2953,6 +3014,25 @@ fn huffman_build(frequencies: []const u64, limit: u32) -> (Huffman, err)
 fn huffman_canonical(h: *Huffman)
 fn huffman_encode(h: *const Huffman, src: []const u8, w: *BitWriter) -> err
 fn huffman_decode(h: *const Huffman, r: *BitReader, dst: []u8) -> err
+fn elias_gamma(values: []const u32, dst: []u8) -> (usize, err)
+fn elias_gamma_decode(src: []const u8, values: []u32) -> err
+fn rice_encode(values: []const u32, k: u32, dst: []u8) -> (usize, err)
+fn rice_decode(src: []const u8, k: u32, values: []u32) -> err
+fn move_to_front(src: []const u8, dst: []u8) -> err
+fn bwt(src: []const u8, dst: []u8, scratch: []usize) -> (usize, err)
+fn arithmetic_encode(src: []const u8, dst: []u8) -> (usize, err)
+fn arith_emit(w: *BitWriter, bit: u64, pending: *u64) -> err
+fn arith_update(freq: []u32, sym: usize, total: u64) -> u64
+fn arith_bit(r: *BitReader) -> u64
+fn arithmetic_decode(src: []const u8, dst: []u8) -> (usize, err)
+fn ans_frequencies(src: []const u8, freqs: []u32) -> err
+fn ans_cumulative(freqs: []const u32, cum: []u32) -> bool
+fn ans_encode(src: []const u8, freqs: []const u32, dst: []u8) -> (usize, err)
+fn ans_decode(src: []const u8, freqs: []const u32, dst: []u8) -> (usize, err)
+fn dictionary_encode(src: []const u8, dst: []u8, scratch: []u32) -> (usize, err)
+fn dictionary_decode(src: []const u8, dst: []u8, scratch: []u32) -> (usize, err)
+fn simple8b_encode(values: []const u64, dst: []u64) -> (usize, err)
+fn simple8b_decode(src: []const u64, values: []u64) -> (usize, err)
 ```
 
 Encoders write into caller storage and answer the length used; decoders answer
@@ -12218,25 +12298,81 @@ fn visible_count(f: Field) -> usize
 type Agent = struct { x: fixed.Fx, y: fixed.Fx, vx: fixed.Fx, vy: fixed.Fx, max_speed: fixed.Fx }
 type Steer = struct { x: fixed.Fx, y: fixed.Fx }
 type Kind = enum u8 { Sequence, Selector, Invert, Condition, Action }
-type Behavior = struct { kind: Kind, first_child: u16, child_count: u16, id: u16 }
 type Status = enum u8 { Running, Success, Failure }
-// The search's working memory, sized by the caller: nothing here allocates.
+type Behavior = struct { kind: Kind, first_child: u16, child_count: u16, id: u16 }
 type Scratch = struct { came_from: []u32, cost: []u32, heap: []u32, heap_f: []u32, heap_count: usize, seen: []u64 }
+type Game[Ctx: type] = struct { ctx: *Ctx, moves: fn(*Ctx, u32, []u32) -> usize, apply: fn(*Ctx, u32, u32) -> u32, release: fn(*Ctx, u32), evaluate: fn(*Ctx, u32) -> i32, is_terminal: fn(*Ctx, u32) -> bool, is_capture: fn(*Ctx, u32, u32) -> bool, chance_outcomes: fn(*Ctx, u32, []u32, []i32) -> usize, zobrist: fn(*Ctx, u32) -> u64 }
+type TtFlag = enum u8 { Empty, Exact, Lower, Upper }
+type TtEntry = struct { key: u64, depth: u32, score: i32, flag: TtFlag, best: u32 }
+type Tt = struct { entries: []TtEntry }
+type Search = struct { moves: []u32, weights: []i32, max_moves: usize, nodes: u64, budget: u64, aborted: bool, overflow: bool, best: u32, tt: Tt }
+type MctsNode = struct { state: u32, parent: u32, move: u32, first_child: u32, next_sibling: u32, child_count: u32, visits: u32, wins: i32 }
+type Mcts = struct { nodes: []MctsNode, count: usize, moves: []u32, rollout: []u32, c: fixed.Fx }
+type BtKind = enum u8 { Sequence, Selector, Inverter, Succeeder, Repeat, Leaf }
+type BtNode = struct { kind: BtKind, first_child: u16, child_count: u16, id: u16, limit: u16 }
+type GoapAction = struct { pre_mask: u32, pre_value: u32, effect_mask: u32, effect_value: u32, cost: u32 }
+type GoapScratch = struct { states: []u32, cost: []u32, parent: []u32, action: []u32, closed: []u8 }
+type Curve = enum u8 { Linear, Quadratic, Logistic }
+type Consideration = struct { curve: Curve, input: u16, m: fixed.Fx, k: fixed.Fx, b: fixed.Fx, c: fixed.Fx }
+type Choice = struct { first: u16, count: u16 }
 error Unreachable
 error Size
 error Bounds
+error Budget
+const NONE: u32 = 4294967295u32
+const INF: i32 = 2000000000i32
 
 fn steer(x: fixed.Fx, y: fixed.Fx) -> Steer
-fn limit(s: Steer, most: fixed.Fx) -> Steer
-
 fn seek(a: Agent, tx: fixed.Fx, ty: fixed.Fx) -> Steer
 fn flee(a: Agent, tx: fixed.Fx, ty: fixed.Fx) -> Steer
 fn arrive(a: Agent, tx: fixed.Fx, ty: fixed.Fx, slow_radius: fixed.Fx) -> Steer
 fn wander(a: Agent, state: *rand.Pcg64, jitter: fixed.Fx) -> Steer
 fn separate(a: Agent, others: []const Agent, radius: fixed.Fx) -> Steer
 fn combine(parts: []const Steer, weights: []const fixed.Fx) -> Steer
+fn limit(s: Steer, most: fixed.Fx) -> Steer
 fn run(tree: []const Behavior, at: u16, conditions: []const bool, action: *u16) -> Status
+fn index_of(m: tilemap.Map, x: i32, y: i32) -> u32
+fn bit_test(words: []const u64, index: usize) -> bool
+fn bit_set(words: []u64, index: usize)
+fn heuristic(x: i32, y: i32, gx: i32, gy: i32) -> u32
+fn heap_push(s: *Scratch, node: u32, f: u32) -> err
+fn heap_pop(s: *Scratch) -> (u32, bool)
 fn path_grid(m: tilemap.Map, sx: i32, sy: i32, gx: i32, gy: i32, s: *Scratch, out: []u32) -> (usize, err)
+fn try_push(s: *Scratch, node: u32, f: u32)
+fn unwind(s: *Scratch, start: u32, goal: u32, out: []u32) -> (usize, err)
+fn transposition_table(entries: []TtEntry) -> Tt
+fn tt_probe(t: *const Tt, key: u64) -> (TtEntry, bool)
+fn tt_store(t: *Tt, key: u64, depth: u32, score: i32, flag: TtFlag, best: u32)
+fn begin(s: *Search)
+fn verdict(s: *const Search) -> err
+fn visit(s: *Search) -> bool
+fn slab(s: *Search, ply: u32) -> []u32
+fn weight_slab(s: *Search, ply: u32) -> []i32
+fn minimax[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32) -> (i32, u32, err)
+fn minimax_rec[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32, ply: u32) -> i32
+fn alpha_beta[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32) -> (i32, u32, err)
+fn alpha_beta_rec[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32, ply: u32, alpha_in: i32, beta_in: i32) -> i32
+fn hint_first(ms: []u32, count: usize, hint: u32)
+fn pvs[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32) -> (i32, u32, err)
+fn pvs_rec[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32, ply: u32, alpha_in: i32, beta: i32) -> i32
+fn quiescence[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32) -> (i32, u32, err)
+fn quiescence_rec[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32, ply: u32, alpha_in: i32, beta: i32) -> i32
+fn expectimax[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32) -> (i32, u32, err)
+fn expectimax_rec[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, depth: u32, ply: u32) -> i32
+fn iterative_deepening[Ctx: type](g: *const Game[Ctx], s: *Search, state: u32, max_depth: u32, budget: u64) -> (i32, u32, u32, err)
+fn log2_fx(n: u64) -> i64
+fn ln_fx(n: u64) -> i64
+fn sign_of(v: i32) -> i32
+fn select_child(m: *Mcts, n: usize) -> usize
+fn release_tree[Ctx: type](g: *const Game[Ctx], m: *Mcts)
+fn mcts[Ctx: type](g: *const Game[Ctx], m: *Mcts, root: u32, iterations: u32, r: *rand.Pcg64) -> (u32, err)
+fn behavior_tick[Ctx: type](tree: []const BtNode, state: []u16, node: u16, ctx: *Ctx, leaf: fn(*Ctx, u16) -> Status) -> Status
+fn goap_find(s: *GoapScratch, count: usize, state: u32) -> usize
+fn goap_plan(start: u32, goal_mask: u32, goal_value: u32, actions: []const GoapAction, s: *GoapScratch, out: []u32) -> (usize, u32, err)
+fn exp_fx(x_in: i64) -> i64
+fn consider(con: Consideration, x: fixed.Fx) -> fixed.Fx
+fn utility_select(choices: []const Choice, considerations: []const Consideration, inputs: []const fixed.Fx) -> (usize, fixed.Fx)
+fn boids(flock: []const Agent, which: usize, radius: fixed.Fx, w_separate: fixed.Fx, w_align: fixed.Fx, w_cohere: fixed.Fx) -> Steer
 ```
 
 ### `e.game.nav`
