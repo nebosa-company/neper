@@ -6451,6 +6451,9 @@ fn frames_of(app: *const App) -> u64
 type Tray = struct { id: u32, width: u32, height: u32, source: []const u32, composed: []u32, tooltip: str, badge: u32, menu: []const shell.MenuItem, open: bool }
 type TrayActivationKind = enum u8 { Select, Open, Command, Dismissed, NoticeSelect, NoticeDismiss }
 type Notification = struct { title: str, body: str, silent: bool }
+type ContentType = struct { kind: shell.ContentKind, mime: str }
+type DataProvider = struct { ctx: *void, provide: fn(*void, *mem.Arena, ContentType, *shell.Content) -> err }
+type DataOffer = struct { types: []const ContentType, provider: DataProvider }
 type TrayActivation = struct { kind: TrayActivationKind, command: u32, x: i32, y: i32 }
 fn tray_supported() -> bool
 fn tray_open(a: *mem.Arena, id: u32, icon: shell.Icon, tooltip: str) -> (Tray, err)
@@ -6476,6 +6479,12 @@ fn notification_actions_supported() -> bool
 fn notify(a: *mem.Arena, t: *const Tray, n: Notification) -> (u32, err)
 fn notification_update(a: *mem.Arena, t: *const Tray, notice_id: u32, n: Notification) -> err
 fn notification_remove(a: *mem.Arena, t: *const Tray, notice_id: u32) -> err
+fn content_type_name(t: ContentType) -> str
+fn content_type_of(name: str) -> ContentType
+fn content_type_of_content(c: shell.Content) -> ContentType
+fn same_type(x: ContentType, y: ContentType) -> bool
+fn offer_materialize(a: *mem.Arena, offer: DataOffer) -> ([]shell.Content, err)
+fn offer_of(a: *mem.Arena, items: []const shell.Content) -> (DataOffer, err)
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,

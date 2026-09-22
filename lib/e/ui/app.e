@@ -450,3 +450,103 @@ fn notification_update(a: *mem.Arena, t: *const Tray, notice_id: u32, n: Notific
 fn notification_remove(a: *mem.Arena, t: *const Tray, notice_id: u32) -> err {
     ret shell.notice_remove(a, t.id, notice_id)
 }
+
+// -------------------------------------------------- typed data exchange (D891)
+//
+// Widget plan P4-04: one typed model over `e.os.shell`'s representations. A
+// `ContentType` is a kind and, for bytes, the MIME name the other side registers
+// the same way; its name is the MIME name the kind maps to, and `content_type_of`
+// reads one back. A `DataOffer` is the types on offer and a `DataProvider` that
+// produces each representation when a hand-off asks -- the clipboard write or
+// the drag start, not the offer's construction -- so a large representation is
+// built only for a receiver that takes it. `offer_of` is the eager case: an
+// offer over representations already in hand. The representation itself is
+// `shell.Content`; there is no second type for it.
+
+type ContentType = struct { kind: shell.ContentKind, mime: str }
+type DataProvider = struct { ctx: *void, provide: fn(*void, *mem.Arena, ContentType, *shell.Content) -> err }
+type DataOffer = struct { types: []const ContentType, provider: DataProvider }
+type Held = struct { items: []const shell.Content }
+
+fn content_type_name(t: ContentType) -> str {
+    if t.kind == .Text { ret "text/plain;charset=utf-8" }
+    if t.kind == .Files { ret "text/uri-list" }
+    if t.kind == .Image { ret "image/bmp" }
+    ret t.mime
+}
+
+fn same_text(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// The type a MIME name means here; any other name is bytes under that name.
+fn content_type_of(name: str) -> ContentType {
+    if same_text(name, "text/plain;charset=utf-8") || same_text(name, "text/plain") { ret ContentType { kind: .Text, mime: "" } }
+    if same_text(name, "text/uri-list") { ret ContentType { kind: .Files, mime: "" } }
+    if same_text(name, "image/bmp") { ret ContentType { kind: .Image, mime: "" } }
+    ret ContentType { kind: .Bytes, mime: name }
+}
+
+fn content_type_of_content(c: shell.Content) -> ContentType {
+    ret ContentType { kind: c.kind, mime: c.mime }
+}
+
+fn same_type(x: ContentType, y: ContentType) -> bool {
+    if x.kind != y.kind { ret false }
+    if x.kind != .Bytes { ret true }
+    ret same_text(x.mime, y.mime)
+}
+
+// Every representation on offer, produced now, in the offer's order.
+fn offer_materialize(a: *mem.Arena, offer: DataOffer) -> ([]shell.Content, err) {
+    var nothing: []shell.Content = zero
+    if offer.types.len == 0usize { ret (nothing, shell.Invalid) }
+    let (items, allocation_error) = mem.alloc[shell.Content](a, offer.types.len)
+    if allocation_error != ok { ret (nothing, allocation_error) }
+    var at = 0usize
+    while at < offer.types.len {
+        var produced: shell.Content = zero
+        let provide_error = offer.provider.provide(offer.provider.ctx, a, offer.types[at], &produced)
+        if provide_error != ok { ret (nothing, provide_error) }
+        if !same_type(content_type_of_content(produced), offer.types[at]) { ret (nothing, shell.Invalid) }
+        items[at] = produced
+        at += 1usize
+    }
+    ret (items[0usize..offer.types.len], ok)
+}
+
+fn provide_held(ctx: *void, a: *mem.Arena, t: ContentType, out: *shell.Content) -> err {
+    let held = mem.cast[*Held](ctx)
+    var at = 0usize
+    while at < held.items.len {
+        if same_type(content_type_of_content(held.items[at]), t) {
+            *out = held.items[at]
+            ret ok
+        }
+        at += 1usize
+    }
+    ret shell.NotFound
+}
+
+// An offer over representations in hand; the slice has to outlive the offer.
+fn offer_of(a: *mem.Arena, items: []const shell.Content) -> (DataOffer, err) {
+    var nothing: DataOffer = zero
+    if items.len == 0usize { ret (nothing, shell.Invalid) }
+    let (types, types_error) = mem.alloc[ContentType](a, items.len)
+    if types_error != ok { ret (nothing, types_error) }
+    let (holders, holder_error) = mem.alloc[Held](a, 1usize)
+    if holder_error != ok { ret (nothing, holder_error) }
+    var at = 0usize
+    while at < items.len {
+        types[at] = content_type_of_content(items[at])
+        at += 1usize
+    }
+    holders[0usize] = Held { items: items }
+    ret (DataOffer { types: types[0usize..items.len], provider: DataProvider { ctx: mem.cast[*void](&holders[0usize]), provide: provide_held } }, ok)
+}

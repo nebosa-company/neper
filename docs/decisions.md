@@ -17206,3 +17206,22 @@ stands in for each. `link/os_exchange` sends text, two paths, a
 three-by-two image and eight named bytes through the real clipboard
 and back on Windows, sees the sequence move and the refusals hold,
 and sees every verb `Unsupported` on Linux.
+
+## D891 — An offer is types and a provider; the representation is produced when the hand-off asks
+
+P4-04 of the widget plan. The proposal wants one typed, lazy data
+transfer model mapped to the platform's formats, and D890's `Content`
+already is the representation, so `e.ui.app` adds the model and not a
+second representation: a `ContentType` is a kind and, for bytes, the
+MIME name, with `content_type_name` and `content_type_of` mapping to
+and from the MIME names the host formats stand for; a `DataOffer` is
+the types on offer over a `DataProvider`, a context and a function
+that produces one representation into the caller's arena; and
+`offer_materialize` is the hand-off's call -- every type in order,
+a provider that answers a different type refused -- so nothing is
+built until a receiver is taking it. `offer_of` covers the eager case
+with a holder in the arena and a provider that finds the item by type.
+Async production is not in the model: a provider runs on the hand-off's
+thread, since OLE calls back on it and a clipboard write holds the
+clipboard open. `link/ui_exchange_model` counts the provider's calls
+and checks the names both ways on both hosts.

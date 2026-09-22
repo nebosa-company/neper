@@ -865,8 +865,13 @@
             "DataRepresentation",
             "DataProvider"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "ContentType",
+            "DataOffer",
+            "DataRepresentation",
+            "DataProvider"
+          ],
+          "evidence": "lib/e/ui/app.e (D891): ContentType as a kind and MIME name with content_type_name/content_type_of mapping to and from the MIME names the host formats stand for; DataOffer as the types on offer over a DataProvider that produces each representation only when a hand-off materialises the offer (offer_materialize, in order, refusing a provider that answers the wrong type); DataRepresentation is shell.Content itself, one per representation; offer_of is the eager offer over items in hand; tests/selfhost/fixtures/link/ui_exchange_model on both hosts"
         },
         {
           "id": "P4-05",

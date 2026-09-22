@@ -2861,6 +2861,12 @@ $osExchangeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $osExchangeWritten -ne 'executable written') { throw 'os_exchange emission failed' }
 $osExchangeOutput = & $osExchangePath
 if ($LASTEXITCODE -ne 0 -or $osExchangeOutput -ne 'os exchange ok') { throw "the data exchange answered wrongly: exit $LASTEXITCODE" }
+# The typed data exchange model (D891, widget plan P4-04): pure, so the same on every host.
+$uiExchangeModelPath = Join-Path $testBuild 'ui-exchange-model-selfhost.exe'
+$uiExchangeModelWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_exchange_model\src\main.e') $repo 'x64' 'windows' $uiExchangeModelPath
+if ($LASTEXITCODE -ne 0 -or $uiExchangeModelWritten -ne 'executable written') { throw 'ui_exchange_model emission failed' }
+$uiExchangeModelOutput = & $uiExchangeModelPath
+if ($LASTEXITCODE -ne 0 -or $uiExchangeModelOutput -ne 'ui exchange model ok') { throw "the exchange model answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

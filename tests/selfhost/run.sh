@@ -2656,6 +2656,12 @@ os_exchange_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/os-exchange-selfhost"
 os_exchange_output=$("$test_build/os-exchange-selfhost")
 [ "$os_exchange_output" = 'os exchange ok' ]
+# The typed data exchange model (D891, widget plan P4-04): pure, so the same on every host.
+ui_exchange_model_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_exchange_model/src/main.e" "$repo" x64 linux "$test_build/ui-exchange-model-selfhost")
+[ "$ui_exchange_model_written" = 'executable written' ]
+chmod +x "$test_build/ui-exchange-model-selfhost"
+ui_exchange_model_output=$("$test_build/ui-exchange-model-selfhost")
+[ "$ui_exchange_model_output" = 'ui exchange model ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a
