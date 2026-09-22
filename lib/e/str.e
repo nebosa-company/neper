@@ -9,30 +9,15 @@
 // and `format`.
 use e.mem
 
-type Sink = struct {
-    ctx: *void,
-    write: fn(ctx: *void, bytes: []const u8) -> err,
-}
+type Sink = struct { ctx: *void, write: fn(ctx: *void, bytes: []const u8) -> err }
 
 // `Split` carries a whole traversal by value, so iterating allocates nothing. An
 // empty `separator` is the one state `split` cannot produce -- it returns
 // `InvalidSeparator` instead -- so `lines` marks its own mode with it, which is the
 // only spare bit a frozen four-field struct has.
-type Split = struct {
-    source: str,
-    separator: str,
-    off: usize,
-    finished: bool,
-}
+type Split = struct { source: str, separator: str, off: usize, finished: bool }
 
-type Builder = struct {
-    arena: *mem.Arena,
-    start: usize,
-    len: usize,
-    reserved: usize,
-    sink: Sink,
-    flushing: bool,
-}
+type Builder = struct { arena: *mem.Arena, start: usize, len: usize, reserved: usize, sink: Sink, flushing: bool }
 
 error NotOnTop
 error InvalidSeparator
@@ -521,11 +506,11 @@ fn push_f64(b: *Builder, v: f64) -> err {
             written += 1usize
             text[written] = 46u8
             written += 1usize
-            var pad = 0i64 - shortest_exponent
-            while pad > 0i64 {
+            var fill_count = 0i64 - shortest_exponent
+            while fill_count > 0i64 {
                 text[written] = 48u8
                 written += 1usize
-                pad = pad - 1i64
+                fill_count = fill_count - 1i64
             }
             var emit = 0usize
             while emit < shortest_used {
@@ -870,11 +855,11 @@ fn push_f32(b: *Builder, v: f32) -> err {
             written += 1usize
             text[written] = 46u8
             written += 1usize
-            var pad = 0i64 - shortest_exponent
-            while pad > 0i64 {
+            var fill_count = 0i64 - shortest_exponent
+            while fill_count > 0i64 {
                 text[written] = 48u8
                 written += 1usize
-                pad = pad - 1i64
+                fill_count = fill_count - 1i64
             }
             var emit = 0usize
             while emit < shortest_used {
@@ -1114,12 +1099,12 @@ fn push_f64_fixed(b: *Builder, v: f64, precision: u8) -> err {
     if places > 0usize {
         text[length] = 46u8
         length += 1usize
-        var pad = 0usize
-        if digits_kept < places { pad = places - digits_kept }
-        while pad > 0usize {
+        var fill_count = 0usize
+        if digits_kept < places { fill_count = places - digits_kept }
+        while fill_count > 0usize {
             text[length] = 48u8
             length += 1usize
-            pad = pad - 1usize
+            fill_count = fill_count - 1usize
         }
         var tail = 0usize
         if digits_kept > places { tail = digits_kept - places }
@@ -1313,12 +1298,12 @@ fn push_f32_fixed(b: *Builder, v: f32, precision: u8) -> err {
     if places > 0usize {
         text[length] = 46u8
         length += 1usize
-        var pad = 0usize
-        if digits_kept < places { pad = places - digits_kept }
-        while pad > 0usize {
+        var fill_count = 0usize
+        if digits_kept < places { fill_count = places - digits_kept }
+        while fill_count > 0usize {
             text[length] = 48u8
             length += 1usize
-            pad = pad - 1usize
+            fill_count = fill_count - 1usize
         }
         var tail = 0usize
         if digits_kept > places { tail = digits_kept - places }
@@ -2282,4 +2267,69 @@ fn is_ascii_alpha(b: u8) -> bool {
 
 fn is_ascii_alnum(b: u8) -> bool {
     ret is_ascii_digit(b) || is_ascii_alpha(b)
+}
+
+// --- Padding to a width counted in UTF-8 code points (#356).
+
+type Side = enum u8 { Left, Right, Center }
+
+// Code points in `s`: every byte that is not a continuation byte.
+fn count_points(s: str) -> usize {
+    var n = 0usize
+    var at = 0usize
+    while at < s.len {
+        if (s[at] & 192u8) != 128u8 { n += 1usize }
+        at += 1usize
+    }
+    ret n
+}
+
+fn push_repeated(b: *Builder, fill: str, times: usize) -> err {
+    var at = 0usize
+    while at < times {
+        let push_error = push(b, fill)
+        if push_error != ok { ret push_error }
+        at += 1usize
+    }
+    ret ok
+}
+
+// `s` padded with copies of `fill` (one code point, any width in bytes) to
+// `width` code points on `side`; a string already that wide comes back as it
+// is. `Center` puts the odd extra copy on the right. An empty `fill` is
+// `InvalidSeparator`.
+fn pad(a: *mem.Arena, s: str, width: usize, side: Side, fill: str) -> (str, err) {
+    if fill.len == 0usize { ret ("", InvalidSeparator) }
+    let have = count_points(s)
+    if have >= width { ret (s, ok) }
+    let extra = width - have
+    var before = 0usize
+    if side == .Left { before = extra }
+    if side == .Center { before = extra / 2usize }
+    let after = extra - before
+    var (b, builder_error) = builder(a, s.len + extra * fill.len)
+    if builder_error != ok { ret ("", builder_error) }
+    let before_error = push_repeated(&b, fill, before)
+    if before_error != ok { ret ("", before_error) }
+    let push_error = push(&b, s)
+    if push_error != ok { ret ("", push_error) }
+    let after_error = push_repeated(&b, fill, after)
+    if after_error != ok { ret ("", after_error) }
+    let out = done(&b)
+    ret (out, ok)
+}
+
+fn pad_left(a: *mem.Arena, s: str, width: usize, fill: str) -> (str, err) {
+    let (out, pad_error) = pad(a, s, width, .Left, fill)
+    ret (out, pad_error)
+}
+
+fn pad_right(a: *mem.Arena, s: str, width: usize, fill: str) -> (str, err) {
+    let (out, pad_error) = pad(a, s, width, .Right, fill)
+    ret (out, pad_error)
+}
+
+fn pad_center(a: *mem.Arena, s: str, width: usize, fill: str) -> (str, err) {
+    let (out, pad_error) = pad(a, s, width, .Center, fill)
+    ret (out, pad_error)
 }

@@ -602,3 +602,19 @@ fn chacha20_poly1305_open(dst: []u8, key: [32]u8, nonce: [12]u8, aad: []const u8
     if crypt_error != ok { ret (0usize, crypt_error) }
     ret (cipher_len, ok)
 }
+
+
+// --- The planned names (#603): AES-GCM dispatching on the key length,
+// 16, 24 or 32 bytes (AES-128, AES-192, AES-256); anything else is `InvalidKey`.
+
+fn aes_gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err) {
+    if key.len != 16usize && key.len != 24usize && key.len != 32usize { ret (0usize, InvalidKey) }
+    let (written, seal_error) = gcm_seal(dst, key, nonce, aad, plain)
+    ret (written, seal_error)
+}
+
+fn aes_gcm_open(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err) {
+    if key.len != 16usize && key.len != 24usize && key.len != 32usize { ret (0usize, InvalidKey) }
+    let (written, open_error) = gcm_open(dst, key, nonce, aad, sealed)
+    ret (written, open_error)
+}

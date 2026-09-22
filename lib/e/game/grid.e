@@ -15,14 +15,12 @@
 // uses -- rather than mixing Manhattan distance with a square ring.
 
 use e.mem
+use e.math
 use e.math.fixed
 
 type Shape = enum u8 { Square, IsoDiamond, HexPointy, HexFlat }
 
-type Coord = struct {
-    q: i32,
-    r: i32,
-}
+type Coord = struct { q: i32, r: i32 }
 
 error Bounds
 
@@ -283,4 +281,261 @@ fn area(s: Shape, centre: Coord, radius: u32, out: []Coord) -> (usize, err) {
         dq += 1i32
     }
     ret (count, ok)
+}
+
+
+// --- Pathfinding over a `w` x `h` square grid (#126, #1839, #1844) whose
+// cells are `Coord { q: column, r: row }` in `[0, w) x [0, h)`; passability is
+// a caller callback `passable(ctx, cell)`, and the per-cell arrays (`w * h`
+// entries) come from the caller. `NONE` marks an unset parent.
+
+const NONE: u32 = 4294967295u32
+
+fn cell_index(w: usize, c: Coord) -> usize { ret usize(c.r) * w + usize(c.q) }
+
+fn cell_of(w: usize, index: usize) -> Coord { ret Coord { q: i32(index % w), r: i32(index / w) } }
+
+fn inside_grid(w: usize, h: usize, c: Coord) -> bool {
+    ret c.q >= 0i32 && c.r >= 0i32 && usize(c.q) < w && usize(c.r) < h
+}
+
+// The parent chain from `goal` back to the root into `out`, root first.
+fn unwind(w: usize, parent: []const u32, goal: usize, out: []Coord) -> (usize, err) {
+    var n = 0usize
+    var cur = goal
+    while true {
+        n += 1usize
+        let p = usize(parent[cur])
+        if p == cur { break }
+        cur = p
+    }
+    if out.len < n { ret (n, Bounds) }
+    var i = n
+    cur = goal
+    while true {
+        i -= 1usize
+        out[i] = cell_of(w, cur)
+        let p = usize(parent[cur])
+        if p == cur { break }
+        cur = p
+    }
+    ret (n, ok)
+}
+
+// #126 Lee's algorithm: breadth-first over the four neighbours (in
+// `neighbours` order) from `from` to `to`; the shortest path, both ends
+// included, into `out`, or 0 cells when there is none. `parent` and
+// `queue` need `w * h` entries.
+fn path_bfs[Ctx: type](w: usize, h: usize, ctx: *Ctx, passable: fn(*Ctx, Coord) -> bool, from: Coord, to: Coord, parent: []u32, queue: []u32, out: []Coord) -> (usize, err) {
+    let total = w * h
+    if parent.len < total || queue.len < total { ret (0usize, Bounds) }
+    if !inside_grid(w, h, from) || !inside_grid(w, h, to) { ret (0usize, Bounds) }
+    if !passable(ctx, from) || !passable(ctx, to) { ret (0usize, ok) }
+    var i = 0usize
+    while i < total {
+        parent[i] = NONE
+        i += 1usize
+    }
+    let start = cell_index(w, from)
+    let goal = cell_index(w, to)
+    parent[start] = u32(start)
+    queue[0usize] = u32(start)
+    var head = 0usize
+    var tail = 1usize
+    while head < tail {
+        let cur = usize(queue[head])
+        head += 1usize
+        if cur == goal {
+            let (n, unwind_error) = unwind(w, parent, goal, out)
+            ret (n, unwind_error)
+        }
+        var around: [4]Coord = zero
+        let (count, _) = neighbours(.Square, cell_of(w, cur), around[0..])
+        var k = 0usize
+        while k < count {
+            let next_cell = around[k]
+            if inside_grid(w, h, next_cell) {
+                let index = cell_index(w, next_cell)
+                if parent[index] == NONE && passable(ctx, next_cell) {
+                    parent[index] = u32(cur)
+                    queue[tail] = u32(index)
+                    tail += 1usize
+                }
+            }
+            k += 1usize
+        }
+    }
+    ret (0usize, ok)
+}
+
+// #1844 The cells a segment between the centres of `a` and `b` passes
+// through, in order (Amanatides-Woo traversal; a corner crossing steps in
+// `r` first). `|dq| + |dr| + 1` cells.
+fn ray_cells(a: Coord, b: Coord, out: []Coord) -> (usize, err) {
+    let dq = i64(b.q) - i64(a.q)
+    let dr = i64(b.r) - i64(a.r)
+    let nq = abs64(dq)
+    let nr = abs64(dr)
+    let total = usize(nq + nr) + 1usize
+    if out.len < total { ret (0usize, Bounds) }
+    var step_q = 1i32
+    if dq < 0i64 { step_q = -1i32 }
+    var step_r = 1i32
+    if dr < 0i64 { step_r = -1i32 }
+    // Times to the next boundary, scaled by 2 |dq| |dr|: the first crossing
+    // sits half a cell away, each further one a whole cell.
+    var t_q = nr
+    var t_r = nq
+    var cur = a
+    var n = 0usize
+    while n < total {
+        out[n] = cur
+        n += 1usize
+        if n == total { ret (total, ok) }
+        if nr == 0i64 || (nq != 0i64 && t_q < t_r) {
+            cur = Coord { q: cur.q + step_q, r: cur.r }
+            t_q += 2i64 * nr
+        } else {
+            cur = Coord { q: cur.q, r: cur.r + step_r }
+            t_r += 2i64 * nq
+        }
+    }
+    ret (total, ok)
+}
+
+// Whether every cell the segment `a`-`b` touches is passable.
+fn line_of_sight[Ctx: type](ctx: *Ctx, passable: fn(*Ctx, Coord) -> bool, a: Coord, b: Coord, scratch: []Coord) -> bool {
+    let (n, ray_error) = ray_cells(a, b, scratch)
+    if ray_error != ok { ret false }
+    var i = 0usize
+    while i < n {
+        if !passable(ctx, scratch[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn euclid(a: Coord, b: Coord) -> f64 {
+    let dq = f64(i64(b.q) - i64(a.q))
+    let dr = f64(i64(b.r) - i64(a.r))
+    ret math.sqrt[f64](dq * dq + dr * dr)
+}
+
+fn heap_push(key: []f64, node: []u32, used: *usize, k: f64, v: u32) -> err {
+    if *used >= key.len || *used >= node.len { ret Bounds }
+    var i = *used
+    *used += 1usize
+    key[i] = k
+    node[i] = v
+    while i > 0usize {
+        let p = (i - 1usize) / 2usize
+        if key[p] <= key[i] { ret ok }
+        let held_key = key[p]
+        let held_node = node[p]
+        key[p] = key[i]
+        node[p] = node[i]
+        key[i] = held_key
+        node[i] = held_node
+        i = p
+    }
+    ret ok
+}
+
+fn heap_pop(key: []f64, node: []u32, used: *usize) -> u32 {
+    let top = node[0usize]
+    *used -= 1usize
+    key[0usize] = key[*used]
+    node[0usize] = node[*used]
+    var i = 0usize
+    while true {
+        let l = 2usize * i + 1usize
+        let r = l + 1usize
+        var s = i
+        if l < *used && key[l] < key[s] { s = l }
+        if r < *used && key[r] < key[s] { s = r }
+        if s == i { ret top }
+        let held_key = key[s]
+        let held_node = node[s]
+        key[s] = key[i]
+        node[s] = node[i]
+        key[i] = held_key
+        node[i] = held_node
+        i = s
+    }
+    ret top
+}
+
+fn delta_q(k: usize) -> i32 {
+    if k == 0usize || k == 4usize || k == 7usize { ret 1i32 }
+    if k == 2usize || k == 5usize || k == 6usize { ret -1i32 }
+    ret 0i32
+}
+
+fn delta_r(k: usize) -> i32 {
+    if k == 1usize || k == 4usize || k == 5usize { ret 1i32 }
+    if k == 3usize || k == 6usize || k == 7usize { ret -1i32 }
+    ret 0i32
+}
+
+// #1839 Theta*: A* over the eight neighbours with Euclidean costs where a
+// cell whose parent's parent can see it (`line_of_sight` through
+// `ray_cells`) hangs off that grandparent instead, so the path is a short
+// list of corner waypoints, both ends included, into `out`; 0 cells when
+// unreachable. `g`, `parent`, `closed` need `w * h` entries, the heap
+// arrays room for every relaxation (`8 * w * h` is always enough), and
+// `scratch` `w + h` cells. Answers (waypoints, length).
+fn path_theta_star[Ctx: type](w: usize, h: usize, ctx: *Ctx, passable: fn(*Ctx, Coord) -> bool, from: Coord, to: Coord, g: []f64, parent: []u32, closed: []u8, heap_key: []f64, heap_node: []u32, scratch: []Coord, out: []Coord) -> (usize, f64, err) {
+    let total = w * h
+    if g.len < total || parent.len < total || closed.len < total || scratch.len < w + h { ret (0usize, 0.0f64, Bounds) }
+    if !inside_grid(w, h, from) || !inside_grid(w, h, to) { ret (0usize, 0.0f64, Bounds) }
+    if !passable(ctx, from) || !passable(ctx, to) { ret (0usize, 0.0f64, ok) }
+    var i = 0usize
+    while i < total {
+        g[i] = 1.0e300f64
+        parent[i] = NONE
+        closed[i] = 0u8
+        i += 1usize
+    }
+    let start = cell_index(w, from)
+    let goal = cell_index(w, to)
+    g[start] = 0.0f64
+    parent[start] = u32(start)
+    var used = 0usize
+    let first_push = heap_push(heap_key, heap_node, &used, euclid(from, to), u32(start))
+    if first_push != ok { ret (0usize, 0.0f64, first_push) }
+    while used > 0usize {
+        let cur = usize(heap_pop(heap_key, heap_node, &used))
+        if closed[cur] != 0u8 { continue }
+        closed[cur] = 1u8
+        if cur == goal {
+            let (n, unwind_error) = unwind(w, parent, goal, out)
+            ret (n, g[goal], unwind_error)
+        }
+        let here = cell_of(w, cur)
+        let grand = usize(parent[cur])
+        let grand_cell = cell_of(w, grand)
+        var k = 0usize
+        while k < 8usize {
+            let next_cell = Coord { q: here.q + delta_q(k), r: here.r + delta_r(k) }
+            if inside_grid(w, h, next_cell) {
+                let index = cell_index(w, next_cell)
+                if closed[index] == 0u8 && passable(ctx, next_cell) {
+                    var via = cur
+                    var cost = g[cur] + euclid(here, next_cell)
+                    if line_of_sight[Ctx](ctx, passable, grand_cell, next_cell, scratch) {
+                        via = grand
+                        cost = g[grand] + euclid(grand_cell, next_cell)
+                    }
+                    if cost < g[index] {
+                        g[index] = cost
+                        parent[index] = u32(via)
+                        let push_error = heap_push(heap_key, heap_node, &used, cost + euclid(next_cell, to), u32(index))
+                        if push_error != ok { ret (0usize, 0.0f64, push_error) }
+                    }
+                }
+            }
+            k += 1usize
+        }
+    }
+    ret (0usize, 0.0f64, ok)
 }

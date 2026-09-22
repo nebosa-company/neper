@@ -426,3 +426,30 @@ fn parse_iso8601(s: str) -> (Timestamp, err) {
     // leave the instant they name.
     ret (Timestamp { nanos: civil.nanos - offset_minutes * NANOS_PER_MINUTE }, ok)
 }
+
+// --- Half-open intervals over any i64 unit (nanos, days, ...): `[start, end)`.
+
+type Interval = struct { start: i64, end: i64 }
+
+// Whether two half-open intervals share a point: `a.start < b.end && b.start < a.end`.
+fn intervals_overlap(a: Interval, b: Interval) -> bool {
+    ret a.start < b.end && b.start < a.end
+}
+
+// Merge a list sorted by `start` in place: overlapping or touching neighbours
+// become one; answers the merged count (the prefix of `xs`).
+fn intervals_merge(xs: []Interval) -> usize {
+    if xs.len == 0usize { ret 0usize }
+    var kept = 0usize
+    var i = 1usize
+    while i < xs.len {
+        if xs[i].start <= xs[kept].end {
+            if xs[i].end > xs[kept].end { xs[kept].end = xs[i].end }
+        } else {
+            kept += 1usize
+            xs[kept] = xs[i]
+        }
+        i += 1usize
+    }
+    ret kept + 1usize
+}

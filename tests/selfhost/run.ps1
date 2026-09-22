@@ -2428,6 +2428,36 @@ $distGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $distGapsWritten -ne 'executable written') { throw 'dist_gaps emission failed' }
 & $distGapsPath
 if ($LASTEXITCODE -ne 0) { throw "a dist_gaps check failed: exit $LASTEXITCODE" }
+# `e.fmt.asn1` planned functions across seven `e.fmt` modules: a DER writer and a BER reader, canonical CBOR equal to cbor2, a CSV writer equal to Python's, HTML escaping and an HTML tokenizer equal to html.parser's events, JSON canonicalization byte-equal to RFC 8785's reference, all fifteen merge-patch rows, a JSON tokenizer, quoted-printable encoding equal to quopri, query strings equal to urllib (D911).
+$fmtGapsAPath = Join-Path $testBuild 'fmt-gaps-a-selfhost.exe'
+$fmtGapsAWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_gaps_a\src\main.e') $repo 'x64' 'windows' $fmtGapsAPath
+if ($LASTEXITCODE -ne 0 -or $fmtGapsAWritten -ne 'executable written') { throw 'fmt_gaps_a emission failed' }
+& $fmtGapsAPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_gaps_a check failed: exit $LASTEXITCODE" }
+# `e.fmt.xml` planned functions across four `e.fmt` modules: an XML DOM, pull reader, namespace resolver and XPath subset checked against ElementTree, a schema-less protobuf decoder re-encoding byte-equal, whole-buffer LZW, and a Zstandard encoder with predefined FSE sequences whose frames python-zstandard decompresses (D911).
+$fmtGapsBPath = Join-Path $testBuild 'fmt-gaps-b-selfhost.exe'
+$fmtGapsBWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_gaps_b\src\main.e') $repo 'x64' 'windows' $fmtGapsBPath
+if ($LASTEXITCODE -ne 0 -or $fmtGapsBWritten -ne 'executable written') { throw 'fmt_gaps_b emission failed' }
+& $fmtGapsBPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_gaps_b check failed: exit $LASTEXITCODE" }
+# `e.text.regex` planned functions across twelve `e.text` modules: Thompson NFA, Pike VM, subset-construction DFA, Moore minimization and DFA runs agreeing with Python's re, Aho-Corasick and collation entry points, charset detection, Elias-Fano postings, ellipsis truncation, ROUGE, font fallback runs, Porter2 stemming equal to Snowball on two hundred words, byte-pair encoding, identifier checks, UTF-16 conversion (D911).
+$textGapsPath = Join-Path $testBuild 'text-gaps-selfhost.exe'
+$textGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_gaps\src\main.e') $repo 'x64' 'windows' $textGapsPath
+if ($LASTEXITCODE -ne 0 -or $textGapsWritten -ne 'executable written') { throw 'text_gaps emission failed' }
+& $textGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a text_gaps check failed: exit $LASTEXITCODE" }
+# `e.ml.ann` planned functions across seven `e.ml` modules: HNSW with recall one against brute force and a bit-exact structure, IVF-PQ, MinHash LSH, one-call naive Bayes, DBSCAN, OPTICS and BIRCH equal to scikit-learn, streaming k-means, KL and JS divergences, margin and averaged perceptrons, reverse-mode autodiff checked by finite differences, Frequent Directions within its error bound, temperature sampling (D911).
+$mlGapsPath = Join-Path $testBuild 'ml-gaps-selfhost.exe'
+$mlGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_gaps\src\main.e') $repo 'x64' 'windows' $mlGapsPath
+if ($LASTEXITCODE -ne 0 -or $mlGapsWritten -ne 'executable written') { throw 'ml_gaps emission failed' }
+& $mlGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_gaps check failed: exit $LASTEXITCODE" }
+# `e.net.http.auth` and planned functions across sixteen modules and the new `e.net.http.auth`: TPDF dither, a Luenberger observer, AES-GCM and CBC dispatch names, Certificate Transparency SCT verification, Neper and Itanium demangling, grid BFS, Theta* and Amanatides-Woo rays, saturating arithmetic, float unpacking, CIDR and private-address tests, SameSite, CORS preflight and CSP nonces, PKCE and WebAuthn assertions signed in Python, grammar-constrained decoding, LPA*, D* Lite and PRM, string padding, interval merging and Julian days (D911).
+$miscGapsPath = Join-Path $testBuild 'misc-gaps-selfhost.exe'
+$miscGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\misc_gaps\src\main.e') $repo 'x64' 'windows' $miscGapsPath
+if ($LASTEXITCODE -ne 0 -or $miscGapsWritten -ne 'executable written') { throw 'misc_gaps emission failed' }
+& $miscGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a misc_gaps check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

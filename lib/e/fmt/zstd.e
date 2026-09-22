@@ -4,11 +4,12 @@
 // the content checksum (XXH64, low 32 bits) is compared at the frame's end. A
 // dictionary id or a skippable frame is `Unsupported`, so is a window past
 // `window_limit`; anything malformed is `Invalid`; output past `output_limit` is
-// `Invalid` too, reported before the byte leaves. The writer emits frames of raw
-// blocks with a content checksum at every level -- valid Zstandard that any decoder
-// reads, at no compression; the entropy coders on the writing side are the upgrade.
+// `Invalid` too, reported before the byte leaves. The streaming writer emits frames
+// of raw blocks with a content checksum at every level -- valid Zstandard that any
+// decoder reads, at no compression; `encode` at the end is the whole-buffer
+// compressor, with LZ77 sequences under the predefined FSE tables.
 //
-// ponytail: the writer's `Level` is accepted and ignored, as the header says.
+// ponytail: `Level` is accepted and ignored by both writers, as their headers say.
 use e.io
 use e.mem
 
@@ -586,31 +587,7 @@ fn seq_table_read(t: *SeqTable, mode: u32, data: []const u8, kind: u32, max_symb
 
 // --- The reader.
 
-type State = struct {
-    source: io.Reader,
-    input: []u8,
-    literals: []u8,
-    history: []u8,
-    hist_len: usize,
-    out_at: usize,
-    window_limit: usize,
-    window: usize,
-    huff: Huff,
-    ll: SeqTable,
-    of: SeqTable,
-    ml: SeqTable,
-    fse_scratch: []u8,
-    rep: [3]u32,
-    in_frame: bool,
-    last_block: bool,
-    has_checksum: bool,
-    hash: Xxh64,
-    finished: bool,
-    output_limit: u64,
-    output_total: u64,
-    frame_left: u64,
-    has_frame_size: bool,
-}
+type State = struct { source: io.Reader, input: []u8, literals: []u8, history: []u8, hist_len: usize, out_at: usize, window_limit: usize, window: usize, huff: Huff, ll: SeqTable, of: SeqTable, ml: SeqTable, fse_scratch: []u8, rep: [3]u32, in_frame: bool, last_block: bool, has_checksum: bool, hash: Xxh64, finished: bool, output_limit: u64, output_total: u64, frame_left: u64, has_frame_size: bool }
 
 fn reader_storage(window_limit: usize) -> (usize, err) {
     if window_limit == 0usize { ret (0usize, Invalid) }
@@ -1134,4 +1111,441 @@ fn finish(w: *Writer) -> err {
     try io.write_all(&s.sink, trailer[0..])
     s.finished = true
     ret io.flush(&s.sink)
+}
+
+// --- The planned name `encode`: a whole-buffer compressor producing one frame with
+// a content size, a 128 KiB window and a checksum. Each 128 KiB block is RLE when it
+// is one byte repeated, else a compressed block -- raw literals and the sequences a
+// greedy hash matcher finds (4-byte hashes, one candidate, matches within the block),
+// coded with the predefined FSE distributions (RFC 8878 3.1.1.3.2.2, no table
+// headers) through the FSE encoder -- unless that comes out no smaller, when the
+// block goes raw.
+//
+// ponytail: `level` is accepted and ignored; the matcher is the one-candidate greedy
+// kind (no lazy match, no repeat offsets, no Huffman literals), so the ratio is
+// libzstd level 1's cousin, not its equal. The upgrade is a chain table and a
+// Huffman literal encoder.
+
+const ENC_HASH_LOG: u32 = 16u32
+const ENC_MIN_MATCH: usize = 4usize
+
+// FSE encoding tables built from normalized counts exactly as libzstd's
+// FSE_buildCTable: per symbol the bit-count delta and the state-index delta, and a
+// next-state table indexed by cumulative count.
+type FseEncoder = struct { next_state: []u32, delta_bits: []i64, delta_find: []i64, accuracy: u32 }
+
+fn fse_encoder_alloc(a: *mem.Arena, e: *FseEncoder) -> err {
+    let (states, states_error) = mem.alloc[u32](a, SEQ_TABLE)
+    if states_error != ok { ret states_error }
+    let (bits, bits_error) = mem.alloc[i64](a, 64usize)
+    if bits_error != ok { ret bits_error }
+    let (finds, finds_error) = mem.alloc[i64](a, 64usize)
+    if finds_error != ok { ret finds_error }
+    e.next_state = states
+    e.delta_bits = bits
+    e.delta_find = finds
+    ret ok
+}
+
+fn fse_encoder_build(e: *FseEncoder, counts: []const i32, symbols: usize, accuracy: u32) {
+    let size = 1usize << accuracy
+    e.accuracy = accuracy
+    // The same spread as the decoder's table.
+    var high = size - 1usize
+    var spread: [512]u8 = zero
+    var s = 0usize
+    while s < symbols {
+        if counts[s] == -1 {
+            spread[high] = u8(s)
+            high -= 1usize
+        }
+        s += 1usize
+    }
+    var position = 0usize
+    let step = (size >> 1u32) + (size >> 3u32) + 3usize
+    let mask = size - 1usize
+    s = 0usize
+    while s < symbols {
+        var n = counts[s]
+        while n > 0 {
+            spread[position] = u8(s)
+            position = (position + step) & mask
+            while position > high { position = (position + step) & mask }
+            n -= 1
+        }
+        s += 1usize
+    }
+    var cumul: [64]usize = zero
+    var total = 0usize
+    s = 0usize
+    while s < symbols {
+        cumul[s] = total
+        var c = counts[s]
+        if c == -1 { c = 1 }
+        total += usize(c)
+        s += 1usize
+    }
+    var u = 0usize
+    while u < size {
+        let symbol = usize(spread[u])
+        e.next_state[cumul[symbol]] = u32(size + u)
+        cumul[symbol] += 1usize
+        u += 1usize
+    }
+    total = 0usize
+    s = 0usize
+    while s < symbols {
+        let n = counts[s]
+        if n == 0 {
+            e.delta_bits[s] = 0i64
+            e.delta_find[s] = 0i64
+        } else {
+        if n == -1 || n == 1 {
+            e.delta_bits[s] = (i64(accuracy) << 16u32) - i64(size)
+            e.delta_find[s] = i64(total) - 1i64
+            total += 1usize
+        } else {
+            let max_bits_out = accuracy - highest_bit(u32(n - 1))
+            let min_state_plus = i64(n) << max_bits_out
+            e.delta_bits[s] = (i64(max_bits_out) << 16u32) - min_state_plus
+            e.delta_find[s] = i64(total) - i64(n)
+            total += usize(n)
+        }
+        }
+        s += 1usize
+    }
+}
+
+// A forward bit writer, least significant bit first; `overflow` once `out` is full.
+type BitWriter = struct { out: []u8, pos: usize, bits: u64, bit_count: u32, overflow: bool }
+
+fn bits_add(b: *BitWriter, value: u64, n: u32) {
+    if n == 0u32 { ret }
+    b.bits = b.bits | ((value & ((1u64 << n) - 1u64)) << b.bit_count)
+    b.bit_count += n
+    while b.bit_count >= 8u32 {
+        if b.pos >= b.out.len { b.overflow = true } else { b.out[b.pos] = u8(b.bits & 255u64) }
+        b.pos += 1usize
+        b.bits = b.bits >> 8u32
+        b.bit_count -= 8u32
+    }
+}
+
+// The sentinel bit, then the partial byte; the bytes written.
+fn bits_close(b: *BitWriter) -> usize {
+    bits_add(b, 1u64, 1u32)
+    if b.bit_count > 0u32 {
+        if b.pos >= b.out.len { b.overflow = true } else { b.out[b.pos] = u8(b.bits & 255u64) }
+        b.pos += 1usize
+        b.bits = 0u64
+        b.bit_count = 0u32
+    }
+    ret b.pos
+}
+
+fn fse_init_state(e: *const FseEncoder, symbol: u32) -> usize {
+    let nb = (e.delta_bits[usize(symbol)] + 32768i64) >> 16u32
+    let value = (nb << 16u32) - e.delta_bits[usize(symbol)]
+    ret usize(e.next_state[usize((value >> u32(nb)) + e.delta_find[usize(symbol)])])
+}
+
+fn fse_encode_symbol(e: *const FseEncoder, b: *BitWriter, state: *usize, symbol: u32) {
+    let nb = u32((i64(*state) + e.delta_bits[usize(symbol)]) >> 16u32)
+    bits_add(b, u64(*state), nb)
+    *state = usize(e.next_state[usize(i64(*state >> nb) + e.delta_find[usize(symbol)])])
+}
+
+fn fse_flush_state(e: *const FseEncoder, b: *BitWriter, state: usize) {
+    bits_add(b, u64(state), e.accuracy)
+}
+
+// Codes and extra bits: the largest baseline not above the value.
+fn code_of_ll(value: u32) -> (u32, u32) {
+    if value < 16u32 { ret (value, 0u32) }
+    var code = 16u32
+    while code < 35u32 {
+        let (next_base, _) = ll_base(code + 1u32)
+        if next_base > value { break }
+        code += 1u32
+    }
+    let (base, _) = ll_base(code)
+    ret (code, value - base)
+}
+
+fn code_of_ml(length: u32) -> (u32, u32) {
+    if length < 35u32 { ret (length - 3u32, 0u32) }
+    var code = 32u32
+    while code < 52u32 {
+        let (next_base, _) = ml_base(code + 1u32)
+        if next_base > length { break }
+        code += 1u32
+    }
+    let (base, _) = ml_base(code)
+    ret (code, length - base)
+}
+
+type Packer = struct { table: []u32, ll: []u32, ml: []u32, of: []u32, count: usize, scratch: []u8, ll_fse: FseEncoder, ml_fse: FseEncoder, of_fse: FseEncoder }
+
+fn hash4(block: []const u8, pos: usize) -> usize {
+    ret usize((load32(block, pos) *% 2654435761u32) >> (32u32 - ENC_HASH_LOG))
+}
+
+// Greedy matches over `block` into the sequence arrays; the literal bytes stay in
+// place, described by the literal lengths.
+fn find_matches(p: *Packer, block: []const u8) {
+    var i = 0usize
+    while i < p.table.len {
+        p.table[i] = 0u32
+        i += 1usize
+    }
+    p.count = 0usize
+    var pos = 0usize
+    var anchor = 0usize
+    while pos + ENC_MIN_MATCH <= block.len {
+        let h = hash4(block, pos)
+        let candidate = p.table[h]
+        p.table[h] = u32(pos + 1usize)
+        if candidate != 0u32 {
+            let c = usize(candidate - 1u32)
+            if load32(block, c) == load32(block, pos) {
+                var length = ENC_MIN_MATCH
+                while pos + length < block.len && block[c + length] == block[pos + length] { length += 1usize }
+                p.ll[p.count] = u32(pos - anchor)
+                p.ml[p.count] = u32(length)
+                p.of[p.count] = u32(pos - c)
+                p.count += 1usize
+                pos += length
+                anchor = pos
+                continue
+            }
+        }
+        pos += 1usize
+    }
+}
+
+// The compressed block for `block` into the scratch; 0 when it would not be smaller.
+fn pack_block(p: *Packer, block: []const u8) -> usize {
+    find_matches(p, block)
+    if p.count == 0usize || p.count >= 32512usize { ret 0usize }
+    var literal_count = block.len
+    var i = 0usize
+    while i < p.count {
+        literal_count -= usize(p.ml[i])
+        i += 1usize
+    }
+    let out = p.scratch
+    var pos = 0usize
+    if literal_count < 32usize {
+        out[0] = u8(literal_count << 3u32)
+        pos = 1usize
+    } else {
+    if literal_count < 4096usize {
+        out[0] = u8(4usize | ((literal_count & 15usize) << 4u32))
+        out[1] = u8(literal_count >> 4u32)
+        pos = 2usize
+    } else {
+        out[0] = u8(12usize | ((literal_count & 15usize) << 4u32))
+        out[1] = u8((literal_count >> 4u32) & 255usize)
+        out[2] = u8(literal_count >> 12u32)
+        pos = 3usize
+    }
+    }
+    if pos + literal_count + 4usize >= block.len { ret 0usize }
+    var from = 0usize
+    i = 0usize
+    while i < p.count {
+        let ll = usize(p.ll[i])
+        mem.copy[u8](out[pos..pos + ll], block[from..from + ll])
+        pos += ll
+        from += ll + usize(p.ml[i])
+        i += 1usize
+    }
+    mem.copy[u8](out[pos..pos + block.len - from], block[from..])
+    pos += block.len - from
+    if p.count < 128usize {
+        out[pos] = u8(p.count)
+        pos += 1usize
+    } else {
+        out[pos] = u8((p.count >> 8u32) + 128usize)
+        out[pos + 1usize] = u8(p.count & 255usize)
+        pos += 2usize
+    }
+    out[pos] = 0u8
+    pos += 1usize
+    // The sequences, last first, as the decoder reads them backward.
+    var b = BitWriter { out: out[pos..], pos: 0usize, bits: 0u64, bit_count: 0u32, overflow: false }
+    let last = p.count - 1usize
+    let (ll_last, ll_last_extra) = code_of_ll(p.ll[last])
+    let (ml_last, ml_last_extra) = code_of_ml(p.ml[last])
+    let of_last_value = p.of[last] + 3u32
+    let of_last = highest_bit(of_last_value)
+    var ml_state = fse_init_state(&p.ml_fse, ml_last)
+    var of_state = fse_init_state(&p.of_fse, of_last)
+    var ll_state = fse_init_state(&p.ll_fse, ll_last)
+    let (_, ll_last_bits) = ll_base(ll_last)
+    let (_, ml_last_bits) = ml_base(ml_last)
+    bits_add(&b, u64(ll_last_extra), ll_last_bits)
+    bits_add(&b, u64(ml_last_extra), ml_last_bits)
+    bits_add(&b, u64(of_last_value - (1u32 << of_last)), of_last)
+    var n = last
+    while n > 0usize {
+        n -= 1usize
+        let (llc, ll_extra) = code_of_ll(p.ll[n])
+        let (mlc, ml_extra) = code_of_ml(p.ml[n])
+        let of_value = p.of[n] + 3u32
+        let ofc = highest_bit(of_value)
+        fse_encode_symbol(&p.of_fse, &b, &of_state, ofc)
+        fse_encode_symbol(&p.ml_fse, &b, &ml_state, mlc)
+        fse_encode_symbol(&p.ll_fse, &b, &ll_state, llc)
+        let (_, ll_bits) = ll_base(llc)
+        let (_, ml_bits) = ml_base(mlc)
+        bits_add(&b, u64(ll_extra), ll_bits)
+        bits_add(&b, u64(ml_extra), ml_bits)
+        bits_add(&b, u64(of_value - (1u32 << ofc)), ofc)
+        if b.overflow { ret 0usize }
+    }
+    fse_flush_state(&p.ml_fse, &b, ml_state)
+    fse_flush_state(&p.of_fse, &b, of_state)
+    fse_flush_state(&p.ll_fse, &b, ll_state)
+    let stream_len = bits_close(&b)
+    if b.overflow { ret 0usize }
+    pos += stream_len
+    if pos >= block.len { ret 0usize }
+    ret pos
+}
+
+fn put_block_header(out: []u8, pos: usize, size: usize, kind: usize, last: bool) {
+    var raw = (size << 3u32) | (kind << 1u32)
+    if last { raw = raw | 1usize }
+    out[pos] = u8(raw & 255usize)
+    out[pos + 1usize] = u8((raw >> 8u32) & 255usize)
+    out[pos + 2usize] = u8((raw >> 16u32) & 255usize)
+}
+
+fn encode(a: *mem.Arena, src: []const u8, level: Level) -> ([]u8, err) {
+    let blocks = src.len / BLOCK_MAX + 1usize
+    let (out, out_error) = mem.alloc[u8](a, src.len + blocks * 3usize + 32usize)
+    if out_error != ok { ret (zero, out_error) }
+    var p: Packer = zero
+    let (table, table_error) = mem.alloc[u32](a, 1usize << ENC_HASH_LOG)
+    if table_error != ok { ret (zero, table_error) }
+    p.table = table
+    let seq_max = BLOCK_MAX / ENC_MIN_MATCH + 1usize
+    let (ll, ll_error) = mem.alloc[u32](a, seq_max)
+    if ll_error != ok { ret (zero, ll_error) }
+    let (ml, ml_error) = mem.alloc[u32](a, seq_max)
+    if ml_error != ok { ret (zero, ml_error) }
+    let (of, of_error) = mem.alloc[u32](a, seq_max)
+    if of_error != ok { ret (zero, of_error) }
+    p.ll = ll
+    p.ml = ml
+    p.of = of
+    let (scratch, scratch_error) = mem.alloc[u8](a, BLOCK_MAX + 64usize)
+    if scratch_error != ok { ret (zero, scratch_error) }
+    p.scratch = scratch
+    let e1 = fse_encoder_alloc(a, &p.ll_fse)
+    if e1 != ok { ret (zero, e1) }
+    let e2 = fse_encoder_alloc(a, &p.ml_fse)
+    if e2 != ok { ret (zero, e2) }
+    let e3 = fse_encoder_alloc(a, &p.of_fse)
+    if e3 != ok { ret (zero, e3) }
+    var counts: [64]i32 = zero
+    let ll_symbols = default_ll(counts[0..])
+    fse_encoder_build(&p.ll_fse, counts[0..], ll_symbols, 6u32)
+    let of_symbols = default_of(counts[0..])
+    fse_encoder_build(&p.of_fse, counts[0..], of_symbols, 5u32)
+    let ml_symbols = default_ml(counts[0..])
+    fse_encoder_build(&p.ml_fse, counts[0..], ml_symbols, 6u32)
+    // The frame header: magic, a content size of four or eight bytes, a checksum, a
+    // 128 KiB window.
+    out[0] = 40u8
+    out[1] = 181u8
+    out[2] = 47u8
+    out[3] = 253u8
+    var fcs_bytes = 4usize
+    out[4] = 132u8
+    if src.len > 4294967295usize {
+        fcs_bytes = 8usize
+        out[4] = 196u8
+    }
+    out[5] = 56u8
+    var pos = 6usize
+    var i = 0usize
+    while i < fcs_bytes {
+        out[pos] = u8((u64(src.len) >> u32(i * 8usize)) & 255u64)
+        pos += 1usize
+        i += 1usize
+    }
+    var hash = xxh64_init()
+    xxh64_update(&hash, src)
+    var from = 0usize
+    while true {
+        var stop = from + BLOCK_MAX
+        if stop > src.len { stop = src.len }
+        let block = src[from..stop]
+        let last = stop == src.len
+        var same = block.len >= 2usize
+        i = 1usize
+        while same && i < block.len {
+            if block[i] != block[0] { same = false }
+            i += 1usize
+        }
+        if same {
+            put_block_header(out, pos, block.len, 1usize, last)
+            out[pos + 3usize] = block[0]
+            pos += 4usize
+        } else {
+            let packed = pack_block(&p, block)
+            if packed > 0usize {
+                put_block_header(out, pos, packed, 2usize, last)
+                mem.copy[u8](out[pos + 3usize..pos + 3usize + packed], p.scratch[..packed])
+                pos += 3usize + packed
+            } else {
+                put_block_header(out, pos, block.len, 0usize, last)
+                mem.copy[u8](out[pos + 3usize..pos + 3usize + block.len], block)
+                pos += 3usize + block.len
+            }
+        }
+        from = stop
+        if last { break }
+    }
+    let sum = u32(xxh64_done(&hash) & 4294967295u64)
+    out[pos] = u8(sum & 255u32)
+    out[pos + 1usize] = u8((sum >> 8u32) & 255u32)
+    out[pos + 2usize] = u8((sum >> 16u32) & 255u32)
+    out[pos + 3usize] = u8(sum >> 24u32)
+    ret (out[..pos + 4usize], ok)
+}
+
+// The frame decoded whole in the arena, for callers with the bytes in hand.
+fn decode(a: *mem.Arena, src: []const u8, output_limit: u64) -> ([]u8, err) {
+    let (needed, needed_error) = reader_storage(BLOCK_MAX)
+    if needed_error != ok { ret (zero, needed_error) }
+    let words = needed / 8usize + 1usize
+    let (aligned, aligned_error) = mem.alloc[u64](a, words)
+    if aligned_error != ok { ret (zero, aligned_error) }
+    let storage = mem.view(a, a.off - words * 8usize, words * 8usize)
+    var source_state = io.SliceReader { data: src, off: 0usize }
+    let (r0, reader_error) = reader(storage, io.slice_reader(&source_state), output_limit)
+    if reader_error != ok { ret (zero, reader_error) }
+    var r = r0
+    var capacity = src.len * 2usize + 64usize
+    let (first, first_error) = mem.alloc[u8](a, capacity)
+    if first_error != ok { ret (zero, first_error) }
+    var out = first
+    var filled = 0usize
+    while true {
+        if filled == capacity {
+            let (bigger, bigger_error) = mem.alloc[u8](a, capacity * 2usize)
+            if bigger_error != ok { ret (zero, bigger_error) }
+            mem.copy[u8](bigger[..filled], out[..filled])
+            out = bigger
+            capacity = capacity * 2usize
+        }
+        let (count, read_error) = read(&r, out[filled..])
+        if read_error == io.End { break }
+        if read_error != ok { ret (zero, read_error) }
+        filled += count
+    }
+    ret (out[..filled], ok)
 }

@@ -89,30 +89,218 @@ fn set[FIELD: Field, T: type](v: *T, x: FIELD.ty)
 Every function is generic over `F`, which must be `f16`, `bf16`, `f32` or `f64`.
 
 ```neper
-fn sqrt[F: type](x: F) -> F
+type Wide = struct { limbs: [4]u64 }
+type Parts = struct { negative: bool, significand: u64, exponent: i64, kind: u8 }
+type LogParts = struct { n: i64, f: f64, special: f64, is_special: bool }
+type Reduced = struct { n: i64, hi: f64, lo: f64 }
+const ALIGN_LIMIT: i64 = 128i64
+const LN2_HI: u64 = 4604418534311723008u64 // 0.6931471803691238
+const LN2_LO: u64 = 4461442080421002358u64 // 1.9082149292705877e-10
+const INV_LN2: u64 = 4609176140021203710u64 // 1.4426950408889634
+const EXP_P1: u64 = 4595172819793696062u64 // 0.16666666666666602
+const EXP_P2: u64 = 13791923578850950547u64 // -0.0027777777777015593
+const EXP_P3: u64 = 4544508515198557740u64 // 6.613756321437934e-05
+const EXP_P4: u64 = 13743786778040626161u64 // -1.6533902205465252e-06
+const EXP_P5: u64 = 4496342204012209360u64 // 4.1381367970572385e-08
+const EXP_OVERFLOW: u64 = 4649454530587146735u64 // 709.782712893384
+const EXP_UNDERFLOW: u64 = 13873137513782915153u64 // -745.1332191019411
+const LG1: u64 = 4604180019048437139u64 // 0.6666666666666735
+const LG2: u64 = 4600877379321592324u64 // 0.3999999999940942
+const LG3: u64 = 4598818590951641945u64 // 0.2857142874366239
+const LG4: u64 = 4597174411056806063u64 // 0.22222198432149784
+const LG5: u64 = 4595719342595441630u64 // 0.1818357216161805
+const LG6: u64 = 4594685411790997151u64 // 0.15313837699209373
+const LG7: u64 = 4594499633228436036u64 // 0.14798198605116586
+const IVLN2_HI: u64 = 4609176140020449280u64 // 1.4426950407214463
+const IVLN2_LO: u64 = 4460540536611119616u64 // 1.6751713164886512e-10
+const IVLN10_HI: u64 = 4601495173784928256u64 // 0.4342944818781689
+const IVLN10_LO: u64 = 4448312028596710869u64 // 2.5082946711645275e-11
+const LOG10_2_HI: u64 = 4599094494223097856u64 // 0.30102999566361177
+const LOG10_2_LO: u64 = 4420844829172378422u64 // 3.694239077158931e-13
+const TWO54: u64 = 4850376798678024192u64 // 1.8014398509481984e+16
+const ATAN_HI_0: u64 = 4602023952714414927u64 // 0.4636476090008061
+const ATAN_HI_1: u64 = 4605249457297304856u64 // 0.7853981633974483
+const ATAN_HI_2: u64 = 4607027438436873883u64 // 0.982793723247329
+const ATAN_HI_3: u64 = 4609753056924675352u64 // 1.5707963267948966
+const ATAN_LO_0: u64 = 4357843414468748770u64 // 2.2698777452961687e-17
+const ATAN_LO_1: u64 = 4359948597267291143u64 // 3.061616997868383e-17
+const ATAN_LO_2: u64 = 4354989122426817469u64 // 1.3903311031230998e-17
+const ATAN_LO_3: u64 = 4364452196894661639u64 // 6.123233995736766e-17
+const AT0: u64 = 4599676419421066509u64 // 0.3333333333333293
+const AT1: u64 = 13819745816549059524u64 // -0.19999999999876483
+const AT2: u64 = 4594314991288484863u64 // 0.14285714272503466
+const AT3: u64 = 13816042856347014769u64 // -0.11111110405462356
+const AT4: u64 = 4591215095208222830u64 // 0.09090887133436507
+const AT5: u64 = 13813579038447671917u64 // -0.0769187620504483
+const AT6: u64 = 4589464229703073105u64 // 0.06661073137387531
+const AT7: u64 = 13811939918460419482u64 // -0.058335701337905735
+const AT8: u64 = 4587333258118041067u64 // 0.049768779946159324
+const AT9: u64 = 13808797612367309871u64 // -0.036531572744216916
+const AT10: u64 = 4580351289466214929u64 // 0.016285820115365782
+const PI_LO: u64 = 4368955796522032135u64 // 1.2246467991473532e-16
+const PI: u64 = 4614256656552045848u64 // 3.141592653589793
+const PIO2_HI: u64 = 4609753056924675352u64 // 1.5707963267948966
+const PIO2_LO: u64 = 4364452196894661639u64 // 6.123233995736766e-17
+const PIO4_HI: u64 = 4605249457297304856u64 // 0.7853981633974483
+const PS0: u64 = 4595172819793696085u64 // 0.16666666666666666
+const PS1: u64 = 13822908529170411389u64 // -0.3255658186224009
+const PS2: u64 = 4596417465768494165u64 // 0.20121253213486293
+const PS3: u64 = 13809305468778614587u64 // -0.04005553450067941
+const PS4: u64 = 4560439845004096136u64 // 0.0007915349942898145
+const PS5: u64 = 4540259411154564873u64 // 3.479331075960212e-05
+const QS1: u64 = 13835966419869248843u64 // -2.403394911734414
+const QS2: u64 = 4611733184086379208u64 // 2.0209457602335057
+const QS3: u64 = 13827746767276147033u64 // -0.6882839716054533
+const QS4: u64 = 4590215604441354882u64 // 0.07703815055590194
+const S1: u64 = 13818544856648471881u64 // -0.16666666666666632
+const S2: u64 = 4575957461383575718u64 // 0.00833333333332249
+const S3: u64 = 13774824197404582357u64 // -0.0001984126982985795
+const S4: u64 = 4523617212983017085u64 // 2.7557313707070068e-06
+const S5: u64 = 13716528393433619691u64 // -2.5050760253406863e-08
+const S6: u64 = 4460209850635244924u64 // 1.58969099521155e-10
+const C1: u64 = 4586165620538955084u64 // 0.0416666666666666
+const C2: u64 = 13787419979223748983u64 // -0.001388888888887411
+const C3: u64 = 4537941361668330896u64 // 2.480158728947673e-05
+const C4: u64 = 13732177093731308205u64 // -2.7557314351390663e-07
+const C5: u64 = 4477121870137961473u64 // 2.0875723212975648e-09
+const C6: u64 = 13666448951086692564u64 // -1.1359647557788195e-11
+const T0: u64 = 4599676419421066595u64 // 0.3333333333333341
+const T1: u64 = 4593971859893059194u64 // 0.13333333333320124
+const T2: u64 = 4587938466107703806u64 // 0.05396825397622605
+const T3: u64 = 4581960672245896759u64 // 0.021869488294859542
+const T4: u64 = 4576262931677611155u64 // 0.0088632398235993
+const T5: u64 = 4570429193025094440u64 // 0.0035920791075913124
+const T6: u64 = 4564358403679355669u64 // 0.0014562094543252903
+const T7: u64 = 4558562946408670465u64 // 0.0005880412408202641
+const T8: u64 = 4553182066015810993u64 // 0.00024646313481898734
+const T9: u64 = 4545397049192321702u64 // 7.817944429395571e-05
+const T10: u64 = 4544897349388904425u64 // 7.140724913826082e-05
+const T11: u64 = 13759470804966331251u64 // -1.8558637485527546e-05
+const T12: u64 = 4538267711989316308u64 // 2.590730518636337e-05
+const PIO4: u64 = 4605249457297304856u64 // 0.7853981633974483
+const PIO4_LO: u64 = 4359948597267291143u64 // 3.061616997868383e-17
+const INVPIO2: u64 = 4603909380684499075u64 // 0.6366197723675814
+const PIO2_1: u64 = 4609753056924401664u64 // 1.5707963267341256
+const PIO2_1T: u64 = 4454258360616903473u64 // 6.077100506506192e-11
+const PIO2_2: u64 = 4454258360616747008u64 // 6.077100506303966e-11
+const PIO2_2T: u64 = 4297306550709743731u64 // 2.0222662487959506e-21
+const PIO2_3: u64 = 4297306550709518336u64 // 2.0222662487111665e-21
+const PIO2_3T: u64 = 4142048980368378305u64 // 8.4784276603689e-32
+const PIO2_HI_EXACT: u64 = 4609753056924675352u64 // 1.5707963267948966
+const PIO2_LO_EXACT: u64 = 4364452196894661639u64 // 6.123233995736766e-17
+const POW_BP1: u64 = 4609434218613702656u64 // 1.5
+const POW_DP_H1: u64 = 4603444093224222720u64 // 0.5849624872207642
+const POW_DP_L1: u64 = 4489242115478376454u64 // 1.350039202129749e-08
+const POW_L1: u64 = 4603579539098120963u64 // 0.5999999999999946
+const POW_L2: u64 = 4601392076422097919u64 // 0.4285714285785502
+const POW_L3: u64 = 4599676419357746765u64 // 0.33333332981837743
+const POW_L4: u64 = 4598584653024936193u64 // 0.272728123808534
+const POW_L5: u64 = 4597478449480325989u64 // 0.23066074577556175
+const POW_L6: u64 = 4596625081194860271u64 // 0.20697501780033842
+const POW_LG2: u64 = 4604418534313441775u64 // 0.6931471805599453
+const POW_LG2_H: u64 = 4604418534330597376u64 // 0.6931471824645996
+const POW_LG2_L: u64 = 13700051638354996281u64 // -1.904654299957768e-09
+const POW_OVT: u64 = 4365981760143196926u64 // 8.008566259537294e-17
+const POW_CP: u64 = 4606838314010018813u64 // 0.9617966939259756
+const POW_CP_H: u64 = 4606838314073325568u64 // 0.9617967009544373
+const POW_CP_L: u64 = 13708446955223056885u64 // -7.028461650952758e-09
+const POW_IVLN2: u64 = 4609176140021203710u64 // 1.4426950408889634
+const POW_IVLN2_H: u64 = 4609176139934466048u64 // 1.4426950216293335
+const POW_IVLN2_L: u64 = 4491406094830001988u64 // 1.9259629911266175e-08
+const POW_THIRD: u64 = 4599676419421066581u64 // 0.3333333333333333
+const POW_TWO53: u64 = 4845873199050653696u64 // 9007199254740992.0
+
+fn sign_bit_f32() -> u32
+fn sign_bit_f64() -> u64
 fn rsqrt[F: type](x: F) -> F
-fn fma[F: type](a: F, b: F, c: F) -> F
 fn abs[F: type](x: F) -> F
 fn min[F: type](a: F, b: F) -> F
 fn max[F: type](a: F, b: F) -> F
+fn is_negative[F: type](x: F) -> bool
+fn trunc[F: type](x: F) -> F
 fn floor[F: type](x: F) -> F
 fn ceil[F: type](x: F) -> F
 fn round[F: type](x: F) -> F
-fn trunc[F: type](x: F) -> F
 fn copysign[F: type](x: F, y: F) -> F
-fn sin[F: type](x: F) -> F
-fn cos[F: type](x: F) -> F
-fn tan[F: type](x: F) -> F
-fn asin[F: type](x: F) -> F
-fn acos[F: type](x: F) -> F
-fn atan[F: type](x: F) -> F
-fn atan2[F: type](y: F, x: F) -> F
+fn integral_threshold[F: type]() -> F
+fn wide_zero() -> Wide
+fn wide_set(w: *Wide, limbs: [4]u64)
+fn wide_is_zero(w: *const Wide) -> bool
+fn wide_shl(w: *Wide, n: u32)
+fn wide_shr_jam(w: *Wide, n: u32)
+fn wide_add(a: *Wide, b: *const Wide)
+fn wide_sub(a: *Wide, b: *const Wide)
+fn wide_less(a: *const Wide, b: *const Wide) -> bool
+fn wide_msb(w: *const Wide) -> u32
+fn wide_bit(w: *const Wide, index: u32) -> bool
+fn wide_any_below(w: *const Wide, index: u32) -> bool
+fn wide_extract(w: *const Wide, index: u32, count: u32) -> u64
+fn wide_product(a: u64, b: u64) -> Wide
+fn take_apart(bits: u64, mantissa: u32, exponent_bits: u32) -> Parts
+fn put_together(negative: bool, field: u64, fraction: u64, mantissa: u32, exponent_bits: u32) -> u64
+fn quiet_nan_bits(mantissa: u32, exponent_bits: u32) -> u64
+fn infinity_bits(negative: bool, mantissa: u32, exponent_bits: u32) -> u64
+fn fma_bits(a: u64, b: u64, c: u64, mantissa: u32, exponent_bits: u32) -> u64
+fn fma[F: type](a: F, b: F, c: F) -> F
+fn k(bits: u64) -> f64
+fn high_word(x: f64) -> u32
+fn low_word(x: f64) -> u32
+fn with_high_word(x: f64, high: u32) -> f64
+fn with_low_word_zero(x: f64) -> f64
+fn from_words(high: u32, low: u32) -> f64
+fn nan64() -> f64
+fn inf64() -> f64
+fn power_of_two(n: i64) -> f64
+fn scale(y: f64, n: i64) -> f64
+fn exp_core(hi: f64, lo: f64, n: i64) -> f64
+fn exp64(x: f64) -> f64
+fn exp2_64(x: f64) -> f64
+fn log_reduce(x: f64) -> LogParts
+fn log_polynomial(f: f64) -> (f64, f64)
+fn log64(x: f64) -> f64
+fn log2_64(x: f64) -> f64
+fn log10_64(x: f64) -> f64
 fn exp[F: type](x: F) -> F
 fn exp2[F: type](x: F) -> F
 fn log[F: type](x: F) -> F
 fn log2[F: type](x: F) -> F
 fn log10[F: type](x: F) -> F
+fn atan_hi(index: i64) -> f64
+fn atan_lo(index: i64) -> f64
+fn atan64(x: f64) -> f64
+fn atan2_64(y: f64, x: f64) -> f64
+fn asin_ratio(t: f64) -> f64
+fn asin64(x: f64) -> f64
+fn acos64(x: f64) -> f64
+fn atan[F: type](x: F) -> F
+fn atan2[F: type](y: F, x: F) -> F
+fn asin[F: type](x: F) -> F
+fn acos[F: type](x: F) -> F
+fn two_over_pi_limb(index: usize) -> u64
+fn two_product(a: f64, b: f64) -> (f64, f64)
+fn two_over_pi_window(start: i64) -> Wide
+fn reduce_large(x: f64) -> Reduced
+fn reduce_medium(x: f64) -> Reduced
+fn reduce(x: f64) -> Reduced
+fn kernel_sin(x: f64, y: f64, has_tail: bool) -> f64
+fn kernel_cos(x: f64, y: f64) -> f64
+fn kernel_tan(x_in: f64, y_in: f64, odd: bool) -> f64
+fn sin64(x: f64) -> f64
+fn cos64(x: f64) -> f64
+fn tan64(x: f64) -> f64
+fn sin[F: type](x: F) -> F
+fn cos[F: type](x: F) -> F
+fn tan[F: type](x: F) -> F
+fn signed_high(x: f64) -> i64
+fn integer_kind(y: f64) -> i64
+fn pow64(x: f64, y: f64) -> f64
 fn pow[F: type](x: F, y: F) -> F
+fn int_is_signed[T: type]() -> bool
+fn int_max[T: type]() -> T
+fn int_min[T: type]() -> T
+fn saturating_add[T: type](a: T, b: T) -> T
+fn saturating_sub[T: type](a: T, b: T) -> T
+fn saturating_mul[T: type](a: T, b: T) -> T
 ```
 
 ### `e.simd`
@@ -261,25 +449,46 @@ Z85 rejects input outside its four-byte or five-character quantum.
 
 ```neper
 type Sink = struct { ctx: *void, write: fn(ctx: *void, bytes: []const u8) -> err }
-type Builder = struct { arena: *mem.Arena, start: usize, len: usize, reserved: usize, sink: Sink, flushing: bool }
 type Split = struct { source: str, separator: str, off: usize, finished: bool }
+type Builder = struct { arena: *mem.Arena, start: usize, len: usize, reserved: usize, sink: Sink, flushing: bool }
+type Side = enum u8 { Left, Right, Center }
 error NotOnTop
-error BadNumber
 error InvalidSeparator
+error BadNumber
 
 fn builder(a: *mem.Arena, cap: usize) -> (Builder, err)
 fn builder_to(a: *mem.Arena, cap: usize, sink: Sink) -> (Builder, err)
 fn done(b: *Builder) -> str
+fn push(b: *Builder, s: str) -> err
+fn push_byte(b: *Builder, v: u8) -> err
+fn push_bool(b: *Builder, v: bool) -> err
+fn push_i8(b: *Builder, v: i8) -> err
+fn push_i16(b: *Builder, v: i16) -> err
+fn push_i32(b: *Builder, v: i32) -> err
+fn push_i64(b: *Builder, v: i64) -> err
+fn push_isize(b: *Builder, v: isize) -> err
+fn push_u8(b: *Builder, v: u8) -> err
+fn push_u16(b: *Builder, v: u16) -> err
+fn push_u32(b: *Builder, v: u32) -> err
+fn push_u64(b: *Builder, v: u64) -> err
+fn push_usize(b: *Builder, v: usize) -> err
+fn push_hex_u32(b: *Builder, v: u32) -> err
+fn push_hex_u64(b: *Builder, v: u64) -> err
+fn push_f64(b: *Builder, v: f64) -> err
+fn push_f32(b: *Builder, v: f32) -> err
+fn push_f64_fixed(b: *Builder, v: f64, precision: u8) -> err
+fn push_f32_fixed(b: *Builder, v: f32, precision: u8) -> err
+fn push_bin_u32(b: *Builder, v: u32) -> err
+fn push_bin_u64(b: *Builder, v: u64) -> err
 fn concat(a: *mem.Arena, x: str, y: str) -> (str, err)
 fn join(a: *mem.Arena, parts: []const str, sep: str) -> (str, err)
 fn eq(x: str, y: str) -> bool
-fn format[FMT: str](a: *mem.Arena, args: ...) -> (str, err)
 fn parse_i64(s: str) -> (i64, err)
 fn parse_u64(s: str) -> (u64, err)
-fn parse_f32(s: str) -> (f32, err)
-fn parse_f64(s: str) -> (f64, err)
 fn parse_i64_radix(s: str, radix: u8) -> (i64, err)
 fn parse_u64_radix(s: str, radix: u8) -> (u64, err)
+fn parse_f64(s: str) -> (f64, err)
+fn parse_f32(s: str) -> (f32, err)
 fn compare(x: str, y: str) -> i32
 fn compare_ascii_fold(x: str, y: str) -> i32
 fn starts_with(s: str, prefix: str) -> bool
@@ -305,28 +514,14 @@ fn is_ascii_space(b: u8) -> bool
 fn is_ascii_digit(b: u8) -> bool
 fn is_ascii_alpha(b: u8) -> bool
 fn is_ascii_alnum(b: u8) -> bool
-fn push(b: *Builder, s: str) -> err
-fn push_byte(b: *Builder, v: u8) -> err
-fn push_bool(b: *Builder, v: bool) -> err
+fn count_points(s: str) -> usize
+fn push_repeated(b: *Builder, fill: str, times: usize) -> err
+fn pad(a: *mem.Arena, s: str, width: usize, side: Side, fill: str) -> (str, err)
+fn pad_left(a: *mem.Arena, s: str, width: usize, fill: str) -> (str, err)
+fn pad_right(a: *mem.Arena, s: str, width: usize, fill: str) -> (str, err)
+fn pad_center(a: *mem.Arena, s: str, width: usize, fill: str) -> (str, err)
 fn push_err(b: *Builder, v: err) -> err
-fn push_i8(b: *Builder, v: i8) -> err
-fn push_i16(b: *Builder, v: i16) -> err
-fn push_i32(b: *Builder, v: i32) -> err
-fn push_i64(b: *Builder, v: i64) -> err
-fn push_isize(b: *Builder, v: isize) -> err
-fn push_u8(b: *Builder, v: u8) -> err
-fn push_u16(b: *Builder, v: u16) -> err
-fn push_u32(b: *Builder, v: u32) -> err
-fn push_u64(b: *Builder, v: u64) -> err
-fn push_usize(b: *Builder, v: usize) -> err
-fn push_hex_u32(b: *Builder, v: u32) -> err
-fn push_hex_u64(b: *Builder, v: u64) -> err
-fn push_bin_u32(b: *Builder, v: u32) -> err
-fn push_bin_u64(b: *Builder, v: u64) -> err
-fn push_f32(b: *Builder, v: f32) -> err
-fn push_f64(b: *Builder, v: f64) -> err
-fn push_f32_fixed(b: *Builder, v: f32, precision: u8) -> err
-fn push_f64_fixed(b: *Builder, v: f64, precision: u8) -> err
+fn format[FMT: str](a: *mem.Arena, args: ...) -> (str, err)
 ```
 
 All search indices and slices are byte offsets. The trim functions without an
@@ -3393,19 +3588,32 @@ type Encoding = enum u8 { Utf8, Utf16Le, Utf16Be, Utf32Le, Utf32Be }
 type InvalidPolicy = enum u8 { Reject, Replace }
 type Decoder = struct { encoding: Encoding, policy: InvalidPolicy, pending: [4]u8, pending_len: u8, bom_seen: bool }
 type Encoder = struct { encoding: Encoding, emit_bom: bool, started: bool }
+type Guess = struct { encoding: Encoding, confidence: u8 }
 error Invalid
 error Incomplete
 error TooSmall
+const REPLACEMENT: u32 = 65533u32
 
 fn detect_bom(src: []const u8) -> (Encoding, usize, bool)
 fn decoder(encoding: Encoding, policy: InvalidPolicy, consume_bom: bool) -> Decoder
 fn encoder(encoding: Encoding, emit_bom: bool) -> Encoder
+fn unit_size(encoding: Encoding) -> usize
+fn bom_length(encoding: Encoding) -> usize
+fn utf8_length(scalar: u32) -> usize
+fn write_utf8(scalar: u32, dst: []u8, at: usize) -> usize
+fn read_utf8(src: []const u8, at: usize) -> (u32, usize, u8)
+fn read_unit(src: []const u8, at: usize, encoding: Encoding) -> u32
+fn write_unit(unit: u32, dst: []u8, at: usize, encoding: Encoding)
+fn read_wide(src: []const u8, at: usize, encoding: Encoding) -> (u32, usize, u8)
 fn decode(d: *Decoder, src: []const u8, dst_utf8: []u8, final: bool) -> (usize, usize, err)
+fn read_any(src: []const u8, at: usize, encoding: Encoding) -> (u32, usize, u8)
 fn encode(e: *Encoder, src_utf8: str, dst: []u8, final: bool) -> (usize, usize, err)
 fn decoded_len(encoding: Encoding, src: []const u8, policy: InvalidPolicy) -> (usize, err)
 fn encoded_len(encoding: Encoding, src_utf8: str, emit_bom: bool) -> (usize, err)
 fn to_utf8(a: *mem.Arena, encoding: Encoding, src: []const u8, policy: InvalidPolicy) -> (str, err)
 fn from_utf8(a: *mem.Arena, encoding: Encoding, src: str, emit_bom: bool) -> ([]u8, err)
+fn decodes(encoding: Encoding, src: []const u8) -> bool
+fn detect(src: []const u8) -> Guess
 ```
 
 The streaming calls return consumed source bytes followed by written destination
@@ -3422,14 +3630,18 @@ type Iterator = struct { data: str, off: usize }
 error Invalid
 error TooSmall
 
-fn validate(s: str) -> bool
 fn decode(s: str, off: usize) -> (Decode, err)
 fn encode(scalar: u32, dst: []u8) -> (u8, err)
+fn validate(s: str) -> bool
 fn count(s: str) -> (usize, err)
 fn byte_offset(s: str, scalar_index: usize) -> (usize, err)
 fn iterator(s: str) -> Iterator
 fn iterator_next(it: *Iterator) -> (u32, bool)
 fn iterator_next_err(it: *Iterator) -> (u32, bool, err)
+fn unit_at(src: []const u8, at: usize, big_endian: bool) -> u32
+fn decode_utf16(src: []const u8, big_endian: bool, out: []u8) -> (usize, err)
+fn put_unit(unit: u32, big_endian: bool, out: []u8, at: usize)
+fn encode_utf16(s: str, big_endian: bool, out: []u8) -> (usize, err)
 ```
 
 ### `e.text.search`
@@ -3450,6 +3662,9 @@ fn aho_corasick_find[Ctx: type](m: *const Automaton, text: str, ctx: *Ctx, on_ma
 fn z_array(s: str, z: []usize) -> err
 fn bitap(text: str, pattern: str, errors: u32) -> (usize, bool)
 fn longest_palindrome(s: str, scratch: []usize) -> (usize, usize, err)
+fn aho_corasick(a: *mem.Arena, patterns: []const str) -> (Automaton, err)
+fn count_hit(ctx: *usize, end: usize, pattern: usize) -> bool
+fn aho_corasick_count(m: *const Automaton, text: str) -> usize
 ```
 
 Every finder answers the byte offset of the leftmost match and whether one exists;
@@ -3551,6 +3766,16 @@ fn lancaster_rules() -> str
 fn lancaster(word: str, out: []u8) -> (str, err)
 fn strip_affixes(word: str, prefixes: []const str, suffixes: []const str, minimum: usize) -> str
 fn starts_at(word: str, start: usize, p: str) -> bool
+fn sb_vowel(c: u8) -> bool
+fn sb_has_vowel(w: []const u8, from: usize, to: usize) -> bool
+fn sb_region(w: []const u8, n: usize, from: usize) -> usize
+fn sb_short_syllable(w: []const u8, m: usize) -> bool
+fn sb_double(w: []const u8, n: usize) -> bool
+fn sb_valid_li(c: u8) -> bool
+fn sb_rules(w: []u8, n: usize, region: usize, rules: str) -> (usize, bool)
+fn sb_exception(w: []u8, n: usize) -> (usize, bool)
+fn sb_prefix_region(w: []const u8, n: usize) -> usize
+fn snowball(word: str, out: []u8) -> (str, err)
 ```
 
 `porter` is the 1980 algorithm as published, `lancaster` the Paice/Husk stemmer
@@ -3579,6 +3804,7 @@ with the extra spaces from the left.
 
 ```neper
 type Rouge = struct { precision: f64, recall: f64, f1: f64 }
+type RougeScores = struct { one: Rouge, two: Rouge, l: Rouge }
 error TooSmall
 error Invalid
 
@@ -3592,6 +3818,7 @@ fn rouge_of(matched: usize, candidate_count: usize, reference_count: usize) -> R
 fn rouge_n(candidate: str, reference: str, n: usize, scratch: []usize) -> (Rouge, err)
 fn rouge_l(candidate: str, reference: str, scratch: []usize) -> (Rouge, err)
 fn meteor(candidate: str, reference: str, scratch: []usize) -> (f64, err)
+fn rouge(candidate: str, reference: str, scratch: []usize) -> (RougeScores, err)
 ```
 
 Over one reference of space-separated words: `bleu` (clipped n-gram precisions to
@@ -3691,6 +3918,7 @@ to what is already chosen.
 
 ```neper
 type Index = struct { terms: []str, starts: []usize, postings: []u32, documents: usize }
+type EliasFano = struct { bytes: []const u8, n: usize, universe: u32, l: u32 }
 error TooSmall
 error Invalid
 
@@ -3707,6 +3935,13 @@ fn get_bit(bits: []const u8, at: usize) -> bool
 fn elias_fano_size(n: usize, universe: u32) -> usize
 fn elias_fano_encode(values: []const u32, universe: u32, out: []u8) -> (usize, err)
 fn elias_fano_decode(bytes: []const u8, n: usize, universe: u32, values: []u32) -> err
+fn postings_elias_fano(ids: []const u32, out: []u8) -> (EliasFano, err)
+fn ef_high_start(ef: EliasFano) -> usize
+fn ef_high_bits(ef: EliasFano) -> usize
+fn ef_low(ef: EliasFano, i: usize) -> u32
+fn ef_select(ef: EliasFano, k: usize, want: bool) -> usize
+fn ef_get(ef: EliasFano, i: usize) -> (u32, err)
+fn ef_next_geq(ef: EliasFano, x: u32) -> (u32, usize, bool)
 ```
 
 `build` makes an inverted index in the arena (terms in byte order, sorted postings);
@@ -3738,6 +3973,7 @@ fn unigram(word: str, vocabulary: []const str, log_probability: []const f64, out
 fn collect(word: str, from: []const usize, n: usize, out: []str) -> usize
 fn unigram_sample(word: str, vocabulary: []const str, log_probability: []const f64, temperature: f64, r: *rand.Pcg64, out: []str, scores: []f64, scratch: []usize) -> (usize, err)
 fn log_add(a: f64, b: f64) -> f64
+fn bpe(b: *const Bpe, word: str, out: []str, scratch: []usize) -> (usize, err)
 ```
 
 `shingles` and `word_shingles` cut windows; `word_break` segments into dictionary
@@ -3811,16 +4047,42 @@ fractional indexing (`order_key_between`, base 62).
 type Category = enum u8 { Lu, Ll, Lt, Lm, Lo, Mn, Mc, Me, Nd, Nl, No, Pc, Pd, Ps, Pe, Pi, Pf, Po, Sm, Sc, Sk, So, Zs, Zl, Zp, Cc, Cf, Cs, Co, Cn }
 type Graphemes = struct { text: str, off: usize }
 
+fn scalar_at(table: str, at: usize) -> u32
+fn read_u32(table: str, at: usize) -> u32
+fn run_value(table: str, scalar: u32) -> u8
+fn category_of(code: u8) -> Category
 fn category(scalar: u32) -> Category
 fn combining_class(scalar: u32) -> u8
 fn is_whitespace(scalar: u32) -> bool
 fn is_alphabetic(scalar: u32) -> bool
 fn is_numeric(scalar: u32) -> bool
+fn pair_lookup(table: str, scalar: u32) -> (u32, bool)
 fn to_lower_simple(scalar: u32) -> u32
 fn to_upper_simple(scalar: u32) -> u32
+fn utf8_length(scalar: u32) -> usize
+fn write_utf8(scalar: u32, dst: []u8, at: usize) -> usize
+fn read_utf8(text: str, at: usize) -> (u32, usize)
 fn casefold(a: *mem.Arena, s: str) -> (str, err)
 fn graphemes(s: str) -> Graphemes
+fn is_extend(scalar: u32) -> bool
+fn is_regional(scalar: u32) -> bool
+fn is_hangul_l(scalar: u32) -> bool
+fn is_hangul_v(scalar: u32) -> bool
+fn is_hangul_t(scalar: u32) -> bool
+fn is_hangul_lv(scalar: u32) -> bool
+fn is_hangul_lvt(scalar: u32) -> bool
+fn joins(previous: u32, current: u32, regional_run: usize) -> bool
 fn graphemes_next(it: *Graphemes) -> (str, bool)
+fn version() -> str
+fn category_table() -> str
+fn combining_table() -> str
+fn lower_table() -> str
+fn upper_table() -> str
+fn fold_table() -> str
+fn fold_multi_table() -> str
+fn is_id_start(scalar: u32) -> bool
+fn is_id_continue(scalar: u32) -> bool
+fn is_identifier(s: str) -> bool
 ```
 
 ### `e.text.normalize`
@@ -3840,6 +4102,7 @@ type Options = struct { case_sensitive: bool, numeric: bool }
 
 fn codepoint_cmp(a: str, b: str) -> i32
 fn natural_cmp(a: str, b: str, options: Options) -> i32
+fn compare(a: str, b: str, options: Options) -> i32
 ```
 
 Locale-aware collation is exposed by `e.text.locale`; this module remains the
@@ -3908,14 +4171,77 @@ type Regex = struct { state: *void }
 type Match = struct { start: usize, end: usize }
 type Captures = struct { whole: Match, groups: []const Match }
 type Options = struct { case_insensitive: bool, multiline: bool, dot_matches_newline: bool }
+type Op = enum u8 { Char, Any, Class, Split, Jmp, Save, Bol, Eol, WordB, NotWordB, Done }
+type Inst = struct { op: Op, x: u32, y: u32 }
+type Kind = enum u8 { Empty, Char, Any, Class, Bol, Eol, WordB, NotWordB, Group, Concat, Alt, Repeat }
+type Node = struct { kind: Kind, first: u32, second: u32, value: u32, min: u32, max: u32, lazy: bool }
+type Parser = struct { pattern: str, at: usize, nodes: []Node, node_count: usize, ranges: []u32, range_count: usize, groups: u32, depth: u32, options: Options }
+type Emitter = struct { insts: []Inst, count: usize, writing: bool }
+type Threads = struct { pcs: []u32, caps: []usize, seen: []u32, gen: u32, count: usize }
+type Program = struct { insts: []Inst, ranges: []u32, groups: usize, slots: usize, options: Options, a: Threads, b: Threads, work: []usize, result: []usize, stack: []usize }
+type Nfa = struct { state: *void }
+type Dfa = struct { table: []const u32, points: []const u32, classes: usize, states: usize, start: u32, accept: []const u8 }
 error InvalidPattern
 error TooComplex
+error TooLarge
+error Unsupported
+const NONE: usize = 18446744073709551615usize
+const NO_NODE: u32 = 4294967295u32
+const MAX_INSTS: usize = 16384usize
+const MAX_REPEAT: u32 = 1000u32
+const MAX_DEPTH: u32 = 64u32
 
+fn node(p: *Parser, kind: Kind, first: u32, second: u32, value: u32) -> (u32, err)
+fn add_range(p: *Parser, lo: u32, hi: u32) -> err
+fn peek(p: Parser) -> u32
+fn advance(p: *Parser) -> u32
+fn add_shorthand(p: *Parser, letter: u32, positive: bool) -> err
+fn is_shorthand(scalar: u32) -> bool
+fn escape_scalar(scalar: u32) -> (u32, err)
+fn class_node(p: *Parser, start: usize, negated: bool) -> (u32, err)
+fn parse_class(p: *Parser) -> (u32, err)
+fn parse_escape(p: *Parser) -> (u32, err)
+fn parse_atom(p: *Parser) -> (u32, err)
+fn parse_number(p: *Parser) -> (u32, bool)
+fn parse_brace(p: *Parser) -> (u32, u32, err)
+fn parse_repeat(p: *Parser) -> (u32, err)
+fn parse_concat(p: *Parser) -> (u32, err)
+fn parse_alt(p: *Parser) -> (u32, err)
+fn emit(e: *Emitter, op: Op, x: u32, y: u32) -> (u32, err)
+fn patch(e: *Emitter, at: u32, second: bool, to: u32)
+fn gen_optional(e: *Emitter, p: *Parser, child: u32, remaining: u32, lazy: bool) -> err
+fn gen_repeat(e: *Emitter, p: *Parser, at: u32) -> err
+fn gen_node(e: *Emitter, p: *Parser, at: u32) -> err
+fn gen_program(e: *Emitter, p: *Parser, root: u32) -> err
+fn threads(a: *mem.Arena, insts: usize, slots: usize) -> (Threads, err)
 fn compile(a: *mem.Arena, pattern: str, options: Options) -> (Regex, err)
+fn is_word_byte(text: str, at: usize) -> bool
+fn holds(prog: *Program, op: Op, text: str, pos: usize) -> bool
+fn in_ranges(prog: *Program, first: u32, count: u32, scalar: u32) -> bool
+fn consumes(prog: *Program, inst: Inst, scalar: u32) -> bool
+fn clear(t: *Threads)
+fn add_thread(prog: *Program, t: *Threads, pc: u32, pos: usize, text: str)
+fn run(prog: *Program, text: str, from: usize, first: bool) -> bool
 fn is_match(r: *const Regex, text: str) -> bool
 fn find(r: *const Regex, text: str, from: usize) -> (Match, bool)
 fn captures(a: *mem.Arena, r: *const Regex, text: str, from: usize) -> (Captures, bool, err)
+fn expand(prog: *Program, out: []u8, at: usize, writing: bool, replacement: str, text: str) -> usize
+fn substitute(prog: *Program, out: []u8, writing: bool, text: str, replacement: str) -> usize
 fn replace_all(a: *mem.Arena, r: *const Regex, text: str, replacement: str) -> (str, err)
+fn nfa_compile(a: *mem.Arena, pattern: str, options: Options) -> (Nfa, err)
+fn nfa_size(n: Nfa) -> usize
+fn pike_vm(n: Nfa, text: str, from: usize, caps: []Match) -> bool
+fn bit_set(bits: []const u64, at: usize) -> bool
+fn bit_mark(bits: []u64, at: usize)
+fn is_consuming(op: Op) -> bool
+fn dfa_closure(prog: *Program, set: []const u64, at_start: bool, at_end: bool, reach: []u64, stack: []u32) -> bool
+fn dfa_points(prog: *Program, points: []u32) -> usize
+fn dfa_class(d: Dfa, scalar: u32) -> usize
+fn same_set(sets: []const u64, at: usize, words: usize, set: []const u64) -> bool
+fn dfa_from_nfa(a: *mem.Arena, n: Nfa, max_states: usize) -> (Dfa, err)
+fn dfa_minimize(a: *mem.Arena, d: Dfa) -> (Dfa, err)
+fn dfa_run(d: Dfa, text: str) -> bool
+fn dfa_longest(d: Dfa, text: str) -> (usize, bool)
 ```
 
 The accepted syntax is regular only: no backreferences, recursion or lookbehind.
@@ -4255,13 +4581,60 @@ type Feature = struct { tag: u32, value: u32, start: usize, end: usize }
 type Glyph = struct { id: u32, cluster: usize, advance_x: f32, advance_y: f32, offset_x: f32, offset_y: f32 }
 type Run = struct { font: FontId, direction: Direction, script: u32, language: str, glyphs: []const Glyph }
 type Options = struct { direction: Direction, script: u32, language: str, features: []const Feature }
+type Table = struct { at: usize, len: usize }
+type Buffer = struct { gid: []u32, cluster: []usize, adv_x: []i32, adv_y: []i32, off_x: []i32, off_y: []i32, count: usize }
+type FontRun = struct { font: usize, start: usize, end: usize }
 error InvalidFont
 error InvalidText
 error Unsupported
 error TooLarge
+const MAX_SOURCE: usize = 16777216usize
+const NONE: usize = 18446744073709551615usize
+const TAG_HEAD: u32 = 1751474532u32
+const TAG_HHEA: u32 = 1751672161u32
+const TAG_HMTX: u32 = 1752003704u32
+const TAG_MAXP: u32 = 1835104368u32
+const TAG_CMAP: u32 = 1668112752u32
+const TAG_GSUB: u32 = 1196643650u32
+const TAG_GPOS: u32 = 1196445523u32
+const TAG_KERN: u32 = 1801810542u32
+const TAG_DFLT: u32 = 1145457748u32
+const TAG_TTCF: u32 = 1953784678u32
+const TAG_CCMP: u32 = 1663443056u32
+const TAG_LOCL: u32 = 1819239276u32
+const TAG_RLIG: u32 = 1919707495u32
+const TAG_LIGA: u32 = 1818847073u32
+const TAG_CLIG: u32 = 1668049255u32
 
+fn u16_at(d: []const u8, at: usize) -> u32
+fn i16_at(d: []const u8, at: usize) -> i32
+fn u32_at(d: []const u8, at: usize) -> u32
+fn face_offset(font: Font) -> (usize, err)
+fn find_table(font: Font, tag: u32) -> (Table, bool)
 fn validate_font(font: Font) -> err
+fn cmap_subtable(d: []const u8, cmap: Table) -> (usize, bool)
+fn glyph_of(d: []const u8, sub: usize, scalar: u32) -> u32
+fn coverage_index(d: []const u8, cov: usize, gid: u32) -> usize
+fn class_of(d: []const u8, def: usize, gid: u32) -> u32
+fn langsys_of(d: []const u8, table: Table, options: Options) -> (usize, usize, bool)
+fn default_feature(tag: u32, positioning: bool) -> bool
+fn enable_lookup(lo: []usize, hi: []usize, index: usize, start: usize, end: usize)
+fn mark_lookups(d: []const u8, table: Table, options: Options, positioning: bool, source_len: usize, lo: []usize, hi: []usize)
+fn in_range(b: *Buffer, i: usize, lo: usize, hi: usize) -> bool
+fn single_subst(d: []const u8, sat: usize, b: *Buffer, lo: usize, hi: usize)
+fn ligate(d: []const u8, lig: usize, b: *Buffer, i: usize) -> bool
+fn ligature_subst(d: []const u8, sat: usize, b: *Buffer, lo: usize, hi: usize)
+fn value_size(format: u32) -> usize
+fn apply_value(d: []const u8, at: usize, format: u32, b: *Buffer, i: usize)
+fn pair_pos(d: []const u8, sat: usize, b: *Buffer, lo: usize, hi: usize)
+fn apply_lookup(d: []const u8, lookup: usize, positioning: bool, b: *Buffer, lo: usize, hi: usize)
+fn apply_table(a: *mem.Arena, d: []const u8, table: Table, options: Options, positioning: bool, source_len: usize, b: *Buffer) -> err
+fn legacy_kern(d: []const u8, kern: Table, b: *Buffer)
+fn buffer(a: *mem.Arena, capacity: usize) -> (Buffer, err)
 fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err)
+fn covers(font: Font, scalar: u32) -> bool
+fn fallback_font(fonts: []const Font, scalar: u32) -> usize
+fn fallback_runs(fonts: []const Font, text: str, out: []FontRun) -> (usize, err)
 ```
 
 Shaping is deterministic over caller-provided OpenType font bytes and the toolchain's
@@ -4279,14 +4652,54 @@ type GlyphRun = struct { run: shape.Run, origin: geometry.Point, size: f32 }
 type Line = struct { runs: []const GlyphRun, bounds: geometry.Rect, baseline: f32, start: usize, end: usize }
 type Layout = struct { source: str, lines: []const Line, bounds: geometry.Rect }
 type Options = struct { width: f32, max_lines: u32, align: Align, wrap: Wrap, ellipsis: str }
+type Item = struct { run: shape.Run, start: usize, end: usize, font: usize, rtl: bool }
+type Metrics = struct { ascent: f32, descent: f32 }
+type Cut = struct { start: usize, end: usize, paragraph_end: bool, rtl: bool, item_from: usize, item_to: usize }
+type Ellipsis = enum u8 { End, Middle, Start }
 error MissingGlyph
 error Invalid
 error TooLarge
+error TooSmall
+const MAX_SOURCE: usize = 16777216usize
+const MAX_ITEMS: usize = 65536usize
+const NONE: usize = 18446744073709551615usize
 
+fn is_rtl(scalar: u32) -> bool
+fn is_neutral(scalar: u32) -> bool
+fn read16(d: []const u8, at: usize) -> i32
+fn read32(d: []const u8, at: usize) -> u32
+fn metrics_of(choice: FontChoice) -> Metrics
+fn shape_options(rtl: bool, language: str) -> shape.Options
+fn valid_utf8(s: str) -> bool
+fn font_for(a: *mem.Arena, style: Style, scalar: u32) -> (usize, err)
+fn shape_span(a: *mem.Arena, style: Style, source: str, start: usize, end: usize, font: usize, rtl: bool) -> (Item, err)
+fn shape_paragraph(a: *mem.Arena, style: Style, source: str, start: usize, end: usize, items: []Item, count: *usize, rtl_paragraph: *bool) -> err
+fn cluster_advance(items: []const Item, from: usize, to: usize, style: Style, byte: usize) -> f32
+fn scalar_at(source: str, at: usize) -> u32
+fn next_char(source: str, at: usize) -> usize
+fn can_break(source: str, at: usize, wrap: Wrap, cluster_start: bool) -> bool
+fn is_cluster_start(items: []const Item, from: usize, to: usize, byte: usize) -> bool
+fn measure(items: []const Item, from: usize, to: usize, style: Style, source: str, start: usize, end: usize) -> f32
+fn cut_paragraph(items: []const Item, from: usize, to: usize, style: Style, source: str, start: usize, end: usize, options: Options, rtl: bool, cuts: []Cut, count: *usize) -> err
+fn cluster_start_before(items: []const Item, from: usize, to: usize, at: usize) -> usize
+fn slice_item(a: *mem.Arena, item: Item, start: usize, end: usize, source: str, last_content: usize, extra: f32, size: f32) -> (shape.Run, usize, err)
+fn run_width(run: GlyphRun) -> f32
+fn reverse_runs(runs: []GlyphRun, from: usize, to: usize)
+fn reorder(runs: []GlyphRun, paragraph_rtl: bool)
+fn count_spaces(source: str, start: usize, last_content: usize) -> usize
+fn content_end(source: str, start: usize, end: usize) -> usize
+fn ellipsis_run(a: *mem.Arena, style: Style, text: str, at: usize, rtl: bool) -> (GlyphRun, err)
+fn build_line(a: *mem.Arena, items: []const Item, style: Style, source: str, cut: Cut, options: Options, top: f32, tail: GlyphRun, has_tail: bool) -> (Line, err)
 fn layout(a: *mem.Arena, source: str, style: Style, options: Options) -> (Layout, err)
+fn line_at(value: *const Layout, y: f32) -> usize
+fn cluster_end(line: *const Line, cluster: usize) -> usize
 fn hit_test(value: *const Layout, point: geometry.Point) -> usize
+fn cluster_end_of_run(line: *const Line, r: usize) -> usize
+fn caret_x(line: *const Line, offset: usize) -> f32
+fn line_of_offset(value: *const Layout, byte_offset: usize) -> usize
 fn caret(value: *const Layout, byte_offset: usize) -> geometry.Rect
 fn selection(a: *mem.Arena, value: *const Layout, start: usize, end: usize) -> ([]geometry.Rect, err)
+fn ellipsis(a: *mem.Arena, style: Style, line: str, max_width: f32, mode: Ellipsis, out: []u8) -> (str, err)
 ```
 
 The module performs Unicode bidi resolution, line breaking, fallback and visual
@@ -4470,6 +4883,7 @@ fn store_le32(out: []u8, off: usize, word: u32)
 fn chacha20_block(key: [32]u8, counter: u32, nonce: [12]u8, out: []u8) -> err
 fn chacha20(key: [32]u8, counter: u32, nonce: [12]u8, data: []u8)
 fn hchacha20(key: [32]u8, nonce: [16]u8) -> [32]u8
+fn cbc(k: *const AesKey, iv: [16]u8, data: []u8, encrypt: bool) -> err
 ```
 
 AES over `aead`'s key schedule: `aes_key`, `aes_block`, `aes_block_decrypt` (the
@@ -4696,17 +5110,43 @@ introduced. Release requires published independent vectors and boundary tests.
 ### `e.crypto.aead`
 
 ```neper
+type AesKey = struct { round_keys: [240]u8, rounds: usize }
+type Block128 = struct { high: u64, low: u64 }
+type Poly = struct { r: [5]u32, h: [5]u32, pad: [4]u32 }
 error InvalidKey
 error InvalidNonce
 error TooSmall
 error Authentication
 
+fn sbox(index: u8) -> u8
+fn xtime(x: u8) -> u8
+fn expand_key(key: []const u8) -> AesKey
+fn add_round_key(state: []u8, k: *const AesKey, round: usize)
+fn aes_encrypt_block(k: *const AesKey, block: []u8)
+fn load_block(bytes: []const u8, at: usize, count: usize) -> Block128
+fn store_block(b: Block128, out: []u8)
+fn gf_multiply(x: Block128, y: Block128) -> Block128
+fn ghash_update(acc: Block128, h: Block128, bytes: []const u8) -> Block128
+fn gcm_tag(k: *const AesKey, nonce: [12]u8, aad: []const u8, cipher: []const u8) -> [16]u8
+fn gcm_crypt(k: *const AesKey, nonce: [12]u8, data: []u8)
+fn gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err)
+fn gcm_open(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err)
 fn aes128_gcm_seal(dst: []u8, key: [16]u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err)
 fn aes128_gcm_open(dst: []u8, key: [16]u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err)
 fn aes256_gcm_seal(dst: []u8, key: [32]u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err)
 fn aes256_gcm_open(dst: []u8, key: [32]u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err)
+fn load_le32(bytes: []const u8, at: usize) -> u32
+fn poly_init(key: []const u8) -> Poly
+fn poly_block(p: *Poly, block: []const u8, final_partial: bool)
+fn poly_update(p: *Poly, data: []const u8)
+fn poly_update_padded(p: *Poly, data: []const u8)
+fn poly_tag(p: *Poly) -> [16]u8
+fn chacha_poly_tag(key: [32]u8, nonce: [12]u8, aad: []const u8, cipher: []const u8) -> [16]u8
+fn chacha_crypt(key: [32]u8, nonce: [12]u8, data: []u8) -> err
 fn chacha20_poly1305_seal(dst: []u8, key: [32]u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err)
 fn chacha20_poly1305_open(dst: []u8, key: [32]u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err)
+fn aes_gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err)
+fn aes_gcm_open(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err)
 ```
 
 The sealed representation is ciphertext followed by the 16-byte authentication tag.
@@ -5012,18 +5452,44 @@ type Pool = struct { certificates: []const Certificate }
 type VerifyOptions = struct { roots: Pool, intermediates: Pool, dns_name: str, now: time.Instant, usage: KeyUsage, max_depth: u16 }
 type KeyUsage = enum u8 { ServerAuth, ClientAuth, CodeSigning, EmailProtection, Any }
 type Chain = struct { certificates: []const Certificate }
+type SignatureAlgorithm = enum u8 { Ed25519, EcdsaSha256, Unsupported }
+type Sct = struct { version: u8, log_id: [32]u8, timestamp: u64, extensions: []const u8, hash_algorithm: u8, signature_algorithm: u8, signature: []const u8 }
 error InvalidCertificate
 error UnknownAuthority
 error Expired
 error NameMismatch
 error InvalidUsage
 error TooDeep
+error InvalidSct
+error BadSctSignature
+const DEPTH: u16 = 16u16
 
+fn next(r: *asn1.Reader) -> (asn1.Value, err)
+fn expect(r: *asn1.Reader, number: u32, constructed: bool) -> (asn1.Value, err)
+fn inside(value: asn1.Value) -> (asn1.Reader, err)
+fn oid_equal(content: []const u8, expected: []const u8) -> bool
+fn attribute_name(oid: []const u8) -> str
+fn render_name(a: *mem.Arena, name: asn1.Value) -> (str, err)
+fn two_digits(text: []const u8, at: usize) -> (i64, bool)
+fn parse_time(value: asn1.Value) -> (time.Instant, err)
+fn signature_algorithm(value: asn1.Value) -> (SignatureAlgorithm, err)
+fn signed_parts(der: []const u8) -> ([]const u8, []const u8, SignatureAlgorithm, []const u8, err)
 fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err)
+fn parse_dns_names(a: *mem.Arena, content: []const u8) -> ([]const str, err)
 fn parse_pem(a: *mem.Arena, source: str) -> ([]const Certificate, err)
 fn pool(a: *mem.Arena, certificates: []const Certificate) -> Pool
-fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, err)
 fn verify_signature(certificate: Certificate, issuer: Certificate) -> err
+fn same_der(a: []const u8, b: []const u8) -> bool
+fn dns_match(pattern: str, name: str) -> bool
+fn usage_oid(usage: KeyUsage) -> [8]u8
+fn usage_excluded(certificate: Certificate, usage: KeyUsage) -> bool
+fn find_issuer(pool_of: Pool, subject: str) -> (Certificate, bool)
+fn in_window(certificate: Certificate, now: time.Instant) -> bool
+fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, err)
+fn be16(bytes: []const u8, at: usize) -> usize
+fn ct_parse(bytes: []const u8) -> (Sct, err)
+fn ct_signed_data(s: *const Sct, entry: []const u8, issuer_key_hash: []const u8, dst: []u8) -> (usize, err)
+fn ct_verify(sct: []const u8, log_key: PublicKey, entry: []const u8, issuer_key_hash: []const u8, scratch: []u8) -> (Sct, err)
 ```
 
 Parsing and verification use the DER and PEM modules and the algorithm set pinned to
@@ -6219,7 +6685,14 @@ type Duration = struct { nanos: i64 }
 type Date = struct { year: i32, month: u8, day: u8 }
 type Time = struct { hour: u8, minute: u8, second: u8, nanos: u32 }
 type Timer = struct { started: Instant }
+type Interval = struct { start: i64, end: i64 }
 error Invalid
+const NANOS_PER_SECOND: i64 = 1000000000i64
+const NANOS_PER_DAY: i64 = 86400000000000i64
+const NANOS_PER_MINUTE: i64 = 60000000000i64
+const MAX_CIVIL_DAY: i64 = 106750i64
+const MIN_CIVIL_DAY: i64 = -106750i64
+const ISO8601_LENGTH: usize = 30usize
 
 fn now() -> (Timestamp, err)
 fn monotonic() -> (Instant, err)
@@ -6237,6 +6710,7 @@ fn duration_sub(a: Duration, b: Duration) -> Duration
 fn duration_neg(d: Duration) -> Duration
 fn duration_scale(d: Duration, n: i64) -> Duration
 fn duration_cmp(a: Duration, b: Duration) -> i32
+fn compare_nanos(a: i64, b: i64) -> i32
 fn days(n: i64) -> Duration
 fn hours(n: i64) -> Duration
 fn minutes(n: i64) -> Duration
@@ -6251,13 +6725,24 @@ fn as_seconds(d: Duration) -> i64
 fn as_millis(d: Duration) -> i64
 fn as_micros(d: Duration) -> i64
 fn as_nanos(d: Duration) -> i64
-fn to_date(t: Timestamp) -> Date
-fn to_time(t: Timestamp) -> Time
+fn floor_div(value: i64, divisor: i64) -> i64
+fn floor_mod(value: i64, divisor: i64) -> i64
+fn is_leap(year: i64) -> bool
+fn days_in_month(year: i64, month: i64) -> i64
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64
+fn civil_from_days(count: i64) -> (i64, i64, i64)
 fn to_date_at(t: Timestamp, offset_minutes: i32) -> Date
 fn to_time_at(t: Timestamp, offset_minutes: i32) -> Time
+fn to_date(t: Timestamp) -> Date
+fn to_time(t: Timestamp) -> Time
 fn from_civil(d: Date, t: Time) -> (Timestamp, err)
+fn write_digits(buf: []u8, at: usize, value: i64, width: usize)
 fn format_iso8601(t: Timestamp, buf: []u8) -> str
+fn digit_value(byte: u8) -> (i64, bool)
+fn parse_digits(s: str, at: usize, width: usize) -> (i64, bool)
 fn parse_iso8601(s: str) -> (Timestamp, err)
+fn intervals_overlap(a: Interval, b: Interval) -> bool
+fn intervals_merge(xs: []Interval) -> usize
 ```
 
 ### `e.time.calendar`
@@ -6273,18 +6758,29 @@ fn is_leap_year(year: i32) -> bool
 fn days_in_month(year: i32, month: u8) -> (u8, err)
 fn valid_date(date: time.Date) -> bool
 fn valid_time(value: time.Time) -> bool
+fn day_count(date: time.Date) -> i64
+fn date_of(count: i64) -> time.Date
+fn weekday_of_count(count: i64) -> Weekday
+fn weekday_index(day: Weekday) -> i64
 fn weekday(date: time.Date) -> (Weekday, err)
 fn day_of_year(date: time.Date) -> (u16, err)
 fn iso_week(date: time.Date) -> (IsoWeek, err)
 fn compare(a: DateTime, b: DateTime) -> i32
+fn time_nanos(value: time.Time) -> i64
 fn add_days(value: DateTime, days: i64) -> (DateTime, err)
 fn add_months(value: DateTime, months: i64) -> (DateTime, err)
 fn add_years(value: DateTime, years: i64) -> (DateTime, err)
 fn difference_days(a: DateTime, b: DateTime) -> i64
 fn components(value: DateTime) -> (Components, err)
 fn from_components(value: Components) -> (DateTime, err)
+fn run_length(pattern: str, at: usize) -> usize
+fn is_verb(c: u8) -> bool
+fn write_field(dst: []u8, at: usize, value: i64, width: usize) -> (usize, bool)
 fn format[PATTERN: str](value: DateTime, dst: []u8) -> (str, err)
 fn parse[PATTERN: str](source: str) -> (DateTime, err)
+fn julian_day_epoch() -> i64
+fn julian_day(date: time.Date) -> (i64, err)
+fn julian_day_to_date(jdn: i64) -> time.Date
 ```
 
 This is proleptic Gregorian calendar arithmetic with ISO-8601 weekdays and weeks.
@@ -6614,9 +7110,21 @@ register, counter or set model.
 
 ```neper
 type Frame = struct { address: usize, function: str, file: str, line: u32 }
+type Symbol = struct { module: str, function: str }
+type Out = struct { dst: []u8, used: usize }
+error Malformed
+error Unsupported
+error TooSmall
 
 fn backtrace(dst: []Frame) -> []Frame
 fn symbolize(address: usize) -> Frame
+fn demangle_neper(symbol: str) -> (Symbol, err)
+fn emit(o: *Out, text: str) -> err
+fn source_name(s: str, at: usize) -> (str, usize, err)
+fn builtin(c: u8) -> str
+fn parse_name(s: str, at: usize, o: *Out) -> (usize, str, err)
+fn parse_type(s: str, at: usize, o: *Out) -> (usize, err)
+fn demangle(symbol: str, dst: []u8) -> (str, err)
 ```
 
 Both functions allocate nothing. Missing symbol data yields empty strings and line
@@ -6770,6 +7278,7 @@ type Address = union enum u8 { Ip4: Ip4, Ip6: Ip6 }
 type Endpoint = struct { address: Address, port: u16 }
 type Family = enum u8 { Any, Ip4, Ip6 }
 type Shutdown = enum u8 { Read, Write, Both }
+type Cidr = struct { address: Address, prefix: u8 }
 error NotFound
 error Refused
 error Reset
@@ -6777,9 +7286,25 @@ error Timeout
 error AddressInUse
 error Unreachable
 error Failed
+const CONTROL_SLICE_NS: i64 = 1000000i64
 
+fn hex_value(byte: u8) -> (usize, bool)
+fn parse_ip4(text: str) -> (Ip4, bool)
+fn parse_scope(text: str) -> (str, u32, bool)
+fn parse_ip6(source: str) -> (Ip6, bool)
 fn parse_ip(s: str) -> (Address, err)
+fn put(dst: []u8, at: usize, byte: u8) -> (usize, bool)
+fn put_decimal(dst: []u8, at: usize, value: u32) -> (usize, bool)
+fn put_hex(dst: []u8, at: usize, value: u16) -> (usize, bool)
+fn format_ip4(address: Ip4, dst: []u8) -> (str, err)
+fn format_ip6(address: Ip6, dst: []u8) -> (str, err)
 fn format_ip(address: Address, dst: []u8) -> (str, err)
+fn map_error(source_error: err) -> err
+fn map_error_with_code(source_error: err, code: i32) -> err
+fn to_os_address(endpoint: Endpoint) -> os.SocketAddress
+fn from_os_address(source: os.SocketAddress) -> Endpoint
+fn socket_family(address: Address) -> os.SocketFamily
+fn append_resolved(out: []Endpoint, used: usize, addresses: []const os.SocketAddress) -> usize
 fn resolve(a: *mem.Arena, host: str, port: u16, family: Family) -> ([]Endpoint, err)
 fn tcp_connect(endpoint: Endpoint) -> (Socket, err)
 fn tcp_listen(endpoint: Endpoint, backlog: u32) -> (Socket, err)
@@ -6791,13 +7316,23 @@ fn receive_from(socket: Socket, dst: []u8) -> (usize, Endpoint, err)
 fn send_to(socket: Socket, dst: Endpoint, src: []const u8) -> (usize, err)
 fn shutdown(socket: Socket, how: Shutdown) -> err
 fn close(socket: own Socket) -> err
+fn socket_read(ctx: *void, dst: []u8) -> (usize, err)
+fn socket_write(ctx: *void, src: []const u8) -> (usize, err)
+fn socket_flush(ctx: *void) -> err
 fn reader(socket: *Socket) -> io.Reader
 fn writer(socket: *Socket) -> io.Writer
+fn control_wait(control: cancel.Control) -> (i64, err)
+fn wait_socket(socket: Socket, writable: bool, control: cancel.Control) -> err
+fn precheck(control: cancel.Control) -> err
 fn resolve_with_control(a: *mem.Arena, host: str, port: u16, family: Family, control: cancel.Control) -> ([]Endpoint, err)
 fn tcp_connect_with_control(endpoint: Endpoint, control: cancel.Control) -> (Socket, err)
 fn receive_with_control(socket: Socket, dst: []u8, control: cancel.Control) -> (usize, err)
 fn send_with_control(socket: Socket, src: []const u8, control: cancel.Control) -> (usize, err)
-
+fn address_bytes(address: Address, out: []u8) -> usize
+fn cidr_parse(text: str) -> (Cidr, err)
+fn cidr_contains(c: Cidr, address: Address) -> bool
+fn in_range(address: Address, text: str) -> bool
+fn is_private(address: Address) -> bool
 ```
 
 `parse_ip` accepts strict dotted-decimal IPv4 and RFC 4291 IPv6 literals, including
@@ -7463,6 +7998,32 @@ client certificates, PSK, resumption, 0-RTT and post-handshake authentication ar
 unsupported. Constructors remain inert; `reader` and `writer` expose no plaintext
 until `handshake` succeeds, and `close` exchanges an authenticated close notification.
 
+### `e.net.http.auth`
+
+```neper
+type Key = union enum u8 { P256: sign.P256PublicKey, Ed25519: sign.Ed25519PublicKey }
+type Assertion = struct { rp_id_hash: [32]u8, user_present: bool, user_verified: bool, sign_count: u32 }
+error TooSmall
+error Invalid
+error Malformed
+error BadRpId
+error UserNotPresent
+error BadClientData
+error BadSignature
+
+fn unreserved(index: u64) -> u8
+fn pkce_verifier(rng: *rand.Pcg64, dst: []u8) -> (str, err)
+fn pkce_challenge(verifier: str, dst: []u8) -> (str, err)
+fn pkce(rng: *rand.Pcg64, verifier_dst: []u8, challenge_dst: []u8) -> (str, str, err)
+fn parse_authenticator_data(auth_data: []const u8) -> (Assertion, err)
+fn client_string(client_data: str, name: str) -> (str, err)
+fn webauthn_verify(auth_data: []const u8, client_data: []const u8, signature: []const u8, key: Key, rp_id: str, challenge: str, origin: str, scratch: []u8) -> (Assertion, err)
+```
+
+RFC 7636 PKCE (`pkce_verifier`, `pkce_challenge`, `pkce`) and WebAuthn assertion verification
+(`parse_authenticator_data`, `webauthn_verify` over ES256 or EdDSA keys with the rpId hash,
+user-presence flag, sign count and client-data type, challenge and origin checked).
+
 ### `e.net.http`
 
 ```neper
@@ -7474,36 +8035,103 @@ type Response = struct { version: Version, status: u16, reason: str, headers: []
 type Limits = struct { start_line: usize, header_bytes: usize, header_count: usize, body_bytes: usize }
 type Reader = struct { state: *void }
 type Writer = struct { sink: io.Writer }
-error Invalid
-error TooLarge
-error Unsupported
-
-fn reader(a: *mem.Arena, source: io.Reader, limits: Limits) -> (Reader, err)
-fn writer(sink: io.Writer) -> Writer
-fn read_request(a: *mem.Arena, r: *Reader) -> (Request, err)
-fn read_response(a: *mem.Arena, r: *Reader) -> (Response, err)
-fn write_request(w: *Writer, req: *const Request) -> err
-fn write_response(w: *Writer, response: *const Response) -> err
-fn request(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: Limits) -> (Response, err)
-fn request_tls(a: *mem.Arena, endpoint: net.Endpoint, config: tls.ClientConfig, req: *const Request, limits: Limits) -> (Response, err)
-fn header(headers: []const Header, name: str) -> (str, bool)
-fn reason(status: u16) -> str
 type ResponseHead = struct { version: Version, status: u16, reason: str, headers: []const Header }
 type ResponseStream = struct { state: *void }
 type SseEvent = struct { event: str, data: str, id: str, has_id: bool, retry_ms: u64, has_retry: bool }
 type SseState = struct { id: str, has_id: bool, retry_ms: u64, has_retry: bool }
 type SseReader = struct { state: *void }
 type SseLimits = struct { line_bytes: usize, event_bytes: usize }
+type ReaderState = struct { source: io.Reader, input: []u8, input_at: usize, input_len: usize, line: []u8, limits: Limits }
+type NetworkIo = struct { socket: net.Socket, control: cancel.Control }
+type ResponseMeta = struct { head: ResponseHead, length: usize, has_length: bool, chunked: bool }
+type ResponseStreamState = struct { network: NetworkIo, secure: tls.Stream, tls_active: bool, decoder: Reader, head: ResponseHead, limits: Limits, remaining: usize, total: usize, chunk_remaining: usize, chunked: bool, chunk_needs_crlf: bool, close_delimited: bool, ended: bool, closed: bool }
+type SseReaderState = struct { source: io.Reader, input: []u8, input_at: usize, input_len: usize, line: []u8, data: []u8, event: []u8, id: []u8, data_len: usize, event_len: usize, id_len: usize, event_used: usize, retry_ms: u64, has_id: bool, has_retry: bool, ended: bool, line_terminated: bool, first_line: bool }
+type SameSite = enum u8 { Strict, Lax, None, Default }
+type CorsPolicy = struct { origins: []const str, methods: []const str, headers: []const str, credentials: bool }
+type CspPolicy = struct { default_src: str, script_src: str, style_src: str, img_src: str, connect_src: str, frame_ancestors: str, nonce: str, strict_dynamic: bool }
+error Invalid
+error TooLarge
+error Unsupported
+error Denied
+const INPUT_CAPACITY: usize = 4096usize
+const CR: u8 = 13u8
+const LF: u8 = 10u8
 
+fn network_read(ctx: *void, dst: []u8) -> (usize, err)
+fn network_write(ctx: *void, src: []const u8) -> (usize, err)
+fn network_flush(ctx: *void) -> err
+fn ascii_lower(byte: u8) -> u8
+fn same_ascii(left: str, right: str) -> bool
+fn copy_text(a: *mem.Arena, value: str) -> (str, err)
+fn http_take(s: *ReaderState) -> (u8, bool, err)
+fn http_line(s: *ReaderState, limit: usize) -> (str, err)
+fn token_byte(byte: u8) -> bool
+fn valid_token(value: str) -> bool
+fn valid_header_value(value: str) -> bool
+fn parse_version(value: str) -> (Version, err)
+fn valid_version_prefix(value: str) -> bool
+fn checked_version(value: str) -> (Version, err)
+fn parse_method(value: str) -> (Method, err)
+fn method_text(value: Method) -> str
+fn version_text(value: Version) -> str
+fn parse_decimal(value: str) -> (usize, err)
+fn parse_hex(value: str) -> (usize, err)
+fn read_headers(a: *mem.Arena, s: *ReaderState) -> ([]const Header, usize, bool, err)
+fn exact_bytes(s: *ReaderState, dst: []u8) -> err
+fn expect_crlf(s: *ReaderState) -> err
+fn read_trailers(s: *ReaderState) -> err
+fn read_chunked(a: *mem.Arena, s: *ReaderState) -> ([]const u8, err)
+fn read_body(a: *mem.Arena, s: *ReaderState, length: usize, chunked: bool, until_end: bool) -> ([]const u8, err)
+fn reader(a: *mem.Arena, source: io.Reader, limits: Limits) -> (Reader, err)
+fn writer(sink: io.Writer) -> Writer
+fn read_request(a: *mem.Arena, r: *Reader) -> (Request, err)
+fn no_response_body(status: u16) -> bool
+fn read_response_meta(a: *mem.Arena, r: *Reader) -> (ResponseMeta, err)
+fn read_response_for(a: *mem.Arena, r: *Reader, suppress_body: bool) -> (Response, err)
+fn read_response(a: *mem.Arena, r: *Reader) -> (Response, err)
+fn request(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: Limits) -> (Response, err)
+fn request_tls(a: *mem.Arena, endpoint: net.Endpoint, config: tls.ClientConfig, req: *const Request, limits: Limits) -> (Response, err)
 fn request_stream(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: Limits, control: cancel.Control) -> (ResponseStream, err)
 fn request_tls_stream(a: *mem.Arena, endpoint: net.Endpoint, config: tls.ClientConfig, req: *const Request, limits: Limits, control: cancel.Control) -> (ResponseStream, err)
 fn response_head(stream: *const ResponseStream) -> ResponseHead
 fn response_read(stream: *ResponseStream, dst: []u8) -> (usize, err)
 fn response_close(stream: *ResponseStream) -> err
+fn has_header(headers: []const Header, name: str) -> bool
+fn header(headers: []const Header, name: str) -> (str, bool)
+fn write_decimal(sink: *io.Writer, value: usize) -> err
+fn write_hex(sink: *io.Writer, value: usize) -> err
+fn framing(headers: []const Header) -> (usize, bool, bool, err)
+fn write_headers(sink: *io.Writer, headers: []const Header) -> err
+fn write_body(sink: *io.Writer, headers: []const Header, body: []const u8) -> err
+fn valid_start_value(value: str) -> bool
+fn write_request(w: *Writer, req: *const Request) -> err
+fn write_response(w: *Writer, response: *const Response) -> err
+fn reason(status: u16) -> str
+fn take(s: *SseReaderState) -> (u8, bool, err)
+fn unread(s: *SseReaderState)
+fn read_line(s: *SseReaderState) -> (str, bool, err)
+fn same(value: str, expected: str) -> bool
+fn has_nul(value: str) -> bool
+fn copy_lossy(dst: []u8, source: str) -> (usize, err)
+fn add_used(s: *SseReaderState, count: usize) -> err
+fn reset_event(s: *SseReaderState)
+fn parse_retry(value: str) -> (u64, bool, err)
+fn process_line(s: *SseReaderState, raw: str) -> (bool, err)
 fn sse_reader(a: *mem.Arena, source: io.Reader, limits: SseLimits) -> (SseReader, err)
 fn sse_next_err(it: *SseReader) -> (SseEvent, bool, err)
 fn sse_state(it: *const SseReader) -> SseState
-
+fn cookie_same_site_parse(value: str) -> SameSite
+fn cookie_same_site_text(value: SameSite) -> str
+fn safe_method(method: Method) -> bool
+fn cookie_same_site(policy: SameSite, secure: bool, same_site_request: bool, method: Method, top_level_navigation: bool) -> bool
+fn list_has(list: []const str, value: str, fold: bool) -> bool
+fn str_equal(left: str, right: str) -> bool
+fn trim_spaces(value: str) -> str
+fn cors_preflight(policy: *const CorsPolicy, origin: str, method: str, request_headers: str, out: []Header) -> (usize, err)
+fn csp_nonce(rng: *rand.Pcg64, dst: []u8) -> (str, err)
+fn csp_put(dst: []u8, at: *usize, text: str) -> err
+fn csp_directive(dst: []u8, at: *usize, name: str, value: str, nonce: str, strict_dynamic: bool) -> err
+fn csp_header(policy: *const CspPolicy, dst: []u8) -> (str, err)
 ```
 
 Chunked transfer encoding is supported. `request_tls` performs and verifies one TLS
@@ -9344,35 +9972,119 @@ call. Streaming readers retain only their documented scratch state. Every writer
 ```neper
 type Number = struct { lexeme: str }
 type Member = struct { key: str, value: Value }
-type Value = union enum u8 { Null, Bool: bool, Number: Number, String: str, Array: []const Value, Object: []const Member }
-type Event = union enum u8 { Null, Bool: bool, Number: Number, String: str, Key: str, BeginArray, EndArray, BeginObject, EndObject }
+type Value = union enum u8 {
+type Event = union enum u8 {
 type Reader = struct { state: *void }
 type Options = struct { allow_duplicate_keys: bool, max_depth: u16 }
+type Parser = struct { source: str, at: usize, arena: *mem.Arena, stack: []Member, height: usize, max_depth: u16, allow_duplicate_keys: bool }
+type ReaderState = struct { source: io.Reader, options: Options, arena: *mem.Arena, input: []u8, input_at: usize, input_len: usize, text: []u8, stack_kind: []u8, stack_count: []usize, stack_keys: []usize, depth: usize, keys: []str, key_count: usize, pending_value: bool, started: bool, finished: bool, spent: bool }
+type TokenKind = enum u8 { End, BeginObject, EndObject, BeginArray, EndArray, Colon, Comma, String, Number, True, False, Null }
+type Tokenizer = struct { source: str, at: usize }
 error Invalid
 error TooDeep
 error DuplicateKey
 error TooLarge
-
-fn reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Reader, err)
-fn reader_next_err(r: *Reader) -> (Event, bool, err)
-fn parse(a: *mem.Arena, source: str, options: Options) -> (Value, err)
-fn write(writer: *io.Writer, value: *const Value) -> err
-fn write_pretty(writer: *io.Writer, value: *const Value, indent: u8) -> err
-fn encode[T: type](writer: *io.Writer, value: *const T) -> err
-fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err)
 error InvalidPointer
 error PatchFailed
+const DEFAULT_MAX_DEPTH: u16 = 128u16
+const MAX_STACK: usize = 1048576usize
+const OP_ADD: u8 = 0u8
+const OP_REMOVE: u8 = 1u8
+const OP_REPLACE: u8 = 2u8
+const OP_MOVE: u8 = 3u8
+const OP_COPY: u8 = 4u8
+const OP_TEST: u8 = 5u8
+const DEFAULT_MAX_OPERATIONS: usize = 1024usize
+const MAX_PATH_TOKENS: usize = 256usize
+const OPEN_ARRAY: u8 = 0u8
+const OPEN_OBJECT: u8 = 1u8
+const READ_CAPACITY: usize = 4096usize
+const EVENT_TEXT: usize = 65536usize
+const OPEN_KEYS: usize = 4096usize
+const MINUS_BYTE: u8 = 45u8
+const NUMBER_TEXT: usize = 128usize
 
 fn number(source: str) -> (Number, err)
-fn number_i64(value: Number) -> (i64, err)
+fn decompose(lexeme: str) -> (bool, usize, usize, i64, err)
+fn digits_u64(lexeme: str, start: usize, end: usize) -> (u64, err)
+fn scaled_u64(value: u64, exponent: i64) -> (u64, err)
 fn number_u64(value: Number) -> (u64, err)
+fn number_i64(value: Number) -> (i64, err)
+fn finite(value: f64) -> bool
 fn number_f64(value: Number) -> (f64, err)
 fn number_from_i64(a: *mem.Arena, value: i64) -> (Number, err)
 fn number_from_u64(a: *mem.Arena, value: u64) -> (Number, err)
 fn number_from_f64(a: *mem.Arena, value: f64) -> (Number, err)
+fn is_space(byte: u8) -> bool
+fn skip_space(p: *Parser)
+fn hex_value(byte: u8) -> (u32, bool)
+fn hex4(source: str, at: usize) -> (u32, bool)
+fn encode_utf8(into: []u8, at: usize, point: u32) -> usize
+fn parse_string(p: *Parser) -> (str, err)
+fn parse_number(p: *Parser) -> (Number, err)
+fn literal(p: *Parser, word: str) -> bool
+fn push_element(p: *Parser, key: str, value: Value) -> err
+fn duplicate_key(p: *Parser, base: usize, key: str) -> bool
+fn parse_value(p: *Parser, depth: u16) -> (Value, err)
+fn parse(a: *mem.Arena, source: str, options: Options) -> (Value, err)
+fn hex_digit(nibble: u8) -> u8
+fn write_string(w: *io.Writer, text: str) -> err
+fn write_number(w: *io.Writer, value: Number) -> err
+fn write_indent(w: *io.Writer, spaces: usize) -> err
+fn write_value(w: *io.Writer, value: *const Value, indent: u8, depth: usize) -> err
+fn write(writer: *io.Writer, value: *const Value) -> err
+fn write_pretty(writer: *io.Writer, value: *const Value, indent: u8) -> err
+fn token_eq(token: str, key: str) -> bool
+fn array_index(token: str) -> (usize, bool)
 fn pointer(root: *const Value, path: str) -> (*const Value, err)
+fn copy_text(a: *mem.Arena, text: str) -> (str, err)
+fn copy_value(a: *mem.Arena, value: *const Value, depth: u16, limit: u16) -> (Value, err)
+fn number_parts(lexeme: str) -> (bool, str, i64, bool)
+fn normalised_digits(integer_part: str, fraction: str, scale: i64) -> (usize, usize, i64, bool)
+fn digit_at(integer_part: str, fraction: str, index: usize) -> u8
+fn numbers_equal(left: Number, right: Number) -> bool
+fn fraction_of(lexeme: str) -> str
+fn values_equal(left: *const Value, right: *const Value) -> bool
+fn array_of(value: Value) -> ([]const Value, bool)
+fn path_tokens(path: str, into: []str) -> (usize, err)
+fn member_index(members: []const Member, token: str) -> (usize, bool)
+fn token_key(a: *mem.Arena, token: str) -> (str, err)
+fn edit_here(a: *mem.Arena, container: *const Value, token: str, action: u8, payload: *const Value) -> (Value, Value, err)
+fn edit_at(a: *mem.Arena, node: *const Value, tokens: []const str, at: usize, action: u8, payload: *const Value) -> (Value, Value, err)
+fn operation_code(name: str) -> (u8, bool)
+fn is_prefix_of(from_tokens: []const str, from_count: usize, path_tokens_list: []const str, path_count: usize) -> bool
+fn free_of_duplicates(value: *const Value) -> bool
 fn patch(a: *mem.Arena, root: *const Value, operations: *const Value, max_operations: usize, max_depth: u16) -> (Value, err)
-
+fn stream_take(s: *ReaderState) -> (u8, bool, err)
+fn stream_peek(s: *ReaderState) -> (u8, bool, err)
+fn stream_skip_space(s: *ReaderState) -> err
+fn stream_expect(s: *ReaderState, wanted: u8) -> err
+fn keep_byte(s: *ReaderState, at: usize, byte: u8) -> (usize, err)
+fn stream_hex4(s: *ReaderState) -> (u32, bool, err)
+fn stream_string(s: *ReaderState) -> (str, err)
+fn stream_number(s: *ReaderState) -> (Number, err)
+fn stream_literal(s: *ReaderState, word: str) -> err
+fn stream_push(s: *ReaderState, kind: u8) -> err
+fn stream_remember(s: *ReaderState, key: str) -> err
+fn stream_value(s: *ReaderState) -> (Event, bool, err)
+fn reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Reader, err)
+fn reader_next_err(r: *Reader) -> (Event, bool, err)
+fn string_of(value: Value) -> (str, bool)
+fn bool_of(value: Value) -> (bool, bool)
+fn number_of(value: Value) -> (Number, bool)
+fn object_of(value: Value) -> ([]const Member, bool)
+fn member_of(members: []const Member, name: str) -> (Value, bool)
+fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err)
+fn encode[T: type](writer: *io.Writer, value: *const T) -> err
+fn utf16_unit(text: str, at: usize) -> (u32, usize, u32)
+fn utf16_less(x: str, y: str) -> bool
+fn put_digits(w: *io.Writer, value: i64) -> err
+fn write_es6_number(w: *io.Writer, value: f64) -> err
+fn canonicalize(w: *io.Writer, value: *const Value) -> err
+fn is_null(value: *const Value) -> bool
+fn merge_patch(a: *mem.Arena, original: *const Value, delta: *const Value) -> (Value, err)
+fn tokenizer(source: str) -> Tokenizer
+fn next_token(t: *Tokenizer) -> (TokenKind, str, err)
 ```
 
 Numbers preserve their validated JSON lexeme, including large integers, exponent
@@ -9437,16 +10149,42 @@ to a caller buffer.
 type Dialect = struct { delimiter: u8, quote: u8, crlf: bool, header: bool }
 type Row = struct { fields: []const str }
 type Reader = struct { state: *void }
+type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool }
+type Writer = struct { sink: io.Writer, dialect: Dialect }
 error Invalid
 error TooLarge
+const COMMA: u8 = 44u8
+const TAB: u8 = 9u8
+const QUOTE: u8 = 34u8
+const CR: u8 = 13u8
+const LF: u8 = 10u8
+const DEFAULT_FIELD_LIMIT: usize = 1024usize
+const DEFAULT_ROW_LIMIT: usize = 65536usize
+const INPUT_CAPACITY: usize = 4096usize
+const MINUS: u8 = 45u8
+const FIELD_TEXT: usize = 128usize
+const FIRST_ROWS: usize = 16usize
 
 fn csv() -> Dialect
 fn tsv() -> Dialect
+fn usable(dialect: Dialect) -> bool
+fn take(s: *ReaderState) -> (u8, bool, err)
+fn unread(s: *ReaderState)
+fn keep(s: *ReaderState, row_at: usize, byte: u8) -> (usize, err)
+fn close_field(s: *ReaderState, field_count: usize, field_start: usize, row_at: usize) -> (usize, err)
+fn read_record(s: *ReaderState) -> (Row, bool, err)
 fn reader(a: *mem.Arena, source: io.Reader, dialect: Dialect, field_limit: usize, row_limit: usize) -> (Reader, err)
 fn reader_next_err(r: *Reader) -> (Row, bool, err)
-fn write_row(writer: *io.Writer, row: Row, dialect: Dialect) -> err
+fn needs_quote(field: str, dialect: Dialect) -> bool
+fn write_field(sink: *io.Writer, field: str, dialect: Dialect) -> err
+fn write_ending(sink: *io.Writer, dialect: Dialect) -> err
+fn write_row(sink: *io.Writer, row: Row, dialect: Dialect) -> err
+fn copy_text(a: *mem.Arena, text: str) -> (str, err)
 fn decode_rows[T: type](a: *mem.Arena, source: io.Reader, dialect: Dialect) -> ([]T, err)
-fn encode_rows[T: type](writer: *io.Writer, rows: []const T, dialect: Dialect) -> err
+fn encode_rows[T: type](sink: *io.Writer, rows: []const T, dialect: Dialect) -> err
+fn writer(sink: io.Writer, dialect: Dialect) -> (Writer, err)
+fn write_record(w: *Writer, fields: []const str) -> err
+fn flush(w: *Writer) -> err
 ```
 
 ### `e.fmt.ini`
@@ -9548,6 +10286,9 @@ ranges, whitespace AND, `||` OR) desugared as read.
 type Encoder = struct { out: []u8, len: usize }
 type Decoder = struct { data: []const u8, at: usize }
 type Item = struct { major: u8, info: u8, value: u64, indefinite: bool }
+type Pair = struct { key: Value, value: Value }
+type Tagged = struct { tag: u64, items: []const Value }
+type Value = union enum u8 { Null, Undefined, Bool: bool, Uint: u64, Int: i64, Float: f64, Bytes: []const u8, Text: str, Array: []const Value, Map: []const Pair, Tagged: Tagged }
 error Invalid
 error Truncated
 error TooSmall
@@ -9611,6 +10352,14 @@ fn pow2(exponent: i64) -> f64
 fn f16_to_f64(bits: u64) -> f64
 fn decode_f64(d: *Decoder) -> (f64, err)
 fn skip(d: *Decoder) -> err
+fn f16_of(value: f64) -> (u64, bool)
+fn encode_float_shortest(e: *Encoder, value: f64) -> err
+fn key_less(x: []const u8, y: []const u8) -> bool
+fn reverse_bytes(dst: []u8, lo: usize, hi: usize)
+fn sort_pairs(e: *Encoder, start: usize) -> err
+fn encode(e: *Encoder, value: *const Value) -> err
+fn count_until_break(d: *const Decoder) -> (usize, err)
+fn decode(a: *mem.Arena, d: *Decoder, max_depth: u16) -> (Value, err)
 ```
 
 A streaming `Encoder` over a caller buffer (`encode_uint/int/negative/bytes/text/
@@ -9813,14 +10562,36 @@ declarations by origin, importance, specificity and source order.
 type Uri = struct { scheme: str, authority: str, userinfo: str, host: str, port: str, path: str, query: str, fragment: str }
 type EncodeSet = enum u8 { Path, PathSegment, Query, QueryComponent, Fragment, UserInfo }
 error Invalid
+error TooSmall
 
+fn is_alpha(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn is_hex(c: u8) -> bool
+fn hex_value(c: u8) -> u8
+fn is_unreserved(c: u8) -> bool
+fn is_sub_delim(c: u8) -> bool
 fn parse(source: str) -> (Uri, err)
+fn split_authority(u: *Uri) -> err
+fn remove_dot_segments(path: str, out: []u8) -> usize
+fn merge_paths(a: *mem.Arena, base: Uri, reference_path: str) -> (str, err)
+fn cleaned_path(a: *mem.Arena, path: str) -> (str, err)
 fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err)
+fn lowered(a: *mem.Arena, text: str) -> (str, err)
+fn normalized_escapes(a: *mem.Arena, text: str) -> (str, err)
+fn upper_hex(nibble: u8) -> u8
 fn normalize(a: *mem.Arena, value: Uri) -> (Uri, err)
+fn format_authority(a: *mem.Arena, value: Uri) -> (str, err)
+fn append(out: []u8, at: usize, text: str) -> usize
 fn format(a: *mem.Arena, value: Uri) -> (str, err)
+fn allowed(c: u8, set: EncodeSet) -> bool
 fn percent_encode(a: *mem.Arena, source: []const u8, set: EncodeSet) -> (str, err)
 fn percent_decode(a: *mem.Arena, source: str) -> ([]u8, err)
 fn query_get(query: str, name: str) -> (str, bool, err)
+fn form_decode(a: *mem.Arena, source: str) -> (str, err)
+fn query_parse(a: *mem.Arena, query: str, keys: []str, values: []str) -> (usize, err)
+fn form_encoded_len(text: str) -> usize
+fn form_encode_into(out: []u8, at: usize, text: str) -> usize
+fn query_build(a: *mem.Arena, keys: []const str, values: []const str) -> (str, err)
 ```
 
 Parsing follows RFC 3986 and returns borrowed slices. Percent decoding never treats
@@ -10137,17 +10908,51 @@ type Class = enum u8 { Universal, Application, Context, Private }
 type Tag = struct { class: Class, number: u32, constructed: bool }
 type Value = struct { tag: Tag, content: []const u8, encoded: []const u8 }
 type Reader = struct { data: []const u8, off: usize, depth: u16, max_depth: u16 }
+type BitString = struct { unused: u8, data: []const u8 }
+type Context = struct { number: u32, items: []const Item }
+type Item = union enum u8 { Null, Bool: bool, Integer: i64, BitString: BitString, OctetString: []const u8, Oid: []const u32, Utf8String: str, Sequence: []const Item, Set: []const Item, Context: Context }
 error Invalid
 error NonCanonical
 error TooDeep
 error TooLarge
 
 fn reader(data: []const u8, max_depth: u16) -> Reader
+fn class_of(first: u8) -> Class
 fn reader_next_err(source_reader: *Reader) -> (Value, bool, err)
 fn children(value: Value, max_depth: u16) -> (Reader, err)
+fn is_universal(value: Value, number: u32, constructed: bool) -> bool
+fn integer_of(value: Value) -> (i64, err)
+fn boolean_of(value: Value) -> (bool, err)
 fn decode[T: type](a: *mem.Arena, source: []const u8, max_depth: u16) -> (T, err)
+fn integer_len(value: i64) -> usize
+fn length_len(length: usize) -> usize
+fn contents_len[T: type](value: *const T) -> usize
 fn encoded_len[T: type](value: *const T) -> (usize, err)
+fn put_header(dst: []u8, at: usize, tag: u8, length: usize) -> usize
 fn encode[T: type](dst: []u8, value: *const T) -> ([]u8, err)
+fn tag_len(number: u32) -> usize
+fn arc_len(arc: u32) -> usize
+fn oid_len(arcs: []const u32) -> (usize, err)
+fn items_len(items: []const Item) -> (usize, err)
+fn item_content_len(item: *const Item) -> (usize, err)
+fn item_tag(item: *const Item) -> u32
+fn item_first(item: *const Item) -> u8
+fn item_len(item: *const Item) -> (usize, err)
+fn put_tag(dst: []u8, at: usize, first: u8, number: u32) -> usize
+fn put_base128(dst: []u8, at: usize, value: u32) -> usize
+fn reverse_bytes(dst: []u8, lo: usize, hi: usize)
+fn bytes_less(x: []const u8, y: []const u8) -> bool
+fn sort_set(dst: []u8, start: usize, end: usize)
+fn put_items(dst: []u8, at: usize, items: []const Item) -> (usize, err)
+fn put_item(dst: []u8, at: usize, item: *const Item) -> (usize, err)
+fn der_encode(dst: []u8, item: *const Item) -> ([]u8, err)
+fn ber_header(data: []const u8, at: usize) -> (Tag, usize, bool, usize, err)
+fn ber_integer(c: []const u8) -> (i64, err)
+fn ber_oid(a: *mem.Arena, c: []const u8) -> ([]const u32, err)
+fn ber_join(a: *mem.Arena, items: []const Item) -> ([]u8, u8, err)
+fn ber_items(a: *mem.Arena, data: []const u8, at: usize, indefinite: bool, depth: u16) -> ([]const Item, usize, err)
+fn ber_item(a: *mem.Arena, data: []const u8, at: usize, depth: u16) -> (Item, usize, err)
+fn ber_decode(a: *mem.Arena, source: []const u8, max_depth: u16) -> (Item, err)
 ```
 
 The version-1 surface accepts and emits canonical DER only. Lengths, nesting and
@@ -10192,13 +10997,22 @@ making output reproducible; nested multipart content uses another explicit reade
 ```neper
 type Reader = struct { state: *void }
 type Writer = struct { state: *void }
+type ReaderState = struct { source: io.Reader, buffer: []u8, start: usize, end: usize, ended: bool }
+type WriterState = struct { sink: io.Writer, line: []u8, used: usize, limit: usize }
 error Invalid
 
+fn is_hex_upper(c: u8) -> bool
+fn hex_value(c: u8) -> u8
+fn hex_digit(nibble: u8) -> u8
 fn reader(storage: []u8, source: io.Reader) -> Reader
+fn refill(s: *ReaderState) -> err
 fn read(source_reader: *Reader, dst: []u8) -> (usize, err)
 fn writer(storage: []u8, sink: io.Writer, line_limit: u8) -> (Writer, err)
+fn soft_break(s: *WriterState) -> err
+fn put(s: *WriterState, bytes: []const u8) -> err
 fn write(sink_writer: *Writer, src: []const u8) -> (usize, err)
 fn finish(sink_writer: *Writer) -> err
+fn encode(dst: []u8, src: []const u8) -> ([]u8, err)
 ```
 
 Decoding is strict RFC 2045. Encoding uses canonical uppercase hex escapes and
@@ -10252,17 +11066,97 @@ checked before exposing bytes. `finish` writes the final DEFLATE blocks and trai
 type Reader = struct { state: *void }
 type Writer = struct { state: *void }
 type Level = enum u8 { Fast, Balanced, Best }
+type Xxh64 = struct { v1: u64, v2: u64, v3: u64, v4: u64, total: u64, buffer: [32]u8, buffered: usize }
+type BackBits = struct { data: []const u8, at: usize, bits: u64, bit_count: u32, padded: u32 }
+type ForwardBits = struct { data: []const u8, at: usize, bits: u64, bit_count: u32 }
+type Huff = struct { table: []u8, max_bits: u32, valid: bool }
+type SeqTable = struct { table: []u8, accuracy: u32, valid: bool, rle_symbol: u32, rle: bool }
+type State = struct { source: io.Reader, input: []u8, literals: []u8, history: []u8, hist_len: usize, out_at: usize, window_limit: usize, window: usize, huff: Huff, ll: SeqTable, of: SeqTable, ml: SeqTable, fse_scratch: []u8, rep: [3]u32, in_frame: bool, last_block: bool, has_checksum: bool, hash: Xxh64, finished: bool, output_limit: u64, output_total: u64, frame_left: u64, has_frame_size: bool }
+type WriterState = struct { sink: io.Writer, buffer: []u8, buffered: usize, started: bool, finished: bool, hash: Xxh64 }
+type FseEncoder = struct { next_state: []u32, delta_bits: []i64, delta_find: []i64, accuracy: u32 }
+type BitWriter = struct { out: []u8, pos: usize, bits: u64, bit_count: u32, overflow: bool }
+type Packer = struct { table: []u32, ll: []u32, ml: []u32, of: []u32, count: usize, scratch: []u8, ll_fse: FseEncoder, ml_fse: FseEncoder, of_fse: FseEncoder }
 error Invalid
 error Checksum
 error Unsupported
+const BLOCK_MAX: usize = 131072usize
+const INPUT: usize = 131072usize + 32usize
+const HUFF_LOG_MAX: usize = 11usize
+const SEQ_TABLE: usize = 512usize
+const PRIME1: u64 = 11400714785074694791u64
+const PRIME2: u64 = 14029467366897019727u64
+const PRIME3: u64 = 1609587929392839161u64
+const PRIME4: u64 = 9650029242287828579u64
+const PRIME5: u64 = 2870177450012600261u64
+const ENC_HASH_LOG: u32 = 16u32
+const ENC_MIN_MATCH: usize = 4usize
 
+fn rotl64(x: u64, n: u32) -> u64
+fn xxh_round(acc: u64, lane: u64) -> u64
+fn xxh_merge(acc: u64, lane: u64) -> u64
+fn load64(data: []const u8, at: usize) -> u64
+fn load32(data: []const u8, at: usize) -> u32
+fn xxh64_init() -> Xxh64
+fn xxh64_block(h: *Xxh64, block: []const u8, at: usize)
+fn xxh64_update(h: *Xxh64, data: []const u8)
+fn xxh64_done(h: *const Xxh64) -> u64
+fn back_init(data: []const u8) -> (BackBits, err)
+fn back_fill(b: *BackBits, n: u32)
+fn back_peek(b: *BackBits, n: u32) -> u32
+fn back_skip(b: *BackBits, n: u32)
+fn back_read(b: *BackBits, n: u32) -> u32
+fn back_finished(b: *const BackBits) -> bool
+fn back_overrun(b: *const BackBits) -> bool
+fn forward_init(data: []const u8) -> ForwardBits
+fn forward_read(f: *ForwardBits, n: u32) -> u32
+fn forward_used(f: *const ForwardBits) -> usize
+fn table_symbol(table: []const u8, state: usize) -> u32
+fn table_bits(table: []const u8, state: usize) -> u32
+fn table_base(table: []const u8, state: usize) -> u32
+fn table_set(table: []u8, state: usize, symbol: u32, bits: u32, base: u32)
+fn highest_bit(v: u32) -> u32
+fn fse_build(table: []u8, counts: []const i32, symbols: usize, accuracy: u32) -> err
+fn fse_read_counts(data: []const u8, counts: []i32, max_symbols: usize, max_accuracy: u32) -> (u32, usize, usize, err)
+fn huff_build(h: *Huff, weights: []const u8, count: usize) -> err
+fn huff_read(h: *Huff, data: []const u8, fse_scratch: []u8) -> (usize, err)
+fn huff_stream(h: *const Huff, data: []const u8, dst: []u8) -> err
+fn ll_base(code: u32) -> (u32, u32)
+fn ml_base(code: u32) -> (u32, u32)
+fn default_ll(counts: []i32) -> usize
+fn default_of(counts: []i32) -> usize
+fn default_ml(counts: []i32) -> usize
+fn seq_table_read(t: *SeqTable, mode: u32, data: []const u8, kind: u32, max_symbols: usize, max_accuracy: u32) -> (usize, err)
+fn reader_storage(window_limit: usize) -> (usize, err)
 fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err)
+fn take(s: *State, n: usize) -> ([]u8, err)
+fn start_frame(s: *State) -> err
+fn make_room(s: *State)
+fn read_literals(s: *State, block: []const u8) -> (usize, usize, err)
+fn seq_symbol(t: *const SeqTable, state: usize) -> u32
+fn run_sequences(s: *State, block: []const u8, literal_count: usize) -> err
+fn next_block(s: *State) -> (bool, err)
 fn read(r: *Reader, dst: []u8) -> (usize, err)
+fn writer_storage(level: Level) -> usize
 fn writer(storage: []u8, sink: io.Writer, level: Level) -> (Writer, err)
+fn start_writer(s: *WriterState) -> err
+fn flush_block(s: *WriterState, last: bool) -> err
 fn write(w: *Writer, src: []const u8) -> (usize, err)
 fn finish(w: *Writer) -> err
-fn reader_storage(window_limit: usize) -> (usize, err)
-fn writer_storage(level: Level) -> usize
+fn fse_encoder_alloc(a: *mem.Arena, e: *FseEncoder) -> err
+fn fse_encoder_build(e: *FseEncoder, counts: []const i32, symbols: usize, accuracy: u32)
+fn bits_add(b: *BitWriter, value: u64, n: u32)
+fn bits_close(b: *BitWriter) -> usize
+fn fse_init_state(e: *const FseEncoder, symbol: u32) -> usize
+fn fse_encode_symbol(e: *const FseEncoder, b: *BitWriter, state: *usize, symbol: u32)
+fn fse_flush_state(e: *const FseEncoder, b: *BitWriter, state: usize)
+fn code_of_ll(value: u32) -> (u32, u32)
+fn code_of_ml(length: u32) -> (u32, u32)
+fn hash4(block: []const u8, pos: usize) -> usize
+fn find_matches(p: *Packer, block: []const u8)
+fn pack_block(p: *Packer, block: []const u8) -> usize
+fn put_block_header(out: []u8, pos: usize, size: usize, kind: usize, last: bool)
+fn encode(a: *mem.Arena, src: []const u8, level: Level) -> ([]u8, err)
+fn decode(a: *mem.Arena, src: []const u8, output_limit: u64) -> ([]u8, err)
 ```
 
 Version 1 supports standard frames without dictionaries. Window and decompressed
@@ -10477,15 +11371,31 @@ LZMA2 blocks with CRC32, CRC64 or SHA-256 checks, index and footer verified).
 type Order = enum u8 { LeastSignificant, MostSignificant }
 type Reader = struct { state: *void }
 type Writer = struct { state: *void }
+type ReaderState = struct { source: io.Reader, order: Order, literal_width: u32, width: u32, clear: u32, end: u32, next: u32, previous: u32, has_previous: bool, bits: u64, bit_count: u32, output_limit: u64, produced: u64, finished: bool, prefix: []u8, suffix: []u8, stack: []u8, stack_len: usize, first_of: []u8 }
+type WriterState = struct { sink: io.Writer, order: Order, literal_width: u32, width: u32, clear: u32, end: u32, next: u32, current: u32, has_current: bool, bits: u64, bit_count: u32, started: bool, keys: []u8, values: []u8 }
 error Invalid
 error TooLarge
+const MAX_WIDTH: u32 = 12u32
+const TABLE: usize = 4096usize
+const HASH: usize = 8192usize
 
+fn get16(table: []const u8, index: usize) -> u32
+fn set16(table: []u8, index: usize, value: u32)
+fn get32(table: []const u8, index: usize) -> u32
+fn set32(table: []u8, index: usize, value: u32)
+fn storage_required(literal_width: u8) -> (usize, err)
 fn reader(storage: []u8, source: io.Reader, order: Order, literal_width: u8, output_limit: u64) -> (Reader, err)
+fn read_code(s: *ReaderState) -> (u32, bool, err)
+fn expand(s: *ReaderState, code: u32) -> u8
 fn read(source_reader: *Reader, dst: []u8) -> (usize, err)
 fn writer(storage: []u8, sink: io.Writer, order: Order, literal_width: u8) -> (Writer, err)
+fn clear_table(s: *WriterState)
+fn emit(s: *WriterState, code: u32) -> err
+fn slot_of(s: *WriterState, key: u32) -> usize
 fn write(sink_writer: *Writer, src: []const u8) -> (usize, err)
 fn finish(sink_writer: *Writer) -> err
-fn storage_required(literal_width: u8) -> (usize, err)
+fn encode(a: *mem.Arena, src: []const u8, order: Order, literal_width: u8) -> ([]u8, err)
+fn decode(a: *mem.Arena, src: []const u8, order: Order, literal_width: u8, output_limit: u64) -> ([]u8, err)
 ```
 
 Bit order and literal width are explicit so GIF- and TIFF-style streams cannot be
@@ -10614,17 +11524,50 @@ type Processing = struct { target: str, data: str }
 type Reader = struct { state: *void }
 type Writer = struct { sink: io.Writer, depth: u16 }
 type Options = struct { max_depth: u16, preserve_comments: bool }
+type State = struct { a: *mem.Arena, source: []const u8, at: usize, options: Options, stack: []str, depth: usize, pending_end: str, has_pending: bool, started: bool, finished: bool }
+type NodeId = u32
+type NodeKind = enum u8 { Document, Element, Text, Comment, Processing }
+type Node = struct { kind: NodeKind, name: str, value: str, attributes: []const Attribute, parent: NodeId, first_child: NodeId, last_child: NodeId, next_sibling: NodeId }
+type Document = struct { nodes: []const Node, root: NodeId }
+type Namespaces = struct { prefixes: []str, uris: []str, count: usize, marks: []usize, depth: usize }
+type PathSet = struct { ids: []NodeId, count: usize }
 error Invalid
 error TooDeep
 error Unsupported
+const NONE: NodeId = 4294967295u32
 
+fn slurp(a: *mem.Arena, source: io.Reader) -> ([]u8, err)
 fn reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Reader, err)
+fn is_space(c: u8) -> bool
+fn is_name_byte(c: u8) -> bool
+fn name_end(source: []const u8, at: usize) -> usize
+fn skip_space(source: []const u8, at: usize) -> usize
+fn push_scalar(out: []u8, at: usize, scalar: u32) -> usize
+fn decode(a: *mem.Arena, raw: []const u8) -> (str, err)
 fn reader_next_err(r: *Reader) -> (Event, bool, err)
 fn writer(sink: io.Writer) -> Writer
+fn write_escaped(sink: *io.Writer, value: str, in_attribute: bool) -> err
 fn start(w: *Writer, name: str, attributes: []const Attribute) -> err
 fn text(w: *Writer, value: str) -> err
 fn comment(w: *Writer, value: str) -> err
 fn end(w: *Writer, name: str) -> err
+fn stream(a: *mem.Arena, source: []const u8, options: Options) -> (Reader, err)
+fn stream_next(r: *Reader) -> (Event, bool, err)
+fn add_node(nodes: []Node, used: *usize, kind: NodeKind, name: str, value: str, attributes: []const Attribute, parent: NodeId) -> NodeId
+fn parse(a: *mem.Arena, source: []const u8) -> (Document, err)
+fn attribute(element: *const Node, name: str) -> (str, bool)
+fn namespaces(a: *mem.Arena, max_bindings: usize, max_depth: usize) -> (Namespaces, err)
+fn namespaces_push(ns: *Namespaces, attributes: []const Attribute) -> err
+fn namespaces_pop(ns: *Namespaces) -> err
+fn resolve(ns: *const Namespaces, prefix: str) -> (str, err)
+fn expand(ns: *const Namespaces, name: str) -> (str, str, err)
+fn set_add(set: *PathSet, id: NodeId)
+fn next_in_subtree(document: *const Document, root: NodeId, cursor: NodeId) -> NodeId
+fn text_equals(document: *const Document, id: NodeId, want: str) -> bool
+fn predicate_holds(document: *const Document, id: NodeId, predicate: str, position: usize) -> (bool, err)
+fn push_id(set: *PathSet, id: NodeId)
+fn path_step(document: *const Document, from: *const PathSet, into: *PathSet, scratch: *PathSet, step: str) -> err
+fn xpath(a: *mem.Arena, document: *const Document, context: NodeId, path: str) -> ([]NodeId, err)
 ```
 
 XML 1.0 names, namespaces and entity escaping are supported. External entities and
@@ -10634,7 +11577,6 @@ DTDs are always `Unsupported`; the module never performs hidden I/O.
 
 ```neper
 type NodeId = u32
-const NONE: NodeId = 4294967295
 type NodeKind = enum u8 { Document, Doctype, Element, Text, Comment }
 type Namespace = enum u8 { Html, Svg, MathMl }
 type Attribute = struct { namespace: Namespace, name: str, value: str }
@@ -10642,18 +11584,63 @@ type Node = struct { kind: NodeKind, namespace: Namespace, name: str, value: str
 type Document = struct { nodes: []const Node, root: NodeId }
 type Children = struct { document: *const Document, next: NodeId }
 type Options = struct { max_bytes: usize, max_nodes: usize, max_attributes: usize, max_depth: u16, preserve_comments: bool }
+type Builder = struct { a: *mem.Arena, nodes: []Node, used: usize, options: Options, stack: []NodeId, depth: usize, html: NodeId, head: NodeId, body: NodeId, text_start: usize, text_len: usize, text_buffer: []u8 }
+type TokenKind = enum u8 { StartTag, EndTag, Text, Comment, Doctype }
+type Token = struct { kind: TokenKind, name: str, value: str, attributes: []const Attribute, self_closing: bool }
+type Tokens = struct { out: []Token, count: usize }
 error InvalidEncoding
 error TooDeep
 error TooLarge
+const NONE: NodeId = 4294967295u32
 
+fn is_void(name: str) -> bool
+fn is_raw_text(name: str) -> bool
+fn is_rcdata(name: str) -> bool
+fn is_head_only(name: str) -> bool
+fn closes_p(name: str) -> bool
+fn is_heading(name: str) -> bool
+fn add_node(b: *Builder, kind: NodeKind, namespace: Namespace, name: str, value: str, parent: NodeId) -> (NodeId, err)
+fn current(b: *Builder) -> NodeId
+fn current_name(b: *Builder) -> str
+fn push(b: *Builder, id: NodeId) -> err
+fn close_to(b: *Builder, name: str) -> bool
+fn has_open(b: *Builder, name: str) -> bool
+fn flush_text(b: *Builder) -> err
+fn is_blank(text: str) -> bool
+fn ensure_html(b: *Builder) -> err
+fn ensure_head(b: *Builder) -> err
+fn ensure_body(b: *Builder) -> err
+fn append_text(b: *Builder, bytes: []const u8) -> err
+fn write_utf8(scalar: u32, dst: []u8, at: usize) -> usize
+fn lookup_entity(text: str, at: usize, in_attribute: bool) -> ([]const u8, usize, bool)
+fn decode_reference(text: str, at: usize, in_attribute: bool, out: []u8) -> (usize, usize)
+fn lower(a: *mem.Arena, text: str) -> (str, err)
+fn is_space(c: u8) -> bool
+fn start_element(b: *Builder, name: str, attributes: []const Attribute, self_closing: bool) -> err
+fn end_element(b: *Builder, name: str) -> err
+fn utf8_valid(text: str) -> bool
+fn find_ci(text: str, needle: str, from: usize) -> (usize, bool)
+fn append_decoded(b: *Builder, text: str, in_attribute: bool) -> err
+fn decode_value(b: *Builder, raw: str) -> (str, err)
+fn parse_into(b: *Builder, source: str) -> err
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Document, err)
 fn parse_reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Document, err)
 fn node(document: *const Document, id: NodeId) -> *const Node
 fn children(document: *const Document, parent: NodeId) -> Children
 fn children_next(it: *Children) -> (NodeId, bool)
 fn attribute(element: *const Node, name: str) -> (str, bool)
+fn text_size(document: *const Document, id: NodeId) -> usize
+fn text_fill(document: *const Document, id: NodeId, out: []u8, at: usize) -> usize
 fn text_content(a: *mem.Arena, document: *const Document, root: NodeId) -> (str, err)
+fn write_escaped(writer: *io.Writer, text: str, in_attribute: bool) -> err
+fn write_node(writer: *io.Writer, document: *const Document, id: NodeId) -> err
 fn write(writer: *io.Writer, document: *const Document) -> err
+fn entity_table() -> str
+fn escape(a: *mem.Arena, text: str) -> (str, err)
+fn unescape(a: *mem.Arena, text: str) -> (str, err)
+fn emit(t: *Tokens, token: Token) -> err
+fn emit_text(b: *Builder, t: *Tokens) -> err
+fn tokenize(a: *mem.Arena, source: str, out: []Token) -> (usize, err)
 ```
 
 The input is UTF-8 with an optional UTF-8 BOM; invalid UTF-8 returns
@@ -10797,28 +11784,37 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err
 type WireType = enum u8 { Varint, Fixed64, Bytes, Fixed32 }
 type Key = struct { number: u32, wire: WireType }
 type Reader = struct { input: bytes.Reader }
+type Field = struct { number: u32, wire: WireType, varint: u64, fixed: u64, data: []const u8 }
 error Invalid
 error TooLarge
 
 fn reader(source: []const u8) -> Reader
+fn number_legal(number: u32) -> bool
+fn wire_code(wire: WireType) -> u32
 fn reader_next_err(r: *Reader) -> (Key, bool, err)
 fn read_u64(r: *Reader) -> (u64, err)
 fn read_i64(r: *Reader) -> (i64, err)
+fn twos_complement(raw: u64) -> i64
 fn read_sint64(r: *Reader) -> (i64, err)
 fn read_fixed32(r: *Reader) -> (u32, err)
 fn read_fixed64(r: *Reader) -> (u64, err)
 fn read_bytes(r: *Reader) -> ([]const u8, err)
 fn skip(r: *Reader, wire: WireType) -> err
-fn size_key(number: u32, wire: WireType) -> (usize, err)
 fn size_varint(value: u64) -> usize
+fn size_key(number: u32, wire: WireType) -> (usize, err)
 fn size_bytes(n: usize) -> (usize, err)
-fn write_key(w: *io.Writer, number: u32, wire: WireType) -> err
 fn write_u64(w: *io.Writer, value: u64) -> err
+fn write_key(w: *io.Writer, number: u32, wire: WireType) -> err
 fn write_i64(w: *io.Writer, value: i64) -> err
 fn write_sint64(w: *io.Writer, value: i64) -> err
 fn write_fixed32(w: *io.Writer, value: u32) -> err
 fn write_fixed64(w: *io.Writer, value: u64) -> err
 fn write_bytes(w: *io.Writer, value: []const u8) -> err
+fn decode(source: []const u8, fields: []Field) -> (usize, err)
+fn decode_varint(source: []const u8) -> (u64, usize, err)
+fn decode_zigzag(raw: u64) -> i64
+fn encode_zigzag(value: i64) -> u64
+fn encode(w: *io.Writer, fields: []const Field) -> err
 ```
 
 These are protobuf wire-format primitives for generated message code.
@@ -10984,6 +11980,7 @@ length table).
 type Pid = struct { kp: f64, ki: f64, kd: f64, integral: f64, previous_error: f64, out_min: f64, out_max: f64, kb: f64 }
 type Tuning = enum u8 { P, PI, PID }
 type Feedforward = struct { gain: f64, feedback: Pid }
+type Observer = struct { a: []const f64, b: []const f64, c: []const f64, l: []const f64, n: usize, m: usize, p: usize, x_hat: []f64 }
 error TooSmall
 error Singular
 
@@ -11003,6 +12000,8 @@ fn characteristic(re: []const f64, im: []const f64, out: []f64, scratch: []f64) 
 fn pole_placement(a: []const f64, b: []const f64, n: usize, poles_re: []const f64, poles_im: []const f64, k: []f64, scratch: []f64) -> err
 fn observer_gain(a: []const f64, c: []const f64, n: usize, poles_re: []const f64, poles_im: []const f64, l: []f64, scratch: []f64) -> err
 fn observer_step(x_hat: []f64, a: []const f64, b: []const f64, c: []const f64, l: []const f64, n: usize, m: usize, p: usize, u: []const f64, y: []const f64, scratch: []f64) -> err
+fn observer(a: []const f64, b: []const f64, c: []const f64, l: []const f64, n: usize, m: usize, p: usize, x_hat: []f64) -> Observer
+fn observer_update(o: *Observer, u: []const f64, y: []const f64, scratch: []f64) -> err
 ```
 
 `pid` and `pid_step`, `pid_anti_windup` (clamped output with back-calculation),
@@ -11081,10 +12080,12 @@ fn nullable_set(g: *const Grammar) -> u64
 fn earley_add(items: []Item, from: usize, used: usize, it: Item) -> (usize, err)
 fn earley_run(g: *const Grammar, start: u32, sentence: []const u32, items: []Item, sets: []usize) -> (usize, err)
 fn earley(g: *const Grammar, start: u32, sentence: []const u32, items: []Item, sets: []usize) -> (bool, usize, err)
+fn viable_mask(g: *const Grammar, start: u32, prefix: []const u32, items: []Item, sets: []usize) -> (u64, err)
 fn next_terminals(g: *const Grammar, start: u32, prefix: []const u32, out: []u32, items: []Item, sets: []usize) -> (usize, err)
 fn peg(p: *const Peg, rule: usize, text: str, memo: []i64) -> (usize, bool, err)
 fn peg_rule(p: *const Peg, rule: usize, text: str, pos: usize, memo: []i64) -> (usize, bool)
 fn peg_match(p: *const Peg, node: u32, text: str, pos: usize, memo: []i64) -> (usize, bool)
+fn constrained_decode(g: *const Grammar, start: u32, prefix: []const u32, vocab: []const u32, allowed: []bool, items: []Item, sets: []usize) -> (usize, err)
 ```
 
 `lex` (table scanner with a caller operator list), `lex_indent` (off-side rule),
@@ -11535,6 +12536,7 @@ type Config = struct { min_x: f64, min_y: f64, max_x: f64, max_y: f64, step: f64
 type Kino = struct { v_min: f64, v_max: f64, omega_max: f64, dt: f64, substeps: usize, controls: usize }
 type Grid = struct { cell: f64, w: usize, h: usize, headings: usize, arc: f64, radius: f64, substeps: usize }
 type Heap = struct { key: []f64, node: []u32, used: usize }
+type Incremental = struct { w: usize, h: usize, blocked: []u8, g: []f64, rhs: []f64, heap_k1: []f64, heap_k2: []f64, heap_node: []u32, heap_used: usize, root: usize, focus: usize, km: f64, expansions: usize }
 error TooSmall
 error Invalid
 const NONE: u32 = 4294967295u32
@@ -11583,6 +12585,22 @@ fn cell_node_of(cfg: *const Config, grid: *const Grid, p: *const Pool, u: usize)
 fn path_length(xs: []const f64, ys: []const f64, n: usize) -> f64
 fn path_extract(p: *const Pool, node: u32, out_x: []f64, out_y: []f64) -> (usize, f64, err)
 fn path_join(a: *const Pool, a_node: u32, b: *const Pool, b_node: u32, out_x: []f64, out_y: []f64) -> (usize, f64, err)
+fn prm(cfg: *const Config, obstacles: []const Circle, rng: *rand.Pcg64, p: *Pool, n: usize, k: usize, adj: []u32, sx: f64, sy: f64, gx: f64, gy: f64, heap_key: []f64, heap_node: []u32, closed: []u8) -> (u32, err)
+fn infinite() -> f64
+fn manhattan(w: usize, a: usize, b: usize) -> f64
+fn key_less(a1: f64, a2: f64, b1: f64, b2: f64) -> bool
+fn key_of(s: *const Incremental, u: usize) -> (f64, f64)
+fn ikey_push(s: *Incremental, k1: f64, k2: f64, node: u32) -> err
+fn ikey_pop(s: *Incremental) -> (f64, f64, u32)
+fn grid_neighbour(w: usize, h: usize, u: usize, k: usize) -> (usize, bool)
+fn update_vertex(s: *Incremental, u: usize) -> err
+fn incremental(w: usize, h: usize, blocked: []u8, g: []f64, rhs: []f64, heap_k1: []f64, heap_k2: []f64, heap_node: []u32, root: usize, focus: usize) -> (Incremental, err)
+fn lpa_star(w: usize, h: usize, blocked: []u8, g: []f64, rhs: []f64, heap_k1: []f64, heap_k2: []f64, heap_node: []u32, start: usize, goal: usize) -> (Incremental, err)
+fn dstar_lite(w: usize, h: usize, blocked: []u8, g: []f64, rhs: []f64, heap_k1: []f64, heap_k2: []f64, heap_node: []u32, start: usize, goal: usize) -> (Incremental, err)
+fn incremental_compute(s: *Incremental) -> (f64, err)
+fn incremental_block(s: *Incremental, cell: usize, wall: bool) -> err
+fn incremental_move(s: *Incremental, cell: usize) -> err
+fn incremental_path(s: *const Incremental, out: []u32) -> (usize, err)
 ```
 
 Sampling planners over circle obstacles and caller node pools with a stated draw
@@ -11941,8 +12959,8 @@ it is a compatibility entry point, not a hidden process-global cache.
 ```neper
 type SampleFormat = enum u8 { I16, I32, F32 }
 type Format = struct { rate: u32, channels: u8, sample: SampleFormat }
-// Interleaved. `count` is frames, never samples: one frame is `channels` samples.
 type Frames = struct { bytes: []u8, format: Format, count: usize }
+type Dither = struct { rng: *rand.Pcg64, shaping: bool, error_value: f64 }
 error Unsupported
 error Truncated
 
@@ -11950,10 +12968,17 @@ fn sample_bytes(s: SampleFormat) -> usize
 fn frame_bytes(f: Format) -> usize
 fn frames_in(f: Format, bytes: usize) -> usize
 fn view(bytes: []u8, f: Format) -> (Frames, err)
+fn read_u16(bytes: []const u8, at: usize) -> u16
+fn read_u32(bytes: []const u8, at: usize) -> u32
+fn write_u16(bytes: []u8, at: usize, value: u16)
+fn write_u32(bytes: []u8, at: usize, value: u32)
 fn sample_i32(fr: Frames, frame: usize, channel: u8) -> (i32, err)
 fn set_sample_i32(fr: *Frames, frame: usize, channel: u8, value: i32) -> err
 fn convert(a: *mem.Arena, src: Frames, to: SampleFormat) -> (Frames, err)
 fn silence(fr: *Frames) -> err
+fn dither(rng: *rand.Pcg64, shaping: bool) -> Dither
+fn dither_sample(d: *Dither, x: f32) -> i16
+fn dither_block(d: *Dither, src: []const f32, dst: []i16) -> err
 ```
 
 The delivered base uses interleaved little-endian samples on every target. `sample_i32`
@@ -12303,6 +13328,8 @@ fn to_f16(x: f32) -> u16
 fn from_f16(h: u16) -> f32
 fn to_bf16(x: f32) -> u16
 fn from_bf16(h: u16) -> f32
+fn unpack(x: f64) -> (bool, u32, u64)
+fn pack(negative: bool, exponent: u32, mantissa: u64) -> f64
 ```
 
 `unpack64`/`unpack32` split a float into sign, biased exponent and mantissa and
@@ -12423,6 +13450,7 @@ of `lambda`; `predict` and `predict_probability` apply the coefficients.
 
 ```neper
 type Linkage = enum u8 { Single, Complete, Average }
+type Birch = struct { child: []u32, child_count: []u32, height: []u32, cf_n: []f64, cf_ls: []f64, cf_ss: []f64, threshold: f64, branching: usize, d: usize, room: usize, nodes: usize, root: usize }
 error TooSmall
 error Invalid
 
@@ -12438,6 +13466,22 @@ fn agglomerative(x: []const f64, n: usize, d: usize, linkage: Linkage, k: usize,
 fn neighbor_joining(distance: []const f64, n: usize, work: []f64, joins: []usize, lengths: []f64, scratch: []usize) -> (usize, err)
 fn row_sum(work: []const f64, n: usize, ids: []const usize, dead: usize, i: usize) -> f64
 fn gmm_em(x: []const f64, n: usize, d: usize, k: usize, means: []f64, variances: []f64, weights: []f64, responsibilities: []f64, tolerance: f64, max_iterations: u32) -> (f64, u32, err)
+fn dbscan(x: []const f64, n: usize, d: usize, eps: f64, min_points: usize, labels: []usize, scratch: []usize) -> (usize, err)
+fn optics(x: []const f64, n: usize, d: usize, eps: f64, min_points: usize, order: []usize, reachability: []f64, scratch: []f64, work: []f64, marks: []usize) -> err
+fn optics_cut(order: []const usize, reachability: []const f64, core: []const f64, n: usize, eps: f64, labels: []usize) -> (usize, err)
+fn kmeans_streaming_update(centres: []f64, counts: []usize, point: []const f64) -> (usize, err)
+fn kmeans_streaming(x: []const f64, n: usize, d: usize, k: usize, centres: []f64, counts: []usize, labels: []usize) -> err
+fn birch(a: *mem.Arena, room: usize, d: usize, branching: usize, threshold: f64) -> (Birch, err)
+fn birch_clear(t: *Birch, node: usize, h: u32)
+fn birch_add_point(t: *Birch, node: usize, point: []const f64)
+fn birch_add_node(t: *Birch, node: usize, other: usize)
+fn birch_centroid_distance(t: *const Birch, p: usize, q: usize) -> f64
+fn birch_point_distance(t: *const Birch, node: usize, point: []const f64) -> f64
+fn birch_nearest_child(t: *const Birch, node: usize, point: []const f64) -> usize
+fn birch_split(t: *Birch, node: usize) -> usize
+fn birch_insert(t: *Birch, point: []const f64, path: []usize) -> err
+fn birch_centroids(t: *const Birch, centroids: []f64, sizes: []f64) -> (usize, err)
+fn birch_fit(a: *mem.Arena, x: []const f64, n: usize, d: usize, branching: usize, threshold: f64, room: usize, path: []usize) -> (Birch, err)
 ```
 
 `kmeans` runs Lloyd's iterations from caller centroids (`kmeans_pp_init` seeds them,
@@ -12492,6 +13536,7 @@ fn gaussian_log_posterior(query: []const f64, d: usize, c: usize, means: []const
 fn gaussian_predict(query: []const f64, d: usize, classes: usize, means: []const f64, variances: []const f64, priors: []const f64) -> usize
 fn multinomial_fit(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usize, alpha: f64, log_probability: []f64, log_prior: []f64, scratch: []usize) -> err
 fn multinomial_predict(query: []const f64, d: usize, classes: usize, log_probability: []const f64, log_prior: []const f64) -> usize
+fn naive(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usize, queries: []const f64, m: usize, means: []f64, variances: []f64, priors: []f64, out: []usize, scratch: []usize) -> err
 ```
 
 `gaussian_fit`/`gaussian_predict` keep a mean and variance per class and feature
@@ -12582,6 +13627,8 @@ fn triplet(anchor: []const f64, positive: []const f64, negative: []const f64, d:
 fn distillation_kl(teacher: []const f64, student: []const f64, n: usize, temperature: f64, scratch: []f64) -> (f64, err)
 fn log_add(a: f64, b: f64) -> f64
 fn ctc(log_probabilities: []const f64, frames: usize, classes: usize, blank: usize, labels: []const usize, scratch: []f64) -> (f64, err)
+fn kl_divergence(p: []const f64, q: []const f64, n: usize, reverse: bool, epsilon: f64) -> (f64, err)
+fn js_divergence(p: []const f64, q: []const f64, n: usize, epsilon: f64, scratch: []f64) -> (f64, err)
 ```
 
 `info_nce` (softmax over scaled dot products with one positive), `triplet` (the
@@ -12595,13 +13642,15 @@ log probabilities and a label sequence).
 error TooSmall
 error Invalid
 
-fn softmax(logits: []const f64, temperature: f64, out: []f64) -> err
+fn softmax(logits: []const f64, temp: f64, out: []f64) -> err
 fn rank(probabilities: []const f64, order: []usize)
 fn draw(probabilities: []const f64, order: []const usize, count: usize, r: *rand.Pcg64) -> usize
-fn top_k(logits: []const f64, temperature: f64, k: usize, r: *rand.Pcg64, probabilities: []f64, order: []usize) -> (usize, err)
-fn top_p(logits: []const f64, temperature: f64, p: f64, r: *rand.Pcg64, probabilities: []f64, order: []usize) -> (usize, err)
+fn top_k(logits: []const f64, temp: f64, k: usize, r: *rand.Pcg64, probabilities: []f64, order: []usize) -> (usize, err)
+fn top_p(logits: []const f64, temp: f64, p: f64, r: *rand.Pcg64, probabilities: []f64, order: []usize) -> (usize, err)
 fn contrastive(expert: []const f64, amateur: []const f64, alpha: f64, scratch: []f64) -> (usize, err)
 fn beam_search[Ctx: type](ctx: *Ctx, score: fn(*Ctx, []const usize, []f64), n: usize, width: usize, length: usize, out: []usize, tokens: []usize, scores: []f64) -> (f64, err)
+fn temperature(logits: []const f64, t: f64, out: []f64) -> err
+fn sample_temperature(r: *rand.Pcg64, logits: []const f64, t: f64, probabilities: []f64) -> (usize, err)
 ```
 
 `softmax` at a temperature, `top_k` and `top_p` draws through the caller's PCG,
@@ -12636,6 +13685,11 @@ fn attention(queries: []const f64, keys: []const f64, values: []const f64, n: us
 fn matmul(x: []const f64, w: []const f64, n: usize, d: usize, e: usize, out: []f64)
 fn multi_head_attention(x: []const f64, n: usize, d: usize, heads: usize, wq: []const f64, wk: []const f64, wv: []const f64, wo: []const f64, causal: bool, out: []f64, scratch: []f64) -> err
 fn rope(x: []f64, p: u64, base: f64) -> err
+fn perceptron_score(sample: []const f64, weights: []const f64) -> f64
+fn perceptron(x: []const f64, y: []const f64, n: usize, d: usize, weights: []f64, rate: f64, margin: f64, epochs: usize) -> (usize, err)
+fn perceptron_averaged(x: []const f64, y: []const f64, n: usize, d: usize, weights: []f64, averaged: []f64, rate: f64, margin: f64, epochs: usize) -> (usize, err)
+fn variable(t: *Tape, value: f64) -> (usize, err)
+fn autodiff(t: *Tape, root: usize) -> (f64, err)
 ```
 
 `perceptron_epoch`/`perceptron_predict` are the perceptron rule; a `Tape` over caller
@@ -12687,6 +13741,7 @@ fn pca_project(sample: []const f64, mean: []const f64, components: []const f64, 
 fn pca_online(w: []f64, sample: []const f64, rate: f64) -> (f64, err)
 fn frequent_directions_insert(sketch: []f64, rows: usize, d: usize, filled: *usize, sample: []const f64, scratch: []f64) -> err
 fn tsne(x: []const f64, n: usize, d: usize, perplexity: f64, iterations: u32, rate: f64, momentum: f64, y: []f64, scratch: []f64) -> err
+fn frequent_directions(x: []const f64, n: usize, d: usize, sketch: []f64, rows: usize, scratch: []f64) -> (usize, err)
 ```
 
 `symmetric_eigen` (cyclic Jacobi) serves `pca` (mean, falling variances, components
@@ -12699,6 +13754,8 @@ and momentum gradient descent into two dimensions.
 ```neper
 type Graph = struct { first: []u32, count: []u32, neighbours: []u32, m: usize, n: usize }
 type IvfPq = struct { coarse: []f64, codebooks: []f64, codes: []u8, cell_start: []usize, cell_items: []u32, cells: usize, subspaces: usize, codebook_size: usize, d: usize, n: usize }
+type Hnsw = struct { level: []u32, count: []u32, links: []u32, m: usize, levels: usize, d: usize, room: usize, entry: usize, n: usize }
+type MinhashLsh = struct { keys: []u64, ids: []u32, bands: usize, rows: usize, room: usize, n: usize }
 error TooSmall
 error Invalid
 
@@ -12712,6 +13769,15 @@ fn graph_search(g: *const Graph, x: []const f64, d: usize, query: []const f64, k
 fn float_beam_insert(ids: []f64, dists: []f64, count: usize, cap: usize, candidate: usize, dist: f64) -> usize
 fn ivf_pq_train(a: *mem.Arena, x: []const f64, n: usize, d: usize, cells: usize, subspaces: usize, codebook_size: usize, r: *rand.Pcg64, scratch: []f64, labels: []usize, marks: []usize) -> (IvfPq, err)
 fn ivf_pq_search(index: *const IvfPq, query: []const f64, probes: usize, k: usize, ids: []u32, dists: []f64, scratch: []f64) -> (usize, err)
+fn hnsw(a: *mem.Arena, room: usize, d: usize, m: usize, max_level: usize) -> (Hnsw, err)
+fn hnsw_layer(g: *const Hnsw, x: []const f64, query: []const f64, start: usize, layer: usize, ef: usize, beam_ids: []f64, beam_dists: []f64, visited: []u32) -> usize
+fn hnsw_connect(g: *Hnsw, x: []const f64, j: usize, layer: usize, node: usize)
+fn hnsw_insert(g: *Hnsw, x: []const f64, r: *rand.Pcg64, ef: usize, scratch: []f64, visited: []u32) -> err
+fn hnsw_search(g: *const Hnsw, x: []const f64, query: []const f64, k: usize, ef: usize, ids: []u32, dists: []f64, scratch: []f64, visited: []u32) -> (usize, err)
+fn ivf_pq(a: *mem.Arena, x: []const f64, n: usize, d: usize, cells: usize, subspaces: usize, codebook_size: usize, r: *rand.Pcg64, scratch: []f64, labels: []usize, marks: []usize) -> (IvfPq, err)
+fn minhash_lsh(keys: []u64, ids: []u32, bands: usize, rows: usize, room: usize) -> (MinhashLsh, err)
+fn minhash_lsh_insert(index: *MinhashLsh, signature: []const u64, id: u32) -> err
+fn minhash_lsh_query(index: *const MinhashLsh, signature: []const u64, out: []u32) -> (usize, err)
 ```
 
 `minhash`/`jaccard_estimate`/`lsh_match` estimate and band set similarity;
@@ -13283,24 +14349,42 @@ fn after(a: Item, b: Item) -> bool
 ### `e.game.grid`
 
 ```neper
-// Square, isometric and hex coordinates over one integer vocabulary. Isometric is a
-// coordinate transform plus a depth order, which is most of what 2.5D means in practice.
 type Shape = enum u8 { Square, IsoDiamond, HexPointy, HexFlat }
 type Coord = struct { q: i32, r: i32 }
 error Bounds
+const NONE: u32 = 4294967295u32
 
 fn coord(q: i32, r: i32) -> Coord
 fn equal(a: Coord, b: Coord) -> bool
 fn hexed(s: Shape) -> bool
-
+fn floor_div(a: i64, b: i64) -> i64
+fn abs64(v: i64) -> i64
+fn q16_floor(v: i64) -> i64
+fn q16_round(v: i64) -> i64
 fn to_world(s: Shape, c: Coord, tile_w: u32, tile_h: u32) -> (fixed.Fx, fixed.Fx)
+fn cube_round(qf: i64, rf: i64) -> Coord
 fn from_world(s: Shape, wx: fixed.Fx, wy: fixed.Fx, tile_w: u32, tile_h: u32) -> Coord
 fn neighbours(s: Shape, c: Coord, out: []Coord) -> (usize, err)
 fn distance(s: Shape, a: Coord, b: Coord) -> u32
+fn depth(s: Shape, c: Coord, elevation: u8) -> i32
+fn step_toward(value: i32, goal: i32) -> i32
+fn abs32(v: i32) -> i32
 fn line(s: Shape, a: Coord, b: Coord, out: []Coord) -> (usize, err)
 fn ring(s: Shape, centre: Coord, radius: u32, out: []Coord) -> (usize, err)
 fn area(s: Shape, centre: Coord, radius: u32, out: []Coord) -> (usize, err)
-fn depth(s: Shape, c: Coord, elevation: u8) -> i32
+fn cell_index(w: usize, c: Coord) -> usize
+fn cell_of(w: usize, index: usize) -> Coord
+fn inside_grid(w: usize, h: usize, c: Coord) -> bool
+fn unwind(w: usize, parent: []const u32, goal: usize, out: []Coord) -> (usize, err)
+fn path_bfs[Ctx: type](w: usize, h: usize, ctx: *Ctx, passable: fn(*Ctx, Coord) -> bool, from: Coord, to: Coord, parent: []u32, queue: []u32, out: []Coord) -> (usize, err)
+fn ray_cells(a: Coord, b: Coord, out: []Coord) -> (usize, err)
+fn line_of_sight[Ctx: type](ctx: *Ctx, passable: fn(*Ctx, Coord) -> bool, a: Coord, b: Coord, scratch: []Coord) -> bool
+fn euclid(a: Coord, b: Coord) -> f64
+fn heap_push(key: []f64, node: []u32, used: *usize, k: f64, v: u32) -> err
+fn heap_pop(key: []f64, node: []u32, used: *usize) -> u32
+fn delta_q(k: usize) -> i32
+fn delta_r(k: usize) -> i32
+fn path_theta_star[Ctx: type](w: usize, h: usize, ctx: *Ctx, passable: fn(*Ctx, Coord) -> bool, from: Coord, to: Coord, g: []f64, parent: []u32, closed: []u8, heap_key: []f64, heap_node: []u32, scratch: []Coord, out: []Coord) -> (usize, f64, err)
 ```
 
 ### `e.game.input`

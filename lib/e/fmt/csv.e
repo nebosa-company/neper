@@ -16,20 +16,11 @@ use e.mem
 use e.meta
 use e.str
 
-type Dialect = struct {
-    delimiter: u8,
-    quote: u8,
-    crlf: bool,
-    header: bool,
-}
+type Dialect = struct { delimiter: u8, quote: u8, crlf: bool, header: bool }
 
-type Row = struct {
-    fields: []const str,
-}
+type Row = struct { fields: []const str }
 
-type Reader = struct {
-    state: *void,
-}
+type Reader = struct { state: *void }
 
 error Invalid
 error TooLarge
@@ -51,16 +42,7 @@ const DEFAULT_ROW_LIMIT: usize = 65536usize
 // many reads as it needs.
 const INPUT_CAPACITY: usize = 4096usize
 
-type ReaderState = struct {
-    source: io.Reader,
-    dialect: Dialect,
-    input: []u8,
-    input_at: usize,
-    input_len: usize,
-    row: []u8,
-    fields: []str,
-    ended: bool,
-}
+type ReaderState = struct { source: io.Reader, dialect: Dialect, input: []u8, input_at: usize, input_len: usize, row: []u8, fields: []str, ended: bool }
 
 fn csv() -> Dialect {
     ret Dialect { delimiter: COMMA, quote: QUOTE, crlf: false, header: false }
@@ -268,43 +250,43 @@ fn needs_quote(field: str, dialect: Dialect) -> bool {
 
 // One field, quoted if it has to be. Shared, because `encode_rows` writes the same field from a
 // struct and has nowhere to build a `Row` it would only take apart again.
-fn write_field(writer: *io.Writer, field: str, dialect: Dialect) -> err {
+fn write_field(sink: *io.Writer, field: str, dialect: Dialect) -> err {
     var mark: [1]u8 = zero
     mark[0usize] = dialect.quote
-    if !needs_quote(field, dialect) { ret io.write_all(writer, field) }
-    try io.write_all(writer, mark[..])
+    if !needs_quote(field, dialect) { ret io.write_all(sink, field) }
+    try io.write_all(sink, mark[..])
     var start = 0usize
     var at = 0usize
     while at < field.len {
         // The quote itself is doubled, so the run up to and including it is written and then
         // the quote once more.
         if field[at] == dialect.quote {
-            try io.write_all(writer, field[start..at + 1usize])
-            try io.write_all(writer, mark[..])
+            try io.write_all(sink, field[start..at + 1usize])
+            try io.write_all(sink, mark[..])
             start = at + 1usize
         }
         at += 1usize
     }
-    try io.write_all(writer, field[start..field.len])
-    ret io.write_all(writer, mark[..])
+    try io.write_all(sink, field[start..field.len])
+    ret io.write_all(sink, mark[..])
 }
 
-fn write_ending(writer: *io.Writer, dialect: Dialect) -> err {
-    if dialect.crlf { ret io.write_all(writer, "\r\n") }
-    ret io.write_all(writer, "\n")
+fn write_ending(sink: *io.Writer, dialect: Dialect) -> err {
+    if dialect.crlf { ret io.write_all(sink, "\r\n") }
+    ret io.write_all(sink, "\n")
 }
 
-fn write_row(writer: *io.Writer, row: Row, dialect: Dialect) -> err {
+fn write_row(sink: *io.Writer, row: Row, dialect: Dialect) -> err {
     if !usable(dialect) { ret Invalid }
     var separator: [1]u8 = zero
     separator[0usize] = dialect.delimiter
     var index = 0usize
     while index < row.fields.len {
-        if index != 0usize { try io.write_all(writer, separator[..]) }
-        try write_field(writer, row.fields[index], dialect)
+        if index != 0usize { try io.write_all(sink, separator[..]) }
+        try write_field(sink, row.fields[index], dialect)
         index += 1usize
     }
-    ret write_ending(writer, dialect)
+    ret write_ending(sink, dialect)
 }
 // --- The typed codec.
 //
@@ -414,7 +396,7 @@ fn decode_rows[T: type](a: *mem.Arena, source: io.Reader, dialect: Dialect) -> (
     ret (rows[0usize..count], ok)
 }
 
-fn encode_rows[T: type](writer: *io.Writer, rows: []const T, dialect: Dialect) -> err {
+fn encode_rows[T: type](sink: *io.Writer, rows: []const T, dialect: Dialect) -> err {
     if !usable(dialect) { ret Invalid }
     var separator: [1]u8 = zero
     separator[0usize] = dialect.delimiter
@@ -423,17 +405,17 @@ fn encode_rows[T: type](writer: *io.Writer, rows: []const T, dialect: Dialect) -
     if dialect.header {
         var named = 0usize
         for f in meta.fields[T]() {
-            if named != 0usize { try io.write_all(writer, separator[..]) }
-            try write_field(writer, f.name, dialect)
+            if named != 0usize { try io.write_all(sink, separator[..]) }
+            try write_field(sink, f.name, dialect)
             named += 1usize
         }
-        try write_ending(writer, dialect)
+        try write_ending(sink, dialect)
     }
     var index = 0usize
     while index < rows.len {
         var written = 0usize
         for f in meta.fields[T]() {
-            if written != 0usize { try io.write_all(writer, separator[..]) }
+            if written != 0usize { try io.write_all(sink, separator[..]) }
             var slot: f.ty = zero
             slot = meta.get[f, T](&rows[index])
             // A buffer per field and an arena over it, so `e.str` does the rendering and this
@@ -476,11 +458,38 @@ fn encode_rows[T: type](writer: *io.Writer, rows: []const T, dialect: Dialect) -
             }
             }
             }
-            try write_field(writer, text, dialect)
+            try write_field(sink, text, dialect)
             written += 1usize
         }
-        try write_ending(writer, dialect)
+        try write_ending(sink, dialect)
         index += 1usize
     }
     ret ok
+}
+
+// --- The record sink.
+//
+// The counterpart of `reader`: a sink and a dialect held together, so a caller writing rows
+// in a loop names the dialect once. `write_record` is `write_row` over bare fields, with the
+// same minimal quoting (RFC 4180: a field holding the delimiter, the quote, a CR or an LF is
+// quoted and its quotes doubled) and the dialect's line ending.
+
+type Writer = struct { sink: io.Writer, dialect: Dialect }
+
+fn writer(sink: io.Writer, dialect: Dialect) -> (Writer, err) {
+    var w: Writer = zero
+    if !usable(dialect) { ret (w, Invalid) }
+    w.sink = sink
+    w.dialect = dialect
+    ret (w, ok)
+}
+
+fn write_record(w: *Writer, fields: []const str) -> err {
+    var row: Row = zero
+    row.fields = fields
+    ret write_row(&w.sink, row, w.dialect)
+}
+
+fn flush(w: *Writer) -> err {
+    ret io.flush(&w.sink)
 }

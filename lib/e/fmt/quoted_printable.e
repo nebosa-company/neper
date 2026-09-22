@@ -221,3 +221,19 @@ fn finish(sink_writer: *Writer) -> err {
     }
     ret io.flush(&s.sink)
 }
+
+// `src` encoded whole into `dst` at the RFC's 76-column limit: the `writer` above over a
+// slice, then `finish`. `io.TooSmall` when `dst` fills.
+fn encode(dst: []u8, src: []const u8) -> ([]u8, err) {
+    var sink_state: io.SliceWriter = zero
+    sink_state.data = dst
+    var storage: [192]u8 = zero
+    let (w0, writer_error) = writer(storage[0..], io.slice_writer(&sink_state), 76u8)
+    if writer_error != ok { ret (zero, writer_error) }
+    var w = w0
+    let (consumed, write_error) = write(&w, src)
+    if write_error != ok { ret (zero, write_error) }
+    let finish_error = finish(&w)
+    if finish_error != ok { ret (zero, finish_error) }
+    ret (dst[..sink_state.off], ok)
+}

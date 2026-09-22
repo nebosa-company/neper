@@ -8,6 +8,8 @@
 
 use e.algo.rand
 use e.math
+use e.mem
+use e.ml.cluster.density as density
 
 type Linkage = enum u8 { Single, Complete, Average }
 error TooSmall
@@ -585,4 +587,350 @@ fn gmm_em(x: []const f64, n: usize, d: usize, k: usize, means: []f64, variances:
         previous = log_likelihood
     }
     ret (log_likelihood, iteration, ok)
+}
+
+// --- Density clustering (the planned names of `e.ml.cluster.density`) ------
+
+// DBSCAN: `labels` receives a cluster index or `density.NOISE` (the
+// all-ones index, `-1`) per sample; answers the cluster count.
+// `scratch.len >= n`.
+fn dbscan(x: []const f64, n: usize, d: usize, eps: f64, min_points: usize, labels: []usize, scratch: []usize) -> (usize, err) {
+    let (clusters, run_error) = density.dbscan(x, n, d, eps, min_points, labels, scratch)
+    ret (clusters, run_error)
+}
+
+// OPTICS: `order` and `reachability` as in `density.optics`; `scratch.len
+// >= n` floats, `work.len >= min_points`, `marks.len >= n`.
+fn optics(x: []const f64, n: usize, d: usize, eps: f64, min_points: usize, order: []usize, reachability: []f64, scratch: []f64, work: []f64, marks: []usize) -> err {
+    ret density.optics(x, n, d, eps, min_points, order, reachability, scratch, work, marks)
+}
+
+// Clusters of an OPTICS ordering cut at `eps` (sklearn's
+// `cluster_optics_dbscan`): along `order`, a sample with reachability
+// `> eps` opens a cluster when its core distance (`core`, the `scratch` of
+// `optics`) is `<= eps` and is `density.NOISE` otherwise; the rest join the
+// open cluster. Answers the count.
+fn optics_cut(order: []const usize, reachability: []const f64, core: []const f64, n: usize, eps: f64, labels: []usize) -> (usize, err) {
+    if order.len < n || reachability.len < n || core.len < n || labels.len < n { ret (0usize, TooSmall) }
+    var clusters = 0usize
+    var i = 0usize
+    while i < n {
+        let s = order[i]
+        if reachability[s] > eps && core[s] <= eps { clusters += 1usize }
+        if clusters == 0usize || (reachability[s] > eps && core[s] > eps) {
+            labels[s] = density.NOISE
+        } else {
+            labels[s] = clusters - 1usize
+        }
+        i += 1usize
+    }
+    ret (clusters, ok)
+}
+
+// --- Streaming k-means -----------------------------------------------------
+
+// One `point` of a stream joins the nearest of `counts.len` centres
+// (`centres` is `k × point.len`), which moves toward it by `1 / count`.
+// Answers the centre.
+fn kmeans_streaming_update(centres: []f64, counts: []usize, point: []const f64) -> (usize, err) {
+    let (c, update_error) = kmeans_online(point, point.len, counts.len, centres, counts)
+    ret (c, update_error)
+}
+
+// Sequential k-means over the stream `x` (`n × d`) from the caller's
+// `centres` and `counts` (zero for fresh centres); `labels` receives the
+// centre each sample joined.
+fn kmeans_streaming(x: []const f64, n: usize, d: usize, k: usize, centres: []f64, counts: []usize, labels: []usize) -> err {
+    if x.len < n * d || centres.len < k * d || counts.len < k || labels.len < n { ret TooSmall }
+    if k == 0usize { ret Invalid }
+    var i = 0usize
+    while i < n {
+        let (c, update_error) = kmeans_online(x[i * d..(i + 1usize) * d], d, k, centres, counts[..k])
+        if update_error != ok { ret update_error }
+        labels[i] = c
+        i += 1usize
+    }
+    ret ok
+}
+
+// --- BIRCH -----------------------------------------------------------------
+
+// A clustering-feature tree: node `i` holds `(cf_n, cf_ls, cf_ss)` (count,
+// linear sum, square sum) and up to `branching` children (`child` has
+// `branching + 1` slots per node for the split). `height` is 0 for a
+// subcluster, 1 for a leaf, more above; subclusters are the result.
+type Birch = struct { child: []u32, child_count: []u32, height: []u32, cf_n: []f64, cf_ls: []f64, cf_ss: []f64, threshold: f64, branching: usize, d: usize, room: usize, nodes: usize, root: usize }
+
+// An empty tree with room for `room` nodes over `d` features: a subcluster
+// absorbs a point while its radius stays within `threshold`.
+fn birch(a: *mem.Arena, room: usize, d: usize, branching: usize, threshold: f64) -> (Birch, err) {
+    if room < 2usize || d == 0usize || branching < 2usize || threshold < 0.0f64 || room > 4000000000usize { ret (zero, Invalid) }
+    let (child, child_error) = mem.alloc[u32](a, room * (branching + 1usize))
+    if child_error != ok { ret (zero, child_error) }
+    let (child_count, count_error) = mem.alloc[u32](a, room)
+    if count_error != ok { ret (zero, count_error) }
+    let (height, height_error) = mem.alloc[u32](a, room)
+    if height_error != ok { ret (zero, height_error) }
+    let (cf_n, n_error) = mem.alloc[f64](a, room)
+    if n_error != ok { ret (zero, n_error) }
+    let (cf_ls, ls_error) = mem.alloc[f64](a, room * d)
+    if ls_error != ok { ret (zero, ls_error) }
+    let (cf_ss, ss_error) = mem.alloc[f64](a, room)
+    if ss_error != ok { ret (zero, ss_error) }
+    var t = Birch { child: child, child_count: child_count, height: height, cf_n: cf_n, cf_ls: cf_ls, cf_ss: cf_ss, threshold: threshold, branching: branching, d: d, room: room, nodes: 1usize, root: 0usize }
+    birch_clear(&t, 0usize, 1u32)
+    ret (t, ok)
+}
+
+fn birch_clear(t: *Birch, node: usize, h: u32) {
+    t.child_count[node] = 0u32
+    t.height[node] = h
+    t.cf_n[node] = 0.0f64
+    t.cf_ss[node] = 0.0f64
+    var j = 0usize
+    while j < t.d {
+        t.cf_ls[node * t.d + j] = 0.0f64
+        j += 1usize
+    }
+}
+
+fn birch_add_point(t: *Birch, node: usize, point: []const f64) {
+    t.cf_n[node] += 1.0f64
+    var j = 0usize
+    while j < t.d {
+        t.cf_ls[node * t.d + j] += point[j]
+        t.cf_ss[node] += point[j] * point[j]
+        j += 1usize
+    }
+}
+
+fn birch_add_node(t: *Birch, node: usize, other: usize) {
+    t.cf_n[node] += t.cf_n[other]
+    t.cf_ss[node] += t.cf_ss[other]
+    var j = 0usize
+    while j < t.d {
+        t.cf_ls[node * t.d + j] += t.cf_ls[other * t.d + j]
+        j += 1usize
+    }
+}
+
+// Squared distance between the centroids of two nodes.
+fn birch_centroid_distance(t: *const Birch, p: usize, q: usize) -> f64 {
+    var s = 0.0f64
+    var j = 0usize
+    while j < t.d {
+        let v = t.cf_ls[p * t.d + j] / t.cf_n[p] - t.cf_ls[q * t.d + j] / t.cf_n[q]
+        s += v * v
+        j += 1usize
+    }
+    ret s
+}
+
+// Squared distance from a point to a node's centroid.
+fn birch_point_distance(t: *const Birch, node: usize, point: []const f64) -> f64 {
+    var s = 0.0f64
+    var j = 0usize
+    while j < t.d {
+        let v = point[j] - t.cf_ls[node * t.d + j] / t.cf_n[node]
+        s += v * v
+        j += 1usize
+    }
+    ret s
+}
+
+// The child of `node` whose centroid is nearest `point` (ties to the first).
+fn birch_nearest_child(t: *const Birch, node: usize, point: []const f64) -> usize {
+    let base = node * (t.branching + 1usize)
+    var best = usize(t.child[base])
+    var best_distance = birch_point_distance(t, best, point)
+    var c = 1usize
+    while c < usize(t.child_count[node]) {
+        let dist = birch_point_distance(t, usize(t.child[base + c]), point)
+        if dist < best_distance {
+            best = usize(t.child[base + c])
+            best_distance = dist
+        }
+        c += 1usize
+    }
+    ret best
+}
+
+// Split the overfull `node` into itself and a fresh node: the two children
+// farthest apart seed the halves, every other child joins the nearer seed
+// (ties to the first). Answers the fresh node.
+fn birch_split(t: *Birch, node: usize) -> usize {
+    let stride = t.branching + 1usize
+    let base = node * stride
+    let count = usize(t.child_count[node])
+    var s1 = 0usize
+    var s2 = 1usize
+    var farthest = 0.0f64 - 1.0f64
+    var p = 0usize
+    while p < count {
+        var q = p + 1usize
+        while q < count {
+            let dist = birch_centroid_distance(t, usize(t.child[base + p]), usize(t.child[base + q]))
+            if dist > farthest {
+                farthest = dist
+                s1 = p
+                s2 = q
+            }
+            q += 1usize
+        }
+        p += 1usize
+    }
+    let fresh = t.nodes
+    t.nodes += 1usize
+    birch_clear(t, fresh, t.height[node])
+    let seed1 = usize(t.child[base + s1])
+    let seed2 = usize(t.child[base + s2])
+    var kept = 0usize
+    p = 0usize
+    while p < count {
+        let c = usize(t.child[base + p])
+        var to_fresh = p == s2
+        if p != s1 && p != s2 { to_fresh = birch_centroid_distance(t, c, seed2) < birch_centroid_distance(t, c, seed1) }
+        if to_fresh {
+            t.child[fresh * stride + usize(t.child_count[fresh])] = u32(c)
+            t.child_count[fresh] += 1u32
+            birch_add_node(t, fresh, c)
+        } else {
+            t.child[base + kept] = u32(c)
+            kept += 1usize
+        }
+        p += 1usize
+    }
+    t.child_count[node] = u32(kept)
+    t.cf_n[node] = 0.0f64
+    t.cf_ss[node] = 0.0f64
+    var j = 0usize
+    while j < t.d {
+        t.cf_ls[node * t.d + j] = 0.0f64
+        j += 1usize
+    }
+    p = 0usize
+    while p < kept {
+        birch_add_node(t, node, usize(t.child[base + p]))
+        p += 1usize
+    }
+    ret fresh
+}
+
+// Insert `point`: it descends to the leaf of nearest centroids, joins the
+// nearest subcluster when the merged radius stays within the threshold
+// and otherwise opens a new one; an overfull node splits, up to a new
+// root. `path.len` must cover the tree height (`room` is always enough).
+// `Invalid` when the tree is out of nodes.
+fn birch_insert(t: *Birch, point: []const f64, path: []usize) -> err {
+    if point.len < t.d { ret TooSmall }
+    var depth = 0usize
+    var node = t.root
+    var descending = true
+    while descending {
+        if depth >= path.len { ret TooSmall }
+        path[depth] = node
+        depth += 1usize
+        if t.height[node] > 1u32 {
+            node = birch_nearest_child(t, node, point)
+        } else {
+            descending = false
+        }
+    }
+    // `node` is the leaf: absorb into a subcluster or open one.
+    let stride = t.branching + 1usize
+    var home = t.room
+    if t.child_count[node] > 0u32 {
+        let candidate = birch_nearest_child(t, node, point)
+        let n = t.cf_n[candidate] + 1.0f64
+        var ss = t.cf_ss[candidate]
+        var norm = 0.0f64
+        var j = 0usize
+        while j < t.d {
+            let ls = t.cf_ls[candidate * t.d + j] + point[j]
+            ss += point[j] * point[j]
+            norm += (ls / n) * (ls / n)
+            j += 1usize
+        }
+        if ss / n - norm <= t.threshold * t.threshold { home = candidate }
+    }
+    if home == t.room {
+        if t.nodes >= t.room { ret Invalid }
+        home = t.nodes
+        t.nodes += 1usize
+        birch_clear(t, home, 0u32)
+        t.child[node * stride + usize(t.child_count[node])] = u32(home)
+        t.child_count[node] += 1u32
+    }
+    birch_add_point(t, home, point)
+    var i = 0usize
+    while i < depth {
+        birch_add_point(t, path[i], point)
+        i += 1usize
+    }
+    // Splits propagate upward.
+    var level = depth
+    var splitting = true
+    while splitting && level > 0usize {
+        level -= 1usize
+        let full = path[level]
+        if usize(t.child_count[full]) > t.branching {
+            if t.nodes + 2usize > t.room { ret Invalid }
+            let fresh = birch_split(t, full)
+            if level == 0usize {
+                let top = t.nodes
+                t.nodes += 1usize
+                birch_clear(t, top, t.height[full] + 1u32)
+                t.child[top * stride] = u32(full)
+                t.child[top * stride + 1usize] = u32(fresh)
+                t.child_count[top] = 2u32
+                birch_add_node(t, top, full)
+                birch_add_node(t, top, fresh)
+                t.root = top
+            } else {
+                let parent = path[level - 1usize]
+                t.child[parent * stride + usize(t.child_count[parent])] = u32(fresh)
+                t.child_count[parent] += 1u32
+            }
+        } else {
+            splitting = false
+        }
+    }
+    ret ok
+}
+
+// Every subcluster's centroid into `centroids` (`k × d`, in node order),
+// its size into `sizes`; answers `k`.
+fn birch_centroids(t: *const Birch, centroids: []f64, sizes: []f64) -> (usize, err) {
+    var k = 0usize
+    var node = 0usize
+    while node < t.nodes {
+        if t.height[node] == 0u32 {
+            if centroids.len < (k + 1usize) * t.d || sizes.len <= k { ret (k, TooSmall) }
+            var j = 0usize
+            while j < t.d {
+                centroids[k * t.d + j] = t.cf_ls[node * t.d + j] / t.cf_n[node]
+                j += 1usize
+            }
+            sizes[k] = t.cf_n[node]
+            k += 1usize
+        }
+        node += 1usize
+    }
+    ret (k, ok)
+}
+
+// BIRCH over `x` (`n × d`) in one pass: a fresh tree in the caller's arena
+// with room for `room` nodes, every sample inserted; `path.len >= room`.
+fn birch_fit(a: *mem.Arena, x: []const f64, n: usize, d: usize, branching: usize, threshold: f64, room: usize, path: []usize) -> (Birch, err) {
+    if x.len < n * d { ret (zero, TooSmall) }
+    let (t, tree_error) = birch(a, room, d, branching, threshold)
+    if tree_error != ok { ret (zero, tree_error) }
+    var tree = t
+    var i = 0usize
+    while i < n {
+        let insert_error = birch_insert(&tree, x[i * d..(i + 1usize) * d], path)
+        if insert_error != ok { ret (zero, insert_error) }
+        i += 1usize
+    }
+    ret (tree, ok)
 }

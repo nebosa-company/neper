@@ -81,3 +81,14 @@ fn natural_cmp(a: str, b: str, options: Options) -> i32 {
     if right < b.len { ret -1i32 }
     ret 0i32
 }
+
+// The collation comparison: -1, 0 or 1 for `a` against `b` under `options` (the
+// natural order with digit runs by magnitude when `numeric`, ASCII case folded when
+// not `case_sensitive`); equal under the options, the two are ordered by code point
+// so the order stays total. ponytail: this is the module's locale-independent
+// ordering, not UCA weights; `e.text.locale` is where a tailoring would live.
+fn compare(a: str, b: str, options: Options) -> i32 {
+    let primary = natural_cmp(a, b, options)
+    if primary != 0i32 { ret primary }
+    ret codepoint_cmp(a, b)
+}

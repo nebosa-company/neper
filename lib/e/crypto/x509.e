@@ -592,3 +592,113 @@ fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, e
     }
     ret (Chain { certificates: links[..count] }, ok)
 }
+
+
+// --- Certificate Transparency (#1431), RFC 6962 sections 3.2 and 3.3: a
+// v1 SignedCertificateTimestamp is `version(1) log_id(32) timestamp(8)
+// extensions(2 + n) hash(1) signature_algorithm(1) signature(2 + n)`; the
+// log signs `version(1) signature_type(1 = certificate_timestamp)
+// timestamp(8) entry_type(2) entry extensions(2 + n)`, where an `x509_entry`
+// (0) is the certificate DER under a 3-byte length and a `precert_entry` (1)
+// is the issuer key hash (32) then the TBS under a 3-byte length. Only the
+// signature over one entry is checked here; the log's Merkle inclusion
+// proofs are `e.crypto.merkle`'s.
+
+type Sct = struct { version: u8, log_id: [32]u8, timestamp: u64, extensions: []const u8, hash_algorithm: u8, signature_algorithm: u8, signature: []const u8 }
+error InvalidSct
+error BadSctSignature
+
+fn be16(bytes: []const u8, at: usize) -> usize { ret (usize(bytes[at]) << 8u32) | usize(bytes[at + 1usize]) }
+
+// Parse the binary SCT (the content of one `SerializedSCT` in a list).
+fn ct_parse(bytes: []const u8) -> (Sct, err) {
+    if bytes.len < 47usize || bytes[0usize] != 0u8 { ret (zero, InvalidSct) }
+    var s: Sct = zero
+    s.version = 0u8
+    mem.copy[u8](s.log_id[0..], bytes[1usize..33usize])
+    var at = 33usize
+    var timestamp = 0u64
+    var i = 0usize
+    while i < 8usize {
+        timestamp = (timestamp << 8u32) | u64(bytes[at + i])
+        i += 1usize
+    }
+    s.timestamp = timestamp
+    at += 8usize
+    let extension_len = be16(bytes, at)
+    at += 2usize
+    if at + extension_len + 4usize > bytes.len { ret (zero, InvalidSct) }
+    s.extensions = bytes[at..at + extension_len]
+    at += extension_len
+    s.hash_algorithm = bytes[at]
+    s.signature_algorithm = bytes[at + 1usize]
+    let signature_len = be16(bytes, at + 2usize)
+    at += 4usize
+    if at + signature_len != bytes.len { ret (zero, InvalidSct) }
+    s.signature = bytes[at..]
+    ret (s, ok)
+}
+
+// The bytes the log signed, into `dst`: `entry` is the certificate DER for
+// an X.509 entry, or the TBS certificate when `issuer_key_hash` (32 bytes)
+// is given for a precert entry. Answers the length used.
+fn ct_signed_data(s: *const Sct, entry: []const u8, issuer_key_hash: []const u8, dst: []u8) -> (usize, err) {
+    let precert = issuer_key_hash.len == 32usize
+    if !precert && issuer_key_hash.len != 0usize { ret (0usize, InvalidSct) }
+    if entry.len > 16777215usize { ret (0usize, InvalidSct) }
+    var need = 12usize + 3usize + entry.len + 2usize + s.extensions.len
+    if precert { need += 32usize }
+    if dst.len < need { ret (0usize, InvalidSct) }
+    dst[0usize] = s.version
+    dst[1usize] = 0u8
+    var i = 0usize
+    while i < 8usize {
+        dst[2usize + i] = u8((s.timestamp >> u32(56usize - 8usize * i)) & 255u64)
+        i += 1usize
+    }
+    dst[10usize] = 0u8
+    dst[11usize] = 0u8
+    var at = 12usize
+    if precert {
+        dst[11usize] = 1u8
+        mem.copy[u8](dst[at..at + 32usize], issuer_key_hash)
+        at += 32usize
+    }
+    dst[at] = u8((entry.len >> 16u32) & 255usize)
+    dst[at + 1usize] = u8((entry.len >> 8u32) & 255usize)
+    dst[at + 2usize] = u8(entry.len & 255usize)
+    at += 3usize
+    mem.copy[u8](dst[at..at + entry.len], entry)
+    at += entry.len
+    dst[at] = u8((s.extensions.len >> 8u32) & 255usize)
+    dst[at + 1usize] = u8(s.extensions.len & 255usize)
+    at += 2usize
+    mem.copy[u8](dst[at..at + s.extensions.len], s.extensions)
+    at += s.extensions.len
+    ret (at, ok)
+}
+
+// Verify a serialised SCT for `entry` against the log's key: ECDSA P-256
+// with SHA-256 (hash 4, signature 3) or Ed25519 (signature 7). `scratch`
+// holds the signed data (`entry.len + 49` bytes, 32 more for a precert).
+// Answers the parsed SCT; a mismatch is `BadSctSignature`.
+fn ct_verify(sct: []const u8, log_key: PublicKey, entry: []const u8, issuer_key_hash: []const u8, scratch: []u8) -> (Sct, err) {
+    let (s, parse_error) = ct_parse(sct)
+    if parse_error != ok { ret (zero, parse_error) }
+    let (signed_len, data_error) = ct_signed_data(&s, entry, issuer_key_hash, scratch)
+    if data_error != ok { ret (zero, data_error) }
+    let signed = scratch[..signed_len]
+    switch log_key {
+    case .P256 as key:
+        if s.signature_algorithm != 3u8 || s.hash_algorithm != 4u8 { ret (s, InvalidSct) }
+        if sign.p256_verify(key, signed, s.signature) { ret (s, ok) }
+    case .Ed25519 as key:
+        if s.signature_algorithm != 7u8 || s.signature.len != 64usize { ret (s, InvalidSct) }
+        var signature: sign.Ed25519Signature = zero
+        mem.copy[u8](signature.bytes[0..], s.signature)
+        if sign.ed25519_verify(key, signed, signature) { ret (s, ok) }
+    default:
+        ret (s, InvalidSct)
+    }
+    ret (s, BadSctSignature)
+}

@@ -675,13 +675,11 @@ fn earley(g: *const Grammar, start: u32, sentence: []const u32, items: []Item, s
     ret (false, used, ok)
 }
 
-// Constrained decoding: the terminals (ascending, fewer than 64 of them)
-// that may follow `prefix` in some sentence of `start`; none when the prefix
-// is not viable.
-fn next_terminals(g: *const Grammar, start: u32, prefix: []const u32, out: []u32, items: []Item, sets: []usize) -> (usize, err) {
-    if g.terminals > 64u32 { ret (0usize, Invalid) }
+// The bitmask of terminals (fewer than 64) that may follow `prefix`.
+fn viable_mask(g: *const Grammar, start: u32, prefix: []const u32, items: []Item, sets: []usize) -> (u64, err) {
+    if g.terminals > 64u32 { ret (0u64, Invalid) }
     let (_, e) = earley_run(g, start, prefix, items, sets)
-    if e != ok { ret (0usize, e) }
+    if e != ok { ret (0u64, e) }
     let n = prefix.len
     var mask = 0u64
     var j = sets[n]
@@ -694,6 +692,15 @@ fn next_terminals(g: *const Grammar, start: u32, prefix: []const u32, out: []u32
         }
         j += 1usize
     }
+    ret (mask, ok)
+}
+
+// Constrained decoding: the terminals (ascending, fewer than 64 of them)
+// that may follow `prefix` in some sentence of `start`; none when the prefix
+// is not viable.
+fn next_terminals(g: *const Grammar, start: u32, prefix: []const u32, out: []u32, items: []Item, sets: []usize) -> (usize, err) {
+    let (mask, e) = viable_mask(g, start, prefix, items, sets)
+    if e != ok { ret (0usize, e) }
     var count = 0usize
     var s = 0u32
     while s < g.terminals {
@@ -776,4 +783,22 @@ fn peg_match(p: *const Peg, node: u32, text: str, pos: usize, memo: []i64) -> (u
         ret (0usize, matched == (op == PEG_AND))
     }
     ret (0usize, false)
+}
+
+// #1537 Grammar-constrained decoding: `allowed[i]` becomes whether the
+// vocabulary token `vocab[i]` (a terminal id) may follow `prefix` in some
+// sentence of `start`; answers how many are allowed (none when the prefix
+// is not viable). Terminals are capped at 64 by the bitset.
+fn constrained_decode(g: *const Grammar, start: u32, prefix: []const u32, vocab: []const u32, allowed: []bool, items: []Item, sets: []usize) -> (usize, err) {
+    if allowed.len < vocab.len { ret (0usize, TooSmall) }
+    let (mask, e) = viable_mask(g, start, prefix, items, sets)
+    if e != ok { ret (0usize, e) }
+    var count = 0usize
+    var i = 0usize
+    while i < vocab.len {
+        allowed[i] = vocab[i] < g.terminals && ((mask >> vocab[i]) & 1u64) == 1u64
+        if allowed[i] { count += 1usize }
+        i += 1usize
+    }
+    ret (count, ok)
 }

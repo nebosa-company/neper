@@ -22,7 +22,7 @@
 - `ICON`: `lib/e/os/shell.windows.e`×10‡
 - `CURSOR`: `lib/e/os/shell.windows.e`×2‡, `src/main.e`×1‡
 - `BITMAP`: `lib/e/os.windows.e`×1‡
-- `RCDATA`: `lib/e/fmt/html.e`×2†
+- `RCDATA`: `lib/e/fmt/html.e`×3†
 - `LANGUAGE`: `benchmarks/llm_edit/hard_context.py`×5
 - `.ico`: `lib/e/fmt/brotli.e`×2‡, `lib/e/ui/navigation.e`×2†, `lib/e/os/shell.windows.e`×1‡
 - `.cur`: `src/parse.e`×201†, `src/tool.e`×43‡, `lib/e/ui/undo.e`×32, `src/lower.e`×30‡, `src/nir.e`×25†, `lib/e/gfx/scene.e`×18†, `src/main.e`×10‡, `lib/e/fmt/lzw.e`×6

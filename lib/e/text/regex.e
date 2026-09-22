@@ -53,17 +53,7 @@ type Kind = enum u8 { Empty, Char, Any, Class, Bol, Eol, WordB, NotWordB, Group,
 // NO_NODE for unbounded.
 type Node = struct { kind: Kind, first: u32, second: u32, value: u32, min: u32, max: u32, lazy: bool }
 
-type Parser = struct {
-    pattern: str,
-    at: usize,
-    nodes: []Node,
-    node_count: usize,
-    ranges: []u32,
-    range_count: usize,
-    groups: u32,
-    depth: u32,
-    options: Options,
-}
+type Parser = struct { pattern: str, at: usize, nodes: []Node, node_count: usize, ranges: []u32, range_count: usize, groups: u32, depth: u32, options: Options }
 
 type Emitter = struct { insts: []Inst, count: usize, writing: bool }
 
@@ -71,18 +61,7 @@ type Emitter = struct { insts: []Inst, count: usize, writing: bool }
 // `seen` marks the counters already in the list for this generation.
 type Threads = struct { pcs: []u32, caps: []usize, seen: []u32, gen: u32, count: usize }
 
-type Program = struct {
-    insts: []Inst,
-    ranges: []u32,
-    groups: usize,
-    slots: usize,
-    options: Options,
-    a: Threads,
-    b: Threads,
-    work: []usize,
-    result: []usize,
-    stack: []usize,
-}
+type Program = struct { insts: []Inst, ranges: []u32, groups: usize, slots: usize, options: Options, a: Threads, b: Threads, work: []usize, result: []usize, stack: []usize }
 
 fn node(p: *Parser, kind: Kind, first: u32, second: u32, value: u32) -> (u32, err) {
     if p.node_count >= p.nodes.len { ret (NO_NODE, TooComplex) }
@@ -824,4 +803,329 @@ fn replace_all(a: *mem.Arena, r: *const Regex, text: str, replacement: str) -> (
     if out_error != ok { ret ("", out_error) }
     let written = substitute(prog, out, true, text, replacement)
     ret (out[..written], ok)
+}
+
+// The automata behind `compile` as entry points of their own: `nfa_compile` is the
+// Thompson construction (the same instruction program), `pike_vm` the thread-list VM
+// with capture slots, `dfa_from_nfa` the subset construction over the program with
+// the scalar alphabet cut into the classes the pattern's literals and ranges bound,
+// `dfa_minimize` Moore partition refinement, `dfa_run` anchored acceptance and
+// `dfa_longest` the longest accepted prefix. A DFA state is a set of program counters
+// before its empty closure; `^` holds only in the start state's closure, `$` only in
+// the closure taken at the text's end, so each state carries two accept bits. The DFA
+// refuses (`Unsupported`) what a state cannot decide from one scalar: `\b`, `\B`,
+// `multiline` and `case_insensitive`. `TooLarge` caps the states at the caller's limit.
+// ponytail: states are deduplicated by a linear scan of bitsets and minimized by Moore
+// refinement, both quadratic in the state count; a hashed set table and Hopcroft are
+// the upgrade for patterns that build thousands of states.
+
+type Nfa = struct { state: *void }
+type Dfa = struct { table: []const u32, points: []const u32, classes: usize, states: usize, start: u32, accept: []const u8 }
+error TooLarge
+error Unsupported
+
+fn nfa_compile(a: *mem.Arena, pattern: str, options: Options) -> (Nfa, err) {
+    let (r, r_error) = compile(a, pattern, options)
+    if r_error != ok { ret (zero, r_error) }
+    ret (Nfa { state: r.state }, ok)
+}
+
+// The instruction count of the program.
+fn nfa_size(n: Nfa) -> usize {
+    let prog = mem.cast[*Program](n.state)
+    ret prog.insts.len
+}
+
+// The leftmost match from `from`: `caps[0]` is the whole match and `caps[g]` group g
+// (`NONE` bounds for a group that took no part), as many as `caps` holds.
+fn pike_vm(n: Nfa, text: str, from: usize, caps: []Match) -> bool {
+    if from > text.len { ret false }
+    let prog = mem.cast[*Program](n.state)
+    if !run(prog, text, from, false) { ret false }
+    var g = 0usize
+    while g < caps.len && g <= prog.groups {
+        caps[g] = Match { start: prog.result[g * 2usize], end: prog.result[g * 2usize + 1usize] }
+        g += 1usize
+    }
+    ret true
+}
+
+fn bit_set(bits: []const u64, at: usize) -> bool { ret ((bits[at / 64usize] >> u32(at % 64usize)) & 1u64) == 1u64 }
+fn bit_mark(bits: []u64, at: usize) { bits[at / 64usize] |= 1u64 << u32(at % 64usize) }
+
+fn is_consuming(op: Op) -> bool { ret op == .Char || op == .Any || op == .Class }
+
+// The closure of `set` under empty edges in the context (`at_start`, `at_end`): every
+// instruction reached is marked in `reach`; answers whether `Done` is among them.
+fn dfa_closure(prog: *Program, set: []const u64, at_start: bool, at_end: bool, reach: []u64, stack: []u32) -> bool {
+    var w = 0usize
+    while w < reach.len {
+        reach[w] = 0u64
+        w += 1usize
+    }
+    var sp = 0usize
+    var pc = 0usize
+    while pc < prog.insts.len {
+        if bit_set(set, pc) {
+            stack[sp] = u32(pc)
+            sp += 1usize
+        }
+        pc += 1usize
+    }
+    var done = false
+    while sp > 0usize {
+        sp -= 1usize
+        let here = stack[sp]
+        if bit_set(reach, usize(here)) { continue }
+        bit_mark(reach, usize(here))
+        let inst = prog.insts[usize(here)]
+        if inst.op == .Jmp {
+            stack[sp] = inst.x
+            sp += 1usize
+        } else if inst.op == .Split {
+            stack[sp] = inst.x
+            stack[sp + 1usize] = inst.y
+            sp += 2usize
+        } else if inst.op == .Save || (inst.op == .Bol && at_start) || (inst.op == .Eol && at_end) {
+            stack[sp] = here + 1u32
+            sp += 1usize
+        } else if inst.op == .Done {
+            done = true
+        }
+    }
+    ret done
+}
+
+// The sorted distinct boundaries of the scalar classes: 0, every literal and range edge,
+// the newline and the end of the scalar space; answers how many points were written.
+fn dfa_points(prog: *Program, points: []u32) -> usize {
+    var count = 0usize
+    points[0] = 0u32
+    points[1] = 10u32
+    points[2] = 11u32
+    points[3] = 1114112u32
+    count = 4usize
+    var pc = 0usize
+    while pc < prog.insts.len {
+        let inst = prog.insts[pc]
+        if inst.op == .Char {
+            points[count] = inst.x
+            points[count + 1usize] = inst.x + 1u32
+            count += 2usize
+        }
+        if inst.op == .Class {
+            var r = 0u32
+            while r < (inst.y >> 1u32) {
+                let at = usize(inst.x + r * 2u32)
+                points[count] = prog.ranges[at]
+                points[count + 1usize] = prog.ranges[at + 1usize] + 1u32
+                count += 2usize
+                r += 1u32
+            }
+        }
+        pc += 1usize
+    }
+    var i = 1usize
+    while i < count {
+        let v = points[i]
+        var j = i
+        while j > 0usize && points[j - 1usize] > v {
+            points[j] = points[j - 1usize]
+            j -= 1usize
+        }
+        points[j] = v
+        i += 1usize
+    }
+    var kept = 1usize
+    i = 1usize
+    while i < count {
+        if points[i] != points[kept - 1usize] {
+            points[kept] = points[i]
+            kept += 1usize
+        }
+        i += 1usize
+    }
+    ret kept
+}
+
+// The class of `scalar`: the last point at or below it.
+fn dfa_class(d: Dfa, scalar: u32) -> usize {
+    var low = 0usize
+    var high = d.classes
+    while high - low > 1usize {
+        let mid = (low + high) / 2usize
+        if d.points[mid] <= scalar { low = mid } else { high = mid }
+    }
+    ret low
+}
+
+fn same_set(sets: []const u64, at: usize, words: usize, set: []const u64) -> bool {
+    var w = 0usize
+    while w < words {
+        if sets[at * words + w] != set[w] { ret false }
+        w += 1usize
+    }
+    ret true
+}
+
+// Subset construction over the program, at most `max_states` states.
+fn dfa_from_nfa(a: *mem.Arena, n: Nfa, max_states: usize) -> (Dfa, err) {
+    let prog = mem.cast[*Program](n.state)
+    if prog.options.case_insensitive || prog.options.multiline || max_states == 0usize { ret (zero, Unsupported) }
+    let count = prog.insts.len
+    var pc = 0usize
+    while pc < count {
+        if prog.insts[pc].op == .WordB || prog.insts[pc].op == .NotWordB { ret (zero, Unsupported) }
+        pc += 1usize
+    }
+    let (points, points_error) = mem.alloc[u32](a, count * 2usize + prog.ranges.len + 4usize)
+    if points_error != ok { ret (zero, points_error) }
+    let classes = dfa_points(prog, points) - 1usize
+    let words = (count + 63usize) / 64usize
+    let (sets, sets_error) = mem.alloc[u64](a, max_states * words)
+    if sets_error != ok { ret (zero, sets_error) }
+    let (table, table_error) = mem.alloc[u32](a, max_states * classes)
+    if table_error != ok { ret (zero, table_error) }
+    let (accept, accept_error) = mem.alloc[u8](a, max_states)
+    if accept_error != ok { ret (zero, accept_error) }
+    let (reach, reach_error) = mem.alloc[u64](a, words)
+    if reach_error != ok { ret (zero, reach_error) }
+    let (next, next_error) = mem.alloc[u64](a, words)
+    if next_error != ok { ret (zero, next_error) }
+    let (stack, stack_error) = mem.alloc[u32](a, count * 3usize + 1usize)
+    if stack_error != ok { ret (zero, stack_error) }
+    var w = 0usize
+    while w < words {
+        sets[w] = 0u64
+        w += 1usize
+    }
+    bit_mark(sets, 0usize)
+    var states = 1usize
+    var s = 0usize
+    while s < states {
+        let set = sets[s * words..(s + 1usize) * words]
+        var flags = 0u8
+        if dfa_closure(prog, set, s == 0usize, true, reach, stack) { flags |= 2u8 }
+        if dfa_closure(prog, set, s == 0usize, false, reach, stack) { flags |= 1u8 }
+        accept[s] = flags
+        var k = 0usize
+        while k < classes {
+            w = 0usize
+            while w < words {
+                next[w] = 0u64
+                w += 1usize
+            }
+            pc = 0usize
+            while pc < count {
+                if bit_set(reach, pc) && is_consuming(prog.insts[pc].op) && consumes(prog, prog.insts[pc], points[k]) { bit_mark(next, pc + 1usize) }
+                pc += 1usize
+            }
+            var t = 0usize
+            while t < states && !same_set(sets, t, words, next) { t += 1usize }
+            if t == states {
+                if states >= max_states { ret (zero, TooLarge) }
+                mem.copy[u64](sets[states * words..(states + 1usize) * words], next)
+                states += 1usize
+            }
+            table[s * classes + k] = u32(t)
+            k += 1usize
+        }
+        s += 1usize
+    }
+    ret (Dfa { table: table[..states * classes], points: points[..classes + 1usize], classes: classes, states: states, start: 0u32, accept: accept[..states] }, ok)
+}
+
+// Moore refinement: states split by their accept bits, then by the blocks their
+// transitions reach, until a pass splits nothing.
+fn dfa_minimize(a: *mem.Arena, d: Dfa) -> (Dfa, err) {
+    let n = d.states
+    let c = d.classes
+    let (block, block_error) = mem.alloc[u32](a, n)
+    if block_error != ok { ret (zero, block_error) }
+    let (fresh, fresh_error) = mem.alloc[u32](a, n)
+    if fresh_error != ok { ret (zero, fresh_error) }
+    var s = 0usize
+    while s < n {
+        block[s] = u32(d.accept[s])
+        s += 1usize
+    }
+    var previous = 0usize
+    var blocks = 0usize
+    while true {
+        blocks = 0usize
+        s = 0usize
+        while s < n {
+            var found = n
+            var t = 0usize
+            while t < s && found == n {
+                var alike = block[t] == block[s]
+                var k = 0usize
+                while alike && k < c {
+                    if block[usize(d.table[t * c + k])] != block[usize(d.table[s * c + k])] { alike = false }
+                    k += 1usize
+                }
+                if alike { found = t }
+                t += 1usize
+            }
+            if found < n {
+                fresh[s] = fresh[found]
+            } else {
+                fresh[s] = u32(blocks)
+                blocks += 1usize
+            }
+            s += 1usize
+        }
+        mem.copy[u32](block, fresh)
+        if blocks == previous { break }
+        previous = blocks
+    }
+    let (table, table_error) = mem.alloc[u32](a, blocks * c)
+    if table_error != ok { ret (zero, table_error) }
+    let (accept, accept_error) = mem.alloc[u8](a, blocks)
+    if accept_error != ok { ret (zero, accept_error) }
+    s = 0usize
+    while s < n {
+        let b = usize(block[s])
+        accept[b] = d.accept[s]
+        var k = 0usize
+        while k < c {
+            table[b * c + k] = block[usize(d.table[s * c + k])]
+            k += 1usize
+        }
+        s += 1usize
+    }
+    ret (Dfa { table: table, points: d.points, classes: c, states: blocks, start: block[usize(d.start)], accept: accept }, ok)
+}
+
+// Whether the whole text is accepted.
+fn dfa_run(d: Dfa, text: str) -> bool {
+    var s = usize(d.start)
+    var pos = 0usize
+    while pos < text.len {
+        let (scalar, width) = unicode.read_utf8(text, pos)
+        s = usize(d.table[s * d.classes + dfa_class(d, scalar)])
+        pos += width
+    }
+    ret (d.accept[s] & 2u8) != 0u8
+}
+
+// The end of the longest prefix accepted, and whether there is one.
+fn dfa_longest(d: Dfa, text: str) -> (usize, bool) {
+    var s = usize(d.start)
+    var pos = 0usize
+    var best = 0usize
+    var has = false
+    while true {
+        var flag = 1u8
+        if pos == text.len { flag = 2u8 }
+        if (d.accept[s] & flag) != 0u8 {
+            best = pos
+            has = true
+        }
+        if pos >= text.len { break }
+        let (scalar, width) = unicode.read_utf8(text, pos)
+        s = usize(d.table[s * d.classes + dfa_class(d, scalar)])
+        pos += width
+    }
+    ret (best, has)
 }

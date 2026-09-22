@@ -388,3 +388,22 @@ fn longest_palindrome(s: str, scratch: []usize) -> (usize, usize, err) {
     if best_len == 0usize { ret (0usize, 1usize, ok) }
     ret (best_at, best_len, ok)
 }
+
+// The Aho-Corasick automaton over `patterns`: `aho_corasick_build` under the plan's
+// name, queried with `aho_corasick_find` or `aho_corasick_count`.
+fn aho_corasick(a: *mem.Arena, patterns: []const str) -> (Automaton, err) {
+    let (made, made_error) = aho_corasick_build(a, patterns)
+    ret (made, made_error)
+}
+
+fn count_hit(ctx: *usize, end: usize, pattern: usize) -> bool {
+    *ctx += 1usize
+    ret true
+}
+
+// How many pattern occurrences the text holds, overlapping ones included.
+fn aho_corasick_count(m: *const Automaton, text: str) -> usize {
+    var hits = 0usize
+    let _ = aho_corasick_find[usize](m, text, &hits, count_hit)
+    ret hits
+}

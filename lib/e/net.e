@@ -698,3 +698,108 @@ fn send_with_control(socket: Socket, src: []const u8, control: cancel.Control) -
     }
     ret (0usize, Failed)
 }
+
+
+// --- CIDR prefixes (#952) and the private ranges an SSRF guard refuses (#1436).
+
+type Cidr = struct { address: Address, prefix: u8 }
+
+// The address bytes and their count: four for v4, sixteen for v6.
+fn address_bytes(address: Address, out: []u8) -> usize {
+    switch address {
+    case .Ip4 as four:
+        var i = 0usize
+        while i < 4usize {
+            out[i] = four.bytes[i]
+            i += 1usize
+        }
+        ret 4usize
+    case .Ip6 as six:
+        var j = 0usize
+        while j < 16usize {
+            out[j] = six.bytes[j]
+            j += 1usize
+        }
+        ret 16usize
+    }
+    ret 0usize
+}
+
+// `10.0.0.0/8`, `fd00::/8`; a bare address is a host prefix (`/32`, `/128`).
+fn cidr_parse(text: str) -> (Cidr, err) {
+    var slash = text.len
+    var at = 0usize
+    while at < text.len {
+        if text[at] == 47u8 { slash = at }
+        at += 1usize
+    }
+    let (address, address_error) = parse_ip(text[..slash])
+    if address_error != ok { ret (zero, address_error) }
+    var width = 32usize
+    switch address {
+    case .Ip6 as six:
+        width = 128usize
+    default:
+        width = 32usize
+    }
+    var prefix = width
+    if slash < text.len {
+        let digits = text[slash + 1usize..]
+        if digits.len == 0usize || digits.len > 3usize { ret (zero, Failed) }
+        prefix = 0usize
+        at = 0usize
+        while at < digits.len {
+            if digits[at] < 48u8 || digits[at] > 57u8 { ret (zero, Failed) }
+            prefix = prefix * 10usize + usize(digits[at] - 48u8)
+            at += 1usize
+        }
+        if prefix > width { ret (zero, Failed) }
+    }
+    ret (Cidr { address: address, prefix: u8(prefix) }, ok)
+}
+
+// Whether `address` lies in `c`: the same family and the first `prefix` bits equal.
+fn cidr_contains(c: Cidr, address: Address) -> bool {
+    var net_bytes: [16]u8 = zero
+    var host_bytes: [16]u8 = zero
+    let net_len = address_bytes(c.address, net_bytes[0..])
+    let host_len = address_bytes(address, host_bytes[0..])
+    if net_len != host_len { ret false }
+    var remaining = usize(c.prefix)
+    var i = 0usize
+    while i < net_len && remaining > 0usize {
+        var mask = 255u8
+        if remaining < 8usize { mask = u8((255u32 << u32(8usize - remaining)) & 255u32) }
+        if (net_bytes[i] & mask) != (host_bytes[i] & mask) { ret false }
+        if remaining >= 8usize { remaining -= 8usize } else { remaining = 0usize }
+        i += 1usize
+    }
+    ret true
+}
+
+fn in_range(address: Address, text: str) -> bool {
+    let (c, parse_error) = cidr_parse(text)
+    if parse_error != ok { ret false }
+    ret cidr_contains(c, address)
+}
+
+// The ranges a request to a user-supplied host must not reach: RFC 1918,
+// loopback and link-local for v4; loopback, link-local and unique-local for
+// v6, plus a v4-mapped v6 address judged as the v4 address it carries.
+fn is_private(address: Address) -> bool {
+    switch address {
+    case .Ip4 as four:
+        ret in_range(address, "10.0.0.0/8") || in_range(address, "172.16.0.0/12") || in_range(address, "192.168.0.0/16") || in_range(address, "127.0.0.0/8") || in_range(address, "169.254.0.0/16")
+    case .Ip6 as six:
+        if in_range(address, "::ffff:0:0/96") {
+            var mapped: Ip4 = zero
+            mapped.bytes[0usize] = six.bytes[12usize]
+            mapped.bytes[1usize] = six.bytes[13usize]
+            mapped.bytes[2usize] = six.bytes[14usize]
+            mapped.bytes[3usize] = six.bytes[15usize]
+            ret is_private(Address{ Ip4: mapped })
+        }
+        ret in_range(address, "::1/128") || in_range(address, "fe80::/10") || in_range(address, "fc00::/7")
+    }
+    ret false
+}

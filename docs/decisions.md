@@ -17812,3 +17812,35 @@ argument is refused, bind the literal first; a `u32` cannot index a slice,
 convert; slicing an array literal inline is refused; `else` must share the
 line with the closing brace.
 
+## D911 — Batch 44: formats, text, learning and a miscellany; `e.net.http.auth` arrives
+
+Forty-six modules extended and one created, in five family fixtures.
+Formats: a DER writer and BER reader, canonical CBOR, a CSV writer, HTML
+escaping and tokenizing, JSON canonicalization (RFC 8785, byte-equal to
+the reference implementation because the shortest-digit float printer
+already existed), merge-patch and a tokenizer, quoted-printable encoding,
+query strings; an XML DOM, pull reader, namespaces and an XPath subset; a
+schema-less protobuf decoder; whole-buffer LZW; and a Zstandard encoder --
+raw literals, a greedy matcher and the predefined FSE distributions, which
+need no table headers -- whose frames python-zstandard decompresses (about
+half of libzstd's level-one ratio on text, as expected without Huffman
+literals or repeat offsets). Text: the regex engine's Thompson NFA, Pike
+VM, subset-construction DFA, Moore minimization and DFA run exposed as
+their planned names and checked against Python's `re`; Porter2 as Snowball
+3.1.1 defines it; Elias-Fano postings; byte-pair encoding; charset
+detection; UTF-16. Learning: HNSW, IVF-PQ and MinHash LSH indexes, BIRCH,
+one-call DBSCAN and OPTICS over the density module, autodiff checked by
+finite differences, Frequent Directions. The miscellany reaches from TPDF
+dither to Certificate Transparency SCTs, Itanium demangling, Theta*, CIDR,
+SameSite, CORS, CSP, D* Lite and Julian days; and `e.net.http.auth` is a
+new module (PKCE and WebAuthn) because the plan named it and nothing
+existed. Eleven dependency lists changed. Two pre-existing defects were
+fixed on the way: `json.number_f64` refused an upper-case exponent, and
+locals named `pad`, `writer`, `bytes` or `index` had to move aside for the
+planned module-scope names -- appending to an old module can break its
+older functions' locals, which is the batch's recurring lesson. The C
+bootstrap still builds the compiler over the touched modules. Compiler
+notes: `try` inside a tuple-returning function passes the checker and
+fails only at lowering; a bare block statement is refused; an inline
+array literal cannot be sliced.
+

@@ -331,7 +331,8 @@
     "e.concurrent.stack",
     "e.concurrent.reclaim",
     "e.text.segment",
-    "e.thread.pool"
+    "e.thread.pool",
+    "e.net.http.auth"
    ]
   },
   {
@@ -720,6 +721,7 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.algo.rand",
     "e.mem"
    ],
    "blocked_by": []
@@ -1531,8 +1533,8 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.bytes",
-    "e.io"
+    "e.io",
+    "e.mem"
    ],
    "blocked_by": []
   },
@@ -1658,7 +1660,7 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.io",
-    "e.str"
+    "e.mem"
    ],
    "blocked_by": []
   },
@@ -1682,8 +1684,7 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.mem",
-    "e.str"
+    "e.mem"
    ],
    "blocked_by": []
   },
@@ -1944,7 +1945,9 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.math.fixed"
+    "e.math",
+    "e.math.fixed",
+    "e.mem"
    ],
    "blocked_by": []
   },
@@ -2434,7 +2437,8 @@
     "e.cancel",
     "e.io",
     "e.mem",
-    "e.os"
+    "e.os",
+    "e.time"
    ],
    "blocked_by": []
   },
@@ -2445,12 +2449,13 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.algo.rand",
+    "e.bytes",
     "e.cancel",
     "e.io",
     "e.mem",
     "e.net",
     "e.net.tls",
-    "e.fmt.multipart",
     "e.text.utf8"
    ],
    "blocked_by": []
@@ -3024,6 +3029,7 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.bytes",
     "e.mem"
    ],
    "blocked_by": []
@@ -3910,7 +3916,9 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.rand",
-    "e.math"
+    "e.math",
+    "e.mem",
+    "e.ml.cluster.density"
    ],
    "blocked_by": []
   },
@@ -4057,6 +4065,7 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.rand",
+    "e.algo.sketch",
     "e.math",
     "e.mem",
     "e.ml.cluster"
@@ -4489,6 +4498,23 @@
     "e.mem",
     "e.sync",
     "e.thread"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.http.auth",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.bytes",
+    "e.crypto.hash",
+    "e.crypto.sign",
+    "e.fmt.jwt",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   }

@@ -6,6 +6,7 @@
 // `n * (2 + log2(universe / n))` bits, low bits packed then high bits in
 // unary, and decodes it back.
 
+use e.bytes as bt
 use e.mem
 
 type Index = struct { terms: []str, starts: []usize, postings: []u32, documents: usize }
@@ -288,4 +289,92 @@ fn elias_fano_decode(bytes: []const u8, n: usize, universe: u32, values: []u32) 
         i += 1usize
     }
     ret ok
+}
+
+// A posting list as an Elias-Fano structure the queries read in place: `n` ids below
+// `universe` (the last id plus one) in `bytes`, `l` low bits each, the high bits in
+// unary after them. `ef_get` selects the i-th one of the high bits, `ef_next_geq`
+// skips to the bucket of `x`'s high part by counting zeros and scans from there.
+// ponytail: select and rank walk the high bits a byte at a time with a popcount;
+// a sampled select index every 256 ones is the upgrade for long lists.
+type EliasFano = struct { bytes: []const u8, n: usize, universe: u32, l: u32 }
+
+fn postings_elias_fano(ids: []const u32, out: []u8) -> (EliasFano, err) {
+    var universe = 1u32
+    if ids.len > 0usize {
+        if ids[ids.len - 1usize] == 4294967295u32 { ret (zero, Invalid) }
+        universe = ids[ids.len - 1usize] + 1u32
+    }
+    let (size, size_error) = elias_fano_encode(ids, universe, out)
+    if size_error != ok { ret (zero, size_error) }
+    ret (EliasFano { bytes: out[..size], n: ids.len, universe: universe, l: low_bits(ids.len, universe) }, ok)
+}
+
+fn ef_high_start(ef: EliasFano) -> usize { ret ef.n * usize(ef.l) }
+
+fn ef_high_bits(ef: EliasFano) -> usize { ret ef.n + (usize(ef.universe) >> ef.l) + 1usize }
+
+fn ef_low(ef: EliasFano, i: usize) -> u32 {
+    var v = 0u32
+    var bit = 0u32
+    while bit < ef.l {
+        if get_bit(ef.bytes, i * usize(ef.l) + usize(bit)) { v |= 1u32 << bit }
+        bit += 1u32
+    }
+    ret v
+}
+
+// The position of the `k`-th (zero-based) bit equal to `want` in the high bits, or
+// the bit count when there are fewer.
+fn ef_select(ef: EliasFano, k: usize, want: bool) -> usize {
+    let start = ef_high_start(ef)
+    let total = ef_high_bits(ef)
+    var remaining = k
+    var pos = 0usize
+    while pos < total {
+        // A whole byte at a time while it starts on one and the count lets it pass.
+        if (start + pos) % 8usize == 0usize && pos + 8usize <= total {
+            var ones = usize(bt.count_ones[u8](ef.bytes[(start + pos) / 8usize]))
+            if !want { ones = 8usize - ones }
+            if ones <= remaining {
+                remaining -= ones
+                pos += 8usize
+                continue
+            }
+        }
+        if get_bit(ef.bytes, start + pos) == want {
+            if remaining == 0usize { ret pos }
+            remaining -= 1usize
+        }
+        pos += 1usize
+    }
+    ret total
+}
+
+// The i-th id.
+fn ef_get(ef: EliasFano, i: usize) -> (u32, err) {
+    if i >= ef.n { ret (0u32, Invalid) }
+    let pos = ef_select(ef, i, true)
+    ret ((u32(pos - i) << ef.l) | ef_low(ef, i), ok)
+}
+
+// The first id at or above `x` and its index; `n` and false when there is none.
+fn ef_next_geq(ef: EliasFano, x: u32) -> (u32, usize, bool) {
+    if ef.n == 0usize || x >= ef.universe { ret (0u32, ef.n, false) }
+    let h = usize(x >> ef.l)
+    // The bucket of `h` starts after the h-th zero; the ones before it are the ids below it.
+    var pos = 0usize
+    if h > 0usize { pos = ef_select(ef, h - 1usize, false) + 1usize }
+    var i = pos - h
+    let start = ef_high_start(ef)
+    let total = ef_high_bits(ef)
+    while pos < total && i < ef.n {
+        if get_bit(ef.bytes, start + pos) {
+            let v = (u32(pos - i) << ef.l) | ef_low(ef, i)
+            if v >= x { ret (v, i, true) }
+            i += 1usize
+        }
+        pos += 1usize
+    }
+    ret (0u32, ef.n, false)
 }

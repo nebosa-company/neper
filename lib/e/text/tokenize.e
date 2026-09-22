@@ -429,3 +429,11 @@ fn log_add(a: f64, b: f64) -> f64 {
     if a < b { ret b + math.log[f64](1.0f64 + math.exp[f64](a - b)) }
     ret a + math.log[f64](1.0f64 + math.exp[f64](b - a))
 }
+
+// Byte-pair encoding of one word by the learned merges, in rank order: the plan's
+// name for `bpe_encode`. An end-of-word marker is the caller's: append it to every
+// corpus word before `bpe_train` and to the word here, and it merges like any byte.
+fn bpe(b: *const Bpe, word: str, out: []str, scratch: []usize) -> (usize, err) {
+    let (count, count_error) = bpe_encode(b, word, out, scratch)
+    ret (count, count_error)
+}

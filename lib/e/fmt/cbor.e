@@ -401,3 +401,257 @@ fn skip(d: *Decoder) -> err {
     if item.major == MAJOR_TAG { ret skip(d) }
     ret ok
 }
+
+// --- A value model, canonically encoded and decoded whole.
+//
+// `Value` is one item with its nesting. `encode` writes it in the preferred serialization of
+// RFC 8949 section 4.2: shortest heads, the shortest float that reads back exactly, no
+// indefinite lengths, and map keys in the order of their encodings (shorter first, then
+// bytewise). `decode` reads one back through the typed helpers above; its arrays, maps and
+// tagged items live in the arena, its strings borrow from the input.
+
+type Pair = struct { key: Value, value: Value }
+// `items` holds exactly the one item the tag applies to; a slice so the type needs no pointer.
+type Tagged = struct { tag: u64, items: []const Value }
+type Value = union enum u8 { Null, Undefined, Bool: bool, Uint: u64, Int: i64, Float: f64, Bytes: []const u8, Text: str, Array: []const Value, Map: []const Pair, Tagged: Tagged }
+
+// `value` as binary16 bits when that reads back to the same bits, else `false`.
+fn f16_of(value: f64) -> (u64, bool) {
+    let bits = mem.bitcast[u64](value)
+    let sign = (bits >> 48u32) & 32768u64
+    let exponent = i64((bits >> 52u32) & 2047u64) - 1023i64
+    let mantissa = bits & 4503599627370495u64
+    if (bits & 9223372036854775807u64) == 0u64 { ret (sign, true) }
+    if exponent == 1024i64 {
+        if mantissa == 0u64 { ret (sign | 31744u64, true) }
+        ret (32256u64, true)
+    }
+    var candidate = 0u64
+    if exponent >= -14i64 && exponent <= 15i64 {
+        candidate = sign | (u64(exponent + 15i64) << 10u32) | (mantissa >> 42u32)
+    } else {
+        if exponent < -14i64 && exponent >= -24i64 {
+            candidate = sign | ((mantissa | 4503599627370496u64) >> u32(42i64 + (-14i64 - exponent)))
+        } else {
+            ret (0u64, false)
+        }
+    }
+    ret (candidate, mem.bitcast[u64](f16_to_f64(candidate)) == bits)
+}
+
+// The shortest of the three float widths that round-trips `value` exactly; a NaN is the
+// canonical half-precision one.
+fn encode_float_shortest(e: *Encoder, value: f64) -> err {
+    let (half, fits_half) = f16_of(value)
+    if fits_half {
+        try put(e, (MAJOR_SIMPLE << 5u32) | 25u8)
+        ret put_be(e, half, 2usize)
+    }
+    let single = f32(value)
+    if mem.bitcast[u64](f64(single)) == mem.bitcast[u64](value) { ret encode_f32(e, single) }
+    ret encode_f64(e, value)
+}
+
+fn key_less(x: []const u8, y: []const u8) -> bool {
+    if x.len != y.len { ret x.len < y.len }
+    var i = 0usize
+    while i < x.len {
+        if x[i] != y[i] { ret x[i] < y[i] }
+        i += 1usize
+    }
+    ret false
+}
+
+fn reverse_bytes(dst: []u8, lo: usize, hi: usize) {
+    var i = lo
+    var j = hi
+    while i + 1usize < j {
+        j -= 1usize
+        let t = dst[i]
+        dst[i] = dst[j]
+        dst[j] = t
+        i += 1usize
+    }
+}
+
+// The pairs written at `e.out[start..e.len]` put into canonical key order, in place.
+// ponytail: a bubble sort that re-walks the pairs with `skip` after every swap, O(n^2) walks
+// over the encoded bytes; it keeps the caller's buffer the only storage, and a map with
+// thousands of keys is what a sorted index is for.
+fn sort_pairs(e: *Encoder, start: usize) -> err {
+    var swapped = true
+    while swapped {
+        swapped = false
+        var d = decoder(e.out[start..e.len])
+        var previous_start = 0usize
+        var previous_key_end = 0usize
+        var previous_end = 0usize
+        var has_previous = false
+        while d.at < d.data.len {
+            let pair_start = d.at
+            try skip(&d)
+            let key_end = d.at
+            try skip(&d)
+            let pair_end = d.at
+            if has_previous && key_less(d.data[pair_start..key_end], d.data[previous_start..previous_key_end]) {
+                reverse_bytes(e.out, start + previous_start, start + previous_end)
+                reverse_bytes(e.out, start + pair_start, start + pair_end)
+                reverse_bytes(e.out, start + previous_start, start + pair_end)
+                swapped = true
+                break
+            }
+            has_previous = true
+            previous_start = pair_start
+            previous_key_end = key_end
+            previous_end = pair_end
+        }
+    }
+    ret ok
+}
+
+// One value, canonically. ponytail: recursive on nesting depth with no cap, like `skip`.
+fn encode(e: *Encoder, value: *const Value) -> err {
+    switch *value {
+    case .Null:
+        ret encode_null(e)
+    case .Undefined:
+        ret encode_undefined(e)
+    case .Bool as flag:
+        ret encode_bool(e, flag)
+    case .Uint as unsigned:
+        ret encode_uint(e, unsigned)
+    case .Int as signed:
+        ret encode_int(e, signed)
+    case .Float as number:
+        ret encode_float_shortest(e, number)
+    case .Bytes as data:
+        ret encode_bytes(e, data)
+    case .Text as text:
+        ret encode_text(e, text)
+    case .Array as items:
+        try encode_array(e, items.len)
+        var at = 0usize
+        while at < items.len {
+            try encode(e, &items[at])
+            at += 1usize
+        }
+        ret ok
+    case .Map as pairs:
+        try encode_map(e, pairs.len)
+        let start = e.len
+        var at = 0usize
+        while at < pairs.len {
+            try encode(e, &pairs[at].key)
+            try encode(e, &pairs[at].value)
+            at += 1usize
+        }
+        ret sort_pairs(e, start)
+    case .Tagged as tagged:
+        if tagged.items.len != 1usize { ret Invalid }
+        try encode_tag(e, tagged.tag)
+        ret encode(e, &tagged.items[0])
+    }
+}
+
+// The items of an indefinite-length container, counted by skipping a copy of the decoder.
+fn count_until_break(d: *const Decoder) -> (usize, err) {
+    var probe = decoder(d.data)
+    probe.at = d.at
+    var count = 0usize
+    while !at_break(&probe) {
+        if probe.at >= probe.data.len { ret (0usize, Truncated) }
+        let skip_error = skip(&probe)
+        if skip_error != ok { ret (0usize, skip_error) }
+        count += 1usize
+    }
+    ret (count, ok)
+}
+
+// One whole item as a `Value`. An integer is `Uint` when it is major 0 and `Int` when it is
+// major 1 and fits; a negative below `i64` is `Mismatch`, an indefinite string too (see
+// `payload`).
+fn decode(a: *mem.Arena, d: *Decoder, max_depth: u16) -> (Value, err) {
+    var none: Value = .Null
+    if max_depth == 0u16 { ret (none, Invalid) }
+    if d.at >= d.data.len { ret (none, Truncated) }
+    let major = d.data[d.at] >> 5u32
+    if major == MAJOR_UINT {
+        let (unsigned, unsigned_error) = decode_uint(d)
+        ret (Value{ Uint: unsigned }, unsigned_error)
+    }
+    if major == MAJOR_NEGATIVE {
+        let (signed, signed_error) = decode_int(d)
+        ret (Value{ Int: signed }, signed_error)
+    }
+    if major == MAJOR_BYTES {
+        let (data, data_error) = decode_bytes(d)
+        ret (Value{ Bytes: data }, data_error)
+    }
+    if major == MAJOR_TEXT {
+        let (text, text_error) = decode_text(d)
+        ret (Value{ Text: text }, text_error)
+    }
+    if major == MAJOR_TAG {
+        let (tag, tag_error) = decode_tag(d)
+        if tag_error != ok { ret (none, tag_error) }
+        let (items, items_error) = mem.alloc[Value](a, 1usize)
+        if items_error != ok { ret (none, items_error) }
+        let (inner, inner_error) = decode(a, d, max_depth - 1u16)
+        if inner_error != ok { ret (none, inner_error) }
+        items[0] = inner
+        ret (Value{ Tagged: Tagged { tag: tag, items: items[0usize..] } }, ok)
+    }
+    if major == MAJOR_ARRAY || major == MAJOR_MAP {
+        let (item, head_error) = decode_head(d)
+        if head_error != ok { ret (none, head_error) }
+        var count = usize(item.value)
+        if item.indefinite {
+            let (counted, count_error) = count_until_break(d)
+            if count_error != ok { ret (none, count_error) }
+            count = counted
+            if major == MAJOR_MAP {
+                if count % 2usize != 0usize { ret (none, Invalid) }
+                count = count / 2usize
+            }
+        }
+        if major == MAJOR_ARRAY {
+            let (items, items_error) = mem.alloc[Value](a, count)
+            if items_error != ok { ret (none, items_error) }
+            var at = 0usize
+            while at < count {
+                let (inner, inner_error) = decode(a, d, max_depth - 1u16)
+                if inner_error != ok { ret (none, inner_error) }
+                items[at] = inner
+                at += 1usize
+            }
+            if item.indefinite { d.at += 1usize }
+            ret (Value{ Array: items[0usize..] }, ok)
+        }
+        let (pairs, pairs_error) = mem.alloc[Pair](a, count)
+        if pairs_error != ok { ret (none, pairs_error) }
+        var at = 0usize
+        while at < count {
+            let (key, key_error) = decode(a, d, max_depth - 1u16)
+            if key_error != ok { ret (none, key_error) }
+            let (inner, inner_error) = decode(a, d, max_depth - 1u16)
+            if inner_error != ok { ret (none, inner_error) }
+            pairs[at] = Pair { key: key, value: inner }
+            at += 1usize
+        }
+        if item.indefinite { d.at += 1usize }
+        ret (Value{ Map: pairs[0usize..] }, ok)
+    }
+    let (item, head_error) = decode_head(d)
+    if head_error != ok { ret (none, head_error) }
+    if item.info >= 25u8 && item.info <= 27u8 {
+        if item.info == 25u8 { ret (Value{ Float: f16_to_f64(item.value) }, ok) }
+        if item.info == 26u8 { ret (Value{ Float: f64(mem.bitcast[f32](u32(item.value))) }, ok) }
+        ret (Value{ Float: mem.bitcast[f64](item.value) }, ok)
+    }
+    if item.info == INFO_INDEFINITE { ret (none, Invalid) }
+    if item.value == SIMPLE_TRUE { ret (Value{ Bool: true }, ok) }
+    if item.value == SIMPLE_FALSE { ret (Value{ Bool: false }, ok) }
+    if item.value == SIMPLE_NULL { ret (none, ok) }
+    if item.value == SIMPLE_UNDEFINED { ret (.Undefined, ok) }
+    ret (none, Mismatch)
+}

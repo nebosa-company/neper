@@ -10,15 +10,9 @@
 // rather than swallowing the text after it. The validity rules are the same ones
 // `e.text.unicode` reads by, so the two never disagree about what a string contains.
 
-type Decode = struct {
-    scalar: u32,
-    width: u8,
-}
+type Decode = struct { scalar: u32, width: u8 }
 
-type Iterator = struct {
-    data: str,
-    off: usize,
-}
+type Iterator = struct { data: str, off: usize }
 
 error Invalid
 error TooSmall
@@ -159,4 +153,76 @@ fn iterator_next_err(it: *Iterator) -> (u32, bool, err) {
     if d_error != ok { ret (0u32, false, Invalid) }
     it.off = it.off + usize(d.width)
     ret (d.scalar, true, ok)
+}
+
+fn unit_at(src: []const u8, at: usize, big_endian: bool) -> u32 {
+    if big_endian { ret (u32(src[at]) << 8u32) | u32(src[at + 1usize]) }
+    ret u32(src[at]) | (u32(src[at + 1usize]) << 8u32)
+}
+
+// UTF-16 to UTF-8: a leading BOM picks the byte order and is dropped, else
+// `big_endian` says which; surrogate pairs combine and an unpaired surrogate, like an
+// odd byte count, is `Invalid`. Answers the bytes written to `out`.
+fn decode_utf16(src: []const u8, big_endian: bool, out: []u8) -> (usize, err) {
+    var at = 0usize
+    var big = big_endian
+    if src.len >= 2usize && src[0] == 254u8 && src[1] == 255u8 {
+        big = true
+        at = 2usize
+    } else if src.len >= 2usize && src[0] == 255u8 && src[1] == 254u8 {
+        big = false
+        at = 2usize
+    }
+    if (src.len - at) % 2usize != 0usize { ret (0usize, Invalid) }
+    var used = 0usize
+    while at < src.len {
+        var scalar = unit_at(src, at, big)
+        at += 2usize
+        if scalar >= 56320u32 && scalar <= 57343u32 { ret (used, Invalid) }
+        if scalar >= 55296u32 && scalar <= 56319u32 {
+            if at >= src.len { ret (used, Invalid) }
+            let low = unit_at(src, at, big)
+            if low < 56320u32 || low > 57343u32 { ret (used, Invalid) }
+            at += 2usize
+            scalar = 65536u32 + ((scalar - 55296u32) << 10u32) + (low - 56320u32)
+        }
+        let (width, width_error) = encode(scalar, out[used..])
+        if width_error != ok { ret (used, width_error) }
+        used += usize(width)
+    }
+    ret (used, ok)
+}
+
+fn put_unit(unit: u32, big_endian: bool, out: []u8, at: usize) {
+    if big_endian {
+        out[at] = u8(unit >> 8u32)
+        out[at + 1usize] = u8(unit & 255u32)
+    } else {
+        out[at] = u8(unit & 255u32)
+        out[at + 1usize] = u8(unit >> 8u32)
+    }
+}
+
+// UTF-8 to UTF-16 in the given byte order, no BOM; `Invalid` on malformed input,
+// `TooSmall` when `out` cannot hold the units. Answers the bytes written.
+fn encode_utf16(s: str, big_endian: bool, out: []u8) -> (usize, err) {
+    var off = 0usize
+    var used = 0usize
+    while off < s.len {
+        let (d, d_error) = decode(s, off)
+        if d_error != ok { ret (used, Invalid) }
+        off += usize(d.width)
+        if d.scalar < 65536u32 {
+            if used + 2usize > out.len { ret (used, TooSmall) }
+            put_unit(d.scalar, big_endian, out, used)
+            used += 2usize
+        } else {
+            if used + 4usize > out.len { ret (used, TooSmall) }
+            let v = d.scalar - 65536u32
+            put_unit(55296u32 + (v >> 10u32), big_endian, out, used)
+            put_unit(56320u32 + (v & 1023u32), big_endian, out, used + 2usize)
+            used += 4usize
+        }
+    }
+    ret (used, ok)
 }

@@ -111,3 +111,14 @@ fn to_bf16(x: f32) -> u16 {
 }
 
 fn from_bf16(h: u16) -> f32 { ret mem.bitcast[f32](u32(h) << 16u32) }
+
+// The planned names: an `f64` as its (negative, biased exponent, mantissa)
+// tuple and back; `unpack32` above answers the same fields for an `f32`.
+fn unpack(x: f64) -> (bool, u32, u64) {
+    let f = unpack64(x)
+    ret (f.negative, f.exponent, f.mantissa)
+}
+
+fn pack(negative: bool, exponent: u32, mantissa: u64) -> f64 {
+    ret pack64(Fields { negative: negative, exponent: exponent, mantissa: mantissa })
+}

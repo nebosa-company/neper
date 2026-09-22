@@ -811,3 +811,62 @@ fn selection(a: *mem.Arena, value: *const Layout, start: usize, end: usize) -> (
     }
     ret (rects, ok)
 }
+
+// One line truncated to `max_width` with U+2026 at its end, middle or start, measured
+// the way `layout` measures (the style's fonts, hanging trailing whitespace, cuts at
+// cluster starts): the longest head (`End`), tail (`Start`), or head under half the
+// remaining width plus the longest tail after it (`Middle`) that leaves room for the
+// ellipsis. A line that fits is answered whole; an ellipsis wider than the width
+// answers empty. The answer is a slice of `out`, which needs `line.len + 3` bytes.
+type Ellipsis = enum u8 { End, Middle, Start }
+error TooSmall
+
+fn ellipsis(a: *mem.Arena, style: Style, line: str, max_width: f32, mode: Ellipsis, out: []u8) -> (str, err) {
+    if style.fonts.len == 0usize || max_width < 0.0 || !valid_utf8(line) { ret ("", Invalid) }
+    if line.len > MAX_SOURCE { ret ("", TooLarge) }
+    if out.len < line.len + 3usize { ret ("", TooSmall) }
+    var table = line.len + 2usize
+    if table > MAX_ITEMS { table = MAX_ITEMS }
+    let (items, items_error) = mem.alloc[Item](a, table)
+    if items_error != ok { ret ("", items_error) }
+    var count = 0usize
+    var rtl = false
+    let shape_error = shape_paragraph(a, style, line, 0usize, line.len, items, &count, &rtl)
+    if shape_error != ok { ret ("", shape_error) }
+    if measure(items, 0usize, count, style, line, 0usize, line.len) <= max_width {
+        mem.copy[u8](out[..line.len], line)
+        ret (out[..line.len], ok)
+    }
+    let (tail, tail_error) = ellipsis_run(a, style, "\xe2\x80\xa6", 0usize, rtl)
+    if tail_error != ok { ret ("", tail_error) }
+    let budget = max_width - run_width(tail)
+    if budget < 0.0 { ret (out[..0usize], ok) }
+    var head = 0usize
+    var from = line.len
+    if mode == .End {
+        head = line.len
+        while head > 0usize && measure(items, 0usize, count, style, line, 0usize, head) > budget { head = cluster_start_before(items, 0usize, count, head) }
+    } else if mode == .Start {
+        from = 0usize
+        while from < line.len && measure(items, 0usize, count, style, line, from, line.len) > budget { from = next_char(line, from) }
+    } else {
+        var growing = true
+        while growing && head < line.len {
+            let more = next_char(line, head)
+            if measure(items, 0usize, count, style, line, 0usize, more) > budget / 2.0 { growing = false } else { head = more }
+        }
+        let rest = budget - measure(items, 0usize, count, style, line, 0usize, head)
+        growing = true
+        while growing && from > head {
+            let earlier = cluster_start_before(items, 0usize, count, from)
+            if earlier < head || measure(items, 0usize, count, style, line, earlier, line.len) > rest { growing = false } else { from = earlier }
+        }
+    }
+    mem.copy[u8](out[..head], line[..head])
+    out[head] = 226u8
+    out[head + 1usize] = 128u8
+    out[head + 2usize] = 166u8
+    let used = head + 3usize + (line.len - from)
+    mem.copy[u8](out[head + 3usize..used], line[from..])
+    ret (out[..used], ok)
+}

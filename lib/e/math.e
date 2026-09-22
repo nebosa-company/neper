@@ -1561,3 +1561,60 @@ fn pow64(x: f64, y: f64) -> f64 {
 }
 
 fn pow[F: type](x: F, y: F) -> F { ret F(pow64(f64(x), f64(y))) }
+
+
+// --- Saturating integer arithmetic (#837), generic over every integer type.
+// The bounds come from the type itself: `0 -% 1` is all ones, which is below
+// zero exactly when `T` is signed; the signed maximum is that pattern with
+// the top bit clear, built in a `u64` so no shift is asked of a signed `T`.
+
+fn int_is_signed[T: type]() -> bool { ret (T(0u64) -% T(1u64)) < T(0u64) }
+
+fn int_max[T: type]() -> T {
+    if int_is_signed[T]() { ret T(9223372036854775807u64 >> u32(64usize - mem.size_of[T]() * 8usize)) }
+    ret T(0u64) -% T(1u64)
+}
+
+fn int_min[T: type]() -> T {
+    if int_is_signed[T]() { ret T(0u64) -% int_max[T]() -% T(1u64) }
+    ret T(0u64)
+}
+
+fn saturating_add[T: type](a: T, b: T) -> T {
+    let r = a +% b
+    if int_is_signed[T]() {
+        if b > T(0u64) && r < a { ret int_max[T]() }
+        if b < T(0u64) && r > a { ret int_min[T]() }
+        ret r
+    }
+    if r < a { ret int_max[T]() }
+    ret r
+}
+
+fn saturating_sub[T: type](a: T, b: T) -> T {
+    let r = a -% b
+    if int_is_signed[T]() {
+        if b > T(0u64) && r > a { ret int_min[T]() }
+        if b < T(0u64) && r < a { ret int_max[T]() }
+        ret r
+    }
+    if b > a { ret T(0u64) }
+    ret r
+}
+
+fn saturating_mul[T: type](a: T, b: T) -> T {
+    let none = T(0u64)
+    if a == none || b == none { ret none }
+    let negative = (a < none) != (b < none)
+    if int_is_signed[T]() {
+        // `min * -1` is the one product the division check cannot ask about.
+        let minus_one = none -% T(1u64)
+        if (a == int_min[T]() && b == minus_one) || (b == int_min[T]() && a == minus_one) { ret int_max[T]() }
+    }
+    let r = a *% b
+    if r / b != a || (negative && r > none) || (!negative && r < none) {
+        if negative { ret int_min[T]() }
+        ret int_max[T]()
+    }
+    ret r
+}

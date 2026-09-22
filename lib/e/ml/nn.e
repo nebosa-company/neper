@@ -290,3 +290,103 @@ fn rope(x: []f64, p: u64, base: f64) -> err {
     }
     ret ok
 }
+
+// `w·x + b` of `weights` (`d + 1`, bias last) over `sample`.
+fn perceptron_score(sample: []const f64, weights: []const f64) -> f64 {
+    let d = sample.len
+    var s = weights[d]
+    var j = 0usize
+    while j < d {
+        s += weights[j] * sample[j]
+        j += 1usize
+    }
+    ret s
+}
+
+// The perceptron: up to `epochs` passes over `x` (`n × d`, labels `y` in
+// {-1, +1}) in which every sample with `y (w·x + b) <= margin` moves
+// `weights` (`d + 1`, bias last) by `rate y x`; a clean pass stops early.
+// Answers the passes taken.
+fn perceptron(x: []const f64, y: []const f64, n: usize, d: usize, weights: []f64, rate: f64, margin: f64, epochs: usize) -> (usize, err) {
+    if x.len < n * d || y.len < n || weights.len < d + 1usize { ret (0usize, TooSmall) }
+    var epoch = 0usize
+    var dirty = true
+    while epoch < epochs && dirty {
+        dirty = false
+        var i = 0usize
+        while i < n {
+            if y[i] * perceptron_score(x[i * d..(i + 1usize) * d], weights) <= margin {
+                var j = 0usize
+                while j < d {
+                    weights[j] += rate * y[i] * x[i * d + j]
+                    j += 1usize
+                }
+                weights[d] += rate * y[i]
+                dirty = true
+            }
+            i += 1usize
+        }
+        epoch += 1usize
+    }
+    ret (epoch, ok)
+}
+
+// The averaged perceptron: `perceptron`'s updates, with `averaged` (`d +
+// 1`) receiving the mean of the weight vector after every sample step
+// (Freund and Schapire's voted perceptron in its averaged form).
+fn perceptron_averaged(x: []const f64, y: []const f64, n: usize, d: usize, weights: []f64, averaged: []f64, rate: f64, margin: f64, epochs: usize) -> (usize, err) {
+    if x.len < n * d || y.len < n || weights.len < d + 1usize || averaged.len < d + 1usize { ret (0usize, TooSmall) }
+    var j = 0usize
+    while j <= d {
+        averaged[j] = 0.0f64
+        j += 1usize
+    }
+    var steps = 0.0f64
+    var epoch = 0usize
+    var dirty = true
+    while epoch < epochs && dirty {
+        dirty = false
+        var i = 0usize
+        while i < n {
+            if y[i] * perceptron_score(x[i * d..(i + 1usize) * d], weights) <= margin {
+                j = 0usize
+                while j < d {
+                    weights[j] += rate * y[i] * x[i * d + j]
+                    j += 1usize
+                }
+                weights[d] += rate * y[i]
+                dirty = true
+            }
+            j = 0usize
+            while j <= d {
+                averaged[j] += weights[j]
+                j += 1usize
+            }
+            steps += 1.0f64
+            i += 1usize
+        }
+        epoch += 1usize
+    }
+    if steps > 0.0f64 {
+        j = 0usize
+        while j <= d {
+            averaged[j] = averaged[j] / steps
+            j += 1usize
+        }
+    }
+    ret (epoch, ok)
+}
+
+// A leaf of the tape (the planned name of `input`).
+fn variable(t: *Tape, value: f64) -> (usize, err) {
+    let (id, record_error) = record(t, .Input, 0usize, 0usize, value)
+    ret (id, record_error)
+}
+
+// Reverse-mode automatic differentiation of `root`: `backward` fills the
+// gradients and the value of `root` is answered.
+fn autodiff(t: *Tape, root: usize) -> (f64, err) {
+    let backward_error = backward(t, root)
+    if backward_error != ok { ret (0.0f64, backward_error) }
+    ret (t.value[root], ok)
+}

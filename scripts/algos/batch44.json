@@ -1,0 +1,309 @@
+{
+ "decision": "D911",
+ "modules": [
+  {
+   "name": "e.fmt.asn1",
+   "refresh": true,
+   "fixture": "fmt_gaps_a",
+   "comment": "`e.fmt.asn1` planned functions across seven `e.fmt` modules: a DER writer and a BER reader, canonical CBOR equal to cbor2, a CSV writer equal to Python's, HTML escaping and an HTML tokenizer equal to html.parser's events, JSON canonicalization byte-equal to RFC 8785's reference, all fifteen merge-patch rows, a JSON tokenizer, quoted-printable encoding equal to quopri, query strings equal to urllib"
+  },
+  {
+   "name": "e.fmt.cbor",
+   "refresh": true,
+   "comment": "`e.fmt.cbor` (shared fixture fmt_gaps_a)"
+  },
+  {
+   "name": "e.fmt.csv",
+   "refresh": true,
+   "comment": "`e.fmt.csv` (shared fixture fmt_gaps_a)"
+  },
+  {
+   "name": "e.fmt.html",
+   "refresh": true,
+   "comment": "`e.fmt.html` (shared fixture fmt_gaps_a)"
+  },
+  {
+   "name": "e.fmt.json",
+   "refresh": true,
+   "comment": "`e.fmt.json` (shared fixture fmt_gaps_a)"
+  },
+  {
+   "name": "e.fmt.quoted_printable",
+   "refresh": true,
+   "deps": [
+    "e.io",
+    "e.mem"
+   ],
+   "comment": "`e.fmt.quoted_printable` (shared fixture fmt_gaps_a)"
+  },
+  {
+   "name": "e.fmt.uri",
+   "refresh": true,
+   "deps": [
+    "e.mem"
+   ],
+   "comment": "`e.fmt.uri` (shared fixture fmt_gaps_a)"
+  },
+  {
+   "name": "e.fmt.xml",
+   "refresh": true,
+   "fixture": "fmt_gaps_b",
+   "comment": "`e.fmt.xml` planned functions across four `e.fmt` modules: an XML DOM, pull reader, namespace resolver and XPath subset checked against ElementTree, a schema-less protobuf decoder re-encoding byte-equal, whole-buffer LZW, and a Zstandard encoder with predefined FSE sequences whose frames python-zstandard decompresses"
+  },
+  {
+   "name": "e.fmt.protobuf",
+   "refresh": true,
+   "comment": "`e.fmt.protobuf` (shared fixture fmt_gaps_b)"
+  },
+  {
+   "name": "e.fmt.lzw",
+   "refresh": true,
+   "deps": [
+    "e.io",
+    "e.mem"
+   ],
+   "comment": "`e.fmt.lzw` (shared fixture fmt_gaps_b)"
+  },
+  {
+   "name": "e.fmt.zstd",
+   "refresh": true,
+   "comment": "`e.fmt.zstd` (shared fixture fmt_gaps_b)"
+  },
+  {
+   "name": "e.text.regex",
+   "refresh": true,
+   "fixture": "text_gaps",
+   "comment": "`e.text.regex` planned functions across twelve `e.text` modules: Thompson NFA, Pike VM, subset-construction DFA, Moore minimization and DFA runs agreeing with Python's re, Aho-Corasick and collation entry points, charset detection, Elias-Fano postings, ellipsis truncation, ROUGE, font fallback runs, Porter2 stemming equal to Snowball on two hundred words, byte-pair encoding, identifier checks, UTF-16 conversion"
+  },
+  {
+   "name": "e.text.search",
+   "refresh": true,
+   "comment": "`e.text.search` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.collate",
+   "refresh": true,
+   "comment": "`e.text.collate` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.encoding",
+   "refresh": true,
+   "comment": "`e.text.encoding` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.index",
+   "refresh": true,
+   "deps": [
+    "e.bytes",
+    "e.mem"
+   ],
+   "comment": "`e.text.index` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.layout",
+   "refresh": true,
+   "comment": "`e.text.layout` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.metric",
+   "refresh": true,
+   "comment": "`e.text.metric` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.shape",
+   "refresh": true,
+   "comment": "`e.text.shape` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.stem",
+   "refresh": true,
+   "comment": "`e.text.stem` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.tokenize",
+   "refresh": true,
+   "comment": "`e.text.tokenize` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.unicode",
+   "refresh": true,
+   "comment": "`e.text.unicode` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.text.utf8",
+   "refresh": true,
+   "comment": "`e.text.utf8` (shared fixture text_gaps)"
+  },
+  {
+   "name": "e.ml.ann",
+   "refresh": true,
+   "deps": [
+    "e.algo.rand",
+    "e.algo.sketch",
+    "e.math",
+    "e.mem",
+    "e.ml.cluster"
+   ],
+   "fixture": "ml_gaps",
+   "comment": "`e.ml.ann` planned functions across seven `e.ml` modules: HNSW with recall one against brute force and a bit-exact structure, IVF-PQ, MinHash LSH, one-call naive Bayes, DBSCAN, OPTICS and BIRCH equal to scikit-learn, streaming k-means, KL and JS divergences, margin and averaged perceptrons, reverse-mode autodiff checked by finite differences, Frequent Directions within its error bound, temperature sampling"
+  },
+  {
+   "name": "e.ml.cluster",
+   "refresh": true,
+   "deps": [
+    "e.algo.rand",
+    "e.math",
+    "e.mem",
+    "e.ml.cluster.density"
+   ],
+   "comment": "`e.ml.cluster` (shared fixture ml_gaps)"
+  },
+  {
+   "name": "e.ml.bayes",
+   "refresh": true,
+   "comment": "`e.ml.bayes` (shared fixture ml_gaps)"
+  },
+  {
+   "name": "e.ml.loss",
+   "refresh": true,
+   "comment": "`e.ml.loss` (shared fixture ml_gaps)"
+  },
+  {
+   "name": "e.ml.nn",
+   "refresh": true,
+   "comment": "`e.ml.nn` (shared fixture ml_gaps)"
+  },
+  {
+   "name": "e.ml.reduce",
+   "refresh": true,
+   "comment": "`e.ml.reduce` (shared fixture ml_gaps)"
+  },
+  {
+   "name": "e.ml.sample",
+   "refresh": true,
+   "comment": "`e.ml.sample` (shared fixture ml_gaps)"
+  },
+  {
+   "name": "e.audio",
+   "refresh": true,
+   "deps": [
+    "e.algo.rand",
+    "e.mem"
+   ],
+   "comment": "`e.audio` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.control",
+   "refresh": true,
+   "comment": "`e.control` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.crypto.aead",
+   "refresh": true,
+   "comment": "`e.crypto.aead` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.crypto.cipher",
+   "refresh": true,
+   "comment": "`e.crypto.cipher` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.crypto.x509",
+   "refresh": true,
+   "comment": "`e.crypto.x509` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.debug",
+   "refresh": true,
+   "comment": "`e.debug` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.game.grid",
+   "refresh": true,
+   "deps": [
+    "e.math",
+    "e.math.fixed",
+    "e.mem"
+   ],
+   "comment": "`e.game.grid` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.math",
+   "refresh": true,
+   "comment": "`e.math` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.math.float",
+   "refresh": true,
+   "comment": "`e.math.float` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.net",
+   "refresh": true,
+   "deps": [
+    "e.cancel",
+    "e.io",
+    "e.mem",
+    "e.os",
+    "e.time"
+   ],
+   "comment": "`e.net` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.net.http",
+   "refresh": true,
+   "deps": [
+    "e.algo.rand",
+    "e.bytes",
+    "e.cancel",
+    "e.io",
+    "e.mem",
+    "e.net",
+    "e.net.tls",
+    "e.text.utf8"
+   ],
+   "comment": "`e.net.http` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.parse",
+   "refresh": true,
+   "comment": "`e.parse` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.robot.plan",
+   "refresh": true,
+   "comment": "`e.robot.plan` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.str",
+   "refresh": true,
+   "comment": "`e.str` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.time",
+   "refresh": true,
+   "comment": "`e.time` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.time.calendar",
+   "refresh": true,
+   "comment": "`e.time.calendar` (shared fixture misc_gaps)"
+  },
+  {
+   "name": "e.net.http.auth",
+   "deps": [
+    "e.algo.rand",
+    "e.bytes",
+    "e.crypto.hash",
+    "e.crypto.sign",
+    "e.fmt.jwt",
+    "e.mem",
+    "e.str"
+   ],
+   "fixture": "misc_gaps",
+   "anchor": "### `e.net.http`\n",
+   "note": "RFC 7636 PKCE (`pkce_verifier`, `pkce_challenge`, `pkce`) and WebAuthn assertion verification\n(`parse_authenticator_data`, `webauthn_verify` over ES256 or EdDSA keys with the rpId hash,\nuser-presence flag, sign count and client-data type, challenge and origin checked).",
+   "comment": "`e.net.http.auth` and planned functions across sixteen modules and the new `e.net.http.auth`: TPDF dither, a Luenberger observer, AES-GCM and CBC dispatch names, Certificate Transparency SCT verification, Neper and Itanium demangling, grid BFS, Theta* and Amanatides-Woo rays, saturating arithmetic, float unpacking, CIDR and private-address tests, SameSite, CORS preflight and CSP nonces, PKCE and WebAuthn assertions signed in Python, grammar-constrained decoding, LPA*, D* Lite and PRM, string padding, interval merging and Julian days"
+  }
+ ]
+}

@@ -45,7 +45,12 @@ for m in batch['modules']:
         start = text.index(heading)
         open_at = text.index('```neper\n', start)
         close_at = text.index('\n```\n', open_at)
-        text = text[:open_at] + '```neper\n' + fence(m['name']) + text[close_at:]
+        fresh = fence(m['name'])
+        fresh_names = set(re.findall(r'^fn (\w+)', fresh, re.M))
+        # Seeded intrinsics (e.str's format, push_err) have fence lines but no source line: keep them.
+        kept = [l for l in text[open_at + 9:close_at].split('\n')
+                if l.startswith('fn ') and re.match(r'fn (\w+)', l).group(1) not in fresh_names]
+        text = text[:open_at] + '```neper\n' + fresh + (('\n' + '\n'.join(kept)) if kept else '') + text[close_at:]
         continue
     assert heading not in text, m['name']
     block = heading + '\n```neper\n' + fence(m['name']) + '\n```\n\n' + m['note'].strip() + '\n\n'

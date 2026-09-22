@@ -296,3 +296,21 @@ fn parse[PATTERN: str](source: str) -> (DateTime, err) {
     if !valid_date(out.date) || !valid_time(out.time) { ret (zero, Invalid) }
     ret (out, ok)
 }
+
+// --- Julian day numbers (#963).
+
+// The JDN of 1970-01-01, the civil epoch `e.time` counts from.
+fn julian_day_epoch() -> i64 { ret 2440588i64 }
+
+// The Julian day number of a proleptic Gregorian date: 2000-01-01 is 2451545
+// and 1582-10-15 is 2299161. The day count is Fliegel-Van Flandern's answer
+// offset to the civil epoch, so the algorithm is `days_from_civil` plus the
+// epoch's JDN rather than a second copy of the arithmetic.
+fn julian_day(date: time.Date) -> (i64, err) {
+    if !valid_date(date) { ret (0i64, Invalid) }
+    ret (day_count(date) + julian_day_epoch(), ok)
+}
+
+fn julian_day_to_date(jdn: i64) -> time.Date {
+    ret date_of(jdn - julian_day_epoch())
+}

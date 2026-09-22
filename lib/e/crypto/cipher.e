@@ -351,3 +351,10 @@ fn hchacha20(key: [32]u8, nonce: [16]u8) -> [32]u8 {
     }
     ret out
 }
+
+
+// The planned name (#604): CBC in place, one call for both directions.
+fn cbc(k: *const AesKey, iv: [16]u8, data: []u8, encrypt: bool) -> err {
+    if encrypt { ret cbc_encrypt(k, iv, data) }
+    ret cbc_decrypt(k, iv, data)
+}

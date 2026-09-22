@@ -634,3 +634,50 @@ fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err)
     }
     ret (Run { font: font.id, direction: options.direction, script: options.script, language: options.language, glyphs: glyphs }, ok)
 }
+
+// Font fallback by `cmap` coverage: `covers` asks one font for one scalar (a font that
+// fails validation or has no usable subtable covers nothing), `fallback_font` picks the
+// first font in `fonts` covering `scalar` and, when none does, the last one as the last
+// resort (`NONE` for an empty list), and `fallback_runs` cuts `text` into maximal runs
+// of consecutive scalars that chose the same font. ponytail: every scalar asks each
+// font's cmap in turn, which is fine for a handful of fonts; a per-font coverage bitmap
+// is the upgrade for long fallback chains.
+type FontRun = struct { font: usize, start: usize, end: usize }
+
+fn covers(font: Font, scalar: u32) -> bool {
+    if validate_font(font) != ok { ret false }
+    let (cmap, _) = find_table(font, TAG_CMAP)
+    let (sub, has_sub) = cmap_subtable(font.data, cmap)
+    if !has_sub { ret false }
+    ret glyph_of(font.data, sub, scalar) != 0u32
+}
+
+fn fallback_font(fonts: []const Font, scalar: u32) -> usize {
+    if fonts.len == 0usize { ret NONE }
+    var i = 0usize
+    while i < fonts.len {
+        if covers(fonts[i], scalar) { ret i }
+        i += 1usize
+    }
+    ret fonts.len - 1usize
+}
+
+// The runs of `text` by chosen font, in order, into `out`; answers how many.
+fn fallback_runs(fonts: []const Font, text: str, out: []FontRun) -> (usize, err) {
+    if !utf8.validate(text) { ret (0usize, InvalidText) }
+    var count = 0usize
+    var at = 0usize
+    while at < text.len {
+        let (scalar, width) = unicode.read_utf8(text, at)
+        let chosen = fallback_font(fonts, scalar)
+        if count > 0usize && out[count - 1usize].font == chosen {
+            out[count - 1usize].end = at + width
+        } else {
+            if count >= out.len { ret (count, TooLarge) }
+            out[count] = FontRun { font: chosen, start: at, end: at + width }
+            count += 1usize
+        }
+        at += width
+    }
+    ret (count, ok)
+}

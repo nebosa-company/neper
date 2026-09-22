@@ -2,6 +2,7 @@
 // scalar is signed i32 full scale; i16 occupies its high sixteen bits and f32 uses
 // [-1, 1]. Samples are little-endian on every host.
 
+use e.algo.rand
 use e.mem
 
 type SampleFormat = enum u8 { I16, I32, F32 }
@@ -123,6 +124,49 @@ fn silence(fr: *Frames) -> err {
     while at < fr.count * width {
         fr.bytes[at] = 0u8
         at += 1usize
+    }
+    ret ok
+}
+
+
+// --- Dither (#1899): quantising f32 samples to 16 bits with TPDF dither
+// from a caller `Pcg64` (two uniform draws in [0, 1) subtracted: a triangle
+// over (-1, 1) LSB) and, when `shaping` is set, first-order error feedback
+// (the previous quantisation error subtracted before rounding, which moves
+// the noise power toward the top of the band). Rounding is floor(x + 0.5)
+// in f64, the result clamped to the i16 range.
+
+type Dither = struct { rng: *rand.Pcg64, shaping: bool, error_value: f64 }
+
+fn dither(rng: *rand.Pcg64, shaping: bool) -> Dither {
+    ret Dither { rng: rng, shaping: shaping, error_value: 0.0f64 }
+}
+
+// One sample in [-1, 1] to an i16 (full scale 32767).
+fn dither_sample(d: *Dither, x: f32) -> i16 {
+    var v = f64(x) * 32767.0f64 - d.error_value
+    if !(v == v) { v = 0.0f64 }
+    if v > 40000.0f64 { v = 40000.0f64 }
+    if v < -40000.0f64 { v = -40000.0f64 }
+    let first = rand.pcg64_f64(d.rng)
+    let second = rand.pcg64_f64(d.rng)
+    let noise = first - second
+    let w = v + noise + 0.5f64
+    var q = i64(w)
+    if f64(q) > w { q -= 1i64 }
+    if q < -32768i64 { q = -32768i64 }
+    if q > 32767i64 { q = 32767i64 }
+    if d.shaping { d.error_value = f64(q) - v }
+    ret i16(q)
+}
+
+// `dst[i] = dither_sample(src[i])` for every sample; `Truncated` when `dst` is short.
+fn dither_block(d: *Dither, src: []const f32, dst: []i16) -> err {
+    if dst.len < src.len { ret Truncated }
+    var i = 0usize
+    while i < src.len {
+        dst[i] = dither_sample(d, src[i])
+        i += 1usize
     }
     ret ok
 }

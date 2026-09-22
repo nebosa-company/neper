@@ -486,3 +486,128 @@ fn query_get(query: str, name: str) -> (str, bool, err) {
     }
     ret ("", false, ok)
 }
+
+// --- application/x-www-form-urlencoded.
+
+error TooSmall
+
+// One form-encoded component decoded: `+` is a space, `%XX` a byte.
+fn form_decode(a: *mem.Arena, source: str) -> (str, err) {
+    let (out, out_error) = mem.alloc[u8](a, source.len)
+    if out_error != ok { ret ("", out_error) }
+    var written = 0usize
+    var at = 0usize
+    while at < source.len {
+        let c = source[at]
+        if c == 37u8 {
+            if at + 2usize >= source.len || !is_hex(source[at + 1usize]) || !is_hex(source[at + 2usize]) { ret ("", Invalid) }
+            out[written] = hex_value(source[at + 1usize]) * 16u8 + hex_value(source[at + 2usize])
+            at += 3usize
+        } else {
+            if c == 43u8 { out[written] = 32u8 } else { out[written] = c }
+            at += 1usize
+        }
+        written += 1usize
+    }
+    ret (out[..written], ok)
+}
+
+// The `&`-separated pairs of `query` decoded into `keys` and `values`, in order and with
+// repeats kept: the count, or `Invalid` for a bad escape, or `TooSmall` when the slices
+// fill. A pair without `=` has the empty value; an empty pair (`a&&b`) is skipped.
+fn query_parse(a: *mem.Arena, query: str, keys: []str, values: []str) -> (usize, err) {
+    var count = 0usize
+    var at = 0usize
+    while at <= query.len {
+        let pair_start = at
+        while at < query.len && query[at] != 38u8 { at += 1usize }
+        let pair = query[pair_start..at]
+        at += 1usize
+        if pair.len == 0usize { continue }
+        if count >= keys.len || count >= values.len { ret (count, TooSmall) }
+        var split = pair.len
+        var k = 0usize
+        while k < pair.len {
+            if pair[k] == 61u8 {
+                split = k
+                break
+            }
+            k += 1usize
+        }
+        let (key, key_error) = form_decode(a, pair[..split])
+        if key_error != ok { ret (count, key_error) }
+        var value = ""
+        if split < pair.len {
+            let (decoded, value_error) = form_decode(a, pair[split + 1usize..])
+            if value_error != ok { ret (count, value_error) }
+            value = decoded
+        }
+        keys[count] = key
+        values[count] = value
+        count += 1usize
+    }
+    ret (count, ok)
+}
+
+fn form_encoded_len(text: str) -> usize {
+    var needed = 0usize
+    var at = 0usize
+    while at < text.len {
+        if is_unreserved(text[at]) || text[at] == 32u8 { needed += 1usize } else { needed += 3usize }
+        at += 1usize
+    }
+    ret needed
+}
+
+fn form_encode_into(out: []u8, at: usize, text: str) -> usize {
+    var written = at
+    var i = 0usize
+    while i < text.len {
+        let c = text[i]
+        if is_unreserved(c) {
+            out[written] = c
+            written += 1usize
+        } else {
+            if c == 32u8 {
+                out[written] = 43u8
+                written += 1usize
+            } else {
+                out[written] = 37u8
+                out[written + 1usize] = upper_hex(c >> 4u8)
+                out[written + 2usize] = upper_hex(c & 15u8)
+                written += 3usize
+            }
+        }
+        i += 1usize
+    }
+    ret written
+}
+
+// `keys[i]=values[i]` joined by `&`, each side with only RFC 3986 unreserved bytes left
+// bare, a space as `+` and everything else as `%XX`.
+fn query_build(a: *mem.Arena, keys: []const str, values: []const str) -> (str, err) {
+    if keys.len != values.len { ret ("", Invalid) }
+    var needed = 0usize
+    var i = 0usize
+    while i < keys.len {
+        if i > 0usize { needed += 1usize }
+        needed += form_encoded_len(keys[i]) + 1usize + form_encoded_len(values[i])
+        i += 1usize
+    }
+    let (out, out_error) = mem.alloc[u8](a, needed)
+    if out_error != ok { ret ("", out_error) }
+    var at = 0usize
+    i = 0usize
+    while i < keys.len {
+        if i > 0usize {
+            out[at] = 38u8
+            at += 1usize
+        }
+        at = form_encode_into(out, at, keys[i])
+        out[at] = 61u8
+        at += 1usize
+        at = form_encode_into(out, at, values[i])
+        i += 1usize
+    }
+    ret (out[..at], ok)
+}

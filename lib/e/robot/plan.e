@@ -830,3 +830,267 @@ fn path_join(a: *const Pool, a_node: u32, b: *const Pool, b_node: u32, out_x: []
     }
     ret (i, path_length(out_x, out_y, i), ok)
 }
+
+
+// --- #1833 PRM in one call: build the roadmap, then query it.
+fn prm(cfg: *const Config, obstacles: []const Circle, rng: *rand.Pcg64, p: *Pool, n: usize, k: usize, adj: []u32, sx: f64, sy: f64, gx: f64, gy: f64, heap_key: []f64, heap_node: []u32, closed: []u8) -> (u32, err) {
+    let build_error = prm_build(cfg, obstacles, rng, p, n, k, adj)
+    if build_error != ok { ret (NONE, build_error) }
+    let (goal, query_error) = prm_query(obstacles, p, n, k, adj, sx, sy, gx, gy, heap_key, heap_node, closed)
+    ret (goal, query_error)
+}
+
+// --- Incremental search on a `w` x `h` grid (#92, #93, #1840): four unit
+// moves between unblocked cells (`blocked[cell] != 0` is a wall), the
+// `g`/`rhs` machinery of LPA* (Koenig & Likhachev 2004) with a lazy binary
+// heap of `(k1, k2)` keys. `root` is the node whose `rhs` is 0 and `focus`
+// the one the keys point at with the Manhattan heuristic: LPA* roots the
+// start and focuses the goal, D* Lite roots the goal and focuses the robot,
+// whose `km` grows as it moves so old keys stay lower bounds. A path is read
+// from `focus` toward `root` by the neighbour of least `g + 1`.
+
+type Incremental = struct { w: usize, h: usize, blocked: []u8, g: []f64, rhs: []f64, heap_k1: []f64, heap_k2: []f64, heap_node: []u32, heap_used: usize, root: usize, focus: usize, km: f64, expansions: usize }
+
+fn infinite() -> f64 { ret 1.0e300f64 }
+
+fn manhattan(w: usize, a: usize, b: usize) -> f64 {
+    let ax = i64(a % w)
+    let ay = i64(a / w)
+    let bx = i64(b % w)
+    let by = i64(b / w)
+    var dx = ax - bx
+    if dx < 0i64 { dx = 0i64 - dx }
+    var dy = ay - by
+    if dy < 0i64 { dy = 0i64 - dy }
+    ret f64(dx + dy)
+}
+
+fn key_less(a1: f64, a2: f64, b1: f64, b2: f64) -> bool {
+    if a1 < b1 { ret true }
+    if a1 > b1 { ret false }
+    ret a2 < b2
+}
+
+fn key_of(s: *const Incremental, u: usize) -> (f64, f64) {
+    var m = s.g[u]
+    if s.rhs[u] < m { m = s.rhs[u] }
+    if m >= infinite() { ret (infinite(), infinite()) }
+    ret (m + manhattan(s.w, u, s.focus) + s.km, m)
+}
+
+fn ikey_push(s: *Incremental, k1: f64, k2: f64, node: u32) -> err {
+    if s.heap_used >= s.heap_k1.len || s.heap_used >= s.heap_k2.len || s.heap_used >= s.heap_node.len { ret TooSmall }
+    var i = s.heap_used
+    s.heap_used += 1usize
+    s.heap_k1[i] = k1
+    s.heap_k2[i] = k2
+    s.heap_node[i] = node
+    while i > 0usize {
+        let q = (i - 1usize) / 2usize
+        if !key_less(s.heap_k1[i], s.heap_k2[i], s.heap_k1[q], s.heap_k2[q]) { ret ok }
+        let hk1 = s.heap_k1[q]
+        let hk2 = s.heap_k2[q]
+        let hn = s.heap_node[q]
+        s.heap_k1[q] = s.heap_k1[i]
+        s.heap_k2[q] = s.heap_k2[i]
+        s.heap_node[q] = s.heap_node[i]
+        s.heap_k1[i] = hk1
+        s.heap_k2[i] = hk2
+        s.heap_node[i] = hn
+        i = q
+    }
+    ret ok
+}
+
+fn ikey_pop(s: *Incremental) -> (f64, f64, u32) {
+    let top1 = s.heap_k1[0usize]
+    let top2 = s.heap_k2[0usize]
+    let top_node = s.heap_node[0usize]
+    s.heap_used -= 1usize
+    s.heap_k1[0usize] = s.heap_k1[s.heap_used]
+    s.heap_k2[0usize] = s.heap_k2[s.heap_used]
+    s.heap_node[0usize] = s.heap_node[s.heap_used]
+    var i = 0usize
+    while true {
+        let l = 2usize * i + 1usize
+        let r = l + 1usize
+        var m = i
+        if l < s.heap_used && key_less(s.heap_k1[l], s.heap_k2[l], s.heap_k1[m], s.heap_k2[m]) { m = l }
+        if r < s.heap_used && key_less(s.heap_k1[r], s.heap_k2[r], s.heap_k1[m], s.heap_k2[m]) { m = r }
+        if m == i { ret (top1, top2, top_node) }
+        let hk1 = s.heap_k1[m]
+        let hk2 = s.heap_k2[m]
+        let hn = s.heap_node[m]
+        s.heap_k1[m] = s.heap_k1[i]
+        s.heap_k2[m] = s.heap_k2[i]
+        s.heap_node[m] = s.heap_node[i]
+        s.heap_k1[i] = hk1
+        s.heap_k2[i] = hk2
+        s.heap_node[i] = hn
+        i = m
+    }
+    ret (top1, top2, top_node)
+}
+
+// The four grid neighbours of `u` in the order right, down, left, up.
+fn grid_neighbour(w: usize, h: usize, u: usize, k: usize) -> (usize, bool) {
+    let x = u % w
+    let y = u / w
+    if k == 0usize {
+        if x + 1usize < w { ret (u + 1usize, true) }
+        ret (0usize, false)
+    }
+    if k == 1usize {
+        if y + 1usize < h { ret (u + w, true) }
+        ret (0usize, false)
+    }
+    if k == 2usize {
+        if x > 0usize { ret (u - 1usize, true) }
+        ret (0usize, false)
+    }
+    if y > 0usize { ret (u - w, true) }
+    ret (0usize, false)
+}
+
+fn update_vertex(s: *Incremental, u: usize) -> err {
+    if u != s.root {
+        var best = infinite()
+        if s.blocked[u] == 0u8 {
+            var k = 0usize
+            while k < 4usize {
+                let (v, has) = grid_neighbour(s.w, s.h, u, k)
+                if has && s.blocked[v] == 0u8 && s.g[v] + 1.0f64 < best { best = s.g[v] + 1.0f64 }
+                k += 1usize
+            }
+        }
+        s.rhs[u] = best
+    }
+    if s.g[u] != s.rhs[u] {
+        let (k1, k2) = key_of(s, u)
+        ret ikey_push(s, k1, k2, u32(u))
+    }
+    ret ok
+}
+
+fn incremental(w: usize, h: usize, blocked: []u8, g: []f64, rhs: []f64, heap_k1: []f64, heap_k2: []f64, heap_node: []u32, root: usize, focus: usize) -> (Incremental, err) {
+    let total = w * h
+    if blocked.len < total || g.len < total || rhs.len < total || root >= total || focus >= total { ret (zero, TooSmall) }
+    var s = Incremental { w: w, h: h, blocked: blocked, g: g, rhs: rhs, heap_k1: heap_k1, heap_k2: heap_k2, heap_node: heap_node, heap_used: 0usize, root: root, focus: focus, km: 0.0f64, expansions: 0usize }
+    var i = 0usize
+    while i < total {
+        g[i] = infinite()
+        rhs[i] = infinite()
+        i += 1usize
+    }
+    rhs[root] = 0.0f64
+    let (k1, k2) = key_of(&s, root)
+    let push_error = ikey_push(&s, k1, k2, u32(root))
+    if push_error != ok { ret (zero, push_error) }
+    ret (s, ok)
+}
+
+// #93 LPA*: rooted at `start`, keys toward `goal`; `incremental_compute`
+// answers the shortest path, `incremental_block` changes a cell, and the
+// next `incremental_compute` repairs only what the change touched.
+fn lpa_star(w: usize, h: usize, blocked: []u8, g: []f64, rhs: []f64, heap_k1: []f64, heap_k2: []f64, heap_node: []u32, start: usize, goal: usize) -> (Incremental, err) {
+    let (s, e) = incremental(w, h, blocked, g, rhs, heap_k1, heap_k2, heap_node, start, goal)
+    ret (s, e)
+}
+
+// #92 / #1840 D* Lite: rooted at `goal`, keys toward the robot at `start`;
+// `incremental_move` follows the robot, `incremental_block` reports what
+// its sensors found, `incremental_compute` replans.
+fn dstar_lite(w: usize, h: usize, blocked: []u8, g: []f64, rhs: []f64, heap_k1: []f64, heap_k2: []f64, heap_node: []u32, start: usize, goal: usize) -> (Incremental, err) {
+    let (s, e) = incremental(w, h, blocked, g, rhs, heap_k1, heap_k2, heap_node, goal, start)
+    ret (s, e)
+}
+
+// ComputeShortestPath: expand until the focus is consistent and nothing in
+// the queue keys below it. Answers `g[focus]` (`infinite()` when cut off).
+fn incremental_compute(s: *Incremental) -> (f64, err) {
+    while s.heap_used > 0usize {
+        let (f1, f2) = key_of(s, s.focus)
+        let top1 = s.heap_k1[0usize]
+        let top2 = s.heap_k2[0usize]
+        if !key_less(top1, top2, f1, f2) && s.rhs[s.focus] == s.g[s.focus] { ret (s.g[s.focus], ok) }
+        let (k1, k2, popped) = ikey_pop(s)
+        let u = usize(popped)
+        if s.g[u] == s.rhs[u] { continue }
+        let (n1, n2) = key_of(s, u)
+        if key_less(k1, k2, n1, n2) {
+            let repush = ikey_push(s, n1, n2, popped)
+            if repush != ok { ret (infinite(), repush) }
+            continue
+        }
+        s.expansions += 1usize
+        if s.g[u] > s.rhs[u] {
+            s.g[u] = s.rhs[u]
+        } else {
+            s.g[u] = infinite()
+            let self_error = update_vertex(s, u)
+            if self_error != ok { ret (infinite(), self_error) }
+        }
+        var k = 0usize
+        while k < 4usize {
+            let (v, has) = grid_neighbour(s.w, s.h, u, k)
+            if has {
+                let update_error = update_vertex(s, v)
+                if update_error != ok { ret (infinite(), update_error) }
+            }
+            k += 1usize
+        }
+    }
+    ret (s.g[s.focus], ok)
+}
+
+// A cell becomes a wall or open ground: its own and its neighbours' `rhs`
+// are recomputed and queued.
+fn incremental_block(s: *Incremental, cell: usize, wall: bool) -> err {
+    if cell >= s.w * s.h { ret Invalid }
+    if wall { s.blocked[cell] = 1u8 } else { s.blocked[cell] = 0u8 }
+    try update_vertex(s, cell)
+    var k = 0usize
+    while k < 4usize {
+        let (v, has) = grid_neighbour(s.w, s.h, cell, k)
+        if has { try update_vertex(s, v) }
+        k += 1usize
+    }
+    ret ok
+}
+
+// D* Lite: the robot now stands on `cell`; `km` grows by the heuristic
+// distance moved so every queued key stays a lower bound.
+fn incremental_move(s: *Incremental, cell: usize) -> err {
+    if cell >= s.w * s.h { ret Invalid }
+    s.km += manhattan(s.w, s.focus, cell)
+    s.focus = cell
+    ret ok
+}
+
+// The path from `focus` to `root` by descending `g` (`focus` first), into
+// `out`; 0 cells when `focus` is cut off. `out.len` bounds the walk.
+fn incremental_path(s: *const Incremental, out: []u32) -> (usize, err) {
+    if s.g[s.focus] >= infinite() || s.blocked[s.focus] != 0u8 { ret (0usize, ok) }
+    var n = 0usize
+    var cur = s.focus
+    while true {
+        if n >= out.len { ret (n, TooSmall) }
+        out[n] = u32(cur)
+        n += 1usize
+        if cur == s.root { ret (n, ok) }
+        var best = cur
+        var best_g = infinite()
+        var k = 0usize
+        while k < 4usize {
+            let (v, has) = grid_neighbour(s.w, s.h, cur, k)
+            if has && s.blocked[v] == 0u8 && s.g[v] < best_g {
+                best_g = s.g[v]
+                best = v
+            }
+            k += 1usize
+        }
+        if best == cur || best_g >= s.g[cur] { ret (0usize, Invalid) }
+        cur = best
+    }
+    ret (n, ok)
+}

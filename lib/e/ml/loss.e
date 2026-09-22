@@ -155,3 +155,41 @@ fn ctc(log_probabilities: []const f64, frames: usize, classes: usize, blank: usi
     if likelihood <= none { ret (0.0f64, Invalid) }
     ret (0.0f64 - likelihood, ok)
 }
+
+// `KL(p || q) = Σ p_i ln((p_i + epsilon) / (q_i + epsilon))` over `n`
+// probabilities, or `KL(q || p)` when `reverse`; `epsilon >= 0` guards
+// empty bins.
+fn kl_divergence(p: []const f64, q: []const f64, n: usize, reverse: bool, epsilon: f64) -> (f64, err) {
+    if p.len < n || q.len < n { ret (0.0f64, TooSmall) }
+    if n == 0usize || epsilon < 0.0f64 { ret (0.0f64, Invalid) }
+    var total = 0.0f64
+    var i = 0usize
+    while i < n {
+        var a = p[i]
+        var b = q[i]
+        if reverse {
+            a = q[i]
+            b = p[i]
+        }
+        if a > 0.0f64 || epsilon > 0.0f64 { total += a * math.log[f64]((a + epsilon) / (b + epsilon)) }
+        i += 1usize
+    }
+    ret (total, ok)
+}
+
+// Jensen-Shannon: `½ KL(p || m) + ½ KL(q || m)` with `m = ½ (p + q)`;
+// `scratch.len >= n`.
+fn js_divergence(p: []const f64, q: []const f64, n: usize, epsilon: f64, scratch: []f64) -> (f64, err) {
+    if p.len < n || q.len < n || scratch.len < n { ret (0.0f64, TooSmall) }
+    var m = scratch[..n]
+    var i = 0usize
+    while i < n {
+        m[i] = 0.5f64 * (p[i] + q[i])
+        i += 1usize
+    }
+    let (left, left_error) = kl_divergence(p, m, n, false, epsilon)
+    if left_error != ok { ret (0.0f64, left_error) }
+    let (right, right_error) = kl_divergence(q, m, n, false, epsilon)
+    if right_error != ok { ret (0.0f64, right_error) }
+    ret (0.5f64 * left + 0.5f64 * right, ok)
+}

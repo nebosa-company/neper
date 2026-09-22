@@ -2,6 +2,8 @@
 // format. Plain and TLS full-body/controlled streaming clients each own one
 // connection.
 
+use e.algo.rand
+use e.bytes as codec
 use e.io
 use e.cancel
 use e.mem
@@ -20,21 +22,9 @@ type Writer = struct { sink: io.Writer }
 type ResponseHead = struct { version: Version, status: u16, reason: str, headers: []const Header }
 type ResponseStream = struct { state: *void }
 
-type SseEvent = struct {
-    event: str,
-    data: str,
-    id: str,
-    has_id: bool,
-    retry_ms: u64,
-    has_retry: bool,
-}
+type SseEvent = struct { event: str, data: str, id: str, has_id: bool, retry_ms: u64, has_retry: bool }
 
-type SseState = struct {
-    id: str,
-    has_id: bool,
-    retry_ms: u64,
-    has_retry: bool,
-}
+type SseState = struct { id: str, has_id: bool, retry_ms: u64, has_retry: bool }
 
 type SseReader = struct { state: *void }
 type SseLimits = struct { line_bytes: usize, event_bytes: usize }
@@ -47,40 +37,13 @@ const INPUT_CAPACITY: usize = 4096usize
 const CR: u8 = 13u8
 const LF: u8 = 10u8
 
-type ReaderState = struct {
-    source: io.Reader,
-    input: []u8,
-    input_at: usize,
-    input_len: usize,
-    line: []u8,
-    limits: Limits,
-}
+type ReaderState = struct { source: io.Reader, input: []u8, input_at: usize, input_len: usize, line: []u8, limits: Limits }
 
 type NetworkIo = struct { socket: net.Socket, control: cancel.Control }
 
-type ResponseMeta = struct {
-    head: ResponseHead,
-    length: usize,
-    has_length: bool,
-    chunked: bool,
-}
+type ResponseMeta = struct { head: ResponseHead, length: usize, has_length: bool, chunked: bool }
 
-type ResponseStreamState = struct {
-    network: NetworkIo,
-    secure: tls.Stream,
-    tls_active: bool,
-    decoder: Reader,
-    head: ResponseHead,
-    limits: Limits,
-    remaining: usize,
-    total: usize,
-    chunk_remaining: usize,
-    chunked: bool,
-    chunk_needs_crlf: bool,
-    close_delimited: bool,
-    ended: bool,
-    closed: bool,
-}
+type ResponseStreamState = struct { network: NetworkIo, secure: tls.Stream, tls_active: bool, decoder: Reader, head: ResponseHead, limits: Limits, remaining: usize, total: usize, chunk_remaining: usize, chunked: bool, chunk_needs_crlf: bool, close_delimited: bool, ended: bool, closed: bool }
 
 fn network_read(ctx: *void, dst: []u8) -> (usize, err) {
     let network = mem.cast[*NetworkIo](ctx)
@@ -1055,26 +1018,7 @@ fn reason(status: u16) -> str {
     ret ""
 }
 
-type SseReaderState = struct {
-    source: io.Reader,
-    input: []u8,
-    input_at: usize,
-    input_len: usize,
-    line: []u8,
-    data: []u8,
-    event: []u8,
-    id: []u8,
-    data_len: usize,
-    event_len: usize,
-    id_len: usize,
-    event_used: usize,
-    retry_ms: u64,
-    has_id: bool,
-    has_retry: bool,
-    ended: bool,
-    line_terminated: bool,
-    first_line: bool,
-}
+type SseReaderState = struct { source: io.Reader, input: []u8, input_at: usize, input_len: usize, line: []u8, data: []u8, event: []u8, id: []u8, data_len: usize, event_len: usize, id_len: usize, event_used: usize, retry_ms: u64, has_id: bool, has_retry: bool, ended: bool, line_terminated: bool, first_line: bool }
 
 fn take(s: *SseReaderState) -> (u8, bool, err) {
     if s.input_at == s.input_len {
@@ -1349,4 +1293,192 @@ fn sse_next_err(it: *SseReader) -> (SseEvent, bool, err) {
 fn sse_state(it: *const SseReader) -> SseState {
     let s = mem.cast[*SseReaderState](it.state)
     ret SseState { id: s.id[..s.id_len], has_id: s.has_id, retry_ms: s.retry_ms, has_retry: s.has_retry }
+}
+
+
+// --- Browser-side policy (#1432-#1434): SameSite cookies, CORS preflights
+// and Content-Security-Policy nonces, all over caller storage.
+
+// A cookie's `SameSite` attribute; `Default` is an absent or unrecognised
+// value, which RFC 6265bis treats as `Lax`.
+type SameSite = enum u8 { Strict, Lax, None, Default }
+type CorsPolicy = struct { origins: []const str, methods: []const str, headers: []const str, credentials: bool }
+type CspPolicy = struct { default_src: str, script_src: str, style_src: str, img_src: str, connect_src: str, frame_ancestors: str, nonce: str, strict_dynamic: bool }
+error Denied
+
+// The attribute's value, case-insensitively; anything else is `Default`.
+fn cookie_same_site_parse(value: str) -> SameSite {
+    if same_ascii(value, "Strict") { ret .Strict }
+    if same_ascii(value, "Lax") { ret .Lax }
+    if same_ascii(value, "None") { ret .None }
+    ret .Default
+}
+
+// The attribute text to emit in a `Set-Cookie` header (`Default` emits none).
+fn cookie_same_site_text(value: SameSite) -> str {
+    if value == .Strict { ret "SameSite=Strict" }
+    if value == .Lax { ret "SameSite=Lax" }
+    if value == .None { ret "SameSite=None" }
+    ret ""
+}
+
+fn safe_method(method: Method) -> bool {
+    ret method == .Get || method == .Head || method == .Options || method == .Trace
+}
+
+// Whether a cookie with attribute `policy` is attached to a request, per the
+// RFC 6265bis table: a same-site request always carries it; cross-site,
+// `Strict` never, `Lax` (and `Default`) only on a top-level navigation by a
+// safe method, `None` always -- but only when the cookie is `Secure`, since
+// an insecure `SameSite=None` cookie is rejected at set time.
+// ponytail: `Default` skips the "Lax-allowing-unsafe" two-minute window for
+// fresh cookies; add a cookie age when a client needs it.
+fn cookie_same_site(policy: SameSite, secure: bool, same_site_request: bool, method: Method, top_level_navigation: bool) -> bool {
+    if policy == .None && !secure { ret false }
+    if same_site_request { ret true }
+    if policy == .Strict { ret false }
+    if policy == .None { ret true }
+    ret top_level_navigation && safe_method(method)
+}
+
+fn list_has(list: []const str, value: str, fold: bool) -> bool {
+    var i = 0usize
+    while i < list.len {
+        if fold {
+            if same_ascii(list[i], value) { ret true }
+        } else {
+            if str_equal(list[i], value) { ret true }
+        }
+        i += 1usize
+    }
+    ret false
+}
+
+fn str_equal(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn trim_spaces(value: str) -> str {
+    var lo = 0usize
+    var hi = value.len
+    while lo < hi && (value[lo] == 32u8 || value[lo] == 9u8) { lo += 1usize }
+    while hi > lo && (value[hi - 1usize] == 32u8 || value[hi - 1usize] == 9u8) { hi -= 1usize }
+    ret value[lo..hi]
+}
+
+// Evaluate a CORS preflight: `origin` is the request's `Origin`, `method`
+// its `Access-Control-Request-Method` and `request_headers` the comma list
+// of `Access-Control-Request-Headers` (empty when absent). The policy's
+// `origins` may hold `*`; methods compare exactly, header names fold case.
+// Allowed, the response headers go to `out` -- `Access-Control-Allow-Origin`
+// (the origin, or `*` for a wildcard policy without credentials),
+// `Access-Control-Allow-Methods` and `-Headers` echoing what was asked,
+// `Access-Control-Allow-Credentials: true` when set and `Vary: Origin` --
+// answering the count; refused, `Denied`.
+fn cors_preflight(policy: *const CorsPolicy, origin: str, method: str, request_headers: str, out: []Header) -> (usize, err) {
+    if origin.len == 0usize || method.len == 0usize { ret (0usize, Denied) }
+    let wildcard = list_has(policy.origins, "*", false)
+    if !wildcard && !list_has(policy.origins, origin, false) { ret (0usize, Denied) }
+    if !list_has(policy.methods, method, false) && !list_has(policy.methods, "*", false) { ret (0usize, Denied) }
+    var at = 0usize
+    while at < request_headers.len {
+        var stop = at
+        while stop < request_headers.len && request_headers[stop] != 44u8 { stop += 1usize }
+        let name = trim_spaces(request_headers[at..stop])
+        if name.len != 0usize && !list_has(policy.headers, name, true) && !list_has(policy.headers, "*", false) { ret (0usize, Denied) }
+        at = stop + 1usize
+    }
+    var count = 0usize
+    var allow_origin = origin
+    if wildcard && !policy.credentials { allow_origin = "*" }
+    if out.len < 5usize { ret (0usize, TooLarge) }
+    out[count] = Header { name: "Access-Control-Allow-Origin", value: allow_origin }
+    count += 1usize
+    out[count] = Header { name: "Access-Control-Allow-Methods", value: method }
+    count += 1usize
+    if request_headers.len != 0usize {
+        out[count] = Header { name: "Access-Control-Allow-Headers", value: request_headers }
+        count += 1usize
+    }
+    if policy.credentials {
+        out[count] = Header { name: "Access-Control-Allow-Credentials", value: "true" }
+        count += 1usize
+    }
+    out[count] = Header { name: "Vary", value: "Origin" }
+    count += 1usize
+    ret (count, ok)
+}
+
+// A CSP nonce: sixteen bytes from the caller's generator (two `pcg64_next`
+// words, little-endian) as standard base64 with padding, 24 characters
+// into `dst`.
+fn csp_nonce(rng: *rand.Pcg64, dst: []u8) -> (str, err) {
+    var raw: [16]u8 = zero
+    var word = 0usize
+    while word < 2usize {
+        let value = rand.pcg64_next(rng)
+        var i = 0usize
+        while i < 8usize {
+            raw[word * 8usize + i] = u8((value >> u32(8usize * i)) & 255u64)
+            i += 1usize
+        }
+        word += 1usize
+    }
+    let (text, encode_error) = codec.base64_encode(dst, raw[0..], .Standard, true)
+    if encode_error != ok { ret ("", TooLarge) }
+    ret (text, ok)
+}
+
+fn csp_put(dst: []u8, at: *usize, text: str) -> err {
+    if *at + text.len > dst.len { ret TooLarge }
+    var i = 0usize
+    while i < text.len {
+        dst[*at + i] = text[i]
+        i += 1usize
+    }
+    *at += text.len
+    ret ok
+}
+
+fn csp_directive(dst: []u8, at: *usize, name: str, value: str, nonce: str, strict_dynamic: bool) -> err {
+    if value.len == 0usize { ret ok }
+    if *at != 0usize { try csp_put(dst, at, "; ") }
+    try csp_put(dst, at, name)
+    try csp_put(dst, at, " ")
+    try csp_put(dst, at, value)
+    if nonce.len != 0usize {
+        try csp_put(dst, at, " 'nonce-")
+        try csp_put(dst, at, nonce)
+        try csp_put(dst, at, "'")
+    }
+    if strict_dynamic { try csp_put(dst, at, " 'strict-dynamic'") }
+    ret ok
+}
+
+// The `Content-Security-Policy` header value for a policy: each non-empty
+// source list as `name value`, `; `-separated in the order default-src,
+// script-src, style-src, img-src, connect-src, frame-ancestors; the nonce
+// (from `csp_nonce`) is appended to script-src and style-src as
+// `'nonce-...'`, and `'strict-dynamic'` to script-src.
+fn csp_header(policy: *const CspPolicy, dst: []u8) -> (str, err) {
+    var p = 0usize
+    let default_error = csp_directive(dst, &p, "default-src", policy.default_src, "", false)
+    if default_error != ok { ret ("", default_error) }
+    let script_error = csp_directive(dst, &p, "script-src", policy.script_src, policy.nonce, policy.strict_dynamic)
+    if script_error != ok { ret ("", script_error) }
+    let style_error = csp_directive(dst, &p, "style-src", policy.style_src, policy.nonce, false)
+    if style_error != ok { ret ("", style_error) }
+    let img_error = csp_directive(dst, &p, "img-src", policy.img_src, "", false)
+    if img_error != ok { ret ("", img_error) }
+    let connect_error = csp_directive(dst, &p, "connect-src", policy.connect_src, "", false)
+    if connect_error != ok { ret ("", connect_error) }
+    let frame_error = csp_directive(dst, &p, "frame-ancestors", policy.frame_ancestors, "", false)
+    if frame_error != ok { ret ("", frame_error) }
+    ret (dst[..p], ok)
 }

@@ -198,3 +198,84 @@ fn write_bytes(w: *io.Writer, value: []const u8) -> err {
     try write_u64(w, u64(value.len))
     ret io.write_all(w, value)
 }
+
+// --- The planned name `decode`: a schema-less walk of the top-level fields into
+// caller storage, each as its number, wire type and raw value -- the varint as it
+// came (`decode_zigzag` for sint fields), a fixed width in `fixed`, the bytes of a
+// length-delimited field (a nested message stays bytes) -- and `encode` writing such
+// a list back. More fields than `fields` holds is `io.TooSmall`.
+
+type Field = struct { number: u32, wire: WireType, varint: u64, fixed: u64, data: []const u8 }
+
+fn decode(source: []const u8, fields: []Field) -> (usize, err) {
+    var r = reader(source)
+    var count = 0usize
+    while true {
+        let (key, more, key_error) = reader_next_err(&r)
+        if key_error != ok { ret (count, key_error) }
+        if !more { ret (count, ok) }
+        if count >= fields.len { ret (count, io.TooSmall) }
+        var field: Field = zero
+        field.number = key.number
+        field.wire = key.wire
+        if key.wire == .Varint {
+            let (value, value_error) = read_u64(&r)
+            if value_error != ok { ret (count, value_error) }
+            field.varint = value
+        }
+        if key.wire == .Fixed32 {
+            let (value, value_error) = read_fixed32(&r)
+            if value_error != ok { ret (count, value_error) }
+            field.fixed = u64(value)
+        }
+        if key.wire == .Fixed64 {
+            let (value, value_error) = read_fixed64(&r)
+            if value_error != ok { ret (count, value_error) }
+            field.fixed = value
+        }
+        if key.wire == .Bytes {
+            let (data, data_error) = read_bytes(&r)
+            if data_error != ok { ret (count, data_error) }
+            field.data = data
+        }
+        fields[count] = field
+        count += 1usize
+    }
+}
+
+// One varint from the front of `source`: its value and the bytes it took.
+fn decode_varint(source: []const u8) -> (u64, usize, err) {
+    var r = reader(source)
+    let (value, value_error) = read_u64(&r)
+    if value_error != ok { ret (0u64, 0usize, value_error) }
+    ret (value, source.len - bytes.remaining_reader(&r.input), ok)
+}
+
+// The zigzag mapping undone: 0, 1, 2, 3 are 0, -1, 1, -2.
+fn decode_zigzag(raw: u64) -> i64 {
+    let magnitude = i64(raw >> 1u32)
+    if raw & 1u64 == 1u64 { ret 0i64 - magnitude - 1i64 }
+    ret magnitude
+}
+
+fn encode_zigzag(value: i64) -> u64 {
+    if value >= 0i64 { ret u64(value) << 1u32 }
+    ret (u64(0i64 - value - 1i64) << 1u32) | 1u64
+}
+
+fn encode(w: *io.Writer, fields: []const Field) -> err {
+    var i = 0usize
+    while i < fields.len {
+        let f = fields[i]
+        try write_key(w, f.number, f.wire)
+        if f.wire == .Varint { try write_u64(w, f.varint) }
+        if f.wire == .Fixed32 {
+            if f.fixed > 4294967295u64 { ret Invalid }
+            try write_fixed32(w, u32(f.fixed))
+        }
+        if f.wire == .Fixed64 { try write_fixed64(w, f.fixed) }
+        if f.wire == .Bytes { try write_bytes(w, f.data) }
+        i += 1usize
+    }
+    ret ok
+}

@@ -25,44 +25,9 @@ const TABLE: usize = 4096usize
 // The writer's hash table: enough for 4096 entries at a load below one half.
 const HASH: usize = 8192usize
 
-type ReaderState = struct {
-    source: io.Reader,
-    order: Order,
-    literal_width: u32,
-    width: u32,
-    clear: u32,
-    end: u32,
-    next: u32,
-    previous: u32,
-    has_previous: bool,
-    bits: u64,
-    bit_count: u32,
-    output_limit: u64,
-    produced: u64,
-    finished: bool,
-    prefix: []u8,
-    suffix: []u8,
-    stack: []u8,
-    stack_len: usize,
-    first_of: []u8,
-}
+type ReaderState = struct { source: io.Reader, order: Order, literal_width: u32, width: u32, clear: u32, end: u32, next: u32, previous: u32, has_previous: bool, bits: u64, bit_count: u32, output_limit: u64, produced: u64, finished: bool, prefix: []u8, suffix: []u8, stack: []u8, stack_len: usize, first_of: []u8 }
 
-type WriterState = struct {
-    sink: io.Writer,
-    order: Order,
-    literal_width: u32,
-    width: u32,
-    clear: u32,
-    end: u32,
-    next: u32,
-    current: u32,
-    has_current: bool,
-    bits: u64,
-    bit_count: u32,
-    started: bool,
-    keys: []u8,
-    values: []u8,
-}
+type WriterState = struct { sink: io.Writer, order: Order, literal_width: u32, width: u32, clear: u32, end: u32, next: u32, current: u32, has_current: bool, bits: u64, bit_count: u32, started: bool, keys: []u8, values: []u8 }
 
 // The tables live in byte storage, two or four bytes an entry, little-endian.
 fn get16(table: []const u8, index: usize) -> u32 {
@@ -367,4 +332,56 @@ fn finish(sink_writer: *Writer) -> err {
         try io.write_all(&s.sink, byte[0..])
     }
     ret io.flush(&s.sink)
+}
+
+// --- The planned name `encode`, whole-buffer forms over the streaming pair: the
+// codes of `src` in the arena (12-bit codes at worst, so at most 1.5 bytes a byte
+// plus the clears), and `decode` growing its output up to `output_limit`.
+
+fn encode(a: *mem.Arena, src: []const u8, order: Order, literal_width: u8) -> ([]u8, err) {
+    let (needed, needed_error) = storage_required(literal_width)
+    if needed_error != ok { ret (zero, needed_error) }
+    let (storage, storage_error) = mem.alloc[u8](a, needed)
+    if storage_error != ok { ret (zero, storage_error) }
+    let (out, out_error) = mem.alloc[u8](a, src.len + src.len / 2usize + src.len / 512usize + 16usize)
+    if out_error != ok { ret (zero, out_error) }
+    var sink_state = io.SliceWriter { data: out, off: 0usize }
+    let (w0, writer_error) = writer(storage, io.slice_writer(&sink_state), order, literal_width)
+    if writer_error != ok { ret (zero, writer_error) }
+    var w = w0
+    let (_, write_error) = write(&w, src)
+    if write_error != ok { ret (zero, write_error) }
+    let finish_error = finish(&w)
+    if finish_error != ok { ret (zero, finish_error) }
+    ret (out[..sink_state.off], ok)
+}
+
+fn decode(a: *mem.Arena, src: []const u8, order: Order, literal_width: u8, output_limit: u64) -> ([]u8, err) {
+    let (needed, needed_error) = storage_required(literal_width)
+    if needed_error != ok { ret (zero, needed_error) }
+    let (storage, storage_error) = mem.alloc[u8](a, needed)
+    if storage_error != ok { ret (zero, storage_error) }
+    var source_state = io.SliceReader { data: src, off: 0usize }
+    let (r0, reader_error) = reader(storage, io.slice_reader(&source_state), order, literal_width, output_limit)
+    if reader_error != ok { ret (zero, reader_error) }
+    var r = r0
+    var capacity = src.len * 2usize + 64usize
+    let (first, first_error) = mem.alloc[u8](a, capacity)
+    if first_error != ok { ret (zero, first_error) }
+    var out = first
+    var filled = 0usize
+    while true {
+        if filled == capacity {
+            let (bigger, bigger_error) = mem.alloc[u8](a, capacity * 2usize)
+            if bigger_error != ok { ret (zero, bigger_error) }
+            mem.copy[u8](bigger[..filled], out[..filled])
+            out = bigger
+            capacity = capacity * 2usize
+        }
+        let (count, read_error) = read(&r, out[filled..])
+        if read_error == io.End { break }
+        if read_error != ok { ret (zero, read_error) }
+        filled += count
+    }
+    ret (out[..filled], ok)
 }

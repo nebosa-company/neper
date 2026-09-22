@@ -320,3 +320,21 @@ fn observer_step(x_hat: []f64, a: []const f64, b: []const f64, c: []const f64, l
     }
     ret ok
 }
+
+
+// --- The observer as a record (#1810): the system matrices, the gain and
+// the estimate in caller storage, stepped by `observer_update`.
+
+type Observer = struct { a: []const f64, b: []const f64, c: []const f64, l: []const f64, n: usize, m: usize, p: usize, x_hat: []f64 }
+
+// A Luenberger observer for `x' = A x + B u, y = C x` with gain `L` (n x p);
+// `x_hat` (n entries) is the estimate it keeps.
+fn observer(a: []const f64, b: []const f64, c: []const f64, l: []const f64, n: usize, m: usize, p: usize, x_hat: []f64) -> Observer {
+    ret Observer { a: a, b: b, c: c, l: l, n: n, m: m, p: p, x_hat: x_hat }
+}
+
+// One update from the input `u` and measurement `y`: `observer_step` over
+// the record. `scratch.len >= 3 * n + p`.
+fn observer_update(o: *Observer, u: []const f64, y: []const f64, scratch: []f64) -> err {
+    ret observer_step(o.x_hat, o.a, o.b, o.c, o.l, o.n, o.m, o.p, u, y, scratch)
+}

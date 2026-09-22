@@ -277,3 +277,236 @@ fn starts_at(word: str, start: usize, p: str) -> bool {
     }
     ret true
 }
+
+// The Snowball English stemmer (Porter2) as Snowball 3.1 defines it: the exception
+// list, the y/Y prelude, R1 and R2 (with the prefix exceptions arsen commun emerg
+// gener inter later organ past univers), steps 1a to 5 and the short-syllable rule
+// with its `past` case. Vowels are a e i o u y; a y turned Y is a consonant.
+
+fn sb_vowel(c: u8) -> bool { ret c == 97u8 || c == 101u8 || c == 105u8 || c == 111u8 || c == 117u8 || c == 121u8 }
+
+fn sb_has_vowel(w: []const u8, from: usize, to: usize) -> bool {
+    var i = from
+    while i < to {
+        if sb_vowel(w[i]) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// The position after the first non-vowel that follows a vowel at or past `from`; `n`
+// when there is none.
+fn sb_region(w: []const u8, n: usize, from: usize) -> usize {
+    var i = from
+    while i < n && !sb_vowel(w[i]) { i += 1usize }
+    while i < n && sb_vowel(w[i]) { i += 1usize }
+    if i >= n { ret n }
+    ret i + 1usize
+}
+
+// Whether `w[..m]` ends in a short syllable: non-vowel, vowel, non-vowel other than
+// w x Y; or a vowel then a non-vowel as the whole word; or `past`.
+fn sb_short_syllable(w: []const u8, m: usize) -> bool {
+    if m >= 3usize {
+        let c = w[m - 1usize]
+        if !sb_vowel(c) && c != 119u8 && c != 120u8 && c != 89u8 && sb_vowel(w[m - 2usize]) && !sb_vowel(w[m - 3usize]) { ret true }
+    }
+    if m == 2usize && !sb_vowel(w[1usize]) && sb_vowel(w[0usize]) { ret true }
+    ret ends_with(w, m, "past")
+}
+
+fn sb_double(w: []const u8, n: usize) -> bool {
+    if n < 2usize || w[n - 1usize] != w[n - 2usize] { ret false }
+    let c = w[n - 1usize]
+    ret c == 98u8 || c == 100u8 || c == 102u8 || c == 103u8 || c == 109u8 || c == 110u8 || c == 112u8 || c == 114u8 || c == 116u8
+}
+
+fn sb_valid_li(c: u8) -> bool {
+    ret c == 99u8 || c == 100u8 || c == 101u8 || c == 103u8 || c == 104u8 || c == 107u8 || c == 109u8 || c == 110u8 || c == 114u8 || c == 116u8
+}
+
+// The first rule of `rules` (`suffix=replacement;...`, longest suffixes first) whose
+// suffix ends the word: applied when the stem reaches `region`. Answers the new length
+// and whether any suffix matched (a match outside the region ends the step too).
+fn sb_rules(w: []u8, n: usize, region: usize, rules: str) -> (usize, bool) {
+    var i = 0usize
+    while i < rules.len {
+        var j = i
+        while rules[j] != 61u8 { j += 1usize }
+        var k = j + 1usize
+        while k < rules.len && rules[k] != 59u8 { k += 1usize }
+        let suffix = rules[i..j]
+        if ends_with(w, n, suffix) {
+            let stem = n - suffix.len
+            if stem < region { ret (n, true) }
+            ret (append(w, stem, rules[j + 1usize..k]), true)
+        }
+        i = k + 1usize
+    }
+    ret (n, false)
+}
+
+// The words stemmed by the exception list; answers the new length and whether the word
+// was one of them.
+fn sb_exception(w: []u8, n: usize) -> (usize, bool) {
+    let rules = "andes=andes;atlas=atlas;bias=bias;cosmos=cosmos;early=earli;gently=gentl;howe=howe;idly=idl;news=news;only=onli;singly=singl;skies=sky;skis=ski;sky=sky;ugly=ugli"
+    var i = 0usize
+    while i < rules.len {
+        var j = i
+        while rules[j] != 61u8 { j += 1usize }
+        var k = j + 1usize
+        while k < rules.len && rules[k] != 59u8 { k += 1usize }
+        if j - i == n && ends_with(w, n, rules[i..j]) { ret (append(w, 0usize, rules[j + 1usize..k]), true) }
+        i = k + 1usize
+    }
+    ret (n, false)
+}
+
+fn sb_prefix_region(w: []const u8, n: usize) -> usize {
+    let prefixes = "arsen;commun;emerg;gener;inter;later;organ;past;univers"
+    var i = 0usize
+    while i < prefixes.len {
+        var k = i
+        while k < prefixes.len && prefixes[k] != 59u8 { k += 1usize }
+        if starts_at(w[..n], 0usize, prefixes[i..k]) { ret k - i }
+        i = k + 1usize
+    }
+    ret sb_region(w, n, 0usize)
+}
+
+// The Snowball stem of `word`; `out.len >= word.len + 1`.
+fn snowball(word: str, out: []u8) -> (str, err) {
+    if out.len < word.len + 1usize { ret ("", TooSmall) }
+    var w = out
+    var n = word.len
+    var i = 0usize
+    while i < n {
+        w[i] = lower(word[i])
+        i += 1usize
+    }
+    let (special, is_special) = sb_exception(w, n)
+    if is_special { ret (w[..special], ok) }
+    if n < 3usize { ret (w[..n], ok) }
+    // Prelude: a leading apostrophe goes; y is Y at the start and after a vowel.
+    if w[0usize] == 39u8 {
+        i = 1usize
+        while i < n {
+            w[i - 1usize] = w[i]
+            i += 1usize
+        }
+        n -= 1usize
+    }
+    if n > 0usize && w[0usize] == 121u8 { w[0usize] = 89u8 }
+    i = 1usize
+    while i < n {
+        if w[i] == 121u8 && sb_vowel(w[i - 1usize]) { w[i] = 89u8 }
+        i += 1usize
+    }
+    let p1 = sb_prefix_region(w, n)
+    let p2 = sb_region(w, n, p1)
+    // Step 1a: possessives, then sses, ied/ies, s.
+    if ends_with(w, n, "'s'") {
+        n -= 3usize
+    } else if ends_with(w, n, "'s") {
+        n -= 2usize
+    } else if ends_with(w, n, "'") {
+        n -= 1usize
+    }
+    if ends_with(w, n, "sses") {
+        n -= 2usize
+    } else if ends_with(w, n, "ied") || ends_with(w, n, "ies") {
+        if n - 3usize >= 2usize { n = append(w, n - 3usize, "i") } else { n = append(w, n - 3usize, "ie") }
+    } else if ends_with(w, n, "s") && !ends_with(w, n, "ss") && !ends_with(w, n, "us") {
+        if n >= 2usize && sb_has_vowel(w, 0usize, n - 2usize) { n -= 1usize }
+    }
+    // Step 1b: eed/eedly to ee in R1; ed/edly/ing/ingly deleted after a vowel, then
+    // the at/bl/iz, double and short-word repairs.
+    var suffix = 0usize
+    var slen = 0usize
+    if ends_with(w, n, "eedly") {
+        suffix = 1usize
+        slen = 5usize
+    } else if ends_with(w, n, "ingly") {
+        suffix = 2usize
+        slen = 5usize
+    } else if ends_with(w, n, "edly") {
+        suffix = 2usize
+        slen = 4usize
+    } else if ends_with(w, n, "eed") {
+        suffix = 1usize
+        slen = 3usize
+    } else if ends_with(w, n, "ing") {
+        suffix = 3usize
+        slen = 3usize
+    } else if ends_with(w, n, "ed") {
+        suffix = 2usize
+        slen = 2usize
+    }
+    if suffix == 1usize {
+        let stem = n - slen
+        if stem >= p1 {
+            let keep = (stem == 4usize && (ends_with(w, 4usize, "succ") || ends_with(w, 4usize, "proc"))) || (stem == 3usize && ends_with(w, 3usize, "exc"))
+            if !keep { n = append(w, stem, "ee") }
+        }
+    } else if suffix != 0usize {
+        var delete = true
+        if suffix == 3usize {
+            let stem = n - 3usize
+            let whole4 = stem == 4usize && (ends_with(w, 4usize, "even") || ends_with(w, 4usize, "cann") || ends_with(w, 4usize, "earr") || ends_with(w, 4usize, "herr"))
+            let whole3 = stem == 3usize && (ends_with(w, 3usize, "inn") || ends_with(w, 3usize, "out"))
+            if whole4 || whole3 {
+                delete = false
+            } else if stem == 2usize && w[1usize] == 121u8 && !sb_vowel(w[0usize]) {
+                n = append(w, 1usize, "ie")
+                delete = false
+            }
+        }
+        if delete {
+            let stem = n - slen
+            if sb_has_vowel(w, 0usize, stem) {
+                n = stem
+                if ends_with(w, n, "at") || ends_with(w, n, "bl") || ends_with(w, n, "iz") {
+                    n = append(w, n, "e")
+                } else if sb_double(w, n) {
+                    let short_aeo = n == 3usize && (w[0usize] == 97u8 || w[0usize] == 101u8 || w[0usize] == 111u8)
+                    if !short_aeo { n -= 1usize }
+                } else if n == p1 && sb_short_syllable(w, n) {
+                    n = append(w, n, "e")
+                }
+            }
+        }
+    }
+    // Step 1c: a final y after a non-vowel that is not the first letter becomes i.
+    if n >= 3usize && (w[n - 1usize] == 121u8 || w[n - 1usize] == 89u8) && !sb_vowel(w[n - 2usize]) { w[n - 1usize] = 105u8 }
+    // Step 2, in R1.
+    let (n2, matched2) = sb_rules(w, n, p1, "ational=ate;ization=ize;iveness=ive;fulness=ful;ousness=ous;tional=tion;lessli=less;biliti=ble;fulli=ful;ousli=ous;entli=ent;aliti=al;iviti=ive;alism=al;ation=ate;ogist=og;anci=ance;enci=ence;abli=able;alli=al;izer=ize;ator=ate;bli=ble")
+    n = n2
+    if !matched2 {
+        if ends_with(w, n, "ogi") {
+            if n - 3usize >= p1 && n >= 4usize && w[n - 4usize] == 108u8 { n = append(w, n - 3usize, "og") }
+        } else if ends_with(w, n, "li") {
+            if n - 2usize >= p1 && n >= 3usize && sb_valid_li(w[n - 3usize]) { n -= 2usize }
+        }
+    }
+    // Step 3, in R1 (ative in R2).
+    let (n3, matched3) = sb_rules(w, n, p1, "ational=ate;tional=tion;alize=al;icate=ic;iciti=ic;ical=ic;ness=;ful=")
+    n = n3
+    if !matched3 && ends_with(w, n, "ative") && n - 5usize >= p2 { n -= 5usize }
+    // Step 4, in R2.
+    let (n4, matched4) = sb_rules(w, n, p2, "ement=;ment=;ance=;ence=;able=;ible=;ant=;ent=;ism=;ate=;iti=;ous=;ive=;ize=;al=;er=;ic=")
+    n = n4
+    if !matched4 && ends_with(w, n, "ion") && n - 3usize >= p2 && n >= 4usize && (w[n - 4usize] == 115u8 || w[n - 4usize] == 116u8) { n -= 3usize }
+    // Step 5.
+    if ends_with(w, n, "e") {
+        let stem = n - 1usize
+        if stem >= p2 || (stem >= p1 && !sb_short_syllable(w, stem)) { n = stem }
+    } else if ends_with(w, n, "l") && n - 1usize >= p2 && n >= 2usize && w[n - 2usize] == 108u8 {
+        n -= 1usize
+    }
+    i = 0usize
+    while i < n {
+        if w[i] == 89u8 { w[i] = 121u8 }
+        i += 1usize
+    }
+    ret (w[..n], ok)
+}

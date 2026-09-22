@@ -396,3 +396,19 @@ fn tsne(x: []const f64, n: usize, d: usize, perplexity: f64, iterations: u32, ra
     }
     ret ok
 }
+
+// Frequent directions (Liberty) of `x` (`n × d`) into `sketch` (`rows ×
+// d`, `rows = 2 ℓ` even): every row goes through
+// `frequent_directions_insert`, so `‖AᵀA − BᵀB‖₂ <= ‖A‖²_F / ℓ` over the
+// filled rows, whose count is answered. `scratch` as for the insert.
+fn frequent_directions(x: []const f64, n: usize, d: usize, sketch: []f64, rows: usize, scratch: []f64) -> (usize, err) {
+    if x.len < n * d { ret (0usize, TooSmall) }
+    var filled = 0usize
+    var i = 0usize
+    while i < n {
+        let insert_error = frequent_directions_insert(sketch, rows, d, &filled, x[i * d..(i + 1usize) * d], scratch)
+        if insert_error != ok { ret (0usize, insert_error) }
+        i += 1usize
+    }
+    ret (filled, ok)
+}

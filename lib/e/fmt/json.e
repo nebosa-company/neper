@@ -12,14 +12,9 @@ use e.mem
 use e.meta
 use e.str
 
-type Number = struct {
-    lexeme: str,
-}
+type Number = struct { lexeme: str }
 
-type Member = struct {
-    key: str,
-    value: Value,
-}
+type Member = struct { key: str, value: Value }
 
 // The tags are in declaration order and the order is JSON's own: `Null` first so that a zero
 // `Value` is null rather than a bool nobody set.
@@ -44,14 +39,9 @@ type Event = union enum u8 {
     EndObject,
 }
 
-type Reader = struct {
-    state: *void,
-}
+type Reader = struct { state: *void }
 
-type Options = struct {
-    allow_duplicate_keys: bool,
-    max_depth: u16,
-}
+type Options = struct { allow_duplicate_keys: bool, max_depth: u16 }
 
 error Invalid
 error TooDeep
@@ -237,7 +227,15 @@ fn finite(value: f64) -> bool {
 fn number_f64(value: Number) -> (f64, err) {
     let (checked, valid) = number(value.lexeme)
     if valid != ok { ret (0.0f64, valid) }
-    let (parsed, failure) = str.parse_f64(value.lexeme)
+    // `str.parse_f64` spells the exponent marker `e` only; JSON allows `E` too.
+    var lowered: [64]u8 = zero
+    var spelling = value.lexeme
+    if value.lexeme.len <= lowered.len {
+        mem.copy[u8](lowered[..value.lexeme.len], value.lexeme)
+        str.ascii_lower_in_place(lowered[..value.lexeme.len])
+        spelling = lowered[..value.lexeme.len]
+    }
+    let (parsed, failure) = str.parse_f64(spelling)
     // A lexeme this rejects is a valid JSON number too far out for the format to name, which
     // is the one thing `TooLarge` says here.
     if failure != ok { ret (0.0f64, TooLarge) }
@@ -286,15 +284,7 @@ fn number_from_f64(a: *mem.Arena, value: f64) -> (Number, err) {
 // One stack serves both containers: an array element is a member whose key is empty. What is
 // on it is every element of every container still open, so closing one is a copy of a run off
 // the top rather than a walk of anything.
-type Parser = struct {
-    source: str,
-    at: usize,
-    arena: *mem.Arena,
-    stack: []Member,
-    height: usize,
-    max_depth: u16,
-    allow_duplicate_keys: bool,
-}
+type Parser = struct { source: str, at: usize, arena: *mem.Arena, stack: []Member, height: usize, max_depth: u16, allow_duplicate_keys: bool }
 
 fn is_space(byte: u8) -> bool {
     ret byte == 32u8 || byte == 9u8 || byte == 10u8 || byte == 13u8
@@ -1556,25 +1546,7 @@ const EVENT_TEXT: usize = 65536usize
 // key and capped rather than unbounded. `e.data.map` is the upgrade once that module exists.
 const OPEN_KEYS: usize = 4096usize
 
-type ReaderState = struct {
-    source: io.Reader,
-    options: Options,
-    arena: *mem.Arena,
-    input: []u8,
-    input_at: usize,
-    input_len: usize,
-    text: []u8,
-    stack_kind: []u8,
-    stack_count: []usize,
-    stack_keys: []usize,
-    depth: usize,
-    keys: []str,
-    key_count: usize,
-    pending_value: bool,
-    started: bool,
-    finished: bool,
-    spent: bool,
-}
+type ReaderState = struct { source: io.Reader, options: Options, arena: *mem.Arena, input: []u8, input_at: usize, input_len: usize, text: []u8, stack_kind: []u8, stack_count: []usize, stack_keys: []usize, depth: usize, keys: []str, key_count: usize, pending_value: bool, started: bool, finished: bool, spent: bool }
 
 // One byte, or `false` at the end of the source.
 fn stream_take(s: *ReaderState) -> (u8, bool, err) {
@@ -2139,4 +2111,351 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
         written += 1usize
     }
     ret io.write_all(writer, "}")
+}
+
+// --- RFC 8785 canonical form.
+//
+// One byte sequence per value: no whitespace, `write_string`'s escapes (which are the JCS
+// ones: the short forms, then lower-case `\u00xx`), object members in the order of their
+// keys as UTF-16 code units, and every number as ES6 `Number.prototype.toString` writes the
+// double it names -- which is what `str.push_f64`'s shortest digits are, laid out by the
+// ES6 rule rather than `e.str`'s.
+
+// The next UTF-16 code unit of `text` from byte `at`: (unit, next byte, low surrogate to
+// follow). A supplementary character yields its high surrogate and leaves the low one pending.
+fn utf16_unit(text: str, at: usize) -> (u32, usize, u32) {
+    let b0 = u32(text[at])
+    if b0 < 128u32 { ret (b0, at + 1usize, 0u32) }
+    var need = 1usize
+    var scalar = b0 & 31u32
+    if b0 >= 240u32 {
+        need = 3usize
+        scalar = b0 & 7u32
+    } else {
+        if b0 >= 224u32 {
+            need = 2usize
+            scalar = b0 & 15u32
+        }
+    }
+    var k = 1usize
+    while k <= need && at + k < text.len {
+        scalar = (scalar << 6u32) | (u32(text[at + k]) & 63u32)
+        k += 1usize
+    }
+    if scalar < 65536u32 { ret (scalar, at + k, 0u32) }
+    let offset = scalar - 65536u32
+    ret (55296u32 + (offset >> 10u32), at + k, 56320u32 + (offset & 1023u32))
+}
+
+// Whether `x` sorts before `y` by UTF-16 code units.
+fn utf16_less(x: str, y: str) -> bool {
+    var x_at = 0usize
+    var y_at = 0usize
+    var x_pending = 0u32
+    var y_pending = 0u32
+    while true {
+        var x_unit = 0u32
+        var y_unit = 0u32
+        var x_done = false
+        var y_done = false
+        if x_pending != 0u32 {
+            x_unit = x_pending
+            x_pending = 0u32
+        } else {
+            if x_at >= x.len { x_done = true } else {
+                let (unit, next_at, pending) = utf16_unit(x, x_at)
+                x_unit = unit
+                x_at = next_at
+                x_pending = pending
+            }
+        }
+        if y_pending != 0u32 {
+            y_unit = y_pending
+            y_pending = 0u32
+        } else {
+            if y_at >= y.len { y_done = true } else {
+                let (unit, next_at, pending) = utf16_unit(y, y_at)
+                y_unit = unit
+                y_at = next_at
+                y_pending = pending
+            }
+        }
+        if x_done { ret !y_done }
+        if y_done { ret false }
+        if x_unit != y_unit { ret x_unit < y_unit }
+    }
+    ret false
+}
+
+fn put_digits(w: *io.Writer, value: i64) -> err {
+    var scratch: [24]u8 = zero
+    var holder = mem.arena_from(scratch[..])
+    let (b, builder_failure) = str.builder(&holder, 22usize)
+    if builder_failure != ok { ret builder_failure }
+    var built = b
+    try str.push_i64(&built, value)
+    ret io.write_all(w, str.done(&built))
+}
+
+// The ES6 spelling of the double `value` names. Anything JSON can write is finite.
+fn write_es6_number(w: *io.Writer, value: f64) -> err {
+    if !finite(value) { ret Invalid }
+    if value == 0.0f64 { ret io.write_all(w, "0") }
+    var scratch: [64]u8 = zero
+    var holder = mem.arena_from(scratch[..])
+    let (b, builder_failure) = str.builder(&holder, 40usize)
+    if builder_failure != ok { ret builder_failure }
+    var built = b
+    try str.push_f64(&built, value)
+    let spelled = str.done(&built)
+    // The shortest digits `s` (k of them) and the point position `n`: value = s * 10^(n-k).
+    var digits: [24]u8 = zero
+    var k = 0usize
+    var n = 0i64
+    var seen_point = false
+    var at = 0usize
+    if spelled[0usize] == 45u8 {
+        try io.write_all(w, "-")
+        at = 1usize
+    }
+    while at < spelled.len && spelled[at] != 101u8 {
+        let c = spelled[at]
+        if c == 46u8 {
+            seen_point = true
+        } else {
+            if k == 0usize && c == 48u8 {
+                if seen_point { n -= 1i64 }
+            } else {
+                digits[k] = c
+                k += 1usize
+                if !seen_point { n += 1i64 }
+            }
+        }
+        at += 1usize
+    }
+    if at < spelled.len {
+        let (power, power_failure) = str.parse_i64(spelled[at + 1usize..])
+        if power_failure != ok { ret Invalid }
+        n += power
+    }
+    while k > 0usize && digits[k - 1usize] == 48u8 { k -= 1usize }
+    let count = i64(k)
+    if count <= n && n <= 21i64 {
+        try io.write_all(w, digits[..k])
+        var zeros = n - count
+        while zeros > 0i64 {
+            try io.write_all(w, "0")
+            zeros -= 1i64
+        }
+        ret ok
+    }
+    if 0i64 < n && n <= 21i64 {
+        try io.write_all(w, digits[..usize(n)])
+        try io.write_all(w, ".")
+        ret io.write_all(w, digits[usize(n)..k])
+    }
+    if -6i64 < n && n <= 0i64 {
+        try io.write_all(w, "0.")
+        var zeros = 0i64 - n
+        while zeros > 0i64 {
+            try io.write_all(w, "0")
+            zeros -= 1i64
+        }
+        ret io.write_all(w, digits[..k])
+    }
+    try io.write_all(w, digits[..1usize])
+    if k > 1usize {
+        try io.write_all(w, ".")
+        try io.write_all(w, digits[1usize..k])
+    }
+    try io.write_all(w, "e")
+    if n - 1i64 >= 0i64 { try io.write_all(w, "+") }
+    ret put_digits(w, n - 1i64)
+}
+
+// ponytail: members go out by repeated selection of the next key, O(n^2) comparisons and no
+// storage; an object with thousands of members would want an index sorted once.
+fn canonicalize(w: *io.Writer, value: *const Value) -> err {
+    switch *value {
+    case .Null:
+        ret io.write_all(w, "null")
+    case .Bool as flag:
+        if flag { ret io.write_all(w, "true") }
+        ret io.write_all(w, "false")
+    case .Number as literal_number:
+        let (parsed, failure) = number_f64(literal_number)
+        if failure != ok { ret failure }
+        ret write_es6_number(w, parsed)
+    case .String as text:
+        ret write_string(w, text)
+    case .Array as items:
+        try io.write_all(w, "[")
+        var at = 0usize
+        while at < items.len {
+            if at > 0usize { try io.write_all(w, ",") }
+            try canonicalize(w, &items[at])
+            at += 1usize
+        }
+        ret io.write_all(w, "]")
+    case .Object as members:
+        try io.write_all(w, "{")
+        var written = 0usize
+        var last = 0usize
+        while written < members.len {
+            // The least (key, index) above the one written last.
+            var pick = members.len
+            var at = 0usize
+            while at < members.len {
+                var above = written == 0usize
+                if !above {
+                    above = utf16_less(members[last].key, members[at].key) || (at > last && str.eq(members[last].key, members[at].key))
+                }
+                if above {
+                    if pick == members.len || utf16_less(members[at].key, members[pick].key) { pick = at }
+                }
+                at += 1usize
+            }
+            if pick == members.len { ret Invalid }
+            if written > 0usize { try io.write_all(w, ",") }
+            try write_string(w, members[pick].key)
+            try io.write_all(w, ":")
+            try canonicalize(w, &members[pick].value)
+            last = pick
+            written += 1usize
+        }
+        ret io.write_all(w, "}")
+    default:
+        ret Invalid
+    }
+}
+
+// --- RFC 7396 merge patch.
+
+fn is_null(value: *const Value) -> bool {
+    switch *value {
+    case .Null:
+        ret true
+    default:
+        ret false
+    }
+}
+
+// `target` with `patch` applied: a patch that is not an object replaces the target; one that
+// is walks its members, a null removing the member and anything else merged into it. The
+// result shares what it can with both inputs; only the member arrays it makes are new.
+fn merge_patch(a: *mem.Arena, original: *const Value, delta: *const Value) -> (Value, err) {
+    let (patch_members, patch_is_object) = object_of(*delta)
+    if !patch_is_object { ret (*delta, ok) }
+    var base: []const Member = zero
+    let (original_members, original_is_object) = object_of(*original)
+    if original_is_object { base = original_members }
+    // Members of the target the delta does not name survive; the delta's non-null members
+    // follow, in the delta's order.
+    var count = 0usize
+    var at = 0usize
+    while at < base.len {
+        let (index, named) = member_index(patch_members, base[at].key)
+        if !named { count += 1usize }
+        at += 1usize
+    }
+    at = 0usize
+    while at < patch_members.len {
+        if !is_null(&patch_members[at].value) { count += 1usize }
+        at += 1usize
+    }
+    let (members, members_failure) = mem.alloc[Member](a, count)
+    if members_failure != ok { ret (zero, members_failure) }
+    var filled = 0usize
+    at = 0usize
+    while at < base.len {
+        let (index, named) = member_index(patch_members, base[at].key)
+        if !named {
+            members[filled] = base[at]
+            filled += 1usize
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < patch_members.len {
+        if !is_null(&patch_members[at].value) {
+            var existing: Value = .Null
+            let (index, named) = member_index(base, patch_members[at].key)
+            if named { existing = base[index].value }
+            let (merged, merge_failure) = merge_patch(a, &existing, &patch_members[at].value)
+            if merge_failure != ok { ret (zero, merge_failure) }
+            members[filled] = Member { key: patch_members[at].key, value: merged }
+            filled += 1usize
+        }
+        at += 1usize
+    }
+    ret (Value{ Object: members[0usize..filled] }, ok)
+}
+
+// --- The tokenizer.
+//
+// Lexemes off the source one at a time and nothing built: the punctuation, a string as it was
+// written (quotes and escapes included), a number validated as `number` validates it, and the
+// three literals. `End` once the source is spent; a byte that starts nothing is `Invalid`.
+
+type TokenKind = enum u8 { End, BeginObject, EndObject, BeginArray, EndArray, Colon, Comma, String, Number, True, False, Null }
+type Tokenizer = struct { source: str, at: usize }
+
+fn tokenizer(source: str) -> Tokenizer {
+    ret Tokenizer { source: source, at: 0usize }
+}
+
+fn next_token(t: *Tokenizer) -> (TokenKind, str, err) {
+    while t.at < t.source.len && is_space(t.source[t.at]) { t.at += 1usize }
+    if t.at >= t.source.len { ret (.End, "", ok) }
+    let start = t.at
+    let byte = t.source[start]
+    var kind: TokenKind = .End
+    if byte == 123u8 { kind = .BeginObject }
+    if byte == 125u8 { kind = .EndObject }
+    if byte == 91u8 { kind = .BeginArray }
+    if byte == 93u8 { kind = .EndArray }
+    if byte == 58u8 { kind = .Colon }
+    if byte == 44u8 { kind = .Comma }
+    if kind != .End {
+        t.at += 1usize
+        ret (kind, t.source[start..t.at], ok)
+    }
+    if byte == 34u8 {
+        var at = start + 1usize
+        while at < t.source.len {
+            let c = t.source[at]
+            if c == 34u8 { break }
+            if c < 32u8 { ret (.End, "", Invalid) }
+            if c == 92u8 { at += 1usize }
+            at += 1usize
+        }
+        if at >= t.source.len { ret (.End, "", Invalid) }
+        t.at = at + 1usize
+        ret (.String, t.source[start..t.at], ok)
+    }
+    if byte == 45u8 || str.is_ascii_digit(byte) {
+        var p: Parser = zero
+        p.source = t.source
+        p.at = start
+        let (parsed, failure) = parse_number(&p)
+        if failure != ok { ret (.End, "", failure) }
+        t.at = p.at
+        ret (.Number, parsed.lexeme, ok)
+    }
+    var p: Parser = zero
+    p.source = t.source
+    p.at = start
+    if literal(&p, "true") {
+        t.at = p.at
+        ret (.True, t.source[start..t.at], ok)
+    }
+    if literal(&p, "false") {
+        t.at = p.at
+        ret (.False, t.source[start..t.at], ok)
+    }
+    if literal(&p, "null") {
+        t.at = p.at
+        ret (.Null, t.source[start..t.at], ok)
+    }
+    ret (.End, "", Invalid)
 }

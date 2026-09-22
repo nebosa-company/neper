@@ -229,3 +229,17 @@ fn meteor(candidate: str, reference: str, scratch: []usize) -> (f64, err) {
     let penalty = 0.5f64 * fragmentation * fragmentation * fragmentation
     ret (mean * (1.0f64 - penalty), ok)
 }
+
+// The ROUGE suite in one call: ROUGE-1, ROUGE-2 and ROUGE-L, each as precision,
+// recall and F1; `scratch` as `rouge_l` declares.
+type RougeScores = struct { one: Rouge, two: Rouge, l: Rouge }
+
+fn rouge(candidate: str, reference: str, scratch: []usize) -> (RougeScores, err) {
+    let (one, one_error) = rouge_n(candidate, reference, 1usize, scratch)
+    if one_error != ok { ret (zero, one_error) }
+    let (two, two_error) = rouge_n(candidate, reference, 2usize, scratch)
+    if two_error != ok { ret (zero, two_error) }
+    let (l, l_error) = rouge_l(candidate, reference, scratch)
+    if l_error != ok { ret (zero, l_error) }
+    ret (RougeScores { one: one, two: two, l: l }, ok)
+}

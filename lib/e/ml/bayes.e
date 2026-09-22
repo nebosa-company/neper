@@ -174,3 +174,19 @@ fn multinomial_predict(query: []const f64, d: usize, classes: usize, log_probabi
     }
     ret best
 }
+
+// Naive Bayes in one call: the Gaussian fit of `x`/`labels` (`n × d`,
+// `classes`) into `means`, `variances` (`classes × d`) and `priors`, then
+// the class of each of the `m` `queries` (`m × d`) into `out`;
+// `scratch.len >= classes`.
+fn naive(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usize, queries: []const f64, m: usize, means: []f64, variances: []f64, priors: []f64, out: []usize, scratch: []usize) -> err {
+    if queries.len < m * d || out.len < m { ret TooSmall }
+    let fit_error = gaussian_fit(x, labels, n, d, classes, means, variances, priors, scratch)
+    if fit_error != ok { ret fit_error }
+    var i = 0usize
+    while i < m {
+        out[i] = gaussian_predict(queries[i * d..(i + 1usize) * d], d, classes, means, variances, priors)
+        i += 1usize
+    }
+    ret ok
+}

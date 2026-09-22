@@ -385,3 +385,49 @@ fn from_utf8(a: *mem.Arena, encoding: Encoding, src: str, emit_bom: bool) -> ([]
     if encode_error != ok { ret (zero, encode_error) }
     ret (buffer[..written], ok)
 }
+
+// Charset detection among the encodings this module decodes: a BOM decides
+// outright (100); else the zero-byte pattern of the wide forms -- UTF-32 has three
+// zeros in most quads, UTF-16 a zero in every other byte of Latin text -- names one
+// when the bytes also decode strictly (80 and 70); else strict UTF-8 validity (90
+// with multibyte sequences, 60 for pure ASCII, which every ASCII superset shares).
+// Confidence 0 with `Utf8` means a single-byte legacy page: bytes past 0x7F that
+// are not UTF-8, which nothing here decodes. ponytail: no byte-frequency profile
+// between Latin-1 and Windows-1252 -- there is no decoder for either to hand the
+// answer to; add one with the decoders if they come.
+type Guess = struct { encoding: Encoding, confidence: u8 }
+
+fn decodes(encoding: Encoding, src: []const u8) -> bool {
+    let (_, verdict) = decoded_len(encoding, src, .Reject)
+    ret verdict == ok
+}
+
+fn detect(src: []const u8) -> Guess {
+    let (bom, _, has_bom) = detect_bom(src)
+    if has_bom { ret Guess { encoding: bom, confidence: 100u8 } }
+    if src.len == 0usize { ret Guess { encoding: .Utf8, confidence: 50u8 } }
+    var zeros: [4]usize = zero
+    var high = false
+    var i = 0usize
+    while i < src.len {
+        if src[i] == 0u8 { zeros[i % 4usize] += 1usize }
+        if src[i] >= 128u8 { high = true }
+        i += 1usize
+    }
+    let quads = src.len / 4usize
+    if src.len % 4usize == 0usize && quads > 0usize {
+        if zeros[2] == quads && zeros[3] == quads && zeros[0] < quads && decodes(.Utf32Le, src) { ret Guess { encoding: .Utf32Le, confidence: 80u8 } }
+        if zeros[0] == quads && zeros[1] == quads && zeros[3] < quads && decodes(.Utf32Be, src) { ret Guess { encoding: .Utf32Be, confidence: 80u8 } }
+    }
+    let even = zeros[0] + zeros[2]
+    let odd = zeros[1] + zeros[3]
+    if src.len % 2usize == 0usize {
+        if odd > 0usize && odd > 4usize * even && decodes(.Utf16Le, src) { ret Guess { encoding: .Utf16Le, confidence: 70u8 } }
+        if even > 0usize && even > 4usize * odd && decodes(.Utf16Be, src) { ret Guess { encoding: .Utf16Be, confidence: 70u8 } }
+    }
+    if decodes(.Utf8, src) {
+        if high { ret Guess { encoding: .Utf8, confidence: 90u8 } }
+        ret Guess { encoding: .Utf8, confidence: 60u8 }
+    }
+    ret Guess { encoding: .Utf8, confidence: 0u8 }
+}

@@ -2169,6 +2169,31 @@ dist_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$dist_gaps_written" = 'executable written' ]
 chmod +x "$test_build/dist-gaps-selfhost"
 "$test_build/dist-gaps-selfhost"
+# `e.fmt.asn1` planned functions across seven `e.fmt` modules: a DER writer and a BER reader, canonical CBOR equal to cbor2, a CSV writer equal to Python's, HTML escaping and an HTML tokenizer equal to html.parser's events, JSON canonicalization byte-equal to RFC 8785's reference, all fifteen merge-patch rows, a JSON tokenizer, quoted-printable encoding equal to quopri, query strings equal to urllib (D911).
+fmt_gaps_a_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_gaps_a/src/main.e" "$repo" x64 linux "$test_build/fmt-gaps-a-selfhost")
+[ "$fmt_gaps_a_written" = 'executable written' ]
+chmod +x "$test_build/fmt-gaps-a-selfhost"
+"$test_build/fmt-gaps-a-selfhost"
+# `e.fmt.xml` planned functions across four `e.fmt` modules: an XML DOM, pull reader, namespace resolver and XPath subset checked against ElementTree, a schema-less protobuf decoder re-encoding byte-equal, whole-buffer LZW, and a Zstandard encoder with predefined FSE sequences whose frames python-zstandard decompresses (D911).
+fmt_gaps_b_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_gaps_b/src/main.e" "$repo" x64 linux "$test_build/fmt-gaps-b-selfhost")
+[ "$fmt_gaps_b_written" = 'executable written' ]
+chmod +x "$test_build/fmt-gaps-b-selfhost"
+"$test_build/fmt-gaps-b-selfhost"
+# `e.text.regex` planned functions across twelve `e.text` modules: Thompson NFA, Pike VM, subset-construction DFA, Moore minimization and DFA runs agreeing with Python's re, Aho-Corasick and collation entry points, charset detection, Elias-Fano postings, ellipsis truncation, ROUGE, font fallback runs, Porter2 stemming equal to Snowball on two hundred words, byte-pair encoding, identifier checks, UTF-16 conversion (D911).
+text_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_gaps/src/main.e" "$repo" x64 linux "$test_build/text-gaps-selfhost")
+[ "$text_gaps_written" = 'executable written' ]
+chmod +x "$test_build/text-gaps-selfhost"
+"$test_build/text-gaps-selfhost"
+# `e.ml.ann` planned functions across seven `e.ml` modules: HNSW with recall one against brute force and a bit-exact structure, IVF-PQ, MinHash LSH, one-call naive Bayes, DBSCAN, OPTICS and BIRCH equal to scikit-learn, streaming k-means, KL and JS divergences, margin and averaged perceptrons, reverse-mode autodiff checked by finite differences, Frequent Directions within its error bound, temperature sampling (D911).
+ml_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_gaps/src/main.e" "$repo" x64 linux "$test_build/ml-gaps-selfhost")
+[ "$ml_gaps_written" = 'executable written' ]
+chmod +x "$test_build/ml-gaps-selfhost"
+"$test_build/ml-gaps-selfhost"
+# `e.net.http.auth` and planned functions across sixteen modules and the new `e.net.http.auth`: TPDF dither, a Luenberger observer, AES-GCM and CBC dispatch names, Certificate Transparency SCT verification, Neper and Itanium demangling, grid BFS, Theta* and Amanatides-Woo rays, saturating arithmetic, float unpacking, CIDR and private-address tests, SameSite, CORS preflight and CSP nonces, PKCE and WebAuthn assertions signed in Python, grammar-constrained decoding, LPA*, D* Lite and PRM, string padding, interval merging and Julian days (D911).
+misc_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/misc_gaps/src/main.e" "$repo" x64 linux "$test_build/misc-gaps-selfhost")
+[ "$misc_gaps_written" = 'executable written' ]
+chmod +x "$test_build/misc-gaps-selfhost"
+"$test_build/misc-gaps-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

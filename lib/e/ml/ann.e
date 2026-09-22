@@ -8,6 +8,7 @@
 // the caller's arena.
 
 use e.algo.rand
+use e.algo.sketch
 use e.math
 use e.mem
 use e.ml.cluster
@@ -379,6 +380,250 @@ fn ivf_pq_search(index: *const IvfPq, query: []const f64, probes: usize, k: usiz
             at += 1usize
         }
         probe += 1usize
+    }
+    ret (count, ok)
+}
+
+// --- HNSW ------------------------------------------------------------------
+
+// A hierarchical navigable small world over points `0..n` of a row-major
+// `x`: every node has links at layers `0..level`, `2 m` at layer 0 and `m`
+// above, at `links[(node * levels + layer) * 2 m ..]`.
+type Hnsw = struct { level: []u32, count: []u32, links: []u32, m: usize, levels: usize, d: usize, room: usize, entry: usize, n: usize }
+
+// An empty index with room for `room` points of `d` values, `m` links per
+// layer and layers `0..=max_level`, in the caller's arena.
+fn hnsw(a: *mem.Arena, room: usize, d: usize, m: usize, max_level: usize) -> (Hnsw, err) {
+    if room == 0usize || d == 0usize || m == 0usize || room > 4000000000usize { ret (zero, Invalid) }
+    let levels = max_level + 1usize
+    let (level, level_error) = mem.alloc[u32](a, room)
+    if level_error != ok { ret (zero, level_error) }
+    let (count, count_error) = mem.alloc[u32](a, room * levels)
+    if count_error != ok { ret (zero, count_error) }
+    let (links, links_error) = mem.alloc[u32](a, room * levels * 2usize * m)
+    if links_error != ok { ret (zero, links_error) }
+    ret (Hnsw { level: level, count: count, links: links, m: m, levels: levels, d: d, room: room, entry: 0usize, n: 0usize }, ok)
+}
+
+// Beam search of width `ef` at `layer` from `start`: the beam (nearest
+// first) stays in `beam_ids`/`beam_dists` and its count is answered.
+fn hnsw_layer(g: *const Hnsw, x: []const f64, query: []const f64, start: usize, layer: usize, ef: usize, beam_ids: []f64, beam_dists: []f64, visited: []u32) -> usize {
+    var i = 0usize
+    while i < g.n {
+        visited[i] = 0u32
+        i += 1usize
+    }
+    var count = float_beam_insert(beam_ids, beam_dists, 0usize, ef, start, distance_squared(x, g.d, start, query, 0usize))
+    visited[start] = 1u32
+    var expanding = true
+    while expanding {
+        var pick = ef
+        i = 0usize
+        while i < count && pick == ef {
+            if visited[usize(beam_ids[i])] == 1u32 { pick = i }
+            i += 1usize
+        }
+        if pick == ef {
+            expanding = false
+        } else {
+            let p = usize(beam_ids[pick])
+            visited[p] = 2u32
+            let base = (p * g.levels + layer) * 2usize * g.m
+            var e = 0usize
+            while e < usize(g.count[p * g.levels + layer]) {
+                let q = usize(g.links[base + e])
+                if visited[q] == 0u32 {
+                    visited[q] = 1u32
+                    let dq = distance_squared(x, g.d, q, query, 0usize)
+                    if count < ef || dq < beam_dists[count - 1usize] {
+                        count = float_beam_insert(beam_ids, beam_dists, count, ef, q, dq)
+                    } else {
+                        visited[q] = 2u32
+                    }
+                }
+                e += 1usize
+            }
+        }
+    }
+    ret count
+}
+
+// Link `j` to `node` at `layer`; a full list drops its farthest link when
+// `node` is nearer (ties keep the list).
+fn hnsw_connect(g: *Hnsw, x: []const f64, j: usize, layer: usize, node: usize) {
+    var cap = g.m
+    if layer == 0usize { cap = 2usize * g.m }
+    let base = (j * g.levels + layer) * 2usize * g.m
+    let c = usize(g.count[j * g.levels + layer])
+    if c < cap {
+        g.links[base + c] = u32(node)
+        g.count[j * g.levels + layer] = u32(c + 1usize)
+        ret
+    }
+    var worst = cap
+    var worst_dist = distance_squared(x, g.d, j, x, node)
+    var e = 0usize
+    while e < c {
+        let dist = distance_squared(x, g.d, j, x, usize(g.links[base + e]))
+        if dist > worst_dist {
+            worst = e
+            worst_dist = dist
+        }
+        e += 1usize
+    }
+    if worst < cap { g.links[base + worst] = u32(node) }
+}
+
+// Insert point `g.n` of `x`: its level is `floor(-ln u / ln m)` for a
+// uniform `u` from `r` (capped at the top layer), it descends greedily to
+// that level, then at every layer down to 0 links to the `m` nearest of a
+// beam of `ef`, which link back (`hnsw_connect`). `scratch.len >= 2 max(ef,
+// 2 m)`, `visited.len >= room`.
+fn hnsw_insert(g: *Hnsw, x: []const f64, r: *rand.Pcg64, ef: usize, scratch: []f64, visited: []u32) -> err {
+    var width = ef
+    if 2usize * g.m > width { width = 2usize * g.m }
+    if g.n >= g.room || ef == 0usize { ret Invalid }
+    if scratch.len < 2usize * width || visited.len < g.room || x.len < (g.n + 1usize) * g.d { ret TooSmall }
+    let node = g.n
+    let u = rand.pcg64_f64(r)
+    var lvl = g.levels - 1usize
+    if u > 0.0f64 && g.m > 1usize {
+        let drawn = (0.0f64 - math.log[f64](u)) / math.log[f64](f64(g.m))
+        if drawn < f64(lvl) { lvl = usize(drawn) }
+    }
+    g.level[node] = u32(lvl)
+    var l = 0usize
+    while l < g.levels {
+        g.count[node * g.levels + l] = 0u32
+        l += 1usize
+    }
+    if node == 0usize {
+        g.entry = 0usize
+        g.n = 1usize
+        ret ok
+    }
+    let query = x[node * g.d..(node + 1usize) * g.d]
+    var beam_ids = scratch[..width]
+    var beam_dists = scratch[width..2usize * width]
+    var ep = g.entry
+    let top = usize(g.level[g.entry])
+    l = top
+    while l > lvl {
+        let _ = hnsw_layer(g, x, query, ep, l, 1usize, beam_ids, beam_dists, visited)
+        ep = usize(beam_ids[0usize])
+        l -= 1usize
+    }
+    var layer = lvl
+    if top < layer { layer = top }
+    var descending = true
+    while descending {
+        let found = hnsw_layer(g, x, query, ep, layer, ef, beam_ids, beam_dists, visited)
+        ep = usize(beam_ids[0usize])
+        var take = found
+        if take > g.m { take = g.m }
+        let base = (node * g.levels + layer) * 2usize * g.m
+        var k = 0usize
+        while k < take {
+            let j = usize(beam_ids[k])
+            g.links[base + k] = u32(j)
+            hnsw_connect(g, x, j, layer, node)
+            k += 1usize
+        }
+        g.count[node * g.levels + layer] = u32(take)
+        if layer == 0usize { descending = false } else { layer -= 1usize }
+    }
+    if lvl > top { g.entry = node }
+    g.n = node + 1usize
+    ret ok
+}
+
+// The `k` nearest of `query`: a greedy descent from the entry point to
+// layer 1, then a beam of `ef >= k` at layer 0; `ids`/`dists` receive them
+// nearest first. `scratch.len >= 2 ef`, `visited.len >= room`.
+fn hnsw_search(g: *const Hnsw, x: []const f64, query: []const f64, k: usize, ef: usize, ids: []u32, dists: []f64, scratch: []f64, visited: []u32) -> (usize, err) {
+    if scratch.len < 2usize * ef || visited.len < g.room || ids.len < k || dists.len < k || query.len < g.d { ret (0usize, TooSmall) }
+    if k == 0usize || k > ef { ret (0usize, Invalid) }
+    if g.n == 0usize { ret (0usize, ok) }
+    var beam_ids = scratch[..ef]
+    var beam_dists = scratch[ef..2usize * ef]
+    var ep = g.entry
+    var l = usize(g.level[g.entry])
+    while l > 0usize {
+        let _ = hnsw_layer(g, x, query, ep, l, 1usize, beam_ids, beam_dists, visited)
+        ep = usize(beam_ids[0usize])
+        l -= 1usize
+    }
+    var found = hnsw_layer(g, x, query, ep, 0usize, ef, beam_ids, beam_dists, visited)
+    if found > k { found = k }
+    var i = 0usize
+    while i < found {
+        ids[i] = u32(beam_ids[i])
+        dists[i] = beam_dists[i]
+        i += 1usize
+    }
+    ret (found, ok)
+}
+
+// The planned name of `ivf_pq_train`.
+fn ivf_pq(a: *mem.Arena, x: []const f64, n: usize, d: usize, cells: usize, subspaces: usize, codebook_size: usize, r: *rand.Pcg64, scratch: []f64, labels: []usize, marks: []usize) -> (IvfPq, err) {
+    let (index, train_error) = ivf_pq_train(a, x, n, d, cells, subspaces, codebook_size, r, scratch, labels, marks)
+    ret (index, train_error)
+}
+
+// --- MinHash LSH index -----------------------------------------------------
+
+// Signatures of `bands × rows` positions bucketed per band
+// (`sketch.lsh_bucket`): `keys`/`ids` hold `bands * room` entries, band
+// `b`'s at `b * room ..`.
+type MinhashLsh = struct { keys: []u64, ids: []u32, bands: usize, rows: usize, room: usize, n: usize }
+
+fn minhash_lsh(keys: []u64, ids: []u32, bands: usize, rows: usize, room: usize) -> (MinhashLsh, err) {
+    if keys.len < bands * room || ids.len < bands * room { ret (zero, TooSmall) }
+    if bands == 0usize || rows == 0usize || room == 0usize { ret (zero, Invalid) }
+    ret (MinhashLsh { keys: keys, ids: ids, bands: bands, rows: rows, room: room, n: 0usize }, ok)
+}
+
+fn minhash_lsh_insert(index: *MinhashLsh, signature: []const u64, id: u32) -> err {
+    if signature.len < index.bands * index.rows { ret TooSmall }
+    if index.n >= index.room { ret Invalid }
+    var b = 0usize
+    while b < index.bands {
+        index.keys[b * index.room + index.n] = sketch.lsh_bucket(signature, b, index.rows)
+        index.ids[b * index.room + index.n] = id
+        b += 1usize
+    }
+    index.n += 1usize
+    ret ok
+}
+
+// The ids sharing a band bucket with `signature`, each once, in band then
+// insertion order into `out`; answers the count (`TooSmall` once `out` is full).
+// ponytail: a linear scan per band; sort each band's keys past a few thousand entries.
+fn minhash_lsh_query(index: *const MinhashLsh, signature: []const u64, out: []u32) -> (usize, err) {
+    if signature.len < index.bands * index.rows { ret (0usize, TooSmall) }
+    var count = 0usize
+    var b = 0usize
+    while b < index.bands {
+        let key = sketch.lsh_bucket(signature, b, index.rows)
+        var i = 0usize
+        while i < index.n {
+            if index.keys[b * index.room + i] == key {
+                let id = index.ids[b * index.room + i]
+                var seen = false
+                var k = 0usize
+                while k < count {
+                    if out[k] == id { seen = true }
+                    k += 1usize
+                }
+                if !seen {
+                    if count >= out.len { ret (count, TooSmall) }
+                    out[count] = id
+                    count += 1usize
+                }
+            }
+            i += 1usize
+        }
+        b += 1usize
     }
     ret (count, ok)
 }
