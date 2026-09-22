@@ -941,6 +941,7 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.bignum",
+    "e.crypto.hash",
     "e.mem"
    ],
    "blocked_by": []
@@ -2240,6 +2241,7 @@
    "milestone": "M3",
    "schedule": "scheduled",
    "direct_dependencies": [
+    "e.math",
     "e.mem",
     "e.os"
    ],
@@ -2745,9 +2747,11 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.algo.rand",
     "e.io",
     "e.mem",
     "e.test",
+    "e.text.diff",
     "e.time"
    ],
    "blocked_by": []

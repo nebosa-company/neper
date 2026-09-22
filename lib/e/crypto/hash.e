@@ -1099,3 +1099,71 @@ fn blake3_derive_key(context: []const u8, key_material: []const u8, out: []u8) {
     blake3_update(&h, key_material)
     blake3_done(&h, out)
 }
+
+// SHAKE128 and SHAKE256 (FIPS 202 section 6.2): the same Keccak-f[1600] with rates 168
+// and 136, domain bits `1111` (0x1F then 0x80), and a squeeze that may run past one
+// block. `shake_absorb` is refused silently once squeezing has begun.
+type Shake = struct { lanes: [25]u64, block: [168]u8, block_len: usize, rate: usize, offset: usize, squeezing: bool }
+
+fn shake128_init() -> Shake {
+    var s: Shake = zero
+    s.rate = 168usize
+    ret s
+}
+
+fn shake256_init() -> Shake {
+    var s: Shake = zero
+    s.rate = 136usize
+    ret s
+}
+
+fn shake_absorb(s: *Shake, data: []const u8) {
+    if s.squeezing { ret }
+    var at = 0usize
+    while at < data.len {
+        s.block[s.block_len] = data[at]
+        s.block_len += 1usize
+        if s.block_len == s.rate {
+            keccak_absorb(s.lanes[0..], s.block[0..s.rate])
+            s.block_len = 0usize
+        }
+        at += 1usize
+    }
+}
+
+fn shake_squeeze(s: *Shake, out: []u8) {
+    if !s.squeezing {
+        var at = s.block_len
+        while at < s.rate {
+            s.block[at] = 0u8
+            at += 1usize
+        }
+        s.block[s.block_len] = s.block[s.block_len] ^ 31u8
+        s.block[s.rate - 1usize] = s.block[s.rate - 1usize] ^ 128u8
+        keccak_absorb(s.lanes[0..], s.block[0..s.rate])
+        s.squeezing = true
+        s.offset = 0usize
+    }
+    var at = 0usize
+    while at < out.len {
+        if s.offset == s.rate {
+            keccak_f(s.lanes[0..])
+            s.offset = 0usize
+        }
+        out[at] = u8((s.lanes[s.offset / 8usize] >> u32((s.offset % 8usize) * 8usize)) & 255u64)
+        s.offset += 1usize
+        at += 1usize
+    }
+}
+
+fn shake128(data: []const u8, out: []u8) {
+    var s = shake128_init()
+    shake_absorb(&s, data)
+    shake_squeeze(&s, out)
+}
+
+fn shake256(data: []const u8, out: []u8) {
+    var s = shake256_init()
+    shake_absorb(&s, data)
+    shake_squeeze(&s, out)
+}

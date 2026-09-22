@@ -10,6 +10,7 @@
 
 use e.mem
 use e.algo.bignum as bignum
+use e.crypto.hash as hash
 
 type X25519PublicKey = struct { bytes: [32]u8 }
 type X25519SecretKey = struct { bytes: [32]u8 }
@@ -436,4 +437,457 @@ fn dh_shared(a: *mem.Arena, secret: []const u8, peer_public: []const u8, out: []
 fn dh(a: *mem.Arena, secret: []const u8, peer_public: []const u8, out: []u8) -> (usize, err) {
     let (written, shared_error) = dh_shared(a, secret, peer_public, out)
     ret (written, shared_error)
+}
+
+// ML-KEM-768 by FIPS 203 (k = 3, eta1 = eta2 = 2, du = 10, dv = 4): the NTT over
+// Z_3329 with zeta = 17 in bit-reversed order, SampleNTT from SHAKE128, the centred
+// binomial sampler from SHAKE256, byte encodings at 12, 10, 4 and 1 bits, and the
+// K-PKE scheme under the Fujisaki-Okamoto transform with implicit rejection. The
+// seeds d, z and m come from the caller; every result lands in caller storage.
+// Polynomials are 256 `i32` coefficients in [0, q); a vector is 768 of them in a row.
+//
+// ponytail: coefficient arithmetic is plain `%` by q, not Montgomery or Barrett, and
+// the ciphertext comparison in decaps is not constant time.
+
+fn kem_q() -> i32 { ret 3329i32 }
+
+fn kem_bitrev7(i: usize) -> usize {
+    var r = 0usize
+    var b = 0usize
+    while b < 7usize {
+        r = (r << 1u32) | ((i >> u32(b)) & 1usize)
+        b += 1usize
+    }
+    ret r
+}
+
+// zetas[i] = 17^BitRev7(i) mod q.
+fn kem_zetas() -> [128]i32 {
+    var pow: [128]i32 = zero
+    var value = 1i32
+    var i = 0usize
+    while i < 128usize {
+        pow[i] = value
+        value = (value * 17i32) % kem_q()
+        i += 1usize
+    }
+    var z: [128]i32 = zero
+    i = 0usize
+    while i < 128usize {
+        z[i] = pow[kem_bitrev7(i)]
+        i += 1usize
+    }
+    ret z
+}
+
+fn kem_ntt(f: []i32) {
+    let z = kem_zetas()
+    var i = 1usize
+    var len = 128usize
+    while len >= 2usize {
+        var start = 0usize
+        while start < 256usize {
+            let zeta = z[i]
+            i += 1usize
+            var j = start
+            while j < start + len {
+                let t = (zeta * f[j + len]) % kem_q()
+                f[j + len] = (f[j] + kem_q() - t) % kem_q()
+                f[j] = (f[j] + t) % kem_q()
+                j += 1usize
+            }
+            start += 2usize * len
+        }
+        len = len / 2usize
+    }
+}
+
+fn kem_intt(f: []i32) {
+    let z = kem_zetas()
+    var i = 127usize
+    var len = 2usize
+    while len <= 128usize {
+        var start = 0usize
+        while start < 256usize {
+            let zeta = z[i]
+            i -= 1usize
+            var j = start
+            while j < start + len {
+                let t = f[j]
+                f[j] = (t + f[j + len]) % kem_q()
+                f[j + len] = (zeta * ((f[j + len] + kem_q() - t) % kem_q())) % kem_q()
+                j += 1usize
+            }
+            start += 2usize * len
+        }
+        len = len * 2usize
+    }
+    var k = 0usize
+    while k < 256usize {
+        f[k] = (f[k] * 3303i32) % kem_q()
+        k += 1usize
+    }
+}
+
+// h += f o g in the NTT domain (Algorithm 11, accumulated).
+fn kem_mul_acc(h: []i32, f: []const i32, g: []const i32) {
+    let z = kem_zetas()
+    var i = 0usize
+    while i < 128usize {
+        let gamma = (((z[i] * z[i]) % kem_q()) * 17i32) % kem_q()
+        let a0 = f[2usize * i]
+        let a1 = f[2usize * i + 1usize]
+        let b0 = g[2usize * i]
+        let b1 = g[2usize * i + 1usize]
+        let c0 = (a0 * b0 + ((a1 * b1) % kem_q()) * gamma) % kem_q()
+        let c1 = (a0 * b1 + a1 * b0) % kem_q()
+        h[2usize * i] = (h[2usize * i] + c0) % kem_q()
+        h[2usize * i + 1usize] = (h[2usize * i + 1usize] + c1) % kem_q()
+        i += 1usize
+    }
+}
+
+// SampleNTT (Algorithm 7): SHAKE128(rho || j || i) rejection-sampled into 256 coefficients.
+fn kem_sample_ntt(rho: []const u8, j: u8, i: u8, out: []i32) {
+    var s = hash.shake128_init()
+    hash.shake_absorb(&s, rho)
+    var index: [2]u8 = zero
+    index[0] = j
+    index[1] = i
+    hash.shake_absorb(&s, index[0..])
+    var count = 0usize
+    var chunk: [3]u8 = zero
+    while count < 256usize {
+        hash.shake_squeeze(&s, chunk[0..])
+        let d1 = i32(chunk[0]) + 256i32 * (i32(chunk[1]) & 15i32)
+        let d2 = (i32(chunk[1]) >> 4u32) + 16i32 * i32(chunk[2])
+        if d1 < kem_q() {
+            out[count] = d1
+            count += 1usize
+        }
+        if d2 < kem_q() && count < 256usize {
+            out[count] = d2
+            count += 1usize
+        }
+    }
+}
+
+// SamplePolyCBD_2 over PRF(seed, nonce) = SHAKE256(seed || nonce, 128).
+fn kem_sample_cbd(seed: []const u8, nonce: u8, out: []i32) {
+    var s = hash.shake256_init()
+    hash.shake_absorb(&s, seed)
+    var n: [1]u8 = zero
+    n[0] = nonce
+    hash.shake_absorb(&s, n[0..])
+    var buf: [128]u8 = zero
+    hash.shake_squeeze(&s, buf[0..])
+    var i = 0usize
+    while i < 256usize {
+        let byte = u32(buf[i / 2usize])
+        let nibble = (byte >> u32((i % 2usize) * 4usize)) & 15u32
+        let x = i32((nibble & 1u32) + ((nibble >> 1u32) & 1u32))
+        let y = i32(((nibble >> 2u32) & 1u32) + ((nibble >> 3u32) & 1u32))
+        out[i] = (x + kem_q() - y) % kem_q()
+        i += 1usize
+    }
+}
+
+// ByteEncode_d: 256 coefficients of d bits each, little-endian bit order, into 32d bytes.
+fn kem_encode(f: []const i32, d: usize, out: []u8) {
+    var at = 0usize
+    while at < 32usize * d {
+        out[at] = 0u8
+        at += 1usize
+    }
+    var i = 0usize
+    while i < 256usize {
+        let a = u32(f[i])
+        var j = 0usize
+        while j < d {
+            let bit = i * d + j
+            out[bit / 8usize] = out[bit / 8usize] | u8((((a >> u32(j)) & 1u32) << u32(bit % 8usize)) & 255u32)
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+fn kem_decode(bytes: []const u8, d: usize, out: []i32) {
+    var i = 0usize
+    while i < 256usize {
+        var a = 0u32
+        var j = 0usize
+        while j < d {
+            let bit = i * d + j
+            a = a | (((u32(bytes[bit / 8usize]) >> u32(bit % 8usize)) & 1u32) << u32(j))
+            j += 1usize
+        }
+        if d == 12usize {
+            out[i] = i32(a % 3329u32)
+        } else {
+            out[i] = i32(a)
+        }
+        i += 1usize
+    }
+}
+
+fn kem_compress(f: []i32, d: usize) {
+    var i = 0usize
+    while i < 256usize {
+        f[i] = i32((((u32(f[i]) << u32(d)) + 1664u32) / 3329u32) & ((1u32 << u32(d)) - 1u32))
+        i += 1usize
+    }
+}
+
+fn kem_decompress(f: []i32, d: usize) {
+    var i = 0usize
+    while i < 256usize {
+        f[i] = i32((3329u32 * u32(f[i]) + (1u32 << u32(d - 1usize))) >> u32(d))
+        i += 1usize
+    }
+}
+
+fn kem_add(f: []i32, g: []const i32) {
+    var i = 0usize
+    while i < 256usize {
+        f[i] = (f[i] + g[i]) % kem_q()
+        i += 1usize
+    }
+}
+
+fn kem_sub(f: []i32, g: []const i32) {
+    var i = 0usize
+    while i < 256usize {
+        f[i] = (f[i] + kem_q() - g[i]) % kem_q()
+        i += 1usize
+    }
+}
+
+// A-hat from rho, row-major: a[(i * 3 + j) * 256 ..] = SampleNTT(rho, j, i).
+fn kem_matrix(rho: []const u8, a: []i32) {
+    var i = 0usize
+    while i < 3usize {
+        var j = 0usize
+        while j < 3usize {
+            kem_sample_ntt(rho, u8(j & 255usize), u8(i & 255usize), a[(i * 3usize + j) * 256usize..(i * 3usize + j + 1usize) * 256usize])
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+fn ml_kem_ek_len() -> usize { ret 1184usize }
+fn ml_kem_dk_len() -> usize { ret 2400usize }
+fn ml_kem_ct_len() -> usize { ret 1088usize }
+
+// K-PKE.KeyGen(d): ek = Encode12(t-hat) || rho, dk_pke = Encode12(s-hat).
+fn kem_pke_keygen(d: [32]u8, ek: []u8, dk: []u8) {
+    var seed: [33]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        seed[i] = d[i]
+        i += 1usize
+    }
+    seed[32] = 3u8
+    let g = hash.sha3_512(seed[0..])
+    var a: [2304]i32 = zero
+    kem_matrix(g[0..32], a[0..])
+    var s: [768]i32 = zero
+    var e: [768]i32 = zero
+    i = 0usize
+    while i < 3usize {
+        kem_sample_cbd(g[32..64], u8(i & 255usize), s[i * 256usize..(i + 1usize) * 256usize])
+        kem_sample_cbd(g[32..64], u8((i + 3usize) & 255usize), e[i * 256usize..(i + 1usize) * 256usize])
+        kem_ntt(s[i * 256usize..(i + 1usize) * 256usize])
+        kem_ntt(e[i * 256usize..(i + 1usize) * 256usize])
+        i += 1usize
+    }
+    i = 0usize
+    while i < 3usize {
+        var j = 0usize
+        while j < 3usize {
+            kem_mul_acc(e[i * 256usize..(i + 1usize) * 256usize], a[(i * 3usize + j) * 256usize..(i * 3usize + j + 1usize) * 256usize], s[j * 256usize..(j + 1usize) * 256usize])
+            j += 1usize
+        }
+        kem_encode(e[i * 256usize..(i + 1usize) * 256usize], 12usize, ek[i * 384usize..(i + 1usize) * 384usize])
+        kem_encode(s[i * 256usize..(i + 1usize) * 256usize], 12usize, dk[i * 384usize..(i + 1usize) * 384usize])
+        i += 1usize
+    }
+    i = 0usize
+    while i < 32usize {
+        ek[1152usize + i] = g[i]
+        i += 1usize
+    }
+}
+
+// K-PKE.Encrypt(ek, m, r) into c (1088 bytes).
+fn kem_pke_encrypt(ek: []const u8, m: []const u8, r: []const u8, c: []u8) {
+    var t: [768]i32 = zero
+    var i = 0usize
+    while i < 3usize {
+        kem_decode(ek[i * 384usize..(i + 1usize) * 384usize], 12usize, t[i * 256usize..(i + 1usize) * 256usize])
+        i += 1usize
+    }
+    var a: [2304]i32 = zero
+    kem_matrix(ek[1152..1184], a[0..])
+    var y: [768]i32 = zero
+    var e1: [768]i32 = zero
+    i = 0usize
+    while i < 3usize {
+        kem_sample_cbd(r, u8(i & 255usize), y[i * 256usize..(i + 1usize) * 256usize])
+        kem_sample_cbd(r, u8((i + 3usize) & 255usize), e1[i * 256usize..(i + 1usize) * 256usize])
+        kem_ntt(y[i * 256usize..(i + 1usize) * 256usize])
+        i += 1usize
+    }
+    var e2: [256]i32 = zero
+    kem_sample_cbd(r, 6u8, e2[0..])
+    // u = NTT^-1(A^T o y) + e1, compressed to du bits.
+    var acc: [768]i32 = zero
+    i = 0usize
+    while i < 3usize {
+        var j = 0usize
+        while j < 3usize {
+            kem_mul_acc(acc[i * 256usize..(i + 1usize) * 256usize], a[(j * 3usize + i) * 256usize..(j * 3usize + i + 1usize) * 256usize], y[j * 256usize..(j + 1usize) * 256usize])
+            j += 1usize
+        }
+        kem_intt(acc[i * 256usize..(i + 1usize) * 256usize])
+        kem_add(acc[i * 256usize..(i + 1usize) * 256usize], e1[i * 256usize..(i + 1usize) * 256usize])
+        kem_compress(acc[i * 256usize..(i + 1usize) * 256usize], 10usize)
+        kem_encode(acc[i * 256usize..(i + 1usize) * 256usize], 10usize, c[i * 320usize..(i + 1usize) * 320usize])
+        i += 1usize
+    }
+    // v = NTT^-1(t o y) + e2 + Decompress1(m), compressed to dv bits.
+    var w: [256]i32 = zero
+    i = 0usize
+    while i < 3usize {
+        kem_mul_acc(w[0..], t[i * 256usize..(i + 1usize) * 256usize], y[i * 256usize..(i + 1usize) * 256usize])
+        i += 1usize
+    }
+    kem_intt(w[0..])
+    kem_add(w[0..], e2[0..])
+    var mu: [256]i32 = zero
+    kem_decode(m, 1usize, mu[0..])
+    kem_decompress(mu[0..], 1usize)
+    kem_add(w[0..], mu[0..])
+    kem_compress(w[0..], 4usize)
+    kem_encode(w[0..], 4usize, c[960..1088])
+}
+
+// K-PKE.Decrypt(dk_pke, c) -> the 32-byte message.
+fn kem_pke_decrypt(dk: []const u8, c: []const u8) -> [32]u8 {
+    var u: [768]i32 = zero
+    var i = 0usize
+    while i < 3usize {
+        kem_decode(c[i * 320usize..(i + 1usize) * 320usize], 10usize, u[i * 256usize..(i + 1usize) * 256usize])
+        kem_decompress(u[i * 256usize..(i + 1usize) * 256usize], 10usize)
+        kem_ntt(u[i * 256usize..(i + 1usize) * 256usize])
+        i += 1usize
+    }
+    var v: [256]i32 = zero
+    kem_decode(c[960..1088], 4usize, v[0..])
+    kem_decompress(v[0..], 4usize)
+    var s: [256]i32 = zero
+    var w: [256]i32 = zero
+    i = 0usize
+    while i < 3usize {
+        kem_decode(dk[i * 384usize..(i + 1usize) * 384usize], 12usize, s[0..])
+        kem_mul_acc(w[0..], s[0..], u[i * 256usize..(i + 1usize) * 256usize])
+        i += 1usize
+    }
+    kem_intt(w[0..])
+    kem_sub(v[0..], w[0..])
+    kem_compress(v[0..], 1usize)
+    var m: [32]u8 = zero
+    kem_encode(v[0..], 1usize, m[0..])
+    ret m
+}
+
+// ML-KEM.KeyGen_internal(d, z): ek (1184 bytes) and dk = dk_pke || ek || H(ek) || z (2400).
+fn ml_kem_keygen(d: [32]u8, z: [32]u8, ek: []u8, dk: []u8) -> err {
+    if ek.len < 1184usize || dk.len < 2400usize { ret TooSmall }
+    kem_pke_keygen(d, ek[0..1184], dk[0..1152])
+    var i = 0usize
+    while i < 1184usize {
+        dk[1152usize + i] = ek[i]
+        i += 1usize
+    }
+    let h = hash.sha3_256(ek[0..1184])
+    i = 0usize
+    while i < 32usize {
+        dk[2336usize + i] = h[i]
+        dk[2368usize + i] = z[i]
+        i += 1usize
+    }
+    ret ok
+}
+
+// ML-KEM.Encaps_internal(ek, m): the ciphertext (1088 bytes) and the shared key.
+fn ml_kem_encaps(ek: []const u8, m: [32]u8, c: []u8) -> ([32]u8, err) {
+    var key: [32]u8 = zero
+    if ek.len < 1184usize || c.len < 1088usize { ret (key, TooSmall) }
+    var input: [64]u8 = zero
+    let h = hash.sha3_256(ek[0..1184])
+    var i = 0usize
+    while i < 32usize {
+        input[i] = m[i]
+        input[32usize + i] = h[i]
+        i += 1usize
+    }
+    let g = hash.sha3_512(input[0..])
+    kem_pke_encrypt(ek, m[0..], g[32..64], c[0..1088])
+    i = 0usize
+    while i < 32usize {
+        key[i] = g[i]
+        i += 1usize
+    }
+    ret (key, ok)
+}
+
+// ML-KEM.Decaps_internal(dk, c): the shared key, or J(z || c) when c fails to re-encrypt.
+fn ml_kem_decaps(dk: []const u8, c: []const u8) -> ([32]u8, err) {
+    var key: [32]u8 = zero
+    if dk.len < 2400usize || c.len < 1088usize { ret (key, TooSmall) }
+    let m = kem_pke_decrypt(dk[0..1152], c)
+    var input: [64]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        input[i] = m[i]
+        input[32usize + i] = dk[2336usize + i]
+        i += 1usize
+    }
+    let g = hash.sha3_512(input[0..])
+    var reject = hash.shake256_init()
+    hash.shake_absorb(&reject, dk[2368..2400])
+    hash.shake_absorb(&reject, c[0..1088])
+    var bar: [32]u8 = zero
+    hash.shake_squeeze(&reject, bar[0..])
+    var again: [1088]u8 = zero
+    kem_pke_encrypt(dk[1152..2336], m[0..], g[32..64], again[0..])
+    var same = true
+    i = 0usize
+    while i < 1088usize {
+        if again[i] != c[i] { same = false }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 32usize {
+        if same {
+            key[i] = g[i]
+        } else {
+            key[i] = bar[i]
+        }
+        i += 1usize
+    }
+    ret (key, ok)
+}
+
+// One full round: keygen from (d, z), encaps with m, decaps; answers both shared keys.
+fn ml_kem(d: [32]u8, z: [32]u8, m: [32]u8, ek: []u8, dk: []u8, c: []u8) -> ([32]u8, [32]u8, err) {
+    var none: [32]u8 = zero
+    let keygen_error = ml_kem_keygen(d, z, ek, dk)
+    if keygen_error != ok { ret (none, none, keygen_error) }
+    let (sent, encaps_error) = ml_kem_encaps(ek, m, c)
+    if encaps_error != ok { ret (none, none, encaps_error) }
+    let (received, decaps_error) = ml_kem_decaps(dk, c)
+    ret (sent, received, decaps_error)
 }

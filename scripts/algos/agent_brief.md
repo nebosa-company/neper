@@ -41,3 +41,9 @@ Repository: D:\repos\neper (work in the MAIN tree; do not touch git, docs/, modu
   ```
 - Keep fixtures under ~300 statements; large data is generated in-fixture by an LCG (`state = state *% 6364136223846793005u64 +% 1442695040888963407u64`, take `state >> 33u32`) and replicated in the Python reference; exit codes are read mod 256.
 - Every public function named in the plan (`→ e.mod.fn` annotations) must exist under exactly that name; add the obvious companions (build/query/remove) so the module is usable.
+
+## Foundational modules (e.mem, e.gpu, e.io, e.os, e.str, e.bytes, e.atomic, e.sync, e.text.utf8)
+Every program links these, so a half-edited file breaks every build on the machine, including
+other sessions'. Develop additions in a copy (e.g. `build/<module>_wip.e`), and copy into
+`lib/e/...` only when `check-file` passes and a fixture emits. Never leave the shared file
+broken between two edits.

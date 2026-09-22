@@ -36,7 +36,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `gpu.launch`: `lib/e/gpu/tensor.e`×12, `src/check.e`×10‡, `lib/e/gpu.e`×3†, `src/lower.e`×1‡, `src/main.e`×1‡
+- `gpu.launch`: `lib/e/gpu/tensor.e`×12, `src/check.e`×10‡, `lib/e/gpu.e`×3†, `scripts/algos/decisions-pending.md`×1†, `src/lower.e`×1‡, `src/main.e`×1‡
 
 ## Existing fixtures
 

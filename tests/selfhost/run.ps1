@@ -2458,6 +2458,30 @@ $miscGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $miscGapsWritten -ne 'executable written') { throw 'misc_gaps emission failed' }
 & $miscGapsPath
 if ($LASTEXITCODE -ne 0) { throw "a misc_gaps check failed: exit $LASTEXITCODE" }
+# `e.crypto.kx` post-quantum entries: ML-KEM-768 with keys, ciphertexts and shared secrets equal to kyber-py including implicit rejection, ML-DSA-44 keys and deterministic signatures equal to dilithium-py with malformed hints refused, XMSS (RFC 8391) against a byte-level replica at height four in the fixture and height ten once, SHAKE128/256 against hashlib (D912).
+$cryptoPqPath = Join-Path $testBuild 'crypto-pq-selfhost.exe'
+$cryptoPqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_pq\src\main.e') $repo 'x64' 'windows' $cryptoPqPath
+if ($LASTEXITCODE -ne 0 -or $cryptoPqWritten -ne 'executable written') { throw 'crypto_pq emission failed' }
+& $cryptoPqPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_pq check failed: exit $LASTEXITCODE" }
+# `e.test.coverage` planned functions: block, branch and MC/DC coverage from counters, grammar-based generation and hierarchical delta debugging, golden files with a Myers diff, normalised snapshots, fault injection plans over readers and writers, HTTP cassettes recorded and replayed (D912).
+$testGapsPath = Join-Path $testBuild 'test-gaps-selfhost.exe'
+$testGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_gaps\src\main.e') $repo 'x64' 'windows' $testGapsPath
+if ($LASTEXITCODE -ne 0 -or $testGapsWritten -ne 'executable written') { throw 'test_gaps emission failed' }
+& $testGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a test_gaps check failed: exit $LASTEXITCODE" }
+# `e.mem` planned functions: pool, slab and buddy allocators over caller storage (offsets, checked against a replica), a backoff spin lock, an epoch-based RCU cell with four readers seeing no retired index, and the mmap `map`/`unmap` names; the C bootstrap still builds the compiler (D912).
+$runtimeGapsPath = Join-Path $testBuild 'runtime-gaps-selfhost.exe'
+$runtimeGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\runtime_gaps\src\main.e') $repo 'x64' 'windows' $runtimeGapsPath
+if ($LASTEXITCODE -ne 0 -or $runtimeGapsWritten -ne 'executable written') { throw 'runtime_gaps emission failed' }
+& $runtimeGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a runtime_gaps check failed: exit $LASTEXITCODE" }
+# `e.gpu` planned kernels on the CPU backend: a bitonic sorting network launched once per stage and pass over a device buffer, and a tiled online-softmax attention within 1e-4 of numpy with the tile count visible (D912).
+$gpuGapsPath = Join-Path $testBuild 'gpu-gaps-selfhost.exe'
+$gpuGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_gaps\src\main.e') $repo 'x64' 'windows' $gpuGapsPath
+if ($LASTEXITCODE -ne 0 -or $gpuGapsWritten -ne 'executable written') { throw 'gpu_gaps emission failed' }
+& $gpuGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a gpu_gaps check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

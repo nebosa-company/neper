@@ -987,3 +987,30 @@ bootstrap still builds the compiler over the touched modules. Compiler
 notes: `try` inside a tuple-returning function passes the checker and
 fails only at lowering; a bare block statement is refused; an inline
 array literal cannot be sliced.
+
+## D912 — Batch 45: post-quantum, test support, allocators and GPU kernels; what stays owed
+
+The stream's last function batch. `e.crypto.kx` gained ML-KEM-768 and
+`e.crypto.sign` ML-DSA-44 (FIPS 203 and 204, keys, ciphertexts and
+signatures byte-equal to kyber-py and dilithium-py) and XMSS (RFC 8391
+against a byte-level replica: no oracle package exists; the fixture ships
+height four for its run time and the height-ten root was verified once,
+in thirty seconds), with SHAKE128/256 appended to `e.crypto.hash`. The
+test family gained coverage summaries with MC/DC pairs, grammar-based
+generation and hierarchical delta debugging, golden files, normalised
+snapshots, fault plans and HTTP cassettes. `e.mem` gained pool, slab and
+buddy allocators that answer offsets -- the module cannot call
+`address_of`, an intrinsic, from inside itself -- `e.sync` a spin lock and
+an RCU cell, `e.fs.mmap` its planned names, and `e.gpu` a bitonic sort and
+a tiled attention written as launcher-shaped functions because a module
+cannot `gpu.launch` through itself. Two lessons cost other sessions
+minutes: a half-edited `e.mem` or `e.gpu` breaks every build on the
+machine, so the brief now says to stage foundational modules in a copy;
+and an intrinsic cannot be wrapped by its own module, so `docs/algos.md`'s
+four `e.atomic` names now point at the intrinsics' spellings (`add`,
+`xchg`, `cas`, `load`), the way `union` became `join`. Still owed after
+this batch and deliberately not attempted here: `e.os` (`sandbox`,
+`send_file`, `signal`, `wait_u32` are per-target syscalls behind the
+bootstrap-seeded surface), `e.thread.fiber` (a context switch belongs in
+the runtime prefix) and `e.fmt.opus` (a codec of several thousand lines).
+The `e.ui` names went to the UI session (D904).

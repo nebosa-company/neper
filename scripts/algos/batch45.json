@@ -1,0 +1,77 @@
+{
+ "decision": "D912",
+ "modules": [
+  {
+   "name": "e.crypto.kx",
+   "refresh": true,
+   "deps": [
+    "e.algo.bignum",
+    "e.crypto.hash",
+    "e.mem"
+   ],
+   "fixture": "crypto_pq",
+   "comment": "`e.crypto.kx` post-quantum entries: ML-KEM-768 with keys, ciphertexts and shared secrets equal to kyber-py including implicit rejection, ML-DSA-44 keys and deterministic signatures equal to dilithium-py with malformed hints refused, XMSS (RFC 8391) against a byte-level replica at height four in the fixture and height ten once, SHAKE128/256 against hashlib"
+  },
+  {
+   "name": "e.crypto.sign",
+   "refresh": true,
+   "comment": "`e.crypto.sign` (shared fixture crypto_pq)"
+  },
+  {
+   "name": "e.crypto.hash",
+   "refresh": true,
+   "comment": "`e.crypto.hash` (shared fixture crypto_pq)"
+  },
+  {
+   "name": "e.test.coverage",
+   "refresh": true,
+   "fixture": "test_gaps",
+   "comment": "`e.test.coverage` planned functions: block, branch and MC/DC coverage from counters, grammar-based generation and hierarchical delta debugging, golden files with a Myers diff, normalised snapshots, fault injection plans over readers and writers, HTTP cassettes recorded and replayed"
+  },
+  {
+   "name": "e.test.fuzz",
+   "refresh": true,
+   "comment": "`e.test.fuzz` (shared fixture test_gaps)"
+  },
+  {
+   "name": "e.test.support",
+   "refresh": true,
+   "deps": [
+    "e.algo.rand",
+    "e.io",
+    "e.mem",
+    "e.test",
+    "e.text.diff",
+    "e.time"
+   ],
+   "comment": "`e.test.support` (shared fixture test_gaps)"
+  },
+  {
+   "name": "e.mem",
+   "refresh": true,
+   "fixture": "runtime_gaps",
+   "comment": "`e.mem` planned functions: pool, slab and buddy allocators over caller storage (offsets, checked against a replica), a backoff spin lock, an epoch-based RCU cell with four readers seeing no retired index, and the mmap `map`/`unmap` names; the C bootstrap still builds the compiler"
+  },
+  {
+   "name": "e.sync",
+   "refresh": true,
+   "comment": "`e.sync` (shared fixture runtime_gaps)"
+  },
+  {
+   "name": "e.fs.mmap",
+   "refresh": true,
+   "comment": "`e.fs.mmap` (shared fixture runtime_gaps)"
+  },
+  {
+   "name": "e.gpu",
+   "refresh": true,
+   "deps": [
+    "e.math",
+    "e.mem",
+    "e.os"
+   ],
+   "fixture": "gpu_gaps",
+   "comment": "`e.gpu` planned kernels on the CPU backend: a bitonic sorting network launched once per stage and pass over a device buffer, and a tiled online-softmax attention within 1e-4 of numpy with the tile count visible"
+  }
+ ]
+}

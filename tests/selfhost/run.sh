@@ -2194,6 +2194,26 @@ misc_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$misc_gaps_written" = 'executable written' ]
 chmod +x "$test_build/misc-gaps-selfhost"
 "$test_build/misc-gaps-selfhost"
+# `e.crypto.kx` post-quantum entries: ML-KEM-768 with keys, ciphertexts and shared secrets equal to kyber-py including implicit rejection, ML-DSA-44 keys and deterministic signatures equal to dilithium-py with malformed hints refused, XMSS (RFC 8391) against a byte-level replica at height four in the fixture and height ten once, SHAKE128/256 against hashlib (D912).
+crypto_pq_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_pq/src/main.e" "$repo" x64 linux "$test_build/crypto-pq-selfhost")
+[ "$crypto_pq_written" = 'executable written' ]
+chmod +x "$test_build/crypto-pq-selfhost"
+"$test_build/crypto-pq-selfhost"
+# `e.test.coverage` planned functions: block, branch and MC/DC coverage from counters, grammar-based generation and hierarchical delta debugging, golden files with a Myers diff, normalised snapshots, fault injection plans over readers and writers, HTTP cassettes recorded and replayed (D912).
+test_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_gaps/src/main.e" "$repo" x64 linux "$test_build/test-gaps-selfhost")
+[ "$test_gaps_written" = 'executable written' ]
+chmod +x "$test_build/test-gaps-selfhost"
+"$test_build/test-gaps-selfhost"
+# `e.mem` planned functions: pool, slab and buddy allocators over caller storage (offsets, checked against a replica), a backoff spin lock, an epoch-based RCU cell with four readers seeing no retired index, and the mmap `map`/`unmap` names; the C bootstrap still builds the compiler (D912).
+runtime_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/runtime_gaps/src/main.e" "$repo" x64 linux "$test_build/runtime-gaps-selfhost")
+[ "$runtime_gaps_written" = 'executable written' ]
+chmod +x "$test_build/runtime-gaps-selfhost"
+"$test_build/runtime-gaps-selfhost"
+# `e.gpu` planned kernels on the CPU backend: a bitonic sorting network launched once per stage and pass over a device buffer, and a tiled online-softmax attention within 1e-4 of numpy with the tile count visible (D912).
+gpu_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_gaps/src/main.e" "$repo" x64 linux "$test_build/gpu-gaps-selfhost")
+[ "$gpu_gaps_written" = 'executable written' ]
+chmod +x "$test_build/gpu-gaps-selfhost"
+"$test_build/gpu-gaps-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

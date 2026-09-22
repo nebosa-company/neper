@@ -43,23 +43,14 @@
 // its traps for overflow, divide, shift, narrow and slice bounds -- the checks a
 // release device build has no record for either.
 
+use e.math
 use e.mem
 use e.os
 
 type Backend = enum u8 { Cpu, Vulkan, Cuda }
 type DeviceKind = enum u8 { Unknown, Cpu, Integrated, Discrete, Virtual, Other }
 type DeviceKey = struct { backend: Backend, uuid: [16]u8 }
-type DeviceInfo = struct {
-    key: DeviceKey,
-    key_valid: bool,
-    index: u32,
-    name: str,
-    kind: DeviceKind,
-    memory_bytes: u64,
-    memory_known: bool,
-    capabilities: []const Cap,
-    supported: bool,
-}
+type DeviceInfo = struct { key: DeviceKey, key_valid: bool, index: u32, name: str, kind: DeviceKind, memory_bytes: u64, memory_known: bool, capabilities: []const Cap, supported: bool }
 type Device = struct { state: *void }
 type Queue = struct { state: *void }
 type StagingLimits = struct { blocks: u32, block_bytes: usize }
@@ -101,28 +92,12 @@ const MAX_AXIS: usize = 4294967295usize
 // generation a handle has to carry.
 type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool }
 
-type DeviceState = struct {
-    arena: *mem.Arena,
-    owner: u32,
-    closed: bool,
-    buffers: []Buffer,
-    queues: u32,
-}
+type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32 }
 
 type QueueState = struct { device: *DeviceState, index: u32, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
 // An offscreen target: two images, the front one presented, the back one acquired.
-type TargetState = struct {
-    queue: *QueueState,
-    images: [2]Image,
-    front: usize,
-    width: u32,
-    height: u32,
-    format: Format,
-    serial: u64,
-    acquired: bool,
-    closed: bool,
-}
+type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquired: bool, closed: bool }
 
 // The invocation ids of the launch on the calling thread.
 var gid: Id = zero
@@ -834,4 +809,227 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     launch_active = false
     state.serial += 1u64
     ret ok
+}
+
+// ------------------------------------------------------- sort and attention
+//
+// Two kernels the plan names on this module: `sort_bitonic` and `attention_flash`.
+// `gpu.launch[K]` is a qualified spelling the checker matches on an import of
+// `e.gpu`, which this module cannot be, so each launch here is the launcher's own
+// shape written by hand: an argument block, a step that runs one invocation by
+// `gid.x` and writes the done mark, and `launch_run` over the grid -- one
+// submission per launch, the same scheduler and fault buffer as any kernel.
+
+// A typed slice over a live buffer's storage: `mem.alloc` on an arena laid over its
+// bytes, the one way source turns bytes into a `[]T`. The debug build's alloc
+// fills what it hands out with 0xCD (D217), so the bytes are held in a copy at
+// the device arena's top meanwhile and the top is given back. ponytail: one
+// memcpy each way per view; a typed `mem.view` would make it free.
+fn device_slice[T: type](state: *QueueState, buf: Buf[T]) -> ([]T, err) {
+    let (slot, slot_error) = slot_of(state, buf.owner, buf.slot, buf.generation)
+    if slot_error != ok { ret (zero, slot_error) }
+    let buffer = state.device.buffers[slot]
+    if buffer.count == 0usize { ret (zero, ok) }
+    let a = state.device.arena
+    let top = mem.mark(a)
+    let (held, held_error) = mem.alloc[u8](a, buffer.bytes.len)
+    if held_error != ok { ret (zero, held_error) }
+    mem.copy[u8](held, buffer.bytes)
+    var over: mem.Arena = zero
+    over.base = &buffer.bytes[0usize]
+    over.cap = buffer.bytes.len
+    over.off = 0usize
+    let (elements, elements_error) = mem.alloc[T](&over, buffer.count)
+    if elements_error != ok { ret (zero, elements_error) }
+    mem.copy[u8](buffer.bytes, held)
+    mem.reset(a, top)
+    ret (elements, ok)
+}
+
+// The done mark a returning invocation leaves in its frame.
+fn mark_done(frame: *u8) {
+    let pc = mem.cast[*usize](frame)
+    *pc = DONE
+}
+
+// One compare-exchange of the bitonic network: invocation `i` against its partner
+// `i ^ j` in the stage of size `k`, ascending where bit `k` of `i` is clear; the
+// lower index of the pair does the exchange, the higher returns.
+fn bitonic_step(keys: []u32, i: u32, j: u32, k: u32) {
+    let partner = i ^ j
+    if partner <= i || usize(partner) >= keys.len { ret }
+    let x = keys[usize(i)]
+    let y = keys[usize(partner)]
+    let ascending = (i & k) == 0u32
+    if (ascending && x > y) || (!ascending && x < y) {
+        keys[usize(i)] = y
+        keys[usize(partner)] = x
+    }
+}
+
+type SortArgs = struct { keys: []u32, n: u32, j: u32, k: u32 }
+
+fn sort_step(ctx: *void, frame: *u8, workgroup: *u8) {
+    let args = mem.cast[*SortArgs](ctx)
+    let i = gid.x
+    if i < args.n { bitonic_step(args.keys, i, args.j, args.k) }
+    mark_done(frame)
+}
+
+const MAX_SORT: usize = 16777216usize
+
+// The first `n` keys of `buffer` sorted ascending by a bitonic network: for every
+// stage `k` (2, 4, ..., p) and pass `j` (k/2, ..., 1) one launch of `p` invocations,
+// each one compare-exchange. `p` is `n` rounded up to a power of two; a shorter
+// `n` is sorted through a padded device copy whose tail is `0xFFFFFFFF`, the
+// largest key, and written back over the first `n`. `n` past the buffer's length,
+// or past MAX_SORT (65535 workgroups of 256), is `TooLarge`.
+fn sort_bitonic(device: *Device, q: *Queue, buffer: Buf[u32], n: usize) -> err {
+    let (owner, owner_error) = state_of(device)
+    if owner_error != ok { ret owner_error }
+    let (state, state_error) = queue_state(q)
+    if state_error != ok { ret state_error }
+    if owner.owner != state.device.owner || buffer.owner != owner.owner { ret WrongDevice }
+    if n > buffer.len || n > MAX_SORT { ret TooLarge }
+    if n < 2usize { ret ok }
+    var p = 1usize
+    while p < n { p = p << 1u32 }
+    let (keys, keys_error) = device_slice[u32](state, buffer)
+    if keys_error != ok { ret keys_error }
+    var work = keys[..n]
+    var padded: Buf[u32] = zero
+    if p != n {
+        let (padded_buf, padded_error) = alloc[u32](q, p)
+        if padded_error != ok { ret padded_error }
+        padded = padded_buf
+        let (scratch, scratch_error) = device_slice[u32](state, padded)
+        if scratch_error != ok { ret scratch_error }
+        mem.copy[u32](scratch, keys[..n])
+        var fill = n
+        while fill < p {
+            scratch[fill] = 4294967295u32
+            fill += 1usize
+        }
+        work = scratch
+    }
+    var args = SortArgs { keys: work, n: u32(p), j: 0u32, k: 0u32 }
+    var k = 2usize
+    while k <= p {
+        var j = k >> 1u32
+        while j > 0usize {
+            args.j = u32(j)
+            args.k = u32(k)
+            try launch_run(q, grid1(p), 256usize, 1usize, 1usize, 16usize, 0usize, sort_step, mem.cast[*void](&args))
+            j = j >> 1u32
+        }
+        k = k << 1u32
+    }
+    if p != n {
+        mem.copy[u32](keys[..n], work[..n])
+        try release[u32](q, padded)
+    }
+    ret ok
+}
+
+const MAX_HEAD: usize = 256usize
+
+type AttentionArgs = struct { query: []const f32, key: []const f32, value: []const f32, out: []f32, n: u32, d: u32, tile: u32, scale: f32 }
+
+// One query row of FlashAttention: the key tiles in order, each scored against the
+// row, and the running max, sum and accumulator rescaled by `exp(old - new)` when
+// a tile raises the max -- the online softmax, so no second pass over the keys.
+// `scores` holds one tile, `acc` one output row; both cap at MAX_HEAD.
+fn attention_row(args: *AttentionArgs, row: usize) {
+    let n = usize(args.n)
+    let d = usize(args.d)
+    let tile = usize(args.tile)
+    var scores: [256]f32 = zero
+    var acc: [256]f32 = zero
+    var running_max: f32 = -3.0e38
+    var running_sum: f32 = 0.0
+    var start = 0usize
+    while start < n {
+        var stop = start + tile
+        if stop > n { stop = n }
+        var tile_max: f32 = -3.0e38
+        var j = start
+        while j < stop {
+            var dot: f32 = 0.0
+            var dim = 0usize
+            while dim < d {
+                dot = dot + args.query[row * d + dim] * args.key[j * d + dim]
+                dim += 1usize
+            }
+            let s = dot * args.scale
+            scores[j - start] = s
+            if s > tile_max { tile_max = s }
+            j += 1usize
+        }
+        var new_max = running_max
+        if tile_max > new_max { new_max = tile_max }
+        let correction = math.exp[f32](running_max - new_max)
+        running_sum = running_sum * correction
+        var col = 0usize
+        while col < d {
+            acc[col] = acc[col] * correction
+            col += 1usize
+        }
+        j = start
+        while j < stop {
+            let weight = math.exp[f32](scores[j - start] - new_max)
+            running_sum = running_sum + weight
+            var lane = 0usize
+            while lane < d {
+                acc[lane] = acc[lane] + weight * args.value[j * d + lane]
+                lane += 1usize
+            }
+            j += 1usize
+        }
+        running_max = new_max
+        start = stop
+    }
+    var o = 0usize
+    while o < d {
+        args.out[row * d + o] = acc[o] / running_sum
+        o += 1usize
+    }
+}
+
+fn attention_step(ctx: *void, frame: *u8, workgroup: *u8) {
+    let args = mem.cast[*AttentionArgs](ctx)
+    let i = gid.x
+    if i < args.n { attention_row(args, usize(i)) }
+    mark_done(frame)
+}
+
+// FlashAttention over `query`, `key`, `value` of shape `(n, d)`, row-major, into
+// `out` of the same shape: one launch of `n` invocations, each one query row over
+// the keys in tiles of `tile` rows (`attention_row`), `scale` applied to every
+// score (`1 / sqrt(d)` for the usual attention). Answers the tiles each row
+// walked, `ceil(n / tile)`. `d` or `tile` past MAX_HEAD, a zero `tile`, or a
+// buffer shorter than `n * d` is `TooLarge`.
+fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], value: Buf[f32], out: Buf[f32], n: usize, d: usize, tile: usize, scale: f32) -> (usize, err) {
+    let (owner, owner_error) = state_of(device)
+    if owner_error != ok { ret (0usize, owner_error) }
+    let (state, state_error) = queue_state(q)
+    if state_error != ok { ret (0usize, state_error) }
+    if owner.owner != state.device.owner { ret (0usize, WrongDevice) }
+    if query.owner != owner.owner || key.owner != owner.owner || value.owner != owner.owner || out.owner != owner.owner { ret (0usize, WrongDevice) }
+    if d == 0usize || d > MAX_HEAD || tile == 0usize || tile > MAX_HEAD || n > MAX_SORT { ret (0usize, TooLarge) }
+    let total = n * d
+    if query.len < total || key.len < total || value.len < total || out.len < total { ret (0usize, TooLarge) }
+    let tiles = (n + tile - 1usize) / tile
+    if n == 0usize { ret (0usize, ok) }
+    let (query_view, query_error) = device_slice[f32](state, query)
+    if query_error != ok { ret (0usize, query_error) }
+    let (key_view, key_error) = device_slice[f32](state, key)
+    if key_error != ok { ret (0usize, key_error) }
+    let (value_view, value_error) = device_slice[f32](state, value)
+    if value_error != ok { ret (0usize, value_error) }
+    let (out_view, out_error) = device_slice[f32](state, out)
+    if out_error != ok { ret (0usize, out_error) }
+    var args = AttentionArgs { query: query_view, key: key_view, value: value_view, out: out_view, n: u32(n), d: u32(d), tile: u32(tile), scale: scale }
+    let run_error = launch_run(q, grid1(n), 256usize, 1usize, 1usize, 16usize, 0usize, attention_step, mem.cast[*void](&args))
+    if run_error != ok { ret (0usize, run_error) }
+    ret (tiles, ok)
 }

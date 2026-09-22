@@ -1335,3 +1335,1026 @@ fn rsa_pkcs1v15_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []c
     }
     ret hash.equal_constant_time(expected[..k], em[..k])
 }
+
+// ML-DSA-44 by FIPS 204 (k = l = 4, eta = 2, tau = 39, gamma1 = 2^17, gamma2 = (q-1)/88,
+// beta = 78, omega = 80, d = 13): the NTT over Z_8380417 with zeta = 1753 in
+// bit-reversed order, RejNTTPoly from SHAKE128, RejBoundedPoly and ExpandMask from
+// SHAKE256, SampleInBall, Power2Round, Decompose with MakeHint/UseHint, the bit
+// packers of pkEncode/skEncode/sigEncode, keygen from a 32-byte seed, the
+// deterministic signature (rnd = 0^32) with its rejection loop, and verification.
+// Polynomials are 256 `i64` coefficients in [0, q); vectors are laid out in a row.
+//
+// ponytail: arithmetic is plain `%` by q; nothing here claims constant time, and the
+// sign rejection loop restarts as soon as a bound fails (as dilithium-py does).
+
+fn dsa_q() -> i64 { ret 8380417i64 }
+fn dsa_gamma1() -> i64 { ret 131072i64 }
+fn dsa_gamma2() -> i64 { ret 95232i64 }
+fn dsa_beta() -> i64 { ret 78i64 }
+
+fn dsa_bitrev8(i: usize) -> usize {
+    var r = 0usize
+    var b = 0usize
+    while b < 8usize {
+        r = (r << 1u32) | ((i >> u32(b)) & 1usize)
+        b += 1usize
+    }
+    ret r
+}
+
+// zetas[i] = 1753^BitRev8(i) mod q.
+fn dsa_zetas() -> [256]i64 {
+    var pow: [256]i64 = zero
+    var value = 1i64
+    var i = 0usize
+    while i < 256usize {
+        pow[i] = value
+        value = (value * 1753i64) % dsa_q()
+        i += 1usize
+    }
+    var z: [256]i64 = zero
+    i = 0usize
+    while i < 256usize {
+        z[i] = pow[dsa_bitrev8(i)]
+        i += 1usize
+    }
+    ret z
+}
+
+fn dsa_ntt(w: []i64) {
+    let z = dsa_zetas()
+    var m = 0usize
+    var len = 128usize
+    while len >= 1usize {
+        var start = 0usize
+        while start < 256usize {
+            m += 1usize
+            let zeta = z[m]
+            var j = start
+            while j < start + len {
+                let t = (zeta * w[j + len]) % dsa_q()
+                w[j + len] = (w[j] + dsa_q() - t) % dsa_q()
+                w[j] = (w[j] + t) % dsa_q()
+                j += 1usize
+            }
+            start += 2usize * len
+        }
+        len = len / 2usize
+    }
+}
+
+fn dsa_intt(w: []i64) {
+    let z = dsa_zetas()
+    var m = 256usize
+    var len = 1usize
+    while len < 256usize {
+        var start = 0usize
+        while start < 256usize {
+            m -= 1usize
+            let zeta = dsa_q() - z[m]
+            var j = start
+            while j < start + len {
+                let t = w[j]
+                w[j] = (t + w[j + len]) % dsa_q()
+                w[j + len] = (zeta * ((t + dsa_q() - w[j + len]) % dsa_q())) % dsa_q()
+                j += 1usize
+            }
+            start += 2usize * len
+        }
+        len = len * 2usize
+    }
+    var k = 0usize
+    while k < 256usize {
+        w[k] = (w[k] * 8347681i64) % dsa_q()
+        k += 1usize
+    }
+}
+
+// h += f o g pointwise in the NTT domain.
+fn dsa_mul_acc(h: []i64, f: []const i64, g: []const i64) {
+    var i = 0usize
+    while i < 256usize {
+        h[i] = (h[i] + (f[i] * g[i]) % dsa_q()) % dsa_q()
+        i += 1usize
+    }
+}
+
+fn dsa_add(f: []i64, g: []const i64) {
+    var i = 0usize
+    while i < 256usize {
+        f[i] = (f[i] + g[i]) % dsa_q()
+        i += 1usize
+    }
+}
+
+fn dsa_sub(f: []i64, g: []const i64) {
+    var i = 0usize
+    while i < 256usize {
+        f[i] = (f[i] + dsa_q() - g[i]) % dsa_q()
+        i += 1usize
+    }
+}
+
+// The representative of x in (-q/2, q/2].
+fn dsa_center(x: i64) -> i64 {
+    if x > (dsa_q() - 1i64) / 2i64 { ret x - dsa_q() }
+    ret x
+}
+
+fn dsa_abs(x: i64) -> i64 {
+    if x < 0i64 { ret 0i64 - x }
+    ret x
+}
+
+// True when the infinity norm of the polynomial reaches `bound`.
+fn dsa_norm_reaches(f: []const i64, bound: i64) -> bool {
+    var i = 0usize
+    while i < 256usize {
+        if dsa_abs(dsa_center(f[i])) >= bound { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// Bit packers: `count` values of `bits` bits each, little-endian bit order.
+fn dsa_pack(values: []const i64, bits: usize, out: []u8) {
+    var at = 0usize
+    while at < values.len * bits / 8usize {
+        out[at] = 0u8
+        at += 1usize
+    }
+    var i = 0usize
+    while i < values.len {
+        let a = u64(values[i])
+        var j = 0usize
+        while j < bits {
+            let bit = i * bits + j
+            out[bit / 8usize] = out[bit / 8usize] | u8((((a >> u32(j)) & 1u64) << u32(bit % 8usize)) & 255u64)
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+fn dsa_unpack(bytes: []const u8, bits: usize, out: []i64) {
+    var i = 0usize
+    while i < out.len {
+        var a = 0u64
+        var j = 0usize
+        while j < bits {
+            let bit = i * bits + j
+            a = a | (((u64(bytes[bit / 8usize]) >> u32(bit % 8usize)) & 1u64) << u32(j))
+            j += 1usize
+        }
+        out[i] = i64(a)
+        i += 1usize
+    }
+}
+
+// BitPack(w, a, b): each coefficient as b - w in `bits` bits; the inverse recovers w mod q.
+fn dsa_pack_centered(f: []const i64, b: i64, bits: usize, out: []u8) {
+    var v: [256]i64 = zero
+    var i = 0usize
+    while i < 256usize {
+        v[i] = b - dsa_center(f[i])
+        i += 1usize
+    }
+    dsa_pack(v[0..], bits, out)
+}
+
+fn dsa_unpack_centered(bytes: []const u8, b: i64, bits: usize, out: []i64) {
+    dsa_unpack(bytes, bits, out)
+    var i = 0usize
+    while i < 256usize {
+        out[i] = ((b - out[i]) + dsa_q()) % dsa_q()
+        i += 1usize
+    }
+}
+
+// RejNTTPoly(rho || s || r) from SHAKE128, three bytes per candidate with the top bit cleared.
+fn dsa_rej_ntt_poly(rho: []const u8, s: u8, r: u8, out: []i64) {
+    var xof = hash.shake128_init()
+    hash.shake_absorb(&xof, rho)
+    var index: [2]u8 = zero
+    index[0] = s
+    index[1] = r
+    hash.shake_absorb(&xof, index[0..])
+    var count = 0usize
+    var chunk: [3]u8 = zero
+    while count < 256usize {
+        hash.shake_squeeze(&xof, chunk[0..])
+        let z = i64(chunk[0]) + 256i64 * i64(chunk[1]) + 65536i64 * i64(chunk[2] & 127u8)
+        if z < dsa_q() {
+            out[count] = z
+            count += 1usize
+        }
+    }
+}
+
+// RejBoundedPoly(rho' || r as two bytes) from SHAKE256, eta = 2: 2 - (z mod 5) for z < 15.
+fn dsa_rej_bounded_poly(rho: []const u8, nonce: usize, out: []i64) {
+    var xof = hash.shake256_init()
+    hash.shake_absorb(&xof, rho)
+    var index: [2]u8 = zero
+    index[0] = u8(nonce & 255usize)
+    index[1] = u8((nonce >> 8u32) & 255usize)
+    hash.shake_absorb(&xof, index[0..])
+    var count = 0usize
+    var byte: [1]u8 = zero
+    while count < 256usize {
+        hash.shake_squeeze(&xof, byte[0..])
+        let z0 = i64(byte[0] & 15u8)
+        let z1 = i64(byte[0] >> 4u32)
+        if z0 < 15i64 {
+            out[count] = (2i64 - z0 % 5i64 + dsa_q()) % dsa_q()
+            count += 1usize
+        }
+        if z1 < 15i64 && count < 256usize {
+            out[count] = (2i64 - z1 % 5i64 + dsa_q()) % dsa_q()
+            count += 1usize
+        }
+    }
+}
+
+// ExpandA: a[(r * 4 + s) * 256 ..] = RejNTTPoly(rho, s, r).
+fn dsa_expand_a(rho: []const u8, a: []i64) {
+    var r = 0usize
+    while r < 4usize {
+        var s = 0usize
+        while s < 4usize {
+            dsa_rej_ntt_poly(rho, u8(s & 255usize), u8(r & 255usize), a[(r * 4usize + s) * 256usize..(r * 4usize + s + 1usize) * 256usize])
+            s += 1usize
+        }
+        r += 1usize
+    }
+}
+
+// ExpandMask: y[r] from SHAKE256(rho'' || (kappa + r) as two bytes), 18 bits per coefficient.
+fn dsa_expand_mask(rho: []const u8, kappa: usize, y: []i64) {
+    var r = 0usize
+    while r < 4usize {
+        var xof = hash.shake256_init()
+        hash.shake_absorb(&xof, rho)
+        var index: [2]u8 = zero
+        index[0] = u8((kappa + r) & 255usize)
+        index[1] = u8(((kappa + r) >> 8u32) & 255usize)
+        hash.shake_absorb(&xof, index[0..])
+        var v: [576]u8 = zero
+        hash.shake_squeeze(&xof, v[0..])
+        dsa_unpack_centered(v[0..], dsa_gamma1(), 18usize, y[r * 256usize..(r + 1usize) * 256usize])
+        r += 1usize
+    }
+}
+
+// SampleInBall(c_tilde): tau = 39 coefficients of +-1 placed by a Fisher-Yates walk.
+fn dsa_sample_in_ball(c_tilde: []const u8, c: []i64) {
+    var i = 0usize
+    while i < 256usize {
+        c[i] = 0i64
+        i += 1usize
+    }
+    var xof = hash.shake256_init()
+    hash.shake_absorb(&xof, c_tilde)
+    var signs: [8]u8 = zero
+    hash.shake_squeeze(&xof, signs[0..])
+    i = 217usize
+    var byte: [1]u8 = zero
+    while i < 256usize {
+        hash.shake_squeeze(&xof, byte[0..])
+        var j = usize(byte[0])
+        while j > i {
+            hash.shake_squeeze(&xof, byte[0..])
+            j = usize(byte[0])
+        }
+        c[i] = c[j]
+        let bit = i + 39usize - 256usize
+        if ((signs[bit / 8usize] >> u32(bit % 8usize)) & 1u8) == 1u8 {
+            c[j] = dsa_q() - 1i64
+        } else {
+            c[j] = 1i64
+        }
+        i += 1usize
+    }
+}
+
+// Power2Round: r = r1 * 2^13 + r0 with r0 in (-2^12, 2^12]; answers (r1, r0 mod q).
+fn dsa_power2round(r: i64) -> (i64, i64) {
+    var r0 = r % 8192i64
+    if r0 > 4096i64 { r0 -= 8192i64 }
+    ret ((r - r0) / 8192i64, (r0 + dsa_q()) % dsa_q())
+}
+
+// Decompose: r = r1 * 2 gamma2 + r0 with r0 in (-gamma2, gamma2]; answers (r1, r0 centered).
+fn dsa_decompose(r: i64) -> (i64, i64) {
+    var r0 = r % (2i64 * dsa_gamma2())
+    if r0 > dsa_gamma2() { r0 -= 2i64 * dsa_gamma2() }
+    if r - r0 == dsa_q() - 1i64 { ret (0i64, r0 - 1i64) }
+    ret ((r - r0) / (2i64 * dsa_gamma2()), r0)
+}
+
+fn dsa_high_bits(r: i64) -> i64 {
+    let (r1, _) = dsa_decompose(r)
+    ret r1
+}
+
+fn dsa_make_hint(z: i64, r: i64) -> u8 {
+    if dsa_high_bits(r) != dsa_high_bits((r + z) % dsa_q()) { ret 1u8 }
+    ret 0u8
+}
+
+fn dsa_use_hint(h: u8, r: i64) -> i64 {
+    let (r1, r0) = dsa_decompose(r)
+    if h == 0u8 { ret r1 }
+    if r0 > 0i64 { ret (r1 + 1i64) % 44i64 }
+    ret (r1 + 43i64) % 44i64
+}
+
+fn ml_dsa_pk_len() -> usize { ret 1312usize }
+fn ml_dsa_sk_len() -> usize { ret 2560usize }
+fn ml_dsa_sig_len() -> usize { ret 2420usize }
+
+// ML-DSA.KeyGen_internal(seed): pk = rho || t1 (1312 bytes), sk = rho || K || tr || s1 || s2 || t0 (2560).
+fn ml_dsa_keygen(seed: [32]u8, pk: []u8, sk: []u8) -> err {
+    if pk.len < 1312usize || sk.len < 2560usize { ret TooSmall }
+    var xof = hash.shake256_init()
+    hash.shake_absorb(&xof, seed[0..])
+    var kl: [2]u8 = zero
+    kl[0] = 4u8
+    kl[1] = 4u8
+    hash.shake_absorb(&xof, kl[0..])
+    var seeds: [128]u8 = zero
+    hash.shake_squeeze(&xof, seeds[0..])
+    var a: [4096]i64 = zero
+    dsa_expand_a(seeds[0..32], a[0..])
+    var s1: [1024]i64 = zero
+    var s2: [1024]i64 = zero
+    var s1hat: [1024]i64 = zero
+    var r = 0usize
+    while r < 4usize {
+        dsa_rej_bounded_poly(seeds[32..96], r, s1[r * 256usize..(r + 1usize) * 256usize])
+        dsa_rej_bounded_poly(seeds[32..96], r + 4usize, s2[r * 256usize..(r + 1usize) * 256usize])
+        var i = 0usize
+        while i < 256usize {
+            s1hat[r * 256usize + i] = s1[r * 256usize + i]
+            i += 1usize
+        }
+        dsa_ntt(s1hat[r * 256usize..(r + 1usize) * 256usize])
+        r += 1usize
+    }
+    var i = 0usize
+    while i < 32usize {
+        pk[i] = seeds[i]
+        sk[i] = seeds[i]
+        sk[32usize + i] = seeds[96usize + i]
+        i += 1usize
+    }
+    var t0: [1024]i64 = zero
+    r = 0usize
+    while r < 4usize {
+        var t: [256]i64 = zero
+        var s = 0usize
+        while s < 4usize {
+            dsa_mul_acc(t[0..], a[(r * 4usize + s) * 256usize..(r * 4usize + s + 1usize) * 256usize], s1hat[s * 256usize..(s + 1usize) * 256usize])
+            s += 1usize
+        }
+        dsa_intt(t[0..])
+        dsa_add(t[0..], s2[r * 256usize..(r + 1usize) * 256usize])
+        var t1: [256]i64 = zero
+        i = 0usize
+        while i < 256usize {
+            let (high, low) = dsa_power2round(t[i])
+            t1[i] = high
+            t0[r * 256usize + i] = low
+            i += 1usize
+        }
+        dsa_pack(t1[0..], 10usize, pk[32usize + r * 320usize..32usize + (r + 1usize) * 320usize])
+        dsa_pack_centered(s1[r * 256usize..(r + 1usize) * 256usize], 2i64, 3usize, sk[128usize + r * 96usize..128usize + (r + 1usize) * 96usize])
+        dsa_pack_centered(s2[r * 256usize..(r + 1usize) * 256usize], 2i64, 3usize, sk[512usize + r * 96usize..512usize + (r + 1usize) * 96usize])
+        dsa_pack_centered(t0[r * 256usize..(r + 1usize) * 256usize], 4096i64, 13usize, sk[896usize + r * 416usize..896usize + (r + 1usize) * 416usize])
+        r += 1usize
+    }
+    var tr = hash.shake256_init()
+    hash.shake_absorb(&tr, pk[0..1312])
+    hash.shake_squeeze(&tr, sk[64..128])
+    ret ok
+}
+
+// mu = H(tr || 0 || |ctx| || ctx || message, 64): the pure-variant message formatting.
+fn dsa_mu(tr: []const u8, message: []const u8, ctx: []const u8) -> [64]u8 {
+    var xof = hash.shake256_init()
+    hash.shake_absorb(&xof, tr)
+    var head: [2]u8 = zero
+    head[1] = u8(ctx.len & 255usize)
+    hash.shake_absorb(&xof, head[0..])
+    hash.shake_absorb(&xof, ctx)
+    hash.shake_absorb(&xof, message)
+    var mu: [64]u8 = zero
+    hash.shake_squeeze(&xof, mu[0..])
+    ret mu
+}
+
+// w1Encode: 6 bits per coefficient, absorbed straight into the challenge hash.
+fn dsa_absorb_w1(xof: *hash.Shake, w1: []const i64) {
+    var packed: [768]u8 = zero
+    dsa_pack(w1, 6usize, packed[0..])
+    hash.shake_absorb(xof, packed[0..])
+}
+
+// ML-DSA.Sign_internal with rnd = 0^32 (the deterministic variant); ctx may be empty
+// and at most 255 bytes. sig is c_tilde || z || hints (2420 bytes).
+fn ml_dsa_sign(sk: []const u8, message: []const u8, ctx: []const u8, sig: []u8) -> err {
+    if sk.len < 2560usize || sig.len < 2420usize { ret TooSmall }
+    if ctx.len > 255usize { ret Invalid }
+    var a: [4096]i64 = zero
+    dsa_expand_a(sk[0..32], a[0..])
+    var s1hat: [1024]i64 = zero
+    var s2hat: [1024]i64 = zero
+    var t0hat: [1024]i64 = zero
+    var r = 0usize
+    while r < 4usize {
+        dsa_unpack_centered(sk[128usize + r * 96usize..128usize + (r + 1usize) * 96usize], 2i64, 3usize, s1hat[r * 256usize..(r + 1usize) * 256usize])
+        dsa_unpack_centered(sk[512usize + r * 96usize..512usize + (r + 1usize) * 96usize], 2i64, 3usize, s2hat[r * 256usize..(r + 1usize) * 256usize])
+        dsa_unpack_centered(sk[896usize + r * 416usize..896usize + (r + 1usize) * 416usize], 4096i64, 13usize, t0hat[r * 256usize..(r + 1usize) * 256usize])
+        dsa_ntt(s1hat[r * 256usize..(r + 1usize) * 256usize])
+        dsa_ntt(s2hat[r * 256usize..(r + 1usize) * 256usize])
+        dsa_ntt(t0hat[r * 256usize..(r + 1usize) * 256usize])
+        r += 1usize
+    }
+    let mu = dsa_mu(sk[64..128], message, ctx)
+    var seed = hash.shake256_init()
+    hash.shake_absorb(&seed, sk[32..64])
+    var rnd: [32]u8 = zero
+    hash.shake_absorb(&seed, rnd[0..])
+    hash.shake_absorb(&seed, mu[0..])
+    var rho2: [64]u8 = zero
+    hash.shake_squeeze(&seed, rho2[0..])
+    var kappa = 0usize
+    var y: [1024]i64 = zero
+    var yhat: [1024]i64 = zero
+    var w: [1024]i64 = zero
+    var w1: [1024]i64 = zero
+    var c: [256]i64 = zero
+    var z: [1024]i64 = zero
+    var hints: [1024]u8 = zero
+    var attempts = 0usize
+    while attempts < 1024usize {
+        attempts += 1usize
+        dsa_expand_mask(rho2[0..], kappa, y[0..])
+        kappa += 4usize
+        var i = 0usize
+        while i < 1024usize {
+            yhat[i] = y[i]
+            w[i] = 0i64
+            i += 1usize
+        }
+        r = 0usize
+        while r < 4usize {
+            dsa_ntt(yhat[r * 256usize..(r + 1usize) * 256usize])
+            r += 1usize
+        }
+        r = 0usize
+        while r < 4usize {
+            var s = 0usize
+            while s < 4usize {
+                dsa_mul_acc(w[r * 256usize..(r + 1usize) * 256usize], a[(r * 4usize + s) * 256usize..(r * 4usize + s + 1usize) * 256usize], yhat[s * 256usize..(s + 1usize) * 256usize])
+                s += 1usize
+            }
+            dsa_intt(w[r * 256usize..(r + 1usize) * 256usize])
+            r += 1usize
+        }
+        i = 0usize
+        while i < 1024usize {
+            w1[i] = dsa_high_bits(w[i])
+            i += 1usize
+        }
+        var challenge = hash.shake256_init()
+        hash.shake_absorb(&challenge, mu[0..])
+        dsa_absorb_w1(&challenge, w1[0..])
+        hash.shake_squeeze(&challenge, sig[0..32])
+        dsa_sample_in_ball(sig[0..32], c[0..])
+        dsa_ntt(c[0..])
+        // z = y + c s1; r0 = LowBits(w - c s2); ct0 and the hints.
+        var ok_so_far = true
+        r = 0usize
+        while r < 4usize && ok_so_far {
+            var cs1: [256]i64 = zero
+            dsa_mul_acc(cs1[0..], c[0..], s1hat[r * 256usize..(r + 1usize) * 256usize])
+            dsa_intt(cs1[0..])
+            dsa_add(cs1[0..], y[r * 256usize..(r + 1usize) * 256usize])
+            if dsa_norm_reaches(cs1[0..], dsa_gamma1() - dsa_beta()) { ok_so_far = false }
+            i = 0usize
+            while i < 256usize {
+                z[r * 256usize + i] = cs1[i]
+                i += 1usize
+            }
+            r += 1usize
+        }
+        var hint_count = 0usize
+        r = 0usize
+        while r < 4usize && ok_so_far {
+            var cs2: [256]i64 = zero
+            dsa_mul_acc(cs2[0..], c[0..], s2hat[r * 256usize..(r + 1usize) * 256usize])
+            dsa_intt(cs2[0..])
+            var wcs2: [256]i64 = zero
+            i = 0usize
+            while i < 256usize {
+                wcs2[i] = (w[r * 256usize + i] + dsa_q() - cs2[i]) % dsa_q()
+                let (_, low) = dsa_decompose(wcs2[i])
+                if dsa_abs(low) >= dsa_gamma2() - dsa_beta() { ok_so_far = false }
+                i += 1usize
+            }
+            var ct0: [256]i64 = zero
+            dsa_mul_acc(ct0[0..], c[0..], t0hat[r * 256usize..(r + 1usize) * 256usize])
+            dsa_intt(ct0[0..])
+            if dsa_norm_reaches(ct0[0..], dsa_gamma2()) { ok_so_far = false }
+            i = 0usize
+            while i < 256usize {
+                let h = dsa_make_hint(dsa_q() - ct0[i], (wcs2[i] + ct0[i]) % dsa_q())
+                hints[r * 256usize + i] = h
+                hint_count += usize(h)
+                i += 1usize
+            }
+            r += 1usize
+        }
+        if ok_so_far && hint_count <= 80usize {
+            r = 0usize
+            while r < 4usize {
+                dsa_pack_centered(z[r * 256usize..(r + 1usize) * 256usize], dsa_gamma1(), 18usize, sig[32usize + r * 576usize..32usize + (r + 1usize) * 576usize])
+                r += 1usize
+            }
+            var at = 0usize
+            while at < 84usize {
+                sig[2336usize + at] = 0u8
+                at += 1usize
+            }
+            var index = 0usize
+            r = 0usize
+            while r < 4usize {
+                var j = 0usize
+                while j < 256usize {
+                    if hints[r * 256usize + j] == 1u8 {
+                        sig[2336usize + index] = u8(j & 255usize)
+                        index += 1usize
+                    }
+                    j += 1usize
+                }
+                sig[2416usize + r] = u8(index & 255usize)
+                r += 1usize
+            }
+            ret ok
+        }
+    }
+    ret Invalid
+}
+
+// ML-DSA.Verify_internal: true when the hints decode, ||z|| < gamma1 - beta and c_tilde matches.
+fn ml_dsa_verify(pk: []const u8, message: []const u8, ctx: []const u8, sig: []const u8) -> bool {
+    if pk.len < 1312usize || sig.len < 2420usize || ctx.len > 255usize { ret false }
+    // HintBitUnpack, refusing a malformed encoding.
+    var hints: [1024]u8 = zero
+    var index = 0usize
+    var r = 0usize
+    while r < 4usize {
+        let end = usize(sig[2416usize + r])
+        if end < index || end > 80usize { ret false }
+        let first = index
+        while index < end {
+            if index > first && sig[2336usize + index - 1usize] >= sig[2336usize + index] { ret false }
+            hints[r * 256usize + usize(sig[2336usize + index])] = 1u8
+            index += 1usize
+        }
+        r += 1usize
+    }
+    while index < 80usize {
+        if sig[2336usize + index] != 0u8 { ret false }
+        index += 1usize
+    }
+    var a: [4096]i64 = zero
+    dsa_expand_a(pk[0..32], a[0..])
+    var zhat: [1024]i64 = zero
+    r = 0usize
+    while r < 4usize {
+        dsa_unpack_centered(sig[32usize + r * 576usize..32usize + (r + 1usize) * 576usize], dsa_gamma1(), 18usize, zhat[r * 256usize..(r + 1usize) * 256usize])
+        if dsa_norm_reaches(zhat[r * 256usize..(r + 1usize) * 256usize], dsa_gamma1() - dsa_beta()) { ret false }
+        dsa_ntt(zhat[r * 256usize..(r + 1usize) * 256usize])
+        r += 1usize
+    }
+    var tr = hash.shake256_init()
+    hash.shake_absorb(&tr, pk[0..1312])
+    var tr_bytes: [64]u8 = zero
+    hash.shake_squeeze(&tr, tr_bytes[0..])
+    let mu = dsa_mu(tr_bytes[0..], message, ctx)
+    var c: [256]i64 = zero
+    dsa_sample_in_ball(sig[0..32], c[0..])
+    dsa_ntt(c[0..])
+    var challenge = hash.shake256_init()
+    hash.shake_absorb(&challenge, mu[0..])
+    var w1: [1024]i64 = zero
+    r = 0usize
+    while r < 4usize {
+        var w: [256]i64 = zero
+        var s = 0usize
+        while s < 4usize {
+            dsa_mul_acc(w[0..], a[(r * 4usize + s) * 256usize..(r * 4usize + s + 1usize) * 256usize], zhat[s * 256usize..(s + 1usize) * 256usize])
+            s += 1usize
+        }
+        var t1: [256]i64 = zero
+        dsa_unpack(pk[32usize + r * 320usize..32usize + (r + 1usize) * 320usize], 10usize, t1[0..])
+        var i = 0usize
+        while i < 256usize {
+            t1[i] = (t1[i] * 8192i64) % dsa_q()
+            i += 1usize
+        }
+        dsa_ntt(t1[0..])
+        var ct1: [256]i64 = zero
+        dsa_mul_acc(ct1[0..], c[0..], t1[0..])
+        dsa_sub(w[0..], ct1[0..])
+        dsa_intt(w[0..])
+        i = 0usize
+        while i < 256usize {
+            w1[r * 256usize + i] = dsa_use_hint(hints[r * 256usize + i], w[i])
+            i += 1usize
+        }
+        r += 1usize
+    }
+    dsa_absorb_w1(&challenge, w1[0..])
+    var c_tilde: [32]u8 = zero
+    hash.shake_squeeze(&challenge, c_tilde[0..])
+    ret hash.equal_constant_time(c_tilde[0..], sig[0..32])
+}
+
+// One full round: keygen from the seed, sign, verify; answers the verdict.
+fn ml_dsa(seed: [32]u8, message: []const u8, ctx: []const u8, pk: []u8, sk: []u8, sig: []u8) -> (bool, err) {
+    let keygen_error = ml_dsa_keygen(seed, pk, sk)
+    if keygen_error != ok { ret (false, keygen_error) }
+    let sign_error = ml_dsa_sign(sk, message, ctx, sig)
+    if sign_error != ok { ret (false, sign_error) }
+    ret (ml_dsa_verify(pk, message, ctx, sig), ok)
+}
+
+// XMSS by RFC 8391 with the XMSS-SHA2_h_256 functions (n = 32, w = 16, len = 67, the
+// address structure and the 32-byte padding words 0..3 of F, H, H_msg and PRF), and
+// WOTS+ secret keys by SP 800-208 section 7.2.1 (PRF_keygen, padding word 4, over
+// S_XMSS || SEED || ADRS). The tree height is a parameter so a short tree can be
+// exercised; `xmss_sha2_10_256_height` names the RFC parameter set. The whole tree is
+// built at keygen into caller storage of `xmss_nodes_len(height)` bytes, level by
+// level, and signing reads its authentication path from there. The secret key holds
+// the next index: signing uses it and advances it, and refuses an exhausted key.
+//
+// ponytail: keygen computes every leaf (2^height WOTS+ key generations); no BDS
+// traversal, no caching of chains, nothing constant time.
+
+type XmssSecretKey = struct { index: u32, height: usize, sk_seed: [32]u8, sk_prf: [32]u8, pub_seed: [32]u8, root: [32]u8 }
+type XmssPublicKey = struct { height: usize, root: [32]u8, pub_seed: [32]u8 }
+
+fn xmss_sha2_10_256_height() -> usize { ret 10usize }
+fn xmss_nodes_len(height: usize) -> usize { ret ((2usize << u32(height)) - 1usize) * 32usize }
+fn xmss_sig_len(height: usize) -> usize { ret 36usize + 2144usize + 32usize * height }
+
+// SHA256(toByte(prefix, 32) || key || m).
+fn xmss_hash(prefix: u8, key: []const u8, m: []const u8) -> [32]u8 {
+    var pad: [32]u8 = zero
+    pad[31] = prefix
+    var s = hash.sha256_init()
+    hash.sha256_update(&s, pad[0..])
+    hash.sha256_update(&s, key)
+    hash.sha256_update(&s, m)
+    ret hash.sha256_done(&s)
+}
+
+fn xmss_adrs_set(adrs: []u8, word: usize, value: u32) {
+    adrs[word * 4usize] = u8((value >> 24u32) & 255u32)
+    adrs[word * 4usize + 1usize] = u8((value >> 16u32) & 255u32)
+    adrs[word * 4usize + 2usize] = u8((value >> 8u32) & 255u32)
+    adrs[word * 4usize + 3usize] = u8(value & 255u32)
+}
+
+fn xmss_adrs_get(adrs: []const u8, word: usize) -> u32 {
+    ret (u32(adrs[word * 4usize]) << 24u32) | (u32(adrs[word * 4usize + 1usize]) << 16u32) | (u32(adrs[word * 4usize + 2usize]) << 8u32) | u32(adrs[word * 4usize + 3usize])
+}
+
+// setType: the type word and a clear of the four words after it.
+fn xmss_adrs_type(adrs: []u8, kind: u32) {
+    xmss_adrs_set(adrs, 3usize, kind)
+    var word = 4usize
+    while word < 8usize {
+        xmss_adrs_set(adrs, word, 0u32)
+        word += 1usize
+    }
+}
+
+// Algorithm 2 in place: `steps` applications of F from hash address `start`.
+fn xmss_chain(x: []u8, start: usize, steps: usize, adrs: []u8, seed: []const u8) {
+    var j = start
+    while j < start + steps {
+        xmss_adrs_set(adrs, 6usize, u32(j))
+        xmss_adrs_set(adrs, 7usize, 0u32)
+        let key = xmss_hash(3u8, seed, adrs)
+        xmss_adrs_set(adrs, 7usize, 1u32)
+        let mask = xmss_hash(3u8, seed, adrs)
+        var i = 0usize
+        while i < 32usize {
+            x[i] = x[i] ^ mask[i]
+            i += 1usize
+        }
+        let next_x = xmss_hash(0u8, key[0..], x)
+        i = 0usize
+        while i < 32usize {
+            x[i] = next_x[i]
+            i += 1usize
+        }
+        j += 1usize
+    }
+}
+
+// The 67 WOTS+ secret key elements of one leaf (adrs already of type 0 with the OTS address).
+fn xmss_wots_sk(sk_seed: []const u8, seed: []const u8, adrs: []u8, out: []u8) {
+    var m: [64]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        m[i] = seed[i]
+        i += 1usize
+    }
+    var chain = 0usize
+    while chain < 67usize {
+        xmss_adrs_set(adrs, 5usize, u32(chain))
+        xmss_adrs_set(adrs, 6usize, 0u32)
+        xmss_adrs_set(adrs, 7usize, 0u32)
+        i = 0usize
+        while i < 32usize {
+            m[32usize + i] = adrs[i]
+            i += 1usize
+        }
+        let element = xmss_hash(4u8, sk_seed, m[0..])
+        i = 0usize
+        while i < 32usize {
+            out[chain * 32usize + i] = element[i]
+            i += 1usize
+        }
+        chain += 1usize
+    }
+}
+
+// base_w of the message and its checksum: 64 nibbles then 3 more from csum << 4.
+fn xmss_digits(msg: []const u8) -> [67]u8 {
+    var d: [67]u8 = zero
+    var csum = 0u32
+    var i = 0usize
+    while i < 32usize {
+        d[2usize * i] = msg[i] >> 4u32
+        d[2usize * i + 1usize] = msg[i] & 15u8
+        csum += 15u32 - u32(d[2usize * i]) + 15u32 - u32(d[2usize * i + 1usize])
+        i += 1usize
+    }
+    csum = csum << 4u32
+    d[64] = u8((csum >> 12u32) & 15u32)
+    d[65] = u8((csum >> 8u32) & 15u32)
+    d[66] = u8((csum >> 4u32) & 15u32)
+    ret d
+}
+
+// Algorithm 7: H(KEY, (left ^ BM_0) || (right ^ BM_1)) with the three PRF calls.
+fn xmss_rand_hash(left: []const u8, right: []const u8, seed: []const u8, adrs: []u8) -> [32]u8 {
+    xmss_adrs_set(adrs, 7usize, 0u32)
+    let key = xmss_hash(3u8, seed, adrs)
+    xmss_adrs_set(adrs, 7usize, 1u32)
+    let mask0 = xmss_hash(3u8, seed, adrs)
+    xmss_adrs_set(adrs, 7usize, 2u32)
+    let mask1 = xmss_hash(3u8, seed, adrs)
+    var m: [64]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        m[i] = left[i] ^ mask0[i]
+        m[32usize + i] = right[i] ^ mask1[i]
+        i += 1usize
+    }
+    ret xmss_hash(1u8, key[0..], m[0..])
+}
+
+// Algorithm 8 over the 67 public key elements in `pk`, which it consumes.
+fn xmss_ltree(pk: []u8, seed: []const u8, adrs: []u8) -> [32]u8 {
+    var count = 67usize
+    var height = 0u32
+    xmss_adrs_set(adrs, 5usize, 0u32)
+    while count > 1usize {
+        var i = 0usize
+        while i < count / 2usize {
+            xmss_adrs_set(adrs, 6usize, u32(i))
+            let node = xmss_rand_hash(pk[2usize * i * 32usize..(2usize * i + 1usize) * 32usize], pk[(2usize * i + 1usize) * 32usize..(2usize * i + 2usize) * 32usize], seed, adrs)
+            var b = 0usize
+            while b < 32usize {
+                pk[i * 32usize + b] = node[b]
+                b += 1usize
+            }
+            i += 1usize
+        }
+        if count % 2usize == 1usize {
+            var b = 0usize
+            while b < 32usize {
+                pk[(count / 2usize) * 32usize + b] = pk[(count - 1usize) * 32usize + b]
+                b += 1usize
+            }
+        }
+        count = (count + 1usize) / 2usize
+        height += 1u32
+        xmss_adrs_set(adrs, 5usize, height)
+    }
+    var out: [32]u8 = zero
+    var b = 0usize
+    while b < 32usize {
+        out[b] = pk[b]
+        b += 1usize
+    }
+    ret out
+}
+
+// One leaf: the WOTS+ public key of leaf `index` through its L-tree.
+fn xmss_leaf(sk_seed: []const u8, seed: []const u8, index: u32) -> [32]u8 {
+    var adrs: [32]u8 = zero
+    xmss_adrs_type(adrs[0..], 0u32)
+    xmss_adrs_set(adrs[0..], 4usize, index)
+    var elements: [2144]u8 = zero
+    xmss_wots_sk(sk_seed, seed, adrs[0..], elements[0..])
+    var chain = 0usize
+    while chain < 67usize {
+        xmss_adrs_set(adrs[0..], 5usize, u32(chain))
+        xmss_chain(elements[chain * 32usize..(chain + 1usize) * 32usize], 0usize, 15usize, adrs[0..], seed)
+        chain += 1usize
+    }
+    xmss_adrs_type(adrs[0..], 1u32)
+    xmss_adrs_set(adrs[0..], 4usize, index)
+    ret xmss_ltree(elements[0..], seed, adrs[0..])
+}
+
+// Byte offset of node j at level t in the level-by-level layout (level 0 = leaves).
+fn xmss_node_at(height: usize, level: usize, j: usize) -> usize {
+    ret ((2usize << u32(height)) - (2usize << u32(height - level)) + j) * 32usize
+}
+
+// Algorithm 10 without the OID: every node of the tree into `nodes`, the root in the key.
+fn xmss_keygen(height: usize, sk_seed: [32]u8, sk_prf: [32]u8, pub_seed: [32]u8, nodes: []u8) -> (XmssSecretKey, err) {
+    var sk: XmssSecretKey = zero
+    if height < 1usize || height > 20usize { ret (sk, Invalid) }
+    if nodes.len < xmss_nodes_len(height) { ret (sk, TooSmall) }
+    sk.height = height
+    sk.sk_seed = sk_seed
+    sk.sk_prf = sk_prf
+    sk.pub_seed = pub_seed
+    var i = 0usize
+    while i < (1usize << u32(height)) {
+        let leaf = xmss_leaf(sk_seed[0..], pub_seed[0..], u32(i))
+        let at = xmss_node_at(height, 0usize, i)
+        var b = 0usize
+        while b < 32usize {
+            nodes[at + b] = leaf[b]
+            b += 1usize
+        }
+        i += 1usize
+    }
+    var level = 0usize
+    var adrs: [32]u8 = zero
+    xmss_adrs_type(adrs[0..], 2u32)
+    while level < height {
+        xmss_adrs_set(adrs[0..], 5usize, u32(level))
+        var j = 0usize
+        while j < (1usize << u32(height - level - 1usize)) {
+            xmss_adrs_set(adrs[0..], 6usize, u32(j))
+            let left = xmss_node_at(height, level, 2usize * j)
+            let parent = xmss_rand_hash(nodes[left..left + 32usize], nodes[left + 32usize..left + 64usize], pub_seed[0..], adrs[0..])
+            let at = xmss_node_at(height, level + 1usize, j)
+            var b = 0usize
+            while b < 32usize {
+                nodes[at + b] = parent[b]
+                b += 1usize
+            }
+            j += 1usize
+        }
+        level += 1usize
+    }
+    let root_at = xmss_node_at(height, height, 0usize)
+    i = 0usize
+    while i < 32usize {
+        sk.root[i] = nodes[root_at + i]
+        i += 1usize
+    }
+    ret (sk, ok)
+}
+
+fn xmss_public(sk: XmssSecretKey) -> XmssPublicKey {
+    var pk: XmssPublicKey = zero
+    pk.height = sk.height
+    pk.root = sk.root
+    pk.pub_seed = sk.pub_seed
+    ret pk
+}
+
+// M' = H_msg(r || root || toByte(idx, 32), message).
+fn xmss_message_digest(r: []const u8, root: []const u8, index: u32, message: []const u8) -> [32]u8 {
+    var key: [96]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        key[i] = r[i]
+        key[32usize + i] = root[i]
+        i += 1usize
+    }
+    xmss_adrs_set(key[64..96], 7usize, index)
+    ret xmss_hash(2u8, key[0..], message)
+}
+
+// Algorithm 12: sig = idx (4) || r (32) || sig_ots (2144) || auth (32 h); advances sk.index.
+fn xmss_sign(sk: *XmssSecretKey, nodes: []const u8, message: []const u8, sig: []u8) -> err {
+    let height = sk.height
+    if sig.len < xmss_sig_len(height) { ret TooSmall }
+    if nodes.len < xmss_nodes_len(height) { ret TooSmall }
+    if usize(sk.index) >= (1usize << u32(height)) { ret Invalid }
+    let index = sk.index
+    sk.index += 1u32
+    var index_bytes: [32]u8 = zero
+    xmss_adrs_set(index_bytes[0..], 7usize, index)
+    let r = xmss_hash(3u8, sk.sk_prf[0..], index_bytes[0..])
+    let digest = xmss_message_digest(r[0..], sk.root[0..], index, message)
+    xmss_adrs_set(sig[0..4], 0usize, index)
+    var i = 0usize
+    while i < 32usize {
+        sig[4usize + i] = r[i]
+        i += 1usize
+    }
+    var adrs: [32]u8 = zero
+    xmss_adrs_type(adrs[0..], 0u32)
+    xmss_adrs_set(adrs[0..], 4usize, index)
+    xmss_wots_sk(sk.sk_seed[0..], sk.pub_seed[0..], adrs[0..], sig[36..2180])
+    let digits = xmss_digits(digest[0..])
+    var chain = 0usize
+    while chain < 67usize {
+        xmss_adrs_set(adrs[0..], 5usize, u32(chain))
+        xmss_chain(sig[36usize + chain * 32usize..36usize + (chain + 1usize) * 32usize], 0usize, usize(digits[chain]), adrs[0..], sk.pub_seed[0..])
+        chain += 1usize
+    }
+    var k = 0usize
+    while k < height {
+        let at = xmss_node_at(height, k, (usize(index) >> u32(k)) ^ 1usize)
+        var b = 0usize
+        while b < 32usize {
+            sig[2180usize + k * 32usize + b] = nodes[at + b]
+            b += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// Algorithm 14: the WOTS+ public key from the signature, its L-tree, then the root path.
+fn xmss_verify(pk: XmssPublicKey, message: []const u8, sig: []const u8) -> bool {
+    let height = pk.height
+    if sig.len < xmss_sig_len(height) { ret false }
+    let index = xmss_adrs_get(sig, 0usize)
+    if usize(index) >= (1usize << u32(height)) { ret false }
+    let digest = xmss_message_digest(sig[4..36], pk.root[0..], index, message)
+    let digits = xmss_digits(digest[0..])
+    var adrs: [32]u8 = zero
+    xmss_adrs_type(adrs[0..], 0u32)
+    xmss_adrs_set(adrs[0..], 4usize, index)
+    var elements: [2144]u8 = zero
+    var i = 0usize
+    while i < 2144usize {
+        elements[i] = sig[36usize + i]
+        i += 1usize
+    }
+    var chain = 0usize
+    while chain < 67usize {
+        xmss_adrs_set(adrs[0..], 5usize, u32(chain))
+        xmss_chain(elements[chain * 32usize..(chain + 1usize) * 32usize], usize(digits[chain]), 15usize - usize(digits[chain]), adrs[0..], pk.pub_seed[0..])
+        chain += 1usize
+    }
+    xmss_adrs_type(adrs[0..], 1u32)
+    xmss_adrs_set(adrs[0..], 4usize, index)
+    var node = xmss_ltree(elements[0..], pk.pub_seed[0..], adrs[0..])
+    xmss_adrs_type(adrs[0..], 2u32)
+    var tree_index = index
+    var k = 0usize
+    while k < height {
+        xmss_adrs_set(adrs[0..], 5usize, u32(k))
+        let auth = sig[2180usize + k * 32usize..2180usize + (k + 1usize) * 32usize]
+        if ((index >> u32(k)) & 1u32) == 0u32 {
+            tree_index = tree_index / 2u32
+            xmss_adrs_set(adrs[0..], 6usize, tree_index)
+            node = xmss_rand_hash(node[0..], auth, pk.pub_seed[0..], adrs[0..])
+        } else {
+            tree_index = (tree_index - 1u32) / 2u32
+            xmss_adrs_set(adrs[0..], 6usize, tree_index)
+            node = xmss_rand_hash(auth, node[0..], pk.pub_seed[0..], adrs[0..])
+        }
+        k += 1usize
+    }
+    ret hash.equal_constant_time(node[0..], pk.root[0..])
+}
+
+// One full round at the given height: keygen, one signature at index 0, verify.
+fn xmss(height: usize, sk_seed: [32]u8, sk_prf: [32]u8, pub_seed: [32]u8, nodes: []u8, message: []const u8, sig: []u8) -> (bool, err) {
+    let (sk_value, keygen_error) = xmss_keygen(height, sk_seed, sk_prf, pub_seed, nodes)
+    if keygen_error != ok { ret (false, keygen_error) }
+    var sk = sk_value
+    let sign_error = xmss_sign(&sk, nodes, message, sig)
+    if sign_error != ok { ret (false, sign_error) }
+    ret (xmss_verify(xmss_public(sk), message, sig), ok)
+}

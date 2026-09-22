@@ -158,3 +158,79 @@ fn write_json(writer: *io.Writer, report: *const Report) -> err {
     }
     ret io.write_all(writer, "]}")
 }
+
+// Summaries over a counter list (a `snapshot` or a merged report's counters):
+// `blocks` counts the regions hit against `total_regions` (a hit region past
+// the total is not counted twice; a total of zero is 0%); `branches` reads
+// each branch's two outcome regions, an outcome covered when its counter has
+// a hit (an absent counter is unhit); `mcdc` finds an independence pair per
+// condition of a decision with `n` conditions from evaluated vectors (a
+// condition mask and the decision's outcome): two vectors differing in that
+// condition alone with different outcomes, the first in vector order.
+// ponytail: the pair search is every pair per condition, O(n * v^2), enough
+// for the n <= 32 a mask holds and the vectors one decision is tested with.
+
+type Summary = struct { covered: usize, total: usize, percent: f64 }
+type Branch = struct { file_id: u32, taken: u32, not_taken: u32 }
+type Vector = struct { mask: u32, outcome: bool }
+type Pair = struct { found: bool, first: usize, second: usize }
+
+fn hits_of(counters: []const Counter, file_id: u32, region_id: u32) -> u64 {
+    var i = 0usize
+    while i < counters.len {
+        if counters[i].file_id == file_id && counters[i].region_id == region_id { ret counters[i].hits }
+        i += 1usize
+    }
+    ret 0u64
+}
+
+fn blocks(counters: []const Counter, total_regions: usize) -> Summary {
+    var covered = 0usize
+    var i = 0usize
+    while i < counters.len {
+        if counters[i].hits > 0u64 { covered += 1usize }
+        i += 1usize
+    }
+    if covered > total_regions { covered = total_regions }
+    var percent = 0.0f64
+    if total_regions > 0usize { percent = f64(covered) * 100.0f64 / f64(total_regions) }
+    ret Summary { covered: covered, total: total_regions, percent: percent }
+}
+
+fn branches(counters: []const Counter, pairs: []const Branch) -> (usize, usize) {
+    var covered = 0usize
+    var i = 0usize
+    while i < pairs.len {
+        if hits_of(counters, pairs[i].file_id, pairs[i].taken) > 0u64 { covered += 1usize }
+        if hits_of(counters, pairs[i].file_id, pairs[i].not_taken) > 0u64 { covered += 1usize }
+        i += 1usize
+    }
+    ret (covered, 2usize * pairs.len)
+}
+
+// `pairs` receives one entry per condition (`TooLarge` when shorter than `n`);
+// answers how many conditions have a pair.
+fn mcdc(n: u32, vectors: []const Vector, pairs: []Pair) -> (usize, err) {
+    if n > 32u32 || pairs.len < usize(n) { ret (0usize, TooLarge) }
+    var covered = 0usize
+    var c = 0u32
+    while c < n {
+        let bit = 1u32 << c
+        var found = false
+        var i = 0usize
+        while i < vectors.len && !found {
+            var j = i + 1usize
+            while j < vectors.len && !found {
+                if (vectors[i].mask ^ vectors[j].mask) == bit && vectors[i].outcome != vectors[j].outcome {
+                    pairs[usize(c)] = Pair { found: true, first: i, second: j }
+                    found = true
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        if found { covered += 1usize } else { pairs[usize(c)] = Pair { found: false, first: 0usize, second: 0usize } }
+        c += 1u32
+    }
+    ret (covered, ok)
+}

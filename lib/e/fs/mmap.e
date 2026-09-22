@@ -45,3 +45,12 @@ fn bytes(m: Mapping) -> []u8 {
 fn flush(m: Mapping) -> err { ret os.mapping_flush(m.raw) }
 
 fn close(m: own Mapping) -> err { ret os.mapping_close(m.raw) }
+
+// The planned name (algo 1623) for `open`, and `unmap` for `close`, so a caller
+// reading the algorithm list finds the mapping under it.
+fn map(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (Mapping, err) {
+    let (m, open_error) = open(a, path, writable, offset, len)
+    ret (m, open_error)
+}
+
+fn unmap(m: own Mapping) -> err { ret close(m) }

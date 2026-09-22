@@ -1026,9 +1026,9 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 661. **Peterson's Algorithm** – Concurrent software lock guaranteeing mutual exclusion between two processes. → skip: pedagogical only
 662. **Dekker's Algorithm** – First correct software solution for two-process mutual exclusion. → skip: pedagogical only
 663. **Lamport's Bakery Algorithm** – N-process mutual exclusion algorithm assigning ordering tickets. → skip: pedagogical only
-664. **Test-And-Set** – Hardware atomic instruction setting memory flags and returning previous values. → `e.atomic.swap`
-665. **Compare-And-Swap (CAS)** – Atomic instruction updating memory locations only if current values match expectations. → `e.atomic.compare_exchange`
-666. **Fetch-And-Add (FAA)** – Hardware atomic primitive incrementing memory values in place. → `e.atomic.fetch_add`
+664. **Test-And-Set** – Hardware atomic instruction setting memory flags and returning previous values. → `e.atomic.xchg` (the intrinsic's spelling)
+665. **Compare-And-Swap (CAS)** – Atomic instruction updating memory locations only if current values match expectations. → `e.atomic.cas` (the intrinsic's spelling)
+666. **Fetch-And-Add (FAA)** – Hardware atomic primitive incrementing memory values in place. → `e.atomic.add` (the intrinsic's spelling)
 667. **Read-Copy-Update (RCU)** – Synchronization mechanism allowing readers lock-free access while updates publish pointer swaps. → `e.sync.rcu`
 668. **Reader-Writer Lock** – Synchronization primitive allowing concurrent reads or exclusive writes. → `e.sync.rwlock`
 669. **Semaphore (P and V Operations)** – Signaling counter managing resource access units. → `e.sync.semaphore`
@@ -1728,7 +1728,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 1324. **AST Pattern Lowering** – Transforming high-level Abstract Syntax Tree constructs into lower-level intermediate representations (IR). → skip: belongs in the Neper compiler, not the library
 1325. **Monadic Bind & Composable Effect System** – Structuring side-effects sequentially using algebraic effect handlers or monadic compositions. → skip: a technique applied per problem, not a reusable function
 1326. **Software Transactional Memory (STM) TLog Validation** – Executing memory updates inside thread-local logs and committing changes via atomic validation passes. → skip: implementable, but too specialised for the standard library
-1327. **Acquire-Release Memory Ordering** – Enforcing hardware memory fence rules to guarantee cross-thread operation visibility without full barriers. → `e.atomic.load_acquire`
+1327. **Acquire-Release Memory Ordering** – Enforcing hardware memory fence rules to guarantee cross-thread operation visibility without full barriers. → `e.atomic.load` (the intrinsic's spelling; the ordering is its argument)
 1328. **AddressSanitizer (ASan) Shadow Memory Mapping** – Intercepting memory allocations and mapping 8-byte application regions to 1-byte shadow memory flags to detect out-of-bound accesses. → skip: belongs in the toolchain (build, test runner, pacman)
 1329. **ThreadSanitizer (TSan) Shadow State Algorithm** – Tracking memory access vector clocks per thread to detect data races. → skip: belongs in the toolchain (build, test runner, pacman)
 1330. **MemorySanitizer (MSan) Shadow Bits** – Tracking initialization state for every memory bit to catch uninitialized memory reads. → skip: belongs in the toolchain (build, test runner, pacman)

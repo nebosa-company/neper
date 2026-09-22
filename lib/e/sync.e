@@ -421,12 +421,7 @@ fn once_call[Ctx: type](o: *Once, ctx: *Ctx, f: fn(*Ctx) -> err) -> err {
 // be shared by every participant; it comes from the caller's arena and is freed with
 // it, so `barrier_close` only marks the barrier unusable.
 
-type BarrierState = struct {
-    parties: u32,
-    waiting: Atomic[u32],
-    generation: Atomic[u32],
-    open: Atomic[u32],
-}
+type BarrierState = struct { parties: u32, waiting: Atomic[u32], generation: Atomic[u32], open: Atomic[u32] }
 
 fn barrier(a: *mem.Arena, parties: u32) -> (Barrier, err) {
     var empty: Barrier = zero
@@ -461,4 +456,134 @@ fn barrier_close(b: *Barrier) {
     atomic.store(&state.open, 0u32, .Release)
     let released = atomic.add(&state.generation, 1u32, .Release)
     os.wake_all_u32(&state.generation)
+}
+
+// ---- SpinLock (algo 673) ------------------------------------------------------
+//
+// 0 free, 1 held. The lock spins with an exponential backoff -- each round polls
+// twice as long as the last, up to `SPIN_CAP` reads -- and once the rounds are spent
+// it parks on the word for a millisecond at a time, which is the yield this surface
+// has (`wait_u32` rounds any shorter timeout up). The unlock is one store and wakes
+// nobody: a parked waiter comes back on its own timeout and finds the lock free.
+//
+// ponytail: a waiter that has parked can be up to 1 ms late to a lock freed while it
+// slept; make the unlock wake the word (the mutex's 2-state) if that latency shows.
+
+type SpinLock = struct { state: Atomic[u32] }
+
+const SPIN_ROUNDS: u32 = 8u32
+const SPIN_CAP: u32 = 256u32
+
+fn spinlock() -> SpinLock {
+    ret SpinLock { state: atomic.init(0u32) }
+}
+
+fn spin_try_lock(s: *SpinLock) -> bool {
+    if atomic.load(&s.state, .Relaxed) != 0u32 { ret false }
+    let (won, seen) = atomic.cas(&s.state, 0u32, 1u32, .Acquire, .Relaxed)
+    ret won
+}
+
+fn spin_lock(s: *SpinLock) {
+    var round = 0u32
+    var polls = 1u32
+    while true {
+        if spin_try_lock(s) { ret }
+        if round < SPIN_ROUNDS {
+            var spun = 0u32
+            while spun < polls && atomic.load(&s.state, .Relaxed) != 0u32 {
+                spun += 1u32
+            }
+            if polls < SPIN_CAP { polls = polls * 2u32 }
+            round += 1u32
+        } else {
+            let ignored = os.wait_u32(&s.state, 1u32, 1000000i64)
+        }
+    }
+}
+
+fn spin_unlock(s: *SpinLock) {
+    atomic.store(&s.state, 0u32, .Release)
+}
+
+// ---- RCU (algo 667) -----------------------------------------------------------
+//
+// One published `u32` -- an index into whatever the caller keeps -- read without a
+// lock and replaced by an exchange. Each reader owns a word of `readers`, holding
+// `epoch << 1 | active` while it is inside a read side (the epoch shape of
+// `e.concurrent.reclaim`, kept here so the primitive owes that module nothing).
+// `rcu_synchronize` advances the epoch and waits until no reader is active at an
+// older one: every reader still holding the retired index has left, and what the old
+// index named may be reused. Readers never block and never wake anyone, so the
+// writer polls with the spin lock's backoff.
+//
+// The orderings are all `SeqCst` on purpose: a reader's epoch load, its active store
+// and its index load must sit in one total order with the writer's exchange, epoch
+// advance and scan, or a reader could enter at the old epoch after the scan passed it.
+
+type Rcu = struct { published: Atomic[u32], epoch: Atomic[u64], readers: []Atomic[u64] }
+
+fn rcu(readers: []Atomic[u64], initial: u32) -> (Rcu, err) {
+    if readers.len == 0usize { ret (zero, Invalid) }
+    var r: Rcu = zero
+    r.published = atomic.init(initial)
+    r.epoch = atomic.init(0u64)
+    r.readers = readers
+    var at = 0usize
+    while at < readers.len {
+        atomic.store(&readers[at], 0u64, .Relaxed)
+        at += 1usize
+    }
+    ret (r, ok)
+}
+
+// Enters reader `thread`'s read side and answers the published index, which stays
+// valid until `rcu_read_unlock`.
+fn rcu_read_lock(r: *Rcu, thread: usize) -> u32 {
+    let g = atomic.load(&r.epoch, .SeqCst)
+    atomic.store(&r.readers[thread], (g << 1u32) | 1u64, .SeqCst)
+    ret atomic.load(&r.published, .SeqCst)
+}
+
+fn rcu_read_unlock(r: *Rcu, thread: usize) {
+    atomic.store(&r.readers[thread], 0u64, .Release)
+}
+
+// The index published now, for a reader that does not need it held.
+fn rcu_load(r: *Rcu) -> u32 {
+    ret atomic.load(&r.published, .SeqCst)
+}
+
+// Publishes `new_index` and answers the one it replaced, which readers may still
+// hold until `rcu_synchronize` returns.
+fn rcu_update(r: *Rcu, new_index: u32) -> u32 {
+    ret atomic.xchg(&r.published, new_index, .SeqCst)
+}
+
+// Waits until every read side that could hold an index retired before this call
+// has ended.
+fn rcu_synchronize(r: *Rcu) {
+    let g = atomic.add(&r.epoch, 1u64, .SeqCst) + 1u64
+    var polls = 1u32
+    while !rcu_all_at(r, g) {
+        var spun = 0u32
+        while spun < polls {
+            spun += 1u32
+        }
+        if polls < SPIN_CAP {
+            polls = polls * 2u32
+        } else {
+            let ignored = os.wait_u32(&r.published, atomic.load(&r.published, .Relaxed), 1000000i64)
+        }
+    }
+}
+
+fn rcu_all_at(r: *Rcu, g: u64) -> bool {
+    var at = 0usize
+    while at < r.readers.len {
+        let seen = atomic.load(&r.readers[at], .SeqCst)
+        if (seen & 1u64) != 0u64 && (seen >> 1u32) < g { ret false }
+        at += 1usize
+    }
+    ret true
 }

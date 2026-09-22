@@ -233,3 +233,259 @@ fn minimize(a: *mem.Arena, target_fn: Target, failing: Input, deadline: time.Ins
     }
     ret (Input { bytes: best[..len], seed: failing.seed }, ok)
 }
+
+// Grammar-based generation and hierarchical delta debugging, over caller
+// arrays. A `Grammar` is rules of alternatives of symbols, a symbol a terminal
+// (its `text`) or a reference to a rule; `grammar` derives a sentence from
+// `start`, choosing alternatives at random until `max_depth`, from where every
+// choice is the alternative with the shortest derivation (so generation always
+// ends when the grammar can end); `shortest` is that derivation alone.
+// `minimize_tree` is HDD (Misherghi and Su): a derivation as pre-ordered
+// `Node`s linked by `parent` (node 0 the root, children in index order), and
+// level by level the nonterminal nodes still standing are reduced by ddmin
+// (Zeller; complements only, the whole level tried first), a reduced node
+// rendering as the shortest sentence of its rule; the answer is the sentence
+// of what stands. ponytail: rules are capped at MAX_RULES and nodes at
+// MAX_NODES so the shortest lengths and the marks live on the stack; a
+// caller-supplied scratch would lift both.
+
+type Symbol = struct { terminal: bool, rule: usize, text: []const u8 }
+type Alternative = struct { symbols: []const Symbol }
+type Rule = struct { alternatives: []const Alternative }
+type Grammar = struct { rules: []const Rule }
+type Node = struct { terminal: bool, rule: usize, parent: usize, text: []const u8 }
+error TooLarge
+
+const MAX_RULES: usize = 64usize
+const MAX_NODES: usize = 256usize
+const UNREACHABLE: usize = 1000000000usize
+
+fn terminal(text: []const u8) -> Symbol { ret Symbol { terminal: true, rule: 0usize, text: text } }
+fn nonterminal(rule: usize) -> Symbol { ret Symbol { terminal: false, rule: rule, text: zero } }
+
+fn alternative_len(g: Grammar, alt: Alternative, min_len: []const usize) -> usize {
+    var total = 0usize
+    var i = 0usize
+    while i < alt.symbols.len {
+        let s = alt.symbols[i]
+        if s.terminal { total += s.text.len } else {
+            if s.rule >= g.rules.len || min_len[s.rule] >= UNREACHABLE { ret UNREACHABLE }
+            total += min_len[s.rule]
+        }
+        i += 1usize
+    }
+    ret total
+}
+
+// The shortest sentence length per rule, by fixpoint; `UNREACHABLE` for a rule that cannot end.
+fn shortest_lengths(g: Grammar, min_len: []usize) -> err {
+    if g.rules.len > min_len.len { ret TooLarge }
+    var i = 0usize
+    while i < g.rules.len {
+        min_len[i] = UNREACHABLE
+        i += 1usize
+    }
+    var changed = true
+    while changed {
+        changed = false
+        i = 0usize
+        while i < g.rules.len {
+            var k = 0usize
+            while k < g.rules[i].alternatives.len {
+                let n = alternative_len(g, g.rules[i].alternatives[k], min_len)
+                if n < min_len[i] {
+                    min_len[i] = n
+                    changed = true
+                }
+                k += 1usize
+            }
+            i += 1usize
+        }
+    }
+    ret ok
+}
+
+fn shortest_alternative(g: Grammar, rule: usize, min_len: []const usize) -> usize {
+    var best = 0usize
+    var best_len = UNREACHABLE
+    var k = 0usize
+    while k < g.rules[rule].alternatives.len {
+        let n = alternative_len(g, g.rules[rule].alternatives[k], min_len)
+        if n < best_len {
+            best_len = n
+            best = k
+        }
+        k += 1usize
+    }
+    ret best
+}
+
+fn expand(r: *rand.Pcg64, g: Grammar, rule: usize, depth: usize, max_depth: usize, min_len: []const usize, out: []u8, at: usize) -> (usize, err) {
+    if rule >= g.rules.len || g.rules[rule].alternatives.len == 0usize || min_len[rule] >= UNREACHABLE { ret (at, InvalidCorpus) }
+    var pick = shortest_alternative(g, rule, min_len)
+    if depth < max_depth { pick = usize(rand.pcg64_bounded(r, u64(g.rules[rule].alternatives.len))) }
+    let alt = g.rules[rule].alternatives[pick]
+    var pos = at
+    var i = 0usize
+    while i < alt.symbols.len {
+        let s = alt.symbols[i]
+        if s.terminal {
+            if pos + s.text.len > out.len { ret (pos, Limit) }
+            mem.copy[u8](out[pos..pos + s.text.len], s.text)
+            pos += s.text.len
+        } else {
+            let (next_pos, e) = expand(r, g, s.rule, depth + 1usize, max_depth, min_len, out, pos)
+            if e != ok { ret (next_pos, e) }
+            pos = next_pos
+        }
+        i += 1usize
+    }
+    ret (pos, ok)
+}
+
+// A sentence from `start` into `out`; answers its length. `Limit` when `out`
+// is too small, `InvalidCorpus` for a rule with no alternatives or no end.
+fn grammar(r: *rand.Pcg64, g: Grammar, start: usize, max_depth: usize, out: []u8) -> (usize, err) {
+    var min_len: [64]usize = zero
+    let e = shortest_lengths(g, min_len[..])
+    if e != ok { ret (0usize, e) }
+    let (n, expand_error) = expand(r, g, start, 0usize, max_depth, min_len[..], out, 0usize)
+    ret (n, expand_error)
+}
+
+fn shortest(g: Grammar, start: usize, out: []u8) -> (usize, err) {
+    var r = rand.pcg64(0u64, 0u64)
+    let (n, e) = grammar(&r, g, start, 0usize, out)
+    ret (n, e)
+}
+
+fn render(g: Grammar, nodes: []const Node, node: usize, replaced: []const bool, min_len: []const usize, out: []u8, at: usize) -> (usize, err) {
+    if replaced[node] {
+        var r = rand.pcg64(0u64, 0u64)
+        let (pos, e) = expand(&r, g, nodes[node].rule, 0usize, 0usize, min_len, out, at)
+        ret (pos, e)
+    }
+    if nodes[node].terminal {
+        let text = nodes[node].text
+        if at + text.len > out.len { ret (at, Limit) }
+        mem.copy[u8](out[at..at + text.len], text)
+        ret (at + text.len, ok)
+    }
+    var pos = at
+    var child = node + 1usize
+    while child < nodes.len {
+        if nodes[child].parent == node {
+            let (next_pos, e) = render(g, nodes, child, replaced, min_len, out, pos)
+            if e != ok { ret (next_pos, e) }
+            pos = next_pos
+        }
+        child += 1usize
+    }
+    ret (pos, ok)
+}
+
+fn depth_of(nodes: []const Node, node: usize) -> usize {
+    var d = 0usize
+    var i = node
+    while i != 0usize {
+        i = nodes[i].parent
+        d += 1usize
+    }
+    ret d
+}
+
+fn under_replaced(nodes: []const Node, node: usize, replaced: []const bool) -> bool {
+    var i = node
+    while i != 0usize {
+        i = nodes[i].parent
+        if replaced[i] { ret true }
+    }
+    ret false
+}
+
+fn tree_fails(target_fn: Target, g: Grammar, nodes: []const Node, replaced: []const bool, min_len: []const usize, scratch: []u8, seed: u64) -> (bool, err) {
+    let (n, e) = render(g, nodes, 0usize, replaced, min_len, scratch, 0usize)
+    if e != ok { ret (false, e) }
+    ret (target_fn(Input { bytes: scratch[..n], seed: seed }) != ok, ok)
+}
+
+fn mark(set: []const usize, lo: usize, hi: usize, replaced: []bool, value: bool) {
+    var i = lo
+    while i < hi {
+        replaced[set[i]] = value
+        i += 1usize
+    }
+}
+
+// The minimized sentence into `out` (`scratch` holds candidates; both at least
+// the longest sentence the tree can render); answers its length.
+fn minimize_tree(target_fn: Target, g: Grammar, nodes: []const Node, seed: u64, out: []u8, scratch: []u8) -> (usize, err) {
+    if nodes.len == 0usize || nodes.len > MAX_NODES { ret (0usize, TooLarge) }
+    var min_len: [64]usize = zero
+    let lengths_error = shortest_lengths(g, min_len[..])
+    if lengths_error != ok { ret (0usize, lengths_error) }
+    var replaced: [256]bool = zero
+    var level_nodes: [256]usize = zero
+    var max_depth = 0usize
+    var i = 0usize
+    while i < nodes.len {
+        let d = depth_of(nodes, i)
+        if d > max_depth { max_depth = d }
+        i += 1usize
+    }
+    var level = 0usize
+    while level <= max_depth {
+        var count = 0usize
+        i = 0usize
+        while i < nodes.len {
+            if !nodes[i].terminal && depth_of(nodes, i) == level && !under_replaced(nodes, i, replaced[..]) {
+                level_nodes[count] = i
+                count += 1usize
+            }
+            i += 1usize
+        }
+        if count > 0usize {
+            // The whole level first, then ddmin over what must stand.
+            mark(level_nodes[..], 0usize, count, replaced[..], true)
+            let (all_fail, all_error) = tree_fails(target_fn, g, nodes, replaced[..], min_len[..], scratch, seed)
+            if all_error != ok { ret (0usize, all_error) }
+            if !all_fail {
+                mark(level_nodes[..], 0usize, count, replaced[..], false)
+                var n = 2usize
+                while count >= 2usize {
+                    var some = false
+                    var k = 0usize
+                    while k < n && !some {
+                        let lo = k * count / n
+                        let hi = (k + 1usize) * count / n
+                        mark(level_nodes[..], lo, hi, replaced[..], true)
+                        let (fails, fail_error) = tree_fails(target_fn, g, nodes, replaced[..], min_len[..], scratch, seed)
+                        if fail_error != ok { ret (0usize, fail_error) }
+                        if fails {
+                            var j = hi
+                            while j < count {
+                                level_nodes[lo + j - hi] = level_nodes[j]
+                                j += 1usize
+                            }
+                            count -= hi - lo
+                            if n > 2usize { n -= 1usize }
+                            some = true
+                        } else {
+                            mark(level_nodes[..], lo, hi, replaced[..], false)
+                        }
+                        k += 1usize
+                    }
+                    if !some {
+                        if n >= count { count = 0usize } else {
+                            n *= 2usize
+                            if n > count { n = count }
+                        }
+                    }
+                }
+            }
+        }
+        level += 1usize
+    }
+    let (len, render_error) = render(g, nodes, 0usize, replaced[..], min_len[..], out, 0usize)
+    ret (len, render_error)
+}

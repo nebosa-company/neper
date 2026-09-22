@@ -39,16 +39,43 @@ surface by exact heading; it never scans the whole document for a short name.
 
 ```neper
 type Arena = struct { base: *u8, cap: usize, off: usize }
-type Stats = struct { used: usize, capacity: usize }
-error Exhausted
+type Pool = struct { storage: []u8, size: usize, head: usize, free_count: usize }
+type Slab = struct { storage: []u8, page_size: usize, next_page: usize, classes: [9]Pool }
+type Buddy = struct { storage: []u8, min_block: usize, orders: usize, total: usize, heads: [32]usize }
+error Invalid
+error Full
+const NONE: usize = 18446744073709551615usize
+const CLASS_COUNT: usize = 9usize
+const MAX_ORDERS: usize = 32usize
 
 fn arena_from(buf: []u8) -> Arena
+fn copy[T: type](dst: []T, src: []const T)
+fn eq[T: type](x: []const T, y: []const T) -> bool
+fn get_link(storage: []u8, at: usize) -> usize
+fn put_link(storage: []u8, at: usize, value: usize)
+fn is_power_of_two(x: usize) -> bool
+fn pool(storage: []u8, object_size: usize, align: usize) -> (Pool, err)
+fn pool_thread(p: *Pool, lo: usize, hi: usize)
+fn pool_alloc(p: *Pool) -> (usize, err)
+fn pool_slot(p: *Pool, offset: usize) -> []u8
+fn pool_free(p: *Pool, offset: usize) -> err
+fn pool_free_count(p: *Pool) -> usize
+fn slab(storage: []u8, page_size: usize) -> (Slab, err)
+fn slab_class(size: usize) -> usize
+fn slab_alloc(s: *Slab, size: usize) -> (usize, err)
+fn slab_slot(s: *Slab, offset: usize, size: usize) -> []u8
+fn slab_free(s: *Slab, offset: usize, size: usize) -> err
+fn buddy(storage: []u8, min_block: usize) -> (Buddy, err)
+fn buddy_order(b: *Buddy, size: usize) -> usize
+fn buddy_push(b: *Buddy, order: usize, at: usize)
+fn buddy_remove(b: *Buddy, order: usize, at: usize) -> bool
+fn buddy_alloc(b: *Buddy, size: usize) -> (usize, err)
+fn buddy_free(b: *Buddy, offset: usize, size: usize) -> err
+fn buddy_largest_free(b: *Buddy) -> usize
 fn alloc[T: type](a: *Arena, n: usize) -> ([]T, err)
 fn mark(a: *Arena) -> usize
 fn reset(a: *Arena, m: usize)
 fn view(a: *const Arena, start: usize, len: usize) -> []u8
-fn copy[T: type](dst: []T, src: []const T)
-fn eq[T: type](x: []const T, y: []const T) -> bool
 fn cast[P: type, Q: type](p: Q) -> P
 fn bitcast[T: type, U: type](x: U) -> T
 fn address_of[T: type](p: *const T) -> usize
@@ -4944,6 +4971,7 @@ type Sha3_512 = struct { lanes: [25]u64, block: [72]u8, block_len: u8 }
 type Blake2b = struct { h: [8]u64, t_lo: u64, t_hi: u64, block: [128]u8, block_len: usize, out_len: usize }
 type Blake3 = struct { key: [8]u32, cv: [8]u32, chunk_counter: u64, block: [64]u8, block_len: usize, blocks_compressed: usize, flags: u32, stack: [432]u32, stack_len: usize }
 type Blake3Output = struct { cv: [8]u32, block: [16]u32, counter: u64, block_len: u32, flags: u32 }
+type Shake = struct { lanes: [25]u64, block: [168]u8, block_len: usize, rate: usize, offset: usize, squeezing: bool }
 
 fn rotr32(x: u32, n: u32) -> u32
 fn rotr64(x: u64, n: u32) -> u64
@@ -5019,6 +5047,12 @@ fn blake3(data: []const u8) -> [32]u8
 fn blake3_xof(data: []const u8, out: []u8)
 fn blake3_keyed(key: [32]u8, data: []const u8) -> [32]u8
 fn blake3_derive_key(context: []const u8, key_material: []const u8, out: []u8)
+fn shake128_init() -> Shake
+fn shake256_init() -> Shake
+fn shake_absorb(s: *Shake, data: []const u8)
+fn shake_squeeze(s: *Shake, out: []u8)
+fn shake128(data: []const u8, out: []u8)
+fn shake256(data: []const u8, out: []u8)
 ```
 
 ### `e.crypto.mac`
@@ -5188,6 +5222,8 @@ type P256Int = struct { v: [8]u32 }
 type P256Affine = struct { x: P256Int, y: P256Int }
 type P256Point = struct { x: P256Int, y: P256Int, z: P256Int }
 type P256SecretKey = struct { bytes: [32]u8 }
+type XmssSecretKey = struct { index: u32, height: usize, sk_seed: [32]u8, sk_prf: [32]u8, pub_seed: [32]u8, root: [32]u8 }
+type XmssPublicKey = struct { height: usize, root: [32]u8, pub_seed: [32]u8 }
 error InvalidKey
 error InvalidSignature
 error TooSmall
@@ -5300,6 +5336,63 @@ fn rsa_pss(a: *mem.Arena, n: []const u8, d: []const u8, message: []const u8, sal
 fn rsa_public_op(a: *mem.Arena, n: []const u8, e: []const u8, signature: []const u8, out: []u8) -> bool
 fn rsa_pss_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8) -> bool
 fn rsa_pkcs1v15_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8) -> bool
+fn dsa_q() -> i64
+fn dsa_gamma1() -> i64
+fn dsa_gamma2() -> i64
+fn dsa_beta() -> i64
+fn dsa_bitrev8(i: usize) -> usize
+fn dsa_zetas() -> [256]i64
+fn dsa_ntt(w: []i64)
+fn dsa_intt(w: []i64)
+fn dsa_mul_acc(h: []i64, f: []const i64, g: []const i64)
+fn dsa_add(f: []i64, g: []const i64)
+fn dsa_sub(f: []i64, g: []const i64)
+fn dsa_center(x: i64) -> i64
+fn dsa_abs(x: i64) -> i64
+fn dsa_norm_reaches(f: []const i64, bound: i64) -> bool
+fn dsa_pack(values: []const i64, bits: usize, out: []u8)
+fn dsa_unpack(bytes: []const u8, bits: usize, out: []i64)
+fn dsa_pack_centered(f: []const i64, b: i64, bits: usize, out: []u8)
+fn dsa_unpack_centered(bytes: []const u8, b: i64, bits: usize, out: []i64)
+fn dsa_rej_ntt_poly(rho: []const u8, s: u8, r: u8, out: []i64)
+fn dsa_rej_bounded_poly(rho: []const u8, nonce: usize, out: []i64)
+fn dsa_expand_a(rho: []const u8, a: []i64)
+fn dsa_expand_mask(rho: []const u8, kappa: usize, y: []i64)
+fn dsa_sample_in_ball(c_tilde: []const u8, c: []i64)
+fn dsa_power2round(r: i64) -> (i64, i64)
+fn dsa_decompose(r: i64) -> (i64, i64)
+fn dsa_high_bits(r: i64) -> i64
+fn dsa_make_hint(z: i64, r: i64) -> u8
+fn dsa_use_hint(h: u8, r: i64) -> i64
+fn ml_dsa_pk_len() -> usize
+fn ml_dsa_sk_len() -> usize
+fn ml_dsa_sig_len() -> usize
+fn ml_dsa_keygen(seed: [32]u8, pk: []u8, sk: []u8) -> err
+fn dsa_mu(tr: []const u8, message: []const u8, ctx: []const u8) -> [64]u8
+fn dsa_absorb_w1(xof: *hash.Shake, w1: []const i64)
+fn ml_dsa_sign(sk: []const u8, message: []const u8, ctx: []const u8, sig: []u8) -> err
+fn ml_dsa_verify(pk: []const u8, message: []const u8, ctx: []const u8, sig: []const u8) -> bool
+fn ml_dsa(seed: [32]u8, message: []const u8, ctx: []const u8, pk: []u8, sk: []u8, sig: []u8) -> (bool, err)
+fn xmss_sha2_10_256_height() -> usize
+fn xmss_nodes_len(height: usize) -> usize
+fn xmss_sig_len(height: usize) -> usize
+fn xmss_hash(prefix: u8, key: []const u8, m: []const u8) -> [32]u8
+fn xmss_adrs_set(adrs: []u8, word: usize, value: u32)
+fn xmss_adrs_get(adrs: []const u8, word: usize) -> u32
+fn xmss_adrs_type(adrs: []u8, kind: u32)
+fn xmss_chain(x: []u8, start: usize, steps: usize, adrs: []u8, seed: []const u8)
+fn xmss_wots_sk(sk_seed: []const u8, seed: []const u8, adrs: []u8, out: []u8)
+fn xmss_digits(msg: []const u8) -> [67]u8
+fn xmss_rand_hash(left: []const u8, right: []const u8, seed: []const u8, adrs: []u8) -> [32]u8
+fn xmss_ltree(pk: []u8, seed: []const u8, adrs: []u8) -> [32]u8
+fn xmss_leaf(sk_seed: []const u8, seed: []const u8, index: u32) -> [32]u8
+fn xmss_node_at(height: usize, level: usize, j: usize) -> usize
+fn xmss_keygen(height: usize, sk_seed: [32]u8, sk_prf: [32]u8, pub_seed: [32]u8, nodes: []u8) -> (XmssSecretKey, err)
+fn xmss_public(sk: XmssSecretKey) -> XmssPublicKey
+fn xmss_message_digest(r: []const u8, root: []const u8, index: u32, message: []const u8) -> [32]u8
+fn xmss_sign(sk: *XmssSecretKey, nodes: []const u8, message: []const u8, sig: []u8) -> err
+fn xmss_verify(pk: XmssPublicKey, message: []const u8, sig: []const u8) -> bool
+fn xmss(height: usize, sk_seed: [32]u8, sk_prf: [32]u8, pub_seed: [32]u8, nodes: []u8, message: []const u8, sig: []u8) -> (bool, err)
 ```
 
 `Ed25519SecretKey.bytes` is the 32-byte seed form. Verification rejects non-canonical
@@ -5342,6 +5435,31 @@ fn dh_public(a: *mem.Arena, secret: []const u8, out: []u8) -> (usize, err)
 fn dh_valid_public(a: *mem.Arena, public: []const u8) -> bool
 fn dh_shared(a: *mem.Arena, secret: []const u8, peer_public: []const u8, out: []u8) -> (usize, err)
 fn dh(a: *mem.Arena, secret: []const u8, peer_public: []const u8, out: []u8) -> (usize, err)
+fn kem_q() -> i32
+fn kem_bitrev7(i: usize) -> usize
+fn kem_zetas() -> [128]i32
+fn kem_ntt(f: []i32)
+fn kem_intt(f: []i32)
+fn kem_mul_acc(h: []i32, f: []const i32, g: []const i32)
+fn kem_sample_ntt(rho: []const u8, j: u8, i: u8, out: []i32)
+fn kem_sample_cbd(seed: []const u8, nonce: u8, out: []i32)
+fn kem_encode(f: []const i32, d: usize, out: []u8)
+fn kem_decode(bytes: []const u8, d: usize, out: []i32)
+fn kem_compress(f: []i32, d: usize)
+fn kem_decompress(f: []i32, d: usize)
+fn kem_add(f: []i32, g: []const i32)
+fn kem_sub(f: []i32, g: []const i32)
+fn kem_matrix(rho: []const u8, a: []i32)
+fn ml_kem_ek_len() -> usize
+fn ml_kem_dk_len() -> usize
+fn ml_kem_ct_len() -> usize
+fn kem_pke_keygen(d: [32]u8, ek: []u8, dk: []u8)
+fn kem_pke_encrypt(ek: []const u8, m: []const u8, r: []const u8, c: []u8)
+fn kem_pke_decrypt(dk: []const u8, c: []const u8) -> [32]u8
+fn ml_kem_keygen(d: [32]u8, z: [32]u8, ek: []u8, dk: []u8) -> err
+fn ml_kem_encaps(ek: []const u8, m: [32]u8, c: []u8) -> ([32]u8, err)
+fn ml_kem_decaps(dk: []const u8, c: []const u8) -> ([32]u8, err)
+fn ml_kem(d: [32]u8, z: [32]u8, m: [32]u8, ek: []u8, dk: []u8, c: []u8) -> ([32]u8, [32]u8, err)
 ```
 
 The scalar is clamped by the operation. An all-zero shared secret is `InvalidKey`.
@@ -6299,6 +6417,8 @@ fn open(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (M
 fn bytes(m: Mapping) -> []u8
 fn flush(m: Mapping) -> err
 fn close(m: own Mapping) -> err
+fn map(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (Mapping, err)
+fn unmap(m: own Mapping) -> err
 ```
 
 Offset and length are byte values; the implementation performs page alignment
@@ -6436,8 +6556,18 @@ type Barrier = struct { state: *void }
 type Guard = resource(release) struct { m: *Mutex }
 type ReadGuard = resource(read_release) struct { l: *RwLock }
 type WriteGuard = resource(write_release) struct { l: *RwLock }
+type BarrierState = struct { parties: u32, waiting: Atomic[u32], generation: Atomic[u32], open: Atomic[u32] }
+type SpinLock = struct { state: Atomic[u32] }
+type Rcu = struct { published: Atomic[u32], epoch: Atomic[u64], readers: []Atomic[u64] }
 error Invalid
+const WRITER_HELD: u32 = 2147483648u32
+const READER_MASK: u32 = 2147483647u32
+const COUNT_MAX: u32 = 4294967295u32
+const SPIN_ROUNDS: u32 = 8u32
+const SPIN_CAP: u32 = 256u32
 
+fn deadline_for(timeout: time.Duration) -> i64
+fn remaining_for(deadline: i64) -> i64
 fn mutex() -> Mutex
 fn mutex_lock(m: *Mutex)
 fn mutex_try_lock(m: *Mutex) -> bool
@@ -6474,6 +6604,7 @@ fn semaphore_post(s: *Semaphore, count: u32) -> err
 fn event(manual_reset: bool, signaled: bool) -> Event
 fn event_set(e: *Event)
 fn event_reset(e: *Event)
+fn event_take(e: *Event) -> bool
 fn event_wait(e: *Event)
 fn event_wait_for(e: *Event, timeout: time.Duration) -> bool
 fn once() -> Once
@@ -6481,6 +6612,17 @@ fn once_call[Ctx: type](o: *Once, ctx: *Ctx, f: fn(*Ctx) -> err) -> err
 fn barrier(a: *mem.Arena, parties: u32) -> (Barrier, err)
 fn barrier_wait(b: *Barrier) -> bool
 fn barrier_close(b: *Barrier)
+fn spinlock() -> SpinLock
+fn spin_try_lock(s: *SpinLock) -> bool
+fn spin_lock(s: *SpinLock)
+fn spin_unlock(s: *SpinLock)
+fn rcu(readers: []Atomic[u64], initial: u32) -> (Rcu, err)
+fn rcu_read_lock(r: *Rcu, thread: usize) -> u32
+fn rcu_read_unlock(r: *Rcu, thread: usize)
+fn rcu_load(r: *Rcu) -> u32
+fn rcu_update(r: *Rcu, new_index: u32) -> u32
+fn rcu_synchronize(r: *Rcu)
+fn rcu_all_at(r: *Rcu, g: u64) -> bool
 ```
 
 All waits recheck their state after `os.wait_u32`, so spurious wakes are invisible to
@@ -6852,17 +6994,7 @@ file and provides no mutation, decompression or global cache.
 type Backend = enum u8 { Cpu, Vulkan, Cuda }
 type DeviceKind = enum u8 { Unknown, Cpu, Integrated, Discrete, Virtual, Other }
 type DeviceKey = struct { backend: Backend, uuid: [16]u8 }
-type DeviceInfo = struct {
-    key: DeviceKey,
-    key_valid: bool,
-    index: u32,
-    name: str,
-    kind: DeviceKind,
-    memory_bytes: u64,
-    memory_known: bool,
-    capabilities: []const Cap,
-    supported: bool,
-}
+type DeviceInfo = struct { key: DeviceKey, key_valid: bool, index: u32, name: str, kind: DeviceKind, memory_bytes: u64, memory_known: bool, capabilities: []const Cap, supported: bool }
 type Device = struct { state: *void }
 type Queue = struct { state: *void }
 type StagingLimits = struct { blocks: u32, block_bytes: usize }
@@ -6873,13 +7005,29 @@ type Id = struct { x: u32, y: u32, z: u32 }
 type FaultKind = enum u8 { Bounds, Null, Tag, Alignment, Overflow, DivideByZero }
 type FaultRecord = struct { kernel: u32, kind: FaultKind, site: u32, gid: Id }
 type Cap = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }
-type Scope = enum u8 { Workgroup, Device }
 type Format = enum u8 { Rgba8, Bgra8 }
 type Image = struct { data: Buf[u32], width: u32, height: u32, format: Format }
 type SurfaceKind = enum u8 { Offscreen, Win32, X11, Wayland, Cocoa }
 type Surface = struct { kind: SurfaceKind, handle: *void, context: *void }
 type Target = struct { state: *void }
 type Frame = struct { image: Image, serial: u64 }
+type Scope = enum u8 { Workgroup, Device }
+type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, live: bool }
+type DeviceState = struct { arena: *mem.Arena, owner: u32, closed: bool, buffers: []Buffer, queues: u32 }
+type QueueState = struct { device: *DeviceState, index: u32, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
+type TargetState = struct { queue: *QueueState, images: [2]Image, front: usize, width: u32, height: u32, format: Format, serial: u64, acquired: bool, closed: bool }
+var gid: Id = zero
+var lid: Id = zero
+var wgid: Id = zero
+var next_owner: u32 = 1u32
+var open_devices: [16]*DeviceState = zero
+var open_count: usize = 0usize
+var launch_size: [3]usize = zero
+var launch_groups: [3]usize = zero
+var launch_active: bool = zero
+var launch_queue: *QueueState = zero
+type SortArgs = struct { keys: []u32, n: u32, j: u32, k: u32 }
+type AttentionArgs = struct { query: []const f32, key: []const f32, value: []const f32, out: []f32, n: u32, d: u32, tile: u32, scale: f32 }
 error NoDevice
 error AmbiguousDevice
 error Unsupported
@@ -6890,27 +7038,44 @@ error WrongDevice
 error InvalidHandle
 error Fault
 error Outdated
+const MAX_BUFFERS: usize = 4096usize
+const MAX_DEVICES: usize = 16usize
+const MAX_QUEUES: usize = 64usize
+const MAX_AXIS: usize = 4294967295usize
+const MAX_IMAGE_SIDE: u32 = 16384u32
+const DONE: usize = 4294967295usize
+const FAULTED: usize = 4294967294usize
+const MAX_SORT: usize = 16777216usize
+const MAX_HEAD: usize = 256usize
 
-fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err)
+fn cpu_capabilities(a: *mem.Arena) -> ([]const Cap, err)
+fn cpu_info(a: *mem.Arena) -> (DeviceInfo, err)
 fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo, err)
+fn state_of(device: *Device) -> (*DeviceState, err)
+fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err)
 fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err)
 fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err)
 fn close(device: *Device) -> err
 fn has(device: *Device, capability: Cap) -> bool
 fn queue(device: *Device) -> (*Queue, err)
 fn queue_with(device: *Device, limits: StagingLimits) -> (*Queue, err)
+fn queue_state(q: *Queue) -> (*QueueState, err)
+fn slot_of(state: *QueueState, owner: u32, slot: u32, generation: u32) -> (usize, err)
 fn alloc[T: type](q: *Queue, n: usize) -> (Buf[T], err)
+fn host_bytes[T: type](src: []const T) -> []u8
 fn upload[T: type](q: *Queue, src: []const T) -> (Buf[T], err)
 fn len[T: type](buf: Buf[T]) -> usize
 fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err
-fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err
 fn token(q: *Queue) -> (Token, err)
+fn token_device(token_value: Token) -> (*DeviceState, err)
 fn wait_for(q: *Queue, dependency: Token) -> err
 fn done(token_value: Token) -> (bool, err)
 fn wait(token_value: Token) -> err
+fn report_fault(state: *QueueState) -> err
+fn last_fault(q: *Queue) -> (FaultRecord, bool)
+fn fault(kind: u32, site: u32)
 fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err
 fn sync(q: *Queue) -> err
-fn last_fault(q: *Queue) -> (FaultRecord, bool)
 fn release[T: type](q: *Queue, buf: Buf[T]) -> err
 fn grid1(x: usize) -> Grid
 fn grid2(x: usize, y: usize) -> Grid
@@ -6919,6 +7084,9 @@ fn image(q: *Queue, width: u32, height: u32, format: Format) -> (Image, err)
 fn write_image(q: *Queue, dst: Image, x: u32, y: u32, width: u32, height: u32, src: []const u32) -> err
 fn read_image(q: *Queue, src: Image, dst: []u32) -> err
 fn release_image(q: *Queue, img: Image) -> err
+fn target_state(t: *Target) -> (*TargetState, err)
+fn queue_state_of(state: *QueueState) -> (*QueueState, err)
+fn target_images(state: *TargetState, width: u32, height: u32) -> err
 fn open_target(q: *Queue, surface: Surface, width: u32, height: u32, format: Format) -> (*Target, err)
 fn extent(t: *Target) -> (u32, u32)
 fn resize(t: *Target, width: u32, height: u32) -> err
@@ -6926,6 +7094,24 @@ fn acquire(t: *Target) -> (Frame, err)
 fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err)
 fn presented(t: *Target) -> (Image, err)
 fn close_target(t: *Target) -> err
+fn groups_along(invocations: usize, size: usize) -> (usize, err)
+fn launch_view(q: *Queue, owner: u32, slot: u32, generation: u32) -> (usize, usize, err)
+fn set_ids(group: usize, local: usize)
+fn frame_pc(frames: []u8, at: usize) -> usize
+fn write_decimal(out: []u8, at: usize, v: usize) -> usize
+fn write_text(out: []u8, at: usize, text: str) -> usize
+fn write_id(out: []u8, at0: usize, group: usize, local: usize) -> usize
+fn divergence(group: usize, stopped_local: usize, stopped_at: usize, other_local: usize, other_at: usize)
+fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: usize, shared_bytes: usize, step: fn(ctx: *void, frame: *u8, workgroup: *u8), ctx: *void) -> err
+fn device_slice[T: type](state: *QueueState, buf: Buf[T]) -> ([]T, err)
+fn mark_done(frame: *u8)
+fn bitonic_step(keys: []u32, i: u32, j: u32, k: u32)
+fn sort_step(ctx: *void, frame: *u8, workgroup: *u8)
+fn sort_bitonic(device: *Device, q: *Queue, buffer: Buf[u32], n: usize) -> err
+fn attention_row(args: *AttentionArgs, row: usize)
+fn attention_step(ctx: *void, frame: *u8, workgroup: *u8)
+fn attention_flash(device: *Device, q: *Queue, query: Buf[f32], key: Buf[f32], value: Buf[f32], out: Buf[f32], n: usize, d: usize, tile: usize, scale: f32) -> (usize, err)
+fn launch[K: fn](q: *Queue, grid: Grid, args: ...) -> err
 ```
 
 Presentation (spec section 10, D791) is images over kernels: an `Image` is a `Buf[u32]`
@@ -6991,17 +7177,50 @@ type WriteStep = struct { max_bytes: usize, failure: err }
 type ScriptedReader = struct { state: *void }
 type ScriptedWriter = struct { state: *void }
 type Schedule = struct { state: *void }
+type ReaderState = struct { steps: []ReadStep, index: usize, offset: usize }
+type WriterState = struct { steps: []WriteStep, index: usize, capture: []u8, used: usize }
+type ScheduleState = struct { turns: []u64, index: usize }
+type Verdict = enum u8 { Match, Differ }
+type FaultKind = enum u8 { Nth, EveryKth, Probability }
+type FaultPlan = struct { kind: FaultKind, n: u64, p: f64, r: *rand.Pcg64, site: u64, calls: u64, failure: err }
+type FaultyReaderState = struct { inner: io.Reader, plan: *FaultPlan, site: u64 }
+type FaultyWriterState = struct { inner: io.Writer, plan: *FaultPlan, site: u64 }
+type Exchange = struct { method: []const u8, path: []const u8, body_hash: u64, response: []const u8 }
+type Cassette = struct { exchanges: []Exchange, count: usize, match_body: bool }
 
 fn clock(instant: time.Instant, timestamp: time.Timestamp) -> Clock
 fn advance(c: *Clock, elapsed: time.Duration) -> err
 fn scripted_reader(a: *mem.Arena, steps: []const ReadStep) -> (ScriptedReader, err)
-fn scripted_writer(a: *mem.Arena, steps: []const WriteStep, capacity: usize) -> (ScriptedWriter, err)
+fn scripted_read(ctx: *void, dst: []u8) -> (usize, err)
 fn reader(script: *ScriptedReader) -> io.Reader
+fn scripted_writer(a: *mem.Arena, steps: []const WriteStep, capacity: usize) -> (ScriptedWriter, err)
+fn scripted_write(ctx: *void, src: []const u8) -> (usize, err)
 fn writer(script: *ScriptedWriter) -> io.Writer
 fn captured(script: *const ScriptedWriter) -> []const u8
 fn schedule(a: *mem.Arena, turns: []const u64) -> (Schedule, err)
 fn checkpoint(s: *Schedule, participant: u64) -> (bool, err)
 fn complete(s: *const Schedule) -> bool
+fn golden(expected: []const u8, actual: []const u8) -> (Verdict, usize)
+fn golden_update(w: *io.Writer, actual: []const u8) -> err
+fn count_lines(text: []const u8) -> usize
+fn split_lines(a: *mem.Arena, text: []const u8) -> ([]str, err)
+fn golden_diff(a: *mem.Arena, w: *io.Writer, expected: []const u8, actual: []const u8) -> err
+fn starts_with(text: []const u8, prefix: []const u8) -> bool
+fn mask(src: []const u8, volatile: []const str, out: []u8) -> (usize, err)
+fn snapshot[Ctx: type](a: *mem.Arena, ctx: *Ctx, serialise: fn(*Ctx, *io.Writer) -> err, stored: []const u8, volatile: []const str, capacity: usize) -> (Verdict, usize, err)
+fn fault_nth(n: u64, failure: err) -> FaultPlan
+fn fault_every(k: u64, failure: err) -> FaultPlan
+fn fault_probability(p: f64, r: *rand.Pcg64, failure: err) -> FaultPlan
+fn inject_fault(plan: *FaultPlan, site: u64) -> bool
+fn faulty_read(ctx: *void, dst: []u8) -> (usize, err)
+fn faulty_reader(a: *mem.Arena, inner: io.Reader, plan: *FaultPlan, site: u64) -> (io.Reader, err)
+fn faulty_write(ctx: *void, src: []const u8) -> (usize, err)
+fn faulty_flush(ctx: *void) -> err
+fn faulty_writer(a: *mem.Arena, inner: io.Writer, plan: *FaultPlan, site: u64) -> (io.Writer, err)
+fn fnv1a(bytes: []const u8) -> u64
+fn parse_request(request: []const u8) -> (Exchange, err)
+fn http_record(c: *Cassette, request: []const u8, response: []const u8) -> err
+fn http_replay(c: *const Cassette, request: []const u8) -> ([]const u8, bool)
 ```
 
 These are caller-owned deterministic test doubles, never replacements for ambient
@@ -7018,13 +7237,27 @@ proof. Production APIs accept explicit clock/I/O/control inputs where applicable
 ```neper
 type Counter = struct { file_id: u32, region_id: u32, hits: u64 }
 type Report = struct { counters: []const Counter }
+var table: [4096]Counter = zero
+var used: usize = 0usize
+type Summary = struct { covered: usize, total: usize, percent: f64 }
+type Branch = struct { file_id: u32, taken: u32, not_taken: u32 }
+type Vector = struct { mask: u32, outcome: bool }
+type Pair = struct { found: bool, first: usize, second: usize }
 error InvalidProfile
 error TooLarge
+const MAX_COUNTERS: usize = 4096usize
 
+fn hit(file_id: u32, region_id: u32)
 fn snapshot(dst: []Counter) -> ([]Counter, err)
 fn reset()
+fn before(a: Counter, b: Counter) -> bool
 fn merge(a: *mem.Arena, profiles: []const Report) -> (Report, err)
+fn put_number(w: *io.Writer, v: u64) -> err
 fn write_json(writer: *io.Writer, report: *const Report) -> err
+fn hits_of(counters: []const Counter, file_id: u32, region_id: u32) -> u64
+fn blocks(counters: []const Counter, total_regions: usize) -> Summary
+fn branches(counters: []const Counter, pairs: []const Branch) -> (usize, usize)
+fn mcdc(n: u32, vectors: []const Vector, pairs: []Pair) -> (usize, err)
 ```
 
 The compiler assigns stable file and region identifiers and owns instrumentation.
@@ -7037,11 +7270,40 @@ type Input = struct { bytes: []const u8, seed: u64 }
 type Options = struct { max_input: usize, max_runs: u64, deadline: time.Instant }
 type Result = struct { runs: u64, failing: Input, failed: bool }
 type Target = fn(input: Input) -> err
+type Symbol = struct { terminal: bool, rule: usize, text: []const u8 }
+type Alternative = struct { symbols: []const Symbol }
+type Rule = struct { alternatives: []const Alternative }
+type Grammar = struct { rules: []const Rule }
+type Node = struct { terminal: bool, rule: usize, parent: usize, text: []const u8 }
 error InvalidCorpus
 error Limit
+error TooLarge
+const DEFAULT_MAX_INPUT: usize = 4096usize
+const MAX_RULES: usize = 64usize
+const MAX_NODES: usize = 256usize
+const UNREACHABLE: usize = 1000000000usize
 
+fn interesting(r: *rand.Pcg64) -> u8
+fn mutate(r: *rand.Pcg64, base: []const u8, corpus: []const Input, buffer: []u8, max_input: usize) -> usize
+fn past(deadline: time.Instant) -> (bool, err)
+fn keep(a: *mem.Arena, bytes: []const u8, seed: u64) -> (Input, err)
 fn run(a: *mem.Arena, target_fn: Target, corpus: []const Input, options: Options) -> (Result, err)
+fn still_fails(target_fn: Target, candidate: []const u8, seed: u64) -> bool
 fn minimize(a: *mem.Arena, target_fn: Target, failing: Input, deadline: time.Instant) -> (Input, err)
+fn terminal(text: []const u8) -> Symbol
+fn nonterminal(rule: usize) -> Symbol
+fn alternative_len(g: Grammar, alt: Alternative, min_len: []const usize) -> usize
+fn shortest_lengths(g: Grammar, min_len: []usize) -> err
+fn shortest_alternative(g: Grammar, rule: usize, min_len: []const usize) -> usize
+fn expand(r: *rand.Pcg64, g: Grammar, rule: usize, depth: usize, max_depth: usize, min_len: []const usize, out: []u8, at: usize) -> (usize, err)
+fn grammar(r: *rand.Pcg64, g: Grammar, start: usize, max_depth: usize, out: []u8) -> (usize, err)
+fn shortest(g: Grammar, start: usize, out: []u8) -> (usize, err)
+fn render(g: Grammar, nodes: []const Node, node: usize, replaced: []const bool, min_len: []const usize, out: []u8, at: usize) -> (usize, err)
+fn depth_of(nodes: []const Node, node: usize) -> usize
+fn under_replaced(nodes: []const Node, node: usize, replaced: []const bool) -> bool
+fn tree_fails(target_fn: Target, g: Grammar, nodes: []const Node, replaced: []const bool, min_len: []const usize, scratch: []u8, seed: u64) -> (bool, err)
+fn mark(set: []const usize, lo: usize, hi: usize, replaced: []bool, value: bool)
+fn minimize_tree(target_fn: Target, g: Grammar, nodes: []const Node, seed: u64, out: []u8, scratch: []u8) -> (usize, err)
 ```
 
 Mutation is deterministic from each explicit seed. Corpus persistence, subprocess
