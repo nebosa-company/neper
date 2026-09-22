@@ -17994,3 +17994,23 @@ its conversion. Not done, in Flutter's order of worth: skipping reconcile for
 unchanged subtrees (the walk is ~6 µs an element, so thousands of *visible*
 elements would need it), a pixel shift for scrolling, a glyph cache, a u8
 canvas.
+
+## D915 — The stream's closing suites: goldens, pins and the static gate re-pinned
+
+Both full suites pass on the tree of D912. Getting there re-pinned what the
+stream's last batches had moved, each for a named reason. `e.mem` grew by
+the allocators, and every program carries `e.mem`, so every snapshot
+golden of the tools corpus (twenty-one per host), the `e.mem` interface
+and body digests in the context and manifest goldens, the twenty-one new
+inline-decision rows of the explain golden and a reject diagnostic whose
+span points into `mem.e` all moved; the sc500k arena cells moved by one
+megabyte on Windows and four on Linux release under D506's zero-growth
+rule, re-pinned here. `e.algo.hash` doubled its module-scope functions, so
+the artifact-interface pin in both runners reads 26. Two fence-tooling
+gaps surfaced under the compiler-resolved surface check: a regenerated
+fence kept a constant's trailing comment, and `join_structs` skipped
+`union enum` heads; both fixed. The audit rule that made the re-pin safe:
+every refreshed golden was diffed field by field and accepted only when
+the differences were snapshot hashes, `e.mem` digests, the inline rows or
+the moved span -- a golden refresh must never hide a changed answer. The
+refreshing variants of the runners are generated, not committed.

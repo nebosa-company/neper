@@ -5,4 +5,4 @@
 {"record":"edit","op":"rename-symbol","symbol":"deep.pick","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":460,"byte_end":464,"line":12,"column":20,"end_line":12,"end_column":24,"column_utf16":20,"end_column_utf16":24},"replacement":"choose"}
 {"record":"edit","op":"rename-symbol","symbol":"deep.pick","site":"declaration","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":3,"byte_end":7,"line":1,"column":4,"end_line":1,"end_column":8,"column_utf16":4,"end_column_utf16":8},"replacement":"choose"}
 {"record":"postcondition","check":"check-file passes; uses-file --symbol deep.choose reports uses at 2 sites and deep.pick names no function"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":2,"complete":true,"snapshot":"3cad6d8ecb55afd1"}}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":2,"complete":true,"snapshot":"b35df7d6282dd8b1"}}

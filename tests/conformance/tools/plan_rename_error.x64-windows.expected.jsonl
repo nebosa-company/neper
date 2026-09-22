@@ -6,4 +6,4 @@
 {"record":"edit","op":"rename-symbol","symbol":"faults.Stalled","site":"declaration","span":{"source":{"root":"project-src","path":"faults.e"},"byte_start":122,"byte_end":129,"line":3,"column":7,"end_line":3,"end_column":14,"column_utf16":7,"end_column_utf16":14},"replacement":"Blocked"}
 {"record":"edit","op":"rename-symbol","symbol":"faults.Stalled","site":"use","span":{"source":{"root":"project-src","path":"faults.e"},"byte_start":181,"byte_end":188,"line":6,"column":19,"end_line":6,"end_column":26,"column_utf16":19,"end_column_utf16":26},"replacement":"Blocked"}
 {"record":"postcondition","check":"check-file passes; uses-file --symbol faults.Blocked reports uses at 3 sites and faults.Stalled names no error"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":4,"files":2,"complete":true,"snapshot":"7e881d3431a10c2c"}}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":4,"files":2,"complete":true,"snapshot":"70bf6e39dcfb757e"}}

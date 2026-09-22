@@ -6228,7 +6228,7 @@ $hashModuleValidation = & $compiler validate-em $hashModuleRootPath
 if ($LASTEXITCODE -ne 0 -or $hashModuleValidation -ne 'compiled module valid') { throw 'void-return root artifact is invalid' }
 $hashModuleLibraryBytes = [IO.File]::ReadAllBytes($hashModuleLibraryPath)
 $hashModuleInterfaceOffset = [BitConverter]::ToUInt64($hashModuleLibraryBytes, 64)
-if ([BitConverter]::ToUInt32($hashModuleLibraryBytes, [int]$hashModuleInterfaceOffset + 8) -ne 13) { throw 'e.algo.hash artifact interface is incomplete' }
+if ([BitConverter]::ToUInt32($hashModuleLibraryBytes, [int]$hashModuleInterfaceOffset + 8) -ne 26) { throw 'e.algo.hash artifact interface is incomplete' }
 $hashRuntimeArtifacts = Join-Path $testBuild 'hash-runtime'
 New-Item -ItemType Directory -Force -Path $hashRuntimeArtifacts | Out-Null
 $hashRuntimeArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\algo_hash\src\main.e') $repo 'x64' 'windows' $hashRuntimeArtifacts

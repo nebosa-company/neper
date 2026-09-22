@@ -23,7 +23,7 @@ def fence(name):
         m = re.match(r'^(fn|type|error|const|var)\s+(\w+)', ln)
         if not m:
             continue
-        line = ln.rstrip()
+        line = re.sub(r'\s*//.*$', '', ln).rstrip()  # the checked source carries no trailing comment
         kind = m.group(1)
         if kind == 'fn':
             fns.append(line.split(' {')[0])

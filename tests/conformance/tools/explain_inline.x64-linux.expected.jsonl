@@ -6,6 +6,20 @@
 {"record":"inline","symbol":"e.mem.arena_from","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
 {"record":"inline","symbol":"e.mem.copy","decision":"not-a-candidate","reason":"generic, an instance is its instantiating module's own","pass":1}
 {"record":"inline","symbol":"e.mem.eq","decision":"not-a-candidate","reason":"generic, an instance is its instantiating module's own","pass":1}
+{"record":"inline","symbol":"e.mem.get_link","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.mem.put_link","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.mem.is_power_of_two","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.mem.pool_thread","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.mem.pool_alloc","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.mem.pool_slot","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.mem.pool_free","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.mem.pool_free_count","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.mem.slab_class","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.mem.slab_slot","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.mem.slab_free","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.mem.buddy_order","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.mem.buddy_push","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.mem.buddy_largest_free","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"e.os.current_thread_id","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.record_error_detail","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.record_cleanup_error_detail","decision":"rejected","reason":"its body is over the cap","pass":1}
@@ -104,6 +118,13 @@
 {"record":"inline","symbol":"contract.bump","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"contract.first","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"contract.total","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.mem.get_link","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.mem.put_link","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.mem.is_power_of_two","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.mem.pool_free_count","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.mem.slab_class","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.mem.slab_free","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.mem.buddy_push","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.current_thread_id","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.record_error_detail","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.mkdir_detail","decision":"inlinable","reason":"at or under the cap","pass":2}

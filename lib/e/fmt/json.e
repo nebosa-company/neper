@@ -18,26 +18,9 @@ type Member = struct { key: str, value: Value }
 
 // The tags are in declaration order and the order is JSON's own: `Null` first so that a zero
 // `Value` is null rather than a bool nobody set.
-type Value = union enum u8 {
-    Null,
-    Bool: bool,
-    Number: Number,
-    String: str,
-    Array: []const Value,
-    Object: []const Member,
-}
+type Value = union enum u8 { Null, Bool: bool, Number: Number, String: str, Array: []const Value, Object: []const Member }
 
-type Event = union enum u8 {
-    Null,
-    Bool: bool,
-    Number: Number,
-    String: str,
-    Key: str,
-    BeginArray,
-    EndArray,
-    BeginObject,
-    EndObject,
-}
+type Event = union enum u8 { Null, Bool: bool, Number: Number, String: str, Key: str, BeginArray, EndArray, BeginObject, EndObject }
 
 type Reader = struct { state: *void }
 

@@ -4,4 +4,4 @@
 {"record":"edit","op":"change-signature","symbol":"signature_remove.adjust","site":"use","span":{"source":{"root":"operand","path":"signature_remove.e"},"byte_start":399,"byte_end":414,"line":11,"column":24,"end_line":11,"end_column":39,"column_utf16":24,"end_column_utf16":39},"replacement":"41.8, 1.0"}
 {"record":"edit","op":"change-signature","symbol":"signature_remove.adjust","site":"use","span":{"source":{"root":"operand","path":"signature_remove.e"},"byte_start":440,"byte_end":464,"line":12,"column":25,"end_line":12,"end_column":49,"column_utf16":25,"end_column_utf16":49},"replacement":"first, 2.0"}
 {"record":"postcondition","check":"check-file passes; context-file --symbol signature_remove.adjust reports 2 parameters in the order given, and uses-file --symbol signature_remove.adjust reports uses at 2 sites"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":1,"complete":true,"snapshot":"3cd02c5b2791341b"}}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":3,"files":1,"complete":true,"snapshot":"acb605c2077e8fa5"}}

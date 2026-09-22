@@ -9,7 +9,7 @@ for p in sys.argv[1:]:
     changed = 0
     while i < len(lines):
         ln = lines[i]
-        if re.match(r'^type \w+ = (struct|union|enum[^{]*) \{\s*$', ln):
+        if re.match(r'^type \w+(\[[^\]]*\])? = (struct|union( enum[^{]*)?|enum[^{]*) \{\s*$', ln):
             fields = []
             j = i + 1
             while j < len(lines) and lines[j].strip() != '}':
