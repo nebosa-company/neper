@@ -548,3 +548,321 @@ fn base85_decode(dst: []u8, src: str, alphabet: Base85Alphabet) -> ([]u8, err) {
     }
     ret (dst[0usize..out], ok)
 }
+
+// --- More bit operations, over an unsigned `T` like the ones above.
+
+// The bytes of `v` in the other order: `u16`, `u32`, `u64` (a `u8` is its own swap).
+fn byte_swap[T: type](v: T) -> T {
+    let size = mem.size_of[T]()
+    let bits = u64.trunc(v)
+    var out = 0u64
+    var pos = 0usize
+    while pos < size {
+        out = (out << 8u32) | ((bits >> u32(pos * 8usize)) & 255u64)
+        pos += 1usize
+    }
+    ret T.trunc(out)
+}
+
+fn reverse_bits[T: type](v: T) -> T {
+    let width = u32(mem.size_of[T]() * 8usize)
+    let bits = u64.trunc(v)
+    var out = 0u64
+    var pos = 0u32
+    while pos < width {
+        out = (out << 1u32) | ((bits >> pos) & 1u64)
+        pos += 1u32
+    }
+    ret T.trunc(out)
+}
+
+// `v` with the bits at positions `i` and `j` exchanged.
+fn swap_bits[T: type](v: T, i: u32, j: u32) -> T {
+    let one = T(1u64)
+    if (((v >> i) ^ (v >> j)) & one) == T(0u64) { ret v }
+    ret v ^ ((one << i) | (one << j))
+}
+
+// 1 when an odd number of bits is set, else 0.
+fn parity[T: type](v: T) -> u32 {
+    ret count_ones[T](v) & 1u32
+}
+
+// Whether any of the eight bytes of `x` is zero: a byte borrows from its high bit only when it
+// was zero, and `~x` keeps the borrow apart from a high bit `x` already had.
+fn has_zero_byte(x: u64) -> bool {
+    ret ((x -% 72340172838076673u64) & ~x & 9259542123273814144u64) != 0u64
+}
+
+fn has_byte(x: u64, b: u8) -> bool {
+    ret has_zero_byte(x ^ (u64(b) *% 72340172838076673u64))
+}
+
+// Floor of log2; zero has none and is `Invalid`.
+fn ilog2[T: type](v: T) -> (u32, err) {
+    if v == T(0u64) { ret (0u32, Invalid) }
+    let width = u32(mem.size_of[T]() * 8usize)
+    ret (width - 1u32 - leading_zeros[T](v), ok)
+}
+
+// The smallest power of two that is at least `v` (1 for 0), and false when `T` has none.
+fn next_power_of_two[T: type](v: T) -> (T, bool) {
+    let one = T(1u64)
+    if v <= one { ret (one, true) }
+    let shift = leading_zeros[T](v - one)
+    if shift == 0u32 { ret (T(0u64), false) }
+    let width = u32(mem.size_of[T]() * 8usize)
+    ret (one << (width - shift), true)
+}
+
+// The low `bits` bits of `x` as a signed number of that width, widened to an `i64`.
+fn sign_extend(x: u64, bits: u32) -> i64 {
+    if bits == 0u32 { ret 0i64 }
+    if bits >= 64u32 { ret i64.trunc(x) }
+    let sign = 1u64 << (bits - 1u32)
+    let low = x & ((sign << 1u32) - 1u64)
+    ret i64.trunc((low ^ sign) -% sign)
+}
+
+fn gray_encode[T: type](v: T) -> T {
+    ret v ^ (v >> 1u32)
+}
+
+fn gray_decode[T: type](g: T) -> T {
+    var out = g
+    var mask = g >> 1u32
+    while mask != T(0u64) {
+        out = out ^ mask
+        mask = mask >> 1u32
+    }
+    ret out
+}
+
+// --- Hex: two digits per byte, either case out, either case in.
+
+fn hex_alphabet(upper: bool) -> str {
+    if upper { ret "0123456789ABCDEF" }
+    ret "0123456789abcdef"
+}
+
+fn hex_encode(dst: []u8, src: []const u8, upper: bool) -> (str, err) {
+    if src.len > dst.len / 2usize { ret ("", TooLarge) }
+    let table = hex_alphabet(upper)
+    var pos = 0usize
+    while pos < src.len {
+        dst[pos * 2usize] = table[usize(src[pos] >> 4u32)]
+        dst[pos * 2usize + 1usize] = table[usize(src[pos] & 15u8)]
+        pos += 1usize
+    }
+    ret (dst[0usize..src.len * 2usize], ok)
+}
+
+fn hex_digit_value(c: u8) -> (u32, bool) {
+    if c >= 48u8 && c <= 57u8 { ret (u32(c - 48u8), true) }
+    if c >= 97u8 && c <= 102u8 { ret (u32(c - 87u8), true) }
+    if c >= 65u8 && c <= 70u8 { ret (u32(c - 55u8), true) }
+    ret (0u32, false)
+}
+
+// An odd length or a character that is not a digit is `Invalid`.
+fn hex_decode(dst: []u8, src: str) -> ([]u8, err) {
+    if src.len % 2usize != 0usize { ret (zero, Invalid) }
+    let count = src.len / 2usize
+    if count > dst.len { ret (zero, TooLarge) }
+    var pos = 0usize
+    while pos < count {
+        let (high, high_valid) = hex_digit_value(src[pos * 2usize])
+        let (low, low_valid) = hex_digit_value(src[pos * 2usize + 1usize])
+        if !high_valid || !low_valid { ret (zero, Invalid) }
+        dst[pos] = u8((high << 4u32) | low)
+        pos += 1usize
+    }
+    ret (dst[0usize..count], ok)
+}
+
+// --- Base58, the Bitcoin alphabet: the bytes as one big number in base 58, and each leading
+// zero byte as a leading `1`. `dst` is the big number's scratch, so it needs room for the
+// result and says `TooLarge` when the number outgrows it; `src.len * 138 / 100 + 1` always does.
+
+fn base58_alphabet() -> str {
+    ret "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+}
+
+// The digits are built least significant first in `dst[..count]`, then reversed and moved up
+// behind the `1`s.
+fn base58_encode(dst: []u8, src: []const u8) -> (str, err) {
+    var zeros = 0usize
+    while zeros < src.len && src[zeros] == 0u8 { zeros += 1usize }
+    var count = 0usize
+    var pos = zeros
+    while pos < src.len {
+        var carry = u32(src[pos])
+        var digit = 0usize
+        while digit < count {
+            carry += u32(dst[digit]) << 8u32
+            dst[digit] = u8(carry % 58u32)
+            carry = carry / 58u32
+            digit += 1usize
+        }
+        while carry != 0u32 {
+            if count == dst.len { ret ("", TooLarge) }
+            dst[count] = u8(carry % 58u32)
+            carry = carry / 58u32
+            count += 1usize
+        }
+        pos += 1usize
+    }
+    if zeros > dst.len - count { ret ("", TooLarge) }
+    let table = base58_alphabet()
+    var spell = 0usize
+    while spell < count {
+        dst[spell] = table[usize(dst[spell])]
+        spell += 1usize
+    }
+    reverse_in_place(dst[0usize..count])
+    // Moved up from the top so a digit is never written over before it is read.
+    var move = count
+    while move > 0usize {
+        move -= 1usize
+        dst[zeros + move] = dst[move]
+    }
+    var lead = 0usize
+    while lead < zeros {
+        dst[lead] = 49u8
+        lead += 1usize
+    }
+    ret (dst[0usize..zeros + count], ok)
+}
+
+fn base58_decode(dst: []u8, src: str) -> ([]u8, err) {
+    let table = base58_alphabet()
+    var zeros = 0usize
+    while zeros < src.len && src[zeros] == 49u8 { zeros += 1usize }
+    var count = 0usize
+    var pos = zeros
+    while pos < src.len {
+        let (value, valid) = alphabet_index(table, src[pos])
+        if !valid { ret (zero, Invalid) }
+        var carry = value
+        var byte = 0usize
+        while byte < count {
+            carry += u32(dst[byte]) * 58u32
+            dst[byte] = u8(carry & 255u32)
+            carry = carry >> 8u32
+            byte += 1usize
+        }
+        while carry != 0u32 {
+            if count == dst.len { ret (zero, TooLarge) }
+            dst[count] = u8(carry & 255u32)
+            carry = carry >> 8u32
+            count += 1usize
+        }
+        pos += 1usize
+    }
+    if zeros > dst.len - count { ret (zero, TooLarge) }
+    reverse_in_place(dst[0usize..count])
+    var move = count
+    while move > 0usize {
+        move -= 1usize
+        dst[zeros + move] = dst[move]
+    }
+    var lead = 0usize
+    while lead < zeros {
+        dst[lead] = 0u8
+        lead += 1usize
+    }
+    ret (dst[0usize..zeros + count], ok)
+}
+
+// --- Base64 in chunks: the same codec fed a piece at a time, holding back a partial group
+// between calls so a chunk boundary may fall anywhere. Each `update` and `finish` answers how
+// many bytes it put in `dst`, and the whole run is byte for byte what the one-shot pair makes.
+
+type Base64Encoder = struct { alphabet: Base64Alphabet, padded: bool, held: [3]u8, count: usize }
+type Base64Decoder = struct { alphabet: Base64Alphabet, held: [4]u8, count: usize }
+
+fn base64_encoder(alphabet: Base64Alphabet, padded: bool) -> Base64Encoder {
+    ret Base64Encoder { alphabet: alphabet, padded: padded, held: zero, count: 0usize }
+}
+
+fn base64_encoder_update(enc: *Base64Encoder, dst: []u8, src: []const u8) -> (usize, err) {
+    var pos = 0usize
+    var out = 0usize
+    // Complete the group held from last time first.
+    while enc.count != 0usize && enc.count < 3usize && pos < src.len {
+        enc.held[enc.count] = src[pos]
+        enc.count += 1usize
+        pos += 1usize
+    }
+    if enc.count == 3usize {
+        let (text, text_error) = base64_encode(dst, enc.held[..], enc.alphabet, true)
+        if text_error != ok { ret (0usize, text_error) }
+        out = text.len
+        enc.count = 0usize
+    }
+    // Then every whole group of the rest in one call, and hold what is left.
+    let whole = (src.len - pos) / 3usize * 3usize
+    if whole != 0usize {
+        let (text, text_error) = base64_encode(dst[out..], src[pos..pos + whole], enc.alphabet, true)
+        if text_error != ok { ret (0usize, text_error) }
+        out += text.len
+        pos += whole
+    }
+    while pos < src.len {
+        enc.held[enc.count] = src[pos]
+        enc.count += 1usize
+        pos += 1usize
+    }
+    ret (out, ok)
+}
+
+fn base64_encoder_finish(enc: *Base64Encoder, dst: []u8) -> (usize, err) {
+    if enc.count == 0usize { ret (0usize, ok) }
+    let (text, text_error) = base64_encode(dst, enc.held[..enc.count], enc.alphabet, enc.padded)
+    if text_error != ok { ret (0usize, text_error) }
+    enc.count = 0usize
+    ret (text.len, ok)
+}
+
+fn base64_decoder(alphabet: Base64Alphabet) -> Base64Decoder {
+    ret Base64Decoder { alphabet: alphabet, held: zero, count: 0usize }
+}
+
+fn base64_decoder_update(dec: *Base64Decoder, dst: []u8, src: str) -> (usize, err) {
+    var pos = 0usize
+    var out = 0usize
+    while dec.count != 0usize && dec.count < 4usize && pos < src.len {
+        dec.held[dec.count] = src[pos]
+        dec.count += 1usize
+        pos += 1usize
+    }
+    if dec.count == 4usize {
+        let (data, data_error) = base64_decode(dst, dec.held[..], dec.alphabet)
+        if data_error != ok { ret (0usize, data_error) }
+        out = data.len
+        dec.count = 0usize
+    }
+    let whole = (src.len - pos) / 4usize * 4usize
+    if whole != 0usize {
+        let (data, data_error) = base64_decode(dst[out..], src[pos..pos + whole], dec.alphabet)
+        if data_error != ok { ret (0usize, data_error) }
+        out += data.len
+        pos += whole
+    }
+    while pos < src.len {
+        dec.held[dec.count] = src[pos]
+        dec.count += 1usize
+        pos += 1usize
+    }
+    ret (out, ok)
+}
+
+// What is still held is an unpadded tail, which the one-shot decoder already accepts; a single
+// character is `Invalid` there too.
+fn base64_decoder_finish(dec: *Base64Decoder, dst: []u8) -> (usize, err) {
+    if dec.count == 0usize { ret (0usize, ok) }
+    let (data, data_error) = base64_decode(dst, dec.held[..dec.count], dec.alphabet)
+    if data_error != ok { ret (0usize, data_error) }
+    dec.count = 0usize
+    ret (data.len, ok)
+}

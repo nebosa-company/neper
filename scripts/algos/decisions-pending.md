@@ -842,3 +842,35 @@ pass; `add_batch.py` learned to refresh a module's dependency list along
 with its fence. The rule for a planned name that an existing function
 already covers: add the planned name as the natural entry point, not a
 bare alias, unless the existing function already is the algorithm.
+
+## D882 — Batch 40: planned functions for matrices, sorting, random sampling and bytes
+
+Four more modules brought up to their planned names: `e.algo.linalg.matrix`
+(LU, solves, Cholesky, Householder QR, Givens, modified Gram-Schmidt, RREF,
+powers, power iteration, cyclic-Jacobi eigenpairs for symmetric matrices,
+a one-sided Jacobi SVD and a two-grid Poisson V-cycle; the existing
+`transpose` is a shape view that `multiply` does not honour, left as is
+because `algo_linalg` depends on it -- a real transpose is the tidy-up),
+`e.algo.sort` (insertion, Shell, heap, merge, quick, cycle, patience,
+counting and bucket with key callbacks so stability is checkable, LSD
+radix over byte rows, an in-memory k-way external merge and three-way
+string quicksort), `e.algo.rand` (an MMIX LCG, xorshift64*, a Galois LFSR,
+alias tables duplicated from `e.algo.rand.dist` because that module
+imports this one, stratified and Latin-hypercube points, A-Res weighted
+and forward-decayed reservoirs, priority sampling and VarOpt, the last two
+checked unbiased over two hundred repetitions) and `e.bytes` (byte and bit
+reversal, parity, the SWAR zero-byte test, `ilog2`, powers of two, sign
+extension, Gray codes, hex and Base58, and streaming Base64 states that
+defer to the one-shot codec so their output is identical by
+construction). Two compiler notes: a compound assignment indexed by a call
+result (`a[f(x)] += 1`) is refused, bind the index first; and adding a
+module-scope `fn` whose name an older local already used breaks the old
+function, so the two `bucket` locals in the radix sorters became `slot`.
+The `plan_rename_type` conformance goldens moved on both hosts: their
+snapshot folds the source hash of every module the fixture imports, and it
+imports `e.algo.sort`, so any change to that module re-pins them (D804's
+precedent); the refreshed goldens ride with this batch. On the host side,
+the WSL VM was being torn down mid-build once C: fell to two gigabytes
+free -- the Windows commit charge could no longer back a VM allowed eight
+gigabytes -- and `.wslconfig` now caps it at five with the eight-gigabyte
+swap on D:, after which the same build runs in nine seconds.

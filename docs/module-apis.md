@@ -187,36 +187,69 @@ type Base32Alphabet = enum u8 { Standard, Hex }
 type Base85Alphabet = enum u8 { Ascii85, Z85 }
 type Reader = struct { data: []const u8, off: usize }
 type Writer = struct { data: []u8, off: usize }
+type Base64Encoder = struct { alphabet: Base64Alphabet, padded: bool, held: [3]u8, count: usize }
+type Base64Decoder = struct { alphabet: Base64Alphabet, held: [4]u8, count: usize }
 error End
 error Invalid
 error TooLarge
+const PAD: u8 = 61u8
 
 fn reader(data: []const u8) -> Reader
 fn writer(data: []u8) -> Writer
 fn remaining_reader(r: *const Reader) -> usize
 fn remaining_writer(w: *const Writer) -> usize
 fn skip(r: *Reader, n: usize) -> err
-fn read[T: type](r: *Reader, endian: Endian) -> (T, err)
-fn write[T: type](w: *Writer, v: T, endian: Endian) -> err
 fn read_bytes(r: *Reader, n: usize) -> ([]const u8, err)
 fn write_bytes(w: *Writer, src: []const u8) -> err
 fn load[T: type](src: []const u8, off: usize, endian: Endian) -> (T, err)
 fn store[T: type](dst: []u8, off: usize, v: T, endian: Endian) -> err
+fn read[T: type](r: *Reader, endian: Endian) -> (T, err)
+fn write[T: type](w: *Writer, v: T, endian: Endian) -> err
 fn reverse_in_place(data: []u8)
 fn rotate_left[T: type](v: T, n: u32) -> T
 fn rotate_right[T: type](v: T, n: u32) -> T
 fn count_ones[T: type](v: T) -> u32
 fn leading_zeros[T: type](v: T) -> u32
 fn trailing_zeros[T: type](v: T) -> u32
+fn base64_alphabet(alphabet: Base64Alphabet) -> str
 fn base64_encoded_len(n: usize, padded: bool) -> (usize, err)
 fn base64_encode(dst: []u8, src: []const u8, alphabet: Base64Alphabet, padded: bool) -> (str, err)
+fn alphabet_index(table: str, byte: u8) -> (u32, bool)
 fn base64_decode(dst: []u8, src: str, alphabet: Base64Alphabet) -> ([]u8, err)
+fn base32_alphabet(alphabet: Base32Alphabet) -> str
 fn base32_encoded_len(n: usize, padded: bool) -> (usize, err)
 fn base32_encode(dst: []u8, src: []const u8, alphabet: Base32Alphabet, padded: bool) -> (str, err)
 fn base32_decode(dst: []u8, src: str, alphabet: Base32Alphabet) -> ([]u8, err)
+fn z85_alphabet() -> str
+fn base85_digit(alphabet: Base85Alphabet, value: u32) -> u8
+fn base85_value(alphabet: Base85Alphabet, byte: u8) -> (u32, bool)
 fn base85_encoded_len(n: usize, alphabet: Base85Alphabet) -> (usize, err)
 fn base85_encode(dst: []u8, src: []const u8, alphabet: Base85Alphabet) -> (str, err)
 fn base85_decode(dst: []u8, src: str, alphabet: Base85Alphabet) -> ([]u8, err)
+fn byte_swap[T: type](v: T) -> T
+fn reverse_bits[T: type](v: T) -> T
+fn swap_bits[T: type](v: T, i: u32, j: u32) -> T
+fn parity[T: type](v: T) -> u32
+fn has_zero_byte(x: u64) -> bool
+fn has_byte(x: u64, b: u8) -> bool
+fn ilog2[T: type](v: T) -> (u32, err)
+fn next_power_of_two[T: type](v: T) -> (T, bool)
+fn sign_extend(x: u64, bits: u32) -> i64
+fn gray_encode[T: type](v: T) -> T
+fn gray_decode[T: type](g: T) -> T
+fn hex_alphabet(upper: bool) -> str
+fn hex_encode(dst: []u8, src: []const u8, upper: bool) -> (str, err)
+fn hex_digit_value(c: u8) -> (u32, bool)
+fn hex_decode(dst: []u8, src: str) -> ([]u8, err)
+fn base58_alphabet() -> str
+fn base58_encode(dst: []u8, src: []const u8) -> (str, err)
+fn base58_decode(dst: []u8, src: str) -> ([]u8, err)
+fn base64_encoder(alphabet: Base64Alphabet, padded: bool) -> Base64Encoder
+fn base64_encoder_update(enc: *Base64Encoder, dst: []u8, src: []const u8) -> (usize, err)
+fn base64_encoder_finish(enc: *Base64Encoder, dst: []u8) -> (usize, err)
+fn base64_decoder(alphabet: Base64Alphabet) -> Base64Decoder
+fn base64_decoder_update(dec: *Base64Decoder, dst: []u8, src: str) -> (usize, err)
+fn base64_decoder_finish(dec: *Base64Decoder, dst: []u8) -> (usize, err)
 ```
 
 Generic numeric operations accept integer and float primitives only; bit operations
@@ -1600,9 +1633,15 @@ the generic driver `mo_run` over caller add/remove/answer callbacks.
 
 ```neper
 type Pcg64 = struct { state: u64, stream: u64 }
+type Lcg = struct { state: u64 }
+type Xorshift = struct { state: u64 }
+type Lfsr = struct { state: u32 }
+type WeightedReservoir[T: type] = struct { items: []T, keys: []f64, count: usize }
 type Xoshiro256 = struct { s0: u64, s1: u64, s2: u64, s3: u64 }
 type Mt19937 = struct { state: [624]u32, index: u32 }
 type Reservoir[T: type] = struct { items: []T, seen: u64 }
+error TooSmall
+error Invalid
 
 fn pcg64(seed: u64, stream: u64) -> Pcg64
 fn pcg64_next(r: *Pcg64) -> u64
@@ -1619,6 +1658,22 @@ fn cycle_permutation[T: type](r: *Pcg64, items: []T)
 fn reservoir[T: type](items: []T) -> Reservoir[T]
 fn reservoir_offer[T: type](s: *Reservoir[T], r: *Pcg64, item: T)
 fn reservoir_sample[T: type](s: *const Reservoir[T]) -> []T
+fn lcg(seed: u64) -> Lcg
+fn lcg_next(r: *Lcg) -> u64
+fn xorshift(seed: u64) -> Xorshift
+fn xorshift_next(r: *Xorshift) -> u64
+fn lfsr(seed: u32) -> Lfsr
+fn lfsr_next(r: *Lfsr) -> u32
+fn alias_table(weights: []const f64, probability: []f64, alias: []usize, scratch: []usize) -> err
+fn alias_pick(r: *Pcg64, probability: []const f64, alias: []const usize) -> usize
+fn stratified(r: *Pcg64, out: []f64)
+fn latin_hypercube(r: *Pcg64, out: []f64, points: usize, dims: usize, perm: []usize) -> err
+fn reservoir_weighted[T: type](items: []T, keys: []f64) -> WeightedReservoir[T]
+fn reservoir_weighted_offer[T: type](s: *WeightedReservoir[T], r: *Pcg64, item: T, weight: f64)
+fn reservoir_decayed_offer[T: type](s: *WeightedReservoir[T], r: *Pcg64, item: T, weight: f64, time: f64, rate: f64)
+fn reservoir_weighted_sample[T: type](s: *const WeightedReservoir[T]) -> []T
+fn priority_sample(r: *Pcg64, weights: []const f64, chosen: []usize, adjusted: []f64) -> (f64, err)
+fn varopt_sample(r: *Pcg64, weights: []const f64, k: usize, chosen: []usize, adjusted: []f64) -> (f64, err)
 ```
 
 `bounded(..., 0)` returns zero; otherwise it is unbiased rejection sampling.
@@ -2632,6 +2687,9 @@ bitwise gates, `bv_add`, `bv_sub`, `bv_mul`, `bv_eq`, `bv_ult`, constant shifts,
 ### `e.algo.sort`
 
 ```neper
+error TooSmall
+error Invalid
+
 fn in_place[T: type](items: []T)
 fn in_place_by[T: type, Ctx: type](items: []T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32)
 fn stable_in_place[T: type](a: *mem.Arena, items: []T) -> err
@@ -2639,6 +2697,19 @@ fn stable_in_place_by[T: type, Ctx: type](a: *mem.Arena, items: []T, ctx: *Ctx, 
 fn radix_u32_in_place(a: *mem.Arena, items: []u32) -> err
 fn radix_u64_in_place(a: *mem.Arena, items: []u64) -> err
 fn is_sorted[T: type](items: []const T) -> bool
+fn insertion[T: type](items: []T)
+fn shell[T: type](items: []T)
+fn heap[T: type](items: []T)
+fn merge[T: type](items: []T, scratch: []T) -> err
+fn quick[T: type](items: []T)
+fn cycle[T: type](items: []T) -> usize
+fn patience[T: type](items: []T, scratch: []T, below: []usize, tops: []usize) -> (usize, err)
+fn counting[T: type, Ctx: type](items: []T, scratch: []T, ctx: *Ctx, key: fn(*Ctx, T) -> u32, bound: u32, counts: []usize) -> err
+fn bucket[T: type, Ctx: type](items: []T, scratch: []T, ctx: *Ctx, key: fn(*Ctx, T) -> f64, starts: []usize) -> err
+fn radix_bytes(rows: []u8, width: usize, key_width: usize, scratch: []u8) -> err
+fn external_merge[T: type](runs: []const T, bounds: []const usize, cursor: []usize, run_heap: []usize, out: []T) -> err
+fn strings(items: []str)
+fn strings_from(items: []str, depth: usize)
 ```
 
 ### `e.algo.search`
@@ -2979,9 +3050,15 @@ type Matrix[T: type] = struct { data: []T, rows: usize, cols: usize, stride: usi
 type ConstMatrix[T: type] = struct { data: []const T, rows: usize, cols: usize, stride: usize }
 error Shape
 error Singular
+error NotPositiveDefinite
+error Unsupported
+error TooSmall
+error NoConvergence
 
+fn extent(rows: usize, cols: usize, stride: usize) -> usize
 fn view[T: type](data: []T, rows: usize, cols: usize, stride: usize) -> (Matrix[T], err)
 fn view_const[T: type](data: []const T, rows: usize, cols: usize, stride: usize) -> (ConstMatrix[T], err)
+fn as_const[T: type](m: Matrix[T]) -> ConstMatrix[T]
 fn get[T: type](m: Matrix[T], row: usize, col: usize) -> T
 fn set[T: type](m: Matrix[T], row: usize, col: usize, v: T)
 fn transpose[T: type](m: Matrix[T]) -> Matrix[T]
@@ -2991,6 +3068,39 @@ fn add[T: type](dst: Matrix[T], a: ConstMatrix[T], b: ConstMatrix[T]) -> err
 fn multiply[T: type](dst: Matrix[T], a: ConstMatrix[T], b: ConstMatrix[T]) -> err
 fn determinant_f64(a: *mem.Arena, m: ConstMatrix[f64]) -> (f64, err)
 fn inverse_f64(a: *mem.Arena, dst: Matrix[f64], src: ConstMatrix[f64]) -> err
+fn pivot_row(scratch: []f64, width: usize, col: usize) -> usize
+fn swap_rows(scratch: []f64, width: usize, first: usize, second: usize)
+fn eliminate_below(scratch: []f64, n: usize, col: usize, lead: f64)
+fn sub(m: Matrix[f64], row: usize, col: usize, rows: usize, cols: usize) -> Matrix[f64]
+fn identity(m: Matrix[f64])
+fn swap_view_rows(m: Matrix[f64], first: usize, second: usize)
+fn lu_factor(factors: Matrix[f64], perm: []usize, src: ConstMatrix[f64]) -> (f64, err)
+fn lu(l: Matrix[f64], u: Matrix[f64], perm: []usize, src: ConstMatrix[f64]) -> (f64, err)
+fn solve_lu(factors: ConstMatrix[f64], perm: []const usize, x: []f64, b: []const f64) -> err
+fn solve(a: *mem.Arena, x: []f64, m: ConstMatrix[f64], b: []const f64) -> err
+fn inverse(a: *mem.Arena, dst: Matrix[f64], src: ConstMatrix[f64]) -> err
+fn cholesky(l: Matrix[f64], src: ConstMatrix[f64]) -> err
+fn householder_vector(x: []const f64, out: []f64) -> (f64, err)
+fn householder_apply_left(m: Matrix[f64], v: []const f64, beta: f64) -> err
+fn householder_apply_right(m: Matrix[f64], v: []const f64, beta: f64) -> err
+fn qr(q: Matrix[f64], r: Matrix[f64], src: ConstMatrix[f64], work: []f64) -> err
+fn givens(a: f64, b: f64) -> (f64, f64)
+fn givens_apply(m: Matrix[f64], i: usize, k: usize, c: f64, s: f64) -> err
+fn orthonormalize(m: Matrix[f64]) -> err
+fn rref(m: Matrix[f64], pivots: []usize, eps: f64) -> (usize, err)
+fn pow(a: *mem.Arena, dst: Matrix[f64], base: ConstMatrix[f64], n: u64) -> err
+fn power_iteration(m: ConstMatrix[f64], x: []f64, work: []f64, tolerance: f64, max_iterations: u32) -> (f64, u32, err)
+fn vector_norm(x: []const f64) -> f64
+fn eigen(a: *mem.Arena, values: []f64, vectors: Matrix[f64], src: ConstMatrix[f64], tolerance: f64, sweeps: u32) -> err
+fn rotate_columns(m: Matrix[f64], p: usize, q: usize, c: f64, s: f64)
+fn swap_columns(m: Matrix[f64], first: usize, second: usize)
+fn sort_columns(values: []f64, left: Matrix[f64], right: Matrix[f64])
+fn svd(a: *mem.Arena, u: Matrix[f64], s: []f64, v: Matrix[f64], src: ConstMatrix[f64], tolerance: f64, sweeps: u32) -> err
+fn multigrid(a: *mem.Arena, u: []f64, f: []const f64, cycles: u32, smooth: u32) -> (f64, err)
+fn poisson_spacing_squared(n: usize) -> f64
+fn poisson_residual(r: []f64, u: []const f64, f: []const f64)
+fn weighted_jacobi(u: []f64, f: []const f64, scratch: []f64, sweeps: u32)
+fn vcycle(a: *mem.Arena, u: []f64, f: []const f64, smooth: u32) -> err
 ```
 
 ### `e.algo.linalg.tensor`

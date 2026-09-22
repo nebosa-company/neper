@@ -2084,6 +2084,21 @@ algo_stat_plan_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$algo_stat_plan_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-plan-selfhost"
 "$test_build/algo-stat-plan-selfhost"
+# `e.algo.linalg.matrix` planned functions: LU with pivoting, solves and an inverse equal to the old one, Cholesky, Householder QR, Givens, Gram-Schmidt, RREF, powers, power iteration, Jacobi eigenpairs, one-sided Jacobi SVD and a Poisson V-cycle, against numpy, scipy and sympy (D882).
+algo_matrix_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_matrix_plan/src/main.e" "$repo" x64 linux "$test_build/algo-matrix-plan-selfhost")
+[ "$algo_matrix_plan_written" = 'executable written' ]
+chmod +x "$test_build/algo-matrix-plan-selfhost"
+"$test_build/algo-matrix-plan-selfhost"
+# `e.algo.sort` and `e.algo.rand` planned functions: twelve sorters agreeing with the existing order and keeping stability where promised, cycle-sort write counts and patience piles equal to a replica; LCG, xorshift and LFSR generators bit-exact, alias tables, stratified and Latin-hypercube points, weighted, decayed, priority and VarOpt sampling over a bit-exact PCG64 (D882).
+algo_sort_rand_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sort_rand_plan/src/main.e" "$repo" x64 linux "$test_build/algo-sort-rand-plan-selfhost")
+[ "$algo_sort_rand_plan_written" = 'executable written' ]
+chmod +x "$test_build/algo-sort-rand-plan-selfhost"
+"$test_build/algo-sort-rand-plan-selfhost"
+# `e.bytes` planned functions: byte and bit reversal, parity, the zero-byte trick, integer logarithms, powers of two, sign extension, Gray codes, hex and Base58 codecs, streaming Base64 equal to the one-shot codec at every chunk size (D882).
+bytes_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/bytes_plan/src/main.e" "$repo" x64 linux "$test_build/bytes-plan-selfhost")
+[ "$bytes_plan_written" = 'executable written' ]
+chmod +x "$test_build/bytes-plan-selfhost"
+"$test_build/bytes-plan-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
@@ -5446,13 +5461,28 @@ chmod +x "$list_executable_path"
 list_output=$("$list_executable_path")
 [ "$list_output" = 'data list ok' ]
 sort_surface=$(grep -E '^(type|fn|error|const|var) ' "$repo/lib/e/algo/sort.e" | sed -E 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/')
-expected_sort_surface='in_place
+expected_sort_surface='TooSmall
+Invalid
+in_place
 in_place_by
 stable_in_place
 stable_in_place_by
 radix_u32_in_place
 radix_u64_in_place
-is_sorted'
+is_sorted
+insertion
+shell
+heap
+merge
+quick
+cycle
+patience
+counting
+bucket
+radix_bytes
+external_merge
+strings
+strings_from'
 [ "$sort_surface" = "$expected_sort_surface" ]
 sort_parsed=$($test_build/neper-self parse-file "$repo/lib/e/algo/sort.e")
 [ "$sort_parsed" = 'parse file ok' ]

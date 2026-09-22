@@ -2326,6 +2326,24 @@ $algoStatPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoStatPlanWritten -ne 'executable written') { throw 'algo_stat_plan emission failed' }
 & $algoStatPlanPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_plan check failed: exit $LASTEXITCODE" }
+# `e.algo.linalg.matrix` planned functions: LU with pivoting, solves and an inverse equal to the old one, Cholesky, Householder QR, Givens, Gram-Schmidt, RREF, powers, power iteration, Jacobi eigenpairs, one-sided Jacobi SVD and a Poisson V-cycle, against numpy, scipy and sympy (D882).
+$algoMatrixPlanPath = Join-Path $testBuild 'algo-matrix-plan-selfhost.exe'
+$algoMatrixPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_matrix_plan\src\main.e') $repo 'x64' 'windows' $algoMatrixPlanPath
+if ($LASTEXITCODE -ne 0 -or $algoMatrixPlanWritten -ne 'executable written') { throw 'algo_matrix_plan emission failed' }
+& $algoMatrixPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_matrix_plan check failed: exit $LASTEXITCODE" }
+# `e.algo.sort` and `e.algo.rand` planned functions: twelve sorters agreeing with the existing order and keeping stability where promised, cycle-sort write counts and patience piles equal to a replica; LCG, xorshift and LFSR generators bit-exact, alias tables, stratified and Latin-hypercube points, weighted, decayed, priority and VarOpt sampling over a bit-exact PCG64 (D882).
+$algoSortRandPlanPath = Join-Path $testBuild 'algo-sort-rand-plan-selfhost.exe'
+$algoSortRandPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_sort_rand_plan\src\main.e') $repo 'x64' 'windows' $algoSortRandPlanPath
+if ($LASTEXITCODE -ne 0 -or $algoSortRandPlanWritten -ne 'executable written') { throw 'algo_sort_rand_plan emission failed' }
+& $algoSortRandPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_sort_rand_plan check failed: exit $LASTEXITCODE" }
+# `e.bytes` planned functions: byte and bit reversal, parity, the zero-byte trick, integer logarithms, powers of two, sign extension, Gray codes, hex and Base58 codecs, streaming Base64 equal to the one-shot codec at every chunk size (D882).
+$bytesPlanPath = Join-Path $testBuild 'bytes-plan-selfhost.exe'
+$bytesPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\bytes_plan\src\main.e') $repo 'x64' 'windows' $bytesPlanPath
+if ($LASTEXITCODE -ne 0 -or $bytesPlanWritten -ne 'executable written') { throw 'bytes_plan emission failed' }
+& $bytesPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a bytes_plan check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
@@ -5575,7 +5593,7 @@ $sortSurface = Get-Content (Join-Path $repo 'lib\e\algo\sort.e') |
         if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.algo.sort contains an unreadable public declaration' }
         $Matches[1]
     }
-$expectedSortSurface = @('in_place', 'in_place_by', 'stable_in_place', 'stable_in_place_by', 'radix_u32_in_place', 'radix_u64_in_place', 'is_sorted')
+$expectedSortSurface = @('TooSmall', 'Invalid', 'in_place', 'in_place_by', 'stable_in_place', 'stable_in_place_by', 'radix_u32_in_place', 'radix_u64_in_place', 'is_sorted', 'insertion', 'shell', 'heap', 'merge', 'quick', 'cycle', 'patience', 'counting', 'bucket', 'radix_bytes', 'external_merge', 'strings', 'strings_from')
 if (($sortSurface -join "`n") -ne ($expectedSortSurface -join "`n")) { throw 'e.algo.sort public declarations differ from module-apis.md' }
 $sortParsed = & $compiler parse-file (Join-Path $repo 'lib\e\algo\sort.e')
 if ($LASTEXITCODE -ne 0 -or $sortParsed -ne 'parse file ok') { throw 'e.algo.sort failed CLI parsing' }

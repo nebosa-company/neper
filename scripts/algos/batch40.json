@@ -1,0 +1,13 @@
+{
+ "decision": "D882",
+ "modules": [
+  {"name": "e.algo.linalg.matrix", "refresh": true, "fixture": "algo_matrix_plan", "deps": ["e.math", "e.mem"],
+   "comment": "`e.algo.linalg.matrix` planned functions: LU with pivoting, solves and an inverse equal to the old one, Cholesky, Householder QR, Givens, Gram-Schmidt, RREF, powers, power iteration, Jacobi eigenpairs, one-sided Jacobi SVD and a Poisson V-cycle, against numpy, scipy and sympy"},
+  {"name": "e.algo.sort", "refresh": true, "fixture": "algo_sort_rand_plan",
+   "comment": "`e.algo.sort` and `e.algo.rand` planned functions: twelve sorters agreeing with the existing order and keeping stability where promised, cycle-sort write counts and patience piles equal to a replica; LCG, xorshift and LFSR generators bit-exact, alias tables, stratified and Latin-hypercube points, weighted, decayed, priority and VarOpt sampling over a bit-exact PCG64"},
+  {"name": "e.algo.rand", "refresh": true, "deps": ["e.math"],
+   "comment": "`e.algo.rand` (shared fixture with e.algo.sort)"},
+  {"name": "e.bytes", "refresh": true, "fixture": "bytes_plan",
+   "comment": "`e.bytes` planned functions: byte and bit reversal, parity, the zero-byte trick, integer logarithms, powers of two, sign extension, Gray codes, hex and Base58 codecs, streaming Base64 equal to the one-shot codec at every chunk size"}
+ ]
+}

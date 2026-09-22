@@ -531,6 +531,7 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.math",
     "e.mem"
    ],
    "blocked_by": []
@@ -552,7 +553,9 @@
    "surface": "source",
    "milestone": "M2",
    "schedule": "scheduled",
-   "direct_dependencies": [],
+   "direct_dependencies": [
+    "e.math"
+   ],
    "blocked_by": []
   },
   {

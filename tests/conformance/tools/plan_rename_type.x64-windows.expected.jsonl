@@ -13,4 +13,4 @@
 {"record":"edit","op":"rename-symbol","symbol":"deep.Rec","site":"use","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":127,"byte_end":130,"line":7,"column":15,"end_line":7,"end_column":18,"column_utf16":15,"end_column_utf16":18},"replacement":"Pair"}
 {"record":"edit","op":"rename-symbol","symbol":"deep.Rec","site":"use","span":{"source":{"root":"project-src","path":"deep.e"},"byte_start":135,"byte_end":138,"line":7,"column":23,"end_line":7,"end_column":26,"column_utf16":23,"end_column_utf16":26},"replacement":"Pair"}
 {"record":"postcondition","check":"check-file passes; index-file reports 9 references to deep.Pair and deep.Rec names no type; the 1 functions spelled with the type's name are spelled with the new one"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":11,"files":2,"complete":true,"snapshot":"bdcc8852e8c85083"}}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":11,"files":2,"complete":true,"snapshot":"86befbb85f736c84"}}
