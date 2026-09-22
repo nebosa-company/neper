@@ -348,3 +348,149 @@ fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child)
     }
     ret (Result { size: geometry.Size { width: width, height: height }, children: rects }, ok)
 }
+
+// ---------------------------------------------------------- block flow (D904)
+//
+// Normal flow: blocks stacked vertically at their desired sizes, each with a top
+// and a bottom margin, and the margins between two blocks collapsed to the
+// larger of the two; the first top and the last bottom margin stand whole. The
+// width is the widest block, under the limit.
+type Block = struct { desired: geometry.Size, margin_top: f32, margin_bottom: f32 }
+
+fn flow(a: *mem.Arena, limits: Constraints, blocks: []const Block) -> (Result, err) {
+    if !limits_ok(limits) { ret (zero, Invalid) }
+    var at = 0usize
+    while at < blocks.len {
+        let b = blocks[at]
+        if !bounded(b.desired.width) || !bounded(b.desired.height) || !bounded(b.margin_top) || !bounded(b.margin_bottom) || b.margin_top < 0.0 || b.margin_bottom < 0.0 { ret (zero, Invalid) }
+        at += 1usize
+    }
+    let (rects, rects_error) = mem.alloc[geometry.Rect](a, blocks.len)
+    if rects_error != ok { ret (zero, rects_error) }
+    var y: f32 = 0.0
+    var widest: f32 = 0.0
+    var previous_bottom: f32 = 0.0
+    at = 0usize
+    while at < blocks.len {
+        let b = blocks[at]
+        var top = b.margin_top
+        if at != 0usize && previous_bottom > top { top = previous_bottom }
+        if at != 0usize { y += top - previous_bottom }
+        if at == 0usize { y += top }
+        rects[at] = geometry.Rect { x: 0.0, y: y, width: b.desired.width, height: b.desired.height }
+        y += b.desired.height + b.margin_bottom
+        previous_bottom = b.margin_bottom
+        if b.desired.width > widest { widest = b.desired.width }
+        at += 1usize
+    }
+    let size = constrain(geometry.Size { width: widest, height: y }, limits)
+    if y > limits.max_height || widest > limits.max_width { ret (Result { size: size, children: rects }, Overflow) }
+    ret (Result { size: size, children: rects }, ok)
+}
+
+// ---------------------------------------------------- automatic table (D904)
+//
+// Cells in row-major order over `columns`; a column is as narrow as its widest
+// minimum and as wide as its widest maximum; the columns take their maxima when
+// they fit the bounded width, their minima when even those do not (`Overflow`),
+// and otherwise grow from minimum toward maximum in proportion to the room each
+// asks for. A row is as tall as its tallest cell.
+type Table = struct { columns: usize, column_gap: f32, row_gap: f32 }
+type Cell = struct { min: geometry.Size, max: geometry.Size }
+
+fn table(a: *mem.Arena, spec: Table, limits: Constraints, cells: []const Cell) -> (Result, err) {
+    if !limits_ok(limits) || spec.columns == 0usize || !bounded(spec.column_gap) || !bounded(spec.row_gap) || spec.column_gap < 0.0 || spec.row_gap < 0.0 { ret (zero, Invalid) }
+    var at = 0usize
+    while at < cells.len {
+        let c = cells[at]
+        if !bounded(c.min.width) || !bounded(c.max.width) || !bounded(c.min.height) || !bounded(c.max.height) || c.max.width < c.min.width || c.max.height < c.min.height { ret (zero, Invalid) }
+        at += 1usize
+    }
+    let columns = spec.columns
+    let rows = (cells.len + columns - 1usize) / columns
+    let (rects, rects_error) = mem.alloc[geometry.Rect](a, cells.len)
+    if rects_error != ok { ret (zero, rects_error) }
+    let (minima, minima_error) = mem.alloc[f32](a, columns)
+    if minima_error != ok { ret (zero, minima_error) }
+    let (maxima, maxima_error) = mem.alloc[f32](a, columns)
+    if maxima_error != ok { ret (zero, maxima_error) }
+    let (widths, widths_error) = mem.alloc[f32](a, columns)
+    if widths_error != ok { ret (zero, widths_error) }
+    let (heights, heights_error) = mem.alloc[f32](a, rows)
+    if heights_error != ok { ret (zero, heights_error) }
+    at = 0usize
+    while at < columns {
+        minima[at] = 0.0
+        maxima[at] = 0.0
+        at += 1usize
+    }
+    at = 0usize
+    while at < rows {
+        heights[at] = 0.0
+        at += 1usize
+    }
+    at = 0usize
+    while at < cells.len {
+        let column = at % columns
+        let row = at / columns
+        if cells[at].min.width > minima[column] { minima[column] = cells[at].min.width }
+        if cells[at].max.width > maxima[column] { maxima[column] = cells[at].max.width }
+        if cells[at].max.height > heights[row] { heights[row] = cells[at].max.height }
+        at += 1usize
+    }
+    var gaps: f32 = 0.0
+    if columns > 1usize { gaps = spec.column_gap * f32(columns - 1usize) }
+    var sum_min: f32 = 0.0
+    var sum_max: f32 = 0.0
+    at = 0usize
+    while at < columns {
+        sum_min += minima[at]
+        sum_max += maxima[at]
+        at += 1usize
+    }
+    var overflow = false
+    let available = limits.max_width - gaps
+    at = 0usize
+    while at < columns {
+        widths[at] = maxima[at]
+        if bounded(limits.max_width) && sum_max > available {
+            if sum_min >= available {
+                widths[at] = minima[at]
+                if sum_min > available { overflow = true }
+            } else {
+                widths[at] = minima[at] + (maxima[at] - minima[at]) * ((available - sum_min) / (sum_max - sum_min))
+            }
+        }
+        at += 1usize
+    }
+    var x_offsets: f32 = 0.0
+    var y: f32 = 0.0
+    at = 0usize
+    while at < cells.len {
+        let column = at % columns
+        let row = at / columns
+        if column == 0usize {
+            x_offsets = 0.0
+            if row != 0usize { y += heights[row - 1usize] + spec.row_gap }
+        }
+        rects[at] = geometry.Rect { x: x_offsets, y: y, width: widths[column], height: heights[row] }
+        x_offsets += widths[column] + spec.column_gap
+        at += 1usize
+    }
+    var total_width: f32 = gaps
+    at = 0usize
+    while at < columns {
+        total_width += widths[at]
+        at += 1usize
+    }
+    var total_height: f32 = 0.0
+    if rows > 1usize { total_height = spec.row_gap * f32(rows - 1usize) }
+    at = 0usize
+    while at < rows {
+        total_height += heights[at]
+        at += 1usize
+    }
+    let size = constrain(geometry.Size { width: total_width, height: total_height }, limits)
+    if overflow || total_height > limits.max_height { ret (Result { size: size, children: rects }, Overflow) }
+    ret (Result { size: size, children: rects }, ok)
+}

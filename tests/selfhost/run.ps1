@@ -3312,6 +3312,13 @@ $uiPermissionsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $uiPermissionsWritten -ne 'executable written') { throw 'ui_permissions emission failed' }
 $uiPermissionsOutput = & $uiPermissionsPath
 if ($LASTEXITCODE -ne 0 -or $uiPermissionsOutput -ne 'ui permissions ok') { throw "the permission controllers answered wrongly: exit $LASTEXITCODE" }
+# The thirteen e.ui.* algorithms docs/algos.md names (D904): flow, table, hit test, anchor, keyed
+# reconciliation, lazy loading, the virtual window, debounce, idle work, the focus order, damage.
+$uiAlgorithmsPath = Join-Path $testBuild 'ui-algorithms-selfhost.exe'
+$uiAlgorithmsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_algorithms\src\main.e') $repo 'x64' 'windows' $uiAlgorithmsPath
+if ($LASTEXITCODE -ne 0 -or $uiAlgorithmsWritten -ne 'executable written') { throw 'ui_algorithms emission failed' }
+$uiAlgorithmsOutput = & $uiAlgorithmsPath
+if ($LASTEXITCODE -ne 0 -or $uiAlgorithmsOutput -ne 'ui algorithms ok') { throw "the ui algorithms answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

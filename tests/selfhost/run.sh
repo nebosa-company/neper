@@ -3039,6 +3039,13 @@ ui_permissions_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/ui-permissions-selfhost"
 ui_permissions_output=$("$test_build/ui-permissions-selfhost")
 [ "$ui_permissions_output" = 'ui permissions ok' ]
+# The thirteen e.ui.* algorithms docs/algos.md names (D904): layout, tree and clock parts on every
+# host; the app and window parts need a real window and are skipped without one.
+ui_algorithms_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_algorithms/src/main.e" "$repo" x64 linux "$test_build/ui-algorithms-selfhost")
+[ "$ui_algorithms_written" = 'executable written' ]
+chmod +x "$test_build/ui-algorithms-selfhost"
+ui_algorithms_output=$("$test_build/ui-algorithms-selfhost")
+[ "$ui_algorithms_output" = 'ui algorithms ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

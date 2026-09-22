@@ -56,7 +56,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `container_id`: `tests/conformance/tools/index.expected.jsonl`×24, `tests/conformance/tools/index_unsafe.expected.jsonl`×18, `tests/conformance/tools/index_project.expected.jsonl`×8, `src/tool.e`×7‡, `src/main.e`×2‡, `scripts/check_module_surfaces.py`×1
 - `instantiate`: `src/check.e`×19‡, `lib/e/algo/egraph.e`×5, `src/lower.e`×4‡, `src/em.e`×2‡, `tests/conformance/tools/index_unsafe.expected.jsonl`×2, `lib/e/crypto/noise.e`×1, `scripts/algos/decisions-pending.md`×1†, `src/tool.e`×1‡
 - `e.atomic`: `src/resolve.e`×14†, `src/check.e`×8‡, `scripts/algos/batch38.json`×4, `src/main.e`×2‡, `benchmarks/metamorphic/rename_symbols.py`×1, `lib/e/cancel.e`×1, `lib/e/concurrent/deque.e`×1, `lib/e/concurrent/reclaim.e`×1
-- `e.io`: `src/check.e`×4‡, `src/lower.e`×3‡, `src/main.e`×3‡, `lib/e/fmt/bson.e`×2, `lib/e/fmt/msgpack.e`×2, `lib/e/fmt/quoted_printable.e`×2, `benchmarks/llm_gen/README.md`×1, `benchmarks/llm_gen/tasks/factorial/neper.e`×1
+- `e.io`: `scripts/algos/batch44.json`×4, `src/check.e`×4‡, `src/lower.e`×3‡, `src/main.e`×3‡, `lib/e/fmt/bson.e`×2, `lib/e/fmt/msgpack.e`×2, `lib/e/fmt/quoted_printable.e`×2, `scripts/algos/agent_brief.md`×2
 - `e.str`: `src/lower.e`×17‡, `src/check.e`×7‡, `lib/e/str.e`×6†, `lib/e/fmt/json.e`×5†, `lib/e/fmt/csv.e`×3, `lib/e/fmt/ini.e`×3, `lib/e/fmt/png.e`×3, `lib/e/gfx/scene.e`×3†
 
 ## Existing fixtures

@@ -3198,7 +3198,7 @@ fn find_by_text(s: *State, value: str) -> (ElementId, usize) {
 // What an accessibility tree needs of an element: its identity, kind tag, parent,
 // bounds, action, enabling, focus and text, the text borrowed from the runtime
 // until the element changes. `false` for a slot that holds no live element.
-type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool, semantics: Semantics, has_semantics: bool, value: str, selection_start: usize, selection_end: usize, read_only: bool }
+type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool, semantics: Semantics, has_semantics: bool, value: str, selection_start: usize, selection_end: usize, read_only: bool, focusable: bool }
 
 fn element_count(widget_runtime: *const Runtime) -> usize {
     let s = mem.cast[*State](widget_runtime.state)
@@ -3225,6 +3225,7 @@ fn summary_at(widget_runtime: *const Runtime, slot: usize) -> (Summary, bool) {
     summary.bounds = e.bounds
     summary.has_action = e.has_action
     summary.enabled = e.enabled
+    summary.focusable = focusable(e)
     summary.focused = s.has_focus && usize(s.focus) == slot
     summary.text = e.text[0usize..e.text_len]
     summary.has_semantics = e.has_semantics
@@ -3266,4 +3267,118 @@ fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Re
     let (index, found) = element_of(s, element)
     if !found { ret (zero, false) }
     ret (s.elements[index].bounds, true)
+}
+
+// ------------------------------------------------ the algorithms of the tree (D904)
+//
+// Five of docs/algos.md's names over the runtime's element tree: the topmost
+// element under a point, a scroll anchor held across a rebuild, a keyed
+// reconciliation as a pure match of old keys to new, an intersection test for
+// lazy loading, and the row window of a virtualised list.
+
+fn hit_deepest(s: *State, index: usize, p: geometry.Point) -> (usize, bool) {
+    let e = &s.elements[index]
+    if !e.live || !geometry.contains(e.bounds, p) { ret (0usize, false) }
+    var order: [64]u32 = zero
+    var count = 0usize
+    var at = e.first_child
+    var has = e.has_child
+    while has && count < 64usize {
+        order[count] = at
+        count += 1usize
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    while count > 0usize {
+        count = count - 1usize
+        let (found, has_found) = hit_deepest(s, usize(order[count]), p)
+        if has_found { ret (found, true) }
+    }
+    ret (index, true)
+}
+
+// The topmost live element under `p`: the front overlay first, the root last,
+// and within each the deepest child drawn last.
+fn hit_test(widget_runtime: *const Runtime, p: geometry.Point) -> (ElementId, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed || !s.has_root { ret (zero, false) }
+    var o = s.overlay_count
+    while o > 0usize {
+        o -= 1usize
+        let (found, has_found) = hit_deepest(s, usize(s.overlays[o]), p)
+        if has_found { ret (ElementId { slot: u32(found), generation: s.elements[found].generation }, true) }
+    }
+    let (found, has_found) = hit_deepest(s, usize(s.root), p)
+    if !has_found { ret (zero, false) }
+    ret (ElementId { slot: u32(found), generation: s.elements[found].generation }, true)
+}
+
+// The anchor kept where it was: after a rebuild moved content above it, the
+// viewport scrolls by the anchor's displacement from `previous_top` (its top
+// relative to the viewport before the rebuild); the displacement is answered.
+fn scroll_anchor(widget_runtime: *Runtime, viewport: ElementId, anchor: ElementId, previous_top: f32) -> (f32, err) {
+    let (viewport_bounds, has_viewport) = bounds_of(widget_runtime, viewport)
+    let (anchor_bounds, has_anchor) = bounds_of(widget_runtime, anchor)
+    if !has_viewport || !has_anchor { ret (0.0, InvalidTree) }
+    let (offset, has_offset) = scroll_offset_of(widget_runtime, viewport)
+    if !has_offset { ret (0.0, InvalidTree) }
+    let delta = (anchor_bounds.y - viewport_bounds.y) - previous_top
+    if delta == 0.0 { ret (0.0, ok) }
+    let scrolled = scroll_to(widget_runtime, viewport, offset + delta)
+    if scrolled != ok { ret (0.0, scrolled) }
+    ret (delta, ok)
+}
+
+// For each new key, the old index it matches, so that a node moves rather than
+// being remade; a key without a match is new. ponytail: a quadratic scan, which
+// the lists this serves (hundreds) never notice; a map when one does.
+type KeyedMatch = struct { old_index: usize, found: bool }
+
+fn reconcile_keyed(a: *mem.Arena, old: []const Key, new: []const Key) -> ([]KeyedMatch, err) {
+    var nothing: []KeyedMatch = zero
+    let (matches, allocation_error) = mem.alloc[KeyedMatch](a, new.len)
+    if allocation_error != ok { ret (nothing, allocation_error) }
+    var at = 0usize
+    while at < new.len {
+        matches[at] = KeyedMatch { old_index: 0usize, found: false }
+        var o = 0usize
+        while o < old.len {
+            if old[o] == new[at] {
+                matches[at] = KeyedMatch { old_index: o, found: true }
+                break
+            }
+            o += 1usize
+        }
+        at += 1usize
+    }
+    ret (matches[0usize..new.len], ok)
+}
+
+// Whether an element is within `margin` of a viewport, which is when its
+// resource is worth loading.
+fn lazy_load(widget_runtime: *const Runtime, element: ElementId, viewport: ElementId, margin: f32) -> bool {
+    let (element_bounds, has_element) = bounds_of(widget_runtime, element)
+    let (viewport_bounds, has_viewport) = bounds_of(widget_runtime, viewport)
+    if !has_element || !has_viewport { ret false }
+    let near = geometry.Rect { x: viewport_bounds.x - margin, y: viewport_bounds.y - margin, width: viewport_bounds.width + margin * 2.0, height: viewport_bounds.height + margin * 2.0 }
+    let overlap = geometry.intersect(near, element_bounds)
+    ret overlap.width > 0.0 && overlap.height > 0.0
+}
+
+// The rows a viewport of `extent` at `offset` shows, `overscan` more on each
+// side, as `first` up to `end`; every row is `row_height` tall.
+type RowRange = struct { first: usize, end: usize }
+
+fn virtual_list(extent: f32, offset: f32, row_height: f32, count: usize, overscan: usize) -> RowRange {
+    if count == 0usize || !(row_height > 0.0) || !(extent >= 0.0) { ret RowRange { first: 0usize, end: 0usize } }
+    var top = offset
+    if top < 0.0 { top = 0.0 }
+    var first = usize(top / row_height)
+    var end = usize((top + extent) / row_height) + 1usize
+    if first > overscan { first -= overscan } else { first = 0usize }
+    end += overscan
+    if end > count { end = count }
+    if first > end { first = end }
+    ret RowRange { first: first, end: end }
 }

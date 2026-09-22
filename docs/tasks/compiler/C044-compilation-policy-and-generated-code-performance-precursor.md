@@ -82,7 +82,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `unchecked`: `src/em.e`×36‡, `src/main.e`×27‡, `src/check.e`×23‡, `src/tool.e`×11‡, `src/codegen_x64.e`×1‡, `src/lower.e`×1‡, `tests/conformance/reject/safety_unchecked.expected.jsonl`×1
 - `inline-cap`: `src/main.e`×6‡, `src/lower.e`×2‡, `src/nir.e`×1†
-- `Mask`: `lib/e/simd.e`×22, `src/check.e`×15‡, `src/layout.e`×2, `src/main.e`×2‡, `benchmarks/metamorphic/rename_symbols.py`×1, `lib/e/algo/combin.e`×1, `scripts/check_module_plan.py`×1, `src/resolve.e`×1†
+- `Mask`: `lib/e/simd.e`×22, `src/check.e`×15‡, `lib/e/crypto/sign.e`×2†, `src/layout.e`×2, `src/main.e`×2‡, `benchmarks/metamorphic/rename_symbols.py`×1, `lib/e/algo/combin.e`×1, `scripts/check_module_plan.py`×1
 
 ## Verification
 

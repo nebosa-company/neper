@@ -17844,3 +17844,32 @@ notes: `try` inside a tuple-returning function passes the checker and
 fails only at lowering; a bare block statement is refused; an inline
 array literal cannot be sliced.
 
+## D904 — The thirteen algorithms the UI chain still owed, each over what the runtime already knows
+
+`docs/algos.md` named thirteen functions across `e.ui.layout`, `e.ui.widget`,
+`e.ui.app`, `e.ui.accessibility` and `e.ui.window` that no module had, the
+last gaps in the modules meter beside `e.os`, `e.thread.fiber` and
+`e.fmt.opus`. Each is written over what the runtime already keeps rather
+than as a parallel structure: block `flow` stacks desired sizes with the
+margins between two blocks collapsed to the larger; the automatic `table`
+sizes columns from their widest minimum and maximum and grows them in
+proportion when the bound sits between the two sums; `hit_test` is the
+front overlay first and the deepest last-drawn child within it, the same
+walk the dispatcher takes; `scroll_anchor` scrolls a viewport by the
+displacement of an anchor's top across a rebuild; `reconcile_keyed` is the
+pure match of old keys to new that the reconciler does by key already,
+offered on its own for a caller's list; `lazy_load` is an intersection with
+the viewport grown by a margin; `virtual_list` is the row window with its
+overscan; `debounce` and `throttle` run over the caller's clock, since the
+app's loop already has one; `request_frame` marks the frame due, and
+`request_idle` runs once in the step's slack after the frame -- not "when
+no frame is due", because a presenting window requests the next frame and
+that step never comes; `tree` is `build` under the name the catalogue
+gives; `focus_order` is the runtime's own focusability in preorder, which
+is the order its Tab takes, so `Summary` now says `focusable`; `damage`
+unions the invalid regions and the presenting frame clears them. The one
+fence change on the way: `publish`'s parameter was named `tree`, which the
+new function reserves, so it is `t`. `link/ui_algorithms` checks the two
+layouts by number, the tree parts under the harness, the clock parts by
+explicit instants, and the app and window parts through a real window
+where the host has one.

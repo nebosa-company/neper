@@ -4852,6 +4852,11 @@ fn constrain(value: geometry.Size, limits: Constraints) -> geometry.Size
 fn flex(a: *mem.Arena, spec: Flex, limits: Constraints, children: []const Child) -> (Result, err)
 fn wrap(a: *mem.Arena, spec: Wrap, limits: Constraints, children: []const Child) -> (Result, err)
 fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child) -> (Result, err)
+type Block = struct { desired: geometry.Size, margin_top: f32, margin_bottom: f32 }
+type Table = struct { columns: usize, column_gap: f32, row_gap: f32 }
+type Cell = struct { min: geometry.Size, max: geometry.Size }
+fn flow(a: *mem.Arena, limits: Constraints, blocks: []const Block) -> (Result, err)
+fn table(a: *mem.Arena, spec: Table, limits: Constraints, cells: []const Cell) -> (Result, err)
 ```
 
 Layout is a deterministic pure constraint solver. Scroll state, widget measurement
@@ -9143,6 +9148,8 @@ fn orientation(window: *const Window) -> (Orientation, err)
 fn lifecycle(window: *const Window) -> (Lifecycle, err)
 fn screens(a: *mem.Arena, limit: usize) -> ([]const Screen, err)
 fn close(window: *Window) -> err
+fn damage(window: *Window, area: geometry.Rect) -> err
+fn damaged(window: *const Window) -> (geometry.Rect, bool)
 ```
 
 Windows are logically linear handles backed only by reviewed `e.os` primitives.
@@ -9237,7 +9244,7 @@ type Fit = enum u8 { Fill, Contain, Cover, None }
 type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
 type Runtime = struct { state: *void }
 type Limits = struct { max_elements: usize, max_states: usize, state_bytes: usize, state_classes: u16, max_depth: u16, max_commands: usize }
-type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool, semantics: Semantics, has_semantics: bool, value: str, selection_start: usize, selection_end: usize, read_only: bool }
+type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool, semantics: Semantics, has_semantics: bool, value: str, selection_start: usize, selection_end: usize, read_only: bool, focusable: bool }
 error DuplicateKey
 error InvalidTree
 error TooDeep
@@ -9312,6 +9319,13 @@ fn queue_of(widget_runtime: *Runtime) -> *gpu.Queue
 fn element_count(widget_runtime: *const Runtime) -> usize
 fn root_of(widget_runtime: *const Runtime) -> (ElementId, bool)
 fn summary_at(widget_runtime: *const Runtime, slot: usize) -> (Summary, bool)
+type KeyedMatch = struct { old_index: usize, found: bool }
+type RowRange = struct { first: usize, end: usize }
+fn hit_test(widget_runtime: *const Runtime, p: geometry.Point) -> (ElementId, bool)
+fn scroll_anchor(widget_runtime: *Runtime, viewport: ElementId, anchor: ElementId, previous_top: f32) -> (f32, err)
+fn reconcile_keyed(a: *mem.Arena, old: []const Key, new: []const Key) -> ([]KeyedMatch, err)
+fn lazy_load(widget_runtime: *const Runtime, element: ElementId, viewport: ElementId, margin: f32) -> bool
+fn virtual_list(extent: f32, offset: f32, row_height: f32, count: usize, overscan: usize) -> RowRange
 ```
 
 `Node` is the declarative syntax: ordinary literals and the allocation-free convenience
@@ -9477,8 +9491,10 @@ const ACTION_SHOW_MENU: u32 = 1024u32
 const ACTION_SET_SELECTION: u32 = 2048u32
 
 fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err)
-fn publish(window_value: window.Id, tree: *const Tree) -> err
+fn publish(window_value: window.Id, t: *const Tree) -> err
 fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err
+fn tree(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err)
+fn focus_order(a: *mem.Arena, runtime: *const widget.Runtime) -> ([]Id, err)
 ```
 
 The semantics tree is separate from paint order but uses the same stable element
@@ -9829,6 +9845,12 @@ fn run(app: *App) -> err
 fn stop(app: *App)
 fn close(app: *App) -> err
 fn frames_of(app: *const App) -> u64
+type Debounce = struct { delay: time.Duration, interval: time.Duration, due: time.Instant, last: time.Instant, pending: bool, has_last: bool }
+fn debounce(d: *Debounce, now: time.Instant, triggered: bool) -> bool
+fn throttle(d: *Debounce, now: time.Instant) -> bool
+fn request_frame(app: *App) -> err
+fn request_idle(app: *App, work: widget.Submit) -> err
+fn window_of(app: *App) -> (*window.Window, err)
 type Tray = struct { id: u32, width: u32, height: u32, source: []const u32, composed: []u32, tooltip: str, badge: u32, menu: []const shell.MenuItem, open: bool }
 type TrayActivationKind = enum u8 { Select, Open, Command, Dismissed, NoticeSelect, NoticeDismiss }
 type Notification = struct { title: str, body: str, silent: bool }

@@ -46,6 +46,8 @@ type State = struct {
     stopped: bool,
     closed: bool,
     frames: u64,
+    idle: widget.Submit,
+    idle_pending: bool,
 }
 
 // The per-context trampoline: the erased context and the build function's bits
@@ -125,9 +127,16 @@ fn step(app: *App, timeout: time.Duration) -> (bool, err) {
         if dispatch_error != ok { ret (false, dispatch_error) }
         s.frame_due = true
     }
-    if !s.frame_due { ret (true, ok) }
-    let frame_error = present_frame(s)
-    if frame_error != ok { ret (false, frame_error) }
+    if s.frame_due {
+        let frame_error = present_frame(s)
+        if frame_error != ok { ret (false, frame_error) }
+    }
+    // The step's slack, after the frame if there was one: the idle work, once.
+    if s.idle_pending {
+        s.idle_pending = false
+        let idle_error = s.idle.invoke(s.idle.ctx)
+        if idle_error != ok { ret (false, idle_error) }
+    }
     ret (true, ok)
 }
 
@@ -1056,4 +1065,58 @@ fn screen_capture_supported() -> bool {
 fn screen_capture(a: *mem.Arena) -> (shell.Icon, err) {
     let (screen, capture_error) = shell.screen_capture(a)
     ret (screen, capture_error)
+}
+
+// ----------------------------------------------- scheduling algorithms (D904)
+//
+// Debounce and throttle over the caller's clock, a frame requested outside the
+// input loop, and idle work run when a step has no frame to present.
+
+type Debounce = struct { delay: time.Duration, interval: time.Duration, due: time.Instant, last: time.Instant, pending: bool, has_last: bool }
+
+// `triggered` arms the delay again; the answer is true once, when the delay has
+// passed since the last trigger.
+fn debounce(d: *Debounce, now: time.Instant, triggered: bool) -> bool {
+    if triggered {
+        d.pending = true
+        d.due = time.Instant { nanos: now.nanos + d.delay.nanos }
+    }
+    if d.pending && now.nanos >= d.due.nanos {
+        d.pending = false
+        ret true
+    }
+    ret false
+}
+
+// True at most once per interval.
+fn throttle(d: *Debounce, now: time.Instant) -> bool {
+    if d.has_last && now.nanos - d.last.nanos < d.interval.nanos { ret false }
+    d.last = now
+    d.has_last = true
+    ret true
+}
+
+// The next step presents a frame whether or not an event arrives.
+fn request_frame(app: *App) -> err {
+    let (s, state_error) = state_of(app)
+    if state_error != ok { ret state_error }
+    s.frame_due = true
+    ret ok
+}
+
+// Work for the slack of the next step, after its frame if it presents one: run
+// once, then forgotten.
+fn request_idle(app: *App, work: widget.Submit) -> err {
+    let (s, state_error) = state_of(app)
+    if state_error != ok { ret state_error }
+    s.idle = work
+    s.idle_pending = true
+    ret ok
+}
+
+// The window an app draws in, for the window services that take one.
+fn window_of(app: *App) -> (*window.Window, err) {
+    let (s, state_error) = state_of(app)
+    if state_error != ok { ret (zero, state_error) }
+    ret (&s.win, ok)
 }

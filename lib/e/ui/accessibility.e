@@ -379,25 +379,25 @@ fn action_bits(actions: []const Action) -> u8 {
 
 // The tree flattened into the bridge's records and handed to the host: every node
 // once, its parent found from the children lists; nothing of the tree is kept.
-fn publish(window_value: window.Id, tree: *const Tree) -> err {
+fn publish(window_value: window.Id, t: *const Tree) -> err {
     let (state, window_error) = window.state_by_id(window_value)
     if window_error != ok { ret Invalid }
     var storage: [256]os.AccessibleNode = zero
-    if tree.nodes.len > storage.len { ret Invalid }
+    if t.nodes.len > storage.len { ret Invalid }
     var i = 0usize
-    while i < tree.nodes.len {
-        let n = &tree.nodes[i]
+    while i < t.nodes.len {
+        let n = &t.nodes[i]
         storage[i] = os.AccessibleNode { id: n.id.slot, parent: 0u32, has_parent: false, role: role_code(n.role), label: n.label, value: n.value, hint: n.hint, flags: flags_of(n.state), actions: action_bits(n.actions), x: n.bounds.x, y: n.bounds.y, width: n.bounds.width, height: n.bounds.height }
         i += 1usize
     }
     i = 0usize
-    while i < tree.nodes.len {
-        let n = &tree.nodes[i]
+    while i < t.nodes.len {
+        let n = &t.nodes[i]
         var c = 0usize
         while c < n.children.len {
             var k = 0usize
-            while k < tree.nodes.len {
-                if tree.nodes[k].id.slot == n.children[c].slot && tree.nodes[k].id.generation == n.children[c].generation {
+            while k < t.nodes.len {
+                if t.nodes[k].id.slot == n.children[c].slot && t.nodes[k].id.generation == n.children[c].generation {
                     storage[k].parent = n.id.slot
                     storage[k].has_parent = true
                 }
@@ -407,7 +407,7 @@ fn publish(window_value: window.Id, tree: *const Tree) -> err {
         }
         i += 1usize
     }
-    let published = os.accessibility_publish(state.handle, storage[0usize..tree.nodes.len])
+    let published = os.accessibility_publish(state.handle, storage[0usize..t.nodes.len])
     if published == os.Unsupported { ret Unsupported }
     if published != ok { ret Invalid }
     ret ok
@@ -451,4 +451,64 @@ fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err 
     }
     if widget.semantic_action(runtime, id, action_bit(action)) == ok { ret ok }
     ret Unsupported
+}
+
+// ------------------------------------------------ the tree and the order (D904)
+
+// The accessibility tree, built from the runtime; `build` under the name
+// docs/algos.md gives the construction.
+fn tree(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
+    let (built, build_error) = build(a, runtime)
+    ret (built, build_error)
+}
+
+// The focusable elements in document order -- the runtime's preorder, which is
+// the order Tab travels, since no element carries an index of its own here; what
+// is focusable is the runtime's own answer, the one its Tab uses.
+fn focus_order(a: *mem.Arena, runtime: *const widget.Runtime) -> ([]Id, err) {
+    var nothing: []Id = zero
+    let (root, has_root) = widget.root_of(runtime)
+    if !has_root { ret (nothing, ok) }
+    var stack: [256]u32 = zero
+    var depth = 0usize
+    stack[0usize] = root.slot
+    depth = 1usize
+    var order: [256]Id = zero
+    var count = 0usize
+    while depth > 0usize {
+        depth -= 1usize
+        let slot = stack[depth]
+        let (summary, has_summary) = widget.summary_at(runtime, usize(slot))
+        if !has_summary { continue }
+        if summary.focusable && count < 256usize {
+            order[count] = summary.id
+            count += 1usize
+        }
+        // Children pushed last first so that the first child is visited next.
+        var children: [64]u32 = zero
+        var child_count = 0usize
+        var child = summary.first_child
+        var has_child = summary.has_child
+        while has_child && child_count < 64usize {
+            children[child_count] = child.slot
+            child_count += 1usize
+            let (child_summary, has_child_summary) = widget.summary_at(runtime, usize(child.slot))
+            if !has_child_summary { break }
+            has_child = child_summary.has_sibling
+            child = child_summary.next_sibling
+        }
+        while child_count > 0usize && depth < 256usize {
+            child_count -= 1usize
+            stack[depth] = children[child_count]
+            depth += 1usize
+        }
+    }
+    let (copy, allocation_error) = mem.alloc[Id](a, count)
+    if allocation_error != ok { ret (nothing, allocation_error) }
+    var at = 0usize
+    while at < count {
+        copy[at] = order[at]
+        at += 1usize
+    }
+    ret (copy[0usize..count], ok)
 }

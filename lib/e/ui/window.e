@@ -52,6 +52,8 @@ type State = struct {
     resizable: bool,
     frame_requested: bool,
     closed: bool,
+    damage: geometry.Rect,
+    damaged: bool,
 }
 
 var slots: [16]*State = zero
@@ -100,7 +102,7 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
         let abandoned = os.window_close(handle)
         ret (none, Invalid)
     }
-    states[0usize] = State { arena: a, handle: handle, scratch: scratch, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false }
+    states[0usize] = State { arena: a, handle: handle, scratch: scratch, queue: queue, frames: frames, drawable: drawable, width: options.width, height: options.height, mode: options.mode, transparent: options.transparent, resizable: options.resizable, frame_requested: false, closed: false, damage: zero, damaged: false }
     generations[slot] += 1u32
     slots[slot] = &states[0usize]
     live[slot] = true
@@ -216,6 +218,7 @@ fn request_frame(window: *Window) -> err {
         if os.window_present(s.handle, s.scratch[0usize..count], shown.width, shown.height) != ok { ret Invalid }
     }
     s.frame_requested = true
+    s.damaged = false
     ret ok
 }
 
@@ -305,4 +308,25 @@ fn close(window: *Window) -> err {
     s.closed = true
     if host_closed != ok { ret Invalid }
     ret ok
+}
+
+// ------------------------------------------------ damage tracking (D904)
+
+// A region invalidated since the last frame, unioned with the others; the
+// next `request_frame` presents and clears it.
+fn damage(window: *Window, area: geometry.Rect) -> err {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret state_error }
+    if area.width <= 0.0 || area.height <= 0.0 { ret Invalid }
+    if s.damaged { s.damage = geometry.union_rect(s.damage, area) } else { s.damage = area }
+    s.damaged = true
+    ret ok
+}
+
+// What is invalid now, or nothing.
+fn damaged(window: *const Window) -> (geometry.Rect, bool) {
+    let (s, state_error) = state_of(window)
+    if state_error != ok { ret (zero, false) }
+    if !s.damaged { ret (zero, false) }
+    ret (s.damage, true)
 }
