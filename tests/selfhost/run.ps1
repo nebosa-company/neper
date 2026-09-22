@@ -2867,6 +2867,13 @@ $uiExchangeModelWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $uiExchangeModelWritten -ne 'executable written') { throw 'ui_exchange_model emission failed' }
 $uiExchangeModelOutput = & $uiExchangeModelPath
 if ($LASTEXITCODE -ne 0 -or $uiExchangeModelOutput -ne 'ui exchange model ok') { throw "the exchange model answered wrongly: exit $LASTEXITCODE" }
+# Cross-application drag and drop (D892, widget plan P4-05): the app's real window becomes an
+# OLE drop target once, and the refusals hold; no drag is started without a pointer.
+$uiDragDropPath = Join-Path $testBuild 'ui-drag-drop-selfhost.exe'
+$uiDragDropWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_drag_drop\src\main.e') $repo 'x64' 'windows' $uiDragDropPath
+if ($LASTEXITCODE -ne 0 -or $uiDragDropWritten -ne 'executable written') { throw 'ui_drag_drop emission failed' }
+$uiDragDropOutput = & $uiDragDropPath
+if ($LASTEXITCODE -ne 0 -or $uiDragDropOutput -ne 'ui drag drop ok') { throw "the drag and drop answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

@@ -550,3 +550,55 @@ fn offer_of(a: *mem.Arena, items: []const shell.Content) -> (DataOffer, err) {
     holders[0usize] = Held { items: items }
     ret (DataOffer { types: types[0usize..items.len], provider: DataProvider { ctx: mem.cast[*void](&holders[0usize]), provide: provide_held } }, ok)
 }
+
+// ---------------------------------------- cross-application drag and drop (D892)
+//
+// Widget plan P4-05 over `e.os.shell`: a drag from this program offers a
+// `DataOffer`, materialised at the start (the shell copies each block only when
+// the receiver asks for it) and blocks until the receiver copies, moves or the
+// drag is cancelled -- the `DragOperation` the caller allowed and the result it
+// got; a drop target is the app's own window, with the drops copied into the
+// caller's storage arena and taken in order by `drop_take`; a `PromisedFile`
+// is a representation the receiver writes out itself, its name and its
+// contents, which Explorer takes as a file. Both sides say `shell.Unsupported`
+// where the host has neither, and the two predicates say so first.
+
+type DragOperation = struct { allow_move: bool }
+
+fn drag_source_supported() -> bool {
+    ret shell.capabilities().drag_source
+}
+
+fn drop_target_supported() -> bool {
+    ret shell.capabilities().drop_target
+}
+
+// The drag, from a pointer-down of the caller's; the answer is what the receiver did.
+fn drag_offer(a: *mem.Arena, offer: DataOffer, operation: DragOperation) -> (shell.DragResult, err) {
+    let (items, materialize_error) = offer_materialize(a, offer)
+    if materialize_error != ok { ret (.Cancelled, materialize_error) }
+    let (result, drag_error) = shell.drag_start(a, items, operation.allow_move)
+    ret (result, drag_error)
+}
+
+fn drop_target_open(a: *mem.Arena, app: *App, storage: *mem.Arena) -> err {
+    let (handle, handle_error) = host_window(app)
+    if handle_error != ok { ret handle_error }
+    ret shell.drop_target_register(a, handle, storage)
+}
+
+fn drop_target_close(a: *mem.Arena, app: *App) -> err {
+    let (handle, handle_error) = host_window(app)
+    if handle_error != ok { ret handle_error }
+    ret shell.drop_target_unregister(a, handle)
+}
+
+fn drop_take() -> (shell.Drop, bool) {
+    let (landed, any) = shell.drop_poll()
+    ret (landed, any)
+}
+
+// A file the receiver will write: its name and its contents, as one representation.
+fn promised_file(name: str, contents: []const u8) -> shell.Content {
+    ret shell.Content { kind: .Promise, mime: "", text: name, paths: zero, image: zero, bytes: contents }
+}

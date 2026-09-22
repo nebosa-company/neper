@@ -2662,6 +2662,12 @@ ui_exchange_model_written=$($test_build/neper-self emit-executable "$repo/tests/
 chmod +x "$test_build/ui-exchange-model-selfhost"
 ui_exchange_model_output=$("$test_build/ui-exchange-model-selfhost")
 [ "$ui_exchange_model_output" = 'ui exchange model ok' ]
+# Cross-application drag and drop (D892, widget plan P4-05): `Unsupported` on a host without OLE.
+ui_drag_drop_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_drag_drop/src/main.e" "$repo" x64 linux "$test_build/ui-drag-drop-selfhost")
+[ "$ui_drag_drop_written" = 'executable written' ]
+chmod +x "$test_build/ui-drag-drop-selfhost"
+ui_drag_drop_output=$("$test_build/ui-drag-drop-selfhost")
+[ "$ui_drag_drop_output" = 'ui drag drop ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

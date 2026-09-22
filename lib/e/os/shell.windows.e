@@ -25,8 +25,10 @@ type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
 // One representation of transferred data: text, a list of paths, an image as
-// pixels, or bytes under a MIME name the other side registers the same way.
-type ContentKind = enum u8 { Text, Files, Image, Bytes }
+// pixels, bytes under a MIME name the other side registers the same way, or a
+// promised file -- a name in `text` and contents in `bytes` that the receiver
+// writes out itself when it takes the drop.
+type ContentKind = enum u8 { Text, Files, Image, Bytes, Promise }
 type Content = struct { kind: ContentKind, mime: str, text: str, paths: []const str, image: Icon, bytes: []const u8 }
 type Drop = struct { x: i32, y: i32, items: []const Content }
 type DragResult = enum u8 { Copied, Moved, Cancelled }
@@ -929,7 +931,7 @@ const MK_BUTTONS: u32 = 3u32
 const DATA_OBJECT_GET_DATA: usize = 3usize
 const DROP_RING: usize = 8usize
 const MAX_DROP_ITEMS: usize = 4usize
-const MAX_DRAG_ITEMS: usize = 8usize
+const MAX_DRAG_ITEMS: usize = 6usize
 const IID_UNKNOWN: u32 = 0u32
 const IID_DATA_OBJECT: u32 = 270u32
 const IID_DROP_SOURCE: u32 = 289u32
@@ -951,6 +953,8 @@ var drag_items: []const Content = zero
 var drag_formats: [8]FormatEtc = zero
 var drag_format_count: usize = 0usize
 var drag_arena: *mem.Arena = zero
+var descriptor_format: u32 = 0u32
+var contents_format: u32 = 0u32
 
 @import("user32.dll", "OpenClipboard")
 extern fn raw_open_clipboard(owner: usize) -> i32
@@ -1038,6 +1042,78 @@ fn hresult(bits: u32) -> i32 {
     ret mem.bitcast[i32](bits)
 }
 
+// The shell's two promised-file formats, registered by name once.
+fn ensure_promise_formats(a: *mem.Arena) -> err {
+    if descriptor_format != 0u32 { ret ok }
+    let (descriptor_name, descriptor_error) = widen(a, "FileGroupDescriptorW")
+    if descriptor_error != ok { ret descriptor_error }
+    let (contents_name, contents_error) = widen(a, "FileContents")
+    if contents_error != ok { ret contents_error }
+    let descriptor = raw_register_clipboard_format(&descriptor_name[0usize])
+    let contents = raw_register_clipboard_format(&contents_name[0usize])
+    if descriptor == 0u32 || contents == 0u32 { ret Failed }
+    descriptor_format = descriptor
+    contents_format = contents
+    ret ok
+}
+
+// FILEGROUPDESCRIPTORW over the promised items: a count, then 592 bytes per file
+// with the size flag, the size and the name.
+fn descriptor_block(a: *mem.Arena, items: []const Content) -> (usize, err) {
+    var count = 0usize
+    var at = 0usize
+    while at < items.len {
+        if items[at].kind == .Promise { count += 1usize }
+        at += 1usize
+    }
+    if count == 0usize { ret (0usize, NotFound) }
+    let total = 4usize + count * 592usize
+    let (block, allocation_error) = mem.alloc[u8](a, total)
+    if allocation_error != ok { ret (0usize, allocation_error) }
+    at = 0usize
+    while at < total {
+        block[at] = 0u8
+        at += 1usize
+    }
+    put_u32(block, 0usize, u32(count))
+    var index = 0usize
+    at = 0usize
+    while at < items.len {
+        if items[at].kind == .Promise {
+            let base = 4usize + index * 592usize
+            put_u32(block, base, 64u32)
+            put_u32(block, base + 68usize, u32(items[at].bytes.len))
+            let (name, widen_error) = widen(a, items[at].text)
+            if widen_error != ok { ret (0usize, widen_error) }
+            var unit = 0usize
+            while unit < 259usize && name[unit] != 0u16 {
+                block[base + 72usize + unit * 2usize] = u8(name[unit] & 255u16)
+                block[base + 72usize + unit * 2usize + 1usize] = u8(name[unit] >> 8u16)
+                unit += 1usize
+            }
+            index += 1usize
+        }
+        at += 1usize
+    }
+    let handle = global_from_bytes(block[0usize..total])
+    if handle == 0usize { ret (0usize, Failed) }
+    ret (handle, ok)
+}
+
+fn promised_item(items: []const Content, index: i32) -> (usize, bool) {
+    if index < 0i32 { ret (0usize, false) }
+    var seen = 0i32
+    var at = 0usize
+    while at < items.len {
+        if items[at].kind == .Promise {
+            if seen == index { ret (at, true) }
+            seen += 1i32
+        }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
 fn clipboard_open() -> err {
     var attempt = 0usize
     while attempt <= 10usize {
@@ -1101,6 +1177,7 @@ fn global_from_units(units: []const u16) -> usize {
 // A format's id: the three standard ones by kind, bytes by their registered name.
 fn format_of(a: *mem.Arena, kind: ContentKind, mime: str) -> (u32, err) {
     if kind == .Text { ret (CF_UNICODETEXT, ok) }
+    if kind == .Promise { ret (0u32, Unsupported) }
     if kind == .Files { ret (CF_HDROP, ok) }
     if kind == .Image { ret (CF_DIB, ok) }
     if mime.len == 0usize { ret (0u32, Invalid) }
@@ -1472,6 +1549,78 @@ fn take_representation(data: *ComObject, kind: ContentKind, format: u32, out: *C
     ret taken
 }
 
+// The other program's promised files, one `.Promise` item per file into `out`
+// as far as it holds: the descriptor names and sizes them, and the contents come
+// one index at a time; a file offered only as a stream is passed over.
+fn take_promises(data: *ComObject, out: []Content) -> usize {
+    var request: FormatEtc = zero
+    request.format = u16(descriptor_format)
+    request.aspect = DVASPECT_CONTENT
+    request.index = 0i32 - 1i32
+    request.tymed = TYMED_HGLOBAL
+    var getter: GetDataPun = zero
+    getter.bits = data.vtable.slots[DATA_OBJECT_GET_DATA]
+    var medium: StgMedium = zero
+    if getter.function(mem.address_of(data), &request, &medium) != S_OK { ret 0usize }
+    var found = 0usize
+    if medium.tymed == TYMED_HGLOBAL && medium.handle != 0usize {
+        let (block, locked) = global_bytes(medium.handle)
+        if locked {
+            let count = usize(get_u32(block, 0usize))
+            if block.len >= 4usize + count * 592usize && count != 0usize {
+                if true {
+                    var index = 0usize
+                    while index < count && found < out.len {
+                        let base = 4usize + index * 592usize
+                        var units = 0usize
+                        while units < 260usize && (block[base + 72usize + units * 2usize] != 0u8 || block[base + 72usize + units * 2usize + 1usize] != 0u8) { units += 1usize }
+                        let (wide, wide_error) = mem.alloc[u16](drop_storage, units + 1usize)
+                        if wide_error != ok { break }
+                        var unit = 0usize
+                        while unit < units {
+                            wide[unit] = u16(block[base + 72usize + unit * 2usize]) | (u16(block[base + 72usize + unit * 2usize + 1usize]) << 8u16)
+                            unit += 1usize
+                        }
+                        wide[units] = 0u16
+                        let (name_bytes, name_error) = mem.alloc[u8](drop_storage, units * 3usize + 1usize)
+                        if name_error != ok { break }
+                        os.touch(&name_bytes[0usize], units * 3usize + 1usize)
+                        var name_len = 0usize
+                        if units != 0usize {
+                            let converted = raw_narrow(CP_UTF8, 0u32, &wide[0usize], i32(units), &name_bytes[0usize], i32(units * 3usize), 0usize, 0usize)
+                            if converted > 0i32 { name_len = usize(converted) }
+                        }
+                        var contents_request: FormatEtc = zero
+                        contents_request.format = u16(contents_format)
+                        contents_request.aspect = DVASPECT_CONTENT
+                        contents_request.index = i32(index)
+                        contents_request.tymed = TYMED_HGLOBAL
+                        var contents_medium: StgMedium = zero
+                        if getter.function(mem.address_of(data), &contents_request, &contents_medium) == S_OK {
+                            if contents_medium.tymed == TYMED_HGLOBAL && contents_medium.handle != 0usize {
+                                let (item, content_error) = content_of(drop_storage, .Bytes, "", contents_medium.handle)
+                                if content_error == ok {
+                                    var promise: Content = zero
+                                    promise.kind = .Promise
+                                    promise.text = name_bytes[0usize..name_len]
+                                    promise.bytes = item.bytes
+                                    out[found] = promise
+                                    found += 1usize
+                                }
+                            }
+                            raw_release_medium(&contents_medium)
+                        }
+                        index += 1usize
+                    }
+                }
+            }
+            let unlocked = raw_global_unlock(medium.handle)
+        }
+    }
+    raw_release_medium(&medium)
+    ret found
+}
+
 @cc(c)
 fn drop_drop(this: usize, data: *ComObject, keys: u32, point: usize, effect: *Effect) -> i32 {
     effect.value = DROPEFFECT_NONE
@@ -1482,6 +1631,7 @@ fn drop_drop(this: usize, data: *ComObject, keys: u32, point: usize, effect: *Ef
     if take_representation(data, .Files, CF_HDROP, &items[count]) { count += 1usize }
     if take_representation(data, .Text, CF_UNICODETEXT, &items[count]) { count += 1usize }
     if take_representation(data, .Image, CF_DIB, &items[count]) { count += 1usize }
+    if descriptor_format != 0u32 { count += take_promises(data, items[count..MAX_DROP_ITEMS]) }
     if count == 0usize { ret S_OK }
     var landed: Drop = zero
     let (x, y) = point_of(point)
@@ -1521,6 +1671,7 @@ fn drop_target_register(a: *mem.Arena, w: os.Window, storage: *mem.Arena) -> err
     if handle_error != ok { ret handle_error }
     if drop_window != 0usize { ret Invalid }
     try ensure_ole()
+    try ensure_promise_formats(a)
     drop_tables[0usize].slots[0usize] = slot_of_query(drop_query_interface)
     drop_tables[0usize].slots[1usize] = slot_of_this(com_add_ref)
     drop_tables[0usize].slots[2usize] = slot_of_this(com_release_static)
@@ -1588,10 +1739,26 @@ fn drag_item_for(format: u16) -> (usize, bool) {
 
 @cc(c)
 fn data_get_data(this: usize, request: *const FormatEtc, medium: *StgMedium) -> i32 {
-    let (index, found) = drag_item_for(request.format)
-    if !found || (request.tymed & TYMED_HGLOBAL) == 0u32 { ret hresult(DV_E_FORMATETC) }
-    let (handle, handle_error) = global_of(drag_arena, drag_items[index])
-    if handle_error != ok { ret hresult(DV_E_FORMATETC) }
+    if (request.tymed & TYMED_HGLOBAL) == 0u32 { ret hresult(DV_E_FORMATETC) }
+    var handle = 0usize
+    if descriptor_format != 0u32 && u32(request.format) == descriptor_format {
+        let (descriptor, descriptor_error) = descriptor_block(drag_arena, drag_items)
+        if descriptor_error != ok { ret hresult(DV_E_FORMATETC) }
+        handle = descriptor
+    } else {
+        if contents_format != 0u32 && u32(request.format) == contents_format {
+            let (promised, has_promised) = promised_item(drag_items, request.index)
+            if !has_promised { ret hresult(DV_E_FORMATETC) }
+            handle = global_from_bytes(drag_items[promised].bytes)
+            if handle == 0usize { ret hresult(DV_E_FORMATETC) }
+        } else {
+            let (index, found) = drag_item_for(request.format)
+            if !found { ret hresult(DV_E_FORMATETC) }
+            let (block, block_error) = global_of(drag_arena, drag_items[index])
+            if block_error != ok { ret hresult(DV_E_FORMATETC) }
+            handle = block
+        }
+    }
     medium.tymed = TYMED_HGLOBAL
     medium.handle = handle
     medium.release = 0usize
@@ -1605,8 +1772,14 @@ fn data_get_data_here(this: usize, request: *const FormatEtc, medium: *StgMedium
 
 @cc(c)
 fn data_query_get_data(this: usize, request: *const FormatEtc) -> i32 {
+    if (request.tymed & TYMED_HGLOBAL) == 0u32 { ret hresult(DV_E_FORMATETC) }
+    if descriptor_format != 0u32 && (u32(request.format) == descriptor_format || u32(request.format) == contents_format) {
+        let (promised, has_promised) = promised_item(drag_items, 0i32)
+        if !has_promised { ret hresult(DV_E_FORMATETC) }
+        ret S_OK
+    }
     let (index, found) = drag_item_for(request.format)
-    if !found || (request.tymed & TYMED_HGLOBAL) == 0u32 { ret hresult(DV_E_FORMATETC) }
+    if !found { ret hresult(DV_E_FORMATETC) }
     ret S_OK
 }
 
@@ -1673,24 +1846,48 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
     var at = 0usize
     while at < items.len {
         if items[at].kind == .Bytes && items[at].mime.len == 0usize { ret (.Cancelled, Invalid) }
+        if items[at].kind == .Promise && items[at].text.len == 0usize { ret (.Cancelled, Invalid) }
         at += 1usize
     }
     let ole_error = ensure_ole()
     if ole_error != ok { ret (.Cancelled, ole_error) }
+    let promise_error = ensure_promise_formats(a)
+    if promise_error != ok { ret (.Cancelled, promise_error) }
     drag_format_count = 0usize
+    var promised = false
     at = 0usize
     while at < items.len {
-        let (format, format_error) = format_of(a, items[at].kind, items[at].mime)
-        if format_error != ok { ret (.Cancelled, format_error) }
-        var described: FormatEtc = zero
-        described.format = u16(format)
-        described.aspect = DVASPECT_CONTENT
-        described.index = 0i32 - 1i32
-        described.tymed = TYMED_HGLOBAL
-        drag_formats[at] = described
+        if items[at].kind == .Promise {
+            promised = true
+        } else {
+            let (format, format_error) = format_of(a, items[at].kind, items[at].mime)
+            if format_error != ok { ret (.Cancelled, format_error) }
+            var described: FormatEtc = zero
+            described.format = u16(format)
+            described.aspect = DVASPECT_CONTENT
+            described.index = 0i32 - 1i32
+            described.tymed = TYMED_HGLOBAL
+            drag_formats[drag_format_count] = described
+            drag_format_count += 1usize
+        }
         at += 1usize
     }
-    drag_format_count = items.len
+    if promised {
+        var descriptor: FormatEtc = zero
+        descriptor.format = u16(descriptor_format)
+        descriptor.aspect = DVASPECT_CONTENT
+        descriptor.index = 0i32 - 1i32
+        descriptor.tymed = TYMED_HGLOBAL
+        drag_formats[drag_format_count] = descriptor
+        drag_format_count += 1usize
+        var contents: FormatEtc = zero
+        contents.format = u16(contents_format)
+        contents.aspect = DVASPECT_CONTENT
+        contents.index = 0i32 - 1i32
+        contents.tymed = TYMED_HGLOBAL
+        drag_formats[drag_format_count] = contents
+        drag_format_count += 1usize
+    }
     drag_items = items
     drag_arena = a
     data_tables[0usize].slots[0usize] = slot_of_query(data_query_interface)

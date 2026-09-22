@@ -3811,7 +3811,7 @@ type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, revea
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
-type ContentKind = enum u8 { Text, Files, Image, Bytes }
+type ContentKind = enum u8 { Text, Files, Image, Bytes, Promise }
 type Content = struct { kind: ContentKind, mime: str, text: str, paths: []const str, image: Icon, bytes: []const u8 }
 type Drop = struct { x: i32, y: i32, items: []const Content }
 type DragResult = enum u8 { Copied, Moved, Cancelled }
@@ -3894,6 +3894,13 @@ carries into `storage`, `drop_poll` answers the drops in order, and `drag_start`
 offers items as an `IDataObject` to `DoDragDrop`, blocking until the receiver
 copies, moves or the drag is cancelled. Linux has no selection in `e.os` and no
 XDND here, so every verb is `Unsupported` and the record says so.
+
+A `.Promise` (D892) is a file the receiver writes out itself -- its name in `text`,
+its contents in `bytes` -- and in a drag it is the shell's `FileGroupDescriptorW`
+and `FileContents` pair, one descriptor block for all the promises and the
+contents by index; a drop from another program carries its promised files back
+the same way, one `.Promise` item each. A promise has no clipboard format here,
+so `clipboard_write` answers `Unsupported` for one.
 
 ### `e.cancel`
 
@@ -6454,6 +6461,7 @@ type Notification = struct { title: str, body: str, silent: bool }
 type ContentType = struct { kind: shell.ContentKind, mime: str }
 type DataProvider = struct { ctx: *void, provide: fn(*void, *mem.Arena, ContentType, *shell.Content) -> err }
 type DataOffer = struct { types: []const ContentType, provider: DataProvider }
+type DragOperation = struct { allow_move: bool }
 type TrayActivation = struct { kind: TrayActivationKind, command: u32, x: i32, y: i32 }
 fn tray_supported() -> bool
 fn tray_open(a: *mem.Arena, id: u32, icon: shell.Icon, tooltip: str) -> (Tray, err)
@@ -6485,6 +6493,13 @@ fn content_type_of_content(c: shell.Content) -> ContentType
 fn same_type(x: ContentType, y: ContentType) -> bool
 fn offer_materialize(a: *mem.Arena, offer: DataOffer) -> ([]shell.Content, err)
 fn offer_of(a: *mem.Arena, items: []const shell.Content) -> (DataOffer, err)
+fn drag_source_supported() -> bool
+fn drop_target_supported() -> bool
+fn drag_offer(a: *mem.Arena, offer: DataOffer, operation: DragOperation) -> (shell.DragResult, err)
+fn drop_target_open(a: *mem.Arena, app: *App, storage: *mem.Arena) -> err
+fn drop_target_close(a: *mem.Arena, app: *App) -> err
+fn drop_take() -> (shell.Drop, bool)
+fn promised_file(name: str, contents: []const u8) -> shell.Content
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,

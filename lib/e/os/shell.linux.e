@@ -25,8 +25,10 @@ type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
 // One representation of transferred data: text, a list of paths, an image as
-// pixels, or bytes under a MIME name the other side registers the same way.
-type ContentKind = enum u8 { Text, Files, Image, Bytes }
+// pixels, bytes under a MIME name the other side registers the same way, or a
+// promised file -- a name in `text` and contents in `bytes` that the receiver
+// writes out itself when it takes the drop.
+type ContentKind = enum u8 { Text, Files, Image, Bytes, Promise }
 type Content = struct { kind: ContentKind, mime: str, text: str, paths: []const str, image: Icon, bytes: []const u8 }
 type Drop = struct { x: i32, y: i32, items: []const Content }
 type DragResult = enum u8 { Copied, Moved, Cancelled }

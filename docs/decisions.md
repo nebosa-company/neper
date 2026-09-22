@@ -17225,3 +17225,25 @@ Async production is not in the model: a provider runs on the hand-off's
 thread, since OLE calls back on it and a clipboard write holds the
 clipboard open. `link/ui_exchange_model` counts the provider's calls
 and checks the names both ways on both hosts.
+
+## D892 — A promised file is a representation, and the drop target is the app's own window
+
+P4-05 of the widget plan over D890 and D891. `drag_offer` is the
+model's hand-off: the offer materialised, the items given to
+`DoDragDrop` under the `DragOperation` the caller allows, and the
+receiver's answer -- copied, moved or nothing -- returned when the
+drag ends; `drop_target_open` makes the app's own window the
+`IDropTarget`, with the drops landing in the storage arena the caller
+keeps and taken in order by `drop_take`. The promised file needed the
+primitive to grow: a `.Promise` is a `Content` whose text is the name
+and whose bytes are the contents, and in a drag it is the shell's
+`FileGroupDescriptorW` and `FileContents` pair -- one descriptor block
+for every promise, the contents by the index the receiver asks with --
+which is how Explorer takes a file that exists nowhere yet; a drop
+from another program carries its promises back the same way, one item
+each, a file offered only as a stream passed over. A promise has no
+clipboard format here, and the clipboard write says so. Nothing starts
+a real drag in the suite, since a drag ends where the pointer is and
+the suite has no pointer of its own; `link/ui_drag_drop` registers and
+revokes the real window's drop target, refuses the empty offer and a
+second registration, and gets `Unsupported` throughout on Linux.

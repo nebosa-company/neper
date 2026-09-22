@@ -886,8 +886,13 @@
             "DragOperation",
             "PromisedFile"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "SystemDragSource",
+            "SystemDropTarget",
+            "DragOperation",
+            "PromisedFile"
+          ],
+          "evidence": "lib/e/ui/app.e and lib/e/os/shell.windows.e (D892): drag_offer materialises a DataOffer and hands it to the shell's DoDragDrop under the DragOperation the caller allows, answering Copied, Moved or Cancelled; drop_target_open/drop_target_close make the app's window an IDropTarget whose drops land in the caller's storage and are taken in order by drop_take; promised_file is the .Promise representation the shell carries as FileGroupDescriptorW/FileContents both ways; Linux answers Unsupported with the two predicates saying so first; tests/selfhost/fixtures/link/ui_drag_drop on both hosts"
         },
         {
           "id": "P4-06",
