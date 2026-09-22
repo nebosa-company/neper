@@ -303,37 +303,37 @@ fn tray_poll(a: *mem.Arena, t: *Tray) -> (TrayActivation, bool, err) {
         let (event, any) = shell.tray_poll()
         if !any { ret (none, false, ok) }
         if event.id != t.id { continue }
-        var activation: TrayActivation = zero
-        activation.x = event.x
-        activation.y = event.y
+        var reported: TrayActivation = zero
+        reported.x = event.x
+        reported.y = event.y
         if event.kind == .Select {
-            activation.kind = .Select
-            ret (activation, true, ok)
+            reported.kind = .Select
+            ret (reported, true, ok)
         }
         if event.kind == .Open {
-            activation.kind = .Open
-            ret (activation, true, ok)
+            reported.kind = .Open
+            ret (reported, true, ok)
         }
         if event.kind == .NoticeSelect {
-            activation.kind = .NoticeSelect
-            ret (activation, true, ok)
+            reported.kind = .NoticeSelect
+            ret (reported, true, ok)
         }
         if event.kind == .NoticeDismiss {
-            activation.kind = .NoticeDismiss
-            ret (activation, true, ok)
+            reported.kind = .NoticeDismiss
+            ret (reported, true, ok)
         }
         if t.menu.len == 0usize {
-            activation.kind = .Dismissed
-            ret (activation, true, ok)
+            reported.kind = .Dismissed
+            ret (reported, true, ok)
         }
         let (chosen, has_chosen, menu_error) = shell.popup_menu(a, t.menu, event.x, event.y)
         if menu_error != ok { ret (none, false, menu_error) }
-        activation.kind = .Dismissed
+        reported.kind = .Dismissed
         if has_chosen {
-            activation.kind = .Command
-            activation.command = chosen
+            reported.kind = .Command
+            reported.command = chosen
         }
-        ret (activation, true, ok)
+        ret (reported, true, ok)
     }
     ret (none, false, ok)
 }
@@ -601,4 +601,311 @@ fn drop_take() -> (shell.Drop, bool) {
 // A file the receiver will write: its name and its contents, as one representation.
 fn promised_file(name: str, contents: []const u8) -> shell.Content {
     ret shell.Content { kind: .Promise, mime: "", text: name, paths: zero, image: zero, bytes: contents }
+}
+
+// ------------------------------------------- system clipboard and sharing (D893)
+//
+// Widget plan P4-06. The clipboard takes a `DataOffer` -- materialised at the
+// write, one representation each -- and gives one representation back by its
+// type; `clipboard_holds` asks without reading. A `ClipboardMonitor` is the
+// shell's change counter remembered, and `clipboard_changed` compares it, so a
+// program learns of a change without reading anyone's clipboard unasked.
+// Sharing -- the share sheet and being a share target -- is a WinRT flow on
+// Windows and a portal on Linux, neither of which this library speaks, so both
+// are `shell.Unsupported` and the predicates say so first.
+
+type ClipboardMonitor = struct { sequence: u32 }
+
+fn clipboard_supported() -> bool {
+    ret shell.capabilities().clipboard_text
+}
+
+fn clipboard_offer(a: *mem.Arena, offer: DataOffer) -> err {
+    let (items, materialize_error) = offer_materialize(a, offer)
+    if materialize_error != ok { ret materialize_error }
+    ret shell.clipboard_write(a, items)
+}
+
+fn clipboard_holds(a: *mem.Arena, t: ContentType) -> bool {
+    ret shell.clipboard_has(a, t.kind, t.mime)
+}
+
+fn clipboard_take(a: *mem.Arena, t: ContentType) -> (shell.Content, err) {
+    let (item, read_error) = shell.clipboard_read(a, t.kind, t.mime)
+    ret (item, read_error)
+}
+
+fn clipboard_monitor() -> ClipboardMonitor {
+    ret ClipboardMonitor { sequence: shell.clipboard_sequence() }
+}
+
+// Whether the clipboard changed since the last ask; the monitor moves with it.
+fn clipboard_changed(m: *ClipboardMonitor) -> bool {
+    let now = shell.clipboard_sequence()
+    if now == m.sequence { ret false }
+    m.sequence = now
+    ret true
+}
+
+fn share_supported() -> bool {
+    ret false
+}
+
+fn share_target_supported() -> bool {
+    ret false
+}
+
+fn share(a: *mem.Arena, offer: DataOffer) -> err {
+    if offer.types.len == 0usize { ret shell.Invalid }
+    ret shell.Unsupported
+}
+
+fn share_target_take() -> (shell.Drop, bool) {
+    var none: shell.Drop = zero
+    ret (none, false)
+}
+
+// --------------------------------------------- file and document access (D895)
+//
+// Widget plan P4-07 over `e.os.shell`'s dialogs: the native open, save and
+// folder dialogs over the app's window (or none), each answering a
+// `DocumentGrant`. On the desktop hosts a grant is the path itself -- nothing
+// sandboxes them -- and it is a type of its own so that a sandboxed host can
+// carry its bookmark in it later without the callers changing. The recent list
+// takes a grant. Every dialog is `shell.Cancelled` when the user closes it
+// without a choice and `shell.Unsupported` where the host has none, which the
+// predicates say first.
+
+type DocumentGrant = struct { path: str }
+type FileDialogOptions = struct { title: str, filters: []const shell.FileFilter, initial: str, default_extension: str }
+
+fn file_dialogs_supported() -> bool {
+    ret shell.capabilities().file_dialogs
+}
+
+fn recent_documents_supported() -> bool {
+    ret shell.capabilities().recent_documents
+}
+
+fn grant_of(path: str) -> DocumentGrant {
+    ret DocumentGrant { path: path }
+}
+
+fn grant_path(g: DocumentGrant) -> str {
+    ret g.path
+}
+
+fn owner_window(owner: *App) -> (os.Window, err) {
+    var none: os.Window = zero
+    if mem.address_of(owner) == 0usize { ret (none, ok) }
+    let (handle, handle_error) = host_window(owner)
+    ret (handle, handle_error)
+}
+
+fn show_dialog(a: *mem.Arena, owner: *App, kind: shell.DialogKind, options: FileDialogOptions, multiple: bool) -> ([]const str, err) {
+    var nothing: []const str = zero
+    let (window_handle, owner_error) = owner_window(owner)
+    if owner_error != ok { ret (nothing, owner_error) }
+    let dialog = shell.FileDialog { kind: kind, title: options.title, filters: options.filters, multiple: multiple, initial: options.initial, default_extension: options.default_extension }
+    let (paths, dialog_error) = shell.file_dialog(a, window_handle, dialog)
+    ret (paths, dialog_error)
+}
+
+fn grants_of(a: *mem.Arena, paths: []const str) -> ([]DocumentGrant, err) {
+    var nothing: []DocumentGrant = zero
+    let (grants, allocation_error) = mem.alloc[DocumentGrant](a, paths.len)
+    if allocation_error != ok { ret (nothing, allocation_error) }
+    var at = 0usize
+    while at < paths.len {
+        grants[at] = DocumentGrant { path: paths[at] }
+        at += 1usize
+    }
+    ret (grants[0usize..paths.len], ok)
+}
+
+// The open dialog: one grant, or every chosen one when `multiple`.
+fn open_file(a: *mem.Arena, owner: *App, options: FileDialogOptions, multiple: bool) -> ([]DocumentGrant, err) {
+    var nothing: []DocumentGrant = zero
+    let (paths, dialog_error) = show_dialog(a, owner, .Open, options, multiple)
+    if dialog_error != ok { ret (nothing, dialog_error) }
+    let (grants, grants_error) = grants_of(a, paths)
+    ret (grants, grants_error)
+}
+
+fn save_file(a: *mem.Arena, owner: *App, options: FileDialogOptions) -> (DocumentGrant, err) {
+    var nothing: DocumentGrant = zero
+    let (paths, dialog_error) = show_dialog(a, owner, .Save, options, false)
+    if dialog_error != ok { ret (nothing, dialog_error) }
+    if paths.len != 1usize { ret (nothing, shell.Failed) }
+    ret (DocumentGrant { path: paths[0usize] }, ok)
+}
+
+fn pick_folder(a: *mem.Arena, owner: *App, options: FileDialogOptions) -> (DocumentGrant, err) {
+    var nothing: DocumentGrant = zero
+    let (paths, dialog_error) = show_dialog(a, owner, .Folder, options, false)
+    if dialog_error != ok { ret (nothing, dialog_error) }
+    if paths.len != 1usize { ret (nothing, shell.Failed) }
+    ret (DocumentGrant { path: paths[0usize] }, ok)
+}
+
+fn recent_add(a: *mem.Arena, g: DocumentGrant) -> err {
+    ret shell.recent_add(a, g.path)
+}
+
+// --------------------------------------------- activation and associations (D897)
+//
+// Widget plan P4-08 over `e.os.shell`: what the command line means as an
+// `Activation`, file and protocol associations registered for this user and
+// removed again, the program started at login or not, and a single instance --
+// the first under an id receives the later ones' arguments through
+// `activation_poll`, a later one hands its own over and is told to exit.
+// Declarative package registration is a packaging matter this library does
+// not have; the runtime routing is here. The predicates say what the host has.
+
+fn activation(a: *mem.Arena, args: []const str) -> shell.Activation {
+    ret shell.activation_of(a, args)
+}
+
+fn associations_supported() -> bool {
+    ret shell.capabilities().associations
+}
+
+fn startup_supported() -> bool {
+    ret shell.capabilities().startup
+}
+
+fn single_instance_supported() -> bool {
+    ret shell.capabilities().single_instance
+}
+
+fn register_file_type(a: *mem.Arena, extension: str, program_id: str, description: str) -> err {
+    ret shell.associate_file(a, extension, program_id, description)
+}
+
+fn unregister_file_type(a: *mem.Arena, extension: str, program_id: str) -> err {
+    ret shell.dissociate_file(a, extension, program_id)
+}
+
+fn register_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
+    ret shell.associate_protocol(a, scheme, description)
+}
+
+fn unregister_protocol(a: *mem.Arena, scheme: str) -> err {
+    ret shell.dissociate_protocol(a, scheme)
+}
+
+fn startup_registration(a: *mem.Arena, id: str, enabled: bool) -> err {
+    ret shell.startup_set(a, id, enabled)
+}
+
+fn startup_registered(a: *mem.Arena, id: str) -> (bool, err) {
+    let (enabled, query_error) = shell.startup_enabled(a, id)
+    ret (enabled, query_error)
+}
+
+fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Arena) -> (bool, err) {
+    let (first, instance_error) = shell.single_instance(a, id, args, storage)
+    ret (first, instance_error)
+}
+
+fn activation_poll() -> (shell.Activation, bool) {
+    let (received, any) = shell.activation_poll()
+    ret (received, any)
+}
+
+// ------------------------------------------- global input and lifecycle (D899)
+//
+// Widget plan P4-10 over `e.os.shell`: a `GlobalShortcutSession` holds the
+// shortcuts registered for the whole desktop under the caller's ids and drains
+// their presses; the background permission is the host's answer; a login item
+// is D897's startup registration under another name, since that is what a login
+// item is on both hosts; a `PowerInhibitor` keeps the system (and the display,
+// when asked) awake until released; the session's shutdown, suspend and resume
+// come through `lifecycle_poll`; and session restore is the host relaunching
+// the program with the arguments it registered, which `activation` then reads.
+// The predicates say what the host has; the rest is `shell.Unsupported`.
+
+type GlobalShortcutSession = struct { registered: u32 }
+type PowerInhibitor = struct { held: bool }
+
+fn global_shortcuts_supported() -> bool {
+    ret shell.capabilities().hotkeys
+}
+
+fn power_inhibit_supported() -> bool {
+    ret shell.capabilities().power_inhibit
+}
+
+fn lifecycle_events_supported() -> bool {
+    ret shell.capabilities().lifecycle_events
+}
+
+fn session_restore_supported() -> bool {
+    ret shell.capabilities().restart
+}
+
+fn global_shortcut_session() -> GlobalShortcutSession {
+    ret GlobalShortcutSession { registered: 0u32 }
+}
+
+fn global_shortcut_add(a: *mem.Arena, session: *GlobalShortcutSession, id: u32, key: shell.Hotkey) -> err {
+    let added = shell.hotkey_register(a, id, key)
+    if added != ok { ret added }
+    session.registered += 1u32
+    ret ok
+}
+
+fn global_shortcut_remove(a: *mem.Arena, session: *GlobalShortcutSession, id: u32) -> err {
+    let removed = shell.hotkey_unregister(a, id)
+    if removed != ok { ret removed }
+    if session.registered != 0u32 { session.registered -= 1u32 }
+    ret ok
+}
+
+// The oldest press of a registered shortcut, by its id.
+fn global_shortcut_poll() -> (u32, bool) {
+    let (id, any) = shell.hotkey_poll()
+    ret (id, any)
+}
+
+fn background_permission(a: *mem.Arena) -> shell.Permission {
+    ret shell.background_permission(a)
+}
+
+fn login_item_set(a: *mem.Arena, id: str, enabled: bool) -> err {
+    ret shell.startup_set(a, id, enabled)
+}
+
+fn login_item_enabled(a: *mem.Arena, id: str) -> (bool, err) {
+    let (enabled, query_error) = shell.startup_enabled(a, id)
+    ret (enabled, query_error)
+}
+
+fn power_inhibitor_acquire(a: *mem.Arena, keep_display: bool) -> (PowerInhibitor, err) {
+    let held = shell.power_inhibit(a, keep_display)
+    if held != ok { ret (PowerInhibitor { held: false }, held) }
+    ret (PowerInhibitor { held: true }, ok)
+}
+
+fn power_inhibitor_release(a: *mem.Arena, inhibitor: *PowerInhibitor) -> err {
+    if !inhibitor.held { ret shell.NotFound }
+    let released = shell.power_release(a)
+    if released != ok { ret released }
+    inhibitor.held = false
+    ret ok
+}
+
+fn lifecycle_poll() -> (shell.LifecycleEvent, bool) {
+    let (event, any) = shell.lifecycle_poll()
+    ret (event, any)
+}
+
+// The host restarts the program with these arguments after a crash or an
+// update; `activation` reads them on the way back in.
+fn session_restore_register(a: *mem.Arena, arguments: str) -> err {
+    ret shell.restart_register(a, arguments)
+}
+
+fn session_restore_unregister(a: *mem.Arena) -> err {
+    ret shell.restart_unregister(a)
 }

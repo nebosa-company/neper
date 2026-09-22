@@ -11,7 +11,10 @@
   "resolved_blockers": [
     "native-shell-api",
     "native-notification-api",
-    "native-data-exchange-api"
+    "native-data-exchange-api",
+    "native-file-access-api",
+    "native-activation-api",
+    "native-lifecycle-api"
   ],
   "phases": [
     {
@@ -907,8 +910,13 @@
             "ShareSheet",
             "ShareTarget"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "SystemClipboard",
+            "ClipboardMonitor",
+            "ShareSheet",
+            "ShareTarget"
+          ],
+          "evidence": "lib/e/ui/app.e (D893): clipboard_offer writes a materialised DataOffer as its representations, clipboard_holds asks without reading and clipboard_take gives one representation back by type; ClipboardMonitor remembers the shell's change counter and clipboard_changed compares it, so a change is learned without an unsolicited read; share/share_target_take are the honest Unsupported on both hosts (WinRT DataTransferManager and the desktop portal are not spoken), with share_supported and share_target_supported saying so first; tests/selfhost/fixtures/link/ui_clipboard on both hosts"
         },
         {
           "id": "P4-07",
@@ -924,8 +932,14 @@
             "DocumentGrant",
             "RecentDocuments"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "OpenFileDialog",
+            "SaveFileDialog",
+            "FolderDialog",
+            "DocumentGrant",
+            "RecentDocuments"
+          ],
+          "evidence": "lib/e/os/shell.windows.e and lib/e/ui/app.e (D894/D895): open_file, save_file and pick_folder over the shell's IFileOpenDialog/IFileSaveDialog by slot (filters, initial name, default extension, multiple selection, an owner window or none, Cancelled on close), each answering a DocumentGrant that is the path on the desktop hosts and a type of its own for a sandboxed one; recent_add over SHAddToRecentDocs of an existing document; Linux Unsupported with file_dialogs_supported and recent_documents_supported saying so; driven by hand on Windows (open accepted, save cancelled, folder picked); tests/selfhost/fixtures/link/ui_file_access on both hosts"
         },
         {
           "id": "P4-08",
@@ -941,8 +955,14 @@
             "StartupRegistration",
             "SingleInstanceActivation"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "ActivationEvent",
+            "FileAssociation",
+            "ProtocolAssociation",
+            "StartupRegistration",
+            "SingleInstanceActivation"
+          ],
+          "evidence": "lib/e/os/shell.windows.e, lib/e/os/shell.linux.e and lib/e/ui/app.e (D896/D897): activation reads the command line as a launch, a file or a URL on both hosts; register_file_type/register_protocol and their unregister_* write and remove the per-user registry association on Windows; startup_registration/startup_registered set and query the Run value on Windows and the freedesktop autostart entry on Linux; single_instance is a named mutex whose first holder receives later instances' arguments through activation_poll (a probe drove two secondaries into a primary); the predicates say what the host has and the rest is Unsupported; tests/selfhost/fixtures/link/ui_activation on both hosts"
         },
         {
           "id": "P4-09",
@@ -979,8 +999,15 @@
             "SessionLifecycle",
             "SessionRestore"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "GlobalShortcutSession",
+            "BackgroundPermission",
+            "LoginItem",
+            "PowerInhibitor",
+            "SessionLifecycle",
+            "SessionRestore"
+          ],
+          "evidence": "lib/e/os/shell.windows.e, lib/e/os/shell.linux.e and lib/e/ui/app.e (D898/D899): GlobalShortcutSession over RegisterHotKey on the hidden window with global_shortcut_poll draining WM_HOTKEY; background_permission as the host's answer; login_item_set/login_item_enabled as D897's startup registration under the name a login item has; PowerInhibitor over SetThreadExecutionState (Windows) and a systemd-inhibit child (Linux); lifecycle_poll over WM_QUERYENDSESSION/WM_ENDSESSION and WM_POWERBROADCAST; session_restore_register over RegisterApplicationRestart with activation reading the arguments back; the predicates say what the host has and Linux answers Unsupported for shortcuts, events and restart; tests/selfhost/fixtures/link/ui_lifecycle on both hosts"
         },
         {
           "id": "P4-11",

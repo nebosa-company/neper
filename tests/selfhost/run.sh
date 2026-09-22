@@ -2673,6 +2673,34 @@ ui_drag_drop_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/ui-drag-drop-selfhost"
 ui_drag_drop_output=$("$test_build/ui-drag-drop-selfhost")
 [ "$ui_drag_drop_output" = 'ui drag drop ok' ]
+# The system clipboard and sharing (D893, widget plan P4-06): a host without a clipboard says so.
+ui_clipboard_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_clipboard/src/main.e" "$repo" x64 linux "$test_build/ui-clipboard-selfhost")
+[ "$ui_clipboard_written" = 'executable written' ]
+chmod +x "$test_build/ui-clipboard-selfhost"
+ui_clipboard_output=$("$test_build/ui-clipboard-selfhost")
+[ "$ui_clipboard_output" = 'ui clipboard ok' ]
+# File and document access (D894/D895, widget plan P4-07): refusals first, `Unsupported` without dialogs.
+ui_file_access_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_file_access/src/main.e" "$repo" x64 linux "$test_build/ui-file-access-selfhost")
+[ "$ui_file_access_written" = 'executable written' ]
+chmod +x "$test_build/ui-file-access-selfhost"
+ui_file_access_output=$("$test_build/ui-file-access-selfhost")
+[ "$ui_file_access_output" = 'ui file access ok' ]
+# Activation and associations (D896/D897, widget plan P4-08): the command line read three ways,
+# the autostart entry under a scratch config home, and `Unsupported` for the rest.
+ui_activation_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_activation/src/main.e" "$repo" x64 linux "$test_build/ui-activation-selfhost")
+[ "$ui_activation_written" = 'executable written' ]
+chmod +x "$test_build/ui-activation-selfhost"
+rm -rf "$test_build/shell-home"
+mkdir -p "$test_build/shell-home"
+ui_activation_output=$(XDG_CONFIG_HOME="$test_build/shell-home" "$test_build/ui-activation-selfhost")
+[ "$ui_activation_output" = 'ui activation ok' ]
+# Global input and lifecycle (D898/D899, widget plan P4-10): the permission answered, the inhibitor
+# through systemd-inhibit where a session has one, and `Unsupported` for the rest.
+ui_lifecycle_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_lifecycle/src/main.e" "$repo" x64 linux "$test_build/ui-lifecycle-selfhost")
+[ "$ui_lifecycle_written" = 'executable written' ]
+chmod +x "$test_build/ui-lifecycle-selfhost"
+ui_lifecycle_output=$("$test_build/ui-lifecycle-selfhost")
+[ "$ui_lifecycle_output" = 'ui lifecycle ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

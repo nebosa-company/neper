@@ -2880,6 +2880,34 @@ $uiDragDropWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiDragDropWritten -ne 'executable written') { throw 'ui_drag_drop emission failed' }
 $uiDragDropOutput = & $uiDragDropPath
 if ($LASTEXITCODE -ne 0 -or $uiDragDropOutput -ne 'ui drag drop ok') { throw "the drag and drop answered wrongly: exit $LASTEXITCODE" }
+# The system clipboard and sharing (D893, widget plan P4-06): an offer through the real
+# clipboard and back by type, a monitor seeing the change once, sharing declined.
+$uiClipboardPath = Join-Path $testBuild 'ui-clipboard-selfhost.exe'
+$uiClipboardWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_clipboard\src\main.e') $repo 'x64' 'windows' $uiClipboardPath
+if ($LASTEXITCODE -ne 0 -or $uiClipboardWritten -ne 'executable written') { throw 'ui_clipboard emission failed' }
+$uiClipboardOutput = & $uiClipboardPath
+if ($LASTEXITCODE -ne 0 -or $uiClipboardOutput -ne 'ui clipboard ok') { throw "the clipboard controllers answered wrongly: exit $LASTEXITCODE" }
+# File and document access (D894/D895, widget plan P4-07): refusals before the host is asked,
+# and the recent list refusing a missing document; no dialog is shown in the suite.
+$uiFileAccessPath = Join-Path $testBuild 'ui-file-access-selfhost.exe'
+$uiFileAccessWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_file_access\src\main.e') $repo 'x64' 'windows' $uiFileAccessPath
+if ($LASTEXITCODE -ne 0 -or $uiFileAccessWritten -ne 'executable written') { throw 'ui_file_access emission failed' }
+$uiFileAccessOutput = & $uiFileAccessPath
+if ($LASTEXITCODE -ne 0 -or $uiFileAccessOutput -ne 'ui file access ok') { throw "the file access controllers answered wrongly: exit $LASTEXITCODE" }
+# Activation and associations (D896/D897, widget plan P4-08): a file type and a protocol registered
+# for this user and removed, the Run value set and cleared, the first instance of an id.
+$uiActivationPath = Join-Path $testBuild 'ui-activation-selfhost.exe'
+$uiActivationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_activation\src\main.e') $repo 'x64' 'windows' $uiActivationPath
+if ($LASTEXITCODE -ne 0 -or $uiActivationWritten -ne 'executable written') { throw 'ui_activation emission failed' }
+$uiActivationOutput = & $uiActivationPath
+if ($LASTEXITCODE -ne 0 -or $uiActivationOutput -ne 'ui activation ok') { throw "the activation controllers answered wrongly: exit $LASTEXITCODE" }
+# Global input and lifecycle (D898/D899, widget plan P4-10): a desktop-wide shortcut registered and
+# removed, the system kept awake and released, a restart registered and withdrawn.
+$uiLifecyclePath = Join-Path $testBuild 'ui-lifecycle-selfhost.exe'
+$uiLifecycleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_lifecycle\src\main.e') $repo 'x64' 'windows' $uiLifecyclePath
+if ($LASTEXITCODE -ne 0 -or $uiLifecycleWritten -ne 'executable written') { throw 'ui_lifecycle emission failed' }
+$uiLifecycleOutput = & $uiLifecyclePath
+if ($LASTEXITCODE -ne 0 -or $uiLifecycleOutput -ne 'ui lifecycle ok') { throw "the lifecycle controllers answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

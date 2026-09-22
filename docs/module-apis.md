@@ -3807,7 +3807,7 @@ platform delivery requirements and escape limitations.
 ### `e.os.shell`
 
 ```neper
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool }
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
@@ -3815,6 +3815,14 @@ type ContentKind = enum u8 { Text, Files, Image, Bytes, Promise }
 type Content = struct { kind: ContentKind, mime: str, text: str, paths: []const str, image: Icon, bytes: []const u8 }
 type Drop = struct { x: i32, y: i32, items: []const Content }
 type DragResult = enum u8 { Copied, Moved, Cancelled }
+type DialogKind = enum u8 { Open, Save, Folder }
+type FileFilter = struct { label: str, pattern: str }
+type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFilter, multiple: bool, initial: str, default_extension: str }
+type ActivationKind = enum u8 { Launch, File, Url }
+type Activation = struct { kind: ActivationKind, payload: str, args: []const str }
+type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
+type Permission = enum u8 { Granted, Denied, Unavailable }
+type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
@@ -3823,6 +3831,7 @@ error Unsupported
 error Invalid
 error NotFound
 error Failed
+error Cancelled
 fn capabilities() -> Capabilities
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err
 fn tray_update(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err
@@ -3848,6 +3857,26 @@ fn drop_target_register(a: *mem.Arena, w: os.Window, storage: *mem.Arena) -> err
 fn drop_target_unregister(a: *mem.Arena, w: os.Window) -> err
 fn drop_poll() -> (Drop, bool)
 fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragResult, err)
+fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str, err)
+fn recent_add(a: *mem.Arena, path: str) -> err
+fn activation_of(a: *mem.Arena, args: []const str) -> Activation
+fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: str) -> err
+fn dissociate_file(a: *mem.Arena, extension: str, program_id: str) -> err
+fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err
+fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err
+fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err
+fn startup_enabled(a: *mem.Arena, id: str) -> (bool, err)
+fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Arena) -> (bool, err)
+fn activation_poll() -> (Activation, bool)
+fn hotkey_register(a: *mem.Arena, id: u32, key: Hotkey) -> err
+fn hotkey_unregister(a: *mem.Arena, id: u32) -> err
+fn hotkey_poll() -> (u32, bool)
+fn background_permission(a: *mem.Arena) -> Permission
+fn power_inhibit(a: *mem.Arena, keep_display: bool) -> err
+fn power_release(a: *mem.Arena) -> err
+fn lifecycle_poll() -> (LifecycleEvent, bool)
+fn restart_register(a: *mem.Arena, arguments: str) -> err
+fn restart_unregister(a: *mem.Arena) -> err
 ```
 
 The host's shell services (D885, the widget plan's `native-shell-api`), written per
@@ -3901,6 +3930,40 @@ and `FileContents` pair, one descriptor block for all the promises and the
 contents by index; a drop from another program carries its promised files back
 the same way, one `.Promise` item each. A promise has no clipboard format here,
 so `clipboard_write` answers `Unsupported` for one.
+
+A file dialog (D894, the plan's `native-file-access-api`) is the shell's
+`IFileOpenDialog` or `IFileSaveDialog` on Windows -- the kind's options, the
+filters as label and pattern pairs, an initial name, a default extension, shown
+modally over the caller's window or none -- answering the chosen file system
+paths (every one for a multiple open), `Cancelled` when closed without a choice,
+and `Invalid` for more than sixteen filters or a multiple save or folder pick;
+`recent_add` is `SHAddToRecentDocs` of an existing item. Linux has neither the
+portal nor a toolkit here, so both are `Unsupported` and the record says so.
+
+Activation (D896, the plan's `native-activation-api`): `activation_of` reads a
+command line as a launch, a file that exists, or a URL with a scheme, on every
+host. On Windows an association is the per-user registry under
+`Software\Classes` -- the extension naming the program id, the program id's
+open command naming this executable with `%1`, a scheme marked `URL Protocol` --
+removed again by `dissociate_*` (`NotFound` when absent, `Invalid` for a name
+with a separator or a quote); startup is the `Run` key's value under the id;
+a single instance is a named mutex, the first holder titling the hidden window
+with the id and receiving later instances' arguments as `WM_COPYDATA`, which
+`activation_poll` answers as activations from `storage`, a later instance
+handing its arguments over and answering false. Linux writes and removes the
+freedesktop autostart entry under `$XDG_CONFIG_HOME/autostart`; associations
+and a single instance are `Unsupported` there and the record says so.
+
+Lifecycle (D898, the plan's `native-lifecycle-api`): on Windows a hotkey is
+`RegisterHotKey` on the hidden window under the caller's id (1 to 49151, the
+modifiers as given, `Failed` when another program holds the combination), its
+presses drained by `hotkey_poll`; the session's `WM_QUERYENDSESSION` and
+`WM_POWERBROADCAST` become `Shutdown`, `Suspend` and `Resume` from
+`lifecycle_poll`; `power_inhibit` is the thread's execution state until
+`power_release`; `restart_register` is `RegisterApplicationRestart` with at most
+1024 characters of arguments. Background work needs no permission on either
+host. Linux inhibits through `systemd-inhibit` holding a child until released,
+and answers `Unsupported` for hotkeys, lifecycle events and restart.
 
 ### `e.cancel`
 
@@ -6462,6 +6525,9 @@ type ContentType = struct { kind: shell.ContentKind, mime: str }
 type DataProvider = struct { ctx: *void, provide: fn(*void, *mem.Arena, ContentType, *shell.Content) -> err }
 type DataOffer = struct { types: []const ContentType, provider: DataProvider }
 type DragOperation = struct { allow_move: bool }
+type ClipboardMonitor = struct { sequence: u32 }
+type DocumentGrant = struct { path: str }
+type FileDialogOptions = struct { title: str, filters: []const shell.FileFilter, initial: str, default_extension: str }
 type TrayActivation = struct { kind: TrayActivationKind, command: u32, x: i32, y: i32 }
 fn tray_supported() -> bool
 fn tray_open(a: *mem.Arena, id: u32, icon: shell.Icon, tooltip: str) -> (Tray, err)
@@ -6500,6 +6566,54 @@ fn drop_target_open(a: *mem.Arena, app: *App, storage: *mem.Arena) -> err
 fn drop_target_close(a: *mem.Arena, app: *App) -> err
 fn drop_take() -> (shell.Drop, bool)
 fn promised_file(name: str, contents: []const u8) -> shell.Content
+fn clipboard_supported() -> bool
+fn clipboard_offer(a: *mem.Arena, offer: DataOffer) -> err
+fn clipboard_holds(a: *mem.Arena, t: ContentType) -> bool
+fn clipboard_take(a: *mem.Arena, t: ContentType) -> (shell.Content, err)
+fn clipboard_monitor() -> ClipboardMonitor
+fn clipboard_changed(m: *ClipboardMonitor) -> bool
+fn share_supported() -> bool
+fn share_target_supported() -> bool
+fn share(a: *mem.Arena, offer: DataOffer) -> err
+fn share_target_take() -> (shell.Drop, bool)
+fn file_dialogs_supported() -> bool
+fn recent_documents_supported() -> bool
+fn grant_of(path: str) -> DocumentGrant
+fn grant_path(g: DocumentGrant) -> str
+fn open_file(a: *mem.Arena, owner: *App, options: FileDialogOptions, multiple: bool) -> ([]DocumentGrant, err)
+fn save_file(a: *mem.Arena, owner: *App, options: FileDialogOptions) -> (DocumentGrant, err)
+fn pick_folder(a: *mem.Arena, owner: *App, options: FileDialogOptions) -> (DocumentGrant, err)
+fn recent_add(a: *mem.Arena, g: DocumentGrant) -> err
+fn activation(a: *mem.Arena, args: []const str) -> shell.Activation
+fn associations_supported() -> bool
+fn startup_supported() -> bool
+fn single_instance_supported() -> bool
+fn register_file_type(a: *mem.Arena, extension: str, program_id: str, description: str) -> err
+fn unregister_file_type(a: *mem.Arena, extension: str, program_id: str) -> err
+fn register_protocol(a: *mem.Arena, scheme: str, description: str) -> err
+fn unregister_protocol(a: *mem.Arena, scheme: str) -> err
+fn startup_registration(a: *mem.Arena, id: str, enabled: bool) -> err
+fn startup_registered(a: *mem.Arena, id: str) -> (bool, err)
+fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Arena) -> (bool, err)
+fn activation_poll() -> (shell.Activation, bool)
+type GlobalShortcutSession = struct { registered: u32 }
+type PowerInhibitor = struct { held: bool }
+fn global_shortcuts_supported() -> bool
+fn power_inhibit_supported() -> bool
+fn lifecycle_events_supported() -> bool
+fn session_restore_supported() -> bool
+fn global_shortcut_session() -> GlobalShortcutSession
+fn global_shortcut_add(a: *mem.Arena, session: *GlobalShortcutSession, id: u32, key: shell.Hotkey) -> err
+fn global_shortcut_remove(a: *mem.Arena, session: *GlobalShortcutSession, id: u32) -> err
+fn global_shortcut_poll() -> (u32, bool)
+fn background_permission(a: *mem.Arena) -> shell.Permission
+fn login_item_set(a: *mem.Arena, id: str, enabled: bool) -> err
+fn login_item_enabled(a: *mem.Arena, id: str) -> (bool, err)
+fn power_inhibitor_acquire(a: *mem.Arena, keep_display: bool) -> (PowerInhibitor, err)
+fn power_inhibitor_release(a: *mem.Arena, inhibitor: *PowerInhibitor) -> err
+fn lifecycle_poll() -> (shell.LifecycleEvent, bool)
+fn session_restore_register(a: *mem.Arena, arguments: str) -> err
+fn session_restore_unregister(a: *mem.Arena) -> err
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,

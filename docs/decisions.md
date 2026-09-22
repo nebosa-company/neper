@@ -17270,3 +17270,136 @@ a real drag in the suite, since a drag ends where the pointer is and
 the suite has no pointer of its own; `link/ui_drag_drop` registers and
 revokes the real window's drop target, refuses the empty offer and a
 second registration, and gets `Unsupported` throughout on Linux.
+
+## D893 — The clipboard takes an offer and a monitor reads a counter, not the clipboard
+
+P4-06 of the widget plan. `clipboard_offer` is the model's other
+hand-off: the offer materialised and written as its representations;
+`clipboard_take` gives one back by type and `clipboard_holds` asks
+without reading. The monitor is the proposal's "without unsolicited
+private-data reads" made mechanical: a `ClipboardMonitor` remembers
+the shell's change counter and `clipboard_changed` compares it, so a
+program that wants to know when the clipboard changed never reads
+what is on it until the user asks for a paste. Sharing is the share
+sheet and being a share target, a WinRT `DataTransferManager` flow on
+Windows and a portal on Linux, and the library speaks neither; both
+are `shell.Unsupported` behind predicates that say so first, which is
+the honest delivery the proposal asks for rather than a sheet drawn in
+a window. `link/ui_clipboard` sends an offer of text and named bytes
+through the real clipboard and back by type, sees the monitor move
+once and no more, and gets every refusal on a host without a clipboard.
+
+## D894 — A file dialog is the shell's object, and a cancel is an answer
+
+The widget plan's `native-file-access-api`, in `e.os.shell`. The old
+`comdlg32` dialogs are flat exports, but the dialog Windows shows
+today is `IFileOpenDialog`, so the primitive reaches it the way D887
+reaches the taskbar: by slot -- the kind's options, the filters as
+`COMDLG_FILTERSPEC` pairs of wide strings, an initial name, a default
+extension, the dialog shown modally over the caller's window or none,
+and the result as file system paths through `IShellItem`, every item
+of the array for a multiple open. A cancel is `Cancelled`, its own
+answer and not a failure, since a person closing a dialog is the
+normal case; more than sixteen filters, or a multiple save or folder
+pick, is `Invalid` before the shell is asked. A recent document is
+`SHAddToRecentDocs` of an item that exists. Linux has neither the
+portal nor a toolkit here, and says so. The GUID lesson of D887 held
+again -- all four constants typed by hand were wrong -- so the parts
+are computed and pasted. A probe drove the real dialogs by a thread
+that finds the dialog window and posts Enter or Escape: the open
+dialog accepted its initial file, the save dialog cancelled, the
+folder dialog answered its initial folder, and the recent list took
+the file; the suite shows no dialog, since a dialog waits for a person.
+
+## D895 — A grant is the path today and a type for the sandbox tomorrow
+
+P4-07 of the widget plan over D894. `open_file`, `save_file` and
+`pick_folder` are the dialogs over the app's window or none, and each
+answers a `DocumentGrant`: on the desktop hosts that is the path and
+nothing more, since nothing sandboxes them, but it is a type of its
+own so that a sandboxed host can carry its bookmark in it later
+without a caller changing -- `grant_of` and `grant_path` are the two
+ends of that promise. The recent list takes a grant. `link/ui_file_access`
+refuses a crowded dialog before the host is asked, sees the recent
+list refuse a missing document where the host keeps one, and gets the
+predicates and `Unsupported` where it does not.
+
+## D896 — Activation is the registry for this user, a mutex for the instance, and the command line for the event
+
+The widget plan's `native-activation-api`, in `e.os.shell`. The event
+is the command line: `activation_of` reads the first argument as a URL
+when it has a scheme before its colon, as a file when one exists by
+that name, and as a plain launch otherwise, the same on every host.
+On Windows an association needs no package and no elevation: it is the
+per-user registry under `Software\Classes`, the extension naming the
+program id, the program id's open command naming this executable with
+`%1`, a scheme marked `URL Protocol` the same way, and `RegDeleteTreeW`
+takes it back; startup is the `Run` key's value under the id. A single
+instance is a named mutex: the first holder titles the hidden window
+with the id and receives later instances' arguments as `WM_COPYDATA`
+-- read through a pointer pun, since a message's parameter is an
+integer and the language will not cast one to a pointer -- copied into
+the caller's storage and answered by `activation_poll` as the
+activations they mean; a later instance finds that window by class and
+title, hands its arguments over and is told it is not the first. The
+class name is filled when the hidden window is made, so a later
+instance makes its own before searching -- the first probe searched
+by an empty class and found nothing. Linux writes and removes the
+freedesktop autostart entry, and says `Unsupported` for associations
+(a `.desktop` file and `xdg-mime`) and the single instance (a socket in
+the runtime directory), both of which are shaped like the tools this
+module already spawns and can follow. The dialect bit once more: a
+`const` of type `str` is refused by the checker without a location; a
+function returning the literal stands in.
+
+## D897 — The runtime routing is the library's; the package registration is the packager's
+
+P4-08 of the widget plan over D896. `e.ui.app` wraps the event, the
+two associations and their removal, the startup registration, and the
+single instance, and the predicates say which the host has. The
+proposal also asks for declarative package registration -- a manifest
+naming the associations for the store or the installer -- which is a
+packaging artefact this library does not produce; the runtime side,
+where a program learns why it was started and answers a second start,
+is delivered. A probe ran a primary and two secondaries: one with a
+URL, one with a path, both handed over and both received in order.
+`link/ui_activation` reads a command line three ways, registers and
+removes a file type and a protocol for this user, sets and clears the
+startup entry, and is the first instance of its id on Windows; on
+Linux the startup entry lands under a scratch config home and the rest
+is `Unsupported`.
+
+## D898 — The hidden window is the session's ear: hotkeys, shutdown and power arrive there
+
+The widget plan's `native-lifecycle-api`, in `e.os.shell`. Everything a
+session tells a program on Windows comes as a message to a top-level
+window, and the module already keeps one hidden window for the tray,
+so that window gains a share of the session: a global shortcut is
+`RegisterHotKey` on it under the caller's id and its `WM_HOTKEY` goes
+to a ring `hotkey_poll` drains; `WM_QUERYENDSESSION`, `WM_ENDSESSION`
+and `WM_POWERBROADCAST` become `Shutdown`, `Suspend` and `Resume` in a
+lifecycle ring, the session answered yes on the way. Background work
+needs no permission on either host and the answer says so rather than
+inventing a prompt. Power inhibition is the thread's execution state
+on Windows and, on Linux, `systemd-inhibit` holding a child alive until
+released -- the same tool-shaped path as `xdg-open` and `notify-send`,
+which is how this module reaches a desktop it does not speak D-Bus to.
+A restart is `RegisterApplicationRestart` with the arguments the
+restarted program should see, which D896's `activation_of` reads back.
+Linux says `Unsupported` for hotkeys (the compositor's), lifecycle
+events (logind's) and restart (the session manager's).
+
+## D899 — A login item is a startup registration, and the fixture holds the machine awake for a moment
+
+P4-10 of the widget plan over D896 and D898. `e.ui.app` wraps the
+six: a `GlobalShortcutSession` counting what it registered, the
+background permission, the login item -- which is D897's startup
+registration under the name every host gives it, not a second
+mechanism -- a `PowerInhibitor` acquired and released once, the
+lifecycle events and the session restore, each behind a predicate that
+says whether this host has it. `link/ui_lifecycle` registers and
+removes Ctrl+Alt+Shift+F12 for the whole desktop, keeps the system
+awake and releases it, registers and withdraws a restart, and finds
+both queues empty while nothing happened; on Linux it accepts that a
+session may have the inhibitor's tool and no session behind it, and
+gets `Unsupported` for the rest.

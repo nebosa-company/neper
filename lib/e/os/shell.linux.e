@@ -18,8 +18,9 @@ error Unsupported
 error Invalid
 error NotFound
 error Failed
+error Cancelled
 
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
@@ -32,13 +33,28 @@ type ContentKind = enum u8 { Text, Files, Image, Bytes, Promise }
 type Content = struct { kind: ContentKind, mime: str, text: str, paths: []const str, image: Icon, bytes: []const u8 }
 type Drop = struct { x: i32, y: i32, items: []const Content }
 type DragResult = enum u8 { Copied, Moved, Cancelled }
+// A native file dialog: what it picks, its title, the filters offered (a label
+// and a pattern such as `*.txt`), whether several may be chosen, the initial
+// name, and the extension appended to a typed name without one.
+type DialogKind = enum u8 { Open, Save, Folder }
+type FileFilter = struct { label: str, pattern: str }
+type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFilter, multiple: bool, initial: str, default_extension: str }
+// How the program was activated: plainly, with a file, or with a URL; a
+// redirected activation is another instance's arguments handed to the first.
+type ActivationKind = enum u8 { Launch, File, Url }
+type Activation = struct { kind: ActivationKind, payload: str, args: []const str }
+// A global shortcut: the modifiers and the host's key code; a permission the
+// host answers for background work; the lifecycle events a session sends.
+type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
+type Permission = enum u8 { Granted, Denied, Unavailable }
+type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
 type JumpTask = struct { title: str, program: str, arguments: str, description: str }
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: false, clipboard_typed: false, drop_target: false, drag_source: false }
+    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: false, clipboard_typed: false, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: true, lifecycle_events: false, restart: false }
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
@@ -466,4 +482,233 @@ fn drop_poll() -> (Drop, bool) {
 fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragResult, err) {
     if items.len == 0usize { ret (.Cancelled, Invalid) }
     ret (.Cancelled, Unsupported)
+}
+
+// ------------------------------------------------------ file dialogs and recents
+//
+// D894. A native file dialog on a desktop is the portal or the toolkit's own,
+// neither of which the library speaks, and the recent list is a `.xbel` file
+// the specification describes; both are `Unsupported` here and the record says
+// so. ponytail: `zenity --file-selection` would be the same tool-shaped path as
+// `xdg-open`, when a caller needs it.
+
+fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str, err) {
+    var nothing: []const str = zero
+    if dialog.filters.len > 16usize { ret (nothing, Invalid) }
+    if dialog.kind != .Open && dialog.multiple { ret (nothing, Invalid) }
+    ret (nothing, Unsupported)
+}
+
+fn recent_add(a: *mem.Arena, path: str) -> err {
+    if path.len == 0usize { ret Invalid }
+    ret Unsupported
+}
+// The activation a command line means: the first argument a URL when it has a
+// scheme before a colon and no separator, a file when it names one that exists,
+// a plain launch otherwise.
+fn activation_of(a: *mem.Arena, args: []const str) -> Activation {
+    var activation: Activation = zero
+    activation.kind = .Launch
+    activation.args = args
+    if args.len < 2usize { ret activation }
+    let first = args[1usize]
+    if first.len == 0usize { ret activation }
+    var at = 0usize
+    var scheme = false
+    while at < first.len {
+        let c = first[at]
+        if c == 58u8 {
+            scheme = at > 1usize && at + 1usize < first.len
+            break
+        }
+        let letter = (c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || (c >= 48u8 && c <= 57u8) || c == 43u8 || c == 45u8 || c == 46u8
+        if !letter { break }
+        at += 1usize
+    }
+    if scheme {
+        activation.kind = .Url
+        activation.payload = first
+        ret activation
+    }
+    let (info, stat_error) = os.stat(a, first)
+    if stat_error == ok {
+        activation.kind = .File
+        activation.payload = first
+    }
+    ret activation
+}
+
+// ----------------------------------------------- associations and activation
+//
+// D896. Startup is the freedesktop autostart specification: a `.desktop` file
+// under `$XDG_CONFIG_HOME/autostart` (or `~/.config/autostart`) naming this
+// executable, written and removed by hand. A file or protocol association is a
+// `.desktop` file plus `update-desktop-database` and `xdg-mime`, and a single
+// instance is a socket in the runtime directory; neither is written yet, so
+// both are `Unsupported` and the record says so.
+
+fn valid_name(text: str) -> bool {
+    if text.len == 0usize { ret false }
+    var at = 0usize
+    while at < text.len {
+        let c = text[at]
+        if c == 92u8 || c == 47u8 || c == 34u8 || c < 32u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: str) -> err {
+    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
+    ret Unsupported
+}
+
+fn dissociate_file(a: *mem.Arena, extension: str, program_id: str) -> err {
+    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
+    ret Unsupported
+}
+
+fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
+    if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
+    ret Unsupported
+}
+
+fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err {
+    if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
+    ret Unsupported
+}
+
+fn autostart_path(a: *mem.Arena, id: str) -> (str, err) {
+    let (config_home, has_config_home) = fs.env_directory(a, "XDG_CONFIG_HOME")
+    var base = config_home
+    if !has_config_home {
+        let (home, home_error) = fs.home_dir(a)
+        if home_error != ok { ret ("", home_error) }
+        let (config, config_error) = str.concat(a, home, "/.config")
+        if config_error != ok { ret ("", config_error) }
+        base = config
+    }
+    let (directory, directory_error) = str.concat(a, base, "/autostart")
+    if directory_error != ok { ret ("", directory_error) }
+    let (with_id, id_error) = join3(a, directory, "/", id)
+    if id_error != ok { ret ("", id_error) }
+    let (path, path_error) = str.concat(a, with_id, ".desktop")
+    ret (path, path_error)
+}
+
+fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
+    if !valid_name(id) { ret Invalid }
+    let (path, path_error) = autostart_path(a, id)
+    if path_error != ok { ret path_error }
+    if !enabled {
+        let removed = fs.remove_file(a, path)
+        if removed != ok && removed != fs.NotFound { ret Failed }
+        ret ok
+    }
+    let (exe, exe_error) = fs.executable_path(a)
+    if exe_error != ok { ret exe_error }
+    try fs.make_dirs(a, parent_of(path))
+    let (head, head_error) = join3(a, "[Desktop Entry]\nType=Application\nName=", id, "\nExec=")
+    if head_error != ok { ret head_error }
+    let (content, content_error) = join3(a, head, exe, "\nX-GNOME-Autostart-enabled=true\n")
+    if content_error != ok { ret content_error }
+    ret fs.write_file(a, path, content)
+}
+
+fn startup_enabled(a: *mem.Arena, id: str) -> (bool, err) {
+    if !valid_name(id) { ret (false, Invalid) }
+    let (path, path_error) = autostart_path(a, id)
+    if path_error != ok { ret (false, path_error) }
+    let (present, exists_error) = fs.exists(a, path)
+    if exists_error != ok { ret (false, exists_error) }
+    ret (present, ok)
+}
+
+fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Arena) -> (bool, err) {
+    if !valid_name(id) { ret (false, Invalid) }
+    ret (false, Unsupported)
+}
+
+fn activation_poll() -> (Activation, bool) {
+    var none: Activation = zero
+    ret (none, false)
+}
+// ------------------------------------------------- lifecycle and global input
+//
+// D898. Background work needs no permission on a desktop; power inhibition is
+// `systemd-inhibit` holding a child alive until released, the same tool-shaped
+// path as `xdg-open`; a global shortcut is the compositor's (a portal on
+// Wayland, a grab on X11), the session's shutdown is logind over D-Bus, and a
+// restart is the session manager's -- none of which the library speaks, so those
+// are `Unsupported` and the record says so.
+
+var inhibitor: os.Proc = zero
+var inhibiting: bool = zero
+
+fn hotkey_register(a: *mem.Arena, id: u32, key: Hotkey) -> err {
+    if id == 0u32 || id > 49151u32 || key.key == 0u32 { ret Invalid }
+    ret Unsupported
+}
+
+fn hotkey_unregister(a: *mem.Arena, id: u32) -> err {
+    if id == 0u32 || id > 49151u32 { ret Invalid }
+    ret Unsupported
+}
+
+fn hotkey_poll() -> (u32, bool) {
+    ret (0u32, false)
+}
+
+fn background_permission(a: *mem.Arena) -> Permission {
+    ret .Granted
+}
+
+fn power_inhibit(a: *mem.Arena, keep_display: bool) -> err {
+    if inhibiting { ret ok }
+    let (tool, tool_error) = find_program(a, "systemd-inhibit")
+    if tool_error != ok { ret Unsupported }
+    var argv: [5]str = zero
+    argv[0usize] = tool
+    argv[1usize] = "--what=idle:sleep"
+    argv[2usize] = "--who=neper"
+    argv[3usize] = "--why=The program asked to stay awake"
+    argv[4usize] = "sleep"
+    var with_span: [6]str = zero
+    var at = 0usize
+    while at < 5usize {
+        with_span[at] = argv[at]
+        at += 1usize
+    }
+    with_span[5usize] = "infinity"
+    var options: os.SpawnOptions = zero
+    options.argv = with_span[..]
+    options.inherit_env = true
+    options.stdio.stdout = os.File { raw: 1usize }
+    options.stdio.stderr = os.File { raw: 2usize }
+    let (child, spawn_error) = os.spawn_with_options(a, options)
+    if spawn_error != ok { ret Failed }
+    inhibitor = child
+    inhibiting = true
+    ret ok
+}
+
+fn power_release(a: *mem.Arena) -> err {
+    if !inhibiting { ret NotFound }
+    let killed = os.kill(inhibitor)
+    let (usage, wait_error) = os.wait_usage(inhibitor)
+    inhibiting = false
+    ret ok
+}
+
+fn lifecycle_poll() -> (LifecycleEvent, bool) {
+    ret (.Resume, false)
+}
+
+fn restart_register(a: *mem.Arena, arguments: str) -> err {
+    if arguments.len > 1024usize { ret Invalid }
+    ret Unsupported
+}
+
+fn restart_unregister(a: *mem.Arena) -> err {
+    ret Unsupported
 }

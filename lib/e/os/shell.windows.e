@@ -18,8 +18,9 @@ error Unsupported
 error Invalid
 error NotFound
 error Failed
+error Cancelled
 
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
@@ -32,6 +33,21 @@ type ContentKind = enum u8 { Text, Files, Image, Bytes, Promise }
 type Content = struct { kind: ContentKind, mime: str, text: str, paths: []const str, image: Icon, bytes: []const u8 }
 type Drop = struct { x: i32, y: i32, items: []const Content }
 type DragResult = enum u8 { Copied, Moved, Cancelled }
+// A native file dialog: what it picks, its title, the filters offered (a label
+// and a pattern such as `*.txt`), whether several may be chosen, the initial
+// name, and the extension appended to a typed name without one.
+type DialogKind = enum u8 { Open, Save, Folder }
+type FileFilter = struct { label: str, pattern: str }
+type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFilter, multiple: bool, initial: str, default_extension: str }
+// How the program was activated: plainly, with a file, or with a URL; a
+// redirected activation is another instance's arguments handed to the first.
+type ActivationKind = enum u8 { Launch, File, Url }
+type Activation = struct { kind: ActivationKind, payload: str, args: []const str }
+// A global shortcut: the modifiers and the host's key code; a permission the
+// host answers for background work; the lifecycle events a session sends.
+type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
+type Permission = enum u8 { Granted, Denied, Unavailable }
+type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
@@ -52,6 +68,7 @@ const WM_LBUTTONUP: u32 = 514u32
 const WM_LBUTTONDBLCLK: u32 = 515u32
 const WM_RBUTTONUP: u32 = 517u32
 const PM_REMOVE: u32 = 1u32
+const WM_COPYDATA: u32 = 74u32
 const NIN_BALLOONHIDE: u32 = 1027u32
 const NIN_BALLOONTIMEOUT: u32 = 1028u32
 const NIN_BALLOONUSERCLICK: u32 = 1029u32
@@ -164,7 +181,7 @@ extern fn raw_file_operation(operation: *FileOperation) -> i32
 extern fn raw_co_initialize(reserved: usize, model: u32) -> i32
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: true, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: true, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: true, lifecycle_events: true, restart: true }
 }
 
 // UTF-16 with a terminator, in the arena; the pages are touched first because the
@@ -199,6 +216,9 @@ fn ascii_units(out: []u16, text: str) {
 // the ring, at the cursor; everything else goes to the default.
 @cc(c)
 fn shell_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) -> isize {
+    if message == WM_COPYDATA { ret receive_activation(lparam) }
+    let (session, answer) = session_message(message, wparam)
+    if session { ret answer }
     if message != TRAY_MESSAGE { ret raw_default_procedure(handle, message, wparam, lparam) }
     let mouse = u32(lparam) & 65535u32
     var event: TrayEvent = zero
@@ -1949,3 +1969,865 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
     ret (.Cancelled, Failed)
 }
 
+// ------------------------------------------------------ file dialogs and recents
+//
+// D894, the widget plan's `native-file-access-api`. A file dialog is the shell's
+// `IFileOpenDialog` or `IFileSaveDialog`, reached by slot like the taskbar: the
+// options set for the kind, the filters as `COMDLG_FILTERSPEC` pairs, the dialog
+// shown modally over the caller's window (or none), and the result read as file
+// system paths through `IShellItem`. A cancel is `Cancelled`, not a failure. A
+// recent document is `SHAddToRecentDocs`, which feeds the Start menu and the
+// jump list's recent category.
+
+type FilterSpec = struct { label: *const u16, pattern: *const u16 }
+type Count = struct { value: u32 }
+type WidePointer = struct { value: *const u16 }
+
+@cc(c)
+type ComShow = extern fn(usize, usize) -> i32
+@cc(c)
+type ComSetFilters = extern fn(usize, u32, *const FilterSpec) -> i32
+@cc(c)
+type ComSetOptions = extern fn(usize, u32) -> i32
+@cc(c)
+type ComGetOptions = extern fn(usize, *Count) -> i32
+@cc(c)
+type ComGetObject = extern fn(usize, **ComObject) -> i32
+@cc(c)
+type ComDisplayName = extern fn(usize, u32, *WidePointer) -> i32
+@cc(c)
+type ComItemAt = extern fn(usize, u32, **ComObject) -> i32
+type ShowPun = union { function: ComShow, bits: usize }
+type SetFiltersPun = union { function: ComSetFilters, bits: usize }
+type SetOptionsPun = union { function: ComSetOptions, bits: usize }
+type GetOptionsPun = union { function: ComGetOptions, bits: usize }
+type GetObjectPun = union { function: ComGetObject, bits: usize }
+type DisplayNamePun = union { function: ComDisplayName, bits: usize }
+type ItemAtPun = union { function: ComItemAt, bits: usize }
+
+const DIALOG_SHOW: usize = 3usize
+const DIALOG_SET_FILE_TYPES: usize = 4usize
+const DIALOG_SET_OPTIONS: usize = 9usize
+const DIALOG_GET_OPTIONS: usize = 10usize
+const DIALOG_SET_FILE_NAME: usize = 15usize
+const DIALOG_SET_TITLE: usize = 17usize
+const DIALOG_GET_RESULT: usize = 20usize
+const DIALOG_SET_DEFAULT_EXTENSION: usize = 22usize
+const DIALOG_GET_RESULTS: usize = 27usize
+const ITEM_DISPLAY_NAME: usize = 5usize
+const ARRAY_GET_COUNT: usize = 7usize
+const ARRAY_GET_ITEM_AT: usize = 8usize
+const SIGDN_FILESYSPATH: u32 = 2147844096u32
+const FOS_OVERWRITEPROMPT: u32 = 2u32
+const FOS_PICKFOLDERS: u32 = 32u32
+const FOS_FORCEFILESYSTEM: u32 = 64u32
+const FOS_ALLOWMULTISELECT: u32 = 512u32
+const FOS_PATHMUSTEXIST: u32 = 2048u32
+const FOS_FILEMUSTEXIST: u32 = 4096u32
+const ERROR_CANCELLED_HRESULT: u32 = 2147943623u32
+const SHARD_PATHW: u32 = 3u32
+const MAX_DIALOG_FILTERS: usize = 16usize
+
+@import("ole32.dll", "CoTaskMemFree")
+extern fn raw_co_task_free(block: usize)
+
+@import("shell32.dll", "SHAddToRecentDocs")
+extern fn raw_add_to_recent(flags: u32, data: *const u16)
+
+fn call_get_object(object: *ComObject, slot: usize) -> (*ComObject, err) {
+    var found: *ComObject = zero
+    var pun: GetObjectPun = zero
+    pun.bits = object.vtable.slots[slot]
+    let result = pun.function(mem.address_of(object), &found)
+    if result < 0i32 || mem.address_of(found) == 0usize { ret (found, Failed) }
+    ret (found, ok)
+}
+
+// A shell item's file system path, copied into the arena; the shell's block freed.
+fn item_path(a: *mem.Arena, item: *ComObject) -> (str, err) {
+    var holder: WidePointer = zero
+    var pun: DisplayNamePun = zero
+    pun.bits = item.vtable.slots[ITEM_DISPLAY_NAME]
+    if pun.function(mem.address_of(item), SIGDN_FILESYSPATH, &holder) < 0i32 || mem.address_of(holder.value) == 0usize { ret ("", Failed) }
+    let count = usize(raw_wide_length(holder.value))
+    var path = ""
+    var path_error = ok
+    if count != 0usize {
+        let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+        if bytes_error != ok {
+            path_error = bytes_error
+        } else {
+            os.touch(&bytes[0usize], count * 3usize)
+            let converted = raw_narrow(CP_UTF8, 0u32, holder.value, i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+            if converted <= 0i32 { path_error = Failed } else { path = bytes[0usize..usize(converted)] }
+        }
+    }
+    raw_co_task_free(mem.address_of(holder.value))
+    ret (path, path_error)
+}
+
+// The dialog shown and its choice: one path, or every chosen path for a multiple
+// open; `Cancelled` when the user closes it without one.
+fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str, err) {
+    var nothing: []const str = zero
+    if dialog.filters.len > MAX_DIALOG_FILTERS { ret (nothing, Invalid) }
+    if dialog.kind != .Open && dialog.multiple { ret (nothing, Invalid) }
+    var owner = 0usize
+    if w.raw != 0usize {
+        let (handle, handle_error) = window_handle(w)
+        if handle_error != ok { ret (nothing, handle_error) }
+        owner = handle
+    }
+    let window_error = ensure_window()
+    if window_error != ok { ret (nothing, window_error) }
+    var clsid: [16]u8 = zero
+    var iid: [16]u8 = zero
+    if dialog.kind == .Save {
+        guid(clsid[..], 3233080051u32, 47649u16, 18291u16, 2377790302u32, 3376868235u32)
+        guid(iid[..], 1123569974u32, 56190u16, 17308u16, 2247222279u32, 1561550792u32)
+    } else {
+        guid(clsid[..], 3692845724u32, 59530u16, 19934u16, 2778816760u32, 706785015u32)
+        guid(iid[..], 3581702792u32, 54445u16, 18280u16, 3187842454u32, 2503137632u32)
+    }
+    let (object, create_error) = com_create(clsid[..], iid[..])
+    if create_error != ok { ret (nothing, create_error) }
+    var options: Count = zero
+    var get_options: GetOptionsPun = zero
+    get_options.bits = object.vtable.slots[DIALOG_GET_OPTIONS]
+    let read_options = get_options.function(mem.address_of(object), &options)
+    var flags = options.value | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST
+    if dialog.kind == .Open { flags = flags | FOS_FILEMUSTEXIST }
+    if dialog.kind == .Save { flags = flags | FOS_OVERWRITEPROMPT }
+    if dialog.kind == .Folder { flags = flags | FOS_PICKFOLDERS }
+    if dialog.multiple { flags = flags | FOS_ALLOWMULTISELECT }
+    var set_options: SetOptionsPun = zero
+    set_options.bits = object.vtable.slots[DIALOG_SET_OPTIONS]
+    if set_options.function(mem.address_of(object), flags) < 0i32 {
+        com_release(object)
+        ret (nothing, Failed)
+    }
+    if dialog.title.len != 0usize {
+        let (title, title_error) = widen(a, dialog.title)
+        if title_error != ok {
+            com_release(object)
+            ret (nothing, title_error)
+        }
+        let titled = call_wide(object, DIALOG_SET_TITLE, &title[0usize])
+    }
+    if dialog.initial.len != 0usize {
+        let (initial, initial_error) = widen(a, dialog.initial)
+        if initial_error != ok {
+            com_release(object)
+            ret (nothing, initial_error)
+        }
+        let named = call_wide(object, DIALOG_SET_FILE_NAME, &initial[0usize])
+    }
+    if dialog.default_extension.len != 0usize {
+        let (extension, extension_error) = widen(a, dialog.default_extension)
+        if extension_error != ok {
+            com_release(object)
+            ret (nothing, extension_error)
+        }
+        let defaulted = call_wide(object, DIALOG_SET_DEFAULT_EXTENSION, &extension[0usize])
+    }
+    if dialog.filters.len != 0usize && dialog.kind != .Folder {
+        var specs: [16]FilterSpec = zero
+        var at = 0usize
+        while at < dialog.filters.len {
+            let (label, label_error) = widen(a, dialog.filters[at].label)
+            let (pattern, pattern_error) = widen(a, dialog.filters[at].pattern)
+            if label_error != ok || pattern_error != ok {
+                com_release(object)
+                ret (nothing, Invalid)
+            }
+            specs[at] = FilterSpec { label: &label[0usize], pattern: &pattern[0usize] }
+            at += 1usize
+        }
+        var set_filters: SetFiltersPun = zero
+        set_filters.bits = object.vtable.slots[DIALOG_SET_FILE_TYPES]
+        if set_filters.function(mem.address_of(object), u32(dialog.filters.len), &specs[0usize]) < 0i32 {
+            com_release(object)
+            ret (nothing, Failed)
+        }
+    }
+    var show: ShowPun = zero
+    show.bits = object.vtable.slots[DIALOG_SHOW]
+    let shown = show.function(mem.address_of(object), owner)
+    if shown < 0i32 {
+        com_release(object)
+        if u32(mem.bitcast[u32](shown)) == ERROR_CANCELLED_HRESULT { ret (nothing, Cancelled) }
+        ret (nothing, Failed)
+    }
+    if dialog.multiple {
+        let (results, results_error) = call_get_object(object, DIALOG_GET_RESULTS)
+        if results_error != ok {
+            com_release(object)
+            ret (nothing, Failed)
+        }
+        var count: Count = zero
+        var get_count: GetOptionsPun = zero
+        get_count.bits = results.vtable.slots[ARRAY_GET_COUNT]
+        if get_count.function(mem.address_of(results), &count) < 0i32 {
+            com_release(results)
+            com_release(object)
+            ret (nothing, Failed)
+        }
+        let (paths, allocation_error) = mem.alloc[str](a, usize(count.value))
+        if allocation_error != ok {
+            com_release(results)
+            com_release(object)
+            ret (nothing, allocation_error)
+        }
+        var index = 0u32
+        var failure = ok
+        while index < count.value && failure == ok {
+            var item: *ComObject = zero
+            var item_at: ItemAtPun = zero
+            item_at.bits = results.vtable.slots[ARRAY_GET_ITEM_AT]
+            if item_at.function(mem.address_of(results), index, &item) < 0i32 || mem.address_of(item) == 0usize {
+                failure = Failed
+            } else {
+                let (path, path_error) = item_path(a, item)
+                com_release(item)
+                if path_error != ok { failure = path_error } else { paths[usize(index)] = path }
+            }
+            index += 1u32
+        }
+        com_release(results)
+        com_release(object)
+        if failure != ok { ret (nothing, failure) }
+        ret (paths[0usize..usize(count.value)], ok)
+    }
+    let (item, item_error) = call_get_object(object, DIALOG_GET_RESULT)
+    if item_error != ok {
+        com_release(object)
+        ret (nothing, Failed)
+    }
+    let (path, path_error) = item_path(a, item)
+    com_release(item)
+    com_release(object)
+    if path_error != ok { ret (nothing, path_error) }
+    let (paths, allocation_error) = mem.alloc[str](a, 1usize)
+    if allocation_error != ok { ret (nothing, allocation_error) }
+    paths[0usize] = path
+    ret (paths[0usize..1usize], ok)
+}
+
+// The document into the shell's recent list; the item has to exist.
+fn recent_add(a: *mem.Arena, path: str) -> err {
+    if path.len == 0usize { ret Invalid }
+    let (info, stat_error) = os.stat(a, path)
+    if stat_error == os.NotFound { ret NotFound }
+    if stat_error != ok { ret Failed }
+    let (wide, widen_error) = widen(a, path)
+    if widen_error != ok { ret widen_error }
+    raw_add_to_recent(SHARD_PATHW, &wide[0usize])
+    ret ok
+}
+// The activation a command line means: the first argument a URL when it has a
+// scheme before a colon and no separator, a file when it names one that exists,
+// a plain launch otherwise.
+fn activation_of(a: *mem.Arena, args: []const str) -> Activation {
+    var activation: Activation = zero
+    activation.kind = .Launch
+    activation.args = args
+    if args.len < 2usize { ret activation }
+    let first = args[1usize]
+    if first.len == 0usize { ret activation }
+    var at = 0usize
+    var scheme = false
+    while at < first.len {
+        let c = first[at]
+        if c == 58u8 {
+            scheme = at > 1usize && at + 1usize < first.len
+            break
+        }
+        let letter = (c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || (c >= 48u8 && c <= 57u8) || c == 43u8 || c == 45u8 || c == 46u8
+        if !letter { break }
+        at += 1usize
+    }
+    if scheme {
+        activation.kind = .Url
+        activation.payload = first
+        ret activation
+    }
+    let (info, stat_error) = os.stat(a, first)
+    if stat_error == ok {
+        activation.kind = .File
+        activation.payload = first
+    }
+    ret activation
+}
+
+// ----------------------------------------------- associations and activation
+//
+// D896, the widget plan's `native-activation-api`. A file or protocol
+// association is the per-user registry under `HKEY_CURRENT_USER\Software\Classes`
+// -- an extension naming a program id, the program id's open command naming this
+// executable with `%1`, a scheme marked `URL Protocol` the same way -- which
+// needs no elevation and is what the shell reads. Startup registration is the
+// `Run` key's value under the id. A single instance is a named mutex: the first
+// holder titles the hidden window with the id and receives later instances'
+// arguments as `WM_COPYDATA`, which `activation_poll` answers; a later instance
+// finds that window, hands its arguments over and is told it is not the first.
+
+type CopyData = struct { data: usize, length: u32, padding: u32, address: usize }
+type KeyHandle = struct { value: usize }
+type ValueSize = struct { value: u32 }
+
+const HKEY_CURRENT_USER: usize = 2147483649usize
+const KEY_WRITE_READ: u32 = 131103u32
+const REG_SZ: u32 = 1u32
+const ERROR_ALREADY_EXISTS: u32 = 183u32
+const ERROR_FILE_NOT_FOUND_STATUS: i32 = 2i32
+const ACTIVATION_RING: usize = 8usize
+
+var instance_mutex: usize = 0usize
+var instance_storage: *mem.Arena = zero
+var activations: [8]Activation = zero
+var activation_head: usize = 0usize
+var activation_count: usize = 0usize
+
+@import("advapi32.dll", "RegCreateKeyExW")
+extern fn raw_reg_create(root: usize, subkey: *const u16, reserved: u32, class: usize, options: u32, access: u32, security: usize, out: *KeyHandle, disposition: usize) -> i32
+
+@import("advapi32.dll", "RegOpenKeyExW")
+extern fn raw_reg_open(root: usize, subkey: *const u16, options: u32, access: u32, out: *KeyHandle) -> i32
+
+@import("advapi32.dll", "RegSetValueExW")
+extern fn raw_reg_set_value(key: usize, name: usize, reserved: u32, kind: u32, data: *const u8, length: u32) -> i32
+
+@import("advapi32.dll", "RegQueryValueExW")
+extern fn raw_reg_query_value(key: usize, name: *const u16, reserved: usize, kind: usize, data: usize, length: *ValueSize) -> i32
+
+@import("advapi32.dll", "RegDeleteValueW")
+extern fn raw_reg_delete_value(key: usize, name: *const u16) -> i32
+
+@import("advapi32.dll", "RegDeleteTreeW")
+extern fn raw_reg_delete_tree(root: usize, subkey: *const u16) -> i32
+
+@import("advapi32.dll", "RegCloseKey")
+extern fn raw_reg_close(key: usize) -> i32
+
+@import("kernel32.dll", "CreateMutexW")
+extern fn raw_create_mutex(security: usize, initial: i32, name: *const u16) -> usize
+
+@import("kernel32.dll", "GetLastError")
+extern fn raw_last_error() -> u32
+
+@import("kernel32.dll", "GetModuleFileNameW")
+extern fn raw_module_file_name(module: usize, out: *u16, capacity: u32) -> u32
+
+@import("user32.dll", "FindWindowW")
+extern fn raw_find_window(class_name: *const u16, title: *const u16) -> usize
+
+@import("user32.dll", "SetWindowTextW")
+extern fn raw_set_window_text(window: usize, text: *const u16) -> i32
+
+@import("user32.dll", "SendMessageW")
+extern fn raw_send_message(window: usize, message: u32, wparam: usize, lparam: isize) -> isize
+
+fn concat_text(a: *mem.Arena, parts: []const str) -> (str, err) {
+    var total = 0usize
+    var at = 0usize
+    while at < parts.len {
+        total += parts[at].len
+        at += 1usize
+    }
+    let (bytes, allocation_error) = mem.alloc[u8](a, total)
+    if allocation_error != ok { ret ("", allocation_error) }
+    var written = 0usize
+    at = 0usize
+    while at < parts.len {
+        var i = 0usize
+        while i < parts[at].len {
+            bytes[written] = parts[at][i]
+            written += 1usize
+            i += 1usize
+        }
+        at += 1usize
+    }
+    ret (bytes[0usize..total], ok)
+}
+
+// This executable's path, for the open command and the startup value.
+fn executable_wide(a: *mem.Arena) -> ([]u16, err) {
+    var nothing: []u16 = zero
+    let (units, allocation_error) = mem.alloc[u16](a, 32768usize)
+    if allocation_error != ok { ret (nothing, allocation_error) }
+    os.touch(mem.cast[*const u8](&units[0usize]), 65536usize)
+    let count = raw_module_file_name(0usize, &units[0usize], 32767u32)
+    if count == 0u32 { ret (nothing, Failed) }
+    units[usize(count)] = 0u16
+    ret (units[0usize..usize(count) + 1usize], ok)
+}
+
+fn executable_text(a: *mem.Arena) -> (str, err) {
+    let (units, wide_error) = executable_wide(a)
+    if wide_error != ok { ret ("", wide_error) }
+    let count = units.len - 1usize
+    let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize + 1usize)
+    if bytes_error != ok { ret ("", bytes_error) }
+    os.touch(&bytes[0usize], count * 3usize + 1usize)
+    let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+    if converted <= 0i32 { ret ("", Failed) }
+    ret (bytes[0usize..usize(converted)], ok)
+}
+
+// A string value under a key of the current user, the key created on the way.
+fn set_user_value(a: *mem.Arena, subkey: str, name: str, value: str) -> err {
+    let (subkey_wide, subkey_error) = widen(a, subkey)
+    if subkey_error != ok { ret subkey_error }
+    var key: KeyHandle = zero
+    if raw_reg_create(HKEY_CURRENT_USER, &subkey_wide[0usize], 0u32, 0usize, 0u32, KEY_WRITE_READ, 0usize, &key, 0usize) != 0i32 { ret Failed }
+    let (value_wide, value_error) = widen(a, value)
+    if value_error != ok {
+        let closed = raw_reg_close(key.value)
+        ret value_error
+    }
+    var count = 0usize
+    while value_wide[count] != 0u16 { count += 1usize }
+    var name_address = 0usize
+    var name_wide: []u16 = zero
+    if name.len != 0usize {
+        let (named, name_error) = widen(a, name)
+        if name_error != ok {
+            let closed = raw_reg_close(key.value)
+            ret name_error
+        }
+        name_wide = named
+        name_address = mem.address_of(&name_wide[0usize])
+    }
+    let set = raw_reg_set_value(key.value, name_address, 0u32, REG_SZ, mem.cast[*const u8](&value_wide[0usize]), u32((count + 1usize) * 2usize))
+    let closed = raw_reg_close(key.value)
+    if set != 0i32 { ret Failed }
+    ret ok
+}
+
+fn valid_name(text: str) -> bool {
+    if text.len == 0usize { ret false }
+    var at = 0usize
+    while at < text.len {
+        let c = text[at]
+        if c == 92u8 || c == 47u8 || c == 34u8 || c < 32u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// The program id's open command over this executable, and its description.
+fn register_program(a: *mem.Arena, program_id: str, description: str) -> err {
+    let (exe, exe_error) = executable_text(a)
+    if exe_error != ok { ret exe_error }
+    var command_parts: [3]str = zero
+    command_parts[0usize] = "\""
+    command_parts[1usize] = exe
+    command_parts[2usize] = "\" \"%1\""
+    let (command, command_error) = concat_text(a, command_parts[..])
+    if command_error != ok { ret command_error }
+    var key_parts: [2]str = zero
+    key_parts[0usize] = "Software\\Classes\\"
+    key_parts[1usize] = program_id
+    let (program_key, program_key_error) = concat_text(a, key_parts[..])
+    if program_key_error != ok { ret program_key_error }
+    try set_user_value(a, program_key, "", description)
+    var command_key_parts: [2]str = zero
+    command_key_parts[0usize] = program_key
+    command_key_parts[1usize] = "\\shell\\open\\command"
+    let (command_key, command_key_error) = concat_text(a, command_key_parts[..])
+    if command_key_error != ok { ret command_key_error }
+    ret set_user_value(a, command_key, "", command)
+}
+
+fn delete_user_tree(a: *mem.Arena, subkey: str) -> err {
+    let (subkey_wide, subkey_error) = widen(a, subkey)
+    if subkey_error != ok { ret subkey_error }
+    let deleted = raw_reg_delete_tree(HKEY_CURRENT_USER, &subkey_wide[0usize])
+    if deleted == ERROR_FILE_NOT_FOUND_STATUS { ret NotFound }
+    if deleted != 0i32 { ret Failed }
+    ret ok
+}
+
+// `.ext` opens with this executable under `program_id`, for this user.
+fn associate_file(a: *mem.Arena, extension: str, program_id: str, description: str) -> err {
+    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
+    try register_program(a, program_id, description)
+    var key_parts: [2]str = zero
+    key_parts[0usize] = "Software\\Classes\\"
+    key_parts[1usize] = extension
+    let (extension_key, key_error) = concat_text(a, key_parts[..])
+    if key_error != ok { ret key_error }
+    ret set_user_value(a, extension_key, "", program_id)
+}
+
+fn dissociate_file(a: *mem.Arena, extension: str, program_id: str) -> err {
+    if extension.len < 2usize || extension[0usize] != 46u8 || !valid_name(extension) || !valid_name(program_id) { ret Invalid }
+    var key_parts: [2]str = zero
+    key_parts[0usize] = "Software\\Classes\\"
+    key_parts[1usize] = extension
+    let (extension_key, key_error) = concat_text(a, key_parts[..])
+    if key_error != ok { ret key_error }
+    let extension_gone = delete_user_tree(a, extension_key)
+    key_parts[1usize] = program_id
+    let (program_key, program_key_error) = concat_text(a, key_parts[..])
+    if program_key_error != ok { ret program_key_error }
+    let program_gone = delete_user_tree(a, program_key)
+    if extension_gone == NotFound && program_gone == NotFound { ret NotFound }
+    if extension_gone != ok && extension_gone != NotFound { ret extension_gone }
+    if program_gone != ok && program_gone != NotFound { ret program_gone }
+    ret ok
+}
+
+// `scheme:` URLs open with this executable, for this user.
+fn associate_protocol(a: *mem.Arena, scheme: str, description: str) -> err {
+    if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
+    try register_program(a, scheme, description)
+    var key_parts: [2]str = zero
+    key_parts[0usize] = "Software\\Classes\\"
+    key_parts[1usize] = scheme
+    let (scheme_key, key_error) = concat_text(a, key_parts[..])
+    if key_error != ok { ret key_error }
+    ret set_user_value(a, scheme_key, "URL Protocol", "")
+}
+
+fn dissociate_protocol(a: *mem.Arena, scheme: str) -> err {
+    if !valid_name(scheme) || scheme.len > 64usize { ret Invalid }
+    var key_parts: [2]str = zero
+    key_parts[0usize] = "Software\\Classes\\"
+    key_parts[1usize] = scheme
+    let (scheme_key, key_error) = concat_text(a, key_parts[..])
+    if key_error != ok { ret key_error }
+    ret delete_user_tree(a, scheme_key)
+}
+
+fn run_key() -> str {
+    ret "Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+}
+
+// This executable started at the user's login under `id`, or not.
+fn startup_set(a: *mem.Arena, id: str, enabled: bool) -> err {
+    if !valid_name(id) { ret Invalid }
+    if enabled {
+        let (exe, exe_error) = executable_text(a)
+        if exe_error != ok { ret exe_error }
+        var parts: [3]str = zero
+        parts[0usize] = "\""
+        parts[1usize] = exe
+        parts[2usize] = "\""
+        let (quoted, quote_error) = concat_text(a, parts[..])
+        if quote_error != ok { ret quote_error }
+        ret set_user_value(a, run_key(), id, quoted)
+    }
+    let (run_wide, run_error) = widen(a, run_key())
+    if run_error != ok { ret run_error }
+    let (name_wide, name_error) = widen(a, id)
+    if name_error != ok { ret name_error }
+    var key: KeyHandle = zero
+    if raw_reg_open(HKEY_CURRENT_USER, &run_wide[0usize], 0u32, KEY_WRITE_READ, &key) != 0i32 { ret Failed }
+    let deleted = raw_reg_delete_value(key.value, &name_wide[0usize])
+    let closed = raw_reg_close(key.value)
+    if deleted == ERROR_FILE_NOT_FOUND_STATUS { ret ok }
+    if deleted != 0i32 { ret Failed }
+    ret ok
+}
+
+fn startup_enabled(a: *mem.Arena, id: str) -> (bool, err) {
+    if !valid_name(id) { ret (false, Invalid) }
+    let (run_wide, run_error) = widen(a, run_key())
+    if run_error != ok { ret (false, run_error) }
+    let (name_wide, name_error) = widen(a, id)
+    if name_error != ok { ret (false, name_error) }
+    var key: KeyHandle = zero
+    if raw_reg_open(HKEY_CURRENT_USER, &run_wide[0usize], 0u32, KEY_WRITE_READ, &key) != 0i32 { ret (false, Failed) }
+    var size: ValueSize = zero
+    let queried = raw_reg_query_value(key.value, &name_wide[0usize], 0usize, 0usize, 0usize, &size)
+    let closed = raw_reg_close(key.value)
+    if queried == ERROR_FILE_NOT_FOUND_STATUS { ret (false, ok) }
+    if queried != 0i32 { ret (false, Failed) }
+    ret (true, ok)
+}
+// A redirected activation's arguments, newline-separated, copied into the
+// first instance's storage and queued as the activation they mean.
+type CopyDataPun = union { pointer: *const CopyData, bits: usize }
+type BytesPun = union { pointer: *u8, bits: usize }
+
+fn receive_activation(lparam: isize) -> isize {
+    if mem.address_of(instance_storage) == 0usize || activation_count == ACTIVATION_RING { ret 0isize }
+    var pun: CopyDataPun = zero
+    pun.bits = usize(lparam)
+    let length = usize(pun.pointer.length)
+    if length == 0usize || length > 65536usize { ret 0isize }
+    var bytes_pun: BytesPun = zero
+    bytes_pun.bits = pun.pointer.address
+    var region: mem.Arena = zero
+    region.base = bytes_pun.pointer
+    region.cap = length
+    region.off = 0usize
+    let incoming = mem.view(&region, 0usize, length)
+    let (copy, allocation_error) = mem.alloc[u8](instance_storage, length)
+    if allocation_error != ok { ret 0isize }
+    mem.copy[u8](copy, incoming)
+    // The arguments back out of the newline-separated text.
+    var count = 1usize
+    var at = 0usize
+    while at < length {
+        if copy[at] == 10u8 { count += 1usize }
+        at += 1usize
+    }
+    let (args, args_error) = mem.alloc[str](instance_storage, count)
+    if args_error != ok { ret 0isize }
+    var start = 0usize
+    var index = 0usize
+    at = 0usize
+    while at <= length {
+        if at == length || copy[at] == 10u8 {
+            args[index] = copy[start..at]
+            index += 1usize
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    activations[(activation_head + activation_count) % ACTIVATION_RING] = activation_of(instance_storage, args[0usize..count])
+    activation_count += 1usize
+    ret 1isize
+}
+
+// The first instance under `id` keeps the mutex and titles the hidden window
+// with the id; a later one finds that window, hands its arguments over and
+// answers false so that it can exit.
+fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Arena) -> (bool, err) {
+    if !valid_name(id) { ret (false, Invalid) }
+    if instance_mutex != 0usize { ret (true, ok) }
+    // The hidden window first, in both instances: the class name it registers
+    // is what a later instance searches by.
+    let window_error = ensure_window()
+    if window_error != ok { ret (false, window_error) }
+    var name_parts: [2]str = zero
+    name_parts[0usize] = "Local\neper.instance."
+    name_parts[1usize] = id
+    let (mutex_name, name_error) = concat_text(a, name_parts[..])
+    if name_error != ok { ret (false, name_error) }
+    let (mutex_wide, mutex_wide_error) = widen(a, mutex_name)
+    if mutex_wide_error != ok { ret (false, mutex_wide_error) }
+    let mutex = raw_create_mutex(0usize, 0i32, &mutex_wide[0usize])
+    if mutex == 0usize { ret (false, Failed) }
+    let already = raw_last_error() == ERROR_ALREADY_EXISTS
+    let (title, title_error) = widen(a, id)
+    if title_error != ok { ret (false, title_error) }
+    if !already {
+        let titled = raw_set_window_text(shell_window, &title[0usize])
+        instance_mutex = mutex
+        instance_storage = storage
+        ret (true, ok)
+    }
+    // Not the first: the arguments to the first, newline-separated.
+    let primary = raw_find_window(&shell_class_name[0usize], &title[0usize])
+    if primary == 0usize { ret (false, NotFound) }
+    var total = 0usize
+    var at = 0usize
+    while at < args.len {
+        total += args[at].len + 1usize
+        at += 1usize
+    }
+    if total == 0usize { total = 1usize }
+    let (payload, allocation_error) = mem.alloc[u8](a, total)
+    if allocation_error != ok { ret (false, allocation_error) }
+    var written = 0usize
+    at = 0usize
+    while at < args.len {
+        var i = 0usize
+        while i < args[at].len {
+            payload[written] = args[at][i]
+            written += 1usize
+            i += 1usize
+        }
+        if at + 1usize < args.len {
+            payload[written] = 10u8
+            written += 1usize
+        }
+        at += 1usize
+    }
+    var copy: CopyData = zero
+    copy.length = u32(written)
+    copy.address = mem.address_of(&payload[0usize])
+    let delivered = raw_send_message(primary, WM_COPYDATA, shell_window, isize(mem.address_of(&copy)))
+    ret (false, ok)
+}
+
+// Pumps the hidden window and answers the oldest redirected activation.
+fn activation_poll() -> (Activation, bool) {
+    var none: Activation = zero
+    if shell_window != 0usize {
+        var message: ShellMessage = zero
+        while raw_peek_message(&message, shell_window, 0u32, 0u32, PM_REMOVE) != 0i32 {
+            let translated = raw_translate_message(&message)
+            let dispatched = raw_dispatch_message(&message)
+        }
+    }
+    if activation_count == 0usize { ret (none, false) }
+    let activation = activations[activation_head]
+    activation_head = (activation_head + 1usize) % ACTIVATION_RING
+    activation_count -= 1usize
+    ret (activation, true)
+}
+// ------------------------------------------------- lifecycle and global input
+//
+// D898, the widget plan's `native-lifecycle-api` with the shell half of P4-10.
+// A global shortcut is `RegisterHotKey` on the hidden window, whose `WM_HOTKEY`
+// becomes the id in a ring `hotkey_poll` drains; the session's shutdown and the
+// system's suspend and resume arrive at the same window as `WM_QUERYENDSESSION`
+// and `WM_POWERBROADCAST` and become lifecycle events; background work needs no
+// permission on this host; power inhibition is the thread's execution state;
+// a restart after a crash or an update is `RegisterApplicationRestart` with
+// the arguments the restarted program should see.
+
+const WM_HOTKEY: u32 = 786u32
+const WM_QUERYENDSESSION: u32 = 17u32
+const WM_ENDSESSION: u32 = 22u32
+const WM_POWERBROADCAST: u32 = 536u32
+const PBT_APMSUSPEND: usize = 4usize
+const PBT_APMRESUMEAUTOMATIC: usize = 18usize
+const MOD_ALT: u32 = 1u32
+const MOD_CONTROL: u32 = 2u32
+const MOD_SHIFT: u32 = 4u32
+const MOD_WIN: u32 = 8u32
+const MOD_NOREPEAT: u32 = 16384u32
+const ES_CONTINUOUS: u32 = 2147483648u32
+const ES_SYSTEM_REQUIRED: u32 = 1u32
+const ES_DISPLAY_REQUIRED: u32 = 2u32
+const HOTKEY_RING: usize = 32usize
+const LIFECYCLE_RING: usize = 8usize
+
+var hotkeys_pressed: [32]u32 = zero
+var hotkey_head: usize = 0usize
+var hotkey_count: usize = 0usize
+var lifecycle_events: [8]LifecycleEvent = zero
+var lifecycle_head: usize = 0usize
+var lifecycle_count: usize = 0usize
+var inhibiting: bool = zero
+
+@import("user32.dll", "RegisterHotKey")
+extern fn raw_register_hotkey(window: usize, id: i32, modifiers: u32, key: u32) -> i32
+
+@import("user32.dll", "UnregisterHotKey")
+extern fn raw_unregister_hotkey(window: usize, id: i32) -> i32
+
+@import("kernel32.dll", "SetThreadExecutionState")
+extern fn raw_set_execution_state(flags: u32) -> u32
+
+@import("kernel32.dll", "RegisterApplicationRestart")
+extern fn raw_register_restart(command_line: *const u16, flags: u32) -> i32
+
+@import("kernel32.dll", "UnregisterApplicationRestart")
+extern fn raw_unregister_restart() -> i32
+
+// The hidden window's share of the session: a hotkey to its ring, a shutdown or
+// a power change to the lifecycle ring, and consent to the session ending.
+fn session_message(message: u32, wparam: usize) -> (bool, isize) {
+    if message == WM_HOTKEY {
+        if hotkey_count < HOTKEY_RING {
+            hotkeys_pressed[(hotkey_head + hotkey_count) % HOTKEY_RING] = u32(wparam & 4294967295usize)
+            hotkey_count += 1usize
+        }
+        ret (true, 0isize)
+    }
+    if message == WM_QUERYENDSESSION || (message == WM_ENDSESSION && wparam != 0usize) {
+        push_lifecycle(.Shutdown)
+        ret (true, 1isize)
+    }
+    if message == WM_POWERBROADCAST {
+        if wparam == PBT_APMSUSPEND { push_lifecycle(.Suspend) }
+        if wparam == PBT_APMRESUMEAUTOMATIC { push_lifecycle(.Resume) }
+        ret (true, 1isize)
+    }
+    ret (false, 0isize)
+}
+
+fn push_lifecycle(event: LifecycleEvent) {
+    if lifecycle_count == LIFECYCLE_RING { ret }
+    lifecycle_events[(lifecycle_head + lifecycle_count) % LIFECYCLE_RING] = event
+    lifecycle_count += 1usize
+}
+
+fn pump_hidden() {
+    if shell_window == 0usize { ret }
+    var message: ShellMessage = zero
+    while raw_peek_message(&message, shell_window, 0u32, 0u32, PM_REMOVE) != 0i32 {
+        let translated = raw_translate_message(&message)
+        let dispatched = raw_dispatch_message(&message)
+    }
+}
+
+// A shortcut the whole desktop answers with this id; `Failed` when another
+// program holds the combination.
+fn hotkey_register(a: *mem.Arena, id: u32, key: Hotkey) -> err {
+    if id == 0u32 || id > 49151u32 || key.key == 0u32 { ret Invalid }
+    try ensure_window()
+    var modifiers = MOD_NOREPEAT
+    if key.control { modifiers = modifiers | MOD_CONTROL }
+    if key.alt { modifiers = modifiers | MOD_ALT }
+    if key.shift { modifiers = modifiers | MOD_SHIFT }
+    if key.super { modifiers = modifiers | MOD_WIN }
+    if raw_register_hotkey(shell_window, i32(id), modifiers, key.key) == 0i32 { ret Failed }
+    ret ok
+}
+
+fn hotkey_unregister(a: *mem.Arena, id: u32) -> err {
+    if id == 0u32 || id > 49151u32 { ret Invalid }
+    if shell_window == 0usize { ret NotFound }
+    if raw_unregister_hotkey(shell_window, i32(id)) == 0i32 { ret NotFound }
+    ret ok
+}
+
+fn hotkey_poll() -> (u32, bool) {
+    pump_hidden()
+    if hotkey_count == 0usize { ret (0u32, false) }
+    let id = hotkeys_pressed[hotkey_head]
+    hotkey_head = (hotkey_head + 1usize) % HOTKEY_RING
+    hotkey_count -= 1usize
+    ret (id, true)
+}
+
+fn background_permission(a: *mem.Arena) -> Permission {
+    ret .Granted
+}
+
+// The system, and the display when asked, kept awake until released.
+fn power_inhibit(a: *mem.Arena, keep_display: bool) -> err {
+    var flags = ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+    if keep_display { flags = flags | ES_DISPLAY_REQUIRED }
+    if raw_set_execution_state(flags) == 0u32 { ret Failed }
+    inhibiting = true
+    ret ok
+}
+
+fn power_release(a: *mem.Arena) -> err {
+    if !inhibiting { ret NotFound }
+    let previous = raw_set_execution_state(ES_CONTINUOUS)
+    inhibiting = false
+    ret ok
+}
+
+fn lifecycle_poll() -> (LifecycleEvent, bool) {
+    pump_hidden()
+    if lifecycle_count == 0usize { ret (.Resume, false) }
+    let event = lifecycle_events[lifecycle_head]
+    lifecycle_head = (lifecycle_head + 1usize) % LIFECYCLE_RING
+    lifecycle_count -= 1usize
+    ret (event, true)
+}
+
+// After a crash, a hang or an update's restart, this program again with these
+// arguments; at most 1024 characters, none of them a restart of the restart.
+fn restart_register(a: *mem.Arena, arguments: str) -> err {
+    if arguments.len > 1024usize { ret Invalid }
+    let (wide, widen_error) = widen(a, arguments)
+    if widen_error != ok { ret widen_error }
+    if raw_register_restart(&wide[0usize], 0u32) < 0i32 { ret Failed }
+    ret ok
+}
+
+fn restart_unregister(a: *mem.Arena) -> err {
+    if raw_unregister_restart() < 0i32 { ret Failed }
+    ret ok
+}
