@@ -17160,6 +17160,32 @@ function so a sibling block cannot rebind it, and `target` and `at` are
 reserved locals. No compiler change was needed; every module passed its
 first build on both compilers.
 
+## D877 — Batch 35: LZMA and xz, Parquet, CoAP, MQTT and STUN/ICE
+
+Five modules from `docs/algos.md`: `e.fmt.lzma` (LzmaSpec's decoder for
+the alone and raw formats plus the .xz container with LZMA2 chunks and
+CRC32/CRC64/SHA-256 checks; liblzma never writes a known size into an
+alone header, so the known-size path is tested with a patched header),
+`e.fmt.parquet` (the hybrid RLE/bit-packing, PLAIN, dictionary and
+DELTA_BINARY_PACKED decoders, a Thrift compact reader and a flat-column
+`decode` walking dictionary and data pages, Snappy through `e.fmt.snappy`;
+GZIP is `Unsupported` because `e.fmt.gzip` is a streaming reader, not a
+buffer decode -- a buffer entry point there is the tidy-up), `e.net.coap`
+(RFC 7252 messages with the option delta encoding, an exchange table with
+the retransmission schedule, RFC 7959 block options), `e.net.mqtt` (3.1.1
+packets, topic filters, QoS 1 and 2 state machines over caller slot
+tables) and `e.net.stun` (RFC 5389 messages with HMAC-SHA1 integrity and
+CRC32 fingerprint checked on the RFC 5769 vectors, and RFC 8445 candidate
+gathering, priorities and pairing without sockets). The network modules
+move no bytes themselves: every state machine takes `now` and the received
+packet and answers what to send, which is what made their fixtures
+deterministic. Two agents corrected the task prompt from the RFC text (the
+CoAP option byte for an eleven-byte path is `bb`, and the ack timeout
+reaches 3000 ms at the top of the random range), which is the right
+direction of trust. Compiler notes: `i64` minimum cannot be written as a
+negative literal in an array literal (the unary minus overflows at run
+time), and the no-hex-literal convention holds across `lib/e`.
+
 ## D885 — `e.os.shell` opens the host's shell: a capability record, never an emulation
 
 The widget plan's phase 4 waits on reviewed host primitives, and its

@@ -2188,6 +2188,36 @@ $uiUndoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $uiUndoWritten -ne 'executable written') { throw 'ui_undo emission failed' }
 & $uiUndoPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_undo check failed: exit $LASTEXITCODE" }
+# `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
+$fmtLzmaPath = Join-Path $testBuild 'fmt-lzma-selfhost.exe'
+$fmtLzmaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_lzma\src\main.e') $repo 'x64' 'windows' $fmtLzmaPath
+if ($LASTEXITCODE -ne 0 -or $fmtLzmaWritten -ne 'executable written') { throw 'fmt_lzma emission failed' }
+& $fmtLzmaPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_lzma check failed: exit $LASTEXITCODE" }
+# `e.fmt.parquet`: two pyarrow files (plain and Snappy) read column by column including nulls, dictionaries and delta encoding, hybrid vectors against a replica, truncation and bad magic reported (D877).
+$fmtParquetPath = Join-Path $testBuild 'fmt-parquet-selfhost.exe'
+$fmtParquetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_parquet\src\main.e') $repo 'x64' 'windows' $fmtParquetPath
+if ($LASTEXITCODE -ne 0 -or $fmtParquetWritten -ne 'executable written') { throw 'fmt_parquet emission failed' }
+& $fmtParquetPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_parquet check failed: exit $LASTEXITCODE" }
+# `e.net.coap`: the Appendix A GET byte for byte, a message with extended options round-tripped, the 3-9-21-45-93 s schedule, block options (D877).
+$netCoapPath = Join-Path $testBuild 'net-coap-selfhost.exe'
+$netCoapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_coap\src\main.e') $repo 'x64' 'windows' $netCoapPath
+if ($LASTEXITCODE -ne 0 -or $netCoapWritten -ne 'executable written') { throw 'net_coap emission failed' }
+& $netCoapPath
+if ($LASTEXITCODE -ne 0) { throw "a net_coap check failed: exit $LASTEXITCODE" }
+# `e.net.mqtt`: the specification's CONNECT bytes, remaining-length limits, fourteen topic-filter cases, QoS 1 and 2 flows producing the replica's byte stream, a duplicated QoS 2 publish delivered once (D877).
+$netMqttPath = Join-Path $testBuild 'net-mqtt-selfhost.exe'
+$netMqttWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_mqtt\src\main.e') $repo 'x64' 'windows' $netMqttPath
+if ($LASTEXITCODE -ne 0 -or $netMqttWritten -ne 'executable written') { throw 'net_mqtt emission failed' }
+& $netMqttPath
+if ($LASTEXITCODE -ne 0) { throw "a net_mqtt check failed: exit $LASTEXITCODE" }
+# `e.net.stun`: the RFC 5769 request and both responses decoded with integrity and fingerprint verified, host and reflexive candidates with RFC 8445 priorities, pair ordering against a replica (D877).
+$netStunPath = Join-Path $testBuild 'net-stun-selfhost.exe'
+$netStunWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_stun\src\main.e') $repo 'x64' 'windows' $netStunPath
+if ($LASTEXITCODE -ne 0 -or $netStunWritten -ne 'executable written') { throw 'net_stun emission failed' }
+& $netStunPath
+if ($LASTEXITCODE -ne 0) { throw "a net_stun check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

@@ -311,7 +311,12 @@
     "e.net.balance",
     "e.net.reliable",
     "e.ui.state",
-    "e.ui.undo"
+    "e.ui.undo",
+    "e.fmt.lzma",
+    "e.fmt.parquet",
+    "e.net.coap",
+    "e.net.mqtt",
+    "e.net.stun"
    ]
   },
   {
@@ -2451,6 +2456,39 @@
    "blocked_by": []
   },
   {
+   "name": "e.net.coap",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.mqtt",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.stun",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.crypto.hash"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.os",
    "layer": 3,
    "surface": "spec",
@@ -4162,6 +4200,31 @@
    "direct_dependencies": [
     "e.bytes",
     "e.fmt.flatbuffers"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.lzma",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.crypto.hash"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.parquet",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.fmt.snappy",
+    "e.mem"
    ],
    "blocked_by": []
   },

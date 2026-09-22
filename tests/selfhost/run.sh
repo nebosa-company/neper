@@ -1969,6 +1969,31 @@ ui_undo_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$ui_undo_written" = 'executable written' ]
 chmod +x "$test_build/ui-undo-selfhost"
 "$test_build/ui-undo-selfhost"
+# `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
+fmt_lzma_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_lzma/src/main.e" "$repo" x64 linux "$test_build/fmt-lzma-selfhost")
+[ "$fmt_lzma_written" = 'executable written' ]
+chmod +x "$test_build/fmt-lzma-selfhost"
+"$test_build/fmt-lzma-selfhost"
+# `e.fmt.parquet`: two pyarrow files (plain and Snappy) read column by column including nulls, dictionaries and delta encoding, hybrid vectors against a replica, truncation and bad magic reported (D877).
+fmt_parquet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_parquet/src/main.e" "$repo" x64 linux "$test_build/fmt-parquet-selfhost")
+[ "$fmt_parquet_written" = 'executable written' ]
+chmod +x "$test_build/fmt-parquet-selfhost"
+"$test_build/fmt-parquet-selfhost"
+# `e.net.coap`: the Appendix A GET byte for byte, a message with extended options round-tripped, the 3-9-21-45-93 s schedule, block options (D877).
+net_coap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_coap/src/main.e" "$repo" x64 linux "$test_build/net-coap-selfhost")
+[ "$net_coap_written" = 'executable written' ]
+chmod +x "$test_build/net-coap-selfhost"
+"$test_build/net-coap-selfhost"
+# `e.net.mqtt`: the specification's CONNECT bytes, remaining-length limits, fourteen topic-filter cases, QoS 1 and 2 flows producing the replica's byte stream, a duplicated QoS 2 publish delivered once (D877).
+net_mqtt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_mqtt/src/main.e" "$repo" x64 linux "$test_build/net-mqtt-selfhost")
+[ "$net_mqtt_written" = 'executable written' ]
+chmod +x "$test_build/net-mqtt-selfhost"
+"$test_build/net-mqtt-selfhost"
+# `e.net.stun`: the RFC 5769 request and both responses decoded with integrity and fingerprint verified, host and reflexive candidates with RFC 8445 priorities, pair ordering against a replica (D877).
+net_stun_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_stun/src/main.e" "$repo" x64 linux "$test_build/net-stun-selfhost")
+[ "$net_stun_written" = 'executable written' ]
+chmod +x "$test_build/net-stun-selfhost"
+"$test_build/net-stun-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

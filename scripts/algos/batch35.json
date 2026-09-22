@@ -1,0 +1,20 @@
+{
+ "decision": "D877",
+ "modules": [
+  {"name": "e.fmt.lzma", "deps": ["e.algo.hash", "e.crypto.hash"], "fixture": "fmt_lzma", "anchor": "### `e.fmt.lzw`\n",
+   "note": "LZMA decoding over caller storage: `header`, `probs_required`, `decode` (the alone\nformat), `decode_raw` (with or without a known size) and `decode_xz` (single-filter\nLZMA2 blocks with CRC32, CRC64 or SHA-256 checks, index and footer verified).",
+   "comment": "`e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused"},
+  {"name": "e.fmt.parquet", "deps": ["e.bytes", "e.fmt.snappy", "e.mem"], "fixture": "fmt_parquet", "anchor": "### `e.fmt.asn1`\n",
+   "note": "Parquet reading: the RLE/bit-packing hybrid (`decode_page`, `rle_bitpack_hybrid`,\n`bit_unpack`, `levels`), PLAIN and dictionary decoders, `delta_binary_packed`, a Thrift\ncompact reader, `footer`, `metadata`, `column_chunk`, `page_header` and `decode` of a\nflat column across dictionary and data pages, uncompressed or Snappy.",
+   "comment": "`e.fmt.parquet`: two pyarrow files (plain and Snappy) read column by column including nulls, dictionaries and delta encoding, hybrid vectors against a replica, truncation and bad magic reported"},
+  {"name": "e.net.coap", "deps": [], "fixture": "net_coap", "anchor": "### `e.net.tls`\n",
+   "note": "RFC 7252 messages over caller buffers: `encode`, `decode`, option builders and the\n`option_next` iterator with the 13/14 extensions, `request`, an `Exchange` table with the\nRFC's retransmission schedule (`exchange_send`, `exchange_receive`, `exchange_timeouts`)\nand RFC 7959 `block_encode`/`block_decode`.",
+   "comment": "`e.net.coap`: the Appendix A GET byte for byte, a message with extended options round-tripped, the 3-9-21-45-93 s schedule, block options"},
+  {"name": "e.net.mqtt", "deps": ["e.mem", "e.str"], "fixture": "net_mqtt", "anchor": "### `e.net.tls`\n",
+   "note": "MQTT 3.1.1 packets (`encode_connect`, `encode_publish`, `decode_publish`, the acks,\nsubscribe and unsubscribe, ping and disconnect, remaining-length varints), §4.7\n`topic_matches`, and the QoS 1 and 2 state machines over caller slot tables\n(`publish`, `outbox_receive`, `outbox_retransmit`, `inbox_receive`).",
+   "comment": "`e.net.mqtt`: the specification's CONNECT bytes, remaining-length limits, fourteen topic-filter cases, QoS 1 and 2 flows producing the replica's byte stream, a duplicated QoS 2 publish delivered once"},
+  {"name": "e.net.stun", "deps": ["e.algo.hash", "e.crypto.hash"], "fixture": "net_stun", "anchor": "### `e.net.tls`\n",
+   "note": "STUN messages (`encode_binding_request`, `encode_binding_response`, `decode`,\n`attribute_next`, `xor_mapped_address`, MESSAGE-INTEGRITY over HMAC-SHA1, FINGERPRINT)\nand ICE gathering without sockets: `gather_candidates`, `gather_reflexive`, `priority`,\n`foundation`, `sort_candidates`, `pair_priority`, `candidate_pairs`.",
+   "comment": "`e.net.stun`: the RFC 5769 request and both responses decoded with integrity and fingerprint verified, host and reflexive candidates with RFC 8445 priorities, pair ordering against a replica"}
+ ]
+}

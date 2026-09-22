@@ -5618,6 +5618,241 @@ Clock-free state machines: Go-Back-N (`sender_send`, `sender_ack`, `sender_timeo
 RFC 1982 `seq_less`, RFC 6298 `rtt_estimate` with `rtt_backoff` and Karn's `rtt_karn`,
 and RFC 5681 `aimd_ack`/`aimd_loss`.
 
+### `e.net.coap`
+
+```neper
+type Message = struct { kind: u8, code: u8, id: u16, token: []const u8, options: []const u8, payload: []const u8 }
+type Exchange = struct { id: u16, token: []const u8, state: State, retries: u32, deadline: u64, timeout: u64, confirmable: bool }
+type State = enum u8 { Idle, Waiting, Acked, Done, Failed }
+type Reply = enum u8 { None, Piggybacked, Separate, EmptyAck, Reset }
+error Malformed
+error TooSmall
+error Invalid
+error Timeout
+
+fn kind_con() -> u8
+fn kind_non() -> u8
+fn kind_ack() -> u8
+fn kind_rst() -> u8
+fn code(class: u8, detail: u8) -> u8
+fn code_class(c: u8) -> u8
+fn code_detail(c: u8) -> u8
+fn code_empty() -> u8
+fn code_get() -> u8
+fn code_post() -> u8
+fn code_put() -> u8
+fn code_delete() -> u8
+fn code_content() -> u8
+fn code_not_found() -> u8
+fn opt_uri_host() -> u16
+fn opt_etag() -> u16
+fn opt_observe() -> u16
+fn opt_uri_port() -> u16
+fn opt_location_path() -> u16
+fn opt_uri_path() -> u16
+fn opt_content_format() -> u16
+fn opt_max_age() -> u16
+fn opt_uri_query() -> u16
+fn opt_accept() -> u16
+fn opt_block2() -> u16
+fn opt_block1() -> u16
+fn opt_size2() -> u16
+fn opt_size1() -> u16
+fn ack_timeout_ms() -> u64
+fn ack_random_factor() -> f64
+fn max_retransmit() -> u32
+fn ext_nibble(v: usize) -> (u8, usize)
+fn write_ext(dst: []u8, p: usize, v: usize) -> usize
+fn options_add(buf: []u8, used: *usize, last_number: *u16, number: u16, value: []const u8) -> err
+fn options_add_uint(buf: []u8, used: *usize, last_number: *u16, number: u16, value: u32) -> err
+fn option_uint(value: []const u8) -> (u32, err)
+fn read_ext(src: []const u8, nibble: u8, p: usize) -> (usize, usize, err)
+fn parse_option(src: []const u8, p: usize) -> (usize, usize, usize, err)
+fn option_next(options: []const u8, pos: *usize, last: *u16) -> (u16, []const u8, bool, err)
+fn encode(dst: []u8, m: *const Message) -> (usize, err)
+fn append(dst: []u8, p: usize, src: []const u8) -> usize
+fn decode(src: []const u8) -> (Message, err)
+fn request(dst: []u8, method: u8, uri_path: []const str, uri_query: []const str, token: []const u8, id: u16, confirmable: bool, payload: []const u8, content_format: i32) -> (usize, err)
+fn exchange() -> Exchange
+fn initial_timeout(jitter: f64) -> u64
+fn exchange_send(x: *Exchange, now: u64, id: u16, token: []const u8, confirmable: bool, jitter: f64)
+fn token_eq(a: []const u8, b: []const u8) -> bool
+fn exchange_receive(x: *Exchange, m: *const Message) -> (bool, Reply, err)
+fn exchange_timeouts(xs: []Exchange, now: u64, out: []u16) -> (usize, err)
+fn block_encode(num: u32, more: bool, szx: u8) -> u32
+fn block_decode(v: u32) -> (u32, bool, u8)
+fn block_size(szx: u8) -> usize
+```
+
+RFC 7252 messages over caller buffers: `encode`, `decode`, option builders and the
+`option_next` iterator with the 13/14 extensions, `request`, an `Exchange` table with the
+RFC's retransmission schedule (`exchange_send`, `exchange_receive`, `exchange_timeouts`)
+and RFC 7959 `block_encode`/`block_decode`.
+
+### `e.net.mqtt`
+
+```neper
+type Publish = struct { topic: str, payload: []const u8, qos: u8, retain: bool, dup: bool, packet_id: u16 }
+type Connect = struct { client_id: str, keep_alive: u16, clean_session: bool, has_username: bool, username: str, has_password: bool, password: []const u8, has_will: bool, will_topic: str, will_payload: []const u8, will_qos: u8, will_retain: bool }
+type Outbox = struct { ids: []u16, state: []u8, next_id: u16 }
+type Inbox = struct { ids: []u16, used: []u8 }
+error Malformed
+error TooSmall
+error Invalid
+error Full
+const CONNECT: u8 = 1u8
+const CONNACK: u8 = 2u8
+const PUBLISH: u8 = 3u8
+const PUBACK: u8 = 4u8
+const PUBREC: u8 = 5u8
+const PUBREL: u8 = 6u8
+const PUBCOMP: u8 = 7u8
+const SUBSCRIBE: u8 = 8u8
+const SUBACK: u8 = 9u8
+const UNSUBSCRIBE: u8 = 10u8
+const UNSUBACK: u8 = 11u8
+const PINGREQ: u8 = 12u8
+const PINGRESP: u8 = 13u8
+const DISCONNECT: u8 = 14u8
+const FREE: u8 = 0u8
+const AWAIT_PUBACK: u8 = 1u8
+const AWAIT_PUBREC: u8 = 2u8
+const AWAIT_PUBCOMP: u8 = 3u8
+const MAX_REMAINING: usize = 268435455usize
+
+fn encode_remaining_length(dst: []u8, n: usize) -> (usize, err)
+fn decode_remaining_length(src: []const u8) -> (usize, usize, err)
+fn packet_type(src: []const u8) -> (u8, err)
+fn remaining_length(src: []const u8) -> (usize, usize, err)
+fn body(src: []const u8, expect_type: u8) -> ([]const u8, u8, err)
+fn header(dst: []u8, first: u8, remaining: usize) -> (usize, err)
+fn put_u16(dst: []u8, at: usize, v: u16) -> err
+fn get_u16(src: []const u8, at: usize) -> (u16, err)
+fn utf8_string(dst: []u8, s: []const u8) -> (usize, err)
+fn decode_utf8_string(src: []const u8) -> ([]const u8, usize, err)
+fn put_string(dst: []u8, at: *usize, s: []const u8) -> err
+fn finish(dst: []u8, first: u8, body_len: usize) -> (usize, err)
+fn connect(client_id: str, keep_alive: u16, clean_session: bool) -> Connect
+fn encode_connect(dst: []u8, c: *const Connect) -> (usize, err)
+fn decode_connack(src: []const u8) -> (bool, u8, err)
+fn encode_connack(dst: []u8, session_present: bool, return_code: u8) -> (usize, err)
+fn encode_publish(dst: []u8, topic: str, payload: []const u8, qos: u8, retain: bool, dup: bool, packet_id: u16) -> (usize, err)
+fn decode_publish(src: []const u8) -> (Publish, err)
+fn encode_ack(dst: []u8, kind: u8, packet_id: u16) -> (usize, err)
+fn encode_puback(dst: []u8, packet_id: u16) -> (usize, err)
+fn encode_pubrec(dst: []u8, packet_id: u16) -> (usize, err)
+fn encode_pubrel(dst: []u8, packet_id: u16) -> (usize, err)
+fn encode_pubcomp(dst: []u8, packet_id: u16) -> (usize, err)
+fn encode_unsuback(dst: []u8, packet_id: u16) -> (usize, err)
+fn decode_ack(src: []const u8) -> (u8, u16, err)
+fn encode_subscribe(dst: []u8, packet_id: u16, topics: []const str, qoss: []const u8) -> (usize, err)
+fn decode_suback(src: []const u8, codes: []u8) -> (u16, usize, err)
+fn encode_suback(dst: []u8, packet_id: u16, codes: []const u8) -> (usize, err)
+fn encode_unsubscribe(dst: []u8, packet_id: u16, topics: []const str) -> (usize, err)
+fn encode_empty(dst: []u8, kind: u8) -> (usize, err)
+fn encode_pingreq(dst: []u8) -> (usize, err)
+fn encode_pingresp(dst: []u8) -> (usize, err)
+fn encode_disconnect(dst: []u8) -> (usize, err)
+fn level_end(s: str, from: usize) -> usize
+fn topic_matches(filter: str, topic: str) -> bool
+fn valid_filter(filter: str) -> bool
+fn outbox(ids: []u16, state: []u8) -> Outbox
+fn slots(o: *const Outbox) -> usize
+fn find_slot(o: *const Outbox, id: u16) -> (usize, bool)
+fn outbox_pending(o: *const Outbox) -> usize
+fn publish(o: *Outbox, qos: u8, dst: []u8, topic: str, payload: []const u8) -> (u16, usize, err)
+fn outbox_receive(o: *Outbox, src: []const u8, dst: []u8) -> (usize, bool, err)
+fn outbox_slot(o: *const Outbox, slot: usize) -> (u16, u8)
+fn outbox_retransmit(o: *const Outbox, slot: usize, dst: []u8, topic: str, payload: []const u8) -> (usize, err)
+fn inbox(ids: []u16, used: []u8) -> Inbox
+fn inbox_slots(i: *const Inbox) -> usize
+fn inbox_find(i: *const Inbox, id: u16) -> (usize, bool)
+fn inbox_pending(i: *const Inbox) -> usize
+fn inbox_receive(i: *Inbox, src: []const u8, dst: []u8) -> (bool, u16, usize, err)
+```
+
+MQTT 3.1.1 packets (`encode_connect`, `encode_publish`, `decode_publish`, the acks,
+subscribe and unsubscribe, ping and disconnect, remaining-length varints), §4.7
+`topic_matches`, and the QoS 1 and 2 state machines over caller slot tables
+(`publish`, `outbox_receive`, `outbox_retransmit`, `inbox_receive`).
+
+### `e.net.stun`
+
+```neper
+type Address = struct { family: u8, port: u16, ip: [16]u8 }
+type Header = struct { kind: u16, length: u16, txid: [12]u8 }
+type Candidate = struct { kind: u8, address: Address, base: Address, priority: u32, foundation: u32, component: u8 }
+type Pair = struct { local: u32, remote: u32, priority: u64 }
+error Malformed
+error TooSmall
+error Invalid
+const COOKIE: u32 = 554869826u32
+const FINGERPRINT_XOR: u32 = 1398035790u32
+const BINDING_REQUEST: u16 = 1u16
+const BINDING_RESPONSE: u16 = 257u16
+const BINDING_ERROR: u16 = 273u16
+const ATTR_MAPPED_ADDRESS: u16 = 1u16
+const ATTR_USERNAME: u16 = 6u16
+const ATTR_MESSAGE_INTEGRITY: u16 = 8u16
+const ATTR_ERROR_CODE: u16 = 9u16
+const ATTR_UNKNOWN_ATTRIBUTES: u16 = 10u16
+const ATTR_REALM: u16 = 20u16
+const ATTR_NONCE: u16 = 21u16
+const ATTR_XOR_MAPPED_ADDRESS: u16 = 32u16
+const ATTR_PRIORITY: u16 = 36u16
+const ATTR_USE_CANDIDATE: u16 = 37u16
+const ATTR_SOFTWARE: u16 = 32802u16
+const ATTR_FINGERPRINT: u16 = 32808u16
+const ATTR_ICE_CONTROLLED: u16 = 32809u16
+const ATTR_ICE_CONTROLLING: u16 = 32810u16
+const FAMILY_IPV4: u8 = 1u8
+const FAMILY_IPV6: u8 = 2u8
+const HOST: u8 = 0u8
+const SERVER_REFLEXIVE: u8 = 1u8
+const PEER_REFLEXIVE: u8 = 2u8
+const RELAYED: u8 = 3u8
+const MAX_MESSAGE: usize = 1964usize
+
+fn store16(dst: []u8, at: usize, value: u16)
+fn store32(dst: []u8, at: usize, value: u32)
+fn load16(src: []const u8, at: usize) -> u16
+fn load32(src: []const u8, at: usize) -> u32
+fn padded(length: usize) -> usize
+fn ipv4(a: u8, b: u8, c: u8, d: u8, port: u16) -> Address
+fn ip_len(family: u8) -> usize
+fn address_equal(a: Address, b: Address) -> bool
+fn message_class(kind: u16) -> u8
+fn message_method(kind: u16) -> u16
+fn encode_header(dst: []u8, kind: u16, txid: [12]u8) -> (usize, err)
+fn add_attribute(buf: []u8, used: *usize, kind: u16, value: []const u8) -> err
+fn encode_binding_request(dst: []u8, txid: [12]u8, software: str, fingerprint: bool) -> (usize, err)
+fn encode_binding_response(dst: []u8, txid: [12]u8, mapped: Address, xor: bool) -> (usize, err)
+fn xor_byte(txid: [12]u8, i: usize) -> u8
+fn decode(src: []const u8) -> (Header, err)
+fn attribute_next(src: []const u8, pos: *usize) -> (u16, []const u8, bool, err)
+fn find_attribute(src: []const u8, kind: u16) -> ([]const u8, usize, bool)
+fn mapped_address(value: []const u8) -> (Address, err)
+fn xor_mapped_address(value: []const u8, txid: [12]u8) -> (Address, err)
+fn error_code(value: []const u8) -> (u32, str, err)
+fn add_message_integrity(buf: []u8, used: *usize, key: []const u8) -> err
+fn verify_message_integrity(src: []const u8, key: []const u8) -> bool
+fn hmac_sha1(key: []const u8, msg: []const u8, length: u16) -> [20]u8
+fn add_fingerprint(buf: []u8, used: *usize) -> err
+fn verify_fingerprint(src: []const u8) -> bool
+fn priority(kind: u8, local_pref: u16, component: u8) -> u32
+fn foundation(kind: u8, base: Address, server: Address) -> u32
+fn gather_candidates(locals: []const Address, components: u8, out: []Candidate) -> (usize, err)
+fn gather_reflexive(out: []Candidate, count: *usize, base_index: usize, server: Address, response: []const u8) -> err
+fn sort_candidates(out: []Candidate)
+fn pair_priority(controlling_prio: u32, controlled_prio: u32) -> u64
+fn candidate_pairs(local: []const Candidate, remote: []const Candidate, controlling: bool, out_pairs: []Pair) -> usize
+```
+
+STUN messages (`encode_binding_request`, `encode_binding_response`, `decode`,
+`attribute_next`, `xor_mapped_address`, MESSAGE-INTEGRITY over HMAC-SHA1, FINGERPRINT)
+and ICE gathering without sockets: `gather_candidates`, `gather_reflexive`, `priority`,
+`foundation`, `sort_candidates`, `pair_priority`, `candidate_pairs`.
+
 ### `e.net.tls`
 
 ```neper
@@ -7888,6 +8123,80 @@ The Arrow columnar layout over caller buffers (`Column` with validity, offsets a
 RecordBatch through `e.fmt.flatbuffers`, zero-copy over the body; compression and
 dictionaries answer `Unsupported`).
 
+### `e.fmt.parquet`
+
+```neper
+type Hybrid = struct { src: []const u8, pos: usize, bit_width: u32, left: usize, packed: bool, value: u32, acc: u64, bits: u32 }
+type Thrift = struct { buf: []const u8, pos: usize }
+type SchemaElement = struct { name: str, kind: i32, type_length: i32, repetition: i32, num_children: i32, converted_type: i32 }
+type ColumnChunk = struct { kind: i32, encodings: u32, path: str, codec: i32, num_values: i64, total_uncompressed_size: i64, total_compressed_size: i64, data_page_offset: i64, index_page_offset: i64, dictionary_page_offset: i64, file_offset: i64 }
+type FileMetaData = struct { version: i32, num_rows: i64, schema: []SchemaElement, schema_count: usize, columns: []ColumnChunk, column_count: usize, row_group_count: usize }
+type PageHeader = struct { kind: i32, uncompressed_page_size: i32, compressed_page_size: i32, crc: i32, num_values: i32, encoding: i32, definition_level_encoding: i32, repetition_level_encoding: i32, num_nulls: i32, num_rows: i32, definition_levels_byte_length: i32, repetition_levels_byte_length: i32, is_compressed: bool, header_size: usize }
+type Values = struct { ints: []i64, floats: []f64, offsets: []u32, data: []u8, valid: []u8, count: usize, data_len: usize }
+error Malformed
+error Unsupported
+error TooSmall
+error Invalid
+
+fn bits_at(src: []const u8, off: usize, width: u32) -> (u64, err)
+fn bit_unpack(src: []const u8, bit_width: u32, count: usize, out: []u32) -> (usize, err)
+fn uleb(src: []const u8, at: usize) -> (u64, usize, err)
+fn hybrid(src: []const u8, bit_width: u32) -> Hybrid
+fn hybrid_next(h: *Hybrid) -> (u32, err)
+fn hybrid_finish(h: *Hybrid) -> err
+fn rle_bitpack_hybrid(src: []const u8, bit_width: u32, count: usize, out: []u32) -> (usize, err)
+fn decode_page(src: []const u8, bit_width: u32, count: usize, out: []u32) -> (usize, err)
+fn bit_width_for(max_level: u32) -> u32
+fn levels(src: []const u8, max_level: u32, count: usize, out: []u32) -> (usize, err)
+fn plain[T: type](src: []const u8, count: usize, out: []T) -> (usize, err)
+fn plain_i32(src: []const u8, count: usize, out: []i32) -> (usize, err)
+fn plain_i64(src: []const u8, count: usize, out: []i64) -> (usize, err)
+fn plain_f32(src: []const u8, count: usize, out: []f32) -> (usize, err)
+fn plain_f64(src: []const u8, count: usize, out: []f64) -> (usize, err)
+fn plain_bool(src: []const u8, count: usize, out: []u8) -> (usize, err)
+fn plain_byte_array(src: []const u8, count: usize, out_offsets: []u32, out_data: []u8) -> (usize, err)
+fn byte_array_at(src: []const u8, at: usize) -> (usize, usize, err)
+fn zigzag(u: u64) -> i64
+fn i64_from_bits(u: u64) -> i64
+fn delta_binary_packed(src: []const u8, out: []i64) -> (usize, err)
+fn wrap_i32(x: i64) -> i64
+fn dictionary[T: type](indices_page: []const u8, count: usize, dict_values: []const T, out: []T) -> (usize, err)
+fn thrift(buf: []const u8, pos: usize) -> Thrift
+fn thrift_read_varint(t: *Thrift) -> (u64, err)
+fn thrift_zigzag(u: u64) -> i64
+fn thrift_i64(t: *Thrift) -> (i64, err)
+fn thrift_i32(t: *Thrift) -> (i32, err)
+fn thrift_binary(t: *Thrift) -> ([]const u8, err)
+fn thrift_field(t: *Thrift, last: i16) -> (i16, u8, err)
+fn thrift_list(t: *Thrift) -> (usize, u8, err)
+fn thrift_skip(t: *Thrift, kind: u8) -> err
+fn skip_value(t: *Thrift, kind: u8, element: bool, depth: usize) -> err
+fn thrift_str(t: *Thrift) -> (str, err)
+fn footer(file: []const u8) -> (usize, usize, err)
+fn schema_element(t: *Thrift, s: *SchemaElement) -> err
+fn column_meta_data(t: *Thrift, c: *ColumnChunk) -> err
+fn column_chunk_meta(t: *Thrift, c: *ColumnChunk) -> err
+fn row_group(t: *Thrift, m: *FileMetaData) -> err
+fn metadata(file: []const u8, m: *FileMetaData) -> err
+fn column_count(m: *const FileMetaData) -> usize
+fn column_chunk(m: *const FileMetaData, row_group_index: usize, column: usize) -> (ColumnChunk, err)
+fn page_header_v1(t: *Thrift, h: *PageHeader) -> err
+fn page_header_v2(t: *Thrift, h: *PageHeader) -> err
+fn page_header(file: []const u8, pos: usize) -> (PageHeader, err)
+fn page_bytes(file: []const u8, at: usize, h: *const PageHeader, codec: i32, scratch: []u8) -> ([]const u8, err)
+fn physical_width(kind: i32) -> usize
+fn push_bytes(v: *Values, row: usize, src: []const u8, at: usize) -> err
+fn store_value(v: *Values, row: usize, kind: i32, src: []const u8, at: usize) -> err
+fn dictionary_entry(dict: []const u8, kind: i32, index: usize, dict_count: usize) -> (usize, err)
+fn data_page(v: *Values, base: usize, h: *const PageHeader, page: []const u8, kind: i32, max_def: u32, dict: []const u8, dict_count: usize) -> err
+fn decode(file: []const u8, m: *const FileMetaData, chunk_index: usize, v: *Values, scratch: []u8) -> (usize, err)
+```
+
+Parquet reading: the RLE/bit-packing hybrid (`decode_page`, `rle_bitpack_hybrid`,
+`bit_unpack`, `levels`), PLAIN and dictionary decoders, `delta_binary_packed`, a Thrift
+compact reader, `footer`, `metadata`, `column_chunk`, `page_header` and `decode` of a
+flat column across dictionary and data pages, uncompressed or Snappy.
+
 ### `e.fmt.asn1`
 
 ```neper
@@ -8079,6 +8388,62 @@ LZ4 block format (`encode` over a caller `[]u32` hash table, strict `decode`, `b
 and the v1 frame format (`encode_frame` with independent 64 KiB blocks and a content
 checksum, `decode_frame` accepting dependent blocks, block checksums and content size)
 with `xxh32`.
+
+### `e.fmt.lzma`
+
+```neper
+type Props = struct { lc: u32, lp: u32, pb: u32, dict_size: u32, unpacked: u64, has_size: bool }
+type Lz = struct { src: []const u8, at: usize, end: usize, range: u32, code: u32, bad: bool, state: u32, rep0: u32, rep1: u32, rep2: u32, rep3: u32, pos: usize, start: usize, lc: u32, lp: u32, pb: u32, dict_size: u32 }
+error Invalid
+error Malformed
+error TooSmall
+error Checksum
+error Unsupported
+const IS_MATCH: usize = 0usize
+const IS_REP: usize = 192usize
+const IS_REP_G0: usize = 204usize
+const IS_REP_G1: usize = 216usize
+const IS_REP_G2: usize = 228usize
+const IS_REP0_LONG: usize = 240usize
+const POS_SLOT: usize = 432usize
+const SPEC_POS: usize = 688usize
+const ALIGN: usize = 802usize
+const LEN: usize = 818usize
+const REP_LEN: usize = 1332usize
+const LITERAL: usize = 1846usize
+const MARKER: u32 = 4294967295u32
+
+fn probs_required(lc: u32, lp: u32) -> usize
+fn le32(src: []const u8, at: usize) -> u32
+fn le64(src: []const u8, at: usize) -> u64
+fn set_props_byte(p: *Props, b: u8) -> err
+fn header(src: []const u8) -> (Props, err)
+fn rc_init(d: *Lz) -> err
+fn rc_byte(d: *Lz) -> u32
+fn rc_normalize(d: *Lz)
+fn rc_bit(d: *Lz, probs: []u16, i: usize) -> u32
+fn rc_direct(d: *Lz, n: u32) -> u32
+fn tree(d: *Lz, probs: []u16, base: usize, bits: u32) -> u32
+fn tree_reverse(d: *Lz, probs: []u16, base: usize, bits: u32) -> u32
+fn length(d: *Lz, probs: []u16, base: usize, pos_state: usize) -> u32
+fn distance(d: *Lz, probs: []u16, len: u32) -> u32
+fn literal(d: *Lz, probs: []u16, dst: []u8)
+fn reset_probs(probs: []u16, lc: u32, lp: u32)
+fn run(d: *Lz, probs: []u16, dst: []u8, end_pos: usize, has_size: bool) -> err
+fn set_lz_props(d: *Lz, p: Props)
+fn decode_raw(p: Props, src: []const u8, dst: []u8, probs: []u16) -> (usize, err)
+fn decode(src: []const u8, dst: []u8, probs: []u16) -> (usize, err)
+fn vli(src: []const u8, at: *usize) -> (u64, err)
+fn crc64(data: []const u8) -> u64
+fn lzma2_dict_size(b: u8) -> (u32, err)
+fn lzma2(src: []const u8, at0: usize, dst: []u8, out: usize, probs: []u16, dict_size: u32) -> (usize, usize, err)
+fn check_size(kind: u32) -> usize
+fn decode_xz(src: []const u8, dst: []u8, probs: []u16) -> (usize, err)
+```
+
+LZMA decoding over caller storage: `header`, `probs_required`, `decode` (the alone
+format), `decode_raw` (with or without a known size) and `decode_xz` (single-filter
+LZMA2 blocks with CRC32, CRC64 or SHA-256 checks, index and footer verified).
 
 ### `e.fmt.lzw`
 
