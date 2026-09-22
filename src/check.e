@@ -2930,20 +2930,26 @@ fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
 fn refuse_union_members(c: *Checker) -> err {
     var aggregate_at = 0usize
     while aggregate_at < c.aggregate_count {
-        let aggregate = c.aggregates[aggregate_at]
-        if aggregate.kind == .Union && aggregate.field_count > 1usize {
-            var field_at = 0usize
-            while field_at < aggregate.field_count {
-                let field = c.aggregate_fields[aggregate.first_field + field_at]
-                let (field_admits, field_culprit) = type_has_undef_value(c, field.ty, 0usize)
-                if !field_admits {
-                    record_failure_token(c, aggregate.module_index, aggregate.token, .UnionRepresentation, aggregate.name, field_culprit)
-                    ret InvalidType
-                }
-                field_at += 1usize
-            }
-        }
+        try refuse_union_member(c, aggregate_at)
         aggregate_at += 1usize
+    }
+    ret ok
+}
+
+// One aggregate's half of the rule above: also asked of a generic union's instance
+// made while bodies are checked, whose fields are its arguments'.
+fn refuse_union_member(c: *Checker, aggregate_index: usize) -> err {
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind != .Union || aggregate.field_count < 2usize { ret ok }
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let field = c.aggregate_fields[aggregate.first_field + field_at]
+        let (field_admits, field_culprit) = type_has_undef_value(c, field.ty, 0usize)
+        if !field_admits {
+            record_failure_token(c, aggregate.module_index, aggregate.token, .UnionRepresentation, aggregate.name, field_culprit)
+            ret InvalidType
+        }
+        field_at += 1usize
     }
     ret ok
 }
@@ -3547,7 +3553,12 @@ fn instantiate_aggregate(c: *Checker, template_index: usize, first_argument: usi
     let concrete = aggregate_arguments_concrete(c, template, first_argument)
     if concrete {
         let (cached, found) = find_aggregate_instance(c, template_index, first_argument)
-        if found { ret (cached, ok) }
+        if found {
+            // A caller that probed and put the refusal down finds the instance cached.
+            let cached_union_error = refuse_union_member(c, cached)
+            if cached_union_error != ok { ret (0usize, cached_union_error) }
+            ret (cached, ok)
+        }
     }
     if c.aggregate_count == c.aggregates.len { ret (0usize, Capacity) }
     var instance = template
@@ -3589,6 +3600,8 @@ fn instantiate_aggregate(c: *Checker, template_index: usize, first_argument: usi
             c.aggregate_fields[instance.first_field + at].ty = specialized
             at += 1usize
         }
+        let union_error = refuse_union_member(c, index)
+        if union_error != ok { ret (0usize, union_error) }
     }
     ret (index, ok)
 }

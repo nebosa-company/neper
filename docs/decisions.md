@@ -18264,3 +18264,19 @@ the unchecked one (8,778,240 against 7,982,592 bytes; D922 left 12.5%).
 Its cold wall, measured on a host near its memory limit, is +11.5% against the old
 code generator's +13.7% in the same runs; D922's quieter measurement put the checked
 build at +5.5%, and this change removes work from it.
+
+## D924 — A generic union's instance is asked what its declaration was
+
+D921 refused an untagged union holding a member-only field beside another, once
+every aggregate's fields were collected, and said a generic union instantiated
+while bodies are checked was not re-examined. It is now: `instantiate_aggregate`
+asks the same question of every union instance it makes, and of every one it finds
+cached -- a literal is typed by a probe that puts its failure down and asks again,
+and the second asking found the instance already made and passed it. `Pun[T]` with
+`value: T` beside `bits: u8` stays legal; `Pun[bool]` is E-SAFETY-0024 wherever it
+is written. `reject/safety_union_generic.e` is the body-literal case; the library's
+two generic unions pun a function value with a `usize` and are unaffected.
+
+A same-block elision of repeated bounds checks was measured on the way and not
+kept: it left out 204 more of the compiler's checks and about four kilobytes of
+its image, which is not worth a second pass over every function.
