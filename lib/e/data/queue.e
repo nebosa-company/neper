@@ -42,3 +42,32 @@ fn iter_next[T: type](it: *Iter[T]) -> (T, bool) {
     it.index += 1usize
     ret (value, true)
 }
+
+// High/low watermark flow control for a bounded queue: `Above` past `high`
+// asks the producer to pause, `Below` under `low` lets it resume, and the
+// band between is hysteresis -- `watermark_next` keeps the last signal there.
+type WatermarkState = enum u8 { Below, Between, Above }
+type Watermarks = struct { capacity: usize, low: usize, high: usize }
+error Invalid
+
+fn watermarks(cap: usize, low: usize, high: usize) -> (Watermarks, err) {
+    if cap == 0usize || low > high || high > cap { ret (zero, Invalid) }
+    ret (Watermarks { capacity: cap, low: low, high: high }, ok)
+}
+
+// The band `count` falls in, with no memory.
+fn watermark_state(w: *const Watermarks, count: usize) -> WatermarkState {
+    if count < w.low { ret .Below }
+    if count > w.high { ret .Above }
+    ret .Between
+}
+
+// The signal after `count` given the last one: `Above` only once past `high`,
+// `Below` only once under `low`, otherwise unchanged (a fresh `Between` starts
+// as `Below`, the producer running).
+fn watermark_next(w: *const Watermarks, state: WatermarkState, count: usize) -> WatermarkState {
+    if count > w.high { ret .Above }
+    if count < w.low { ret .Below }
+    if state == .Between { ret .Below }
+    ret state
+}

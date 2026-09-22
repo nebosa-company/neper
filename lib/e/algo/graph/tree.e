@@ -2,11 +2,13 @@
 // subtree sizes from a root; lowest common ancestors by binary lifting and by
 // Tarjan's offline union-find; the Euler tour with entry and exit times;
 // heavy-light decomposition into paths; centroid decomposition; Prüfer codes;
-// and AHU canonical forms for rooted-tree isomorphism. Every table is the
-// caller's arena's, indexed by node.
+// AHU canonical forms for rooted-tree isomorphism, LCA by Euler-tour RMQ and
+// tree isomorphism rooted and unrooted. Every table is the caller's arena's,
+// indexed by node.
 
 use e.mem
 use e.data.graph as graph
+use e.algo.graph as algo
 use e.algo.disjoint_set as dsu
 
 type Rooted = struct { parent: []graph.NodeId, depth: []u32, size: []u32, order: []graph.NodeId }
@@ -581,4 +583,102 @@ fn ahu_labels[E: type](a: *mem.Arena, g: *const graph.Graph[E], tree: *const Roo
         if count == 0usize { label[usize(v)] = 3u64 }
     }
     ret ok
+}
+
+type LcaRmq = struct { entry: []const u32, sequence: []const graph.NodeId, depth: []const u32, table: []graph.NodeId, levels: usize, count: usize }
+
+// The binary-lifting table straight from a graph and its root (`root_at`
+// then `lifting`); query it with `lca`, `ancestor` and `distance`.
+fn lca_binary_lifting[E: type](a: *mem.Arena, g: *const graph.Graph[E], root: graph.NodeId) -> (Lifting, err) {
+    let (tree, tree_error) = root_at[E](a, g, root)
+    if tree_error != ok { ret (zero, tree_error) }
+    let (l, l_error) = lifting(a, &tree)
+    ret (l, l_error)
+}
+
+// LCA by range-minimum over the Euler tour: `table[level * count + i]` is the
+// shallowest node of `sequence[i .. i + 2^level]`, so a query is two lookups.
+fn lca_rmq[E: type](a: *mem.Arena, g: *const graph.Graph[E], tree: *const Rooted) -> (LcaRmq, err) {
+    let (tour, tour_error) = euler_tour[E](a, g, tree)
+    if tour_error != ok { ret (zero, tour_error) }
+    let count = tour.sequence.len
+    var levels = 1usize
+    while (1usize << levels) <= count { levels += 1usize }
+    let (table, table_error) = mem.alloc[graph.NodeId](a, levels * count)
+    if table_error != ok { ret (zero, table_error) }
+    var i = 0usize
+    while i < count {
+        table[i] = tour.sequence[i]
+        i += 1usize
+    }
+    var level = 1usize
+    while level < levels {
+        let half = 1usize << (level - 1usize)
+        i = 0usize
+        while i + 2usize * half <= count {
+            let x = table[(level - 1usize) * count + i]
+            let y = table[(level - 1usize) * count + i + half]
+            table[level * count + i] = x
+            if tree.depth[usize(y)] < tree.depth[usize(x)] { table[level * count + i] = y }
+            i += 1usize
+        }
+        level += 1usize
+    }
+    ret (LcaRmq { entry: tour.entry[0..], sequence: tour.sequence, depth: tree.depth[0..], table: table, levels: levels, count: count }, ok)
+}
+
+// The lowest common ancestor in `O(1)`.
+fn lca_rmq_query(r: *const LcaRmq, a: graph.NodeId, b: graph.NodeId) -> graph.NodeId {
+    var lo = usize(r.entry[usize(a)])
+    var hi = usize(r.entry[usize(b)])
+    if lo > hi {
+        let swap = lo
+        lo = hi
+        hi = swap
+    }
+    var level = 0usize
+    while (2usize << level) <= hi - lo + 1usize { level += 1usize }
+    let x = r.table[level * r.count + lo]
+    let y = r.table[level * r.count + hi + 1usize - (1usize << level)]
+    if r.depth[usize(y)] < r.depth[usize(x)] { ret y }
+    ret x
+}
+
+// Rooted isomorphism: the AHU labels of the two roots agree.
+fn is_isomorphic_rooted[E: type](a: *mem.Arena, first: *const graph.Graph[E], first_root: graph.NodeId, second: *const graph.Graph[E], second_root: graph.NodeId) -> (bool, err) {
+    let n = graph.node_count[E](first)
+    if n != graph.node_count[E](second) || first.edges.len != second.edges.len { ret (false, ok) }
+    if n == 0usize { ret (true, ok) }
+    let (t1, t1_error) = root_at[E](a, first, first_root)
+    if t1_error != ok { ret (false, t1_error) }
+    let (t2, t2_error) = root_at[E](a, second, second_root)
+    if t2_error != ok { ret (false, t2_error) }
+    let (labels, labels_error) = mem.alloc[u64](a, 3usize * n)
+    if labels_error != ok { ret (false, labels_error) }
+    let l1_error = ahu_labels[E](a, first, &t1, labels[..n], labels[2usize * n..3usize * n])
+    if l1_error != ok { ret (false, l1_error) }
+    let l2_error = ahu_labels[E](a, second, &t2, labels[n..2usize * n], labels[2usize * n..3usize * n])
+    if l2_error != ok { ret (false, l2_error) }
+    ret (labels[usize(first_root)] == labels[n + usize(second_root)], ok)
+}
+
+// Unrooted isomorphism: each tree rooted at its centre (both, when the
+// centre is an edge) and compared as rooted trees.
+fn is_isomorphic[E: type](a: *mem.Arena, first: *const graph.Graph[E], second: *const graph.Graph[E]) -> (bool, err) {
+    let n = graph.node_count[E](first)
+    if n != graph.node_count[E](second) || first.edges.len != second.edges.len { ret (false, ok) }
+    if n == 0usize { ret (true, ok) }
+    let (c1, c1_error) = algo.center[E](a, first)
+    if c1_error != ok { ret (false, c1_error) }
+    let (c2, c2_error) = algo.center[E](a, second)
+    if c2_error != ok { ret (false, c2_error) }
+    if c1.len != c2.len || c1.len == 0usize || c1.len > 2usize { ret (false, ok) }
+    var i = 0usize
+    while i < c1.len {
+        let (same, same_error) = is_isomorphic_rooted[E](a, first, c1[i], second, c2[0usize])
+        if same_error != ok { ret (false, same_error) }
+        if same { ret (true, ok) }
+        i += 1usize
+    }
+    ret (false, ok)
 }

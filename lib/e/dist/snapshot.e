@@ -138,3 +138,41 @@ fn snapshot_live(s: *const Snapshot) -> u64 {
     }
     ret t
 }
+
+// ---- planned one-call form ------------------------------------------------
+
+// A scripted computation: Send moves `amount` from `from` to `to`, Deliver
+// hands the oldest undelivered message to its process, Initiate starts the
+// snapshot at `from`.
+type OpKind = enum u8 { Send, Deliver, Initiate }
+type Op = struct { kind: OpKind, from: u32, to: u32, amount: u64 }
+
+// Chandy-Lamport in one call: run `script` over fresh processes holding
+// `initial`; answers (recorded total, snapshot complete, error). The
+// process and channel records hold the recorded states afterwards. A
+// Deliver with nothing pending is Invalid, as is a bad send or a second
+// initiation.
+fn chandy_lamport(procs: []Proc, channels: []Channel, initial: []const u64, script: []const Op, out: *Sent) -> (u64, bool, err) {
+    let (s0, e0) = snapshot(procs, channels, initial)
+    if e0 != ok { ret (0u64, false, e0) }
+    var s = s0
+    var head = 0usize
+    var i = 0usize
+    while i < script.len {
+        let op = script[i]
+        if op.kind == .Send {
+            let e = snapshot_send(&s, usize(op.from), usize(op.to), op.amount, out)
+            if e != ok { ret (0u64, false, e) }
+        } else if op.kind == .Initiate {
+            let e = snapshot_initiate(&s, usize(op.from), out)
+            if e != ok { ret (0u64, false, e) }
+        } else {
+            if head >= out.count { ret (0u64, false, Invalid) }
+            if head >= out.out.len { ret (0u64, false, TooSmall) }
+            let _ = snapshot_step(&s, out.out[head], out)
+            head += 1usize
+        }
+        i += 1usize
+    }
+    ret (snapshot_total(&s), snapshot_complete(&s), ok)
+}

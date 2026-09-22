@@ -295,3 +295,89 @@ fn set_iter_next[K: type](it: *SetIter[K]) -> (K, bool) {
     let (key, _, has) = iter_next[K, bool](&it.inner)
     ret (key, has)
 }
+
+// A binary tree of the map's own nodes rebuilt from its traversals: `preorder`
+// (or `postorder`) and `inorder` over the same distinct keys, values `zero`
+// and parent links set. The subtree of `pre[pre_lo..]` whose inorder run is
+// `in[in_lo..in_hi)`.
+fn rebuild[K: type, V: type](a: *mem.Arena, pre: []const K, pre_lo: usize, order: []const K, in_lo: usize, in_hi: usize, up: *Node[K, V], reversed: bool) -> (*Node[K, V], err) {
+    if in_lo >= in_hi { ret (nil, ok) }
+    if pre_lo >= pre.len { ret (nil, mem.Exhausted) }
+    let key = pre[pre_lo]
+    var split = in_lo
+    while split < in_hi && K.cmp(order[split], key) != 0i32 { split += 1usize }
+    if split >= in_hi { ret (nil, mem.Exhausted) }
+    let (storage, storage_error) = mem.alloc[Node[K, V]](a, 1usize)
+    if storage_error != ok { ret (nil, storage_error) }
+    var fresh: Node[K, V] = zero
+    fresh.key = key
+    fresh.parent = up
+    storage[0usize] = fresh
+    let n = &storage[0usize]
+    let left_size = split - in_lo
+    let right_size = in_hi - split - 1usize
+    // Preorder lists the left subtree right after the root; a reversed
+    // postorder (root, right, left) lists the right subtree first.
+    var left_start = pre_lo + 1usize
+    var right_start = pre_lo + 1usize + left_size
+    if reversed {
+        right_start = pre_lo + 1usize
+        left_start = pre_lo + 1usize + right_size
+    }
+    let (l, left_error) = rebuild[K, V](a, pre, left_start, order, in_lo, split, n, reversed)
+    if left_error != ok { ret (nil, left_error) }
+    let (r, right_error) = rebuild[K, V](a, pre, right_start, order, split + 1usize, in_hi, n, reversed)
+    if right_error != ok { ret (nil, right_error) }
+    n.left = l
+    n.right = r
+    ret (n, ok)
+}
+
+// The unique binary tree with these preorder and inorder key sequences; the
+// arena's error when they disagree in length or a key is missing.
+fn from_traversals[K: type, V: type](a: *mem.Arena, preorder: []const K, inorder: []const K) -> (*Node[K, V], err) {
+    if preorder.len != inorder.len { ret (nil, mem.Exhausted) }
+    let (root, build_error) = rebuild[K, V](a, preorder, 0usize, inorder, 0usize, inorder.len, nil, false)
+    ret (root, build_error)
+}
+
+// The same from postorder and inorder: `scratch` (`postorder.len`) receives the
+// postorder reversed, which is a preorder with the children swapped.
+fn from_postorder[K: type, V: type](a: *mem.Arena, postorder: []const K, inorder: []const K, scratch: []K) -> (*Node[K, V], err) {
+    if postorder.len != inorder.len || scratch.len < postorder.len { ret (nil, mem.Exhausted) }
+    var i = 0usize
+    while i < postorder.len {
+        scratch[i] = postorder[postorder.len - 1usize - i]
+        i += 1usize
+    }
+    let (root, build_error) = rebuild[K, V](a, scratch[..postorder.len], 0usize, inorder, 0usize, inorder.len, nil, true)
+    ret (root, build_error)
+}
+
+// The keys under `root` into `out` from `count` on, in preorder (`mode` 0),
+// inorder (1) or postorder (2); answers the count after, keys past `out` dropped.
+fn keys_walk[K: type, V: type](root: *const Node[K, V], out: []K, count: usize, mode: u8) -> usize {
+    if root == nil { ret count }
+    var n = count
+    if mode == 0u8 && n < out.len {
+        out[n] = root.key
+        n += 1usize
+    }
+    n = keys_walk[K, V](root.left, out, n, mode)
+    if mode == 1u8 && n < out.len {
+        out[n] = root.key
+        n += 1usize
+    }
+    n = keys_walk[K, V](root.right, out, n, mode)
+    if mode == 2u8 && n < out.len {
+        out[n] = root.key
+        n += 1usize
+    }
+    ret n
+}
+
+fn preorder_keys[K: type, V: type](root: *const Node[K, V], out: []K) -> usize { ret keys_walk[K, V](root, out, 0usize, 0u8) }
+
+fn inorder_keys[K: type, V: type](root: *const Node[K, V], out: []K) -> usize { ret keys_walk[K, V](root, out, 0usize, 1u8) }
+
+fn postorder_keys[K: type, V: type](root: *const Node[K, V], out: []K) -> usize { ret keys_walk[K, V](root, out, 0usize, 2u8) }

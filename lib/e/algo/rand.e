@@ -544,3 +544,9 @@ fn varopt_sample(r: *Pcg64, weights: []const f64, k: usize, chosen: []usize, adj
     }
     ret (threshold, ok)
 }
+
+// The planned constructor of the time-decayed reservoir (D885): the storage and
+// the heap are `reservoir_weighted`'s, only `reservoir_decayed_offer` differs.
+fn reservoir_decayed[T: type](items: []T, keys: []f64) -> WeightedReservoir[T] {
+    ret reservoir_weighted[T](items, keys)
+}

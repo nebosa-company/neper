@@ -1,15 +1,6 @@
 // Deterministic non-cryptographic hashes and checksums.
 
-type XxHash64 = struct {
-    seed: u64,
-    total: u64,
-    v1: u64,
-    v2: u64,
-    v3: u64,
-    v4: u64,
-    buffer: [32]u8,
-    buffered: u8,
-}
+type XxHash64 = struct { seed: u64, total: u64, v1: u64, v2: u64, v3: u64, v4: u64, buffer: [32]u8, buffered: u8 }
 
 type Crc32 = struct { value: u32 }
 
@@ -335,3 +326,206 @@ fn adler32(data: []const u8) -> u32 {
     let high = b << 16u32
     ret high | a
 }
+
+// Fletcher-16: two running sums modulo 255 over bytes; the second sum is the high byte.
+fn fletcher16(data: []const u8) -> u16 {
+    var a = 0u32
+    var b = 0u32
+    var at = 0usize
+    while at < data.len {
+        a = (a + u32(data[at])) % 255u32
+        b = (b + a) % 255u32
+        at += 1usize
+    }
+    ret u16((b << 8u32) | a)
+}
+
+// Fletcher-32 over little-endian 16-bit words modulo 65535; an odd tail byte is
+// padded with a zero.
+fn fletcher32(data: []const u8) -> u32 {
+    var a = 0u32
+    var b = 0u32
+    var at = 0usize
+    while at < data.len {
+        var word = u32(data[at])
+        if at + 1usize < data.len { word = word | (u32(data[at + 1usize]) << 8u32) }
+        a = (a + word) % 65535u32
+        b = (b + a) % 65535u32
+        at += 2usize
+    }
+    let high = b << 16u32
+    ret high | a
+}
+
+// Fletcher-64 over little-endian 32-bit words modulo 2^32 - 1; a short tail is
+// zero-padded.
+fn fletcher64(data: []const u8) -> u64 {
+    var a = 0u64
+    var b = 0u64
+    var at = 0usize
+    while at < data.len {
+        var word = u64(data[at])
+        if at + 1usize < data.len { word = word | (u64(data[at + 1usize]) << 8u64) }
+        if at + 2usize < data.len { word = word | (u64(data[at + 2usize]) << 16u64) }
+        if at + 3usize < data.len { word = word | (u64(data[at + 3usize]) << 24u64) }
+        a = (a + word) % 4294967295u64
+        b = (b + a) % 4294967295u64
+        at += 4usize
+    }
+    let high = b << 32u64
+    ret high | a
+}
+
+// Longitudinal redundancy check: the XOR of every byte, so a block followed by its
+// LRC XORs to zero.
+fn lrc(data: []const u8) -> u8 {
+    var x = 0u8
+    var at = 0usize
+    while at < data.len {
+        x = x ^ data[at]
+        at += 1usize
+    }
+    ret x
+}
+
+// MurmurHash3 x86_32.
+fn murmur3_32(data: []const u8, seed: u32) -> u32 {
+    let c1 = 3432918353u32
+    let c2 = 461845907u32
+    var h = seed
+    var at = 0usize
+    while at + 4usize <= data.len {
+        var k = u32(data[at]) | (u32(data[at + 1usize]) << 8u32) | (u32(data[at + 2usize]) << 16u32) | (u32(data[at + 3usize]) << 24u32)
+        k = k *% c1
+        k = (k << 15u32) | (k >> 17u32)
+        k = k *% c2
+        h = h ^ k
+        h = (h << 13u32) | (h >> 19u32)
+        h = h *% 5u32 +% 3864292196u32
+        at += 4usize
+    }
+    let rest = data.len - at
+    if rest > 0usize {
+        var k = u32(data[at])
+        if rest > 1usize { k = k ^ (u32(data[at + 1usize]) << 8u32) }
+        if rest > 2usize { k = k ^ (u32(data[at + 2usize]) << 16u32) }
+        k = k *% c1
+        k = (k << 15u32) | (k >> 17u32)
+        k = k *% c2
+        h = h ^ k
+    }
+    h = h ^ u32(data.len)
+    h = h ^ (h >> 16u32)
+    h = h *% 2246822507u32
+    h = h ^ (h >> 13u32)
+    h = h *% 3266489909u32
+    h = h ^ (h >> 16u32)
+    ret h
+}
+
+fn murmur3_load64(data: []const u8, at: usize, count: usize) -> u64 {
+    var word = 0u64
+    var i = 0usize
+    while i < count {
+        word = word | (u64(data[at + i]) << (u64(i) * 8u64))
+        i += 1usize
+    }
+    ret word
+}
+
+fn murmur3_fmix64(value: u64) -> u64 {
+    var k = value
+    k = k ^ (k >> 33u64)
+    k = k *% 18397679294719823053u64
+    k = k ^ (k >> 33u64)
+    k = k *% 14181476777654086739u64
+    ret k ^ (k >> 33u64)
+}
+
+// MurmurHash3 x64_128: the two halves of the digest, low first.
+fn murmur3_x64_128(data: []const u8, seed: u64) -> (u64, u64) {
+    let c1 = 9782798678568883157u64
+    let c2 = 5545529020109919103u64
+    var h1 = seed
+    var h2 = seed
+    var at = 0usize
+    while at + 16usize <= data.len {
+        var k1 = murmur3_load64(data, at, 8usize)
+        var k2 = murmur3_load64(data, at + 8usize, 8usize)
+        k1 = k1 *% c1
+        k1 = (k1 << 31u64) | (k1 >> 33u64)
+        k1 = k1 *% c2
+        h1 = h1 ^ k1
+        h1 = (h1 << 27u64) | (h1 >> 37u64)
+        h1 = h1 +% h2
+        h1 = h1 *% 5u64 +% 1390208809u64
+        k2 = k2 *% c2
+        k2 = (k2 << 33u64) | (k2 >> 31u64)
+        k2 = k2 *% c1
+        h2 = h2 ^ k2
+        h2 = (h2 << 31u64) | (h2 >> 33u64)
+        h2 = h2 +% h1
+        h2 = h2 *% 5u64 +% 944331445u64
+        at += 16usize
+    }
+    let rest = data.len - at
+    if rest > 8usize {
+        var k2 = murmur3_load64(data, at + 8usize, rest - 8usize)
+        k2 = k2 *% c2
+        k2 = (k2 << 33u64) | (k2 >> 31u64)
+        k2 = k2 *% c1
+        h2 = h2 ^ k2
+    }
+    if rest > 0usize {
+        var head = rest
+        if head > 8usize { head = 8usize }
+        var k1 = murmur3_load64(data, at, head)
+        k1 = k1 *% c1
+        k1 = (k1 << 31u64) | (k1 >> 33u64)
+        k1 = k1 *% c2
+        h1 = h1 ^ k1
+    }
+    h1 = h1 ^ u64(data.len)
+    h2 = h2 ^ u64(data.len)
+    h1 = h1 +% h2
+    h2 = h2 +% h1
+    h1 = murmur3_fmix64(h1)
+    h2 = murmur3_fmix64(h2)
+    h1 = h1 +% h2
+    h2 = h2 +% h1
+    ret (h1, h2)
+}
+
+// A Zobrist table: `out` filled with splitmix64 words from `seed`, one per
+// (square, piece) slot the caller indexes as it likes.
+fn zobrist(seed: u64, out: []u64) {
+    var state = seed
+    var at = 0usize
+    while at < out.len {
+        state = state +% 11400714819323198485u64
+        var z = state
+        z = (z ^ (z >> 30u64)) *% 13787848793156543929u64
+        z = (z ^ (z >> 27u64)) *% 10723151780598845931u64
+        out[at] = z ^ (z >> 31u64)
+        at += 1usize
+    }
+}
+
+// The hash of a position: the XOR of the table words of its occupied slots.
+fn zobrist_hash(table: []const u64, slots: []const u32) -> u64 {
+    var h = 0u64
+    var at = 0usize
+    while at < slots.len {
+        h = h ^ table[usize(slots[at])]
+        at += 1usize
+    }
+    ret h
+}
+
+// The hash with `slot` placed or removed: XOR is its own inverse.
+fn zobrist_toggle(hash: u64, table: []const u64, slot: u32) -> u64 { ret hash ^ table[usize(slot)] }
+
+// The planned bare names: Fletcher-32 and MurmurHash3 x86_32.
+fn fletcher(data: []const u8) -> u32 { ret fletcher32(data) }
+
+fn murmur3(data: []const u8, seed: u32) -> u32 { ret murmur3_32(data, seed) }

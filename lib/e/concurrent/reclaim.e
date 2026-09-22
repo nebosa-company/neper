@@ -295,3 +295,9 @@ fn list_pop_front(l: *List) -> u32 {
     }
     ret NONE
 }
+
+// The hazard-pointer scheme under its planned name: `hazards`.
+fn hazard(slots: []Atomic[u32], retired: []u32, retired_count: []usize, freed: []u32, threads: usize, k: usize) -> (Hazards, err) {
+    let (h, e) = hazards(slots, retired, retired_count, freed, threads, k)
+    ret (h, e)
+}

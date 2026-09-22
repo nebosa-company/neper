@@ -452,3 +452,62 @@ fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const 
     }
     ret ok
 }
+
+// Global cardinality: each value `v` must be taken by between `lo[v]` and
+// `hi[v]` of `vars`. Value-count filtering to a fixpoint: a value with fewer
+// possible takers than `lo` or more fixed takers than `hi` is
+// `Unsatisfiable`; at exactly `hi` fixed takers it leaves every open domain;
+// at exactly `lo` possible takers every domain holding it is fixed to it.
+// ponytail: this is weaker than the flow-based bounds consistency, which is the upgrade.
+fn global_cardinality(domains: []u8, k: usize, vars: []const usize, lo: []const usize, hi: []const usize) -> err {
+    if lo.len < k || hi.len < k { ret TooSmall }
+    var changed = true
+    while changed {
+        changed = false
+        var v = 0usize
+        while v < k {
+            var possible = 0usize
+            var fixed = 0usize
+            var i = 0usize
+            while i < vars.len {
+                if domains[vars[i] * k + v] != 0u8 {
+                    possible += 1usize
+                    if count(domains, k, vars[i]) == 1usize { fixed += 1usize }
+                }
+                i += 1usize
+            }
+            if possible < lo[v] || fixed > hi[v] { ret Unsatisfiable }
+            if fixed == hi[v] {
+                i = 0usize
+                while i < vars.len {
+                    if domains[vars[i] * k + v] != 0u8 && count(domains, k, vars[i]) > 1usize {
+                        domains[vars[i] * k + v] = 0u8
+                        changed = true
+                    }
+                    i += 1usize
+                }
+            }
+            if possible == lo[v] {
+                i = 0usize
+                while i < vars.len {
+                    if domains[vars[i] * k + v] != 0u8 && count(domains, k, vars[i]) > 1usize {
+                        var w = 0usize
+                        while w < k {
+                            if w != v { domains[vars[i] * k + w] = 0u8 }
+                            w += 1usize
+                        }
+                        changed = true
+                    }
+                    i += 1usize
+                }
+            }
+            v += 1usize
+        }
+        var i = 0usize
+        while i < vars.len {
+            if count(domains, k, vars[i]) == 0usize { ret Unsatisfiable }
+            i += 1usize
+        }
+    }
+    ret ok
+}

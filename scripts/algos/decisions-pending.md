@@ -929,3 +929,29 @@ is deliberately left for its own batch. This closes the stream's first
 number block; the next rows start at D910 by agreement with the UI session.
 Compiler notes: `h.block = zero` through a pointer is refused (loop
 instead), and `a += b - c` traps on the subtraction before the add.
+
+## D910 — Batch 43: the thin gaps, forty-one modules in five family fixtures
+
+The 189 planned names left after D884 sit one to five per module, so
+this batch groups them by family, one shared fixture each: `algo_gaps_a`
+(hashing, bitsets, BDD building, ECM factoring, three TSP improvers, ring
+virtual nodes, a cardinality propagator, a rollback union-find, Barnes-Hut,
+ternary search), `algo_gaps_b` (sampling, copulas, SAT encodings, three
+goodness-of-fit tests against SciPy, GARCH and Hawkes, UUID v5, ULID,
+snowflake, nanoid), `graph_gaps` (Leiden, max-min fairness, LR planarity
+mirroring networkx, the auction algorithm, best-first, Suurballe, Yen,
+two LCA schemes, tree isomorphism), `data_gaps` (list splicing, watermarks,
+lazy and persistent segment trees, range-tree counts, the succinct
+structures' planned entries, trees from traversals, a radix trie, DABA)
+and `dist_gaps` (the one-call forms of the distributed protocols, whose
+drivers moved out of their fixtures into the modules). Two findings for
+the plan itself: `union` is a keyword, so `docs/algos.md` #201 now points
+at `e.algo.disjoint_set.join`; and `e.algo.hash` is compiled by the C
+bootstrap (the compiler imports it), so its extension was verified under
+`build/windows/neper.exe` as well -- the bootstrap reads `ret (a << 16) | b`
+as a tuple return, bind first. `e.algo.hash` and `e.algo.bitset` are pinned
+in the runners; `pin_surface.py` moved both pins. Four dependency lists
+changed. Compiler notes collected by the agents: `&Struct { ... }` as an
+argument is refused, bind the literal first; a `u32` cannot index a slice,
+convert; slicing an array literal inline is refused; `else` must share the
+line with the closing brace.

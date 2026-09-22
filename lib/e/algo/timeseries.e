@@ -357,3 +357,45 @@ fn hawkes_simulate(mu: f64, alpha: f64, beta: f64, horizon: f64, r: *rand.Pcg64,
     }
     ret (count, ok)
 }
+
+// The two below are D885: the planned names for the recursions the likelihoods
+// run, answered as paths the caller can inspect.
+
+// The GARCH(1,1) conditional variance path: `out[i]` is the variance of
+// `returns[i]`, `omega + alpha r^2_{i-1} + beta out[i-1]` from the sample
+// variance, which is what `garch_log_likelihood` sums over; `garch_fit`
+// estimates the parameters and `garch_forecast` continues the path.
+fn garch(omega: f64, alpha: f64, beta: f64, returns: []const f64, out: []f64) -> err {
+    let n = returns.len
+    if out.len < n { ret TooSmall }
+    if n == 0usize { ret Invalid }
+    var variance = 0.0f64
+    var i = 0usize
+    while i < n {
+        variance += returns[i] * returns[i] / f64(n)
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if i > 0usize { variance = omega + alpha * returns[i - 1usize] * returns[i - 1usize] + beta * variance }
+        out[i] = variance
+        i += 1usize
+    }
+    ret ok
+}
+
+// The exponential Hawkes intensity just before each event of the sorted
+// `events`: `out[i] = mu + A_i` with `A_i = exp(-beta (t_i - t_{i-1})) (A_{i-1} + alpha)`,
+// the recursion `hawkes_log_likelihood` takes the log of; `hawkes_simulate`
+// draws a path by thinning.
+fn hawkes(mu: f64, alpha: f64, beta: f64, events: []const f64, out: []f64) -> err {
+    if out.len < events.len { ret TooSmall }
+    var excitation = 0.0f64
+    var i = 0usize
+    while i < events.len {
+        if i > 0usize { excitation = math.exp[f64](0.0f64 - beta * (events[i] - events[i - 1usize])) * (excitation + alpha) }
+        out[i] = mu + excitation
+        i += 1usize
+    }
+    ret ok
+}

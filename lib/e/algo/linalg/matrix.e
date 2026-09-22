@@ -1122,3 +1122,9 @@ fn vcycle(a: *mem.Arena, u: []f64, f: []const f64, smooth: u32) -> err {
     weighted_jacobi(u, f, work, smooth)
     ret ok
 }
+
+// The planned name of `householder_vector`: the reflector sending `x` to ‖x‖·e1.
+fn householder(x: []const f64, out: []f64) -> (f64, err) {
+    let (beta, reflect_error) = householder_vector(x, out)
+    ret (beta, reflect_error)
+}

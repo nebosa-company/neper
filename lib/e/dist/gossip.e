@@ -164,3 +164,16 @@ fn membership_sweep(t: *Membership, now: u64, timeout: u64) -> usize {
     }
     ret n
 }
+
+// Rumour spreading in one call: `origin` alone knows it, every node contacts
+// `fanout` random peers per round for `rounds` rounds; answers how many nodes
+// hold the rumour at the end.
+fn disseminate(state: []u8, fanout: usize, origin: usize, r: *rand.Pcg64, rounds: usize) -> usize {
+    var g = gossip(state, fanout, origin)
+    var i = 0usize
+    while i < rounds {
+        let _ = gossip_round(&g, r)
+        i += 1usize
+    }
+    ret g.informed
+}

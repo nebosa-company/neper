@@ -2144,6 +2144,31 @@ math_fft_filter_plan_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$math_fft_filter_plan_written" = 'executable written' ]
 chmod +x "$test_build/math-fft-filter-plan-selfhost"
 "$test_build/math-fft-filter-plan-selfhost"
+# `e.algo.hash` planned functions across eleven `e.algo` modules: Fletcher, LRC, MurmurHash3 and Zobrist hashing, bitset set operations, BDD building from an expression tree, ECM factoring splitting two semiprimes, Christofides, 3-opt and Lin-Kernighan tours reaching the brute-force optimum, virtual ring nodes, a global cardinality propagator, a rollback union-find, Barnes-Hut within one percent of direct summation, ternary search (D910).
+algo_gaps_a_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_gaps_a/src/main.e" "$repo" x64 linux "$test_build/algo-gaps-a-selfhost")
+[ "$algo_gaps_a_written" = 'executable written' ]
+chmod +x "$test_build/algo-gaps-a-selfhost"
+"$test_build/algo-gaps-a-selfhost"
+# `e.algo.rand` planned functions across six `e.algo` modules: decayed reservoirs, polar normals, importance weights and a Gaussian copula, Tseitin and cardinality encodings, Kolmogorov-Smirnov, Anderson-Darling and Shapiro-Wilk against SciPy, GARCH and Hawkes recursions, UUID v5, ULID, snowflake and nanoid (D910).
+algo_gaps_b_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_gaps_b/src/main.e" "$repo" x64 linux "$test_build/algo-gaps-b-selfhost")
+[ "$algo_gaps_b_written" = 'executable written' ]
+chmod +x "$test_build/algo-gaps-b-selfhost"
+"$test_build/algo-gaps-b-selfhost"
+# `e.algo.graph.community` planned functions across six `e.algo.graph` sub-modules: Leiden communities, max-min fair rates, LR planarity agreeing with networkx on twenty-five graphs, the auction assignment equal to the Hungarian optimum, greedy best-first, Suurballe's disjoint pair, Yen's k shortest paths equal to networkx, binary-lifting and RMQ lowest common ancestors, tree isomorphism (D910).
+graph_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/graph_gaps/src/main.e" "$repo" x64 linux "$test_build/graph-gaps-selfhost")
+[ "$graph_gaps_written" = 'executable written' ]
+chmod +x "$test_build/graph-gaps-selfhost"
+"$test_build/graph-gaps-selfhost"
+# `e.data.linked` planned functions across eight `e.data` modules: list splicing, sublist search and move-to-front, queue watermarks with hysteresis, lazy range updates and persistent roots, range-tree counting, the succinct structures' planned entry points, trees rebuilt from traversals, a compacted radix trie, and the DABA sliding-window aggregator equal to brute force at every step (D910).
+data_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_gaps/src/main.e" "$repo" x64 linux "$test_build/data-gaps-selfhost")
+[ "$data_gaps_written" = 'executable written' ]
+chmod +x "$test_build/data-gaps-selfhost"
+"$test_build/data-gaps-selfhost"
+# `e.dist.clock` planned entry points across eleven distributed and network modules: vector clocks, Raft election and replication rounds, wait-for graphs from a lock table, the phi accrual detector, gossip dissemination, one-call Redlock, Ricart-Agrawala, Raymond's tree and Chandy-Lamport, and the constructors the plan names for hazard pointers, Maglev and the ARQ senders (D910).
+dist_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_gaps/src/main.e" "$repo" x64 linux "$test_build/dist-gaps-selfhost")
+[ "$dist_gaps_written" = 'executable written' ]
+chmod +x "$test_build/dist-gaps-selfhost"
+"$test_build/dist-gaps-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
@@ -5379,7 +5404,20 @@ crc32
 crc32_init
 crc32_update
 crc32_done
-adler32'
+adler32
+fletcher16
+fletcher32
+fletcher64
+lrc
+murmur3_32
+murmur3_load64
+murmur3_fmix64
+murmur3_x64_128
+zobrist
+zobrist_hash
+zobrist_toggle
+fletcher
+murmur3'
 [ "$hash_surface" = "$expected_hash_surface" ]
 hash_parsed=$($test_build/neper-self parse-file "$repo/lib/e/algo/hash.e")
 [ "$hash_parsed" = 'parse file ok' ]
@@ -5408,7 +5446,10 @@ intersect_in_place
 difference_in_place
 complement_in_place
 is_subset
-eq'
+eq
+intersect
+union_into
+difference'
 [ "$bitset_surface" = "$expected_bitset_surface" ]
 bitset_parsed=$($test_build/neper-self parse-file "$repo/lib/e/algo/bitset.e")
 [ "$bitset_parsed" = 'parse file ok' ]

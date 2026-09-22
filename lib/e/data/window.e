@@ -164,3 +164,97 @@ fn histogram_estimate(h: *const ExponentialHistogram) -> u64 {
     }
     ret total + h.sizes[h.count - 1usize] / 2u64
 }
+
+// The De-Amortized Banker's Aggregator (Tangwongsan, Hirzel, Schneider):
+// a FIFO window over one ring of values and one of partial aggregates,
+// any associative `combine`, worst-case constant work per push, pop and
+// query. Positions are running counts; the ring holds the window. The
+// four cursors bound the regions the paper calls L, R, A and B, whose
+// aggregates are suffixes or prefixes of their region so that a query is
+// the front's aggregate combined with the back's.
+type Daba[T: type] = struct { values: []T, aggs: []T, head: usize, tail: usize, lp: usize, rp: usize, ap: usize, bp: usize, identity: T }
+
+// A window over `values`/`aggs` (rings of one capacity, the largest window).
+fn daba[T: type](values: []T, aggs: []T, identity: T) -> (Daba[T], err) {
+    if values.len == 0usize || aggs.len < values.len { ret (zero, TooSmall) }
+    ret (Daba[T] { values: values, aggs: aggs[..values.len], head: 0usize, tail: 0usize, lp: 0usize, rp: 0usize, ap: 0usize, bp: 0usize, identity: identity }, ok)
+}
+
+fn daba_len[T: type](d: *const Daba[T]) -> usize { ret d.tail - d.head }
+
+fn daba_slot[T: type](d: *const Daba[T], position: usize) -> usize { ret position % d.values.len }
+
+// The aggregate of the back region (`B`, prefixes from `bp`).
+fn daba_back[T: type](d: *const Daba[T]) -> T {
+    if d.bp == d.tail { ret d.identity }
+    ret d.aggs[daba_slot[T](d, d.tail - 1usize)]
+}
+
+// The aggregate of everything before `bp` (a suffix stored at the front).
+fn daba_alpha[T: type](d: *const Daba[T]) -> T {
+    if d.bp == d.head { ret d.identity }
+    ret d.aggs[daba_slot[T](d, d.head)]
+}
+
+fn daba_delta[T: type](d: *const Daba[T]) -> T {
+    if d.ap == d.bp { ret d.identity }
+    ret d.aggs[daba_slot[T](d, d.ap)]
+}
+
+fn daba_gamma[T: type](d: *const Daba[T]) -> T {
+    if d.ap == d.rp { ret d.identity }
+    ret d.aggs[daba_slot[T](d, d.ap - 1usize)]
+}
+
+// One unit of the deferred flip after every push or pop.
+fn daba_step[T: type, Ctx: type](d: *Daba[T], ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) {
+    if d.lp == d.bp {
+        // Flip: the finished front becomes L, the back becomes R.
+        d.lp = d.head
+        d.rp = d.bp
+        d.ap = d.tail
+        d.bp = d.tail
+    }
+    if d.head == d.bp { ret }
+    if d.ap != d.rp {
+        let previous_delta = daba_delta[T](d)
+        d.ap -= 1usize
+        let slot = daba_slot[T](d, d.ap)
+        d.aggs[slot] = combine(ctx, d.values[slot], previous_delta)
+    }
+    if d.lp != d.rp {
+        let rest = combine(ctx, daba_gamma[T](d), daba_delta[T](d))
+        let slot = daba_slot[T](d, d.lp)
+        d.aggs[slot] = combine(ctx, d.aggs[slot], rest)
+        d.lp += 1usize
+    } else {
+        d.lp += 1usize
+        d.rp += 1usize
+        d.ap += 1usize
+    }
+}
+
+fn daba_push[T: type, Ctx: type](d: *Daba[T], value: T, ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> err {
+    if d.tail - d.head >= d.values.len { ret TooSmall }
+    let slot = daba_slot[T](d, d.tail)
+    d.values[slot] = value
+    d.aggs[slot] = combine(ctx, daba_back[T](d), value)
+    d.tail += 1usize
+    daba_step[T, Ctx](d, ctx, combine)
+    ret ok
+}
+
+// Evicts the oldest value.
+fn daba_pop[T: type, Ctx: type](d: *Daba[T], ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> (T, err) {
+    if d.tail == d.head { ret (zero, Invalid) }
+    let value = d.values[daba_slot[T](d, d.head)]
+    d.head += 1usize
+    daba_step[T, Ctx](d, ctx, combine)
+    ret (value, ok)
+}
+
+// The fold over the window, oldest first; the identity when empty.
+fn daba_query[T: type, Ctx: type](d: *const Daba[T], ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> T {
+    if d.tail == d.head { ret d.identity }
+    ret combine(ctx, daba_alpha[T](d), daba_back[T](d))
+}

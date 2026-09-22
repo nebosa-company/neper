@@ -1,0 +1,241 @@
+{
+ "decision": "D910",
+ "modules": [
+  {
+   "name": "e.algo.hash",
+   "refresh": true,
+   "fixture": "algo_gaps_a",
+   "comment": "`e.algo.hash` planned functions across eleven `e.algo` modules: Fletcher, LRC, MurmurHash3 and Zobrist hashing, bitset set operations, BDD building from an expression tree, ECM factoring splitting two semiprimes, Christofides, 3-opt and Lin-Kernighan tours reaching the brute-force optimum, virtual ring nodes, a global cardinality propagator, a rollback union-find, Barnes-Hut within one percent of direct summation, ternary search"
+  },
+  {
+   "name": "e.algo.bitset",
+   "refresh": true,
+   "comment": "`e.algo.bitset` (shared fixture)"
+  },
+  {
+   "name": "e.algo.bdd",
+   "refresh": true,
+   "comment": "`e.algo.bdd` (shared fixture)"
+  },
+  {
+   "name": "e.algo.bignum",
+   "refresh": true,
+   "comment": "`e.algo.bignum` (shared fixture)"
+  },
+  {
+   "name": "e.algo.combopt",
+   "refresh": true,
+   "comment": "`e.algo.combopt` (shared fixture)"
+  },
+  {
+   "name": "e.algo.consistent_hash",
+   "refresh": true,
+   "comment": "`e.algo.consistent_hash` (shared fixture)"
+  },
+  {
+   "name": "e.algo.csp",
+   "refresh": true,
+   "comment": "`e.algo.csp` (shared fixture)"
+  },
+  {
+   "name": "e.algo.disjoint_set",
+   "refresh": true,
+   "comment": "`e.algo.disjoint_set` (shared fixture)"
+  },
+  {
+   "name": "e.algo.geom3",
+   "refresh": true,
+   "comment": "`e.algo.geom3` (shared fixture)"
+  },
+  {
+   "name": "e.algo.search",
+   "refresh": true,
+   "comment": "`e.algo.search` (shared fixture)"
+  },
+  {
+   "name": "e.algo.rand",
+   "refresh": true,
+   "fixture": "algo_gaps_b",
+   "comment": "`e.algo.rand` planned functions across six `e.algo` modules: decayed reservoirs, polar normals, importance weights and a Gaussian copula, Tseitin and cardinality encodings, Kolmogorov-Smirnov, Anderson-Darling and Shapiro-Wilk against SciPy, GARCH and Hawkes recursions, UUID v5, ULID, snowflake and nanoid"
+  },
+  {
+   "name": "e.algo.rand.dist",
+   "refresh": true,
+   "comment": "`e.algo.rand.dist` (shared fixture)",
+   "deps": [
+    "e.algo.rand",
+    "e.math",
+    "e.math.special"
+   ]
+  },
+  {
+   "name": "e.algo.sat",
+   "refresh": true,
+   "comment": "`e.algo.sat` (shared fixture)"
+  },
+  {
+   "name": "e.algo.stat.test",
+   "refresh": true,
+   "comment": "`e.algo.stat.test` (shared fixture)"
+  },
+  {
+   "name": "e.algo.timeseries",
+   "refresh": true,
+   "comment": "`e.algo.timeseries` (shared fixture)"
+  },
+  {
+   "name": "e.algo.uuid",
+   "refresh": true,
+   "comment": "`e.algo.uuid` (shared fixture)",
+   "deps": [
+    "e.algo.hash",
+    "e.algo.rand",
+    "e.crypto.hash",
+    "e.str"
+   ]
+  },
+  {
+   "name": "e.algo.graph.community",
+   "refresh": true,
+   "fixture": "graph_gaps",
+   "comment": "`e.algo.graph.community` planned functions across six `e.algo.graph` sub-modules: Leiden communities, max-min fair rates, LR planarity agreeing with networkx on twenty-five graphs, the auction assignment equal to the Hungarian optimum, greedy best-first, Suurballe's disjoint pair, Yen's k shortest paths equal to networkx, binary-lifting and RMQ lowest common ancestors, tree isomorphism"
+  },
+  {
+   "name": "e.algo.graph.flow",
+   "refresh": true,
+   "comment": "`e.algo.graph.flow` (shared fixture)"
+  },
+  {
+   "name": "e.algo.graph.iso",
+   "refresh": true,
+   "comment": "`e.algo.graph.iso` (shared fixture)",
+   "deps": [
+    "e.data.graph",
+    "e.mem"
+   ]
+  },
+  {
+   "name": "e.algo.graph.match",
+   "refresh": true,
+   "comment": "`e.algo.graph.match` (shared fixture)"
+  },
+  {
+   "name": "e.algo.graph.path",
+   "refresh": true,
+   "comment": "`e.algo.graph.path` (shared fixture)"
+  },
+  {
+   "name": "e.algo.graph.tree",
+   "refresh": true,
+   "comment": "`e.algo.graph.tree` (shared fixture)",
+   "deps": [
+    "e.algo.disjoint_set",
+    "e.algo.graph",
+    "e.data.graph",
+    "e.mem"
+   ]
+  },
+  {
+   "name": "e.data.linked",
+   "refresh": true,
+   "fixture": "data_gaps",
+   "comment": "`e.data.linked` planned functions across eight `e.data` modules: list splicing, sublist search and move-to-front, queue watermarks with hysteresis, lazy range updates and persistent roots, range-tree counting, the succinct structures' planned entry points, trees rebuilt from traversals, a compacted radix trie, and the DABA sliding-window aggregator equal to brute force at every step"
+  },
+  {
+   "name": "e.data.queue",
+   "refresh": true,
+   "comment": "`e.data.queue` (shared fixture)"
+  },
+  {
+   "name": "e.data.segment_tree",
+   "refresh": true,
+   "comment": "`e.data.segment_tree` (shared fixture)"
+  },
+  {
+   "name": "e.data.spatial",
+   "refresh": true,
+   "comment": "`e.data.spatial` (shared fixture)"
+  },
+  {
+   "name": "e.data.succinct",
+   "refresh": true,
+   "comment": "`e.data.succinct` (shared fixture)"
+  },
+  {
+   "name": "e.data.tree",
+   "refresh": true,
+   "comment": "`e.data.tree` (shared fixture)"
+  },
+  {
+   "name": "e.data.trie",
+   "refresh": true,
+   "comment": "`e.data.trie` (shared fixture)"
+  },
+  {
+   "name": "e.data.window",
+   "refresh": true,
+   "comment": "`e.data.window` (shared fixture)"
+  },
+  {
+   "name": "e.dist.clock",
+   "refresh": true,
+   "fixture": "dist_gaps",
+   "comment": "`e.dist.clock` planned entry points across eleven distributed and network modules: vector clocks, Raft election and replication rounds, wait-for graphs from a lock table, the phi accrual detector, gossip dissemination, one-call Redlock, Ricart-Agrawala, Raymond's tree and Chandy-Lamport, and the constructors the plan names for hazard pointers, Maglev and the ARQ senders"
+  },
+  {
+   "name": "e.dist.consensus",
+   "refresh": true,
+   "comment": "`e.dist.consensus` (shared fixture)"
+  },
+  {
+   "name": "e.dist.deadlock",
+   "refresh": true,
+   "comment": "`e.dist.deadlock` (shared fixture)"
+  },
+  {
+   "name": "e.dist.failure_detector",
+   "refresh": true,
+   "comment": "`e.dist.failure_detector` (shared fixture)"
+  },
+  {
+   "name": "e.dist.gossip",
+   "refresh": true,
+   "comment": "`e.dist.gossip` (shared fixture)"
+  },
+  {
+   "name": "e.dist.lock",
+   "refresh": true,
+   "comment": "`e.dist.lock` (shared fixture)"
+  },
+  {
+   "name": "e.dist.mutex",
+   "refresh": true,
+   "comment": "`e.dist.mutex` (shared fixture)"
+  },
+  {
+   "name": "e.dist.snapshot",
+   "refresh": true,
+   "comment": "`e.dist.snapshot` (shared fixture)"
+  },
+  {
+   "name": "e.concurrent.reclaim",
+   "refresh": true,
+   "comment": "`e.concurrent.reclaim` (shared fixture)"
+  },
+  {
+   "name": "e.net.balance",
+   "refresh": true,
+   "comment": "`e.net.balance` (shared fixture)"
+  },
+  {
+   "name": "e.net.reliable",
+   "refresh": true,
+   "comment": "`e.net.reliable` (shared fixture)"
+  },
+  {
+   "name": "e.algo.linalg.matrix",
+   "refresh": true,
+   "comment": "`e.algo.linalg.matrix` (shared fixture algo_gaps_a)"
+  }
+ ]
+}

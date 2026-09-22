@@ -535,3 +535,340 @@ fn large_neighborhood_search[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, iterations: u
     }
     ret (best, improvements)
 }
+
+// Christofides: a minimum spanning tree (Prim), a perfect matching of its
+// odd-degree vertices, an Euler tour of the union and the tour that skips
+// repeats. `scratch.len >= 10 * n + 4`, `flags.len >= 3 * n`. Answers the length.
+// ponytail: the matching is greedy nearest-unmatched, not minimum weight, so
+// the 3/2 bound is not guaranteed; a weighted blossom matching is the upgrade.
+fn tsp_christofides(d: []const f64, n: usize, tour: []usize, scratch: []usize, flags: []u8) -> (f64, err) {
+    if d.len < n * n || tour.len < n || scratch.len < 10usize * n + 4usize || flags.len < 3usize * n { ret (0.0f64, TooSmall) }
+    if n < 3usize { ret (0.0f64, Invalid) }
+    let parent = scratch[..n]
+    let degree = scratch[n..2usize * n]
+    let odd = scratch[2usize * n..3usize * n]
+    let eu = scratch[3usize * n..5usize * n]
+    let ev = scratch[5usize * n..7usize * n]
+    let stack = scratch[7usize * n..9usize * n + 2usize]
+    let circuit = scratch[9usize * n + 2usize..10usize * n + 4usize]
+    let in_tree = flags[..n]
+    let used = flags[n..3usize * n]
+    var i = 0usize
+    while i < n {
+        parent[i] = 0usize
+        degree[i] = 0usize
+        in_tree[i] = 0u8
+        i += 1usize
+    }
+    in_tree[0usize] = 1u8
+    var edges = 0usize
+    var step = 0usize
+    while step + 1usize < n {
+        var best = n
+        var j = 0usize
+        while j < n {
+            if in_tree[j] == 0u8 && (best == n || at(d, n, parent[j], j) < at(d, n, parent[best], best)) { best = j }
+            j += 1usize
+        }
+        in_tree[best] = 1u8
+        eu[edges] = parent[best]
+        ev[edges] = best
+        edges += 1usize
+        j = 0usize
+        while j < n {
+            if in_tree[j] == 0u8 && at(d, n, best, j) < at(d, n, parent[j], j) { parent[j] = best }
+            j += 1usize
+        }
+        step += 1usize
+    }
+    i = 0usize
+    while i < edges {
+        degree[eu[i]] += 1usize
+        degree[ev[i]] += 1usize
+        i += 1usize
+    }
+    var odd_count = 0usize
+    i = 0usize
+    while i < n {
+        if degree[i] % 2usize == 1usize {
+            odd[odd_count] = i
+            odd_count += 1usize
+        }
+        in_tree[i] = 0u8
+        i += 1usize
+    }
+    // Greedy matching; `in_tree` now marks matched vertices.
+    i = 0usize
+    while i < odd_count {
+        let u = odd[i]
+        if in_tree[u] == 0u8 {
+            var best = n
+            var j = 0usize
+            while j < odd_count {
+                let v = odd[j]
+                if v != u && in_tree[v] == 0u8 && (best == n || at(d, n, u, v) < at(d, n, u, best)) { best = v }
+                j += 1usize
+            }
+            in_tree[u] = 1u8
+            in_tree[best] = 1u8
+            eu[edges] = u
+            ev[edges] = best
+            edges += 1usize
+        }
+        i += 1usize
+    }
+    // Hierholzer from city 0 over the multigraph.
+    i = 0usize
+    while i < edges {
+        used[i] = 0u8
+        i += 1usize
+    }
+    stack[0usize] = 0usize
+    var top = 1usize
+    var circuit_len = 0usize
+    while top > 0usize {
+        let v = stack[top - 1usize]
+        var e = edges
+        i = 0usize
+        while i < edges && e == edges {
+            if used[i] == 0u8 && (eu[i] == v || ev[i] == v) { e = i }
+            i += 1usize
+        }
+        if e == edges {
+            circuit[circuit_len] = v
+            circuit_len += 1usize
+            top -= 1usize
+        } else {
+            used[e] = 1u8
+            var other = eu[e]
+            if eu[e] == v { other = ev[e] }
+            stack[top] = other
+            top += 1usize
+        }
+    }
+    i = 0usize
+    while i < n {
+        in_tree[i] = 0u8
+        i += 1usize
+    }
+    var placed = 0usize
+    i = 0usize
+    while i < circuit_len {
+        let v = circuit[i]
+        if in_tree[v] == 0u8 {
+            in_tree[v] = 1u8
+            tour[placed] = v
+            placed += 1usize
+        }
+        i += 1usize
+    }
+    if placed != n { ret (0.0f64, Invalid) }
+    ret (tour_length(d, n, tour), ok)
+}
+
+// 3-opt: for every three edges the seven reconnections, applied by segment
+// reversals at the first that shortens the tour, until none does. Answers the
+// length and the moves made.
+// ponytail: every triple is scanned, O(n^3) per pass; neighbour lists are the upgrade.
+fn tsp_three_opt(d: []const f64, n: usize, tour: []usize) -> (f64, usize, err) {
+    if d.len < n * n || tour.len < n { ret (0.0f64, 0usize, TooSmall) }
+    if n < 4usize { ret (tour_length(d, n, tour), 0usize, ok) }
+    var moves = 0usize
+    var improved = true
+    while improved {
+        improved = false
+        var i = 0usize
+        while i + 2usize < n && !improved {
+            var j = i + 1usize
+            while j + 1usize < n && !improved {
+                var k = j + 1usize
+                while k < n && !improved {
+                    let a = tour[i]
+                    let b = tour[i + 1usize]
+                    let c = tour[j]
+                    let e = tour[j + 1usize]
+                    let f = tour[k]
+                    let g = tour[(k + 1usize) % n]
+                    let base = at(d, n, a, b) + at(d, n, c, e) + at(d, n, f, g)
+                    let limit = base - 1.0e-12f64
+                    var which = 7usize
+                    if at(d, n, a, c) + at(d, n, b, e) + at(d, n, f, g) < limit { which = 0usize }
+                    if which == 7usize && at(d, n, a, b) + at(d, n, c, f) + at(d, n, e, g) < limit { which = 1usize }
+                    if which == 7usize && at(d, n, a, c) + at(d, n, b, f) + at(d, n, e, g) < limit { which = 2usize }
+                    if which == 7usize && at(d, n, a, e) + at(d, n, f, b) + at(d, n, c, g) < limit { which = 3usize }
+                    if which == 7usize && at(d, n, a, e) + at(d, n, f, c) + at(d, n, b, g) < limit { which = 4usize }
+                    if which == 7usize && at(d, n, a, f) + at(d, n, e, b) + at(d, n, c, g) < limit { which = 5usize }
+                    if which == 7usize && at(d, n, a, f) + at(d, n, e, c) + at(d, n, b, g) < limit { which = 6usize }
+                    if which < 7usize {
+                        if which == 0usize || which == 2usize || which == 3usize || which == 5usize { reverse(tour, i + 1usize, j) }
+                        if which == 1usize || which == 2usize || which == 3usize || which == 4usize { reverse(tour, j + 1usize, k) }
+                        if which >= 3usize { reverse(tour, i + 1usize, k) }
+                        moves += 1usize
+                        improved = true
+                    }
+                    k += 1usize
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    ret (tour_length(d, n, tour), moves, ok)
+}
+
+fn lk_positions(work: []const usize, pos: []usize, n: usize) {
+    var i = 0usize
+    while i < n {
+        pos[work[i]] = i
+        i += 1usize
+    }
+}
+
+// Reverses the cyclic run of positions `i ..= j` (wrapping past `n`).
+fn lk_reverse(work: []usize, n: usize, i: usize, j: usize) {
+    let length = (j + n - i) % n + 1usize
+    var s = 0usize
+    while s < length / 2usize {
+        let a = (i + s) % n
+        let b = (j + n - s) % n
+        let t = work[a]
+        work[a] = work[b]
+        work[b] = t
+        s += 1usize
+    }
+}
+
+// One chain from `t1`: the first step goes to `first_t3`, later steps to the
+// city with the largest positive partial gain, each step the 2-opt that
+// breaks `(t1, t2)`, adds `(t2, t3)`, breaks `(t4 = pred t3, t3)` and closes
+// with `(t4, t1)`. `work` is rewritten; the best closed tour beyond `best_gain`
+// is copied to `best`. Answers the best closed gain seen.
+fn lk_chain(d: []const f64, n: usize, work: []usize, pos: []usize, t1: usize, first_t3: usize, depth_limit: usize, best_gain: f64, best: []usize) -> f64 {
+    var record = best_gain
+    var open = 0.0f64
+    var depth = 0usize
+    var stuck = false
+    while depth < depth_limit && !stuck {
+        lk_positions(work, pos, n)
+        let t2 = work[(pos[t1] + 1usize) % n]
+        var g1 = open
+        if depth == 0usize { g1 = at(d, n, t1, t2) }
+        let after_t2 = work[(pos[t2] + 1usize) % n]
+        var t3 = n
+        var gain = 0.0f64
+        if depth == 0usize {
+            t3 = first_t3
+            gain = g1 - at(d, n, t2, t3)
+        } else {
+            var c = 0usize
+            while c < n {
+                if c != t1 && c != t2 && c != after_t2 {
+                    let candidate = g1 - at(d, n, t2, c)
+                    if candidate > 1.0e-12f64 && (t3 == n || candidate > gain) {
+                        t3 = c
+                        gain = candidate
+                    }
+                }
+                c += 1usize
+            }
+        }
+        if t3 == n {
+            stuck = true
+        } else {
+            let t4 = work[(pos[t3] + n - 1usize) % n]
+            lk_reverse(work, n, pos[t2], pos[t4])
+            open = gain + at(d, n, t3, t4)
+            let closed = open - at(d, n, t4, t1)
+            depth += 1usize
+            if closed > record + 1.0e-12f64 {
+                record = closed
+                var i = 0usize
+                while i < n {
+                    best[i] = work[i]
+                    i += 1usize
+                }
+            }
+        }
+    }
+    ret record
+}
+
+// Lin-Kernighan, bounded: from every city and in both tour directions, chains
+// of up to `depth` sequential 2-opt moves under the positive-gain criterion,
+// the first step tried for the `breadth` best candidates and later steps
+// greedy; the best closing tour of a round is kept while rounds improve.
+// `scratch.len >= 4 * n`. Answers the length and the rounds that improved.
+fn tsp_lin_kernighan(d: []const f64, n: usize, tour: []usize, scratch: []usize, depth: usize, breadth: usize) -> (f64, usize, err) {
+    if d.len < n * n || tour.len < n || scratch.len < 4usize * n { ret (0.0f64, 0usize, TooSmall) }
+    if n < 4usize || depth == 0usize || breadth == 0usize { ret (tour_length(d, n, tour), 0usize, ok) }
+    let view = scratch[..n]
+    let work = scratch[n..2usize * n]
+    let pos = scratch[2usize * n..3usize * n]
+    let best = scratch[3usize * n..4usize * n]
+    var improvements = 0usize
+    var improved = true
+    while improved {
+        improved = false
+        var t1 = 0usize
+        while t1 < n {
+            var best_gain = 0.0f64
+            var direction = 0usize
+            while direction < 2usize {
+                var i = 0usize
+                while i < n {
+                    if direction == 0usize { view[i] = tour[i] } else { view[i] = tour[n - 1usize - i] }
+                    i += 1usize
+                }
+                lk_positions(view, pos, n)
+                let t2 = view[(pos[t1] + 1usize) % n]
+                let after_t2 = view[(pos[t2] + 1usize) % n]
+                let g1 = at(d, n, t1, t2)
+                // Candidates in falling gain (ties by falling city), one per round.
+                var last_gain = 1.0e300f64
+                var last_city = n
+                var b = 0usize
+                while b < breadth {
+                    var t3 = n
+                    var gain = 0.0f64
+                    var c = 0usize
+                    while c < n {
+                        if c != t1 && c != t2 && c != after_t2 {
+                            let candidate = g1 - at(d, n, t2, c)
+                            let below = candidate < last_gain || (candidate == last_gain && c < last_city)
+                            if candidate > 1.0e-12f64 && below && (t3 == n || candidate > gain || (candidate == gain && c > t3)) {
+                                t3 = c
+                                gain = candidate
+                            }
+                        }
+                        c += 1usize
+                    }
+                    if t3 == n {
+                        b = breadth
+                    } else {
+                        last_gain = gain
+                        last_city = t3
+                        i = 0usize
+                        while i < n {
+                            work[i] = view[i]
+                            i += 1usize
+                        }
+                        best_gain = lk_chain(d, n, work, pos, t1, t3, depth, best_gain, best)
+                        b += 1usize
+                    }
+                }
+                direction += 1usize
+            }
+            if best_gain > 1.0e-12f64 {
+                var i = 0usize
+                while i < n {
+                    tour[i] = best[i]
+                    i += 1usize
+                }
+                improved = true
+                improvements += 1usize
+            }
+            t1 += 1usize
+        }
+    }
+    ret (tour_length(d, n, tour), improvements, ok)
+}

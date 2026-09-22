@@ -2,7 +2,8 @@
 // `e.data.graph` edges from a left set to a right set, the Hungarian algorithm
 // for the minimum-cost assignment over a square cost matrix, Gale-Shapley
 // stable marriage over preference lists, and Edmonds' blossom algorithm for
-// maximum matching in a general graph. Results are written to caller slices
+// maximum matching in a general graph, and Bertsekas' auction for the
+// maximum-benefit assignment. Results are written to caller slices
 // (`NONE` marks an unmatched node); scratch comes from the arena.
 
 use e.mem
@@ -413,4 +414,95 @@ fn mark_path(base: []u32, parent: []u32, mate: []u32, in_blossom: []u8, from: u3
         c = mate[usize(v)]
         v = parent[usize(mate[usize(v)])]
     }
+}
+
+// Bertsekas' auction for the maximum-benefit assignment over a row-major
+// `n x n` benefit matrix, with epsilon scaling: each unassigned row (taken in
+// round-robin order) bids for its best column by the margin over its second
+// best plus epsilon, the column goes to the bidder and its previous holder
+// is freed, until every row holds a column; epsilon starts at half the largest
+// benefit magnitude and shrinks by four per round down to `epsilon`, prices
+// carrying over between rounds. With integer benefits and `epsilon < 1 / n`
+// the assignment is optimal. `assignment[i]` receives row `i`'s column;
+// `prices.len >= n` floats and `owner.len >= n` indices are scratch.
+// Answers the total benefit.
+fn auction(benefit: []const f64, n: usize, assignment: []usize, prices: []f64, owner: []usize, epsilon: f64) -> (f64, err) {
+    if n == 0usize || !(epsilon > 0.0f64) { ret (0.0f64, Invalid) }
+    if benefit.len < n * n || assignment.len < n || prices.len < n || owner.len < n { ret (0.0f64, TooSmall) }
+    var biggest = 0.0f64
+    var i = 0usize
+    while i < n * n {
+        var b = benefit[i]
+        if b < 0.0f64 { b = 0.0f64 - b }
+        if b > biggest { biggest = b }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        prices[i] = 0.0f64
+        i += 1usize
+    }
+    var eps = biggest / 2.0f64
+    if eps < epsilon { eps = epsilon }
+    var scaling = true
+    while scaling {
+        i = 0usize
+        while i < n {
+            owner[i] = NONE_USIZE
+            assignment[i] = NONE_USIZE
+            i += 1usize
+        }
+        var free = n
+        i = 0usize
+        while free > 0usize {
+            while assignment[i] != NONE_USIZE { i = (i + 1usize) % n }
+            var best = 0usize
+            var best_value = benefit[i * n] - prices[0usize]
+            var j = 1usize
+            while j < n {
+                let value = benefit[i * n + j] - prices[j]
+                if value > best_value {
+                    best_value = value
+                    best = j
+                }
+                j += 1usize
+            }
+            var second = best_value
+            var have_second = false
+            j = 0usize
+            while j < n {
+                if j != best {
+                    let value = benefit[i * n + j] - prices[j]
+                    if !have_second || value > second {
+                        second = value
+                        have_second = true
+                    }
+                }
+                j += 1usize
+            }
+            var bid = eps
+            if have_second { bid = best_value - second + eps }
+            prices[best] += bid
+            if owner[best] != NONE_USIZE {
+                assignment[owner[best]] = NONE_USIZE
+                free += 1usize
+            }
+            owner[best] = i
+            assignment[i] = best
+            free -= 1usize
+        }
+        if eps <= epsilon {
+            scaling = false
+        } else {
+            eps = eps / 4.0f64
+            if eps < epsilon { eps = epsilon }
+        }
+    }
+    var total = 0.0f64
+    i = 0usize
+    while i < n {
+        total += benefit[i * n + assignment[i]]
+        i += 1usize
+    }
+    ret (total, ok)
 }

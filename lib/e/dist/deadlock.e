@@ -123,3 +123,32 @@ fn chandy_misra_haas(edges: []const Edge, site: []const u32, initiator: usize, p
     }
     ret (deadlocked, c.sent, ok)
 }
+
+const NONE: u32 = 4294967295u32
+
+// The wait-for graph of a lock table: `holder[lock]` is the process holding
+// it (NONE when free) and `waiting[process]` the lock it is blocked on (NONE
+// when running); every waiter on a held lock is an edge to the holder, then
+// `wait_for_graph_cycle` runs over it. Answers (edges built, cycle found,
+// its length, error): TooSmall when `edges` lacks room, Invalid on a bad
+// lock index or short scratch.
+fn wait_for_graph(holder: []const u32, waiting: []const u32, edges: []Edge, scratch: []usize) -> (usize, bool, usize, err) {
+    let n = waiting.len
+    var count = 0usize
+    var p = 0usize
+    while p < n {
+        let l = waiting[p]
+        if l != NONE {
+            if usize(l) >= holder.len { ret (count, false, 0usize, Invalid) }
+            let h = holder[usize(l)]
+            if h != NONE && usize(h) != p {
+                if count >= edges.len { ret (count, false, 0usize, TooSmall) }
+                edges[count] = Edge { from: u32(p), to: h }
+                count += 1usize
+            }
+        }
+        p += 1usize
+    }
+    let (found, length, e) = wait_for_graph_cycle(edges[..count], n, scratch)
+    ret (count, found, length, e)
+}

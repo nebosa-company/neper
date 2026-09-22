@@ -66,3 +66,6 @@ fn phi(d: *const Detector, now: u64) -> f64 {
 }
 
 fn suspect(d: *const Detector, now: u64, threshold: f64) -> bool { ret phi(d, now) >= threshold }
+
+// The phi accrual detector over a window of `intervals`: `detector` under its planned name.
+fn phi_accrual(intervals: []u64, min_std_dev: f64) -> Detector { ret detector(intervals, min_std_dev) }

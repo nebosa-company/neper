@@ -1266,3 +1266,50 @@ fn ball_tree_nearest(b: *const BallTree, query: []const f64) -> (usize, f64, err
     ball_nearest_range(b, 0usize, b.tree.order.len, query, &best)
     ret (best.node, best.distance, ok)
 }
+
+// The range tree by its planned name: `range_tree_build` over `xs`/`ys`.
+fn range_tree(xs: []const f64, ys: []const f64, n: usize, order: []usize, pool: []usize) -> (RangeTree, err) {
+    let (t, build_error) = range_tree_build(xs, ys, n, order, pool)
+    ret (t, build_error)
+}
+
+// The first index in `[lo, hi)` of the y-list at `level` whose y is not below `y`.
+fn range_tree_lower(t: *const RangeTree, level: usize, lo: usize, hi: usize, y: f64) -> usize {
+    let base = level * t.n
+    var a = lo
+    var b = hi
+    while a < b {
+        let m = a + (b - a) / 2usize
+        if t.ys[t.pool[base + m]] < y { a = m + 1usize } else { b = m }
+    }
+    ret a
+}
+
+fn range_tree_count_node(t: *const RangeTree, level: usize, lo: usize, hi: usize, x1: f64, x2: f64, y1: f64, y2: f64) -> usize {
+    if hi <= lo { ret 0usize }
+    let first_x = t.xs[t.order[lo]]
+    let last_x = t.xs[t.order[hi - 1usize]]
+    if last_x < x1 || first_x > x2 { ret 0usize }
+    if first_x >= x1 && last_x <= x2 {
+        // A canonical node: two binary searches on its y-list.
+        let from = range_tree_lower(t, level, lo, hi, y1)
+        var to = from
+        let base = level * t.n
+        var a = from
+        var b = hi
+        while a < b {
+            let m = a + (b - a) / 2usize
+            if t.ys[t.pool[base + m]] <= y2 { a = m + 1usize } else { b = m }
+        }
+        to = a
+        ret to - from
+    }
+    if hi - lo == 1usize { ret 0usize }
+    let mid = lo + (hi - lo) / 2usize
+    ret range_tree_count_node(t, level + 1usize, lo, mid, x1, x2, y1, y2) + range_tree_count_node(t, level + 1usize, mid, hi, x1, x2, y1, y2)
+}
+
+// How many points lie in `[x1, x2] × [y1, y2]`, in O(log^2 n) without listing them.
+fn range_tree_count(t: *const RangeTree, x1: f64, y1: f64, x2: f64, y2: f64) -> usize {
+    ret range_tree_count_node(t, 0usize, 0usize, t.n, x1, x2, y1, y2)
+}

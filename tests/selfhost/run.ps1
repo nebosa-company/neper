@@ -2398,6 +2398,36 @@ $mathFftFilterPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $mathFftFilterPlanWritten -ne 'executable written') { throw 'math_fft_filter_plan emission failed' }
 & $mathFftFilterPlanPath
 if ($LASTEXITCODE -ne 0) { throw "a math_fft_filter_plan check failed: exit $LASTEXITCODE" }
+# `e.algo.hash` planned functions across eleven `e.algo` modules: Fletcher, LRC, MurmurHash3 and Zobrist hashing, bitset set operations, BDD building from an expression tree, ECM factoring splitting two semiprimes, Christofides, 3-opt and Lin-Kernighan tours reaching the brute-force optimum, virtual ring nodes, a global cardinality propagator, a rollback union-find, Barnes-Hut within one percent of direct summation, ternary search (D910).
+$algoGapsAPath = Join-Path $testBuild 'algo-gaps-a-selfhost.exe'
+$algoGapsAWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_gaps_a\src\main.e') $repo 'x64' 'windows' $algoGapsAPath
+if ($LASTEXITCODE -ne 0 -or $algoGapsAWritten -ne 'executable written') { throw 'algo_gaps_a emission failed' }
+& $algoGapsAPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_gaps_a check failed: exit $LASTEXITCODE" }
+# `e.algo.rand` planned functions across six `e.algo` modules: decayed reservoirs, polar normals, importance weights and a Gaussian copula, Tseitin and cardinality encodings, Kolmogorov-Smirnov, Anderson-Darling and Shapiro-Wilk against SciPy, GARCH and Hawkes recursions, UUID v5, ULID, snowflake and nanoid (D910).
+$algoGapsBPath = Join-Path $testBuild 'algo-gaps-b-selfhost.exe'
+$algoGapsBWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_gaps_b\src\main.e') $repo 'x64' 'windows' $algoGapsBPath
+if ($LASTEXITCODE -ne 0 -or $algoGapsBWritten -ne 'executable written') { throw 'algo_gaps_b emission failed' }
+& $algoGapsBPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_gaps_b check failed: exit $LASTEXITCODE" }
+# `e.algo.graph.community` planned functions across six `e.algo.graph` sub-modules: Leiden communities, max-min fair rates, LR planarity agreeing with networkx on twenty-five graphs, the auction assignment equal to the Hungarian optimum, greedy best-first, Suurballe's disjoint pair, Yen's k shortest paths equal to networkx, binary-lifting and RMQ lowest common ancestors, tree isomorphism (D910).
+$graphGapsPath = Join-Path $testBuild 'graph-gaps-selfhost.exe'
+$graphGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\graph_gaps\src\main.e') $repo 'x64' 'windows' $graphGapsPath
+if ($LASTEXITCODE -ne 0 -or $graphGapsWritten -ne 'executable written') { throw 'graph_gaps emission failed' }
+& $graphGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a graph_gaps check failed: exit $LASTEXITCODE" }
+# `e.data.linked` planned functions across eight `e.data` modules: list splicing, sublist search and move-to-front, queue watermarks with hysteresis, lazy range updates and persistent roots, range-tree counting, the succinct structures' planned entry points, trees rebuilt from traversals, a compacted radix trie, and the DABA sliding-window aggregator equal to brute force at every step (D910).
+$dataGapsPath = Join-Path $testBuild 'data-gaps-selfhost.exe'
+$dataGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_gaps\src\main.e') $repo 'x64' 'windows' $dataGapsPath
+if ($LASTEXITCODE -ne 0 -or $dataGapsWritten -ne 'executable written') { throw 'data_gaps emission failed' }
+& $dataGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a data_gaps check failed: exit $LASTEXITCODE" }
+# `e.dist.clock` planned entry points across eleven distributed and network modules: vector clocks, Raft election and replication rounds, wait-for graphs from a lock table, the phi accrual detector, gossip dissemination, one-call Redlock, Ricart-Agrawala, Raymond's tree and Chandy-Lamport, and the constructors the plan names for hazard pointers, Maglev and the ARQ senders (D910).
+$distGapsPath = Join-Path $testBuild 'dist-gaps-selfhost.exe'
+$distGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_gaps\src\main.e') $repo 'x64' 'windows' $distGapsPath
+if ($LASTEXITCODE -ne 0 -or $distGapsWritten -ne 'executable written') { throw 'dist_gaps emission failed' }
+& $distGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_gaps check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
@@ -5556,7 +5586,7 @@ $hashSurface = Get-Content (Join-Path $repo 'lib\e\algo\hash.e') |
         if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.algo.hash contains an unreadable public declaration' }
         $Matches[1]
     }
-$expectedHashSurface = @('XxHash64', 'Crc32', 'fnv1a32', 'fnv1a64', 'xxhash64', 'xxhash64_init', 'xxhash64_update', 'xxhash64_done', 'crc32', 'crc32_init', 'crc32_update', 'crc32_done', 'adler32')
+$expectedHashSurface = @('XxHash64', 'Crc32', 'fnv1a32', 'fnv1a64', 'xxhash64', 'xxhash64_init', 'xxhash64_update', 'xxhash64_done', 'crc32', 'crc32_init', 'crc32_update', 'crc32_done', 'adler32', 'fletcher16', 'fletcher32', 'fletcher64', 'lrc', 'murmur3_32', 'murmur3_load64', 'murmur3_fmix64', 'murmur3_x64_128', 'zobrist', 'zobrist_hash', 'zobrist_toggle', 'fletcher', 'murmur3')
 if (($hashSurface -join "`n") -ne ($expectedHashSurface -join "`n")) { throw 'e.algo.hash public declarations differ from module-apis.md' }
 $hashParsed = & $compiler parse-file (Join-Path $repo 'lib\e\algo\hash.e')
 if ($LASTEXITCODE -ne 0 -or $hashParsed -ne 'parse file ok') { throw 'e.algo.hash exceeded or failed CLI parser storage' }
@@ -5571,7 +5601,7 @@ $bitsetSurface = Get-Content (Join-Path $repo 'lib\e\algo\bitset.e') |
         if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.algo.bitset contains an unreadable public declaration' }
         $Matches[1]
     }
-$expectedBitsetSurface = @('BitSet', 'TooSmall', 'init', 'len', 'clear_all', 'fill_all', 'get', 'set', 'unset', 'toggle', 'count', 'first_set', 'next_set', 'union_in_place', 'intersect_in_place', 'difference_in_place', 'complement_in_place', 'is_subset', 'eq')
+$expectedBitsetSurface = @('BitSet', 'TooSmall', 'init', 'len', 'clear_all', 'fill_all', 'get', 'set', 'unset', 'toggle', 'count', 'first_set', 'next_set', 'union_in_place', 'intersect_in_place', 'difference_in_place', 'complement_in_place', 'is_subset', 'eq', 'intersect', 'union_into', 'difference')
 if (($bitsetSurface -join "`n") -ne ($expectedBitsetSurface -join "`n")) { throw 'e.algo.bitset public declarations differ from module-apis.md' }
 $bitsetParsed = & $compiler parse-file (Join-Path $repo 'lib\e\algo\bitset.e')
 if ($LASTEXITCODE -ne 0 -or $bitsetParsed -ne 'parse file ok') { throw 'e.algo.bitset failed CLI parsing' }

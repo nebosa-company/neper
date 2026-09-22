@@ -183,3 +183,83 @@ fn walk[Ctx: type](t: *const Trie, node: u32, depth: usize, scratch: []u8, ctx: 
     }
     ret (true, ok)
 }
+
+// A radix (Patricia) view of a trie: every chain of single-child, non-terminal
+// nodes is one edge whose label is a run of `labels`. Node `0` is the root;
+// `starts`/`lens` locate a node's label, and the rest is as `Trie`.
+type Radix = struct { labels: []u8, starts: []u32, lens: []u32, first: []u32, next: []u32, terminal: []u8, values: []u64, used: usize }
+
+// Compresses `t` into the seven slices; `capacity` nodes and `labels.len >= t.used` suffice.
+fn compact(t: *const Trie, labels: []u8, starts: []u32, lens: []u32, first: []u32, next: []u32, terminal: []u8, values: []u64, capacity: usize) -> (Radix, err) {
+    if capacity == 0usize || capacity >= 4294967295usize { ret (zero, Invalid) }
+    if starts.len < capacity || lens.len < capacity || first.len < capacity || next.len < capacity || terminal.len < capacity || values.len < capacity { ret (zero, TooSmall) }
+    var r = Radix { labels: labels, starts: starts[..capacity], lens: lens[..capacity], first: first[..capacity], next: next[..capacity], terminal: terminal[..capacity], values: values[..capacity], used: 1usize }
+    r.starts[0usize] = 0u32
+    r.lens[0usize] = 0u32
+    r.first[0usize] = NONE
+    r.next[0usize] = NONE
+    r.terminal[0usize] = t.terminal[0usize]
+    r.values[0usize] = t.values[0usize]
+    var written = 0usize
+    let e = compact_children(t, 0u32, &r, 0u32, &written)
+    if e != ok { ret (zero, e) }
+    r.labels = labels[..written]
+    ret (r, ok)
+}
+
+// Every child of trie node `from` becomes a radix child of `into`, its label the
+// chain down to the first branching or terminal node.
+fn compact_children(t: *const Trie, from: u32, r: *Radix, into: u32, written: *usize) -> err {
+    var child_node = t.first[usize(from)]
+    while child_node != NONE {
+        if r.used >= r.starts.len { ret TooSmall }
+        let fresh = u32(r.used)
+        r.used += 1usize
+        r.starts[usize(fresh)] = u32(*written)
+        var end = child_node
+        while true {
+            if *written >= r.labels.len { ret TooSmall }
+            r.labels[*written] = t.bytes[usize(end)]
+            *written += 1usize
+            if t.terminal[usize(end)] != 0u8 { break }
+            let only = t.first[usize(end)]
+            if only == NONE || t.next[usize(only)] != NONE { break }
+            end = only
+        }
+        r.lens[usize(fresh)] = u32(*written) - r.starts[usize(fresh)]
+        r.terminal[usize(fresh)] = t.terminal[usize(end)]
+        r.values[usize(fresh)] = t.values[usize(end)]
+        r.first[usize(fresh)] = NONE
+        r.next[usize(fresh)] = r.first[usize(into)]
+        r.first[usize(into)] = fresh
+        let e = compact_children(t, end, r, fresh, written)
+        if e != ok { ret e }
+        child_node = t.next[usize(child_node)]
+    }
+    ret ok
+}
+
+fn radix_len(r: *const Radix) -> usize { ret r.used }
+
+// The value under `key`, following whole labels.
+fn radix_get(r: *const Radix, key: []const u8) -> (u64, bool) {
+    var node = 0u32
+    var i = 0usize
+    while i < key.len {
+        var pick = r.first[usize(node)]
+        while pick != NONE && r.labels[usize(r.starts[usize(pick)])] != key[i] { pick = r.next[usize(pick)] }
+        if pick == NONE { ret (0u64, false) }
+        let start = usize(r.starts[usize(pick)])
+        let length = usize(r.lens[usize(pick)])
+        if i + length > key.len { ret (0u64, false) }
+        var k = 0usize
+        while k < length {
+            if r.labels[start + k] != key[i + k] { ret (0u64, false) }
+            k += 1usize
+        }
+        i += length
+        node = pick
+    }
+    if r.terminal[usize(node)] == 0u8 { ret (0u64, false) }
+    ret (r.values[usize(node)], true)
+}

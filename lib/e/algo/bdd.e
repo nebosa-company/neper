@@ -131,3 +131,35 @@ fn count_from(b: *const Bdd, f: u32, from: u32) -> u64 {
     let below = count_from(b, b.low[usize(f)], v + 1u32) + count_from(b, b.high[usize(f)], v + 1u32)
     ret below << skipped
 }
+
+// An expression tree in caller arrays: node `i` is `kind[i]` with operands
+// `left[i]`, `right[i]` (`Not` uses `left`; `Var` reads the variable from
+// `left`; `Const` reads 0 or 1 from `left`).
+type Expr = enum u8 { And, Or, Xor, Not, Var, Const }
+
+// The diagram of the expression rooted at `root`, built bottom-up by `apply`
+// over the memo (cleared before every combination).
+fn build(b: *Bdd, kind: []const Expr, left: []const u32, right: []const u32, root: u32, memo_keys: []u64, memo_values: []u32) -> (u32, err) {
+    let i = usize(root)
+    if i >= kind.len || i >= left.len || i >= right.len { ret (0u32, Invalid) }
+    let k = kind[i]
+    if k == .Const { ret (constant(left[i] != 0u32), ok) }
+    if k == .Var {
+        let (node, var_error) = var_node(b, usize(left[i]))
+        ret (node, var_error)
+    }
+    let (f, left_error) = build(b, kind, left, right, left[i], memo_keys, memo_values)
+    if left_error != ok { ret (0u32, left_error) }
+    var memo_count = 0usize
+    if k == .Not {
+        let (negated, not_error) = negate(b, f, memo_keys, memo_values, &memo_count)
+        ret (negated, not_error)
+    }
+    let (g, right_error) = build(b, kind, left, right, right[i], memo_keys, memo_values)
+    if right_error != ok { ret (0u32, right_error) }
+    var op: Op = .And
+    if k == .Or { op = .Or }
+    if k == .Xor { op = .Xor }
+    let (node, apply_error) = apply(b, op, f, g, memo_keys, memo_values, &memo_count)
+    ret (node, apply_error)
+}

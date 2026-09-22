@@ -264,3 +264,14 @@ fn aimd_loss(cwnd: u64, mss: u64, timeout: bool) -> (u64, u64) {
     if timeout { ret (mss, ssthresh) }
     ret (ssthresh, ssthresh)
 }
+
+// ---- planned names --------------------------------------------------------
+
+// The sliding-window (Go-Back-N) sender: `sender` under its planned name.
+fn sliding_window(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> Sender { ret sender(window, timeout, sent_at, bits) }
+
+// The Selective Repeat sender: `sr_sender` under its planned name.
+fn selective_repeat(window: usize, timeout: u64, sent_at: []u64, acked: []u8, bits: u32) -> (SrSender, err) {
+    let (s, e) = sr_sender(window, timeout, sent_at, acked, bits)
+    ret (s, e)
+}

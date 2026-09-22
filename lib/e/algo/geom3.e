@@ -1012,3 +1012,20 @@ fn hull_area(points: []const Vec3, faces: []const u32, count: usize) -> f64 {
     }
     ret sum
 }
+
+// The planned name: the acceleration of every body under `G = 1` with the
+// opening angle `theta`, into `ax`, `ay`, `az` (each at least the body count).
+fn barnes_hut(t: *const BarnesHut, theta: f64, ax: []f64, ay: []f64, az: []f64) -> err {
+    let n = t.xs.len
+    if ax.len < n || ay.len < n || az.len < n { ret TooSmall }
+    var i = 0usize
+    while i < n {
+        var acc = vec3(0.0f64, 0.0f64, 0.0f64)
+        force_node(t, 0usize, t.size, i, theta, &acc)
+        ax[i] = acc.x
+        ay[i] = acc.y
+        az[i] = acc.z
+        i += 1usize
+    }
+    ret ok
+}

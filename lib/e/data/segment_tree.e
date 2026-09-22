@@ -247,3 +247,22 @@ fn persistent_sum_node(t: *const Persistent, node: u32, low: usize, high: usize,
     let middle = low + (high - low) / 2usize
     ret persistent_sum_node(t, t.left[usize(node)], low, middle, from, to) + persistent_sum_node(t, t.right[usize(node)], middle + 1usize, high, from, to)
 }
+
+// Lazy propagation by its planned name: `delta` onto every element in
+// `low..high`, pushed down only when a later query or update needs it.
+fn update_range(t: *Lazy, low: usize, high: usize, delta: i64) -> err { ret lazy_add(t, low, high, delta) }
+
+// Path copying by its planned name: a new version whose element `index` is
+// `value`; the version at `root` stays as it was.
+fn persistent_update(t: *Persistent, root: u32, index: usize, value: i64) -> (u32, err) {
+    let (current, read_error) = persistent_sum(t, root, index, index + 1usize)
+    if read_error != ok { ret (root, read_error) }
+    let (fresh, add_error) = persistent_add(t, root, index, value - current)
+    ret (fresh, add_error)
+}
+
+// The sum over `low..high` of the version at `root`.
+fn persistent_query(t: *const Persistent, root: u32, low: usize, high: usize) -> (i64, err) {
+    let (total, sum_error) = persistent_sum(t, root, low, high)
+    ret (total, sum_error)
+}

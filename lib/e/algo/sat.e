@@ -492,3 +492,46 @@ fn equivalent(f: *Cnf, left: i32, right: i32, assignment: []i8, trail: []u32, le
     if verdict == ok { ret (false, ok) }
     ret (false, verdict)
 }
+
+// The additions below are D885: the planned encoding names and the Tseitin
+// transformation of a whole expression tree.
+
+// A node of an expression tree for `tseitin`.
+type Gate = enum u8 { Var, Not, And, Or, Xor }
+
+// Sinz's sequential counter under its planned name; see `at_most`.
+fn encode_at_most(f: *Cnf, lits: []const i32, k: usize) -> err { ret at_most(f, lits, k) }
+
+// The BDD compilation of a linear constraint under its planned name; see
+// `pseudo_boolean`.
+fn encode_pseudo_boolean(f: *Cnf, lits: []const i32, coefficients: []const u32, bound: u32, memo: []i32) -> err {
+    ret pseudo_boolean(f, lits, coefficients, bound, memo)
+}
+
+// Tseitin transformation of an expression tree over caller arrays: node `i` is
+// `kind[i]` over the children `left[i]` and `right[i]` (node indices); a `Var`
+// carries its literal in `left[i]`, a `Not` reads `left[i]` only. Answers the
+// literal equal to node `root`, one fresh variable per binary gate.
+// ponytail: a node reached by two parents is encoded twice; memoise on the node
+// index if the tree becomes a DAG.
+fn tseitin(f: *Cnf, kind: []const Gate, left: []const i32, right: []const i32, root: usize) -> (i32, err) {
+    if root >= kind.len || left.len < kind.len || right.len < kind.len { ret (0i32, Invalid) }
+    if kind[root] == .Var { ret (left[root], ok) }
+    if left[root] < 0i32 { ret (0i32, Invalid) }
+    let (a, a_error) = tseitin(f, kind, left, right, usize(left[root]))
+    if a_error != ok { ret (0i32, a_error) }
+    if kind[root] == .Not { ret (tseitin_not(a), ok) }
+    if right[root] < 0i32 { ret (0i32, Invalid) }
+    let (b, b_error) = tseitin(f, kind, left, right, usize(right[root]))
+    if b_error != ok { ret (0i32, b_error) }
+    if kind[root] == .And {
+        let (o, e) = tseitin_and(f, a, b)
+        ret (o, e)
+    }
+    if kind[root] == .Or {
+        let (o, e) = tseitin_or(f, a, b)
+        ret (o, e)
+    }
+    let (o, e) = tseitin_xor(f, a, b)
+    ret (o, e)
+}

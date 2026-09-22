@@ -10,6 +10,7 @@
 
 use e.algo.rand
 use e.math
+use e.math.special
 
 type Alias = struct { probability: []f64, alias: []usize }
 type WeightedReservoir = struct { items: []u64, keys: []f64, count: usize }
@@ -457,4 +458,73 @@ fn direction(d: usize, bit: u64) -> u64 {
         i += 1u64
     }
     ret m[usize(bit)] << (31u64 - bit)
+}
+
+// The additions below are D885: the planned names over what was already here.
+
+// Marsaglia's polar method answering both normals of the pair (`normal` keeps
+// only the first and draws the same uniforms).
+fn normal_polar(r: *rand.Pcg64) -> (f64, f64) {
+    while true {
+        let u = 2.0f64 * rand.pcg64_f64(r) - 1.0f64
+        let v = 2.0f64 * rand.pcg64_f64(r) - 1.0f64
+        let s = u * u + v * v
+        if s > 0.0f64 && s < 1.0f64 {
+            let m = math.sqrt[f64](0.0f64 - 2.0f64 * math.log[f64](s) / s)
+            ret (u * m, v * m)
+        }
+    }
+    ret (0.0f64, 0.0f64)
+}
+
+// Self-normalised importance weights of `samples` into `out` (each
+// `importance_weight` over the total); answers the effective sample size
+// `(sum w)^2 / sum w^2`, which is `samples.len` when the proposal is the target.
+fn importance_weights[Ctx: type](samples: []const f64, ctx: *Ctx, target_density: fn(*Ctx, f64) -> f64, proposal_density: fn(*Ctx, f64) -> f64, out: []f64) -> (f64, err) {
+    let n = samples.len
+    if out.len < n { ret (0.0f64, TooSmall) }
+    var total = 0.0f64
+    var i = 0usize
+    while i < n {
+        out[i] = importance_weight[Ctx](samples[i], ctx, target_density, proposal_density)
+        total += out[i]
+        i += 1usize
+    }
+    if total <= 0.0f64 { ret (0.0f64, Invalid) }
+    var squares = 0.0f64
+    i = 0usize
+    while i < n {
+        out[i] = out[i] / total
+        squares += out[i] * out[i]
+        i += 1usize
+    }
+    ret (1.0f64 / squares, ok)
+}
+
+// One draw of a Gaussian copula: `n` uniform marginals whose dependence is
+// the correlation matrix with Cholesky factor `factor` (see `cholesky`).
+// Correlated normals come from `multivariate_normal` about zero and each is
+// mapped through the normal CDF, scaled by its row's norm so a covariance
+// rather than a correlation still yields uniform marginals. `scratch.len >= 2n`.
+fn copula_gaussian(r: *rand.Pcg64, factor: []const f64, n: usize, out: []f64, scratch: []f64) -> err {
+    if scratch.len < 2usize * n { ret TooSmall }
+    var i = 0usize
+    while i < n {
+        scratch[i] = 0.0f64
+        i += 1usize
+    }
+    let e = multivariate_normal(r, scratch[..n], factor, n, out, scratch[n..2usize * n])
+    if e != ok { ret e }
+    i = 0usize
+    while i < n {
+        var variance = 0.0f64
+        var j = 0usize
+        while j <= i {
+            variance += factor[i * n + j] * factor[i * n + j]
+            j += 1usize
+        }
+        out[i] = special.normal_cdf(out[i] / math.sqrt[f64](variance))
+        i += 1usize
+    }
+    ret ok
 }

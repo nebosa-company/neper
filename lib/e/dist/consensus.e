@@ -852,3 +852,51 @@ fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err {
     }
     ret Invalid
 }
+
+// ---- planned one-call Raft forms -------------------------------------------
+
+// Deliver every pooled message in sending order until the pool is empty;
+// a message to or from a node outside the `up` mask is dropped.
+fn pump(c: *Cluster, now: u64, up: u64, out: *Pool) -> err {
+    while out.len > 0usize {
+        var m = pool_pop(out)
+        if has_bit(up, m.from) && has_bit(up, m.to) { try raft_step(c, usize(m.to), now, &m, out) }
+    }
+    ret ok
+}
+
+// One election round: `node` times out now and asks the `up` nodes for
+// their votes (each answers by the log-completeness rule of
+// `raft_election_step`; the others never hear it), a majority makes it the
+// leader and its first heartbeats go out. Answers the role and term it ends
+// with; a node that already leads keeps both.
+fn raft_election(c: *Cluster, node: usize, now: u64, up: u64, out: *Pool) -> (Role, u64, err) {
+    if node >= c.nodes.len { ret (.Follower, 0u64, Invalid) }
+    if c.nodes[node].role != .Leader { c.nodes[node].timeout_at = now }
+    var tick: Message = zero
+    let e1 = raft_election_step(c, node, now, &tick, out)
+    if e1 != ok { ret (c.nodes[node].role, c.nodes[node].term, e1) }
+    let e2 = pump(c, now, up, out)
+    ret (c.nodes[node].role, c.nodes[node].term, e2)
+}
+
+// One replication round: the leader `node` appends `value`, ships it to
+// the `up` followers, advances its commit index once a majority matched it
+// and sends a second heartbeat so the followers learn the commit and apply.
+// Answers the commit index of the leader; NotLeader when `node` does not lead.
+fn raft_replicate(c: *Cluster, node: usize, now: u64, value: i64, up: u64, out: *Pool) -> (u64, err) {
+    if node >= c.nodes.len { ret (0u64, Invalid) }
+    let (_, e0) = raft_propose(c, node, value)
+    if e0 != ok { ret (0u64, e0) }
+    var tick: Message = zero
+    var round = 0usize
+    while round < 2usize {
+        c.nodes[node].heartbeat_at = now
+        let e1 = raft_replicate_step(c, node, now, &tick, out)
+        if e1 != ok { ret (c.nodes[node].commit, e1) }
+        let e2 = pump(c, now, up, out)
+        if e2 != ok { ret (c.nodes[node].commit, e2) }
+        round += 1usize
+    }
+    ret (c.nodes[node].commit, ok)
+}

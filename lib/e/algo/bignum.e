@@ -681,3 +681,222 @@ fn int_mod_pow(a: *mem.Arena, base: Int, exponent: Int, modulus: Int) -> (Int, e
     mont_mul(t, acc, acc, plain, m, m_prime)
     ret (make_int(a, .Positive, acc), ok)
 }
+
+// --- Lenstra elliptic-curve factoring.
+
+error NotFound
+
+// ponytail: the point coordinates are copied to stack buffers of this many limbs
+// after every prime power so the arena can be reset; a modulus above 2048 bits is
+// `Invalid` here. Arena-resident buffers are the upgrade.
+const ECM_LIMBS: usize = 64usize
+
+fn ecm_reduce(a: *mem.Arena, x: Int, n: Int) -> (Int, err) {
+    let (_, remainder, divide_error) = int_divmod(a, x, n)
+    if divide_error != ok { ret (zero, divide_error) }
+    if remainder.sign == .Negative {
+        let (lifted, lift_error) = int_add(a, remainder, n)
+        ret (lifted, lift_error)
+    }
+    ret (remainder, ok)
+}
+
+fn ecm_mul(a: *mem.Arena, x: Int, y: Int, n: Int) -> (Int, err) {
+    let (product, product_error) = int_mul(a, x, y)
+    if product_error != ok { ret (zero, product_error) }
+    let (reduced, reduce_error) = ecm_reduce(a, product, n)
+    ret (reduced, reduce_error)
+}
+
+fn ecm_add_mod(a: *mem.Arena, x: Int, y: Int, n: Int) -> (Int, err) {
+    let (sum, sum_error) = int_add(a, x, y)
+    if sum_error != ok { ret (zero, sum_error) }
+    if int_cmp(sum, n) >= 0i32 {
+        let (wrapped, wrap_error) = int_sub(a, sum, n)
+        ret (wrapped, wrap_error)
+    }
+    ret (sum, ok)
+}
+
+fn ecm_sub_mod(a: *mem.Arena, x: Int, y: Int, n: Int) -> (Int, err) {
+    let (difference, difference_error) = int_sub(a, x, y)
+    if difference_error != ok { ret (zero, difference_error) }
+    if difference.sign == .Negative {
+        let (lifted, lift_error) = int_add(a, difference, n)
+        ret (lifted, lift_error)
+    }
+    ret (difference, ok)
+}
+
+// x-only doubling on the Montgomery curve with `a24 = (A + 2) / 4`.
+fn ecm_double(a: *mem.Arena, x: Int, z: Int, a24: Int, n: Int) -> (Int, Int, err) {
+    let (sum, sum_error) = ecm_add_mod(a, x, z, n)
+    if sum_error != ok { ret (zero, zero, sum_error) }
+    let (difference, difference_error) = ecm_sub_mod(a, x, z, n)
+    if difference_error != ok { ret (zero, zero, difference_error) }
+    let (s, s_error) = ecm_mul(a, sum, sum, n)
+    if s_error != ok { ret (zero, zero, s_error) }
+    let (d, d_error) = ecm_mul(a, difference, difference, n)
+    if d_error != ok { ret (zero, zero, d_error) }
+    let (t, t_error) = ecm_sub_mod(a, s, d, n)
+    if t_error != ok { ret (zero, zero, t_error) }
+    let (x2, x2_error) = ecm_mul(a, s, d, n)
+    if x2_error != ok { ret (zero, zero, x2_error) }
+    let (scaled, scaled_error) = ecm_mul(a, a24, t, n)
+    if scaled_error != ok { ret (zero, zero, scaled_error) }
+    let (inner, inner_error) = ecm_add_mod(a, d, scaled, n)
+    if inner_error != ok { ret (zero, zero, inner_error) }
+    let (z2, z2_error) = ecm_mul(a, t, inner, n)
+    if z2_error != ok { ret (zero, zero, z2_error) }
+    ret (x2, z2, ok)
+}
+
+// x-only differential addition of `p` and `q` whose difference is `(xd, zd)`.
+fn ecm_add(a: *mem.Arena, xp: Int, zp: Int, xq: Int, zq: Int, xd: Int, zd: Int, n: Int) -> (Int, Int, err) {
+    let (p_minus, p_minus_error) = ecm_sub_mod(a, xp, zp, n)
+    if p_minus_error != ok { ret (zero, zero, p_minus_error) }
+    let (q_plus, q_plus_error) = ecm_add_mod(a, xq, zq, n)
+    if q_plus_error != ok { ret (zero, zero, q_plus_error) }
+    let (u, u_error) = ecm_mul(a, p_minus, q_plus, n)
+    if u_error != ok { ret (zero, zero, u_error) }
+    let (p_plus, p_plus_error) = ecm_add_mod(a, xp, zp, n)
+    if p_plus_error != ok { ret (zero, zero, p_plus_error) }
+    let (q_minus, q_minus_error) = ecm_sub_mod(a, xq, zq, n)
+    if q_minus_error != ok { ret (zero, zero, q_minus_error) }
+    let (v, v_error) = ecm_mul(a, p_plus, q_minus, n)
+    if v_error != ok { ret (zero, zero, v_error) }
+    let (sum, sum_error) = ecm_add_mod(a, u, v, n)
+    if sum_error != ok { ret (zero, zero, sum_error) }
+    let (difference, difference_error) = ecm_sub_mod(a, u, v, n)
+    if difference_error != ok { ret (zero, zero, difference_error) }
+    let (sum_sq, sum_sq_error) = ecm_mul(a, sum, sum, n)
+    if sum_sq_error != ok { ret (zero, zero, sum_sq_error) }
+    let (difference_sq, difference_sq_error) = ecm_mul(a, difference, difference, n)
+    if difference_sq_error != ok { ret (zero, zero, difference_sq_error) }
+    let (x_out, x_out_error) = ecm_mul(a, zd, sum_sq, n)
+    if x_out_error != ok { ret (zero, zero, x_out_error) }
+    let (z_out, z_out_error) = ecm_mul(a, xd, difference_sq, n)
+    if z_out_error != ok { ret (zero, zero, z_out_error) }
+    ret (x_out, z_out, ok)
+}
+
+// `[k]P` by the Montgomery ladder, the difference of the two rungs always `P`.
+fn ecm_ladder(a: *mem.Arena, x: Int, z: Int, k: u64, a24: Int, n: Int) -> (Int, Int, err) {
+    var bits = 0u32
+    var rest = k
+    while rest > 0u64 {
+        bits += 1u32
+        rest = rest >> 1u32
+    }
+    var x0 = x
+    var z0 = z
+    let (dx, dz, double_error) = ecm_double(a, x, z, a24, n)
+    if double_error != ok { ret (zero, zero, double_error) }
+    var x1 = dx
+    var z1 = dz
+    var i = bits - 1u32
+    while i > 0u32 {
+        i -= 1u32
+        let (sx, sz, add_error) = ecm_add(a, x0, z0, x1, z1, x, z, n)
+        if add_error != ok { ret (zero, zero, add_error) }
+        if ((k >> i) & 1u64) == 1u64 {
+            let (tx, tz, step_error) = ecm_double(a, x1, z1, a24, n)
+            if step_error != ok { ret (zero, zero, step_error) }
+            x0 = sx
+            z0 = sz
+            x1 = tx
+            z1 = tz
+        } else {
+            let (tx, tz, step_error) = ecm_double(a, x0, z0, a24, n)
+            if step_error != ok { ret (zero, zero, step_error) }
+            x1 = sx
+            z1 = sz
+            x0 = tx
+            z0 = tz
+        }
+    }
+    ret (x0, z0, ok)
+}
+
+fn ecm_is_prime(p: u64) -> bool {
+    if p < 2u64 { ret false }
+    var q = 2u64
+    while q * q <= p {
+        if p % q == 0u64 { ret false }
+        q += 1u64
+    }
+    ret true
+}
+
+// A `u64` below 2^31 from the generator, reduced modulo `n`.
+fn ecm_random(a: *mem.Arena, state: *u64, n: Int) -> (Int, err) {
+    *state = *state *% 6364136223846793005u64 +% 1442695040888963407u64
+    let (value, value_error) = int_from_i64(a, i64(*state >> 33u32))
+    if value_error != ok { ret (zero, value_error) }
+    let (reduced, reduce_error) = ecm_reduce(a, value, n)
+    ret (reduced, reduce_error)
+}
+
+// Stage-1 ECM: for each of `curves` Montgomery curves `By^2 = x^3 + Ax^2 + x`
+// drawn from `seed` (a random `a24` and starting `x`), the point is multiplied
+// by every prime power up to `b1`; a `gcd` of its `Z` with `n` strictly between
+// 1 and `n` is a factor. Answers `NotFound` when no curve splits `n`. An even
+// `n` answers 2.
+fn factor_ecm(a: *mem.Arena, n: Int, b1: u64, curves: usize, seed: u64) -> (Int, err) {
+    if n.sign != .Positive || n.limbs.len > ECM_LIMBS || int_bits(n) < 3usize { ret (zero, Invalid) }
+    if (n.limbs[0] & 1u32) == 0u32 {
+        let (two, two_error) = int_from_i64(a, 2i64)
+        ret (two, two_error)
+    }
+    var bx: [64]u32 = zero
+    var bz: [64]u32 = zero
+    var state = seed
+    var curve = 0usize
+    while curve < curves {
+        curve += 1usize
+        let (a24, a24_error) = ecm_random(a, &state, n)
+        if a24_error != ok { ret (zero, a24_error) }
+        let (start, start_error) = ecm_random(a, &state, n)
+        if start_error != ok { ret (zero, start_error) }
+        if int_bits(a24) >= 2usize {
+            let (one, one_error) = int_from_i64(a, 1i64)
+            if one_error != ok { ret (zero, one_error) }
+            var x = start
+            var z = one
+            var p = 2u64
+            while p <= b1 {
+                if ecm_is_prime(p) {
+                    var k = p
+                    while k * p <= b1 { k = k * p }
+                    let marker = mem.mark(a)
+                    let (nx, nz, ladder_error) = ecm_ladder(a, x, z, k, a24, n)
+                    if ladder_error != ok { ret (zero, ladder_error) }
+                    let x_len = nx.limbs.len
+                    let z_len = nz.limbs.len
+                    var i = 0usize
+                    while i < x_len {
+                        bx[i] = nx.limbs[i]
+                        i += 1usize
+                    }
+                    i = 0usize
+                    while i < z_len {
+                        bz[i] = nz.limbs[i]
+                        i += 1usize
+                    }
+                    mem.reset(a, marker)
+                    x = make_int(a, .Positive, bx[..x_len])
+                    z = make_int(a, .Positive, bz[..z_len])
+                }
+                p += 1u64
+            }
+            let (g, gcd_error) = int_gcd(a, z, n)
+            if gcd_error != ok { ret (zero, gcd_error) }
+            if int_bits(g) > 1usize && int_cmp(g, n) < 0i32 {
+                let (copied, copy_error) = copy_limbs(a, g.limbs)
+                if copy_error != ok { ret (zero, copy_error) }
+                ret (make_int(a, .Positive, copied), ok)
+            }
+        }
+    }
+    ret (zero, NotFound)
+}

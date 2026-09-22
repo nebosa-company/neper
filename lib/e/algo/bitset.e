@@ -175,3 +175,42 @@ fn eq(a: *const BitSet, b: *const BitSet) -> bool {
     }
     ret true
 }
+
+// `out = a & b`; all three must share a length, else the trap lands on `out`.
+fn intersect(a: *const BitSet, b: *const BitSet, out: *BitSet) {
+    if a.len != b.len || a.len != out.len {
+        out.words[out.words.len] = 0u64
+        ret
+    }
+    var at = 0usize
+    while at < out.words.len {
+        out.words[at] = a.words[at] & b.words[at]
+        at += 1usize
+    }
+}
+
+// `out = a | b`.
+fn union_into(a: *const BitSet, b: *const BitSet, out: *BitSet) {
+    if a.len != b.len || a.len != out.len {
+        out.words[out.words.len] = 0u64
+        ret
+    }
+    var at = 0usize
+    while at < out.words.len {
+        out.words[at] = a.words[at] | b.words[at]
+        at += 1usize
+    }
+}
+
+// `out = a & ~b`.
+fn difference(a: *const BitSet, b: *const BitSet, out: *BitSet) {
+    if a.len != b.len || a.len != out.len {
+        out.words[out.words.len] = 0u64
+        ret
+    }
+    var at = 0usize
+    while at < out.words.len {
+        out.words[at] = a.words[at] & ~b.words[at]
+        at += 1usize
+    }
+}

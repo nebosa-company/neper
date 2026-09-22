@@ -540,3 +540,30 @@ fn fm_locate(f: *const FmIndex, i: usize) -> usize {
     }
     ret (usize(f.sampled[row]) + steps) % f.n
 }
+
+// The planned entry points: each is its algorithm's build call under the
+// name `docs/algos.md` promises, over the same storage.
+fn louds(first_child: []const u32, next_sibling: []const u32, n: usize, root: usize, bits: []u64, counts: []u32, queue: []u32, order: []usize) -> (BitVector, err) {
+    let (v, e) = louds_encode(first_child, next_sibling, n, root, bits, counts, queue, order)
+    ret (v, e)
+}
+
+fn balanced_parens(first_child: []const u32, next_sibling: []const u32, n: usize, root: usize, bits: []u64, counts: []u32, stack: []u32, order: []usize) -> (BitVector, err) {
+    let (v, e) = bp_encode(first_child, next_sibling, n, root, bits, counts, stack, order)
+    ret (v, e)
+}
+
+fn wavelet_tree(symbols: []const u8, n: usize, bits: []u64, counts: []u32, levels: []BitVector, zeros: []usize, scratch: []u8) -> (WaveletMatrix, err) {
+    let (w, e) = wavelet_build(symbols, n, bits, counts, levels, zeros, scratch)
+    ret (w, e)
+}
+
+fn compressed_suffix_array(text: str, rate: usize, psi: []u32, sampled: []u32, sa: []usize, scratch: []usize) -> (Csa, err) {
+    let (c, e) = csa_build(text, rate, psi, sampled, sa, scratch)
+    ret (c, e)
+}
+
+fn fm_index(text: str, rate: usize, starts: []u32, sampled: []u32, sa: []usize, scratch: []usize, bwt_bytes: []u8, bits: []u64, counts: []u32, levels: []BitVector, zeros: []usize, wave_scratch: []u8) -> (FmIndex, err) {
+    let (f, e) = fm_build(text, rate, starts, sampled, sa, scratch, bwt_bytes, bits, counts, levels, zeros, wave_scratch)
+    ret (f, e)
+}

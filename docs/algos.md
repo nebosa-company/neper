@@ -545,7 +545,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 198. **Segment Tree Lazy Propagation** – Deferred sub-tree updates for efficient range mutations. → `e.data.segment_tree.update_range`
 199. **Persistent Segment Tree Modification** – Creating path-copy version history of tree states. → `e.data.segment_tree.persistent_update`
 200. **Disjoint Set Union (DSU) Find** – Element root discovery using path compression. → `e.algo.disjoint_set.find`
-201. **DSU Union by Rank / Size** – Merging smaller set root into larger set root. → `e.algo.disjoint_set.union`
+201. **DSU Union by Rank / Size** – Merging smaller set root into larger set root. → `e.algo.disjoint_set.join` (`union` is a keyword)
 202. **DSU Rollback** – Undoing tree unions using state history stacks. → `e.algo.disjoint_set.rollback`
 203. **Trie Insertion** – Character-by-character child node path traversal. → `e.data.trie.insert`
 204. **Trie Search** – Prefix or full-word node path validation. → `e.data.trie.get`

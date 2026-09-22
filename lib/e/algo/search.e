@@ -310,3 +310,42 @@ fn cycle_brent[Ctx: type](start: u64, ctx: *Ctx, next: fn(*Ctx, u64) -> u64) -> 
     }
     ret (mu, lambda)
 }
+
+// The argument minimising a unimodal `f` over the closed integer range.
+fn ternary_min_i64[Ctx: type](low: i64, high: i64, ctx: *Ctx, f: fn(*Ctx, i64) -> i64) -> i64 {
+    var lo = low
+    var hi = high
+    while hi - lo > 2i64 {
+        let third = (hi - lo) / 3i64
+        let m1 = lo + third
+        let m2 = hi - third
+        if f(ctx, m1) > f(ctx, m2) { lo = m1 + 1i64 } else { hi = m2 - 1i64 }
+    }
+    var best = lo
+    var at = lo + 1i64
+    while at <= hi {
+        if f(ctx, at) < f(ctx, best) { best = at }
+        at += 1i64
+    }
+    ret best
+}
+
+// The argument minimising a unimodal `f` over `[low, high]`, the interval cut to
+// two thirds `iterations` times (each cut costs two probes).
+fn ternary_min_f64[Ctx: type](low: f64, high: f64, iterations: usize, ctx: *Ctx, f: fn(*Ctx, f64) -> f64) -> f64 {
+    var lo = low
+    var hi = high
+    var i = 0usize
+    while i < iterations {
+        let m1 = lo + (hi - lo) / 3.0f64
+        let m2 = hi - (hi - lo) / 3.0f64
+        if f(ctx, m1) > f(ctx, m2) { lo = m1 } else { hi = m2 }
+        i += 1usize
+    }
+    ret (lo + hi) / 2.0f64
+}
+
+// The planned name: the integer minimiser.
+fn ternary[Ctx: type](low: i64, high: i64, ctx: *Ctx, f: fn(*Ctx, i64) -> i64) -> i64 {
+    ret ternary_min_i64[Ctx](low, high, ctx, f)
+}

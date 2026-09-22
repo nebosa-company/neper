@@ -166,3 +166,119 @@ fn raymond_release(t: *Raymond, i: usize, s: *Sent) {
     t.nodes[i].in_cs = false
     let _ = settle(t, i, s)
 }
+
+// ---- planned one-call forms -----------------------------------------------
+
+// In a `schedule`, this entry delivers every pending message before the next request.
+const DELIVER: u32 = 4294967295u32
+
+fn ra_in_cs(r: *const Ra) -> usize {
+    var n = 0usize
+    var i = 0usize
+    while i < r.nodes.len {
+        if r.nodes[i].in_cs { n += 1usize }
+        i += 1usize
+    }
+    ret n
+}
+
+fn ray_in_cs(t: *const Raymond) -> usize {
+    var n = 0usize
+    var i = 0usize
+    while i < t.nodes.len {
+        if t.nodes[i].in_cs { n += 1usize }
+        i += 1usize
+    }
+    ret n
+}
+
+// Record `who` entering (alone) as entry `*entered`; TooSmall when `order` is full.
+fn enter(order: []u32, entered: *usize, who: usize, in_cs: usize) -> err {
+    if in_cs != 1usize { ret Invalid }
+    if *entered >= order.len { ret TooSmall }
+    order[*entered] = u32(who)
+    *entered += 1usize
+    ret ok
+}
+
+// Deliver everything pending in sending order; a node that enters leaves at once.
+fn ra_deliver(r: *Ra, s: *Sent, head: *usize, order: []u32, entered: *usize) -> err {
+    while *head < s.count {
+        if *head >= s.out.len { ret TooSmall }
+        let m = s.out[*head]
+        *head += 1usize
+        if ra_receive(r, m, s) {
+            try enter(order, entered, usize(m.to), ra_in_cs(r))
+            ra_release(r, usize(m.to), s)
+        }
+    }
+    ret ok
+}
+
+fn ray_deliver(t: *Raymond, s: *Sent, head: *usize, order: []u32, entered: *usize) -> err {
+    while *head < s.count {
+        if *head >= s.out.len { ret TooSmall }
+        let m = s.out[*head]
+        *head += 1usize
+        if raymond_receive(t, m, s) {
+            try enter(order, entered, usize(m.to), ray_in_cs(t))
+            raymond_release(t, usize(m.to), s)
+        }
+    }
+    ret ok
+}
+
+// Ricart-Agrawala in one call: `schedule` names the requesting nodes in
+// order (`DELIVER` delivers everything pending first; a final delivery is
+// implicit), every node that enters leaves at once, and `order` receives
+// the entry order. Answers how many entered; `s.count` is the message
+// count. TooSmall when the pool or `order` overflowed, Invalid when a
+// request names no node or two nodes were ever inside at once.
+fn ricart_agrawala(nodes: []RaNode, deferred: []bool, schedule: []const u32, s: *Sent, order: []u32) -> (usize, err) {
+    let (r0, e0) = ra(nodes, deferred)
+    if e0 != ok { ret (0usize, e0) }
+    var r = r0
+    var entered = 0usize
+    var head = 0usize
+    var i = 0usize
+    while i < schedule.len {
+        if schedule[i] == DELIVER {
+            let e = ra_deliver(&r, s, &head, order, &entered)
+            if e != ok { ret (entered, e) }
+        } else {
+            if usize(schedule[i]) >= nodes.len { ret (entered, Invalid) }
+            ra_request(&r, usize(schedule[i]), s)
+        }
+        i += 1usize
+    }
+    let e = ra_deliver(&r, s, &head, order, &entered)
+    ret (entered, e)
+}
+
+// The Raymond token tree in one call, with the same `schedule` and answers
+// as `ricart_agrawala`; a requester already holding the token enters at once.
+fn raymond_tree(nodes: []RayNode, queue: []u32, parent: []const u32, root: usize, schedule: []const u32, s: *Sent, order: []u32) -> (usize, err) {
+    let (t0, e0) = raymond(nodes, queue, parent, root)
+    if e0 != ok { ret (0usize, e0) }
+    var t = t0
+    var entered = 0usize
+    var head = 0usize
+    var i = 0usize
+    while i < schedule.len {
+        if schedule[i] == DELIVER {
+            let e = ray_deliver(&t, s, &head, order, &entered)
+            if e != ok { ret (entered, e) }
+        } else {
+            let who = usize(schedule[i])
+            if who >= nodes.len { ret (entered, Invalid) }
+            if raymond_request(&t, who, s) {
+                let e = enter(order, &entered, who, ray_in_cs(&t))
+                if e != ok { ret (entered, e) }
+                raymond_release(&t, who, s)
+            }
+        }
+        i += 1usize
+    }
+    let e = ray_deliver(&t, s, &head, order, &entered)
+    ret (entered, e)
+}

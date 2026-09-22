@@ -3,7 +3,8 @@
 // then Edmonds-Karp (shortest augmenting paths), Dinic (blocking flows over a
 // level graph) or push-relabel (highest label with global relabelling omitted)
 // computes the maximum flow from `source` to `sink`. `min_cut` reads the
-// source side of a minimum cut off a saturated network. Capacities are `i64`
+// source side of a minimum cut off a saturated network; `max_min_fair` shares
+// link capacities among flows by progressive filling. Capacities are `i64`
 // and a directed edge of the input becomes a forward arc with its capacity and
 // a reverse arc of zero; an undirected input edge is two forward arcs.
 
@@ -341,4 +342,109 @@ fn min_cut(a: *mem.Arena, net: *const Network, side: []u8) -> err {
 // arc's residual capacity.
 fn edge_flow(net: *const Network, edge_index: usize) -> i64 {
     ret net.capacity[2usize * edge_index + 1usize]
+}
+
+error TooSmall
+
+// Max-min fair rates by progressive filling: every unfrozen flow's rate grows
+// at one pace until some link fills, the flows through it freeze, and the
+// filling continues with the rest until every flow is frozen. Flow `f` uses
+// links `flow_links[flow_offsets[f] .. flow_offsets[f + 1]]` (a flow with no
+// link is frozen at zero); `rate.len >= flows`. Answers the filling rounds.
+fn max_min_fair(a: *mem.Arena, capacity: []const f64, flow_offsets: []const usize, flow_links: []const u32, rate: []f64) -> (usize, err) {
+    if flow_offsets.len == 0usize { ret (0usize, TooSmall) }
+    let flows = flow_offsets.len - 1usize
+    let links = capacity.len
+    if rate.len < flows { ret (0usize, TooSmall) }
+    let (used, used_error) = mem.alloc[f64](a, links)
+    if used_error != ok { ret (0usize, used_error) }
+    let (count, count_error) = mem.alloc[usize](a, links)
+    if count_error != ok { ret (0usize, count_error) }
+    let (active, active_error) = mem.alloc[u8](a, flows)
+    if active_error != ok { ret (0usize, active_error) }
+    var l = 0usize
+    while l < links {
+        used[l] = 0.0f64
+        l += 1usize
+    }
+    var remaining = 0usize
+    var f = 0usize
+    while f < flows {
+        rate[f] = 0.0f64
+        active[f] = 0u8
+        if flow_offsets[f + 1usize] > flow_offsets[f] {
+            active[f] = 1u8
+            remaining += 1usize
+        }
+        var i = flow_offsets[f]
+        while i < flow_offsets[f + 1usize] {
+            if usize(flow_links[i]) >= links { ret (0usize, InvalidNode) }
+            i += 1usize
+        }
+        f += 1usize
+    }
+    var rounds = 0usize
+    while remaining > 0usize {
+        l = 0usize
+        while l < links {
+            count[l] = 0usize
+            l += 1usize
+        }
+        f = 0usize
+        while f < flows {
+            if active[f] == 1u8 {
+                var i = flow_offsets[f]
+                while i < flow_offsets[f + 1usize] {
+                    count[usize(flow_links[i])] += 1usize
+                    i += 1usize
+                }
+            }
+            f += 1usize
+        }
+        // The link that fills first sets the pace.
+        var tight = links
+        var pace = 0.0f64
+        l = 0usize
+        while l < links {
+            if count[l] > 0usize {
+                var room = (capacity[l] - used[l]) / f64(count[l])
+                if room < 0.0f64 { room = 0.0f64 }
+                if tight == links || room < pace {
+                    tight = l
+                    pace = room
+                }
+            }
+            l += 1usize
+        }
+        f = 0usize
+        while f < flows {
+            if active[f] == 1u8 {
+                rate[f] += pace
+                var i = flow_offsets[f]
+                while i < flow_offsets[f + 1usize] {
+                    used[usize(flow_links[i])] += pace
+                    i += 1usize
+                }
+            }
+            f += 1usize
+        }
+        // Freeze the flows through every link that is now full.
+        f = 0usize
+        while f < flows {
+            if active[f] == 1u8 {
+                var i = flow_offsets[f]
+                while i < flow_offsets[f + 1usize] {
+                    let link = usize(flow_links[i])
+                    if active[f] == 1u8 && (link == tight || used[link] >= capacity[link] - 1.0e-9f64) {
+                        active[f] = 0u8
+                        remaining -= 1usize
+                    }
+                    i += 1usize
+                }
+            }
+            f += 1usize
+        }
+        rounds += 1usize
+    }
+    ret (rounds, ok)
 }

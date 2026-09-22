@@ -156,3 +156,77 @@ fn jump(key: u64, buckets: u32) -> u32 {
     }
     ret u32(b)
 }
+
+// The planned name for placing virtual nodes: `k` points per node, or
+// `k * weights[i]` when `weights` is given (empty means uniform), sorted into
+// a ring; `points.len` must hold them all.
+fn virtual_nodes(points: []Point, nodes: []const u64, k: u32, weights: []const u32) -> ([]Point, err) {
+    if k == 0u32 { ret (points[..0usize], Invalid) }
+    if weights.len == 0usize {
+        let (ring, ring_error) = ring_build(points, nodes, k)
+        ret (ring, ring_error)
+    }
+    if weights.len < nodes.len { ret (points[..0usize], TooSmall) }
+    var total = 0usize
+    var n = 0usize
+    while n < nodes.len {
+        total += usize(k) * usize(weights[n])
+        n += 1usize
+    }
+    if points.len < total { ret (points[..0usize], TooSmall) }
+    var at = 0usize
+    n = 0usize
+    while n < nodes.len {
+        var r = 0u32
+        let replicas = k * weights[n]
+        while r < replicas {
+            points[at] = Point { position: ring_position(nodes[n], r), node: nodes[n] }
+            at += 1usize
+            r += 1u32
+        }
+        n += 1usize
+    }
+    var ring = points[..total]
+    var start = total / 2usize
+    while start > 0usize {
+        start -= 1usize
+        ring_sift(ring, start, total)
+    }
+    var end = total
+    while end > 1usize {
+        end -= 1usize
+        let carried = ring[0usize]
+        ring[0usize] = ring[end]
+        ring[end] = carried
+        ring_sift(ring, 0usize, end)
+    }
+    ret (ring, ok)
+}
+
+// The balance check: how many of `keys` each of `nodes` owns, into `counts`
+// (`counts.len >= nodes.len`); a key owned by a node outside `nodes` is `Invalid`.
+fn virtual_nodes_load(ring: []const Point, keys: []const u64, nodes: []const u64, counts: []usize) -> err {
+    if counts.len < nodes.len { ret TooSmall }
+    var n = 0usize
+    while n < nodes.len {
+        counts[n] = 0usize
+        n += 1usize
+    }
+    var i = 0usize
+    while i < keys.len {
+        let (owner, found) = ring_lookup(ring, keys[i])
+        if !found { ret Invalid }
+        var hit = false
+        n = 0usize
+        while n < nodes.len {
+            if nodes[n] == owner && !hit {
+                counts[n] += 1usize
+                hit = true
+            }
+            n += 1usize
+        }
+        if !hit { ret Invalid }
+        i += 1usize
+    }
+    ret ok
+}

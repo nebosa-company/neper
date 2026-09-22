@@ -141,3 +141,98 @@ fn iter_next[T: type](it: *Iter[T]) -> (T, bool) {
     it.next = current.next
     ret (current.value, true)
 }
+
+// Whether `to` follows `from` in the chain (`from == to` counts), and whether
+// `stop` lies on the way -- the splice source range, and the check that its target
+// is not inside it.
+fn spans[T: type](l: *const List[T], from: NodeId, to: NodeId, stop: NodeId) -> (bool, bool) {
+    var cursor = from
+    var hits_stop = false
+    while cursor != NONE {
+        if cursor == stop { hits_stop = true }
+        if cursor == to { ret (true, hits_stop) }
+        cursor = l.nodes.items[usize(cursor)].next
+    }
+    ret (false, hits_stop)
+}
+
+// Moves the nodes `from..=to` of `src` into `dst` before `before` (`NONE`
+// appends). When `dst` is `src` the nodes keep their identifiers and only four
+// links change; across lists the values move and `src`'s identifiers die.
+fn splice[T: type](dst: *List[T], before: NodeId, src: *List[T], from: NodeId, to: NodeId) -> err {
+    if usize(from) >= src.nodes.len || !src.nodes.items[usize(from)].live { ret InvalidNode }
+    if usize(to) >= src.nodes.len || !src.nodes.items[usize(to)].live { ret InvalidNode }
+    if before != NONE && (usize(before) >= dst.nodes.len || !dst.nodes.items[usize(before)].live) { ret InvalidNode }
+    let (reaches, hits_before) = spans[T](src, from, to, before)
+    if !reaches { ret InvalidNode }
+    if dst != src {
+        var cursor = from
+        var moving = true
+        while moving {
+            let step = src.nodes.items[usize(cursor)].next
+            let (value, remove_error) = remove[T](src, cursor)
+            if remove_error != ok { ret remove_error }
+            var insert_error: err = ok
+            if before == NONE {
+                let (_, e) = push_back[T](dst, value)
+                insert_error = e
+            } else {
+                let (_, e) = insert_before[T](dst, before, value)
+                insert_error = e
+            }
+            if insert_error != ok { ret insert_error }
+            moving = cursor != to
+            cursor = step
+        }
+        ret ok
+    }
+    if hits_before { ret InvalidNode }
+    // Unlink the range from where it is ...
+    let before_range = src.nodes.items[usize(from)].previous
+    let after_range = src.nodes.items[usize(to)].next
+    if before_range == NONE { src.first = after_range } else { src.nodes.items[usize(before_range)].next = after_range }
+    if after_range == NONE { src.last = before_range } else { src.nodes.items[usize(after_range)].previous = before_range }
+    // ... and link it in ahead of `before` (or at the end).
+    var previous = dst.last
+    if before != NONE { previous = dst.nodes.items[usize(before)].previous }
+    dst.nodes.items[usize(from)].previous = previous
+    dst.nodes.items[usize(to)].next = before
+    if previous == NONE { dst.first = from } else { dst.nodes.items[usize(previous)].next = from }
+    if before == NONE { dst.last = to } else { dst.nodes.items[usize(before)].previous = to }
+    ret ok
+}
+
+// Whether `sub`'s values occur as one contiguous run of `l`'s (an empty `sub` does).
+// ponytail: O(n * m) scan; a KMP over values if sublists get long.
+fn contains_sublist[T: type](l: *const List[T], sub: *const List[T]) -> bool {
+    if sub.first == NONE { ret true }
+    var start = l.first
+    while start != NONE {
+        var cursor = start
+        var want = sub.first
+        while cursor != NONE && want != NONE && T.eq(l.nodes.items[usize(cursor)].value, sub.nodes.items[usize(want)].value) {
+            cursor = l.nodes.items[usize(cursor)].next
+            want = sub.nodes.items[usize(want)].next
+        }
+        if want == NONE { ret true }
+        start = l.nodes.items[usize(start)].next
+    }
+    ret false
+}
+
+// The self-organising list: the first node equal to `value` moves to the front;
+// answers the position it was found at (0 when already first) and whether it was.
+fn move_to_front[T: type](l: *List[T], value: T) -> (usize, bool) {
+    var position = 0usize
+    var cursor = l.first
+    while cursor != NONE && !T.eq(l.nodes.items[usize(cursor)].value, value) {
+        cursor = l.nodes.items[usize(cursor)].next
+        position += 1usize
+    }
+    if cursor == NONE { ret (0usize, false) }
+    if position > 0usize {
+        let e = splice[T](l, l.first, l, cursor, cursor)
+        if e != ok { ret (position, false) }
+    }
+    ret (position, true)
+}

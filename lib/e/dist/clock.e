@@ -122,3 +122,16 @@ fn hlc_cmp(a: Hlc, b: Hlc) -> i32 {
     if a.logical > b.logical { ret 1i32 }
     ret 0i32
 }
+
+// A vector clock of `n` entries (at most `storage.len`) over `storage`, all
+// zero; the planned entry point for the `vector_*` family.
+fn vector(storage: []u64, n: usize) -> []u64 {
+    var m = n
+    if m > storage.len { m = storage.len }
+    var i = 0usize
+    while i < m {
+        storage[i] = 0u64
+        i += 1usize
+    }
+    ret storage[..m]
+}

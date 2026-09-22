@@ -99,3 +99,9 @@ fn lease_due(l: *const Lease, now: u64, num: u64, den: u64) -> bool {
     if now < l.granted { ret false }
     ret (now - l.granted) * den >= (l.expires - l.granted) * num
 }
+
+// Redlock in one call: `redlock_acquire` under its planned name; answers (held, validity).
+fn redlock(instances: []Instance, token: u64, now: u64, ttl: u64, drift: u64) -> (bool, u64) {
+    let (held, validity) = redlock_acquire(instances, token, now, ttl, drift)
+    ret (held, validity)
+}

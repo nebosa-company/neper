@@ -191,3 +191,6 @@ fn maglev_disruption(old_table: []const u32, new_table: []const u32) -> usize {
     }
     ret changed
 }
+
+// Maglev under its planned name: `maglev_build`.
+fn maglev(names: []const str, table: []u32, scratch: []u32, m: usize) -> err { ret maglev_build(names, table, scratch, m) }

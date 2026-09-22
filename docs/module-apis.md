@@ -444,6 +444,9 @@ Iteration is LIFO order and does not mutate the stack.
 ```neper
 type Queue[T: type] = struct { items: deque.Deque[T] }
 type Iter[T: type] = struct { queue: *const Queue[T], index: usize }
+type WatermarkState = enum u8 { Below, Between, Above }
+type Watermarks = struct { capacity: usize, low: usize, high: usize }
+error Invalid
 
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (Queue[T], err)
 fn len[T: type](q: *const Queue[T]) -> usize
@@ -454,6 +457,9 @@ fn dequeue[T: type](q: *Queue[T]) -> (T, bool)
 fn clear[T: type](q: *Queue[T])
 fn iter[T: type](q: *const Queue[T]) -> Iter[T]
 fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
+fn watermarks(cap: usize, low: usize, high: usize) -> (Watermarks, err)
+fn watermark_state(w: *const Watermarks, count: usize) -> WatermarkState
+fn watermark_next(w: *const Watermarks, state: WatermarkState, count: usize) -> WatermarkState
 ```
 
 Iteration is FIFO order and does not mutate the queue.
@@ -462,18 +468,19 @@ Iteration is FIFO order and does not mutate the queue.
 
 ```neper
 type NodeId = u32
-const NONE: NodeId = 4294967295
 type Node[T: type] = struct { value: T, previous: NodeId, next: NodeId, live: bool }
 type List[T: type] = struct { nodes: list.List[Node[T]], first: NodeId, last: NodeId, len: usize }
 type Iter[T: type] = struct { list: *const List[T], next: NodeId }
 error InvalidNode
 error TooLarge
+const NONE: NodeId = 4294967295
 
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (List[T], err)
 fn len[T: type](l: *const List[T]) -> usize
 fn first[T: type](l: *const List[T]) -> (NodeId, bool)
 fn last[T: type](l: *const List[T]) -> (NodeId, bool)
 fn node[T: type](l: *const List[T], id: NodeId) -> (*const Node[T], err)
+fn allocate[T: type](l: *List[T], value: T) -> (NodeId, err)
 fn push_front[T: type](l: *List[T], value: own T) -> (NodeId, err)
 fn push_back[T: type](l: *List[T], value: own T) -> (NodeId, err)
 fn insert_before[T: type](l: *List[T], at: NodeId, value: own T) -> (NodeId, err)
@@ -482,6 +489,10 @@ fn remove[T: type](l: *List[T], id: NodeId) -> (T, err)
 fn clear[T: type](l: *List[T])
 fn iter[T: type](l: *const List[T]) -> Iter[T]
 fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
+fn spans[T: type](l: *const List[T], from: NodeId, to: NodeId, stop: NodeId) -> (bool, bool)
+fn splice[T: type](dst: *List[T], before: NodeId, src: *List[T], from: NodeId, to: NodeId) -> err
+fn contains_sublist[T: type](l: *const List[T], sub: *const List[T]) -> bool
+fn move_to_front[T: type](l: *List[T], value: T) -> (usize, bool)
 ```
 
 Node identifiers remain stable across insertions and removals because removed slots
@@ -668,6 +679,9 @@ fn persistent_add(t: *Persistent, root: u32, index: usize, delta: i64) -> (u32, 
 fn persistent_add_node(t: *Persistent, old: u32, low: usize, high: usize, index: usize, delta: i64) -> u32
 fn persistent_sum(t: *const Persistent, root: u32, low: usize, high: usize) -> (i64, err)
 fn persistent_sum_node(t: *const Persistent, node: u32, low: usize, high: usize, from: usize, to: usize) -> i64
+fn update_range(t: *Lazy, low: usize, high: usize, delta: i64) -> err
+fn persistent_update(t: *Persistent, root: u32, index: usize, value: i64) -> (u32, err)
+fn persistent_query(t: *const Persistent, root: u32, low: usize, high: usize) -> (i64, err)
 ```
 
 `SegmentTree[T]` folds any associative `combine` with an identity over `4 * n`
@@ -744,6 +758,10 @@ fn ball_fill(b: *BallTree, lo: usize, hi: usize)
 fn ball_tree_build(points: []const f64, n: usize, d: usize, order: []usize, centre: []f64, radius: []f64) -> (BallTree, err)
 fn ball_nearest_range(b: *const BallTree, lo: usize, hi: usize, query: []const f64, best: *Best)
 fn ball_tree_nearest(b: *const BallTree, query: []const f64) -> (usize, f64, err)
+fn range_tree(xs: []const f64, ys: []const f64, n: usize, order: []usize, pool: []usize) -> (RangeTree, err)
+fn range_tree_lower(t: *const RangeTree, level: usize, lo: usize, hi: usize, y: f64) -> usize
+fn range_tree_count_node(t: *const RangeTree, level: usize, lo: usize, hi: usize, x1: f64, x2: f64, y1: f64, y2: f64) -> usize
+fn range_tree_count(t: *const RangeTree, x1: f64, y1: f64, x2: f64, y2: f64) -> usize
 ```
 
 Spatial indexes over caller storage: implicit k-d tree (`kd_build`, `kd_nearest`), quadtree
@@ -794,6 +812,11 @@ fn fm_build(text: str, rate: usize, starts: []u32, sampled: []u32, sa: []usize, 
 fn fm_search(f: *const FmIndex, pattern: str) -> (usize, usize)
 fn fm_count(f: *const FmIndex, pattern: str) -> usize
 fn fm_locate(f: *const FmIndex, i: usize) -> usize
+fn louds(first_child: []const u32, next_sibling: []const u32, n: usize, root: usize, bits: []u64, counts: []u32, queue: []u32, order: []usize) -> (BitVector, err)
+fn balanced_parens(first_child: []const u32, next_sibling: []const u32, n: usize, root: usize, bits: []u64, counts: []u32, stack: []u32, order: []usize) -> (BitVector, err)
+fn wavelet_tree(symbols: []const u8, n: usize, bits: []u64, counts: []u32, levels: []BitVector, zeros: []usize, scratch: []u8) -> (WaveletMatrix, err)
+fn compressed_suffix_array(text: str, rate: usize, psi: []u32, sampled: []u32, sa: []usize, scratch: []usize) -> (Csa, err)
+fn fm_index(text: str, rate: usize, starts: []u32, sampled: []u32, sa: []usize, scratch: []usize, bwt_bytes: []u8, bits: []u64, counts: []u32, levels: []BitVector, zeros: []usize, wave_scratch: []u8) -> (FmIndex, err)
 ```
 
 `BitVector` with `rank`, `rank0`, `select`, `select0` over a count per word; `louds_encode`
@@ -1085,6 +1108,7 @@ position, `reverse_range` by splitting the range out and tagging it, `collect`.
 type MonotonicQueue = struct { values: []i64, positions: []u64, head: usize, tail: usize, width: usize, pushed: u64, minimum: bool }
 type TwoStack[T: type] = struct { front: []T, front_folds: []T, back: []T, front_count: usize, back_count: usize, identity: T }
 type ExponentialHistogram = struct { sizes: []u64, stamps: []u64, count: usize, width: u64, k: usize, now: u64 }
+type Daba[T: type] = struct { values: []T, aggs: []T, head: usize, tail: usize, lp: usize, rp: usize, ap: usize, bp: usize, identity: T }
 error TooSmall
 error Invalid
 
@@ -1099,6 +1123,17 @@ fn two_stack_query[T: type, Ctx: type](w: *const TwoStack[T], ctx: *Ctx, combine
 fn exponential_histogram(sizes: []u64, stamps: []u64, width: u64, k: usize) -> (ExponentialHistogram, err)
 fn histogram_push(h: *ExponentialHistogram, bit: bool) -> err
 fn histogram_estimate(h: *const ExponentialHistogram) -> u64
+fn daba[T: type](values: []T, aggs: []T, identity: T) -> (Daba[T], err)
+fn daba_len[T: type](d: *const Daba[T]) -> usize
+fn daba_slot[T: type](d: *const Daba[T], position: usize) -> usize
+fn daba_back[T: type](d: *const Daba[T]) -> T
+fn daba_alpha[T: type](d: *const Daba[T]) -> T
+fn daba_delta[T: type](d: *const Daba[T]) -> T
+fn daba_gamma[T: type](d: *const Daba[T]) -> T
+fn daba_step[T: type, Ctx: type](d: *Daba[T], ctx: *Ctx, combine: fn(*Ctx, T, T) -> T)
+fn daba_push[T: type, Ctx: type](d: *Daba[T], value: T, ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> err
+fn daba_pop[T: type, Ctx: type](d: *Daba[T], ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> (T, err)
+fn daba_query[T: type, Ctx: type](d: *const Daba[T], ctx: *Ctx, combine: fn(*Ctx, T, T) -> T) -> T
 ```
 
 `MonotonicQueue` answers the minimum or maximum of the last `width` values;
@@ -1240,6 +1275,7 @@ fills and hits. `Lfu` scans linearly.
 
 ```neper
 type Trie = struct { bytes: []u8, first: []u32, next: []u32, terminal: []u8, values: []u64, used: usize }
+type Radix = struct { labels: []u8, starts: []u32, lens: []u32, first: []u32, next: []u32, terminal: []u8, values: []u64, used: usize }
 error TooSmall
 error Invalid
 const NONE: u32 = 4294967295u32
@@ -1256,6 +1292,10 @@ fn remove(t: *Trie, key: []const u8) -> bool
 fn longest_prefix(t: *const Trie, text: []const u8) -> (usize, u64, bool)
 fn prefix_iter[Ctx: type](t: *const Trie, prefix: []const u8, scratch: []u8, ctx: *Ctx, visit: fn(*Ctx, []const u8, u64) -> bool) -> (bool, err)
 fn walk[Ctx: type](t: *const Trie, node: u32, depth: usize, scratch: []u8, ctx: *Ctx, visit: fn(*Ctx, []const u8, u64) -> bool) -> (bool, err)
+fn compact(t: *const Trie, labels: []u8, starts: []u32, lens: []u32, first: []u32, next: []u32, terminal: []u8, values: []u64, capacity: usize) -> (Radix, err)
+fn compact_children(t: *const Trie, from: u32, r: *Radix, into: u32, written: *usize) -> err
+fn radix_len(r: *const Radix) -> usize
+fn radix_get(r: *const Radix, key: []const u8) -> (u64, bool)
 ```
 
 Node 0 is the root; the five slices need `capacity` entries. Children hang off a
@@ -1269,11 +1309,19 @@ type Map[K: type, V: type] = struct { state: *void }
 type Set[K: type] = struct { map: Map[K, bool] }
 type Iter[K: type, V: type] = struct { state: *const void }
 type SetIter[K: type] = struct { inner: Iter[K, bool] }
+type Node[K: type, V: type] = struct { key: K, value: V, priority: u64, left: *Node[K, V], right: *Node[K, V], parent: *Node[K, V] }
+type State[K: type, V: type] = struct { root: *Node[K, V], free: *Node[K, V], count: usize, arena: *mem.Arena }
 
 fn init[K: type, V: type](a: *mem.Arena) -> Map[K, V]
 fn len[K: type, V: type](m: *const Map[K, V]) -> usize
+fn priority_of[K: type](key: K) -> u64
+fn locate[K: type, V: type](s: *const State[K, V], key: K) -> (*Node[K, V], i32)
+fn replace_child[K: type, V: type](s: *State[K, V], n: *Node[K, V], child: *Node[K, V])
+fn rotate_left[K: type, V: type](s: *State[K, V], n: *Node[K, V])
+fn rotate_right[K: type, V: type](s: *State[K, V], n: *Node[K, V])
 fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err)
 fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool)
+fn bound_node[K: type, V: type](s: *const State[K, V], key: K, strict: bool) -> *Node[K, V]
 fn lower_bound[K: type, V: type](m: *const Map[K, V], key: K) -> (K, V, bool)
 fn upper_bound[K: type, V: type](m: *const Map[K, V], key: K) -> (K, V, bool)
 fn remove[K: type, V: type](m: *Map[K, V], key: K) -> (V, bool)
@@ -1282,11 +1330,19 @@ fn set_init[K: type](a: *mem.Arena) -> Set[K]
 fn set_add[K: type](s: *Set[K], key: K) -> (bool, err)
 fn set_has[K: type](s: *const Set[K], key: K) -> bool
 fn set_remove[K: type](s: *Set[K], key: K) -> bool
+fn leftmost[K: type, V: type](from: *Node[K, V]) -> *Node[K, V]
 fn iter[K: type, V: type](m: *const Map[K, V]) -> Iter[K, V]
 fn iter_from[K: type, V: type](m: *const Map[K, V], key: K) -> Iter[K, V]
 fn iter_next[K: type, V: type](it: *Iter[K, V]) -> (K, V, bool)
 fn set_iter[K: type](s: *const Set[K]) -> SetIter[K]
 fn set_iter_next[K: type](it: *SetIter[K]) -> (K, bool)
+fn rebuild[K: type, V: type](a: *mem.Arena, pre: []const K, pre_lo: usize, order: []const K, in_lo: usize, in_hi: usize, up: *Node[K, V], reversed: bool) -> (*Node[K, V], err)
+fn from_traversals[K: type, V: type](a: *mem.Arena, preorder: []const K, inorder: []const K) -> (*Node[K, V], err)
+fn from_postorder[K: type, V: type](a: *mem.Arena, postorder: []const K, inorder: []const K, scratch: []K) -> (*Node[K, V], err)
+fn keys_walk[K: type, V: type](root: *const Node[K, V], out: []K, count: usize, mode: u8) -> usize
+fn preorder_keys[K: type, V: type](root: *const Node[K, V], out: []K) -> usize
+fn inorder_keys[K: type, V: type](root: *const Node[K, V], out: []K) -> usize
+fn postorder_keys[K: type, V: type](root: *const Node[K, V], out: []K) -> usize
 ```
 
 Tree iteration is ascending by key. `iter_from` begins at the first key not less
@@ -1735,6 +1791,7 @@ fn reservoir_decayed_offer[T: type](s: *WeightedReservoir[T], r: *Pcg64, item: T
 fn reservoir_weighted_sample[T: type](s: *const WeightedReservoir[T]) -> []T
 fn priority_sample(r: *Pcg64, weights: []const f64, chosen: []usize, adjusted: []f64) -> (f64, err)
 fn varopt_sample(r: *Pcg64, weights: []const f64, k: usize, chosen: []usize, adjusted: []f64) -> (f64, err)
+fn reservoir_decayed[T: type](items: []T, keys: []f64) -> WeightedReservoir[T]
 ```
 
 `bounded(..., 0)` returns zero; otherwise it is unbiased rejection sampling.
@@ -1743,6 +1800,7 @@ fn varopt_sample(r: *Pcg64, weights: []const f64, k: usize, chosen: []usize, adj
 
 ```neper
 type Uuid = struct { bytes: [16]u8 }
+type Snowflake = struct { epoch_ms: u64, worker: u64, last_ms: u64, sequence: u64 }
 error Invalid
 
 fn v4(random: [16]u8) -> Uuid
@@ -1755,6 +1813,16 @@ fn uuid_eq(a: Uuid, b: Uuid) -> bool
 fn uuid_cmp(a: Uuid, b: Uuid) -> i32
 fn uuid_hash(uuid: Uuid) -> u64
 fn uuid_format(uuid: Uuid, b: *str.Builder) -> err
+fn v5(namespace: Uuid, name: []const u8, scratch: []u8) -> (Uuid, err)
+fn namespace_dns() -> Uuid
+fn namespace_url() -> Uuid
+fn ulid(unix_millis: u64, r: *rand.Pcg64) -> (Uuid, err)
+fn ulid_monotonic(previous: Uuid, unix_millis: u64, r: *rand.Pcg64) -> (Uuid, err)
+fn ulid_bits(u: Uuid, low: usize) -> usize
+fn ulid_format(u: Uuid, dst: []u8) -> (str, err)
+fn snowflake(epoch_ms: u64, worker: u64) -> (Snowflake, err)
+fn snowflake_next(g: *Snowflake, now_ms: u64) -> (u64, err)
+fn nanoid(r: *rand.Pcg64, dst: []u8) -> str
 ```
 
 `format` writes the 36-byte lowercase hyphenated form. Entropy and time are supplied
@@ -1776,6 +1844,8 @@ fn ring_lookup(ring: []const Point, key: u64) -> (u64, bool)
 fn ring_successors(ring: []const Point, key: u64, out: []u64) -> usize
 fn rendezvous(nodes: []const u64, key: u64) -> (usize, bool)
 fn jump(key: u64, buckets: u32) -> u32
+fn virtual_nodes(points: []Point, nodes: []const u64, k: u32, weights: []const u32) -> ([]Point, err)
+fn virtual_nodes_load(ring: []const Point, keys: []const u64, nodes: []const u64, counts: []usize) -> err
 ```
 
 Nodes are `u64` identifiers and keys are hashes the caller computed. `ring_build`
@@ -1788,6 +1858,7 @@ needs no state; `jump` numbers buckets `0..count`.
 type Network = struct { head: []u32, next: []u32, to: []u32, capacity: []i64, arcs: usize, nodes: usize, source: u32, sink: u32 }
 error InvalidNode
 error InvalidCapacity
+error TooSmall
 const NONE: u32 = 4294967295u32
 
 fn build[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], source: graph.NodeId, sink: graph.NodeId, ctx: *Ctx, capacity: fn(*Ctx, graph.Edge[E]) -> i64) -> (Network, err)
@@ -1797,6 +1868,7 @@ fn dinic(a: *mem.Arena, net: *Network) -> (i64, err)
 fn push_relabel(a: *mem.Arena, net: *Network) -> (i64, err)
 fn min_cut(a: *mem.Arena, net: *const Network, side: []u8) -> err
 fn edge_flow(net: *const Network, edge_index: usize) -> i64
+fn max_min_fair(a: *mem.Arena, capacity: []const f64, flow_offsets: []const usize, flow_links: []const u32, rate: []f64) -> (usize, err)
 ```
 
 `build` turns a graph and a capacity function into a residual network in the
@@ -1818,6 +1890,7 @@ fn stable_marriage(proposer_prefs: []const usize, receiver_prefs: []const usize,
 fn blossom[E: type](a: *mem.Arena, g: *const graph.Graph[E], mate: []u32) -> (usize, err)
 fn lowest_common_base(base: []u32, parent: []u32, mate: []u32, a: u32, b: u32, root: u32, mark: []u8, n: usize) -> u32
 fn mark_path(base: []u32, parent: []u32, mate: []u32, in_blossom: []u8, from: u32, common: u32, child: u32)
+fn auction(benefit: []const f64, n: usize, assignment: []usize, prices: []f64, owner: []usize, epsilon: f64) -> (f64, err)
 ```
 
 `hopcroft_karp` reads edges from left nodes `0..left` to right nodes; `hungarian`
@@ -1829,6 +1902,8 @@ matches a general graph. `NONE` marks an unmatched node.
 
 ```neper
 type Route = struct { nodes: []const graph.NodeId, cost: f64 }
+type Pair = struct { first: []const graph.NodeId, second: []const graph.NodeId, cost: f64 }
+type Routes = struct { offsets: []const usize, nodes: []const graph.NodeId, costs: []const f64 }
 error NegativeCycle
 error InvalidNode
 error TooSmall
@@ -1844,6 +1919,12 @@ fn astar[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: gra
 fn bidirectional[E: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId) -> (Route, err)
 fn iddfs[E: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, max_depth: usize) -> (Route, err)
 fn ida_star[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, max_depth: usize, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64, heuristic: fn(*Ctx, graph.NodeId) -> f64) -> (Route, err)
+fn best_first[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64, heuristic: fn(*Ctx, graph.NodeId) -> f64) -> (Route, err)
+fn dijkstra_masked[E: type, Ctx: type](g: *const graph.Graph[E], start: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64, blocked_edge: []const u8, blocked_node: []const u8, distance: []f64, by_edge: []u32, done: []u8)
+fn walk_chosen[E: type](g: *const graph.Graph[E], chosen: []u8, start: graph.NodeId, goal: graph.NodeId, out: []graph.NodeId) -> usize
+fn copy_nodes(a: *mem.Arena, from: []const graph.NodeId, count: usize) -> ([]const graph.NodeId, err)
+fn suurballe[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Pair, err)
+fn yen_k_shortest[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, goal: graph.NodeId, k_paths: usize, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Routes, err)
 ```
 
 Distances are `f64` with `infinity()` for unreachable; `bellman_ford`,
@@ -1858,6 +1939,7 @@ type Rooted = struct { parent: []graph.NodeId, depth: []u32, size: []u32, order:
 type Lifting = struct { up: []graph.NodeId, depth: []const u32, levels: usize, count: usize }
 type EulerTour = struct { entry: []u32, exit: []u32, sequence: []graph.NodeId }
 type HeavyLight = struct { head: []graph.NodeId, position: []u32, parent: []graph.NodeId, depth: []const u32 }
+type LcaRmq = struct { entry: []const u32, sequence: []const graph.NodeId, depth: []const u32, table: []graph.NodeId, levels: usize, count: usize }
 error InvalidNode
 error NotATree
 error TooSmall
@@ -1875,6 +1957,11 @@ fn centroid_decompose[E: type](a: *mem.Arena, g: *const graph.Graph[E], centroid
 fn prufer_encode[E: type](a: *mem.Arena, g: *const graph.Graph[E], out: []graph.NodeId) -> err
 fn prufer_decode(a: *mem.Arena, code: []const graph.NodeId, edges: []graph.NodeId) -> err
 fn ahu_labels[E: type](a: *mem.Arena, g: *const graph.Graph[E], tree: *const Rooted, label: []u64, scratch: []u64) -> err
+fn lca_binary_lifting[E: type](a: *mem.Arena, g: *const graph.Graph[E], root: graph.NodeId) -> (Lifting, err)
+fn lca_rmq[E: type](a: *mem.Arena, g: *const graph.Graph[E], tree: *const Rooted) -> (LcaRmq, err)
+fn lca_rmq_query(r: *const LcaRmq, a: graph.NodeId, b: graph.NodeId) -> graph.NodeId
+fn is_isomorphic_rooted[E: type](a: *mem.Arena, first: *const graph.Graph[E], first_root: graph.NodeId, second: *const graph.Graph[E], second_root: graph.NodeId) -> (bool, err)
+fn is_isomorphic[E: type](a: *mem.Arena, first: *const graph.Graph[E], second: *const graph.Graph[E]) -> (bool, err)
 ```
 
 `root_at` turns an undirected tree into parents, depths, sizes and a BFS order
@@ -1978,6 +2065,8 @@ fn garch_forecast(omega: f64, alpha: f64, beta: f64, last_return: f64, last_vari
 fn hawkes_intensity(mu: f64, alpha: f64, beta: f64, events: []const f64, t: f64) -> f64
 fn hawkes_log_likelihood(mu: f64, alpha: f64, beta: f64, events: []const f64, horizon: f64) -> f64
 fn hawkes_simulate(mu: f64, alpha: f64, beta: f64, horizon: f64, r: *rand.Pcg64, out: []f64) -> (usize, err)
+fn garch(omega: f64, alpha: f64, beta: f64, returns: []const f64, out: []f64) -> err
+fn hawkes(mu: f64, alpha: f64, beta: f64, events: []const f64, out: []f64) -> err
 ```
 
 `holt_winters` (additive triple smoothing with forecasts), `loess` and `stl` (a LOESS
@@ -2097,6 +2186,8 @@ fn louvain[E: type](a: *mem.Arena, g: *const graph.Graph[E], labels: []u32) -> (
 fn edge_betweenness[E: type](g: *const graph.Graph[E], removed: []const u8, scores: []f64, order: []u32, distance: []u32, sigma: []f64, delta: []f64) -> err
 fn components[E: type](g: *const graph.Graph[E], removed: []const u8, labels: []u32, stack: []u32) -> usize
 fn girvan_newman[E: type](g: *const graph.Graph[E], removed: []u8, scores: []f64, labels: []u32, order: []u32, distance: []u32, sigma: []f64, delta: []f64) -> (usize, err)
+fn refine(w: []const f64, strength: []const f64, k: usize, two_m: f64, community: []const u32, refined: []u32, rtotal: []f64, rcount: []u32, ctotal: []f64, link: []f64) -> usize
+fn leiden[E: type](a: *mem.Arena, g: *const graph.Graph[E], labels: []u32) -> (f64, err)
 ```
 
 `modularity` of a labelling; `label_propagation` to a fixed point; `louvain` (local
@@ -2123,6 +2214,7 @@ fn karger_best[E: type](a: *mem.Arena, g: *const graph.Graph[E], runs: usize, r:
 ### `e.algo.graph.iso`
 
 ```neper
+type Planarity = struct { height: []u32, parent_edge: []u32, lowpt: []u32, lowpt2: []u32, nesting: []u32, oriented: []u8, ordered: []u32, out_count: []usize, lowpt_edge: []u32, chain: []u32, bottom: []usize, stack: []u32, top: usize }
 error TooSmall
 
 fn degree[E: type](g: *const graph.Graph[E], v: usize) -> usize
@@ -2131,6 +2223,17 @@ fn feasible[E: type](pattern: *const graph.Graph[E], host: *const graph.Graph[E]
 fn search[E: type](pattern: *const graph.Graph[E], host: *const graph.Graph[E], mapping: []u32, used: []u8, p: usize, induced: bool) -> bool
 fn subgraph_vf2[E: type](pattern: *const graph.Graph[E], host: *const graph.Graph[E], mapping: []u32, used: []u8) -> (bool, err)
 fn isomorphic[E: type](a: *const graph.Graph[E], b: *const graph.Graph[E], mapping: []u32, used: []u8) -> (bool, err)
+fn already_oriented[E: type](g: *const graph.Graph[E], s: *Planarity, v: usize, w: usize) -> bool
+fn min_u32(x: u32, y: u32) -> u32
+fn dfs_orientation[E: type](g: *const graph.Graph[E], s: *Planarity, v: usize)
+fn interval_empty(s: *const Planarity, at: usize) -> bool
+fn conflicting(s: *const Planarity, at: usize, b: usize) -> bool
+fn swap_sides(s: *Planarity, p: usize)
+fn lowest(s: *const Planarity, p: usize) -> u32
+fn add_constraints(s: *Planarity, ei: usize, e: usize) -> bool
+fn remove_back_edges[E: type](g: *const graph.Graph[E], s: *Planarity, e: usize)
+fn dfs_testing[E: type](g: *const graph.Graph[E], s: *Planarity, v: usize) -> bool
+fn is_planar[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (bool, err)
 ```
 
 `subgraph_vf2` finds a monomorphism of a pattern into a host graph by VF2-style
@@ -2160,6 +2263,12 @@ fn knapsack_search(weights: []const f64, values: []const f64, capacity: f64, ord
 fn branch_and_bound[Ctx: type](ctx: *Ctx, leaf_depth: fn(*Ctx) -> usize, choices: fn(*Ctx, usize) -> usize, bound: fn(*Ctx, usize) -> f64, branch: fn(*Ctx, usize, usize), undo: fn(*Ctx, usize, usize), record: fn(*Ctx), start: f64) -> (f64, usize)
 fn bb_search[Ctx: type](ctx: *Ctx, leaf_depth: fn(*Ctx) -> usize, choices: fn(*Ctx, usize) -> usize, bound: fn(*Ctx, usize) -> f64, branch: fn(*Ctx, usize, usize), undo: fn(*Ctx, usize, usize), record: fn(*Ctx), depth: usize, best: f64) -> (f64, usize)
 fn large_neighborhood_search[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, iterations: usize, start: f64, destroy: fn(*Ctx, *rand.Pcg64), repair: fn(*Ctx, *rand.Pcg64) -> f64, accept: fn(*Ctx), restore: fn(*Ctx)) -> (f64, usize)
+fn tsp_christofides(d: []const f64, n: usize, tour: []usize, scratch: []usize, flags: []u8) -> (f64, err)
+fn tsp_three_opt(d: []const f64, n: usize, tour: []usize) -> (f64, usize, err)
+fn lk_positions(work: []const usize, pos: []usize, n: usize)
+fn lk_reverse(work: []usize, n: usize, i: usize, j: usize)
+fn lk_chain(d: []const f64, n: usize, work: []usize, pos: []usize, t1: usize, first_t3: usize, depth_limit: usize, best_gain: f64, best: []usize) -> f64
+fn tsp_lin_kernighan(d: []const f64, n: usize, tour: []usize, scratch: []usize, depth: usize, breadth: usize) -> (f64, usize, err)
 ```
 
 Tours over a distance matrix: `tsp_nearest_neighbor`, `tsp_two_opt`, `tsp_or_opt`,
@@ -2172,6 +2281,7 @@ destroy and repair.
 
 ```neper
 type Cnf = struct { literals: []i32, starts: []usize, clauses: usize, variables: usize }
+type Gate = enum u8 { Var, Not, And, Or, Xor }
 error TooSmall
 error Invalid
 error Unsatisfiable
@@ -2197,6 +2307,9 @@ fn satisfied(f: *const Cnf, assignment: []const i8) -> bool
 fn walksat(f: *const Cnf, assignment: []i8, p: f64, flips: usize, r: *rand.Pcg64) -> (bool, err)
 fn preprocess(f: *Cnf, fixed: []i8) -> err
 fn equivalent(f: *Cnf, left: i32, right: i32, assignment: []i8, trail: []u32, level: []u32, flipped: []u8, learned: []i32, learned_starts: []usize) -> (bool, err)
+fn encode_at_most(f: *Cnf, lits: []const i32, k: usize) -> err
+fn encode_pseudo_boolean(f: *Cnf, lits: []const i32, coefficients: []const u32, bound: u32, memo: []i32) -> err
+fn tseitin(f: *Cnf, kind: []const Gate, left: []const i32, right: []const i32, root: usize) -> (i32, err)
 ```
 
 `Cnf` over caller literal and clause arrays (`add_clause`, `clause1..3`, `fresh`);
@@ -2225,6 +2338,7 @@ fn all_different(domains: []u8, k: usize, vars: []const usize, match_value: []us
 fn element(domains: []u8, k: usize, index: usize, result: usize, array: []const usize) -> err
 fn table(domains: []u8, k: usize, vars: []const usize, tuples: []const usize, rows: usize) -> err
 fn cumulative(domains: []u8, k: usize, starts: []const usize, duration: []const usize, demand: []const usize, capacity: usize, horizon: usize, profile: []usize) -> err
+fn global_cardinality(domains: []u8, k: usize, vars: []const usize, lo: []const usize, hi: []const usize) -> err
 ```
 
 Domains as `n × k` bytes and binary constraints as the caller's `allowed(ctx, x, y, a, b)`
@@ -2256,6 +2370,7 @@ cover, `quine_mccluskey` does both and `verify` checks a cover against the funct
 ```neper
 type Bdd = struct { variable: []u32, low: []u32, high: []u32, used: usize, variables: usize }
 type Op = enum u8 { And, Or, Xor }
+type Expr = enum u8 { And, Or, Xor, Not, Var, Const }
 error TooSmall
 error Invalid
 
@@ -2269,6 +2384,7 @@ fn negate(b: *Bdd, f: u32, memo_keys: []u64, memo_values: []u32, memo_count: *us
 fn evaluate(b: *const Bdd, f: u32, assignment: []const bool) -> bool
 fn count(b: *const Bdd, f: u32) -> u64
 fn count_from(b: *const Bdd, f: u32, from: u32) -> u64
+fn build(b: *Bdd, kind: []const Expr, left: []const u32, right: []const u32, root: u32, memo_keys: []u64, memo_values: []u32) -> (u32, err)
 ```
 
 Reduced ordered BDDs over a caller node pool with a unique table: `var_node`, `apply`
@@ -2371,6 +2487,7 @@ fn farthest_from_plane(points: []const Vec3, a: Vec3, normal: Vec3) -> (usize, f
 fn hull(points: []const Vec3, faces: []u32, edges: []u32, tolerance: f64) -> (usize, err)
 fn hull_volume(points: []const Vec3, faces: []const u32, count: usize) -> f64
 fn hull_area(points: []const Vec3, faces: []const u32, count: usize) -> f64
+fn barnes_hut(t: *const BarnesHut, theta: f64, ax: []f64, ay: []f64, az: []f64) -> err
 ```
 
 `Vec3` helpers; ray tests (`ray_box`, `ray_triangle`, `ray_sphere`, `ray_plane`,
@@ -2396,6 +2513,19 @@ fn crc32_init() -> Crc32
 fn crc32_update(h: *Crc32, data: []const u8)
 fn crc32_done(h: *const Crc32) -> u32
 fn adler32(data: []const u8) -> u32
+fn fletcher16(data: []const u8) -> u16
+fn fletcher32(data: []const u8) -> u32
+fn fletcher64(data: []const u8) -> u64
+fn lrc(data: []const u8) -> u8
+fn murmur3_32(data: []const u8, seed: u32) -> u32
+fn murmur3_load64(data: []const u8, at: usize, count: usize) -> u64
+fn murmur3_fmix64(value: u64) -> u64
+fn murmur3_x64_128(data: []const u8, seed: u64) -> (u64, u64)
+fn zobrist(seed: u64, out: []u64)
+fn zobrist_hash(table: []const u64, slots: []const u32) -> u64
+fn zobrist_toggle(hash: u64, table: []const u64, slot: u32) -> u64
+fn fletcher(data: []const u8) -> u32
+fn murmur3(data: []const u8, seed: u32) -> u32
 ```
 
 ### `e.algo.deflate`
@@ -2497,6 +2627,7 @@ as `InvalidWeight`; unreachable distance is positive infinity and its predecesso
 
 ```neper
 type DisjointSet = struct { parent: []u32, rank: []u8, sets: usize }
+type RollbackSet = struct { parent: []u32, rank: []u8, log: []u32, log_len: usize, sets: usize }
 error TooLarge
 error TooSmall
 
@@ -2507,6 +2638,13 @@ fn find(s: *DisjointSet, value: u32) -> u32
 fn same(s: *DisjointSet, a: u32, b: u32) -> bool
 fn join(s: *DisjointSet, a: u32, b: u32) -> bool
 fn reset(s: *DisjointSet)
+fn rollback_init(parent: []u32, rank: []u8, log: []u32, count: usize) -> (RollbackSet, err)
+fn rollback_find(s: *const RollbackSet, value: u32) -> u32
+fn rollback_same(s: *const RollbackSet, a: u32, b: u32) -> bool
+fn rollback_union(s: *RollbackSet, a: u32, b: u32) -> (bool, err)
+fn snapshot(s: *const RollbackSet) -> usize
+fn rollback(s: *RollbackSet, to: usize)
+fn rollback_set_count(s: *const RollbackSet) -> usize
 ```
 
 The caller supplies storage. `count` must fit `u32` and both slices. `find` performs
@@ -2566,6 +2704,9 @@ fn radical_inverse(index: u64, base: u64) -> f64
 fn halton(index: u64, out: []f64) -> err
 fn sobol(index: u64, out: []f64) -> err
 fn direction(d: usize, bit: u64) -> u64
+fn normal_polar(r: *rand.Pcg64) -> (f64, f64)
+fn importance_weights[Ctx: type](samples: []const f64, ctx: *Ctx, target_density: fn(*Ctx, f64) -> f64, proposal_density: fn(*Ctx, f64) -> f64, out: []f64) -> (f64, err)
+fn copula_gaussian(r: *rand.Pcg64, factor: []const f64, n: usize, out: []f64, scratch: []f64) -> err
 ```
 
 Variates draw from a `*rand.Pcg64`. `binomial` inverts the CDF below a mean of 30
@@ -2600,6 +2741,11 @@ fn kruskal_wallis(values: []const f64, sizes: []const usize, scratch: []f64, ord
 fn permutation(r: *rand.Pcg64, a: []const f64, b: []const f64, rounds: u32, scratch: []f64) -> (Result, err)
 fn bonferroni(p_values: []f64)
 fn benjamini_hochberg(p_values: []f64, order: []usize) -> err
+fn kolmogorov_survival(lambda: f64) -> f64
+fn ks[Ctx: type](values: []f64, ctx: *Ctx, cdf: fn(*Ctx, f64) -> f64) -> (Result, err)
+fn anderson_darling[Ctx: type](values: []f64, ctx: *Ctx, cdf: fn(*Ctx, f64) -> f64) -> (Result, err)
+fn royston_poly(c: []const f64, x: f64) -> f64
+fn shapiro_wilk(values: []f64, scratch: []f64) -> (Result, err)
 ```
 
 Every test answers a statistic and a two-sided p-value. The rank tests use the
@@ -2692,6 +2838,9 @@ fn difference_in_place(dst: *BitSet, src: *const BitSet)
 fn complement_in_place(s: *BitSet)
 fn is_subset(a: *const BitSet, b: *const BitSet) -> bool
 fn eq(a: *const BitSet, b: *const BitSet) -> bool
+fn intersect(a: *const BitSet, b: *const BitSet, out: *BitSet)
+fn union_into(a: *const BitSet, b: *const BitSet, out: *BitSet)
+fn difference(a: *const BitSet, b: *const BitSet, out: *BitSet)
 ```
 
 Bits at indices `len..storage.len*64` are always zero. Operations requiring two
@@ -2790,6 +2939,9 @@ fn kth[T: type](items: []T, k: usize) -> T
 fn kth_deterministic[T: type](items: []T, k: usize) -> T
 fn cycle_floyd[Ctx: type](start: u64, ctx: *Ctx, next: fn(*Ctx, u64) -> u64) -> (usize, usize)
 fn cycle_brent[Ctx: type](start: u64, ctx: *Ctx, next: fn(*Ctx, u64) -> u64) -> (usize, usize)
+fn ternary_min_i64[Ctx: type](low: i64, high: i64, ctx: *Ctx, f: fn(*Ctx, i64) -> i64) -> i64
+fn ternary_min_f64[Ctx: type](low: f64, high: f64, iterations: usize, ctx: *Ctx, f: fn(*Ctx, f64) -> f64) -> f64
+fn ternary[Ctx: type](low: i64, high: i64, ctx: *Ctx, f: fn(*Ctx, i64) -> i64) -> i64
 ```
 
 Sorted-slice entry points order by `T.cmp` and answer an index; the `_by` form takes
@@ -3103,7 +3255,9 @@ type Int = struct { sign: Sign, limbs: []u32, arena: *mem.Arena }
 type Rat = struct { num: Int, den: Int }
 error DivideByZero
 error Invalid
+error NotFound
 const FORMAT_LIMBS: usize = 1024usize
+const ECM_LIMBS: usize = 64usize
 
 fn int_zero(a: *mem.Arena) -> Int
 fn make_int(a: *mem.Arena, sign: Sign, limbs: []u32) -> Int
@@ -3141,6 +3295,16 @@ fn mont_inverse32(m0: u32) -> u32
 fn mont_mul(t: []u32, out: []u32, x: []const u32, y: []const u32, m: []const u32, m_prime: u32)
 fn mont_enter(a: *mem.Arena, value: []const u32, m: []const u32) -> ([]u32, err)
 fn int_mod_pow(a: *mem.Arena, base: Int, exponent: Int, modulus: Int) -> (Int, err)
+fn ecm_reduce(a: *mem.Arena, x: Int, n: Int) -> (Int, err)
+fn ecm_mul(a: *mem.Arena, x: Int, y: Int, n: Int) -> (Int, err)
+fn ecm_add_mod(a: *mem.Arena, x: Int, y: Int, n: Int) -> (Int, err)
+fn ecm_sub_mod(a: *mem.Arena, x: Int, y: Int, n: Int) -> (Int, err)
+fn ecm_double(a: *mem.Arena, x: Int, z: Int, a24: Int, n: Int) -> (Int, Int, err)
+fn ecm_add(a: *mem.Arena, xp: Int, zp: Int, xq: Int, zq: Int, xd: Int, zd: Int, n: Int) -> (Int, Int, err)
+fn ecm_ladder(a: *mem.Arena, x: Int, z: Int, k: u64, a24: Int, n: Int) -> (Int, Int, err)
+fn ecm_is_prime(p: u64) -> bool
+fn ecm_random(a: *mem.Arena, state: *u64, n: Int) -> (Int, err)
+fn factor_ecm(a: *mem.Arena, n: Int, b1: u64, curves: usize, seed: u64) -> (Int, err)
 ```
 
 ### `e.algo.linalg.matrix`
@@ -3201,6 +3365,7 @@ fn poisson_spacing_squared(n: usize) -> f64
 fn poisson_residual(r: []f64, u: []const f64, f: []const f64)
 fn weighted_jacobi(u: []f64, f: []const f64, scratch: []f64, sweeps: u32)
 fn vcycle(a: *mem.Arena, u: []f64, f: []const f64, smooth: u32) -> err
+fn householder(x: []const f64, out: []f64) -> (f64, err)
 ```
 
 ### `e.algo.linalg.tensor`
@@ -5956,6 +6121,7 @@ fn list_head(l: *List) -> u32
 fn list_push_front(l: *List, node: u32)
 fn list_try_pop(l: *List, h: u32) -> bool
 fn list_pop_front(l: *List) -> u32
+fn hazard(slots: []Atomic[u32], retired: []u32, retired_count: []usize, freed: []u32, threads: usize, k: usize) -> (Hazards, err)
 ```
 
 Safe memory reclamation over node indices: epoch-based (`pin`, `unpin`, `retire` into the
@@ -6720,6 +6886,7 @@ fn maglev_build(names: []const str, table: []u32, scratch: []u32, m: usize) -> e
 fn fnv1a64_basis(data: []const u8, basis: u64) -> u64
 fn maglev_lookup(table: []const u32, key_hash: u64) -> u32
 fn maglev_disruption(old_table: []const u32, new_table: []const u32) -> usize
+fn maglev(names: []const str, table: []u32, scratch: []u32, m: usize) -> err
 ```
 
 `round_robin`, nginx's smooth `weighted_round_robin`, `least_connections`,
@@ -6763,6 +6930,8 @@ fn rtt_karn(e: *Rtt, sample_us: u64, was_retransmitted: bool) -> bool
 fn rtt_rto(e: *const Rtt) -> u64
 fn aimd_ack(cwnd: u64, ssthresh: u64, mss: u64) -> u64
 fn aimd_loss(cwnd: u64, mss: u64, timeout: bool) -> (u64, u64)
+fn sliding_window(window: usize, timeout: u64, sent_at: []u64, bits: u32) -> Sender
+fn selective_repeat(window: usize, timeout: u64, sent_at: []u64, acked: []u8, bits: u32) -> (SrSender, err)
 ```
 
 Clock-free state machines: Go-Back-N (`sender_send`, `sender_ack`, `sender_timeouts`,
@@ -10976,6 +11145,7 @@ fn hlc() -> Hlc
 fn hlc_now(c: *Hlc, physical: u64) -> Hlc
 fn hlc_receive(c: *Hlc, physical: u64, remote: Hlc) -> Hlc
 fn hlc_cmp(a: Hlc, b: Hlc) -> i32
+fn vector(storage: []u64, n: usize) -> []u64
 ```
 
 Lamport clocks (`lamport_tick/send/receive`), vector clocks over caller arrays
@@ -11024,6 +11194,7 @@ fn membership_suspect(t: *Membership, id: u32, now: u64) -> bool
 fn membership_confirm(t: *Membership, id: u32, now: u64) -> bool
 fn membership_refute(t: *Membership, id: u32, now: u64) -> u32
 fn membership_sweep(t: *Membership, now: u64, timeout: u64) -> usize
+fn disseminate(state: []u8, fanout: usize, origin: usize, r: *rand.Pcg64, rounds: usize) -> usize
 ```
 
 Rumour spread by push/pull rounds over a generator (`gossip_round`,
@@ -11040,6 +11211,7 @@ fn heartbeat(d: *Detector, now: u64)
 fn stats(d: *const Detector) -> (f64, f64)
 fn phi(d: *const Detector, now: u64) -> f64
 fn suspect(d: *const Detector, now: u64, threshold: f64) -> bool
+fn phi_accrual(intervals: []u64, min_std_dev: f64) -> Detector
 ```
 
 The phi accrual detector over a caller ring of inter-arrival times: `heartbeat`,
@@ -11175,6 +11347,9 @@ fn vr_request(v: *Vr, node: usize, value: i64, out: *Pool) -> err
 fn vr_primary_dead(v: *Vr, node: usize, out: *Pool) -> err
 fn vr_copy_log(v: *Vr, node: usize, from: u32, count: u64)
 fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err
+fn pump(c: *Cluster, now: u64, up: u64, out: *Pool) -> err
+fn raft_election(c: *Cluster, node: usize, now: u64, up: u64, out: *Pool) -> (Role, u64, err)
+fn raft_replicate(c: *Cluster, node: usize, now: u64, value: i64, up: u64, out: *Pool) -> (u64, err)
 ```
 
 Simulated consensus over caller message pools (node ids as mask bits): Raft
@@ -11614,11 +11789,13 @@ type Probe = struct { initiator: u32, from: u32, to: u32 }
 type Chase = struct { edges: []const Edge, site: []const u32, initiator: u32, probes: []Probe, sent: usize, seen: []bool }
 error TooSmall
 error Invalid
+const NONE: u32 = 4294967295u32
 
 fn dfs(edges: []const Edge, n: usize, u: usize, colour: []usize, depth: []usize) -> (bool, usize)
 fn wait_for_graph_cycle(edges: []const Edge, n: usize, scratch: []usize) -> (bool, usize, err)
 fn spread(c: *Chase, u: usize)
 fn chandy_misra_haas(edges: []const Edge, site: []const u32, initiator: usize, probes: []Probe, scratch: []bool) -> (bool, usize, err)
+fn wait_for_graph(holder: []const u32, waiting: []const u32, edges: []Edge, scratch: []usize) -> (usize, bool, usize, err)
 ```
 
 `wait_for_graph_cycle` (three-colour DFS) and `chandy_misra_haas` (edge-chasing probes
@@ -11663,6 +11840,7 @@ fn lease_expired(l: *const Lease, now: u64) -> bool
 fn lease_acquire(l: *Lease, holder: u64, now: u64, ttl: u64) -> bool
 fn lease_renew(l: *Lease, holder: u64, now: u64, ttl: u64) -> bool
 fn lease_due(l: *const Lease, now: u64, num: u64, den: u64) -> bool
+fn redlock(instances: []Instance, token: u64, now: u64, ttl: u64, drift: u64) -> (bool, u64)
 ```
 
 Redlock over simulated instances with skew and latency (`redlock_acquire` needing a
@@ -11681,6 +11859,7 @@ type RayNode = struct { holder: u32, asked: bool, in_cs: bool, head: usize, coun
 type Raymond = struct { nodes: []RayNode, queue: []u32 }
 error TooSmall
 error Invalid
+const DELIVER: u32 = 4294967295u32
 
 fn sent(out: []Message) -> Sent
 fn push(s: *Sent, kind: Kind, from: usize, to: usize, stamp: u64)
@@ -11695,6 +11874,13 @@ fn settle(t: *Raymond, i: usize, s: *Sent) -> bool
 fn raymond_request(t: *Raymond, i: usize, s: *Sent) -> bool
 fn raymond_receive(t: *Raymond, m: Message, s: *Sent) -> bool
 fn raymond_release(t: *Raymond, i: usize, s: *Sent)
+fn ra_in_cs(r: *const Ra) -> usize
+fn ray_in_cs(t: *const Raymond) -> usize
+fn enter(order: []u32, entered: *usize, who: usize, in_cs: usize) -> err
+fn ra_deliver(r: *Ra, s: *Sent, head: *usize, order: []u32, entered: *usize) -> err
+fn ray_deliver(t: *Raymond, s: *Sent, head: *usize, order: []u32, entered: *usize) -> err
+fn ricart_agrawala(nodes: []RaNode, deferred: []bool, schedule: []const u32, s: *Sent, order: []u32) -> (usize, err)
+fn raymond_tree(nodes: []RayNode, queue: []u32, parent: []const u32, root: usize, schedule: []const u32, s: *Sent, order: []u32) -> (usize, err)
 ```
 
 Ricart-Agrawala (`ra_request`, `ra_receive`, `ra_release`: Lamport-stamped requests
@@ -11710,6 +11896,8 @@ type Sent = struct { out: []Message, count: usize }
 type Proc = struct { state: u64, recorded: bool, snapshot: u64, markers: usize }
 type Channel = struct { recording: bool, count: usize, total: u64 }
 type Snapshot = struct { procs: []Proc, channels: []Channel }
+type OpKind = enum u8 { Send, Deliver, Initiate }
+type Op = struct { kind: OpKind, from: u32, to: u32, amount: u64 }
 error TooSmall
 error Invalid
 
@@ -11723,6 +11911,7 @@ fn snapshot_step(s: *Snapshot, m: Message, out: *Sent) -> bool
 fn snapshot_complete(s: *const Snapshot) -> bool
 fn snapshot_total(s: *const Snapshot) -> u64
 fn snapshot_live(s: *const Snapshot) -> u64
+fn chandy_lamport(procs: []Proc, channels: []Channel, initial: []const u64, script: []const Op, out: *Sent) -> (u64, bool, err)
 ```
 
 Chandy-Lamport over caller FIFO channels: `snapshot_send`, `snapshot_initiate`,

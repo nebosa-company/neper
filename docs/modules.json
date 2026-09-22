@@ -591,6 +591,8 @@
    "schedule": "scheduled",
    "direct_dependencies": [
     "e.algo.hash",
+    "e.algo.rand",
+    "e.crypto.hash",
     "e.str"
    ],
    "blocked_by": []
@@ -3446,7 +3448,8 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.rand",
-    "e.math"
+    "e.math",
+    "e.math.special"
    ],
    "blocked_by": []
   },
@@ -3516,9 +3519,10 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.mem",
+    "e.algo.disjoint_set",
+    "e.algo.graph",
     "e.data.graph",
-    "e.algo.disjoint_set"
+    "e.mem"
    ],
    "blocked_by": []
   },
@@ -3589,7 +3593,8 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.data.graph"
+    "e.data.graph",
+    "e.mem"
    ],
    "blocked_by": []
   },
