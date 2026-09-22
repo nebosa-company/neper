@@ -37,7 +37,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2†, `lib/e/gpu.e`×2†, `scripts/algos/decisions-pending.md`×2†, `src/resolve.e`×2†, `lib/e/gpu/tensor.e`×1, `lib/e/ui/app.e`×1†
+- `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2†, `lib/e/gpu.e`×2†, `scripts/algos/batch45.json`×2, `scripts/algos/decisions-pending.md`×2†, `src/resolve.e`×2†, `lib/e/gpu/tensor.e`×1
 - `queue_with`: `lib/e/gpu.e`×2†
 - `upload`: `lib/e/ui/asset.e`×8, `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2†, `lib/e/fmt/brotli.e`×1‡, `lib/e/gfx/image.e`×1, `lib/e/gfx/scene.e`×1†
 - `download`: `lib/e/gpu.e`×4†, `lib/e/gpu/tensor.e`×3, `lib/e/fmt/brotli.e`×1‡

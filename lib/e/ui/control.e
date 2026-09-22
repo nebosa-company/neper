@@ -710,7 +710,8 @@ fn ring_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
 // A circle, or the arc from the top clockwise through `share` of it, as cubic
 // quarter turns and one shorter piece; `kappa` puts the control points on the circle.
 fn arc_path(a: *mem.Arena, cx: f32, cy: f32, radius: f32, share: f32) -> (geometry.Path, err) {
-    let (pb, pb_error) = geometry.path_builder(a, 12usize, 40usize)
+    // A move, three quarter cubics and a ten-chord fan is fourteen verbs (D913).
+    let (pb, pb_error) = geometry.path_builder(a, 16usize, 40usize)
     if pb_error != ok { ret (zero, TooLarge) }
     var builder = pb
     var remaining = share * 4.0

@@ -65,7 +65,7 @@ type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32 }
-type RendererState = struct { arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, closed: bool }
+type RendererState = struct { arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, closed: bool }
 type TargetState = struct { target: *gpu.Target }
 
 // ------------------------------------------------------------------ the builder
@@ -968,14 +968,15 @@ fn accumulate_edge(acc: []f32, width: usize, height: usize, e: Edge) {
     }
 }
 
-// The coverage of the accumulated edges, row by row, into `out` (`width * height`).
+// The coverage of the accumulated edges, row by row, into `out` (`width * height`),
+// within the edges' box alone: outside it `out` is stale and never read (D913).
 fn resolve_coverage(s: *RendererState, out: []f32) {
     let stride = s.width + 2usize
-    var y = 0usize
-    while y < s.height {
+    var y = s.box_y0
+    while y < s.box_y1 {
         var sum: f32 = 0.0
-        var x = 0usize
-        while x < s.width {
+        var x = s.box_x0
+        while x < s.box_x1 {
             sum = sum + s.acc[y * stride + x]
             var c = sum
             if c < 0.0 { c = 0.0 - c }
@@ -987,8 +988,51 @@ fn resolve_coverage(s: *RendererState, out: []f32) {
     }
 }
 
+// The pixel box the edges reach, clamped to the frame; a command clears, resolves
+// and paints that box and not the frame (D913: a frame of a few hundred commands
+// was three whole-frame passes each).
+fn edge_box(s: *RendererState) {
+    var x0: f32 = f32(s.width)
+    var y0: f32 = f32(s.height)
+    var x1: f32 = 0.0
+    var y1: f32 = 0.0
+    var i = 0usize
+    while i < s.edge_count {
+        let e = s.edges[i]
+        if e.x0 < x0 { x0 = e.x0 }
+        if e.x1 < x0 { x0 = e.x1 }
+        if e.x0 > x1 { x1 = e.x0 }
+        if e.x1 > x1 { x1 = e.x1 }
+        if e.y0 < y0 { y0 = e.y0 }
+        if e.y1 < y0 { y0 = e.y1 }
+        if e.y0 > y1 { y1 = e.y0 }
+        if e.y1 > y1 { y1 = e.y1 }
+        i += 1usize
+    }
+    if s.edge_count == 0usize || !(x1 > x0) || !(y1 > y0) {
+        s.box_x0 = 0usize
+        s.box_y0 = 0usize
+        s.box_x1 = 0usize
+        s.box_y1 = 0usize
+        ret
+    }
+    s.box_x0 = 0usize
+    s.box_y0 = 0usize
+    if x0 > 0.0 { s.box_x0 = usize(math.floor[f32](x0)) }
+    if y0 > 0.0 { s.box_y0 = usize(math.floor[f32](y0)) }
+    // The row's running sum ends one pixel past the last edge.
+    s.box_x1 = s.width
+    s.box_y1 = s.height
+    if x1 + 2.0 < f32(s.width) { s.box_x1 = usize(math.ceil[f32](x1)) + 1usize }
+    if y1 < f32(s.height) { s.box_y1 = usize(math.ceil[f32](y1)) }
+    if s.box_x0 > s.width { s.box_x0 = s.width }
+    if s.box_y0 > s.height { s.box_y0 = s.height }
+}
+
 fn rasterize_edges(s: *RendererState, coverage: []f32) {
-    clear_floats(s.acc, (s.width + 2usize) * s.height)
+    edge_box(s)
+    let stride = s.width + 2usize
+    clear_floats(s.acc[s.box_y0 * stride..s.box_y1 * stride], (s.box_y1 - s.box_y0) * stride)
     var i = 0usize
     while i < s.edge_count {
         accumulate_edge(s.acc, s.width, s.height, s.edges[i])
@@ -1053,7 +1097,15 @@ fn paint_coverage(s: *RendererState, state: DrawState, coverage: []f32, brush: *
     let (inverse, invertible) = transform_invert(state.transform)
     if !invertible { ret }
     let canvas = s.canvases[state.layer].data
-    let (x0, y0, x1, y1) = scissor_bounds(s, state.scissor)
+    let (sx0, sy0, sx1, sy1) = scissor_bounds(s, state.scissor)
+    var x0 = sx0
+    var y0 = sy0
+    var x1 = sx1
+    var y1 = sy1
+    if s.box_x0 > x0 { x0 = s.box_x0 }
+    if s.box_y0 > y0 { y0 = s.box_y0 }
+    if s.box_x1 < x1 { x1 = s.box_x1 }
+    if s.box_y1 < y1 { y1 = s.box_y1 }
     var y = y0
     while y < y1 {
         var x = x0
@@ -1495,7 +1547,7 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
     var states: [32]DrawState = zero
     var depth = 0usize
     var current: DrawState = zero
-    current.transform = geometry.transform_identity()
+    current.transform = geometry.transform_scale(s.scale, s.scale)
     current.scissor = geometry.Rect { x: 0.0, y: 0.0, width: f32(s.width), height: f32(s.height) }
     current.opacity = 1.0
     var mask_count = 0usize
@@ -1604,7 +1656,10 @@ fn push_mask(s: *RendererState, current: *DrawState, mask_count: *usize, coverag
     let count = s.width * s.height
     var i = 0usize
     while i < count {
-        var c = coverage[i]
+        var c: f32 = 0.0
+        let x = i % s.width
+        let y = i / s.width
+        if x >= s.box_x0 && x < s.box_x1 && y >= s.box_y0 && y < s.box_y1 { c = coverage[i] }
         if current.has_mask { c = c * s.masks[current.mask].data[i] }
         mask[i] = c
         i += 1usize
@@ -1623,6 +1678,12 @@ fn from_gpu(e: err) -> err {
 }
 
 fn render(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Size) -> err {
+    ret render_scaled(r, scene, render_target, size, 1.0)
+}
+
+// `render` under a device scale: `size` is logical, the frame is `size * scale`
+// pixels, and every command is drawn through that scale (D913).
+fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Size, scale: f32) -> err {
     let (s, state_error) = renderer_state(r)
     if state_error != ok { ret state_error }
     let (slot, slot_error) = scene_slot(s, scene)
@@ -1630,10 +1691,12 @@ fn render(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Si
     let target_state = mem.cast[*TargetState](render_target.state)
     if mem.address_of(target_state) == 0usize { ret Invalid }
     if !(size.width >= 1.0) || !(size.height >= 1.0) || !finite(size.width) || !finite(size.height) { ret Invalid }
+    if !(scale > 0.0) || !finite(scale) { ret Invalid }
     let (frame, acquire_error) = gpu.acquire(target_state.target)
     if acquire_error != ok { ret from_gpu(acquire_error) }
-    var width = usize(math.ceil[f32](size.width))
-    var height = usize(math.ceil[f32](size.height))
+    s.scale = scale
+    var width = usize(math.ceil[f32](size.width * scale))
+    var height = usize(math.ceil[f32](size.height * scale))
     if width > usize(frame.image.width) { width = usize(frame.image.width) }
     if height > usize(frame.image.height) { height = usize(frame.image.height) }
     // The buffers, each remade when a frame outgrows it.

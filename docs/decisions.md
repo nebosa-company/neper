@@ -17900,3 +17900,54 @@ bootstrap-seeded surface), `e.thread.fiber` (a context switch belongs in
 the runtime prefix) and `e.fmt.opus` (a codec of several thousand lines).
 The `e.ui` names went to the UI session (D904).
 
+
+## D913 — The first desktop application: a Windows gallery of every control, and what running one taught the chain
+
+`examples/ui/win/main.e` is the first program to put the whole UI chain in
+front of a person: `e.ui.app` over a real Win32 window, Segoe UI from
+`C:\Windows\Fonts`, and one tab per family -- buttons, choice, range,
+fields, surfaces, feedback, collections, overlays -- with every control of
+`e.ui.control` and the representative ones of `e.ui.collection`,
+`e.ui.navigation` and `e.ui.overlay`, each live over a model the actions
+change. It starts on the tab named by its first argument and writes the
+last frame's cost into the title. Five things the fixtures never showed
+came out of the first hour with a mouse, and each is fixed where every
+caller routes through rather than in the example:
+
+1. The window was drawn at logical size into a physical framebuffer, so at
+   150% the page filled two thirds of the window. `scene.render_scaled`
+   takes the host scale and seeds the draw state's transform with it;
+   `render` is `render_scaled` at one, and `e.ui.app` passes
+   `metrics.scale`. Pointer input was already divided by the scale.
+2. A frame took 300 ms: every command cleared the accumulator, resolved
+   coverage and painted through the scissor across the whole frame, three
+   whole-frame passes each. The rasteriser now keeps the box its edges
+   reach and clears, resolves and paints that box alone; a mask reads
+   coverage inside the box and zero outside. The gallery's first frame
+   fell to ~130 ms and a hover repaint to ~30 ms; `gfx_scene` and the
+   seventy-two `ui_*` fixtures answer as before.
+3. `present_frame` requested a frame that came back as the next Frame
+   event, which was itself a reason to present: a CPU renderer at 100% for
+   ever. The app keeps an `echo` flag and skips exactly the Frame its own
+   present queued; a host's Frame (a repaint asked of the window) still
+   presents.
+4. A list row grew its item to a flex share even with no fixed extent, and
+   a flex share under an unbounded height (a list in a scroll view) is no
+   height at all, so the selected row's fill was an invalid rect. A row
+   grows its item only when it has an extent. In the same spirit,
+   `widget.measure` now bounds a node's content by its own fixed width and
+   height, so a grid 180 px wide inside an unbounded row measures its
+   rows at 180 px instead of as one.
+5. `control.arc_path` sized its builder for twelve verbs; a share past
+   three quarters is a move, three cubics and a ten-chord fan -- fourteen.
+   Every ring, gauge and dial at 76%..99% answered `TooLarge`; the builder
+   holds sixteen.
+
+Two rules for the next application, learned by dangling into them: an
+action passed as `*const widget.Submit` must live in the build arena or
+the model, never on the page function's stack (the element keeps the
+pointer past the build), and the build arena itself must be a field of
+the model, since a control's custom paint keeps `*mem.Arena` for its paint
+callback. And a frame arena of 8 MB is not enough for a page of text under
+Segoe UI -- shaping asks the arena per character -- so the gallery gives
+`e.ui.app` 64 MB, reserved not committed.

@@ -4,7 +4,8 @@
 // it into dispatch, and when a frame is due -- the first step, an event delivered,
 // an element invalidated, a resize -- resets the frame arena, builds the tree
 // through the builder, reconciles it under the window's logical size, renders it
-// into the window's target and shows it. `run` repeats `step`; `stop` ends it.
+// into the window's target at the host's scale and shows it. `run` repeats `step`;
+// `stop` ends it.
 //
 // The builder is generic over its context and the app is not: `init[Ctx]` keeps
 // the context erased to `*void` and the build function's bits behind a pun a
@@ -43,6 +44,7 @@ type State = struct {
     build_bits: usize,
     trampoline: fn(*void, usize, *widget.BuildContext) -> (widget.Node, err),
     frame_due: bool,
+    echo: bool,
     stopped: bool,
     closed: bool,
     frames: u64,
@@ -122,6 +124,13 @@ fn step(app: *App, timeout: time.Duration) -> (bool, err) {
             s.stopped = true
             ret (false, ok)
         }
+        // The frame `present_frame` requested comes back as the next Frame event:
+        // that echo is not a reason for another frame, or a CPU renderer never
+        // rests; a host's own Frame (a repaint asked of the window) still is (D913).
+        if event.tag == .Frame && s.echo {
+            s.echo = false
+            continue
+        }
         if event.tag == .Resize || event.tag == .Frame { s.frame_due = true }
         let dispatch_error = widget.dispatch(&s.runtime, event)
         if dispatch_error != ok { ret (false, dispatch_error) }
@@ -153,11 +162,12 @@ fn present_frame(s: *State) -> err {
     if reconcile_error != ok { ret reconcile_error }
     let (canvas, canvas_error) = window.draw_target(&s.win)
     if canvas_error != ok { ret Failed }
-    let render_error = scene.render(&s.renderer, compiled, canvas, metrics.logical_size)
+    let render_error = scene.render_scaled(&s.renderer, compiled, canvas, metrics.logical_size, metrics.scale)
     if render_error != ok { ret render_error }
     if window.request_frame(&s.win) != ok { ret Failed }
     s.frames += 1u64
     s.frame_due = false
+    s.echo = true
     ret ok
 }
 

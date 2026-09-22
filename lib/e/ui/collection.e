@@ -39,8 +39,10 @@ fn row(a: *mem.Arena, t: *const control.Theme, item: widget.Node, key: widget.Ke
     if separator { parts_count = 2usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, parts_count)
     if parts_error != ok { ret (zero, TooLarge) }
+    // The item fills a fixed extent; with none the row is as tall as the item, since a
+    // flex share under an unbounded height (a list in a scroll view) is no height at all.
     var grown = item
-    grown.style.height = style.Length { Flex: 1.0 }
+    if extent > 0.0 { grown.style.height = style.Length { Flex: 1.0 } }
     parts[0usize] = grown
     if separator {
         let (line, line_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)

@@ -1038,6 +1038,12 @@ fn measure(s: *State, a: *mem.Arena, node: *const Node, limits: ui_layout.Constr
     let horizontal_extra = margin.left + margin.right + padding.left + padding.right
     let vertical_extra = margin.top + margin.bottom + padding.top + padding.bottom
     var inner = ui_layout.Constraints { min_width: 0.0, max_width: limits.max_width - horizontal_extra, min_height: 0.0, max_height: limits.max_height - vertical_extra }
+    // A fixed size bounds the content too: a wrap 180 px wide in an unbounded row
+    // measures its rows at 180 px, not as one row (D913).
+    let (own_width, has_own_width) = style.px_of(node.style.width)
+    if has_own_width && own_width - padding.left - padding.right < inner.max_width { inner.max_width = own_width - padding.left - padding.right }
+    let (own_height, has_own_height) = style.px_of(node.style.height)
+    if has_own_height && own_height - padding.top - padding.bottom < inner.max_height { inner.max_height = own_height - padding.top - padding.bottom }
     if inner.max_width < 0.0 { inner.max_width = 0.0 }
     if inner.max_height < 0.0 { inner.max_height = 0.0 }
     let (content, content_error) = measure_content(s, a, node, inner)
