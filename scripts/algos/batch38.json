@@ -1,0 +1,20 @@
+{
+ "decision": "D880",
+ "modules": [
+  {"name": "e.concurrent.deque", "deps": ["e.atomic"], "fixture": "concurrent_deque_stack", "anchor": "### `e.concurrent.queue`\n",
+   "note": "A Chase-Lev work-stealing deque over a caller power-of-two buffer, generic over the item\ntype with `Atomic[i64]` ends: the owner's `push` and `pop`, any thread's `steal`\n(`Stolen`, `Empty` or `Retry`), `len`, `capacity`; no growth, `Full` instead.",
+   "comment": "`e.concurrent.deque` and `e.concurrent.stack`: scripted single-thread sequences equal to a replica, then one owner and three thieves taking twenty thousand items exactly once, and four threads pushing and popping through a Treiber stack with every value seen once"},
+  {"name": "e.concurrent.stack", "deps": ["e.atomic"], "anchor": "### `e.concurrent.queue`\n",
+   "note": "A lock-free Treiber stack over a caller node pool: the head word carries the node index\nand a version counter so a compare-and-swap cannot be fooled by a recycled node; the\nfree list is a second such stack. `push` (`Full` when the pool is exhausted), `pop`,\n`len`, `is_empty`.",
+   "comment": "`e.concurrent.stack` (shared fixture with e.concurrent.deque)"},
+  {"name": "e.concurrent.reclaim", "deps": ["e.atomic", "e.mem"], "fixture": "concurrent_reclaim", "anchor": "### `e.concurrent.queue`\n",
+   "note": "Safe memory reclamation over node indices: epoch-based (`pin`, `unpin`, `retire` into the\nglobal epoch's bucket, `try_advance`, `collect`) and hazard pointers (`protect`,\n`protect_validated`, `clear`, `retire_hazard`, `scan`, `is_protected`), a shared free\n`Sink` with an optional hook, and a lock-free list the two schemes protect.",
+   "comment": "`e.concurrent.reclaim`: the replica's exact free sets after each epoch advance and each scan, then four threads pushing, popping and retiring through the list under each scheme with a per-node reader count reporting zero frees while in use"},
+  {"name": "e.text.segment", "deps": [], "fixture": "text_segment", "anchor": "### `e.text.shape`\n",
+   "note": "UAX #29 word boundaries (`words`, `is_word_boundary`, `next_word`, `word_break_property`)\nand UAX #14 line-break opportunities (`line_breaks`, `line_break_at`, `next_line_break`,\n`line_break_class`) for Unicode 15.0 over generated run tables, with the LB25 number\ntailoring the 15.0 test file assumes.",
+   "comment": "`e.text.segment`: sampled test lines in the fixture, and the module passes all 1,823 WordBreakTest and 7,654 LineBreakTest lines through a scratch driver"},
+  {"name": "e.thread.pool", "deps": ["e.atomic", "e.concurrent.queue", "e.mem", "e.sync", "e.thread"], "fixture": "thread_pool", "anchor": "### `e.thread`\n",
+   "note": "Task ids over one context type: `pool`, `submit`, `try_submit`, `run` (submit all and\nwait), `shutdown`; `fork_join` (one-level range splitting), `work_stealing` (a private\nChase-Lev deque per worker with a remaining-count termination), `run_dag` (in-degrees\nreleased by finishing tasks, cycles reported) and `edf`/`edf_order`.",
+   "comment": "`e.thread.pool`: a thousand tasks summing once each, a fork-join sum equal to the sequential one, uneven tasks spread over at least two stealing workers, two hundred DAG edges all ordered, deadlines in order"}
+ ]
+}

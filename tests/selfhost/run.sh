@@ -2044,6 +2044,26 @@ text_bidi_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$text_bidi_written" = 'executable written' ]
 chmod +x "$test_build/text-bidi-selfhost"
 "$test_build/text-bidi-selfhost"
+# `e.concurrent.deque` and `e.concurrent.stack`: scripted single-thread sequences equal to a replica, then one owner and three thieves taking twenty thousand items exactly once, and four threads pushing and popping through a Treiber stack with every value seen once (D880).
+concurrent_deque_stack_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/concurrent_deque_stack/src/main.e" "$repo" x64 linux "$test_build/concurrent-deque-stack-selfhost")
+[ "$concurrent_deque_stack_written" = 'executable written' ]
+chmod +x "$test_build/concurrent-deque-stack-selfhost"
+"$test_build/concurrent-deque-stack-selfhost"
+# `e.concurrent.reclaim`: the replica's exact free sets after each epoch advance and each scan, then four threads pushing, popping and retiring through the list under each scheme with a per-node reader count reporting zero frees while in use (D880).
+concurrent_reclaim_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/concurrent_reclaim/src/main.e" "$repo" x64 linux "$test_build/concurrent-reclaim-selfhost")
+[ "$concurrent_reclaim_written" = 'executable written' ]
+chmod +x "$test_build/concurrent-reclaim-selfhost"
+"$test_build/concurrent-reclaim-selfhost"
+# `e.text.segment`: sampled test lines in the fixture, and the module passes all 1,823 WordBreakTest and 7,654 LineBreakTest lines through a scratch driver (D880).
+text_segment_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_segment/src/main.e" "$repo" x64 linux "$test_build/text-segment-selfhost")
+[ "$text_segment_written" = 'executable written' ]
+chmod +x "$test_build/text-segment-selfhost"
+"$test_build/text-segment-selfhost"
+# `e.thread.pool`: a thousand tasks summing once each, a fork-join sum equal to the sequential one, uneven tasks spread over at least two stealing workers, two hundred DAG edges all ordered, deadlines in order (D880).
+thread_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/thread_pool/src/main.e" "$repo" x64 linux "$test_build/thread-pool-selfhost")
+[ "$thread_pool_written" = 'executable written' ]
+chmod +x "$test_build/thread-pool-selfhost"
+"$test_build/thread-pool-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

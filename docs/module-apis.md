@@ -3436,6 +3436,121 @@ UAX #9 for Unicode 15.0 over generated tables: `class_of`, `paragraph_level`,
 `resolve_levels` (explicit embeddings and isolates, weak and neutral types, bracket pairs,
 implicit levels), `reorder` and `reorder_line` (L1 and L2), `mirror` and `is_mirrored`.
 
+### `e.text.segment`
+
+```neper
+type WordBreak = enum u8 { Other, CR, LF, Newline, Extend, ZWJ, RegionalIndicator, Format, Katakana, HebrewLetter, ALetter, SingleQuote, DoubleQuote, MidNumLet, MidLetter, MidNum, Numeric, ExtendNumLet, WSegSpace }
+type LineBreak = enum u8 { XX, AI, AL, B2, BA, BB, BK, CB, CJ, CL, CM, CP, CR, EB, EM, EX, GL, H2, H3, HL, HY, ID, IN, IS, JL, JT, JV, LF, NL, NS, NU, OP, PO, PR, QU, RI, SA, SG, SP, SY, WJ, ZW, ZWJ }
+error TooSmall
+const W_OTHER: u32 = 0u32
+const W_CR: u32 = 1u32
+const W_LF: u32 = 2u32
+const W_NEWLINE: u32 = 3u32
+const W_EXTEND: u32 = 4u32
+const W_ZWJ: u32 = 5u32
+const W_RI: u32 = 6u32
+const W_FORMAT: u32 = 7u32
+const W_KATAKANA: u32 = 8u32
+const W_HL: u32 = 9u32
+const W_ALETTER: u32 = 10u32
+const W_SQ: u32 = 11u32
+const W_DQ: u32 = 12u32
+const W_MIDNUMLET: u32 = 13u32
+const W_MIDLETTER: u32 = 14u32
+const W_MIDNUM: u32 = 15u32
+const W_NUMERIC: u32 = 16u32
+const W_EXTENDNUMLET: u32 = 17u32
+const W_WSEGSPACE: u32 = 18u32
+const L_XX: u32 = 0u32
+const L_AI: u32 = 1u32
+const L_AL: u32 = 2u32
+const L_B2: u32 = 3u32
+const L_BA: u32 = 4u32
+const L_BB: u32 = 5u32
+const L_BK: u32 = 6u32
+const L_CB: u32 = 7u32
+const L_CJ: u32 = 8u32
+const L_CL: u32 = 9u32
+const L_CM: u32 = 10u32
+const L_CP: u32 = 11u32
+const L_CR: u32 = 12u32
+const L_EB: u32 = 13u32
+const L_EM: u32 = 14u32
+const L_EX: u32 = 15u32
+const L_GL: u32 = 16u32
+const L_H2: u32 = 17u32
+const L_H3: u32 = 18u32
+const L_HL: u32 = 19u32
+const L_HY: u32 = 20u32
+const L_ID: u32 = 21u32
+const L_IN: u32 = 22u32
+const L_IS: u32 = 23u32
+const L_JL: u32 = 24u32
+const L_JT: u32 = 25u32
+const L_JV: u32 = 26u32
+const L_LF: u32 = 27u32
+const L_NL: u32 = 28u32
+const L_NS: u32 = 29u32
+const L_NU: u32 = 30u32
+const L_OP: u32 = 31u32
+const L_PO: u32 = 32u32
+const L_PR: u32 = 33u32
+const L_QU: u32 = 34u32
+const L_RI: u32 = 35u32
+const L_SA: u32 = 36u32
+const L_SG: u32 = 37u32
+const L_SP: u32 = 38u32
+const L_SY: u32 = 39u32
+const L_WJ: u32 = 40u32
+const L_ZW: u32 = 41u32
+const L_ZWJ: u32 = 42u32
+const L_OP_EA: u32 = 64u32
+const L_CP_EA: u32 = 65u32
+const L_EB_CN: u32 = 66u32
+const NONE: u32 = 255u32
+const VARIANT: u32 = 64u32
+const EP_BIT: u32 = 128u32
+
+fn version() -> str
+fn scalar_at(table: str, pos: usize) -> u32
+fn run_value(table: str, scalar: u32) -> u8
+fn wb_raw(cp: u32) -> u32
+fn wb_code(cp: u32) -> u32
+fn is_extended_pictographic(cp: u32) -> bool
+fn word_break_property(cp: u32) -> WordBreak
+fn lb_raw(cp: u32) -> u32
+fn line_break_class(cp: u32) -> LineBreak
+fn is_efz(code: u32) -> bool
+fn is_ahletter(code: u32) -> bool
+fn is_mid_letter_q(code: u32) -> bool
+fn is_mid_num_q(code: u32) -> bool
+fn is_word_newline(code: u32) -> bool
+fn word_base_before(text: []const u32, i: usize) -> (usize, u32)
+fn is_word_boundary(text: []const u32, i: usize) -> bool
+fn next_word(text: []const u32, from: usize) -> usize
+fn words(text: []const u32, boundaries: []usize) -> (usize, err)
+fn lb_resolved(cp: u32) -> u32
+fn is_op(code: u32) -> bool
+fn is_cp(code: u32) -> bool
+fn is_id(code: u32) -> bool
+fn is_alhl(code: u32) -> bool
+fn is_attachable(code: u32) -> bool
+fn is_hangul(code: u32) -> bool
+fn is_prefix(code: u32) -> bool
+fn refuses_attachment(code: u32) -> bool
+fn line_base_before(text: []const u32, i: usize) -> (usize, u32)
+fn line_break_at(text: []const u32, i: usize) -> u8
+fn next_line_break(text: []const u32, from: usize) -> (usize, bool)
+fn line_breaks(text: []const u32, opportunities: []u8) -> err
+fn wb_table() -> str
+fn lb_table() -> str
+```
+
+UAX #29 word boundaries (`words`, `is_word_boundary`, `next_word`, `word_break_property`)
+and UAX #14 line-break opportunities (`line_breaks`, `line_break_at`, `next_line_break`,
+`line_break_class`) for Unicode 15.0 over generated run tables, with the LB25 number
+tailoring the 15.0 test file assumes.
+
 ### `e.text.shape`
 
 ```neper
@@ -4839,6 +4954,50 @@ supported containment facility established before child code executes; unsupport
 containment is rejected before spawning. No shell is inserted. Child-only mode
 does not promise descendant cleanup. See SL05 for platform limits and test cases.
 
+### `e.thread.pool`
+
+```neper
+type Pool[Ctx: type] = struct { state: *void }
+type State[Ctx: type] = struct { q: queue.Queue[u32], ctx: *Ctx, task: fn(*Ctx, u32), pending: Atomic[u32], lock: sync.Mutex, idle: sync.Condition, threads: []thread.Thread, started: usize, deps: []const u32, dep_starts: []const usize, indegree: []Atomic[u32], dag_nodes: usize }
+type Fork[Ctx: type] = struct { ctx: *Ctx, leaf: fn(*Ctx, usize, usize), lo: usize, hi: usize, grain: usize }
+type Deque = struct { items: []u32, top: Atomic[i64], bottom: Atomic[i64], mask: usize }
+type Steal[Ctx: type] = struct { ctx: *Ctx, task: fn(*Ctx, u32), deques: []Deque, remaining: Atomic[u32], counts: []u32 }
+type Thief[Ctx: type] = struct { pool: *Steal[Ctx], index: usize }
+error Invalid
+error Full
+error TooSmall
+
+fn state_of[Ctx: type](p: *Pool[Ctx]) -> *State[Ctx]
+fn worker_main[Ctx: type](s: *State[Ctx])
+fn finish_one[Ctx: type](s: *State[Ctx])
+fn release_dependents[Ctx: type](s: *State[Ctx], id: u32)
+fn submit_state[Ctx: type](s: *State[Ctx], id: u32) -> err
+fn wait_idle[Ctx: type](s: *State[Ctx])
+fn pool[Ctx: type](a: *mem.Arena, workers: usize, queue_capacity: usize, ctx: *Ctx, task: fn(*Ctx, u32)) -> (Pool[Ctx], err)
+fn submit[Ctx: type](p: *Pool[Ctx], id: u32) -> err
+fn try_submit[Ctx: type](p: *Pool[Ctx], id: u32) -> err
+fn run[Ctx: type](p: *Pool[Ctx], ids: []const u32) -> err
+fn shutdown[Ctx: type](p: *Pool[Ctx]) -> err
+fn fork_task[Ctx: type](f: *Fork[Ctx], id: u32)
+fn fork_join[Ctx: type](a: *mem.Arena, workers: usize, ctx: *Ctx, lo: usize, hi: usize, grain: usize, leaf: fn(*Ctx, usize, usize)) -> err
+fn deque_push(d: *Deque, v: u32)
+fn deque_take(d: *Deque) -> (u32, bool)
+fn deque_steal(d: *Deque) -> (u32, bool)
+fn steal_run[Ctx: type](s: *Steal[Ctx], index: usize, id: u32)
+fn steal_main[Ctx: type](w: *Thief[Ctx])
+fn work_stealing[Ctx: type](a: *mem.Arena, workers: usize, ctx: *Ctx, task: fn(*Ctx, u32), ids: []const u32, counts: []u32) -> err
+fn run_dag[Ctx: type](p: *Pool[Ctx], deps: []const u32, dep_starts: []const usize, indegree: []Atomic[u32]) -> err
+fn later(deadlines: []const u64, x: u32, y: u32) -> bool
+fn sift(deadlines: []const u64, out: []u32, root: usize, end: usize)
+fn edf_order(deadlines: []const u64, out: []u32) -> err
+fn edf[Ctx: type](p: *Pool[Ctx], deadlines: []const u64, ids: []const u32, order: []u32) -> err
+```
+
+Task ids over one context type: `pool`, `submit`, `try_submit`, `run` (submit all and
+wait), `shutdown`; `fork_join` (one-level range splitting), `work_stealing` (a private
+Chase-Lev deque per worker with a remaining-count termination), `run_dag` (in-degrees
+released by finishing tasks, cycles reported) and `edf`/`edf_order`.
+
 ### `e.thread`
 
 ```neper
@@ -4938,6 +5097,96 @@ fn capacity[T: type](c: *const Channel[T]) -> usize
 
 A capacity of zero is invalid. Closing wakes all waiters; buffered values remain
 receivable before `Closed` is returned.
+
+### `e.concurrent.deque`
+
+```neper
+type Deque[T: type] = struct { items: []T, top: Atomic[i64], bottom: Atomic[i64], mask: usize }
+type Outcome = enum u8 { Stolen, Empty, Retry }
+error Invalid
+error Full
+
+fn deque[T: type](items: []T) -> (Deque[T], err)
+fn push[T: type](d: *Deque[T], v: T) -> err
+fn pop[T: type](d: *Deque[T]) -> (T, bool)
+fn steal[T: type](d: *Deque[T]) -> (T, Outcome)
+fn len[T: type](d: *Deque[T]) -> usize
+fn capacity[T: type](d: *const Deque[T]) -> usize
+```
+
+A Chase-Lev work-stealing deque over a caller power-of-two buffer, generic over the item
+type with `Atomic[i64]` ends: the owner's `push` and `pop`, any thread's `steal`
+(`Stolen`, `Empty` or `Retry`), `len`, `capacity`; no growth, `Full` instead.
+
+### `e.concurrent.stack`
+
+```neper
+type Stack = struct { head: Atomic[u64], free: Atomic[u64], count: Atomic[u64], next: []u32, value: []u64 }
+error Invalid
+error Full
+const NIL: u32 = 4294967295u32
+
+fn pack(index: u32, version: u64) -> u64
+fn index_of(word: u64) -> u32
+fn version_of(word: u64) -> u64
+fn stack(next: []u32, value: []u64) -> (Stack, err)
+fn take(s: *Stack, list: *Atomic[u64]) -> u32
+fn give(s: *Stack, list: *Atomic[u64], i: u32)
+fn push(s: *Stack, v: u64) -> err
+fn pop(s: *Stack) -> (u64, bool)
+fn len(s: *Stack) -> usize
+fn is_empty(s: *Stack) -> bool
+fn capacity(s: *const Stack) -> usize
+```
+
+A lock-free Treiber stack over a caller node pool: the head word carries the node index
+and a version counter so a compare-and-swap cannot be fooled by a recycled node; the
+free list is a second such stack. `push` (`Full` when the pool is exhausted), `pop`,
+`len`, `is_empty`.
+
+### `e.concurrent.reclaim`
+
+```neper
+type Sink = struct { freed: []u32, freed_count: Atomic[u64], on_free: fn(*void, u32), ctx: *void, hooked: bool }
+type Epoch = struct { global: Atomic[u64], local: []Atomic[u64], retired: []u32, retired_count: []Atomic[u64], bucket_cap: usize, threads: usize, sink: Sink }
+type Hazards = struct { slots: []Atomic[u32], retired: []u32, retired_count: []usize, retire_cap: usize, threshold: usize, threads: usize, k: usize, sink: Sink }
+type List = struct { head: Atomic[u32], next: []Atomic[u32] }
+error Full
+error Invalid
+error TooSmall
+const NONE: u32 = 4294967295u32
+
+fn sink_free(s: *Sink, node: u32)
+fn on_free(s: *Sink, f: fn(*void, u32), ctx: *void)
+fn freed_count(s: *Sink) -> usize
+fn epoch(local: []Atomic[u64], retired: []u32, retired_count: []Atomic[u64], freed: []u32, threads: usize) -> (Epoch, err)
+fn pin(e: *Epoch, thread: usize)
+fn unpin(e: *Epoch, thread: usize)
+fn is_pinned(e: *Epoch, thread: usize) -> bool
+fn retire(e: *Epoch, thread: usize, node: u32) -> err
+fn all_at(e: *Epoch, g: u64) -> bool
+fn free_bucket(e: *Epoch, bucket: usize)
+fn try_advance(e: *Epoch, thread: usize) -> bool
+fn global_epoch(e: *Epoch) -> u64
+fn collect(e: *Epoch, thread: usize) -> usize
+fn hazards(slots: []Atomic[u32], retired: []u32, retired_count: []usize, freed: []u32, threads: usize, k: usize) -> (Hazards, err)
+fn protect(h: *Hazards, thread: usize, slot: usize, node: u32)
+fn protect_validated[Ctx: type](h: *Hazards, thread: usize, slot: usize, load: fn(*Ctx) -> u32, ctx: *Ctx) -> u32
+fn clear(h: *Hazards, thread: usize, slot: usize)
+fn is_protected(h: *Hazards, node: u32) -> bool
+fn retire_hazard(h: *Hazards, thread: usize, node: u32) -> err
+fn scan(h: *Hazards, thread: usize) -> usize
+fn list(next: []Atomic[u32]) -> List
+fn list_head(l: *List) -> u32
+fn list_push_front(l: *List, node: u32)
+fn list_try_pop(l: *List, h: u32) -> bool
+fn list_pop_front(l: *List) -> u32
+```
+
+Safe memory reclamation over node indices: epoch-based (`pin`, `unpin`, `retire` into the
+global epoch's bucket, `try_advance`, `collect`) and hazard pointers (`protect`,
+`protect_validated`, `clear`, `retire_hazard`, `scan`, `is_protected`), a shared free
+`Sink` with an optional hook, and a lock-free list the two schemes protect.
 
 ### `e.concurrent.queue`
 

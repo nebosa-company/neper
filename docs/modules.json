@@ -326,7 +326,12 @@
     "e.db.query",
     "e.db.storage",
     "e.fmt.flac",
-    "e.text.bidi"
+    "e.text.bidi",
+    "e.concurrent.deque",
+    "e.concurrent.stack",
+    "e.concurrent.reclaim",
+    "e.text.segment",
+    "e.thread.pool"
    ]
   },
   {
@@ -848,6 +853,40 @@
     "e.mem",
     "e.sync",
     "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.concurrent.deque",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.atomic"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.concurrent.stack",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.atomic"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.concurrent.reclaim",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.atomic",
+    "e.mem"
    ],
    "blocked_by": []
   },
@@ -3012,6 +3051,15 @@
    "blocked_by": []
   },
   {
+   "name": "e.text.segment",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
    "name": "e.thread",
    "layer": 4,
    "surface": "source",
@@ -4402,6 +4450,21 @@
    "direct_dependencies": [
     "e.algo.hash",
     "e.dist.deadlock"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.thread.pool",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.atomic",
+    "e.concurrent.queue",
+    "e.mem",
+    "e.sync",
+    "e.thread"
    ],
    "blocked_by": []
   }

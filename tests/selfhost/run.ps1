@@ -2278,6 +2278,30 @@ $textBidiWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $textBidiWritten -ne 'executable written') { throw 'text_bidi emission failed' }
 & $textBidiPath
 if ($LASTEXITCODE -ne 0) { throw "a text_bidi check failed: exit $LASTEXITCODE" }
+# `e.concurrent.deque` and `e.concurrent.stack`: scripted single-thread sequences equal to a replica, then one owner and three thieves taking twenty thousand items exactly once, and four threads pushing and popping through a Treiber stack with every value seen once (D880).
+$concurrentDequeStackPath = Join-Path $testBuild 'concurrent-deque-stack-selfhost.exe'
+$concurrentDequeStackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\concurrent_deque_stack\src\main.e') $repo 'x64' 'windows' $concurrentDequeStackPath
+if ($LASTEXITCODE -ne 0 -or $concurrentDequeStackWritten -ne 'executable written') { throw 'concurrent_deque_stack emission failed' }
+& $concurrentDequeStackPath
+if ($LASTEXITCODE -ne 0) { throw "a concurrent_deque_stack check failed: exit $LASTEXITCODE" }
+# `e.concurrent.reclaim`: the replica's exact free sets after each epoch advance and each scan, then four threads pushing, popping and retiring through the list under each scheme with a per-node reader count reporting zero frees while in use (D880).
+$concurrentReclaimPath = Join-Path $testBuild 'concurrent-reclaim-selfhost.exe'
+$concurrentReclaimWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\concurrent_reclaim\src\main.e') $repo 'x64' 'windows' $concurrentReclaimPath
+if ($LASTEXITCODE -ne 0 -or $concurrentReclaimWritten -ne 'executable written') { throw 'concurrent_reclaim emission failed' }
+& $concurrentReclaimPath
+if ($LASTEXITCODE -ne 0) { throw "a concurrent_reclaim check failed: exit $LASTEXITCODE" }
+# `e.text.segment`: sampled test lines in the fixture, and the module passes all 1,823 WordBreakTest and 7,654 LineBreakTest lines through a scratch driver (D880).
+$textSegmentPath = Join-Path $testBuild 'text-segment-selfhost.exe'
+$textSegmentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_segment\src\main.e') $repo 'x64' 'windows' $textSegmentPath
+if ($LASTEXITCODE -ne 0 -or $textSegmentWritten -ne 'executable written') { throw 'text_segment emission failed' }
+& $textSegmentPath
+if ($LASTEXITCODE -ne 0) { throw "a text_segment check failed: exit $LASTEXITCODE" }
+# `e.thread.pool`: a thousand tasks summing once each, a fork-join sum equal to the sequential one, uneven tasks spread over at least two stealing workers, two hundred DAG edges all ordered, deadlines in order (D880).
+$threadPoolPath = Join-Path $testBuild 'thread-pool-selfhost.exe'
+$threadPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\thread_pool\src\main.e') $repo 'x64' 'windows' $threadPoolPath
+if ($LASTEXITCODE -ne 0 -or $threadPoolWritten -ne 'executable written') { throw 'thread_pool emission failed' }
+& $threadPoolPath
+if ($LASTEXITCODE -ne 0) { throw "a thread_pool check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

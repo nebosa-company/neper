@@ -84,7 +84,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `inline-cap`: `src/main.e`×6‡, `src/lower.e`×2‡, `src/nir.e`×1†
 - `options-changed`: `src/main.e`×1‡, `src/tool.e`×1‡
 - `fault-collision`: `src/main.e`×3‡
-- `check-file`: `src/main.e`×10‡, `src/tool.e`×6‡, `benchmarks/fuzz/fuzz.py`×3, `benchmarks/scale/profile_check.sh`×3, `scripts/card_examples.py`×2, `scripts/algos/agent_brief.md`×1, `scripts/render_card.py`×1, `tests/conformance/tools/plan_generated.x64-linux.expected.jsonl`×1
+- `check-file`: `src/main.e`×10‡, `src/tool.e`×6‡, `benchmarks/fuzz/fuzz.py`×3, `benchmarks/scale/profile_check.sh`×3, `scripts/card_examples.py`×2, `scripts/algos/agent_brief.md`×1, `scripts/algos/decisions-pending.md`×1†, `scripts/render_card.py`×1
 - `uses-file`: `src/tool.e`×7‡, `src/check.e`×3‡, `src/main.e`×3‡, `scripts/render_card.py`×1, `tests/conformance/tools/plan_generated.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_generated.x64-windows.expected.jsonl`×1, `tests/conformance/tools/plan_parameter.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_parameter.x64-windows.expected.jsonl`×1
 
 ## Verification

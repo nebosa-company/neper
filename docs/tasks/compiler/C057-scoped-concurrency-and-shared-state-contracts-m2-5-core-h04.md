@@ -75,7 +75,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `join_all`: `lib/e/thread.e`×5, `tests/conformance/reject/safety_thread_group_leak.e`×2, `tests/conformance/reject/safety_thread_group_leak.expected.jsonl`×1
+- `join_all`: `lib/e/thread.e`×5, `tests/conformance/reject/safety_thread_group_leak.e`×2, `lib/e/thread/pool.e`×1, `tests/conformance/reject/safety_thread_group_leak.expected.jsonl`×1
 
 ## Verification
 

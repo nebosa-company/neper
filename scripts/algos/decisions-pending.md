@@ -786,3 +786,31 @@ No compiler change was needed; every module passed its first build on both
 compilers. The stream now stands at 212 modules; only `e.fmt.opus`,
 `e.text.segment`, `e.thread.pool` and the three `e.concurrent` modules
 remain as whole modules, plus named functions owed to existing ones.
+
+## D880 — Batch 38: lock-free structures, reclamation, segmentation and a thread pool
+
+The last five whole modules of the stream except Opus: `e.concurrent.deque`
+(Chase-Lev, generic with `Atomic[i64]` ends -- atomics inside a generic
+struct type-check, lower and run under threads on both compilers),
+`e.concurrent.stack` (a Treiber stack whose head word carries a version
+counter against ABA; it shares the deque's fixture), `e.concurrent.reclaim`
+(epoch-based reclamation and hazard pointers over node indices; the
+threaded test forced one correction -- a retired node must go into the
+GLOBAL epoch's bucket, not the retirer's local one, or a thread pinned one
+epoch ahead can still hold it), `e.text.segment` (UAX #29 and UAX #14 for
+Unicode 15.0, passing every line of WordBreakTest.txt and LineBreakTest.txt
+through a scratch driver; the 15.0 line-break file assumes the LB25 number
+tailoring, which the module therefore implements) and `e.thread.pool`
+(id-based tasks over `e.concurrent.queue`, one-level fork-join, a
+work-stealing executor, DAG execution and EDF; the first `run_dag` raced a
+double submission, cured by a virtual in-degree the caller releases).
+Emitted executables run real threads under both the bootstrap-built and
+the self-built compiler; the "threads run inline" note applies to the C
+bootstrap compiling the compiler only. Two compiler observations for the
+queue: `atomic.load` through a `*const` generic receiver passes
+`check-file` but fails to lower ("cannot lower len"), and `mem.alloc`
+memory is not zeroed, which bit two agents' bitmaps. Deferred on purpose:
+`e.fmt.opus` -- RFC 6716's SILK and CELT decoders are several thousand
+lines of tables and DSP and do not fit one agent pass; it stays the one
+planned module without a file. What remains of `docs/algos.md` are named
+functions owed to modules that already exist.
