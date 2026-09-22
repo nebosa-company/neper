@@ -5815,6 +5815,20 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "` admits only its members; a read of it would be an `invalid` check")
     }
+    if checker.failure_kind == .UnionRepresentation {
+        try write_all(file, "union `")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` reads one field's bytes as another's: `")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "` admits only its members, and no check validates the bytes a sibling field wrote -- hold the integer and convert it, or use a `union enum`")
+    }
+    if checker.failure_kind == .ForeignRepresentation {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` crosses the C ABI and would hand checked code bytes the other side wrote: `")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "` admits only its members, and no check validates a value the other side chose -- declare the integer it writes and convert it")
+    }
     if checker.failure_kind == .CastRepresentation {
         try write_all(file, "`mem.cast` to a pointer to `")
         try write_all(file, checker.failure_detail)

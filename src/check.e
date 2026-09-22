@@ -105,6 +105,8 @@ type DiagnosticKind = enum u8 {
     MissingUndefValue,
     UndefReferenceRead,
     CastRepresentation,
+    ForeignRepresentation,
+    UnionRepresentation,
     IteratorImmutable,
     IteratorMissing,
     IteratorSignature,
@@ -2917,7 +2919,33 @@ fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
     try seed_intrinsic_aggregates(c, g)
     try collect_aggregate_pass(c, r, g, true)
     try collect_aggregate_pass(c, r, g, false)
-    ret refill_aggregate_instances(c)
+    try refill_aggregate_instances(c)
+    ret refuse_union_members(c)
+}
+
+// An untagged `union` reads one field's bytes as another's (D921, H03): a field of a
+// type that admits only its members would be read with whatever representation the
+// last write through a sibling left, which no check validates. Refused once every
+// aggregate's fields are known, since a field's type may be declared after it.
+fn refuse_union_members(c: *Checker) -> err {
+    var aggregate_at = 0usize
+    while aggregate_at < c.aggregate_count {
+        let aggregate = c.aggregates[aggregate_at]
+        if aggregate.kind == .Union && aggregate.field_count > 1usize {
+            var field_at = 0usize
+            while field_at < aggregate.field_count {
+                let field = c.aggregate_fields[aggregate.first_field + field_at]
+                let (field_admits, field_culprit) = type_has_undef_value(c, field.ty, 0usize)
+                if !field_admits {
+                    record_failure_token(c, aggregate.module_index, aggregate.token, .UnionRepresentation, aggregate.name, field_culprit)
+                    ret InvalidType
+                }
+                field_at += 1usize
+            }
+        }
+        aggregate_at += 1usize
+    }
+    ret ok
 }
 
 // An instance copies its template's fields when it is created, and a field type is
@@ -4187,6 +4215,35 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         if item.return_count == 1usize && !type_crosses(c, c.return_types[item.first_return], 0usize) {
             record_failure(c, module_index, node, .ExternType, item.name, crossing_spelling(c.return_types[item.first_return]))
             ret InvalidType
+        }
+    }
+    // Bytes the other side of the C ABI wrote enter checked code unread by any check
+    // (D920, H03): an `extern`'s result and the pointee of a mutable pointer it may write
+    // through, and a `@cc` callback's parameters and every pointee it is handed. None
+    // may be a type that admits only its members.
+    let callback = !item.external && declaration_has_attribute(c, g, tree, module_index, node_index, "cc")
+    if (item.external && !item.intrinsic) || callback {
+        var foreign_at = 0usize
+        while foreign_at < item.parameter_count + item.return_count {
+            var foreign_type = invalid_type()
+            if foreign_at < item.parameter_count {
+                let parameter_type = c.parameters[item.first_parameter + foreign_at].ty
+                if parameter_type.kind == .Pointer {
+                    if (callback || !parameter_type.is_const) && parameter_type.has_element && parameter_type.element < c.type_count { foreign_type = c.types[parameter_type.element] }
+                } else {
+                    if callback { foreign_type = parameter_type }
+                }
+            } else {
+                if !callback { foreign_type = c.return_types[item.first_return + foreign_at - item.parameter_count] }
+            }
+            if foreign_type.kind != .Invalid {
+                let (foreign_admits, foreign_culprit) = type_has_undef_value(c, foreign_type, 0usize)
+                if !foreign_admits {
+                    record_failure(c, module_index, node, .ForeignRepresentation, item.name, foreign_culprit)
+                    ret InvalidType
+                }
+            }
+            foreign_at += 1usize
         }
     }
     c.functions[c.function_count] = item
@@ -14238,6 +14295,8 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .MissingUndefValue { ret "E-SAFETY-0017" }
     if kind == .UndefReferenceRead { ret "E-SAFETY-0021" }
     if kind == .CastRepresentation { ret "E-SAFETY-0022" }
+    if kind == .ForeignRepresentation { ret "E-SAFETY-0023" }
+    if kind == .UnionRepresentation { ret "E-SAFETY-0024" }
     if kind == .ResourceUnchecked { ret "E-SAFETY-0008" }
     if kind == .ResourceDeferredConsumed { ret "E-SAFETY-0009" }
     if kind == .ResourceMovedInLoop { ret "E-SAFETY-0011" }

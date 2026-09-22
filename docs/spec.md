@@ -1265,6 +1265,12 @@ passes and returns the mapped C type. §4's struct layout is C's, so a struct th
 crosses needs no marshalling. A signature naming a type that does not cross is a
 compile error at the declaration, not at the call.
 
+`bool`, an enum and a struct holding one cross only in the direction the neper side
+writes (D920): an `extern`'s result, the pointee of an `extern`'s `*T` parameter, and
+a `@cc` function's parameters and pointees are bytes the other side chose, and none
+may be a type that admits only its members (§11's `invalid` row). Declare the
+integer the other side writes and convert it, which checks it.
+
 An `extern` call is a direct call through the import table (PE) or the PLT/GOT (ELF,
 Mach-O): no wrapper, no thunk, nothing saved beyond what the convention requires.
 §13 states which linking stage each form needs.

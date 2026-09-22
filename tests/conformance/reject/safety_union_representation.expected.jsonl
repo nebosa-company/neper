@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-SAFETY-0024","message":"union `Pun` reads one field's bytes as another's: `Color` admits only its members, and no check validates the bytes a sibling field wrote -- hold the integer and convert it, or use a `union enum`","symbol":"Pun","span":{"source":{"root":"operand","path":"safety_union_representation.e"},"byte_start":367,"byte_end":371,"line":6,"column":1,"end_line":6,"end_column":5,"column_utf16":1,"end_column_utf16":5},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

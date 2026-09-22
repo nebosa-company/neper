@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-SAFETY-0023","message":"`fill` crosses the C ABI and would hand checked code bytes the other side wrote: `Color` admits only its members, and no check validates a value the other side chose -- declare the integer it writes and convert it","symbol":"fill","span":{"source":{"root":"operand","path":"safety_foreign_representation.e"},"byte_start":408,"byte_end":414,"line":8,"column":1,"end_line":8,"end_column":7,"column_utf16":1,"end_column_utf16":7},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

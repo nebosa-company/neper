@@ -11,7 +11,7 @@ type Outer = struct {
 
 type Choice = union {
     number: i32,
-    flag: bool,
+    flag: u8,
 }
 
 type Maybe = union enum u8 {

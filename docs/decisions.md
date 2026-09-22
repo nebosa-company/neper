@@ -18156,3 +18156,56 @@ too. `accept/safety_cast_representation.e` holds the five accepted forms, and
 `reject/safety_cast_representation.e` and `reject/safety_cast_placement.e` a
 cast from a `u8` and a placement read before it is written. A foreign write into
 a `*bool` or an enum stays open.
+
+## D920 — Bytes from across the C ABI do not arrive as a member
+
+D919 left one way in for a representation no check reads: the other side of
+`extern`. Spec §5 lets `bool` and an enum cross as `_Bool` and the backing integer,
+which is right for what the neper side hands over and wrong for what comes back --
+a C function that returns 2 for a `bool`, or writes 7 into a `*Color`, hands checked
+code a value §11's `invalid` row says cannot exist, and nothing stands between it
+and an `if` or a switch.
+
+A signature is refused as E-SAFETY-0023 when a type that admits only its members
+(D475's predicate) arrives from the other side:
+
+- an `extern`'s result;
+- the pointee of an `extern`'s `*T` parameter, which the callee may write -- a
+  `*const T` it may only read is the neper side's bytes and crosses;
+- a `@cc` function's parameters, and the pointee of any pointer it is handed, since
+  every one of them is the caller's choice.
+
+A value parameter of an `extern` and a `@cc` function's result go the other way
+and cross as before. The answer the diagnostic gives is the checked one: declare
+the integer the other side writes and convert it, `Color(raw)` or `ready != 0i32`.
+The rule runs after §5's table, so a signature naming a type that does not cross
+keeps that diagnostic. No declaration in the library, the compiler or the fixtures
+trips it; `accept/safety_foreign_representation.e` holds the crossings that stay,
+and `reject/safety_foreign_representation.e` and `reject/safety_foreign_callback.e`
+an out-parameter and a callback.
+
+## D921 — An untagged union holds no member-only field
+
+An untagged `union` is a pun by construction: `Pun { byte: 7u8 }` and then
+`pun.color` reads the byte as a `Color`, and the read has no check -- the same
+`invalid` value D548 checks at a `mem.bitcast` and D919 and D920 refuse at a cast
+and at the C ABI, made by field syntax instead. A tagged union knows its live
+arm; an untagged one does not, so nothing at the read can say which field last
+wrote the bytes.
+
+An untagged `union` with more than one field, one of which has a type that admits
+only its members (D475's predicate), is refused at its declaration as
+E-SAFETY-0024. The check runs once every aggregate's fields are collected, since
+a field's type may be declared after the union. A union with one field puns
+nothing and is accepted. The answer is the checked one: hold the integer and
+convert it, or use a `union enum`, whose tag says which arm is live.
+
+The library's untagged unions -- the COM and function-pointer puns in
+`e.os.shell` -- hold pointers and integers and are unaffected. Two check
+fixtures, `union_literal_count` and `aggregate_valid`, declared `flag: bool` beside
+an `i32` to test a union literal; the field is now `u8` in both, and each checks
+as it did.
+`reject/safety_union_representation.e` is the pun. A generic union instantiated
+while bodies are checked is not re-examined; the tree's two, `e.ui.app.Pun` and
+`e.ui.widget.ChangeBits`, pun a function value with a `usize`, whatever their
+argument.
