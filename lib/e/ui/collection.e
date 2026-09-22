@@ -1095,7 +1095,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
             let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)
             if drawn_error != ok { ret (none, TooLarge) }
             var no_children: []const widget.Node = zero
-            drawn[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[i]), measure: control.mark_measure, paint: control.mark_paint } }, style: control.sized_style(mark_size, mark_size), children: no_children }
+            drawn[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[i]), measure: control.mark_measure, paint: control.mark_paint, state: widget.bytes_of[control.Mark](&marks[i]) } }, style: control.sized_style(mark_size, mark_size), children: no_children }
             mark_node = widget.region(key + 1u64 + 2u64 * u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&toggles[i]), invoke: row_pick_gesture }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(mark_size, mark_size), drawn[0usize..1usize])
         }
         // The first column: the indent, the mark and the node's own row.

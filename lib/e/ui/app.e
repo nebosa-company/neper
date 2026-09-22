@@ -153,6 +153,7 @@ fn present_frame(s: *State) -> err {
     let (metrics, metrics_error) = window.metrics(&s.win)
     if metrics_error != ok { ret Failed }
     var frame = mem.arena_from(s.frame_storage)
+    if metrics.scale > 0.0 { widget.set_snap(&s.runtime, 1.0 / metrics.scale) }
     let (root, has_root) = widget.root_of(&s.runtime)
     var build_context = widget.BuildContext { runtime: &s.runtime, element: root, frame: s.frames }
     let (tree, build_error) = s.trampoline(s.ctx, s.build_bits, &build_context)

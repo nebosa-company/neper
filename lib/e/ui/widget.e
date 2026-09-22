@@ -19,6 +19,7 @@
 // state of the same size and alignment.
 
 use e.gpu
+use e.math
 use e.mem
 use e.os
 use e.gfx.geometry
@@ -49,7 +50,10 @@ type Image = struct { texture: scene.TextureId, fit: Fit }
 // the rest. A scrollbar thumb is painted on the trailing edge when asked.
 type Overscroll = enum u8 { Clamp, Bounce }
 type Scroll = struct { axis: ui_layout.Axis, offset: f32, overscroll: Overscroll, momentum: bool, scrollbar: bool, thumb: paint.Color, change: Change[f32], virtual_first: usize, virtual_count: usize, virtual_extent: f32 }
-type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> geometry.Size, paint: fn(*void, *scene.Builder, geometry.Rect) -> err }
+// A custom's `state` is the bytes its measure and paint read through `ctx` and
+// nothing else (D917): with them the runtime can tell an unchanged custom from a
+// changed one and skip its subtree; empty, the custom is painted every frame.
+type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> geometry.Size, paint: fn(*void, *scene.Builder, geometry.Rect) -> err, state: []const u8 }
 // Typed actions (D806, widget plan P0-02): a change carries a value of its type, a
 // submit carries nothing; `ctx` outlives the element and never points into the
 // frame arena. An unset action is a no-op.
@@ -278,6 +282,15 @@ type Undo = struct { element: u32, at: usize, removed_off: usize, removed_len: u
 // The gesture arena: one pointer, the region it went down on, where, whether it has
 // become a drag, and the region hovered last.
 type Arena = struct { pressed: bool, candidate: u32, down: geometry.Point, last: geometry.Point, dragging: bool, hovered: u32, has_hovered: bool }
+// The logical size of a device pixel, which a scrolled viewport's offset snaps
+// to when placed; zero snaps nothing. The application sets it from the window's
+// scale (D917).
+fn set_snap(widget_runtime: *Runtime, snap: f32) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize { ret }
+    s.snap = snap
+}
+
 // A measure remembered for the frame: the node (by its address in the frame's
 // tree), the constraints it was measured under and the answer (D914). A parent
 // measures its children to place them and every ancestor measured them before
@@ -298,6 +311,7 @@ type State = struct {
     storage: []u8,
     measured: []Measured,
     measure_stamp: u32,
+    snap: f32,
     replay_scene: scene.SceneId,
     has_replay_scene: bool,
     owners: []Owner,
@@ -507,6 +521,8 @@ fn positioned(key: Key, x: f32, y: f32, value_style: style.Style, children: []co
 
 // Whether a function value is set: its bits are not zero, read through a pun.
 type SubmitBits = union { function: fn(*void) -> err, bits: usize }
+type MeasureBits = union { function: fn(*void, ui_layout.Constraints) -> geometry.Size, bits: usize }
+type PaintBits = union { function: fn(*void, *scene.Builder, geometry.Rect) -> err, bits: usize }
 type GestureBits = union { function: fn(*void, Gesture) -> err, bits: usize }
 type ChangeBits[T: type] = union { function: fn(*void, T) -> err, bits: usize }
 
@@ -930,6 +946,18 @@ fn hash_node(seed: u64, node: *const Node) -> (u64, bool) {
         h = hash_bytes(h, sm.value)
         h = hash_bytes(h, sm.hint)
         h = hash_bytes(h, bytes_of[Semantics](&sm))
+    case .Custom as c:
+        // A custom that names its state is as static as that state (D917).
+        if c.state.len > 0usize {
+            h = hash_bytes(h, c.state)
+            var measure_bits: MeasureBits = zero
+            measure_bits.function = c.measure
+            var paint_bits: PaintBits = zero
+            paint_bits.function = c.paint
+            h = hash_u64(hash_u64(h, u64(measure_bits.bits)), u64(paint_bits.bits))
+        } else {
+            static = false
+        }
     case .Box:
         static = true
     case .Stack:
@@ -1797,7 +1825,10 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         if e.scroll_offset > most { e.scroll_offset = most }
         if e.scroll_offset < 0.0 { e.scroll_offset = 0.0 }
     }
-    let offset = e.scroll_offset
+    // The content is placed at a whole device pixel (D917): a fractional offset
+    // -- momentum, a drag -- would keep the renderer from moving pixels.
+    var offset = e.scroll_offset
+    if s.snap > 0.0 { offset = math.round[f32](offset / s.snap) * s.snap }
     try scene.push(b, save)
     try scene.push(b, scene.Command { Clip: scene.Clip { Rect: inner } })
     if sc.virtual_count != 0usize {

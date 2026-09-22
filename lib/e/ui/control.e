@@ -802,7 +802,7 @@ fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, va
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     var none: []const widget.Node = zero
-    body[0usize] = widget.Node { key: key + 1u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&rings[0usize]), measure: ring_measure, paint: ring_paint } }, style: sized_style(size, size), children: none }
+    body[0usize] = widget.Node { key: key + 1u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&rings[0usize]), measure: ring_measure, paint: ring_paint, state: widget.bytes_of[Ring](&rings[0usize]) } }, style: sized_style(size, size), children: none }
     var sem: widget.Semantics = zero
     sem.role = 16u8
     sem.label = label
@@ -1292,7 +1292,7 @@ fn disclosure(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expan
     if head_error != ok { ret (zero, TooLarge) }
     let size = t.tokens.text[0usize].line_height
     var none: []const widget.Node = zero
-    head[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint } }, style: sized_style(size, size), children: none }
+    head[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
@@ -1588,7 +1588,7 @@ fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, act
     marks[0usize] = Mark { color: look.foreground, expanded: true, arena: a }
     let size = t.tokens.spacing.md
     var none: []const widget.Node = zero
-    let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint } }, style: sized_style(size, size), children: none }
+    let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
     let (tail, tail_error) = pressable_states(a, key + 1u64, t, 3u8, "More", look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
     if tail_error != ok { ret (zero, tail_error) }
     parts[1usize] = tail
@@ -1780,7 +1780,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
         rated[i] = Rated { value: u32(i) + 1u32, change: change }
         let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
         if body_error != ok { ret (zero, TooLarge) }
-        body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&stars[i]), measure: mark_measure, paint: star_paint } }, style: sized_style(size, size), children: none }
+        body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&stars[i]), measure: mark_measure, paint: star_paint, state: widget.bytes_of[Star](&stars[i]) } }, style: sized_style(size, size), children: none }
         items[i] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, style.defaults(), body[0usize..1usize])
         i += 1usize
     }
@@ -2059,7 +2059,7 @@ fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32,
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     var none: []const widget.Node = zero
-    body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&knobs[0usize]), measure: mark_measure, paint: knob_paint } }, style: sized_style(size, size), children: none }
+    body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&knobs[0usize]), measure: mark_measure, paint: knob_paint, state: zero } }, style: sized_style(size, size), children: none }
     let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
     if hit_error != ok { ret (zero, TooLarge) }
     hit[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&knobs[0usize]), invoke: knob_gesture }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: true }, sized_style(size, size), body[0usize..1usize])
@@ -2346,7 +2346,7 @@ fn combo_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
     marks[0usize] = Mark { color: look.foreground, expanded: true, arena: a }
     let size = t.tokens.spacing.md
     var none: []const widget.Node = zero
-    let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint } }, style: sized_style(size, size), children: none }
+    let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
     let (opener, opener_error) = pressable_states(a, key + 1u64, t, 3u8, "Choices", look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)

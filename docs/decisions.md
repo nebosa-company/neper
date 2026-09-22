@@ -18059,3 +18059,21 @@ Not done: a fractional scroll delta (momentum, a drag at 125%) repaints the
 viewport; a subtree containing a custom paint is never skipped, which is every
 checkbox, radio and star -- a custom paint that declared itself pure would
 skip too; the first frame after a page change is whole.
+
+## D917 — A custom paint names its state, and a viewport scrolls by whole pixels
+
+Two leftovers of D916. `widget.Custom` gains `state: []const u8`: the bytes its
+measure and paint read through `ctx` and nothing else. The runtime hashes them
+with the node, so a subtree holding a custom is static when its custom is, and a
+checkbox's mark, a rating's stars, a progress ring, a tree's disclosure now skip
+like everything else; `state: zero` keeps the old meaning -- painted every frame
+-- and the dial's knob, which reads the runtime's bounds as it paints, says so.
+A struct literal names every field, so every constructor and the one fixture
+that builds a `Custom` say which they are.
+
+`widget.set_snap` gives the runtime the logical size of a device pixel, which
+`e.ui.app` takes from the window's scale each frame, and a scrolled viewport is
+placed at its offset rounded to that: a fractional offset -- momentum, a drag,
+a wheel at 125% -- would have left the renderer no whole-pixel move to make and
+repainted the viewport. The stored offset stays as it was, so momentum decays as
+before; only the placement snaps.

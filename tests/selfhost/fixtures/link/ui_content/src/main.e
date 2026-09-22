@@ -179,7 +179,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, page: *Page) -> (widget.Node, e
     let (an_image, image_error) = control.image(a, 7u64, page.texture, 16.0, 8.0, .Cover, "")
     if image_error != ok { ret (zero, image_error) }
     items[6usize] = an_image
-    let (a_canvas, canvas_error) = control.canvas(a, 8u64, widget.Custom { ctx: zero, measure: canvas_measure, paint: canvas_paint }, "plot")
+    let (a_canvas, canvas_error) = control.canvas(a, 8u64, widget.Custom { ctx: zero, measure: canvas_measure, paint: canvas_paint, state: zero }, "plot")
     if canvas_error != ok { ret (zero, canvas_error) }
     items[7usize] = a_canvas
     var column = style.defaults()
