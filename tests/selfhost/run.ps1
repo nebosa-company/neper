@@ -2482,6 +2482,18 @@ $gpuGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $gpuGapsWritten -ne 'executable written') { throw 'gpu_gaps emission failed' }
 & $gpuGapsPath
 if ($LASTEXITCODE -ne 0) { throw "a gpu_gaps check failed: exit $LASTEXITCODE" }
+# `e.thread.fiber`: a cooperative scheduler whose hand-off leaves exactly one fiber running, a round-robin order equal to a replica over two hundred switches, suspend, resume and join, every thread joined at the end (D926).
+$threadFiberPath = Join-Path $testBuild 'thread-fiber-selfhost.exe'
+$threadFiberWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\thread_fiber\src\main.e') $repo 'x64' 'windows' $threadFiberPath
+if ($LASTEXITCODE -ne 0 -or $threadFiberWritten -ne 'executable written') { throw 'thread_fiber emission failed' }
+& $threadFiberPath
+if ($LASTEXITCODE -ne 0) { throw "a thread_fiber check failed: exit $LASTEXITCODE" }
+# `e.os.send_file`, `e.os.signal` and `e.os.sandbox`: a file's bytes moved to a loopback socket by the kernel, a raised signal reaching its handler and the default restored, and a sandboxed child refused its forbidden syscall or its child process (D926).
+$osGapsPath = Join-Path $testBuild 'os-gaps-selfhost.exe'
+$osGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_gaps\src\main.e') $repo 'x64' 'windows' $osGapsPath
+if ($LASTEXITCODE -ne 0 -or $osGapsWritten -ne 'executable written') { throw 'os_gaps emission failed' }
+& $osGapsPath
+if ($LASTEXITCODE -ne 0) { throw "a os_gaps check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

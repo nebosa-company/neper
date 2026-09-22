@@ -43,21 +43,7 @@ type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_
 // `BY_HANDLE_FILE_INFORMATION`: thirteen `DWORD`s. Every `FILETIME` is two of them in
 // the header, so the whole struct is four-byte aligned with no padding anywhere --
 // writing the times as `u64` here would insert some and move every later field.
-type ByHandleFileInformation = struct {
-    attributes: u32,
-    created_low: u32,
-    created_high: u32,
-    accessed_low: u32,
-    accessed_high: u32,
-    written_low: u32,
-    written_high: u32,
-    volume_serial: u32,
-    size_high: u32,
-    size_low: u32,
-    link_count: u32,
-    index_high: u32,
-    index_low: u32,
-}
+type ByHandleFileInformation = struct { attributes: u32, created_low: u32, created_high: u32, accessed_low: u32, accessed_high: u32, written_low: u32, written_high: u32, volume_serial: u32, size_high: u32, size_low: u32, link_count: u32, index_high: u32, index_low: u32 }
 
 // `FILE_ATTRIBUTE_TAG_INFO`, which is the only way to learn *which* kind of reparse
 // point a path is. The handle information above says that one is there and not what it
@@ -72,16 +58,7 @@ type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 // is what makes the later fields land where the call reads them.
 type UnicodeString = struct { length: u16, maximum_length: u16, padding: u32, buffer: *u16 }
 
-type ObjectAttributes = struct {
-    length: u32,
-    padding: u32,
-    root_directory: usize,
-    object_name: *UnicodeString,
-    attributes: u32,
-    padding_two: u32,
-    security_descriptor: usize,
-    security_quality: usize,
-}
+type ObjectAttributes = struct { length: u32, padding: u32, root_directory: usize, object_name: *UnicodeString, attributes: u32, padding_two: u32, security_descriptor: usize, security_quality: usize }
 
 type IoStatusBlock = struct { status: usize, information: usize }
 
@@ -100,18 +77,7 @@ type NotifyHeader = struct { next: u32, action: u32, name_length: u32 }
 // completion signals.
 type Overlapped = struct { status: usize, transferred: usize, offset: u32, offset_high: u32, event: usize }
 
-type ErrorKind = enum u8 {
-    NotFound,
-    Denied,
-    Exists,
-    Interrupted,
-    OutOfMemory,
-    Timeout,
-    WouldBlock,
-    Unsupported,
-    Invalid,
-    Other,
-}
+type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
 
 // The two strings are the caller's, borrowed rather than copied: they name the operation and
 // its subject, and nothing here needs them to outlive the call that supplied them.
@@ -125,56 +91,18 @@ type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: b
 // `STARTUPINFOW`: the padding is written out because the three standard handles are at the end
 // of it and the call reads them where the header says they are, not where they would fall if a
 // field were missing.
-type StartupInfo = struct {
-    size: u32,
-    padding: u32,
-    reserved: usize,
-    desktop: usize,
-    title: usize,
-    x: u32,
-    y: u32,
-    x_size: u32,
-    y_size: u32,
-    x_chars: u32,
-    y_chars: u32,
-    fill: u32,
-    flags: u32,
-    show: u16,
-    reserved_count: u16,
-    padding_two: u32,
-    reserved_block: usize,
-    standard_input: usize,
-    standard_output: usize,
-    standard_error: usize,
-}
+type StartupInfo = struct { size: u32, padding: u32, reserved: usize, desktop: usize, title: usize, x: u32, y: u32, x_size: u32, y_size: u32, x_chars: u32, y_chars: u32, fill: u32, flags: u32, show: u16, reserved_count: u16, padding_two: u32, reserved_block: usize, standard_input: usize, standard_output: usize, standard_error: usize }
 
 type ProcessInformation = struct { process: usize, thread: usize, process_id: u32, thread_id: u32 }
 
 // `SYSTEM_INFO`. Only the page size is read, but the whole thing has to be here for the call
 // to have somewhere to put it -- and for `page_size` to be at the offset it is.
-type SystemInfo = struct {
-    oem_id: u32,
-    page_size: u32,
-    minimum_address: usize,
-    maximum_address: usize,
-    active_mask: usize,
-    processor_count: u32,
-    processor_type: u32,
-    allocation_granularity: u32,
-    processor_level: u16,
-    processor_revision: u16,
-}
+type SystemInfo = struct { oem_id: u32, page_size: u32, minimum_address: usize, maximum_address: usize, active_mask: usize, processor_count: u32, processor_type: u32, allocation_granularity: u32, processor_level: u16, processor_revision: u16 }
 
 // What a watch remembers. The buffer and the `OVERLAPPED` both have to outlive the call that
 // starts a read, because the host writes into them while nothing is waiting -- so they live in
 // the arena with the rest of the state rather than in a frame.
-type WatchState = struct {
-    directory: usize,
-    base: str,
-    recursive: bool,
-    buffer: []u8,
-    overlapped: Overlapped,
-}
+type WatchState = struct { directory: usize, base: str, recursive: bool, buffer: []u8, overlapped: Overlapped }
 
 fn arm_watch(state: *WatchState) -> err {
     state.overlapped.status = 0usize
@@ -399,11 +327,7 @@ type PollRegistration = struct { handle: usize, token: usize, readable: bool, wr
 // completion port would retain the set and even carry the token as its completion key, but
 // it reports finished operations rather than ready handles, so `readable` and `writable`
 // would have nothing to mean -- which is why the set is held here rather than by the host.
-type PollerState = struct {
-    wake: Socket,
-    wake_address: SocketAddress,
-    registrations: []PollRegistration,
-}
+type PollerState = struct { wake: Socket, wake_address: SocketAddress, registrations: []PollRegistration }
 
 // Only sockets. `WSAPoll` reports `POLLNVAL` for anything else, which arrives as a failed
 // event rather than as a lie -- a file handle registered here is answered, not ignored.
@@ -602,16 +526,7 @@ type RawAddress = struct { bytes: [28]u8 }
 // `ADDRINFOW`. `address` is a pointer rather than a `usize` because the bytes behind it have to
 // be read, and there is no way back from an address to a pointer (D96); `next` is `*void` for
 // the same reason with the added one that a type cannot name itself here.
-type AddressInfo = struct {
-    flags: i32,
-    family: i32,
-    kind: i32,
-    protocol: i32,
-    address_len: usize,
-    canonical_name: usize,
-    address: *u8,
-    next: *void,
-}
+type AddressInfo = struct { flags: i32, family: i32, kind: i32, protocol: i32, address_len: usize, canonical_name: usize, address: *u8, next: *void }
 
 // The call answers with a pointer, so it is given somewhere to put one: a `*AddressInfo` out
 // parameter would be an address this file could not follow, and this is a pointer it can.
@@ -627,13 +542,7 @@ type FileDispositionInfo = struct { delete_file: u8 }
 // `FILE_RENAME_INFO`. The name begins at offset twenty, after a four-byte union, the
 // padding that eight-byte-aligns the handle, and the length -- so the padding is written
 // out here for the same reason it is in the structures above.
-type FileRenameInfo = struct {
-    replace: u32,
-    padding: u32,
-    root_directory: usize,
-    name_length: u32,
-    name: [520]u16,
-}
+type FileRenameInfo = struct { replace: u32, padding: u32, root_directory: usize, name_length: u32, name: [520]u16 }
 
 // `FILETIME`: two `DWORD`s, low first, counting 100-nanosecond ticks from 1601.
 type FileTime = struct { low: u32, high: u32 }
@@ -642,17 +551,7 @@ type FileTime = struct { low: u32, high: u32 }
 // a junction's path begins four bytes earlier -- which is why only a symbolic link is
 // read here and every other tag is `Unsupported`. The array covers
 // `MAXIMUM_REPARSE_DATA_BUFFER_SIZE`, which is what the call may write.
-type ReparseBuffer = struct {
-    tag: u32,
-    data_length: u16,
-    reserved: u16,
-    substitute_offset: u16,
-    substitute_length: u16,
-    print_offset: u16,
-    print_length: u16,
-    flags: u32,
-    path: [8188]u16,
-}
+type ReparseBuffer = struct { tag: u32, data_length: u16, reserved: u16, substitute_offset: u16, substitute_length: u16, print_offset: u16, print_length: u16, flags: u32, path: [8188]u16 }
 
 @import("kernel32.dll", "MultiByteToWideChar")
 extern fn raw_widen(code_page: u32, flags: u32, source: *const u8, source_len: i32, destination: *u16, destination_len: i32) -> i32
@@ -2299,18 +2198,7 @@ const DUPLICATE_SAME_ACCESS: u32 = 2u32
 
 // `PROCESS_MEMORY_COUNTERS`: the size first, then a page-fault count, then eight sizes of
 // which the peak working set is the first. The layout is the ABI.
-type MemoryCounters = struct {
-    size: u32,
-    page_faults: u32,
-    peak_working_set: usize,
-    working_set: usize,
-    quota_peak_paged: usize,
-    quota_paged: usize,
-    quota_peak_nonpaged: usize,
-    quota_nonpaged: usize,
-    pagefile: usize,
-    peak_pagefile: usize,
-}
+type MemoryCounters = struct { size: u32, page_faults: u32, peak_working_set: usize, working_set: usize, quota_peak_paged: usize, quota_paged: usize, quota_peak_nonpaged: usize, quota_nonpaged: usize, pagefile: usize, peak_pagefile: usize }
 
 const WAIT_OBJECT_0: u32 = 0u32
 const WAIT_INFINITE: u32 = 4294967295u32
@@ -3750,4 +3638,319 @@ type AccessibleNode = struct { id: u32, parent: u32, has_parent: bool, role: u8,
 
 fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
     ret Unsupported
+}
+
+// `TransmitFile` is the zero-copy transfer this host has (#1290): the file's pages go to
+// the socket inside the kernel, and the offset rides in an `OVERLAPPED` rather than in the
+// descriptor, so the file's own cursor is untouched and one open file can serve several
+// transfers. It lives in `mswsock.dll` and is usually reached through `WSAIoctl`; the
+// export is there under its own name, so it is imported directly like every other call in
+// this file.
+@import("mswsock.dll", "TransmitFile")
+extern fn raw_transmit_file(s: usize, file: usize, count: u32, per_send: u32, overlapped: *Overlapped, buffers: usize, flags: u32) -> i32
+
+@import("ws2_32.dll", "WSAGetOverlappedResult")
+extern fn raw_socket_overlapped_result(s: usize, overlapped: *Overlapped, transferred: *u32, blocking: i32, flags: *u32) -> i32
+
+@import("kernel32.dll", "CreateEventW")
+extern fn raw_create_event(security: usize, manual: i32, initial: i32, name: usize) -> usize
+
+// `socket()` makes an overlapped socket whatever the caller does with it, so a
+// `TransmitFile` that carries an `OVERLAPPED` -- and it must, because that is where the
+// offset lives -- starts and reports itself pending. The event in the structure is what
+// says it finished.
+const WSA_IO_PENDING: i32 = 997i32
+
+// ponytail: one event per call, made and closed around the transfer. A socket whose
+// `hEvent` is null signals the socket handle itself instead, which would save the pair --
+// but only for a socket nobody else is using at the same time, and the fence does not say
+// that. A slot per thread would save it properly, and `e.os` has nowhere to keep one.
+const TRANSMIT_MAX: usize = 4294967295usize
+
+// A count of zero means "the whole file" to `TransmitFile` and "nothing" to every caller,
+// so zero never reaches it.
+//
+// The count is clamped to what is left of the file first, which is what makes a short
+// answer ordinary here as it is on the other host: `TransmitFile` fails rather than
+// stopping at the end, so asking it for more than there is would turn an ordinary end of
+// file into an error.
+fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err) {
+    if count == 0usize { ret (0usize, ok) }
+    let (info, attributes, info_error) = info_from_handle(source.raw)
+    if info_error != ok { ret (0usize, info_error) }
+    if offset >= info.size { ret (0usize, ok) }
+    var wanted = count
+    let remaining = info.size - offset
+    if u64(wanted) > remaining { wanted = usize(remaining) }
+    // One call moves at most four gigabytes, because the count is a `DWORD`. A caller with
+    // more asks again from the offset it reached, which is what a short answer is for.
+    if wanted > TRANSMIT_MAX { wanted = TRANSMIT_MAX }
+    let event = raw_create_event(0usize, 1i32, 0i32, 0usize)
+    if event == 0usize { ret (0usize, from_last_error()) }
+    var window: Overlapped = zero
+    window.offset = u32(offset % 4294967296u64)
+    window.offset_high = u32(offset / 4294967296u64)
+    window.event = event
+    var moved = wanted
+    var moved_error = ok
+    if raw_transmit_file(destination.raw, source.raw, u32(wanted), 0u32, &window, 0usize, 0u32) == 0i32 {
+        moved = 0usize
+        if raw_socket_error() != WSA_IO_PENDING {
+            moved_error = from_socket_error()
+        } else {
+            let waited = raw_wait_for_single_object(event, WAIT_INFINITE)
+            var transferred = 0u32
+            var completion: u32 = 0u32
+            if raw_socket_overlapped_result(destination.raw, &window, &transferred, 0i32, &completion) == 0i32 {
+                moved_error = from_socket_error()
+            } else {
+                moved = usize(transferred)
+            }
+        }
+    }
+    let closed = raw_close_handle(event)
+    // The socket was made non-blocking and is full: nothing moved, which is progress of
+    // zero rather than a failure, as it is on the other host.
+    if moved_error == WouldBlock { ret (0usize, ok) }
+    if moved_error != ok { ret (0usize, moved_error) }
+    ret (moved, ok)
+}
+
+// The six signals a portable program has anything to say about (#1642). This host has no
+// signals at all, so each one is the nearest thing it does have, and they are not all the
+// same nearest thing:
+//
+//   Interrupt, Terminate -- the console control handler. A real Ctrl-C or Ctrl-Break, and
+//     the close of the console window, reach the handler on a thread of the system's, and
+//     an installed handler reports the event handled, which keeps Ctrl-C and Ctrl-Break
+//     from ending the process. A close is not one a program can refuse: reporting it
+//     handled buys the few seconds the system allows and no more.
+//   FloatingPoint, Illegal -- a vectored exception handler, which sees the structured
+//     exception the processor raised on the faulting thread.
+//   Abort -- a vectored exception handler over a customer-defined exception code, which
+//     is what `signal_raise(.Abort)` raises. Nothing else on this host raises it.
+//   SegmentFault -- installed, and not delivered. The neper runtime registers its own
+//     first-chance handler for access violations, which is how an arena commits the page
+//     a program just touched; the ones it cannot resume it reports and ends the process
+//     with 139 before any later handler runs. A handler installed here for `SegmentFault`
+//     therefore never sees one, and that is deliberate: a handler registered ahead of the
+//     runtime's would be entered on every ordinary arena growth.
+//
+// A handler for `FloatingPoint` or `Illegal` returns into the instruction that faulted and
+// the search continues, so the process still ends -- the handler is for reporting, and
+// `os.exit` is how it ends on its own terms. A handler for `Abort` resumes after the raise,
+// because a raised exception has no faulting instruction to return to.
+type Signal = enum u8 { Interrupt, Terminate, Abort, SegmentFault, FloatingPoint, Illegal }
+
+type SignalHandler = union { function: fn(Signal), bits: usize }
+
+// Only the code is read, so the record is declared as far as the code and no further.
+type ExceptionRecord = struct { code: u32, flags: u32, chained: usize, address: usize }
+type ExceptionPointers = struct { record: *ExceptionRecord, context: usize }
+
+@import("kernel32.dll", "SetConsoleCtrlHandler")
+extern fn raw_console_handler(handler: fn(u32) -> i32, add: i32) -> i32
+
+@import("kernel32.dll", "AddVectoredExceptionHandler")
+extern fn raw_add_vectored(first: u32, handler: fn(*ExceptionPointers) -> i32) -> usize
+
+@import("kernel32.dll", "RaiseException")
+extern fn raw_raise_exception(code: u32, flags: u32, count: u32, arguments: usize)
+
+const CTRL_C_EVENT: u32 = 0u32
+const CTRL_BREAK_EVENT: u32 = 1u32
+const CTRL_CLOSE_EVENT: u32 = 2u32
+
+const EXCEPTION_ACCESS_VIOLATION: u32 = 3221225477u32
+const EXCEPTION_ILLEGAL_INSTRUCTION: u32 = 3221225501u32
+const EXCEPTION_FLOAT_DENORMAL: u32 = 3221225613u32
+const EXCEPTION_FLOAT_DIVIDE: u32 = 3221225614u32
+const EXCEPTION_FLOAT_INEXACT: u32 = 3221225615u32
+const EXCEPTION_FLOAT_INVALID: u32 = 3221225616u32
+const EXCEPTION_FLOAT_OVERFLOW: u32 = 3221225617u32
+const EXCEPTION_FLOAT_UNDERFLOW: u32 = 3221225619u32
+
+// A customer-defined code -- bit 29 set, which is what says the code is nobody's but this
+// program's. `Abort` has no structured exception of its own on this host, so it gets one.
+const EXCEPTION_ABORT: u32 = 3758116432u32
+
+const EXCEPTION_CONTINUE_SEARCH: i32 = 0i32
+const EXCEPTION_CONTINUE_EXECUTION: i32 = -1i32
+
+var signal_slot: [6]usize
+var signal_console_ready: u8
+var signal_vectored_ready: u8
+
+fn signal_index(which: Signal) -> usize {
+    if which == .Interrupt { ret 0usize }
+    if which == .Terminate { ret 1usize }
+    if which == .Abort { ret 2usize }
+    if which == .SegmentFault { ret 3usize }
+    if which == .FloatingPoint { ret 4usize }
+    ret 5usize
+}
+
+// The one place a caller's handler is reached from. A slot that is zero is a signal whose
+// handler was taken back between the system's decision to deliver and this call, which is
+// nothing to do rather than a call through zero.
+fn signal_dispatch(which: Signal) -> bool {
+    let bits = signal_slot[signal_index(which)]
+    if bits == 0usize { ret false }
+    var entry: SignalHandler = zero
+    entry.bits = bits
+    entry.function(which)
+    ret true
+}
+
+// The console control handler, which the system calls on a thread of its own. Reporting an
+// event as handled is what keeps the process alive past a Ctrl-C; reporting it unhandled
+// lets the default ending happen, which is what a signal with no handler means.
+@cc(c)
+fn signal_console_routine(event: u32) -> i32 {
+    var which: Signal = .Interrupt
+    if event == CTRL_BREAK_EVENT || event == CTRL_CLOSE_EVENT { which = .Terminate }
+    if event != CTRL_C_EVENT && event != CTRL_BREAK_EVENT && event != CTRL_CLOSE_EVENT { ret 0i32 }
+    if signal_dispatch(which) { ret 1i32 }
+    ret 0i32
+}
+
+// Registered last rather than first, so the runtime's own access-violation handler keeps
+// the first refusal: it commits arena pages on demand, and a handler ahead of it would be
+// entered for every one of them.
+@cc(c)
+fn signal_exception_routine(pointers: *ExceptionPointers) -> i32 {
+    let code = pointers.record.code
+    var which: Signal = .Abort
+    var known = false
+    if code == EXCEPTION_ABORT { known = true }
+    if code == EXCEPTION_ACCESS_VIOLATION {
+        which = .SegmentFault
+        known = true
+    }
+    if code == EXCEPTION_ILLEGAL_INSTRUCTION {
+        which = .Illegal
+        known = true
+    }
+    if code == EXCEPTION_FLOAT_DENORMAL || code == EXCEPTION_FLOAT_DIVIDE || code == EXCEPTION_FLOAT_INEXACT {
+        which = .FloatingPoint
+        known = true
+    }
+    if code == EXCEPTION_FLOAT_INVALID || code == EXCEPTION_FLOAT_OVERFLOW || code == EXCEPTION_FLOAT_UNDERFLOW {
+        which = .FloatingPoint
+        known = true
+    }
+    if !known { ret EXCEPTION_CONTINUE_SEARCH }
+    if !signal_dispatch(which) { ret EXCEPTION_CONTINUE_SEARCH }
+    // A raised exception has no faulting instruction to return to, so execution resumes
+    // where it was raised. A real fault does, and resuming there would fault again.
+    if code == EXCEPTION_ABORT { ret EXCEPTION_CONTINUE_EXECUTION }
+    ret EXCEPTION_CONTINUE_SEARCH
+}
+
+fn signal_ensure_console() -> err {
+    if signal_console_ready == 1u8 { ret ok }
+    if raw_console_handler(signal_console_routine, 1i32) == 0i32 { ret from_last_error() }
+    signal_console_ready = 1u8
+    ret ok
+}
+
+fn signal_ensure_vectored() -> err {
+    if signal_vectored_ready == 1u8 { ret ok }
+    if raw_add_vectored(0u32, signal_exception_routine) == 0usize { ret Failed }
+    signal_vectored_ready = 1u8
+    ret ok
+}
+
+// The slot is written before the system is told, so an event that arrives between the two
+// finds a handler rather than a zero; a failed install takes it back.
+fn signal(which: Signal, handler: fn(Signal)) -> err {
+    var entry: SignalHandler = zero
+    entry.function = handler
+    if entry.bits == 0usize { ret Failed }
+    let slot = signal_index(which)
+    let previous = signal_slot[slot]
+    signal_slot[slot] = entry.bits
+    var install_error = ok
+    if which == .Interrupt || which == .Terminate {
+        install_error = signal_ensure_console()
+    } else {
+        install_error = signal_ensure_vectored()
+    }
+    if install_error != ok {
+        signal_slot[slot] = previous
+        ret install_error
+    }
+    ret ok
+}
+
+// The registrations stay -- neither a console handler nor a vectored handler can be taken
+// back without a handle this file does not keep -- and the slot is what they consult, so
+// clearing it is what restores the default: the console routine reports the event
+// unhandled and the exception routine continues the search.
+fn signal_default(which: Signal) -> err {
+    signal_slot[signal_index(which)] = 0usize
+    ret ok
+}
+
+// `Abort`, `SegmentFault`, `FloatingPoint` and `Illegal` are raised for real, as structured
+// exceptions that travel the whole handler chain -- which for the three that name a fault
+// means the process ends, exactly as the fault itself would end it.
+//
+// ponytail: `Interrupt` and `Terminate` are not raised as real console events.
+// `GenerateConsoleCtrlEvent` can only address a process group, and a program that was not
+// started as its own group leader shares its parent's -- so raising one would reach every
+// process on the console, the shell that started the program included. What happens instead
+// is the control routine being entered directly, which is the same dispatch a real event
+// makes; what it costs is the thread, because a real event arrives on one of the system's
+// and this one arrives on the caller's, and it costs the default ending when no handler is
+// installed, because there is no event for the system to end the process over. A host call
+// that raised an event for one process would replace it.
+fn signal_raise(which: Signal) -> err {
+    if which == .Interrupt || which == .Terminate {
+        var event = CTRL_C_EVENT
+        if which == .Terminate { event = CTRL_BREAK_EVENT }
+        let answered = signal_console_routine(event)
+        ret ok
+    }
+    var code = EXCEPTION_ABORT
+    if which == .SegmentFault { code = EXCEPTION_ACCESS_VIOLATION }
+    if which == .FloatingPoint { code = EXCEPTION_FLOAT_DIVIDE }
+    if which == .Illegal { code = EXCEPTION_ILLEGAL_INSTRUCTION }
+    raw_raise_exception(code, 0u32, 0u32, 0usize)
+    ret ok
+}
+
+// What a process gives up for the rest of its life (#1618). Irreversible on purpose: a
+// sandbox that can be lifted is not one, and every host that offers this offers it as a
+// one-way door.
+//
+// `allow_syscalls` is a list of the target's own system call numbers, which is a Linux
+// idea -- this host has no stable syscall table to name and no supported way to filter it.
+// A policy that names one is applied as far as the rest of it goes and then answers
+// `Unsupported`, so a caller learns which half it got rather than none of it.
+//
+// `kill_on_violation` has nothing to choose between here: a mitigation that is broken
+// fails the operation that broke it -- the child is not created, the page is not made
+// executable -- and there is no killing variant to ask for.
+type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes: bool, deny_dynamic_code: bool, kill_on_violation: bool }
+
+@import("kernel32.dll", "SetProcessMitigationPolicy")
+extern fn raw_set_mitigation(policy: i32, buffer: *u32, length: usize) -> i32
+
+const PROCESS_DYNAMIC_CODE_POLICY: i32 = 8i32
+const PROCESS_CHILD_PROCESS_POLICY: i32 = 13i32
+const PROHIBIT_DYNAMIC_CODE: u32 = 1u32
+const NO_CHILD_PROCESS_CREATION: u32 = 1u32
+
+fn sandbox(policy: *const SandboxPolicy) -> err {
+    if policy.deny_child_processes {
+        var bits = NO_CHILD_PROCESS_CREATION
+        if raw_set_mitigation(PROCESS_CHILD_PROCESS_POLICY, &bits, 4usize) == 0i32 { ret from_last_error() }
+    }
+    if policy.deny_dynamic_code {
+        var bits = PROHIBIT_DYNAMIC_CODE
+        if raw_set_mitigation(PROCESS_DYNAMIC_CODE_POLICY, &bits, 4usize) == 0i32 { ret from_last_error() }
+    }
+    if policy.allow_syscalls.len != 0usize { ret Unsupported }
+    ret ok
 }

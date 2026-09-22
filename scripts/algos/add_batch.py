@@ -41,6 +41,8 @@ apis = root / 'docs' / 'module-apis.md'
 text = apis.read_text(encoding='utf-8')
 for m in batch['modules']:
     heading = f"### `{m['name']}`\n"
+    if m.get('fixture_only'):
+        continue  # an existing module gaining a fixture; its fence is maintained by hand
     if m.get('refresh'):
         start = text.index(heading)
         open_at = text.index('```neper\n', start)
@@ -65,7 +67,7 @@ mods = plan['modules']
 for m in [x for x in batch['modules'] if x.get('refresh') and 'deps' in x]:
     # A refreshed module may have gained imports; its dependency list follows its source.
     [x for x in mods if x['name'] == m['name']][0]['direct_dependencies'] = m['deps']
-for m in [x for x in batch['modules'] if not x.get('refresh')]:
+for m in [x for x in batch['modules'] if not x.get('refresh') and not x.get('fixture_only')]:
     assert not any(x['name'] == m['name'] for x in mods), m['name']
     prefix = m['name'].rsplit('.', 1)[0] + '.'
     candidates = [i for i, x in enumerate(mods) if x['name'].startswith(prefix)]
@@ -74,7 +76,7 @@ for m in [x for x in batch['modules'] if not x.get('refresh')]:
                      "schedule": "later", "direct_dependencies": m['deps'], "blocked_by": []})
 for t in plan['tiers']:
     if t['id'] == 'extended':
-        t['modules'] += [m['name'] for m in batch['modules'] if not m.get('refresh')]
+        t['modules'] += [m['name'] for m in batch['modules'] if not m.get('refresh') and not m.get('fixture_only')]
 plan_path.write_text(json.dumps(plan, indent=1, ensure_ascii=False) + '\n', encoding='utf-8', newline='\n')
 
 # run.ps1 / run.sh

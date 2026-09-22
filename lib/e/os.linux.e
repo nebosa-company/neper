@@ -44,28 +44,7 @@ type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_
 // The kernel's `struct stat` for x86-64, field for field. `newfstatat` writes 144
 // bytes at the address it is given, so this layout is the ABI rather than a choice --
 // every field is here, named or reserved, because the size is part of the contract.
-type StatBuffer = struct {
-    device: u64,
-    inode: u64,
-    link_count: u64,
-    mode: u32,
-    user: u32,
-    group: u32,
-    padding: u32,
-    represented_device: u64,
-    size: i64,
-    block_size: i64,
-    blocks: i64,
-    accessed: i64,
-    accessed_ns: i64,
-    modified: i64,
-    modified_ns: i64,
-    changed: i64,
-    changed_ns: i64,
-    reserved0: i64,
-    reserved1: i64,
-    reserved2: i64,
-}
+type StatBuffer = struct { device: u64, inode: u64, link_count: u64, mode: u32, user: u32, group: u32, padding: u32, represented_device: u64, size: i64, block_size: i64, blocks: i64, accessed: i64, accessed_ns: i64, modified: i64, modified_ns: i64, changed: i64, changed_ns: i64, reserved0: i64, reserved1: i64, reserved2: i64 }
 
 const SYS_NEWFSTATAT: usize = 262usize
 const SYS_MKDIRAT: usize = 258usize
@@ -1389,18 +1368,7 @@ fn decode_address(raw: RawAddress) -> SocketAddress {
     ret address
 }
 
-type ErrorKind = enum u8 {
-    NotFound,
-    Denied,
-    Exists,
-    Interrupted,
-    OutOfMemory,
-    Timeout,
-    WouldBlock,
-    Unsupported,
-    Invalid,
-    Other,
-}
+type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
 
 // The two strings are the caller's, borrowed rather than copied: they name the operation and
 // its subject, and nothing here needs them to outlive the call that supplied them.
@@ -1432,13 +1400,7 @@ fn c_string_vector(a: *mem.Arena, items: []const str) -> (usize, err) {
 // Everything the child will need, prepared while it is still safe to allocate. After the fork
 // the child does nothing but a handful of syscalls: a language runtime in a forked child is only
 // safe if it never touches anything, and the way to keep that true is to leave it nothing to do.
-type SpawnPlan = struct {
-    argv: usize,
-    envp: usize,
-    program: usize,
-    directory: usize,
-    grouped: bool,
-}
+type SpawnPlan = struct { argv: usize, envp: usize, program: usize, directory: usize, grouped: bool }
 
 fn spawn_plan(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (SpawnPlan, err) {
     var plan: SpawnPlan = zero
@@ -1592,10 +1554,11 @@ fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, e
 
 // A negative process identifier is the whole group, which is what `killpg` is.
 fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
-    var signal = SIGTERM
-    if force { signal = SIGKILL }
+    // Not `signal`: that is the name of a module-scope function here now.
+    var number = SIGTERM
+    if force { number = SIGKILL }
     let negated = 0usize -% group.raw
-    let result = syscall(SYS_KILL, negated, signal, 0usize, 0usize, 0usize, 0usize)
+    let result = syscall(SYS_KILL, negated, number, 0usize, 0usize, 0usize, 0usize)
     // ESRCH means the group is already empty, so termination has achieved its postcondition.
     if result == -3isize { ret ok }
     ret from_errno(result)
@@ -3679,4 +3642,314 @@ type AccessibleNode = struct { id: u32, parent: u32, has_parent: bool, role: u8,
 
 fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
     ret Unsupported
+}
+
+// A file's bytes handed to a socket without passing through this process (#1290): the
+// kernel moves them from the page cache into the socket, so nothing is copied into a
+// buffer here and back out again. The offset is the file's own and the descriptor's
+// cursor is not touched, so one open file can serve several transfers at once.
+//
+// A short answer is ordinary -- the socket took what fitted -- and so is zero: the offset
+// is at or past the end of the file, or the socket is non-blocking and full. The two are
+// not told apart, for the reason `socket_send` does not tell a zero-length send from a
+// full buffer either: a caller with more to send asks again, and one without stops.
+const SYS_SENDFILE: usize = 40usize
+
+fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err) {
+    if count == 0usize { ret (0usize, ok) }
+    // The offset rides in memory rather than in a register, which is what keeps the
+    // file's own cursor out of it.
+    var position = mem.bitcast[i64](offset)
+    let moved = syscall(SYS_SENDFILE, destination.raw, source.raw, mem.address_of(&position), count, 0usize, 0usize)
+    // EAGAIN on a socket that was made non-blocking: nothing moved, which is progress of
+    // zero and not a failure.
+    if moved == -11isize { ret (0usize, ok) }
+    if moved < 0isize { ret (0usize, from_errno(moved)) }
+    ret (usize(moved), ok)
+}
+
+// The six signals a portable program has anything to say about (#1642). Everything else
+// the kernel can deliver is left to its default, which is what a program that did not ask
+// for a signal wants.
+//
+// On this host all six are real signals and all six are delivered: `Interrupt` and
+// `Terminate` asynchronously, `Abort`, `SegmentFault`, `FloatingPoint` and `Illegal` on
+// the faulting thread at the faulting instruction. A handler for one of the last four
+// returns into the instruction that faulted, so unless it has fixed what faulted the
+// program will fault again -- a handler there is for reporting, and `os.exit` is how it
+// ends.
+type Signal = enum u8 { Interrupt, Terminate, Abort, SegmentFault, FloatingPoint, Illegal }
+
+// The caller's handler as bits, which is the only way to keep one in a table: a slot is a
+// `usize` and a function is not.
+type SignalHandler = union { function: fn(Signal), bits: usize }
+type SignalEntry = union { function: fn(i32, usize, usize), bits: usize }
+
+// The kernel's `struct sigaction`, which is not libc's: four words, and the mask is the
+// kernel's eight bytes rather than libc's hundred and twenty-eight.
+type KernelSigAction = struct { handler: usize, flags: u64, restorer: usize, mask: u64 }
+
+const SYS_RT_SIGACTION: usize = 13usize
+const SYS_GETPID: usize = 39usize
+const SYS_MPROTECT: usize = 10usize
+
+const SA_RESTORER: u64 = 67108864u64
+const SA_SIGINFO: u64 = 4u64
+const KERNEL_SIGSET_SIZE: usize = 8usize
+
+const SIGINT: usize = 2usize
+const SIGILL: usize = 4usize
+const SIGABRT: usize = 6usize
+const SIGFPE: usize = 8usize
+const SIGSEGV: usize = 11usize
+
+const PROT_EXEC: usize = 4usize
+
+var signal_slot: [6]usize
+var signal_restorer_code: [16]u8
+var signal_restorer_ready: u8
+
+fn signal_number(which: Signal) -> usize {
+    if which == .Interrupt { ret SIGINT }
+    if which == .Terminate { ret SIGTERM }
+    if which == .Abort { ret SIGABRT }
+    if which == .SegmentFault { ret SIGSEGV }
+    if which == .FloatingPoint { ret SIGFPE }
+    ret SIGILL
+}
+
+fn signal_index(which: Signal) -> usize {
+    if which == .Interrupt { ret 0usize }
+    if which == .Terminate { ret 1usize }
+    if which == .Abort { ret 2usize }
+    if which == .SegmentFault { ret 3usize }
+    if which == .FloatingPoint { ret 4usize }
+    ret 5usize
+}
+
+fn signal_of_number(number: i32) -> (Signal, bool) {
+    var which: Signal = .Interrupt
+    if number == 2i32 { ret (which, true) }
+    which = .Terminate
+    if number == 15i32 { ret (which, true) }
+    which = .Abort
+    if number == 6i32 { ret (which, true) }
+    which = .SegmentFault
+    if number == 11i32 { ret (which, true) }
+    which = .FloatingPoint
+    if number == 8i32 { ret (which, true) }
+    which = .Illegal
+    if number == 4i32 { ret (which, true) }
+    ret (which, false)
+}
+
+// The one place a caller's handler is reached from. A slot that is zero is a signal whose
+// handler was taken back between the kernel's decision to deliver and this call, which is
+// nothing to do rather than a call through zero.
+fn signal_dispatch(which: Signal) {
+    let bits = signal_slot[signal_index(which)]
+    if bits == 0usize { ret }
+    var entry: SignalHandler = zero
+    entry.bits = bits
+    entry.function(which)
+}
+
+// What the kernel actually enters, in the C convention it calls with. `SA_SIGINFO` makes
+// it three arguments; the second and third are the `siginfo` and the `ucontext`, which
+// nothing here reads -- the fence answers with a `Signal` and not with a machine state.
+@cc(c)
+fn signal_entry(number: i32, information: usize, context: usize) {
+    let (which, known) = signal_of_number(number)
+    if !known { ret }
+    signal_dispatch(which)
+}
+
+// `rt_sigreturn` reads the signal frame from the stack pointer exactly as the kernel left
+// it, so the restorer cannot be an ordinary function: one pushed register in a prologue
+// moves the frame out from under it. It is nine bytes -- `mov rax, 15` then `syscall` --
+// written into a static buffer whose pages are then made executable. That is the same
+// trampoline libc carries, and the only way to spell one in a language with no inline
+// assembly.
+//
+// ponytail: the page the buffer shares with whatever else the linker put beside it becomes
+// writable and executable, because `mprotect` works in pages and this file cannot ask for
+// one of its own. A program that installs no handler never reaches here, and one that does
+// pays a single page. A section attribute would replace it.
+fn signal_restorer() -> (usize, err) {
+    let address = mem.address_of(&signal_restorer_code[0usize])
+    if signal_restorer_ready == 1u8 { ret (address, ok) }
+    signal_restorer_code[0usize] = 72u8
+    signal_restorer_code[1usize] = 199u8
+    signal_restorer_code[2usize] = 192u8
+    signal_restorer_code[3usize] = 15u8
+    signal_restorer_code[4usize] = 0u8
+    signal_restorer_code[5usize] = 0u8
+    signal_restorer_code[6usize] = 0u8
+    signal_restorer_code[7usize] = 15u8
+    signal_restorer_code[8usize] = 5u8
+    let first = address & ~(PAGE_SIZE - 1usize)
+    let last = (address + 16usize + PAGE_SIZE - 1usize) & ~(PAGE_SIZE - 1usize)
+    let protected = syscall(SYS_MPROTECT, first, last - first, PROT_READ | PROT_WRITE | PROT_EXEC, 0usize, 0usize, 0usize)
+    if protected < 0isize { ret (0usize, from_errno(protected)) }
+    signal_restorer_ready = 1u8
+    ret (address, ok)
+}
+
+fn signal_install(which: Signal, handler: usize, flags: u64) -> err {
+    let (restorer, restorer_error) = signal_restorer()
+    if restorer_error != ok { ret restorer_error }
+    var action: KernelSigAction = zero
+    action.handler = handler
+    action.flags = flags
+    action.restorer = restorer
+    action.mask = 0u64
+    ret from_errno(syscall(SYS_RT_SIGACTION, signal_number(which), mem.address_of(&action), 0usize, KERNEL_SIGSET_SIZE, 0usize, 0usize))
+}
+
+// The slot is written before the kernel is told, so a signal that arrives between the two
+// finds a handler rather than a zero; a failed install takes it back.
+fn signal(which: Signal, handler: fn(Signal)) -> err {
+    var entry: SignalHandler = zero
+    entry.function = handler
+    if entry.bits == 0usize { ret Failed }
+    var trampoline: SignalEntry = zero
+    trampoline.function = signal_entry
+    let slot = signal_index(which)
+    let previous = signal_slot[slot]
+    signal_slot[slot] = entry.bits
+    let install_error = signal_install(which, trampoline.bits, SA_RESTORER | SA_SIGINFO)
+    if install_error != ok {
+        signal_slot[slot] = previous
+        ret install_error
+    }
+    ret ok
+}
+
+// `SIG_DFL` is a handler of zero, which is what the kernel reads it as.
+fn signal_default(which: Signal) -> err {
+    signal_slot[signal_index(which)] = 0usize
+    ret signal_install(which, 0usize, SA_RESTORER)
+}
+
+// A real signal to this process, so it takes the same path as one the kernel decided to
+// send: a handler runs, and with none installed the default action applies -- which for
+// four of the six is the end of the process.
+fn signal_raise(which: Signal) -> err {
+    let identity = syscall(SYS_GETPID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if identity < 0isize { ret from_errno(identity) }
+    ret from_errno(syscall(SYS_KILL, usize(identity), signal_number(which), 0usize, 0usize, 0usize, 0usize))
+}
+
+// What a process gives up for the rest of its life (#1618). Irreversible on purpose: a
+// sandbox that can be lifted is not one, and every host that offers this offers it as a
+// one-way door.
+//
+// `allow_syscalls` is a list of this architecture's system call numbers. Empty means the
+// syscall table is not filtered at all, which is the only way to say "deny nothing" --
+// an empty allow-list that denied everything would deny the exit that reports it.
+type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes: bool, deny_dynamic_code: bool, kill_on_violation: bool }
+
+// One classic BPF instruction, which is what a seccomp filter is made of.
+type BpfInstruction = struct { code: u16, jump_true: u8, jump_false: u8, value: u32 }
+// `struct sock_fprog`: a count and a pointer, with the pointer at the word boundary.
+type BpfProgram = struct { count: u16, padding: u16, padding2: u32, filter: usize }
+
+const SYS_PRCTL: usize = 157usize
+const PR_SET_NO_NEW_PRIVS: usize = 38usize
+const PR_SET_SECCOMP: usize = 22usize
+const SECCOMP_MODE_FILTER: usize = 2usize
+
+const BPF_LOAD_WORD: u16 = 32u16
+const BPF_JUMP_EQUAL: u16 = 21u16
+const BPF_JUMP_ALWAYS: u16 = 5u16
+const BPF_RETURN: u16 = 6u16
+
+// The offsets of `nr` and `arch` in `struct seccomp_data`, which is what an instruction
+// loads from.
+const SECCOMP_DATA_NR: u32 = 0u32
+const SECCOMP_DATA_ARCH: u32 = 4u32
+
+const AUDIT_ARCH_X86_64: u32 = 3221225534u32
+const SECCOMP_RET_ALLOW: u32 = 2147418112u32
+const SECCOMP_RET_KILL_PROCESS: u32 = 2147483648u32
+const SECCOMP_RET_ERRNO_PERM: u32 = 327681u32
+
+// ponytail: a jump in classic BPF is a byte, so nothing may be more than 255 instructions
+// away; two hundred allowed calls with the preamble and the child-process denials stays
+// well inside that. A longer list wants the numbers sorted and compared by halving, which
+// is a different filter and not a longer one.
+const SANDBOX_ALLOW_MAX: usize = 200usize
+var sandbox_filter: [212]BpfInstruction
+
+// The calls that make another process. `clone3` and `execveat` are here for the same
+// reason `clone` and `execve` are: a denial that names only the old spelling is not one.
+const SANDBOX_CHILD_CALLS: usize = 6usize
+
+fn sandbox_child_call(index: usize) -> u32 {
+    if index == 0usize { ret 56u32 }
+    if index == 1usize { ret 57u32 }
+    if index == 2usize { ret 58u32 }
+    if index == 3usize { ret 59u32 }
+    if index == 4usize { ret 322u32 }
+    ret 435u32
+}
+
+// `PR_SET_NO_NEW_PRIVS` first, always: without it an unprivileged process may not install
+// a filter at all, and with it no execve can gain privilege past the filter.
+//
+// The filter reads: refuse anything that is not this architecture, then refuse the calls
+// that make a child if that was asked, then allow what the list names and refuse the rest
+// -- or, with no list, allow everything the child-process denials did not catch.
+//
+// ponytail: `deny_dynamic_code` is not enforced here. Saying it in seccomp means filtering
+// `mprotect` and `mmap` on their protection argument rather than on their number, which is
+// a second kind of filter; until it is written the policy is applied as far as it goes and
+// the answer says the rest was not. The upgrade path is argument filtering on `PROT_EXEC`.
+fn sandbox(policy: *const SandboxPolicy) -> err {
+    let privileged = syscall(SYS_PRCTL, PR_SET_NO_NEW_PRIVS, 1usize, 0usize, 0usize, 0usize, 0usize)
+    if privileged < 0isize { ret from_errno(privileged) }
+    let allowed = policy.allow_syscalls
+    if allowed.len > SANDBOX_ALLOW_MAX { ret Unsupported }
+    var children = 0usize
+    if policy.deny_child_processes { children = SANDBOX_CHILD_CALLS }
+    if children != 0usize || allowed.len != 0usize {
+        var body = allowed.len
+        if allowed.len == 0usize { body = 1usize }
+        let total = 5usize + children + body
+        let deny_at = total - 2usize
+        let allow_at = total - 1usize
+        var deny_value = SECCOMP_RET_ERRNO_PERM
+        if policy.kill_on_violation { deny_value = SECCOMP_RET_KILL_PROCESS }
+        sandbox_filter[0usize] = BpfInstruction { code: BPF_LOAD_WORD, jump_true: 0u8, jump_false: 0u8, value: SECCOMP_DATA_ARCH }
+        sandbox_filter[1usize] = BpfInstruction { code: BPF_JUMP_EQUAL, jump_true: 0u8, jump_false: u8(deny_at - 2usize), value: AUDIT_ARCH_X86_64 }
+        sandbox_filter[2usize] = BpfInstruction { code: BPF_LOAD_WORD, jump_true: 0u8, jump_false: 0u8, value: SECCOMP_DATA_NR }
+        var slot = 3usize
+        var which = 0usize
+        while which < children {
+            sandbox_filter[slot] = BpfInstruction { code: BPF_JUMP_EQUAL, jump_true: u8(deny_at - slot - 1usize), jump_false: 0u8, value: sandbox_child_call(which) }
+            slot += 1usize
+            which += 1usize
+        }
+        if allowed.len == 0usize {
+            sandbox_filter[slot] = BpfInstruction { code: BPF_JUMP_ALWAYS, jump_true: 0u8, jump_false: 0u8, value: u32(allow_at - slot - 1usize) }
+            slot += 1usize
+        } else {
+            which = 0usize
+            while which < allowed.len {
+                sandbox_filter[slot] = BpfInstruction { code: BPF_JUMP_EQUAL, jump_true: u8(allow_at - slot - 1usize), jump_false: 0u8, value: allowed[which] }
+                slot += 1usize
+                which += 1usize
+            }
+        }
+        sandbox_filter[slot] = BpfInstruction { code: BPF_RETURN, jump_true: 0u8, jump_false: 0u8, value: deny_value }
+        slot += 1usize
+        sandbox_filter[slot] = BpfInstruction { code: BPF_RETURN, jump_true: 0u8, jump_false: 0u8, value: SECCOMP_RET_ALLOW }
+        var program: BpfProgram = zero
+        program.count = u16(total)
+        program.filter = mem.address_of(&sandbox_filter[0usize])
+        let filtered = syscall(SYS_PRCTL, PR_SET_SECCOMP, SECCOMP_MODE_FILTER, mem.address_of(&program), 0usize, 0usize, 0usize)
+        if filtered < 0isize { ret from_errno(filtered) }
+    }
+    if policy.deny_dynamic_code { ret Unsupported }
+    ret ok
 }

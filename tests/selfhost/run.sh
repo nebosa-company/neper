@@ -2214,6 +2214,16 @@ gpu_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$gpu_gaps_written" = 'executable written' ]
 chmod +x "$test_build/gpu-gaps-selfhost"
 "$test_build/gpu-gaps-selfhost"
+# `e.thread.fiber`: a cooperative scheduler whose hand-off leaves exactly one fiber running, a round-robin order equal to a replica over two hundred switches, suspend, resume and join, every thread joined at the end (D926).
+thread_fiber_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/thread_fiber/src/main.e" "$repo" x64 linux "$test_build/thread-fiber-selfhost")
+[ "$thread_fiber_written" = 'executable written' ]
+chmod +x "$test_build/thread-fiber-selfhost"
+"$test_build/thread-fiber-selfhost"
+# `e.os.send_file`, `e.os.signal` and `e.os.sandbox`: a file's bytes moved to a loopback socket by the kernel, a raised signal reaching its handler and the default restored, and a sandboxed child refused its forbidden syscall or its child process (D926).
+os_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_gaps/src/main.e" "$repo" x64 linux "$test_build/os-gaps-selfhost")
+[ "$os_gaps_written" = 'executable written' ]
+chmod +x "$test_build/os-gaps-selfhost"
+"$test_build/os-gaps-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

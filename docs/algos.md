@@ -9,7 +9,7 @@ Numbering is global; the ranges in the headings are the transcript's own.
 
 Every entry below carries a verdict. 1232 entries map to a library function, 213 are duplicates of one of those (`see #N`), and 805 are skipped with a one-word reason.
 
-- **→ `e.mod.fn`** — implementable; the proposed module and function name. Names follow the existing conventions in `docs/module-apis.md`: `snake_case`, arena-first for allocating calls, `[T: type]` generics.
+- **`→ e.mod.fn`** — implementable; the proposed module and function name. Names follow the existing conventions in `docs/module-apis.md`: `snake_case`, arena-first for allocating calls, `[T: type]` generics.
 - **→ see #N** — the same algorithm already appears at #N; implement it once, there.
 - **→ skip: reason** — not a library function. Reasons:
 

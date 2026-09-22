@@ -1034,3 +1034,36 @@ every refreshed golden was diffed field by field and accepted only when
 the differences were snapshot hashes, `e.mem` digests, the inline rows or
 the moved span -- a golden refresh must never hide a changed answer. The
 refreshing variants of the runners are generated, not committed.
+
+## D926 — The last planned syscalls and a fiber scheduler: the algos plan is answered
+
+`docs/algos.md` named three `e.os` entries and one `e.thread` entry that no
+module carried. `send_file` is `sendfile(2)` on Linux and `TransmitFile`
+from `mswsock.dll` on Windows -- the socket is overlapped, so the transfer
+completes through an event and `WSAGetOverlappedResult`, and the count is
+clamped to the bytes the file still holds because `TransmitFile` fails
+past the end rather than stopping. `signal` installs a handler for six
+kinds: Linux takes `rt_sigaction` with a nine-byte machine-code restorer
+in an RWX page, because `rt_sigreturn` reads the frame the kernel left at
+`rsp` and any prologue would move it; Windows splits them between
+`SetConsoleCtrlHandler` and `AddVectoredExceptionHandler`, and delivers
+five of the six -- an access violation is taken first by the runtime's own
+fault handler, which commits arena pages and cannot be registered behind.
+`sandbox` is seccomp-BPF behind `PR_SET_NO_NEW_PRIVS` on Linux and
+`SetProcessMitigationPolicy` on Windows; the child-process denial works on
+both, a syscall allow-list only on Linux. `e.thread.fiber` is a
+cooperative scheduler: one `sync.Event` permit per fiber, a hand-off that
+sets the receiver's permit and parks on its own, so exactly one fiber runs
+and the giver's writes are published by the event; the fibers are backed
+by threads, with the stack switch in the runtime prefix named as the
+upgrade. The fixture proves the invariant with a counter that never passes
+one and a round-robin order equal to a replica, and every irreversible or
+fatal case in `os_gaps` runs in a re-executed child so the suite survives.
+Both hosts run both fixtures.
+
+With this the plan's 1,217 selected algorithms all name a function that
+exists, except `e.fmt.opus.decode`: RFC 6716's SILK and CELT decoders are
+a project of their own, and the stream leaves it named and unwritten
+rather than half-written. The legend line of `docs/algos.md` now keeps its
+arrow inside the code span, so the counter stops reading the legend as a
+planned function.

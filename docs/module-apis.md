@@ -5794,6 +5794,8 @@ type Dir = resource(dir_close) struct { raw: usize }
 type FileLock = resource(file_unlock) struct { raw: usize }
 type ProcGroup = resource(proc_group_close) struct { raw: usize }
 type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
+type Signal = enum u8 { Interrupt, Terminate, Abort, SegmentFault, FloatingPoint, Illegal }
+type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes: bool, deny_dynamic_code: bool, kill_on_violation: bool }
 
 fn dir_open(a: *mem.Arena, path: str) -> (Dir, err)
 fn dir_close(dir: own Dir) -> err
@@ -5806,6 +5808,11 @@ fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, e
 fn proc_group_terminate(group: ProcGroup, force: bool) -> err
 fn proc_group_close(group: own ProcGroup) -> err
 
+fn send_file(destination: Socket, source: File, offset: u64, count: usize) -> (usize, err)
+fn signal(which: Signal, handler: fn(Signal)) -> err
+fn signal_default(which: Signal) -> err
+fn signal_raise(which: Signal) -> err
+fn sandbox(policy: *const SandboxPolicy) -> err
 ```
 
 `replace` is `rename` with the two questions a caller actually has: whether an existing
@@ -6534,13 +6541,34 @@ released by finishing tasks, cycles reported) and `edf`/`edf_order`.
 ```neper
 type Thread = os.Thread
 type Group = resource(join_all) struct { threads: []Thread, count: usize }
+type FiberState = enum u8 { Ready, Running, Suspended, Done }
+type Fiber = struct { permit: sync.Event, thread: Thread, owner: *void, id: u32, state: FiberState, started: bool, joined: bool }
+type Scheduler[Ctx: type] = struct { ctx: *Ctx, fibers: []Fiber, bodies: []fn(*Ctx, u32), count: usize, limit: usize, running: u32, cursor: u32, done: usize, host: sync.Event }
+error Invalid
+error Full
 const DEFAULT_STACK: usize = 1048576usize
+const NO_FIBER: u32 = 4294967295u32
 
 fn spawn[Ctx: type](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)
 fn join(thread: own Thread) -> err
 fn detach(thread: own Thread) -> err
 fn spawn_all[Ctx: type](a: *mem.Arena, entry: fn(*Ctx), contexts: []Ctx, stack: usize) -> (Group, err)
 fn join_all(g: own Group) -> err
+fn scheduler[Ctx: type](ctx: *Ctx, fibers: []Fiber, bodies: []fn(*Ctx, u32), worker_count: usize) -> (Scheduler[Ctx], err)
+fn fiber_main[Ctx: type](f: *Fiber)
+fn fiber[Ctx: type](s: *Scheduler[Ctx], body: fn(*Ctx, u32)) -> (u32, err)
+fn next_ready_after[Ctx: type](s: *Scheduler[Ctx], from: u32) -> u32
+fn switch_to[Ctx: type](s: *Scheduler[Ctx], from: u32, to: u32)
+fn switch_to_host[Ctx: type](s: *Scheduler[Ctx], from: u32)
+fn dispatch[Ctx: type](s: *Scheduler[Ctx], to: u32)
+fn current[Ctx: type](s: *Scheduler[Ctx]) -> u32
+fn fiber_state[Ctx: type](s: *Scheduler[Ctx], id: u32) -> (FiberState, err)
+fn yield_now[Ctx: type](s: *Scheduler[Ctx]) -> err
+fn yield_to[Ctx: type](s: *Scheduler[Ctx], id: u32) -> err
+fn suspend[Ctx: type](s: *Scheduler[Ctx]) -> err
+fn resume[Ctx: type](s: *Scheduler[Ctx], id: u32) -> err
+fn run[Ctx: type](s: *Scheduler[Ctx]) -> err
+fn join_fiber[Ctx: type](s: *Scheduler[Ctx], id: u32) -> err
 ```
 
 ### `e.sync`

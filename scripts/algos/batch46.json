@@ -1,0 +1,22 @@
+{
+ "decision": "D926",
+ "modules": [
+  {
+   "name": "e.thread",
+   "refresh": true,
+   "fixture": "thread_fiber",
+   "deps": [
+    "e.mem",
+    "e.os",
+    "e.sync"
+   ],
+   "comment": "`e.thread.fiber`: a cooperative scheduler whose hand-off leaves exactly one fiber running, a round-robin order equal to a replica over two hundred switches, suspend, resume and join, every thread joined at the end"
+  },
+  {
+   "name": "e.os",
+   "fixture": "os_gaps",
+   "comment": "`e.os.send_file`, `e.os.signal` and `e.os.sandbox`: a file's bytes moved to a loopback socket by the kernel, a raised signal reaching its handler and the default restored, and a sandboxed child refused its forbidden syscall or its child process",
+   "fixture_only": true
+  }
+ ]
+}
