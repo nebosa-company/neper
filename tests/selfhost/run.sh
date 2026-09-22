@@ -2701,6 +2701,19 @@ ui_lifecycle_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/ui-lifecycle-selfhost"
 ui_lifecycle_output=$("$test_build/ui-lifecycle-selfhost")
 [ "$ui_lifecycle_output" = 'ui lifecycle ok' ]
+# Printing (D900/D901, widget plan P4-11): a bad range refused first, `Unsupported` without a printer.
+ui_print_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_print/src/main.e" "$repo" x64 linux "$test_build/ui-print-selfhost")
+[ "$ui_print_written" = 'executable written' ]
+chmod +x "$test_build/ui-print-selfhost"
+ui_print_output=$("$test_build/ui-print-selfhost")
+[ "$ui_print_output" = 'ui print ok' ]
+# Hardware and security services (D902/D903, widget plan P4-12): statuses answered, the rest
+# `Unsupported` behind the predicates.
+ui_permissions_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_permissions/src/main.e" "$repo" x64 linux "$test_build/ui-permissions-selfhost")
+[ "$ui_permissions_written" = 'executable written' ]
+chmod +x "$test_build/ui-permissions-selfhost"
+ui_permissions_output=$("$test_build/ui-permissions-selfhost")
+[ "$ui_permissions_output" = 'ui permissions ok' ]
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

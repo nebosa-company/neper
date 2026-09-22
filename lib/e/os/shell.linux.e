@@ -20,7 +20,7 @@ error NotFound
 error Failed
 error Cancelled
 
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool, printing: bool, print_dialogs: bool, permissions: bool, credentials: bool, screen_capture: bool, biometrics: bool, photo_picker: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
@@ -38,7 +38,7 @@ type DragResult = enum u8 { Copied, Moved, Cancelled }
 // name, and the extension appended to a typed name without one.
 type DialogKind = enum u8 { Open, Save, Folder }
 type FileFilter = struct { label: str, pattern: str }
-type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFilter, multiple: bool, initial: str, default_extension: str }
+type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFilter, multiple: bool, initial: str, default_extension: str, folder: str }
 // How the program was activated: plainly, with a file, or with a URL; a
 // redirected activation is another instance's arguments handed to the first.
 type ActivationKind = enum u8 { Launch, File, Url }
@@ -48,13 +48,30 @@ type Activation = struct { kind: ActivationKind, payload: str, args: []const str
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
 type Permission = enum u8 { Granted, Denied, Unavailable }
 type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
+// A printer opened for a job, the page a printer draws in device pixels, a
+// page setup in hundredths of a millimetre, and a job in progress.
+type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }
+type PrintPage = struct { width: u32, height: u32, dpi_x: u32, dpi_y: u32 }
+type PageSetup = struct { paper_width: u32, paper_height: u32, margin_left: u32, margin_top: u32, margin_right: u32, margin_bottom: u32 }
+type PrintJob = struct { device: usize, id: i32, pages: u32, open: bool }
+// A protected capability the host gates, and a secret kept by the host's store.
+type Capability = enum u8 { Camera, Microphone, Location, Screen, Biometric, Photos }
+type Credential = struct { user: str, secret: []const u8 }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
 type JumpTask = struct { title: str, program: str, arguments: str, description: str }
 
+// The record; the tool-backed services are there when their tool is on the PATH.
+fn has_tool(name: str) -> bool {
+    var storage: [32768]u8 = zero
+    var scratch = mem.arena_from(storage[..])
+    let (tool, tool_error) = find_program(&scratch, name)
+    ret tool_error == ok
+}
+
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: false, clipboard_typed: false, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: true, lifecycle_events: false, restart: false }
+    ret Capabilities { tray: false, popup_menu: false, open_uri: true, reveal: true, trash: true, taskbar: false, jump_list: false, notices: true, notice_actions: false, notice_remove: false, clipboard_text: false, clipboard_typed: false, drop_target: false, drag_source: false, file_dialogs: false, recent_documents: false, associations: false, startup: true, single_instance: false, hotkeys: false, power_inhibit: has_tool("systemd-inhibit"), lifecycle_events: false, restart: false, printing: false, print_dialogs: false, permissions: false, credentials: has_tool("secret-tool"), screen_capture: false, biometrics: false, photo_picker: false }
 }
 
 fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
@@ -663,6 +680,8 @@ fn background_permission(a: *mem.Arena) -> Permission {
     ret .Granted
 }
 
+// ponytail: the tool's refusal (no session, a denied inhibitor) is printed by the
+// child and not seen here; a caller that must know reads the lifecycle later.
 fn power_inhibit(a: *mem.Arena, keep_display: bool) -> err {
     if inhibiting { ret ok }
     let (tool, tool_error) = find_program(a, "systemd-inhibit")
@@ -711,4 +730,180 @@ fn restart_register(a: *mem.Arena, arguments: str) -> err {
 
 fn restart_unregister(a: *mem.Arena) -> err {
     ret Unsupported
+}
+// ------------------------------------------------------------------ printing
+//
+// D900. Printing on a desktop is CUPS, whose `lp` takes images as pages, and
+// its dialogs are the toolkit's or the portal's; none of it is written yet, so
+// every verb is `Unsupported` and the record says so. ponytail: `lp` with a PNG
+// per page is the same tool-shaped path as `xdg-open`, when a caller needs it.
+
+fn printer_open(a: *mem.Arena, name: str) -> (Printer, err) {
+    var nothing: Printer = zero
+    ret (nothing, Unsupported)
+}
+
+fn printer_close(a: *mem.Arena, p: Printer) -> err {
+    if p.device == 0usize { ret Invalid }
+    ret Unsupported
+}
+
+fn printer_page(p: Printer) -> PrintPage {
+    ret PrintPage { width: 0u32, height: 0u32, dpi_x: 0u32, dpi_y: 0u32 }
+}
+
+fn print_dialog(a: *mem.Arena, w: os.Window, min_page: u32, max_page: u32) -> (Printer, err) {
+    var nothing: Printer = zero
+    if min_page == 0u32 || max_page < min_page || max_page > 65535u32 { ret (nothing, Invalid) }
+    ret (nothing, Unsupported)
+}
+
+fn page_setup_dialog(a: *mem.Arena, w: os.Window, current: PageSetup) -> (PageSetup, err) {
+    var nothing: PageSetup = zero
+    ret (nothing, Unsupported)
+}
+
+fn print_job_start(a: *mem.Arena, p: Printer, document: str, output: str) -> (PrintJob, err) {
+    var nothing: PrintJob = zero
+    if p.device == 0usize || document.len == 0usize { ret (nothing, Invalid) }
+    ret (nothing, Unsupported)
+}
+
+fn print_page(a: *mem.Arena, job: *PrintJob, page: Icon) -> err {
+    if !job.open { ret NotFound }
+    ret Unsupported
+}
+
+fn print_job_end(a: *mem.Arena, job: *PrintJob) -> err {
+    if !job.open { ret NotFound }
+    ret Unsupported
+}
+
+fn print_job_cancel(a: *mem.Arena, job: *PrintJob) -> err {
+    if !job.open { ret NotFound }
+    ret Unsupported
+}
+// ------------------------------------------------- permissions and services
+//
+// D902. A desktop gates the camera, the microphone and the location through the
+// portal, biometrics through the fingerprint daemon and the screen through the
+// compositor, none of which the library speaks, so those are `Unavailable` or
+// `Unsupported` and the record says so; a credential is `secret-tool` (libsecret)
+// where it is installed, the same tool-shaped path as the rest.
+
+fn permission_status(a: *mem.Arena, c: Capability) -> Permission {
+    ret .Unavailable
+}
+
+fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err) {
+    ret (.Unavailable, ok)
+}
+
+fn credential_tool(a: *mem.Arena) -> (str, err) {
+    let (tool, tool_error) = find_program(a, "secret-tool")
+    if tool_error != ok { ret ("", Unsupported) }
+    ret (tool, ok)
+}
+
+fn run_tool(a: *mem.Arena, argv: []const str, input: []const u8, output: []u8) -> (usize, i32, err) {
+    let (reading, writing, pipe_error) = os.pipe()
+    if pipe_error != ok { ret (0usize, 0i32, Failed) }
+    let (in_reading, in_writing, in_error) = os.pipe()
+    if in_error != ok {
+        let closed_reading = os.close(reading)
+        let closed_writing = os.close(writing)
+        ret (0usize, 0i32, Failed)
+    }
+    var options: os.SpawnOptions = zero
+    options.argv = argv
+    options.inherit_env = true
+    options.stdio.stdin = in_reading
+    options.stdio.stdout = writing
+    options.stdio.stderr = os.File { raw: 2usize }
+    let (child, spawn_error) = os.spawn_with_options(a, options)
+    let closed_in_reading = os.close(options.stdio.stdin)
+    let closed_writing = os.close(options.stdio.stdout)
+    if spawn_error != ok {
+        let closed_reading = os.close(reading)
+        let closed_in_writing = os.close(in_writing)
+        ret (0usize, 0i32, Failed)
+    }
+    if input.len != 0usize { let (sent, write_error) = os.write(in_writing, input) }
+    let closed_in_writing = os.close(in_writing)
+    var filled = 0usize
+    while filled < output.len {
+        let (got, read_error) = os.read(reading, output[filled..output.len])
+        if read_error != ok || got == 0usize { break }
+        filled += got
+    }
+    let closed_reading = os.close(reading)
+    let (usage, wait_error) = os.wait_usage(child)
+    if wait_error != ok { ret (filled, 0i32, Failed) }
+    ret (filled, usage.exit_code, ok)
+}
+
+fn credential_store(a: *mem.Arena, target_name: str, user: str, secret: []const u8) -> err {
+    if target_name.len == 0usize || secret.len == 0usize || secret.len > 2560usize { ret Invalid }
+    let (tool, tool_error) = credential_tool(a)
+    if tool_error != ok { ret tool_error }
+    var argv: [8]str = zero
+    argv[0usize] = tool
+    argv[1usize] = "store"
+    argv[2usize] = "--label"
+    argv[3usize] = target_name
+    argv[4usize] = "target"
+    argv[5usize] = target_name
+    argv[6usize] = "user"
+    argv[7usize] = user
+    var output: [16]u8 = zero
+    let (filled, code, run_error) = run_tool(a, argv[..], secret, output[..])
+    if run_error != ok || code != 0i32 { ret Failed }
+    ret ok
+}
+
+fn credential_read(a: *mem.Arena, target_name: str) -> (Credential, err) {
+    var nothing: Credential = zero
+    if target_name.len == 0usize { ret (nothing, Invalid) }
+    let (tool, tool_error) = credential_tool(a)
+    if tool_error != ok { ret (nothing, tool_error) }
+    var argv: [4]str = zero
+    argv[0usize] = tool
+    argv[1usize] = "lookup"
+    argv[2usize] = "target"
+    argv[3usize] = target_name
+    let (output, allocation_error) = mem.alloc[u8](a, 2560usize)
+    if allocation_error != ok { ret (nothing, allocation_error) }
+    let (filled, code, run_error) = run_tool(a, argv[..], "", output)
+    if run_error != ok { ret (nothing, run_error) }
+    if code != 0i32 || filled == 0usize { ret (nothing, NotFound) }
+    ret (Credential { user: "", secret: output[0usize..filled] }, ok)
+}
+
+fn credential_delete(a: *mem.Arena, target_name: str) -> err {
+    if target_name.len == 0usize { ret Invalid }
+    let (tool, tool_error) = credential_tool(a)
+    if tool_error != ok { ret tool_error }
+    var argv: [4]str = zero
+    argv[0usize] = tool
+    argv[1usize] = "clear"
+    argv[2usize] = "target"
+    argv[3usize] = target_name
+    var output: [16]u8 = zero
+    let (filled, code, run_error) = run_tool(a, argv[..], "", output[..])
+    if run_error != ok || code != 0i32 { ret Failed }
+    ret ok
+}
+
+fn screen_capture(a: *mem.Arena) -> (Icon, err) {
+    var nothing: Icon = zero
+    ret (nothing, Unsupported)
+}
+
+fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
+    ret (.Unavailable, Unsupported)
+}
+
+fn photo_picker(a: *mem.Arena, w: os.Window, multiple: bool) -> ([]const str, err) {
+    var nothing: []const str = zero
+    ret (nothing, Unsupported)
 }

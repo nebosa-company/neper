@@ -2908,6 +2908,20 @@ $uiLifecycleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $uiLifecycleWritten -ne 'executable written') { throw 'ui_lifecycle emission failed' }
 $uiLifecycleOutput = & $uiLifecyclePath
 if ($LASTEXITCODE -ne 0 -or $uiLifecycleOutput -ne 'ui lifecycle ok') { throw "the lifecycle controllers answered wrongly: exit $LASTEXITCODE" }
+# Printing (D900/D901, widget plan P4-11): one page of pixels to the PDF printer's file without a
+# dialog, a second job cancelled, and the refusals; no dialog is shown in the suite.
+$uiPrintPath = Join-Path $testBuild 'ui-print-selfhost.exe'
+$uiPrintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_print\src\main.e') $repo 'x64' 'windows' $uiPrintPath
+if ($LASTEXITCODE -ne 0 -or $uiPrintWritten -ne 'executable written') { throw 'ui_print emission failed' }
+$uiPrintOutput = & $uiPrintPath
+if ($LASTEXITCODE -ne 0 -or $uiPrintOutput -ne 'ui print ok') { throw "the printing controllers answered wrongly: exit $LASTEXITCODE" }
+# Hardware and security services (D902/D903, widget plan P4-12): consent statuses answered, a
+# credential through the Credential Manager and back and gone, the primary screen captured.
+$uiPermissionsPath = Join-Path $testBuild 'ui-permissions-selfhost.exe'
+$uiPermissionsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_permissions\src\main.e') $repo 'x64' 'windows' $uiPermissionsPath
+if ($LASTEXITCODE -ne 0 -or $uiPermissionsWritten -ne 'executable written') { throw 'ui_permissions emission failed' }
+$uiPermissionsOutput = & $uiPermissionsPath
+if ($LASTEXITCODE -ne 0 -or $uiPermissionsOutput -ne 'ui permissions ok') { throw "the permission controllers answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
 # `reader` yields have to agree about what the format says. The format has no standard, so
 # what the fixture pins is the choices -- a comment starts a line and nothing else, a

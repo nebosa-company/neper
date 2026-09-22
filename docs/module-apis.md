@@ -3807,7 +3807,7 @@ platform delivery requirements and escape limitations.
 ### `e.os.shell`
 
 ```neper
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool, printing: bool, print_dialogs: bool, permissions: bool, credentials: bool, screen_capture: bool, biometrics: bool, photo_picker: bool }
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
 type NoticePermission = enum u8 { Granted, Denied, Unavailable }
@@ -3817,12 +3817,18 @@ type Drop = struct { x: i32, y: i32, items: []const Content }
 type DragResult = enum u8 { Copied, Moved, Cancelled }
 type DialogKind = enum u8 { Open, Save, Folder }
 type FileFilter = struct { label: str, pattern: str }
-type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFilter, multiple: bool, initial: str, default_extension: str }
+type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFilter, multiple: bool, initial: str, default_extension: str, folder: str }
 type ActivationKind = enum u8 { Launch, File, Url }
 type Activation = struct { kind: ActivationKind, payload: str, args: []const str }
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
 type Permission = enum u8 { Granted, Denied, Unavailable }
 type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
+type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }
+type PrintPage = struct { width: u32, height: u32, dpi_x: u32, dpi_y: u32 }
+type PageSetup = struct { paper_width: u32, paper_height: u32, margin_left: u32, margin_top: u32, margin_right: u32, margin_bottom: u32 }
+type PrintJob = struct { device: usize, id: i32, pages: u32, open: bool }
+type Capability = enum u8 { Camera, Microphone, Location, Screen, Biometric, Photos }
+type Credential = struct { user: str, secret: []const u8 }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
@@ -3877,6 +3883,23 @@ fn power_release(a: *mem.Arena) -> err
 fn lifecycle_poll() -> (LifecycleEvent, bool)
 fn restart_register(a: *mem.Arena, arguments: str) -> err
 fn restart_unregister(a: *mem.Arena) -> err
+fn printer_open(a: *mem.Arena, name: str) -> (Printer, err)
+fn printer_close(a: *mem.Arena, p: Printer) -> err
+fn printer_page(p: Printer) -> PrintPage
+fn print_dialog(a: *mem.Arena, w: os.Window, min_page: u32, max_page: u32) -> (Printer, err)
+fn page_setup_dialog(a: *mem.Arena, w: os.Window, current: PageSetup) -> (PageSetup, err)
+fn print_job_start(a: *mem.Arena, p: Printer, document: str, output: str) -> (PrintJob, err)
+fn print_page(a: *mem.Arena, job: *PrintJob, page: Icon) -> err
+fn print_job_end(a: *mem.Arena, job: *PrintJob) -> err
+fn print_job_cancel(a: *mem.Arena, job: *PrintJob) -> err
+fn permission_status(a: *mem.Arena, c: Capability) -> Permission
+fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err)
+fn credential_store(a: *mem.Arena, target_name: str, user: str, secret: []const u8) -> err
+fn credential_read(a: *mem.Arena, target_name: str) -> (Credential, err)
+fn credential_delete(a: *mem.Arena, target_name: str) -> err
+fn screen_capture(a: *mem.Arena) -> (Icon, err)
+fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err)
+fn photo_picker(a: *mem.Arena, w: os.Window, multiple: bool) -> ([]const str, err)
 ```
 
 The host's shell services (D885, the widget plan's `native-shell-api`), written per
@@ -3964,6 +3987,33 @@ presses drained by `hotkey_poll`; the session's `WM_QUERYENDSESSION` and
 1024 characters of arguments. Background work needs no permission on either
 host. Linux inhibits through `systemd-inhibit` holding a child until released,
 and answers `Unsupported` for hotkeys, lifecycle events and restart.
+
+Printing (D900, the plan's `native-print-api`): on Windows a `Printer` is a GDI
+device from `WINSPOOL` by name or the default, `printer_page` its printable area
+in device pixels and its resolution, `print_dialog` the user's printer with the
+range and copies (`PD_RETURNDC`; `Cancelled` on close, `Invalid` for a range not
+inside 1 to 65535), `page_setup_dialog` the paper and margins in hundredths of a
+millimetre; a `PrintJob` is `StartDocW` under the document's name -- to the
+output path instead of the spool when one is given, which the PDF printer writes
+-- each `print_page` a 32-bit DIB stretched over the printable area, `print_job_end`
+and `print_job_cancel` `EndDoc` and `AbortDoc`. Linux is `Unsupported` throughout
+and the record says so.
+
+Permissions (D902, the plan's `native-permission-api`): on Windows the camera,
+the microphone and the location are the user's consent in the privacy settings
+as the registry's `ConsentStore` records it, per capability and for unpackaged
+programs -- `permission_status` reads it (`Granted`, `Denied`, `Unavailable` when
+no record exists) and `permission_request` opens the capability's settings page
+on a denial, since a desktop program has no prompt of its own; the screen and
+the photos need no consent; biometrics are `Unavailable` and `biometric_verify`
+`Unsupported`. A credential is the Credential Manager's generic entry under a
+target name (`credential_store` at most 2560 bytes, `credential_read` the secret
+and the user, `credential_delete`; `NotFound` when absent). `screen_capture` is
+the primary screen through GDI as pixels. `photo_picker` is the open dialog over
+the Pictures folder with image filters; a `FileDialog` may now name its `folder`.
+Linux answers `Unavailable` for every status, `Unsupported` for the picker, the
+screen and biometrics, and keeps credentials through `secret-tool` where it is
+installed.
 
 ### `e.cancel`
 
@@ -6527,7 +6577,7 @@ type DataOffer = struct { types: []const ContentType, provider: DataProvider }
 type DragOperation = struct { allow_move: bool }
 type ClipboardMonitor = struct { sequence: u32 }
 type DocumentGrant = struct { path: str }
-type FileDialogOptions = struct { title: str, filters: []const shell.FileFilter, initial: str, default_extension: str }
+type FileDialogOptions = struct { title: str, filters: []const shell.FileFilter, initial: str, default_extension: str, folder: str }
 type TrayActivation = struct { kind: TrayActivationKind, command: u32, x: i32, y: i32 }
 fn tray_supported() -> bool
 fn tray_open(a: *mem.Arena, id: u32, icon: shell.Icon, tooltip: str) -> (Tray, err)
@@ -6614,6 +6664,32 @@ fn power_inhibitor_release(a: *mem.Arena, inhibitor: *PowerInhibitor) -> err
 fn lifecycle_poll() -> (shell.LifecycleEvent, bool)
 fn session_restore_register(a: *mem.Arena, arguments: str) -> err
 fn session_restore_unregister(a: *mem.Arena) -> err
+fn printing_supported() -> bool
+fn print_dialogs_supported() -> bool
+fn print_dialog(a: *mem.Arena, owner: *App, min_page: u32, max_page: u32) -> (shell.Printer, err)
+fn page_setup_dialog(a: *mem.Arena, owner: *App, current: shell.PageSetup) -> (shell.PageSetup, err)
+fn printer_open(a: *mem.Arena, name: str) -> (shell.Printer, err)
+fn printer_close(a: *mem.Arena, printer: shell.Printer) -> err
+fn printer_page(printer: shell.Printer) -> shell.PrintPage
+fn print_job_start(a: *mem.Arena, printer: shell.Printer, document: str, output: str) -> (shell.PrintJob, err)
+fn print_job_page(a: *mem.Arena, job: *shell.PrintJob, page: shell.Icon) -> err
+fn print_job_end(a: *mem.Arena, job: *shell.PrintJob) -> err
+fn print_job_cancel(a: *mem.Arena, job: *shell.PrintJob) -> err
+fn permission_status(a: *mem.Arena, c: shell.Capability) -> shell.Permission
+fn permission_request(a: *mem.Arena, c: shell.Capability) -> (shell.Permission, err)
+fn camera_access(a: *mem.Arena) -> (shell.Permission, err)
+fn microphone_access(a: *mem.Arena) -> (shell.Permission, err)
+fn location_access(a: *mem.Arena) -> (shell.Permission, err)
+fn photo_picker_supported() -> bool
+fn pick_photos(a: *mem.Arena, owner: *App, multiple: bool) -> ([]DocumentGrant, err)
+fn biometrics_supported() -> bool
+fn biometric_verify(a: *mem.Arena, reason: str) -> (shell.Permission, err)
+fn credentials_supported() -> bool
+fn credential_store(a: *mem.Arena, target_name: str, user: str, secret: []const u8) -> err
+fn credential_read(a: *mem.Arena, target_name: str) -> (shell.Credential, err)
+fn credential_delete(a: *mem.Arena, target_name: str) -> err
+fn screen_capture_supported() -> bool
+fn screen_capture(a: *mem.Arena) -> (shell.Icon, err)
 ```
 
 `step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,

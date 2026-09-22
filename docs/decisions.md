@@ -17403,3 +17403,76 @@ awake and releases it, registers and withdraws a restart, and finds
 both queues empty while nothing happened; on Linux it accepts that a
 session may have the inhibitor's tool and no session behind it, and
 gets `Unsupported` for the rest.
+
+## D900 — A print job is a device context and pages of pixels, and the PDF printer makes it testable
+
+The widget plan's `native-print-api`, in `e.os.shell`. GDI printing is
+flat exports and needs no COM: a `Printer` is `CreateDCW` over
+`WINSPOOL` by name or the default, its printable area and resolution
+`GetDeviceCaps`, a job `StartDocW` under the document's name, each
+page a 32-bit DIB stretched over the printable area, `EndDoc` and
+`AbortDoc` the end and the cancel. The dialogs are the old `comdlg32`
+ones, which are still the ones Windows shows: `PrintDlgW` with
+`PD_RETURNDC` hands back the chosen printer's device with the range
+and copies, and `PageSetupDlgW` the paper and margins, asked for in
+hundredths of a millimetre so no float crosses. The output path is
+what makes a job testable without a person: `DOCINFOW`'s output names
+a file, and the PDF printer every Windows has writes it, so a fixture
+prints one page and finds a non-empty file where no dialog was shown.
+Linux printing is CUPS through `lp` with an image per page, the same
+tool-shaped path as the rest of this module, and is `Unsupported`
+until a caller needs it, the record saying so.
+
+## D901 — The caller renders the page; the job only carries it
+
+P4-11 of the widget plan over D900. `e.ui.app` wraps the print and
+page setup dialogs over the app's window or none, a printer by name or
+default, and the job: the caller asks `printer_page` for the printable
+size and resolution, renders each page as pixels with the scene
+renderer it already has, and hands them to `print_job_page`, so the
+library owns no page layout and no print-specific drawing -- a page is
+a frame. `link/ui_print` refuses a bad range before any dialog, prints
+one page to the PDF printer's file and reads the file back, cancels a
+second job, and refuses a page after the end on Windows; on Linux it
+gets `Unsupported` behind the predicates.
+
+## D902 — A permission is the consent the settings record, and a desktop program has no prompt of its own
+
+The widget plan's `native-permission-api`, the last of its eight
+primitives, in `e.os.shell`. Windows keeps the user's consent for the
+camera, the microphone and the location in the privacy settings, and
+the registry's `ConsentStore` records it per capability and again for
+unpackaged programs, so `permission_status` reads both and answers
+`Granted`, `Denied`, or `Unavailable` when no record exists; a request
+cannot prompt from a desktop program -- the prompt is WinRT's and
+belongs to a packaged app -- so `permission_request` answers the
+status and, on a denial, opens the capability's settings page, which
+is the one honest thing the host offers. The screen and the pictures
+need no consent, and biometrics are Windows Hello's WinRT flow, so
+`Unavailable` and `Unsupported`. The Credential Manager is flat
+exports, so a credential is a generic entry under a target name, at
+most 2560 bytes; the screen is GDI, a DIB section the display is
+copied into; the photo picker is D894's dialog over the Pictures
+folder, which taught the dialog to open on a folder through an
+`IShellItem`. Linux answers `Unavailable` for every status, since the
+portal is not spoken, keeps credentials through `secret-tool` where it
+is installed, and says `Unsupported` for the rest. The whole phase-4
+gate is now open: every primitive the proposal named has a module
+behind it that answers, on each host, what it can and cannot do.
+
+## D903 — The gate is delivered; the capture, the sensor and the prompt are other subsystems
+
+P4-12 of the widget plan, closing phase 4. `e.ui.app` wraps the gate:
+a status per capability, a request per capability, the camera, the
+microphone and the location as that gate for their own capability, the
+photo picker as grants, biometrics as the host's answer, the credential
+store and the screen capture, each behind a predicate. What the wrappers
+do not pretend to be: a camera frame, a microphone stream and a position
+are media and sensor subsystems the library does not have, and the
+proposal counts them as capability-gated services, which is what is
+delivered. `link/ui_permissions` reads every status, refuses an empty
+credential, stores, reads back, deletes and misses one through the real
+Credential Manager, captures the primary screen and checks its size on
+Windows, and gets the predicates and `Unsupported` on Linux. With this
+row `--next` reports the plan complete: five phases, 219 capabilities,
+each with evidence.

@@ -677,7 +677,7 @@ fn share_target_take() -> (shell.Drop, bool) {
 // predicates say first.
 
 type DocumentGrant = struct { path: str }
-type FileDialogOptions = struct { title: str, filters: []const shell.FileFilter, initial: str, default_extension: str }
+type FileDialogOptions = struct { title: str, filters: []const shell.FileFilter, initial: str, default_extension: str, folder: str }
 
 fn file_dialogs_supported() -> bool {
     ret shell.capabilities().file_dialogs
@@ -706,7 +706,7 @@ fn show_dialog(a: *mem.Arena, owner: *App, kind: shell.DialogKind, options: File
     var nothing: []const str = zero
     let (window_handle, owner_error) = owner_window(owner)
     if owner_error != ok { ret (nothing, owner_error) }
-    let dialog = shell.FileDialog { kind: kind, title: options.title, filters: options.filters, multiple: multiple, initial: options.initial, default_extension: options.default_extension }
+    let dialog = shell.FileDialog { kind: kind, title: options.title, filters: options.filters, multiple: multiple, initial: options.initial, default_extension: options.default_extension, folder: options.folder }
     let (paths, dialog_error) = shell.file_dialog(a, window_handle, dialog)
     ret (paths, dialog_error)
 }
@@ -908,4 +908,152 @@ fn session_restore_register(a: *mem.Arena, arguments: str) -> err {
 
 fn session_restore_unregister(a: *mem.Arena) -> err {
     ret shell.restart_unregister(a)
+}
+
+// ------------------------------------------------------------ printing (D901)
+//
+// Widget plan P4-11 over `e.os.shell`: the print dialog answers the printer the
+// user chose with the range and copies, the page setup dialog the paper and
+// margins, and a `PrintJob` takes pages as pixels -- the caller renders each
+// page at `printer_page`'s size -- until ended or cancelled. A named printer, or
+// the default, opens without a dialog, and a job with an output path prints to
+// a file where the printer writes one. The predicates say what the host has.
+
+fn printing_supported() -> bool {
+    ret shell.capabilities().printing
+}
+
+fn print_dialogs_supported() -> bool {
+    ret shell.capabilities().print_dialogs
+}
+
+fn print_dialog(a: *mem.Arena, owner: *App, min_page: u32, max_page: u32) -> (shell.Printer, err) {
+    var nothing: shell.Printer = zero
+    let (window_handle, owner_error) = owner_window(owner)
+    if owner_error != ok { ret (nothing, owner_error) }
+    let (printer, dialog_error) = shell.print_dialog(a, window_handle, min_page, max_page)
+    ret (printer, dialog_error)
+}
+
+fn page_setup_dialog(a: *mem.Arena, owner: *App, current: shell.PageSetup) -> (shell.PageSetup, err) {
+    var nothing: shell.PageSetup = zero
+    let (window_handle, owner_error) = owner_window(owner)
+    if owner_error != ok { ret (nothing, owner_error) }
+    let (chosen, dialog_error) = shell.page_setup_dialog(a, window_handle, current)
+    ret (chosen, dialog_error)
+}
+
+fn printer_open(a: *mem.Arena, name: str) -> (shell.Printer, err) {
+    let (printer, open_error) = shell.printer_open(a, name)
+    ret (printer, open_error)
+}
+
+fn printer_close(a: *mem.Arena, printer: shell.Printer) -> err {
+    ret shell.printer_close(a, printer)
+}
+
+fn printer_page(printer: shell.Printer) -> shell.PrintPage {
+    ret shell.printer_page(printer)
+}
+
+fn print_job_start(a: *mem.Arena, printer: shell.Printer, document: str, output: str) -> (shell.PrintJob, err) {
+    let (job, start_error) = shell.print_job_start(a, printer, document, output)
+    ret (job, start_error)
+}
+
+fn print_job_page(a: *mem.Arena, job: *shell.PrintJob, page: shell.Icon) -> err {
+    ret shell.print_page(a, job, page)
+}
+
+fn print_job_end(a: *mem.Arena, job: *shell.PrintJob) -> err {
+    ret shell.print_job_end(a, job)
+}
+
+fn print_job_cancel(a: *mem.Arena, job: *shell.PrintJob) -> err {
+    ret shell.print_job_cancel(a, job)
+}
+
+// -------------------------------------------- hardware and security (D903)
+//
+// Widget plan P4-12 over `e.os.shell`: a `PermissionStatus` is the host's
+// answer for a gated capability, asked before it is used and requested where
+// the host has a way to change it; the camera, the microphone and the location
+// are delivered as that gate -- their capture and positioning are media and
+// sensor subsystems, not this one; the photo library picker is the host's
+// picker of pictures; biometric authentication is what the host offers, which
+// is nothing here; the credential store keeps a secret under a target name;
+// screen capture answers the primary screen's pixels. The predicates say what
+// the host has and the rest is `shell.Unsupported`.
+
+fn permission_status(a: *mem.Arena, c: shell.Capability) -> shell.Permission {
+    ret shell.permission_status(a, c)
+}
+
+fn permission_request(a: *mem.Arena, c: shell.Capability) -> (shell.Permission, err) {
+    let (status, request_error) = shell.permission_request(a, c)
+    ret (status, request_error)
+}
+
+fn camera_access(a: *mem.Arena) -> (shell.Permission, err) {
+    let (status, request_error) = shell.permission_request(a, .Camera)
+    ret (status, request_error)
+}
+
+fn microphone_access(a: *mem.Arena) -> (shell.Permission, err) {
+    let (status, request_error) = shell.permission_request(a, .Microphone)
+    ret (status, request_error)
+}
+
+fn location_access(a: *mem.Arena) -> (shell.Permission, err) {
+    let (status, request_error) = shell.permission_request(a, .Location)
+    ret (status, request_error)
+}
+
+fn photo_picker_supported() -> bool {
+    ret shell.capabilities().photo_picker
+}
+
+fn pick_photos(a: *mem.Arena, owner: *App, multiple: bool) -> ([]DocumentGrant, err) {
+    var nothing: []DocumentGrant = zero
+    let (window_handle, owner_error) = owner_window(owner)
+    if owner_error != ok { ret (nothing, owner_error) }
+    let (paths, picker_error) = shell.photo_picker(a, window_handle, multiple)
+    if picker_error != ok { ret (nothing, picker_error) }
+    let (grants, grants_error) = grants_of(a, paths)
+    ret (grants, grants_error)
+}
+
+fn biometrics_supported() -> bool {
+    ret shell.capabilities().biometrics
+}
+
+fn biometric_verify(a: *mem.Arena, reason: str) -> (shell.Permission, err) {
+    let (verdict, verify_error) = shell.biometric_verify(a, reason)
+    ret (verdict, verify_error)
+}
+
+fn credentials_supported() -> bool {
+    ret shell.capabilities().credentials
+}
+
+fn credential_store(a: *mem.Arena, target_name: str, user: str, secret: []const u8) -> err {
+    ret shell.credential_store(a, target_name, user, secret)
+}
+
+fn credential_read(a: *mem.Arena, target_name: str) -> (shell.Credential, err) {
+    let (credential, read_error) = shell.credential_read(a, target_name)
+    ret (credential, read_error)
+}
+
+fn credential_delete(a: *mem.Arena, target_name: str) -> err {
+    ret shell.credential_delete(a, target_name)
+}
+
+fn screen_capture_supported() -> bool {
+    ret shell.capabilities().screen_capture
+}
+
+fn screen_capture(a: *mem.Arena) -> (shell.Icon, err) {
+    let (screen, capture_error) = shell.screen_capture(a)
+    ret (screen, capture_error)
 }

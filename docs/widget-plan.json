@@ -14,7 +14,9 @@
     "native-data-exchange-api",
     "native-file-access-api",
     "native-activation-api",
-    "native-lifecycle-api"
+    "native-lifecycle-api",
+    "native-print-api",
+    "native-permission-api"
   ],
   "phases": [
     {
@@ -1021,8 +1023,12 @@
             "PageSetupDialog",
             "PrintJob"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "PrintDialog",
+            "PageSetupDialog",
+            "PrintJob"
+          ],
+          "evidence": "lib/e/os/shell.windows.e and lib/e/ui/app.e (D900/D901): print_dialog over PrintDlgW with PD_RETURNDC answering the chosen printer, range and copies; page_setup_dialog over PageSetupDlgW in hundredths of a millimetre; PrintJob over StartDocW/StartPage/StretchDIBits/EndPage/EndDoc with AbortDoc as the cancel, pages as pixels stretched over printer_page's printable area, and an output path for the printers that write a file; printer_open by name or default; Linux Unsupported with printing_supported and print_dialogs_supported saying so; tests/selfhost/fixtures/link/ui_print prints one page to the PDF printer's file and cancels a second job on Windows"
         },
         {
           "id": "P4-12",
@@ -1041,8 +1047,17 @@
             "CredentialStore",
             "ScreenCapture"
           ],
-          "delivered": [],
-          "evidence": ""
+          "delivered": [
+            "PermissionStatus",
+            "CameraAccess",
+            "MicrophoneAccess",
+            "PhotoLibraryPicker",
+            "LocationAccess",
+            "BiometricAuthentication",
+            "CredentialStore",
+            "ScreenCapture"
+          ],
+          "evidence": "lib/e/os/shell.windows.e, lib/e/os/shell.linux.e and lib/e/ui/app.e (D902/D903): permission_status/permission_request read the user's consent from the registry's ConsentStore and open the capability's settings page on a denial; camera_access, microphone_access and location_access are that gate for their capability; pick_photos is the open dialog over the Pictures folder with image filters; biometric_verify is the honest Unsupported with biometrics_supported false on both hosts; credential_store/credential_read/credential_delete over the Credential Manager (Windows) and secret-tool (Linux); screen_capture over GDI into pixels; the predicates say what the host has and Linux answers Unavailable and Unsupported for the rest; tests/selfhost/fixtures/link/ui_permissions on both hosts"
         }
       ]
     }

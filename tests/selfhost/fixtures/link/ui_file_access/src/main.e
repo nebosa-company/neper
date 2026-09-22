@@ -31,12 +31,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         at += 1usize
     }
     var nobody: *app.App = zero
-    let crowded = app.FileDialogOptions { title: "neper", filters: too_many[..], initial: "", default_extension: "" }
+    let crowded = app.FileDialogOptions { title: "neper", filters: too_many[..], initial: "", default_extension: "", folder: "" }
     let (no_grants, crowded_error) = app.open_file(a, nobody, crowded, false)
     if crowded_error != shell.Invalid { os.exit(2i32) }
     let (no_grant, crowded_save_error) = app.save_file(a, nobody, crowded)
     if crowded_save_error != shell.Invalid { os.exit(3i32) }
-    let plain = app.FileDialogOptions { title: "neper", filters: zero, initial: "", default_extension: "" }
+    let plain = app.FileDialogOptions { title: "neper", filters: zero, initial: "", default_extension: "", folder: "" }
     if !app.file_dialogs_supported() {
         let (none, open_error) = app.open_file(a, nobody, plain, true)
         if open_error != shell.Unsupported { os.exit(4i32) }

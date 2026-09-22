@@ -20,7 +20,7 @@ error NotFound
 error Failed
 error Cancelled
 
-type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool }
+type Capabilities = struct { tray: bool, popup_menu: bool, open_uri: bool, reveal: bool, trash: bool, taskbar: bool, jump_list: bool, notices: bool, notice_actions: bool, notice_remove: bool, clipboard_text: bool, clipboard_typed: bool, drop_target: bool, drag_source: bool, file_dialogs: bool, recent_documents: bool, associations: bool, startup: bool, single_instance: bool, hotkeys: bool, power_inhibit: bool, lifecycle_events: bool, restart: bool, printing: bool, print_dialogs: bool, permissions: bool, credentials: bool, screen_capture: bool, biometrics: bool, photo_picker: bool }
 // Rows top-down, a pixel `0xAARRGGBB`, as `os.window_present` takes them.
 type Icon = struct { width: u32, height: u32, pixels: []const u32 }
 type TrayEventKind = enum u8 { Select, Context, Open, NoticeSelect, NoticeDismiss }
@@ -38,7 +38,7 @@ type DragResult = enum u8 { Copied, Moved, Cancelled }
 // name, and the extension appended to a typed name without one.
 type DialogKind = enum u8 { Open, Save, Folder }
 type FileFilter = struct { label: str, pattern: str }
-type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFilter, multiple: bool, initial: str, default_extension: str }
+type FileDialog = struct { kind: DialogKind, title: str, filters: []const FileFilter, multiple: bool, initial: str, default_extension: str, folder: str }
 // How the program was activated: plainly, with a file, or with a URL; a
 // redirected activation is another instance's arguments handed to the first.
 type ActivationKind = enum u8 { Launch, File, Url }
@@ -48,6 +48,15 @@ type Activation = struct { kind: ActivationKind, payload: str, args: []const str
 type Hotkey = struct { control: bool, alt: bool, shift: bool, super: bool, key: u32 }
 type Permission = enum u8 { Granted, Denied, Unavailable }
 type LifecycleEvent = enum u8 { Shutdown, Suspend, Resume }
+// A printer opened for a job, the page a printer draws in device pixels, a
+// page setup in hundredths of a millimetre, and a job in progress.
+type Printer = struct { device: usize, from_page: u32, to_page: u32, copies: u32 }
+type PrintPage = struct { width: u32, height: u32, dpi_x: u32, dpi_y: u32 }
+type PageSetup = struct { paper_width: u32, paper_height: u32, margin_left: u32, margin_top: u32, margin_right: u32, margin_bottom: u32 }
+type PrintJob = struct { device: usize, id: i32, pages: u32, open: bool }
+// A protected capability the host gates, and a secret kept by the host's store.
+type Capability = enum u8 { Camera, Microphone, Location, Screen, Biometric, Photos }
+type Credential = struct { user: str, secret: []const u8 }
 type TrayEvent = struct { kind: TrayEventKind, id: u32, x: i32, y: i32 }
 type MenuItem = struct { id: u32, label: str, enabled: bool, checked: bool, separator: bool }
 type ProgressState = enum u8 { None, Indeterminate, Normal, Paused, Error }
@@ -181,7 +190,7 @@ extern fn raw_file_operation(operation: *FileOperation) -> i32
 extern fn raw_co_initialize(reserved: usize, model: u32) -> i32
 
 fn capabilities() -> Capabilities {
-    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: true, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: true, lifecycle_events: true, restart: true }
+    ret Capabilities { tray: true, popup_menu: true, open_uri: true, reveal: true, trash: true, taskbar: true, jump_list: true, notices: true, notice_actions: false, notice_remove: true, clipboard_text: true, clipboard_typed: true, drop_target: true, drag_source: true, file_dialogs: true, recent_documents: true, associations: true, startup: true, single_instance: true, hotkeys: true, power_inhibit: true, lifecycle_events: true, restart: true, printing: true, print_dialogs: true, permissions: true, credentials: true, screen_capture: true, biometrics: false, photo_picker: true }
 }
 
 // UTF-16 with a terminator, in the arena; the pages are touched first because the
@@ -2122,6 +2131,23 @@ fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str,
         }
         let named = call_wide(object, DIALOG_SET_FILE_NAME, &initial[0usize])
     }
+    if dialog.folder.len != 0usize {
+        // The folder as a shell item, set as the one the dialog opens on.
+        let (folder_wide, folder_error) = widen(a, dialog.folder)
+        if folder_error != ok {
+            com_release(object)
+            ret (nothing, folder_error)
+        }
+        var item_iid: [16]u8 = zero
+        guid(item_iid[..], 1132621086u32, 59160u16, 17134u16, 3159728610u32, 1640201214u32)
+        var item: *ComObject = zero
+        if raw_item_from_name(&folder_wide[0usize], 0usize, &item_iid[0usize], &item) >= 0i32 && mem.address_of(item) != 0usize {
+            var set_folder: SetFolderPun = zero
+            set_folder.bits = object.vtable.slots[DIALOG_SET_FOLDER]
+            let placed = set_folder.function(mem.address_of(object), item)
+            com_release(item)
+        }
+    }
     if dialog.default_extension.len != 0usize {
         let (extension, extension_error) = widen(a, dialog.default_extension)
         if extension_error != ok {
@@ -2830,4 +2856,534 @@ fn restart_register(a: *mem.Arena, arguments: str) -> err {
 fn restart_unregister(a: *mem.Arena) -> err {
     if raw_unregister_restart() < 0i32 { ret Failed }
     ret ok
+}
+// ------------------------------------------------------------------ printing
+//
+// D900, the widget plan's `native-print-api`. A printer is a GDI device context
+// from `WINSPOOL`, by name or the default; the print dialog answers one with the
+// user's range and copies (`PD_RETURNDC`), the page setup dialog answers the
+// paper and margins in hundredths of a millimetre; a job is `StartDocW` over
+// the device with an output path when the caller wants a file rather than a
+// spool, one page per `print_page` as a 32-bit DIB stretched over the printable
+// area, `EndDoc` to release it and `AbortDoc` to cancel it.
+
+type DocInfo = struct { size: i32, padding: u32, name: *const u16, output: usize, datatype: usize, kind: u32, padding2: u32 }
+type PrintDialogData = struct { size: u32, padding: u32, owner: usize, devmode: usize, devnames: usize, device: usize, flags: u32, from_page: u16, to_page: u16, min_page: u16, max_page: u16, copies: u16, padding2: u16, instance: usize, custom: usize, print_hook: usize, setup_hook: usize, print_template: usize, setup_template: usize, print_handle: usize, setup_handle: usize }
+type PageSetupData = struct { size: u32, padding: u32, owner: usize, devmode: usize, devnames: usize, flags: u32, paper_x: i32, paper_y: i32, min_left: i32, min_top: i32, min_right: i32, min_bottom: i32, left: i32, top: i32, right: i32, bottom: i32, padding2: u32, instance: usize, custom: usize, setup_hook: usize, paint_hook: usize, template_name: usize, template_handle: usize }
+
+const PD_RETURNDC: u32 = 256u32
+const PD_NOSELECTION: u32 = 4u32
+const PD_USEDEVMODECOPIESANDCOLLATE: u32 = 262144u32
+const PSD_INHUNDREDTHSOFMILLIMETERS: u32 = 8u32
+const PSD_MARGINS: u32 = 2u32
+const HORZRES: i32 = 8i32
+const VERTRES: i32 = 10i32
+const LOGPIXELSX: i32 = 88i32
+const LOGPIXELSY: i32 = 90i32
+const SRCCOPY: u32 = 13369376u32
+const DIB_RGB_COLORS: u32 = 0u32
+
+@import("gdi32.dll", "CreateDCW")
+extern fn raw_create_dc(driver: *const u16, device: *const u16, output: usize, init: usize) -> usize
+
+@import("gdi32.dll", "DeleteDC")
+extern fn raw_delete_dc(device: usize) -> i32
+
+@import("gdi32.dll", "GetDeviceCaps")
+extern fn raw_device_caps(device: usize, index: i32) -> i32
+
+@import("gdi32.dll", "StartDocW")
+extern fn raw_start_doc(device: usize, info: *const DocInfo) -> i32
+
+@import("gdi32.dll", "StartPage")
+extern fn raw_start_page(device: usize) -> i32
+
+@import("gdi32.dll", "EndPage")
+extern fn raw_end_page(device: usize) -> i32
+
+@import("gdi32.dll", "EndDoc")
+extern fn raw_end_doc(device: usize) -> i32
+
+@import("gdi32.dll", "AbortDoc")
+extern fn raw_abort_doc(device: usize) -> i32
+
+@import("gdi32.dll", "StretchDIBits")
+extern fn raw_stretch_dib(device: usize, x: i32, y: i32, width: i32, height: i32, source_x: i32, source_y: i32, source_width: i32, source_height: i32, bits: *const u8, info: *const DibHeader, usage: u32, rop: u32) -> i32
+
+@import("winspool.drv", "GetDefaultPrinterW")
+extern fn raw_default_printer(out: *u16, size: *Count) -> i32
+
+@import("comdlg32.dll", "PrintDlgW")
+extern fn raw_print_dialog(data: *PrintDialogData) -> i32
+
+@import("comdlg32.dll", "PageSetupDlgW")
+extern fn raw_page_setup_dialog(data: *PageSetupData) -> i32
+
+@import("comdlg32.dll", "CommDlgExtendedError")
+extern fn raw_dialog_error() -> u32
+
+fn printer_of_device(device: usize) -> Printer {
+    ret Printer { device: device, from_page: 0u32, to_page: 0u32, copies: 1u32 }
+}
+
+// The printer by its name, or the default one for an empty name.
+fn printer_open(a: *mem.Arena, name: str) -> (Printer, err) {
+    var nothing: Printer = zero
+    var chosen = name
+    if chosen.len == 0usize {
+        var size: Count = zero
+        let asked = raw_default_printer(&empty_wide[0usize], &size)
+        if size.value == 0u32 { ret (nothing, NotFound) }
+        let (units, allocation_error) = mem.alloc[u16](a, usize(size.value) + 1usize)
+        if allocation_error != ok { ret (nothing, allocation_error) }
+        os.touch(mem.cast[*const u8](&units[0usize]), (usize(size.value) + 1usize) * 2usize)
+        if raw_default_printer(&units[0usize], &size) == 0i32 { ret (nothing, NotFound) }
+        let (bytes, bytes_error) = mem.alloc[u8](a, usize(size.value) * 3usize + 1usize)
+        if bytes_error != ok { ret (nothing, bytes_error) }
+        os.touch(&bytes[0usize], usize(size.value) * 3usize + 1usize)
+        let count = usize(raw_wide_length(&units[0usize]))
+        let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(usize(size.value) * 3usize), 0usize, 0usize)
+        if converted <= 0i32 { ret (nothing, Failed) }
+        chosen = bytes[0usize..usize(converted)]
+    }
+    let (driver, driver_error) = widen(a, "WINSPOOL")
+    if driver_error != ok { ret (nothing, driver_error) }
+    let (device_name, name_error) = widen(a, chosen)
+    if name_error != ok { ret (nothing, name_error) }
+    let device = raw_create_dc(&driver[0usize], &device_name[0usize], 0usize, 0usize)
+    if device == 0usize { ret (nothing, NotFound) }
+    ret (printer_of_device(device), ok)
+}
+
+fn printer_close(a: *mem.Arena, p: Printer) -> err {
+    if p.device == 0usize { ret Invalid }
+    let deleted = raw_delete_dc(p.device)
+    ret ok
+}
+
+// The printable area in device pixels and the resolution.
+fn printer_page(p: Printer) -> PrintPage {
+    if p.device == 0usize { ret PrintPage { width: 0u32, height: 0u32, dpi_x: 0u32, dpi_y: 0u32 } }
+    ret PrintPage { width: u32(raw_device_caps(p.device, HORZRES)), height: u32(raw_device_caps(p.device, VERTRES)), dpi_x: u32(raw_device_caps(p.device, LOGPIXELSX)), dpi_y: u32(raw_device_caps(p.device, LOGPIXELSY)) }
+}
+
+// The print dialog: the printer the user chose, with the range and copies.
+fn print_dialog(a: *mem.Arena, w: os.Window, min_page: u32, max_page: u32) -> (Printer, err) {
+    var nothing: Printer = zero
+    if min_page == 0u32 || max_page < min_page || max_page > 65535u32 { ret (nothing, Invalid) }
+    var owner = 0usize
+    if w.raw != 0usize {
+        let (handle, handle_error) = window_handle(w)
+        if handle_error != ok { ret (nothing, handle_error) }
+        owner = handle
+    }
+    var data: PrintDialogData = zero
+    data.size = 120u32
+    data.owner = owner
+    data.flags = PD_RETURNDC | PD_NOSELECTION | PD_USEDEVMODECOPIESANDCOLLATE
+    data.min_page = u16(min_page)
+    data.max_page = u16(max_page)
+    data.from_page = u16(min_page)
+    data.to_page = u16(max_page)
+    data.copies = 1u16
+    if raw_print_dialog(&data) == 0i32 {
+        if raw_dialog_error() == 0u32 { ret (nothing, Cancelled) }
+        ret (nothing, Failed)
+    }
+    if data.device == 0usize { ret (nothing, Failed) }
+    var copies = u32(data.copies)
+    if copies == 0u32 { copies = 1u32 }
+    ret (Printer { device: data.device, from_page: u32(data.from_page), to_page: u32(data.to_page), copies: copies }, ok)
+}
+
+// The page setup dialog, in hundredths of a millimetre both ways.
+fn page_setup_dialog(a: *mem.Arena, w: os.Window, current: PageSetup) -> (PageSetup, err) {
+    var nothing: PageSetup = zero
+    var owner = 0usize
+    if w.raw != 0usize {
+        let (handle, handle_error) = window_handle(w)
+        if handle_error != ok { ret (nothing, handle_error) }
+        owner = handle
+    }
+    var data: PageSetupData = zero
+    data.size = 128u32
+    data.owner = owner
+    data.flags = PSD_INHUNDREDTHSOFMILLIMETERS | PSD_MARGINS
+    data.left = i32(current.margin_left)
+    data.top = i32(current.margin_top)
+    data.right = i32(current.margin_right)
+    data.bottom = i32(current.margin_bottom)
+    if raw_page_setup_dialog(&data) == 0i32 {
+        if raw_dialog_error() == 0u32 { ret (nothing, Cancelled) }
+        ret (nothing, Failed)
+    }
+    ret (PageSetup { paper_width: u32(data.paper_x), paper_height: u32(data.paper_y), margin_left: u32(data.left), margin_top: u32(data.top), margin_right: u32(data.right), margin_bottom: u32(data.bottom) }, ok)
+}
+
+// A job on the printer under the document's name; with an output path the
+// pages go to that file (the PDF or XPS printers write it) instead of the spool.
+fn print_job_start(a: *mem.Arena, p: Printer, document: str, output: str) -> (PrintJob, err) {
+    var nothing: PrintJob = zero
+    if p.device == 0usize || document.len == 0usize { ret (nothing, Invalid) }
+    let (name, name_error) = widen(a, document)
+    if name_error != ok { ret (nothing, name_error) }
+    var info: DocInfo = zero
+    info.size = 40i32
+    info.name = &name[0usize]
+    if output.len != 0usize {
+        let (output_wide, output_error) = widen(a, output)
+        if output_error != ok { ret (nothing, output_error) }
+        info.output = mem.address_of(&output_wide[0usize])
+    }
+    let id = raw_start_doc(p.device, &info)
+    if id <= 0i32 { ret (nothing, Failed) }
+    ret (PrintJob { device: p.device, id: id, pages: 0u32, open: true }, ok)
+}
+
+// One page: the pixels stretched over the printable area, top-down rows.
+fn print_page(a: *mem.Arena, job: *PrintJob, page: Icon) -> err {
+    if !job.open { ret NotFound }
+    if page.width == 0u32 || page.height == 0u32 || page.pixels.len < usize(page.width) * usize(page.height) { ret Invalid }
+    if raw_start_page(job.device) <= 0i32 { ret Failed }
+    var header: DibHeader = zero
+    header.size = 40u32
+    header.width = i32(page.width)
+    header.height = 0i32 - i32(page.height)
+    header.planes = 1u16
+    header.bit_count = 32u16
+    let width = raw_device_caps(job.device, HORZRES)
+    let height = raw_device_caps(job.device, VERTRES)
+    let drawn = raw_stretch_dib(job.device, 0i32, 0i32, width, height, 0i32, 0i32, i32(page.width), i32(page.height), mem.cast[*const u8](&page.pixels[0usize]), &header, DIB_RGB_COLORS, SRCCOPY)
+    let ended = raw_end_page(job.device)
+    if drawn <= 0i32 || ended <= 0i32 { ret Failed }
+    job.pages += 1u32
+    ret ok
+}
+
+fn print_job_end(a: *mem.Arena, job: *PrintJob) -> err {
+    if !job.open { ret NotFound }
+    job.open = false
+    if raw_end_doc(job.device) <= 0i32 { ret Failed }
+    ret ok
+}
+
+fn print_job_cancel(a: *mem.Arena, job: *PrintJob) -> err {
+    if !job.open { ret NotFound }
+    job.open = false
+    if raw_abort_doc(job.device) <= 0i32 { ret Failed }
+    ret ok
+}
+// ------------------------------------------------- permissions and services
+//
+// D902, the widget plan's `native-permission-api`. The camera, the microphone
+// and the location are gated by the user's consent in the privacy settings,
+// which the registry's `ConsentStore` records per capability and, for a program
+// like this one, under `NonPackaged`; the status is read there, and a request
+// that finds a denial opens the settings page for it, since a desktop program
+// has no prompt of its own. The screen needs no consent here and is captured by
+// GDI into pixels. A credential is the Credential Manager's generic entry under
+// a target name. Biometric verification is a WinRT flow and `Unsupported`. The
+// photo picker is D894's open dialog over the Pictures folder with image
+// filters, the folder set through `IShellItem`.
+
+type CredentialData = struct { flags: u32, kind: u32, target_name: usize, comment: usize, written: u64, blob_size: u32, padding: u32, blob: usize, persist: u32, attribute_count: u32, attributes: usize, alias: usize, user: usize }
+type CredentialPointer = struct { value: *const CredentialData }
+type BitsPointer = struct { value: *u8 }
+
+@cc(c)
+type ComSetFolder = extern fn(usize, *ComObject) -> i32
+type SetFolderPun = union { function: ComSetFolder, bits: usize }
+
+const CRED_TYPE_GENERIC: u32 = 1u32
+const CRED_PERSIST_LOCAL_MACHINE: u32 = 2u32
+const CRED_MAX_BLOB: usize = 2560usize
+const ERROR_NOT_FOUND_CODE: u32 = 1168u32
+const SM_CXSCREEN: i32 = 0i32
+const SM_CYSCREEN: i32 = 1i32
+const DIALOG_SET_FOLDER: usize = 12usize
+
+@import("advapi32.dll", "CredWriteW")
+extern fn raw_cred_write(credential: *const CredentialData, flags: u32) -> i32
+
+@import("advapi32.dll", "CredReadW")
+extern fn raw_cred_read(name: *const u16, kind: u32, flags: u32, out: *CredentialPointer) -> i32
+
+@import("advapi32.dll", "CredDeleteW")
+extern fn raw_cred_delete(name: *const u16, kind: u32, flags: u32) -> i32
+
+@import("advapi32.dll", "CredFree")
+extern fn raw_cred_free(buffer: usize)
+
+@import("user32.dll", "GetDC")
+extern fn raw_get_dc(window: usize) -> usize
+
+@import("user32.dll", "ReleaseDC")
+extern fn raw_release_dc(window: usize, device: usize) -> i32
+
+@import("user32.dll", "GetSystemMetrics")
+extern fn raw_system_metrics(index: i32) -> i32
+
+@import("gdi32.dll", "CreateCompatibleDC")
+extern fn raw_create_compatible_dc(device: usize) -> usize
+
+@import("gdi32.dll", "CreateDIBSection")
+extern fn raw_create_dib_section(device: usize, info: *const DibHeader, usage: u32, bits: *BitsPointer, section: usize, offset: u32) -> usize
+
+@import("gdi32.dll", "SelectObject")
+extern fn raw_select_object(device: usize, object: usize) -> usize
+
+@import("gdi32.dll", "BitBlt")
+extern fn raw_bit_blt(device: usize, x: i32, y: i32, width: i32, height: i32, source: usize, source_x: i32, source_y: i32, rop: u32) -> i32
+
+@import("shell32.dll", "SHGetKnownFolderPath")
+extern fn raw_known_folder_path(id: *const u8, flags: u32, token: usize, out: *WidePointer) -> i32
+
+@import("shell32.dll", "SHCreateItemFromParsingName")
+extern fn raw_item_from_name(path: *const u16, context: usize, iid: *const u8, out: **ComObject) -> i32
+
+// A string value under a key of the current user, or nothing.
+fn read_user_string(a: *mem.Arena, subkey: str, name: str) -> (str, bool) {
+    let (subkey_wide, subkey_error) = widen(a, subkey)
+    if subkey_error != ok { ret ("", false) }
+    let (name_wide, name_error) = widen(a, name)
+    if name_error != ok { ret ("", false) }
+    var key: KeyHandle = zero
+    if raw_reg_open(HKEY_CURRENT_USER, &subkey_wide[0usize], 0u32, 131097u32, &key) != 0i32 { ret ("", false) }
+    var size: ValueSize = zero
+    if raw_reg_query_value(key.value, &name_wide[0usize], 0usize, 0usize, 0usize, &size) != 0i32 || size.value == 0u32 {
+        let closed = raw_reg_close(key.value)
+        ret ("", false)
+    }
+    let (units, allocation_error) = mem.alloc[u16](a, usize(size.value) / 2usize + 1usize)
+    if allocation_error != ok {
+        let closed = raw_reg_close(key.value)
+        ret ("", false)
+    }
+    os.touch(mem.cast[*const u8](&units[0usize]), (usize(size.value) / 2usize + 1usize) * 2usize)
+    let read = raw_reg_query_value(key.value, &name_wide[0usize], 0usize, 0usize, mem.address_of(&units[0usize]), &size)
+    let closed = raw_reg_close(key.value)
+    if read != 0i32 { ret ("", false) }
+    units[usize(size.value) / 2usize] = 0u16
+    let count = usize(raw_wide_length(&units[0usize]))
+    if count == 0usize { ret ("", true) }
+    let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+    if bytes_error != ok { ret ("", false) }
+    os.touch(&bytes[0usize], count * 3usize)
+    let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+    if converted <= 0i32 { ret ("", false) }
+    ret (bytes[0usize..usize(converted)], true)
+}
+
+fn consent_name(c: Capability) -> str {
+    if c == .Camera { ret "webcam" }
+    if c == .Microphone { ret "microphone" }
+    if c == .Location { ret "location" }
+    ret ""
+}
+
+fn same_text(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// The consent store's answer for this user: the capability's own value, then
+// the one for unpackaged programs; a denial in either is a denial.
+fn permission_status(a: *mem.Arena, c: Capability) -> Permission {
+    if c == .Screen || c == .Photos { ret .Granted }
+    if c == .Biometric { ret .Unavailable }
+    let store = "Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\"
+    var key_parts: [3]str = zero
+    key_parts[0usize] = store
+    key_parts[1usize] = consent_name(c)
+    key_parts[2usize] = ""
+    let (capability_key, key_error) = concat_text(a, key_parts[..])
+    if key_error != ok { ret .Unavailable }
+    key_parts[2usize] = "\\NonPackaged"
+    let (unpackaged_key, unpackaged_error) = concat_text(a, key_parts[..])
+    if unpackaged_error != ok { ret .Unavailable }
+    let (global_value, has_global) = read_user_string(a, capability_key, "Value")
+    let (local_value, has_local) = read_user_string(a, unpackaged_key, "Value")
+    if !has_global && !has_local { ret .Unavailable }
+    if (has_global && same_text(global_value, "Deny")) || (has_local && same_text(local_value, "Deny")) { ret .Denied }
+    ret .Granted
+}
+
+// The status, and for a denial the settings page where the user can change it.
+fn permission_request(a: *mem.Arena, c: Capability) -> (Permission, err) {
+    let status = permission_status(a, c)
+    if status != .Denied { ret (status, ok) }
+    var page = ""
+    if c == .Camera { page = "ms-settings:privacy-webcam" }
+    if c == .Microphone { page = "ms-settings:privacy-microphone" }
+    if c == .Location { page = "ms-settings:privacy-location" }
+    if page.len != 0usize { let opened = open_uri(a, page) }
+    ret (status, ok)
+}
+
+// A generic credential under the target name, for this user, kept across logins.
+fn credential_store(a: *mem.Arena, target_name: str, user: str, secret: []const u8) -> err {
+    if !valid_name(target_name) || secret.len == 0usize || secret.len > CRED_MAX_BLOB { ret Invalid }
+    let (target_wide, target_error) = widen(a, target_name)
+    if target_error != ok { ret target_error }
+    let (user_wide, user_error) = widen(a, user)
+    if user_error != ok { ret user_error }
+    var data: CredentialData = zero
+    data.kind = CRED_TYPE_GENERIC
+    data.target_name = mem.address_of(&target_wide[0usize])
+    data.blob_size = u32(secret.len)
+    data.blob = mem.address_of(&secret[0usize])
+    data.persist = CRED_PERSIST_LOCAL_MACHINE
+    data.user = mem.address_of(&user_wide[0usize])
+    if raw_cred_write(&data, 0u32) == 0i32 { ret Failed }
+    ret ok
+}
+
+fn credential_read(a: *mem.Arena, target_name: str) -> (Credential, err) {
+    var nothing: Credential = zero
+    if !valid_name(target_name) { ret (nothing, Invalid) }
+    let (target_wide, target_error) = widen(a, target_name)
+    if target_error != ok { ret (nothing, target_error) }
+    var found: CredentialPointer = zero
+    if raw_cred_read(&target_wide[0usize], CRED_TYPE_GENERIC, 0u32, &found) == 0i32 {
+        if raw_last_error() == ERROR_NOT_FOUND_CODE { ret (nothing, NotFound) }
+        ret (nothing, Failed)
+    }
+    var credential: Credential = zero
+    var failure = ok
+    let size = usize(found.value.blob_size)
+    if size != 0usize {
+        var region: mem.Arena = zero
+        var bits: BytesPun = zero
+        bits.bits = found.value.blob
+        region.base = bits.pointer
+        region.cap = size
+        region.off = 0usize
+        let (secret, allocation_error) = mem.alloc[u8](a, size)
+        if allocation_error != ok {
+            failure = allocation_error
+        } else {
+            mem.copy[u8](secret, mem.view(&region, 0usize, size))
+            credential.secret = secret[0usize..size]
+        }
+    }
+    if failure == ok && found.value.user != 0usize {
+        var user_pun: BytesPun = zero
+        user_pun.bits = found.value.user
+        let user_units = mem.cast[*const u16](user_pun.pointer)
+        let count = usize(raw_wide_length(user_units))
+        if count != 0usize {
+            let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+            if bytes_error != ok {
+                failure = bytes_error
+            } else {
+                os.touch(&bytes[0usize], count * 3usize)
+                let converted = raw_narrow(CP_UTF8, 0u32, user_units, i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+                if converted <= 0i32 { failure = Failed } else { credential.user = bytes[0usize..usize(converted)] }
+            }
+        }
+    }
+    raw_cred_free(mem.address_of(found.value))
+    ret (credential, failure)
+}
+
+fn credential_delete(a: *mem.Arena, target_name: str) -> err {
+    if !valid_name(target_name) { ret Invalid }
+    let (target_wide, target_error) = widen(a, target_name)
+    if target_error != ok { ret target_error }
+    if raw_cred_delete(&target_wide[0usize], CRED_TYPE_GENERIC, 0u32) == 0i32 {
+        if raw_last_error() == ERROR_NOT_FOUND_CODE { ret NotFound }
+        ret Failed
+    }
+    ret ok
+}
+
+// The primary screen as pixels, top-down rows, through a DIB section.
+fn screen_capture(a: *mem.Arena) -> (Icon, err) {
+    var nothing: Icon = zero
+    let width = raw_system_metrics(SM_CXSCREEN)
+    let height = raw_system_metrics(SM_CYSCREEN)
+    if width <= 0i32 || height <= 0i32 { ret (nothing, Failed) }
+    let screen = raw_get_dc(0usize)
+    if screen == 0usize { ret (nothing, Failed) }
+    let memory = raw_create_compatible_dc(screen)
+    if memory == 0usize {
+        let released = raw_release_dc(0usize, screen)
+        ret (nothing, Failed)
+    }
+    var header: DibHeader = zero
+    header.size = 40u32
+    header.width = width
+    header.height = 0i32 - height
+    header.planes = 1u16
+    header.bit_count = 32u16
+    var bits: BitsPointer = zero
+    let section = raw_create_dib_section(memory, &header, DIB_RGB_COLORS, &bits, 0usize, 0u32)
+    var failure = ok
+    var pixels: []u32 = zero
+    if section == 0usize || mem.address_of(bits.value) == 0usize {
+        failure = Failed
+    } else {
+        let previous = raw_select_object(memory, section)
+        if raw_bit_blt(memory, 0i32, 0i32, width, height, screen, 0i32, 0i32, SRCCOPY) == 0i32 {
+            failure = Failed
+        } else {
+            let count = usize(width) * usize(height)
+            let (copy, allocation_error) = mem.alloc[u32](a, count)
+            if allocation_error != ok {
+                failure = allocation_error
+            } else {
+                var region: mem.Arena = zero
+                region.base = bits.value
+                region.cap = count * 4usize
+                region.off = 0usize
+                let bytes = mem.view(&region, 0usize, count * 4usize)
+                var at = 0usize
+                while at < count {
+                    copy[at] = get_u32(bytes, at * 4usize) | 4278190080u32
+                    at += 1usize
+                }
+                pixels = copy
+            }
+        }
+        let restored = raw_select_object(memory, previous)
+        let dropped = raw_delete_object(section)
+    }
+    let dropped_memory = raw_delete_dc(memory)
+    let released = raw_release_dc(0usize, screen)
+    if failure != ok { ret (nothing, failure) }
+    ret (Icon { width: u32(width), height: u32(height), pixels: pixels[0usize..usize(width) * usize(height)] }, ok)
+}
+
+fn biometric_verify(a: *mem.Arena, reason: str) -> (Permission, err) {
+    ret (.Unavailable, Unsupported)
+}
+
+// The open dialog over the Pictures folder, image files only.
+fn photo_picker(a: *mem.Arena, w: os.Window, multiple: bool) -> ([]const str, err) {
+    var nothing: []const str = zero
+    var filters: [2]FileFilter = zero
+    filters[0usize] = FileFilter { label: "Pictures", pattern: "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp" }
+    filters[1usize] = FileFilter { label: "All files", pattern: "*.*" }
+    var pictures: [16]u8 = zero
+    guid(pictures[..], 870482224u32, 19998u16, 18038u16, 2203752505u32, 1547420603u32)
+    var holder: WidePointer = zero
+    var folder = ""
+    if raw_known_folder_path(&pictures[0usize], 0u32, 0usize, &holder) >= 0i32 && mem.address_of(holder.value) != 0usize {
+        let count = usize(raw_wide_length(holder.value))
+        let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize + 1usize)
+        if bytes_error == ok && count != 0usize {
+            os.touch(&bytes[0usize], count * 3usize + 1usize)
+            let converted = raw_narrow(CP_UTF8, 0u32, holder.value, i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+            if converted > 0i32 { folder = bytes[0usize..usize(converted)] }
+        }
+        raw_co_task_free(mem.address_of(holder.value))
+    }
+    let dialog = FileDialog { kind: .Open, title: "Choose a picture", filters: filters[..], multiple: multiple, initial: "", default_extension: "", folder: folder }
+    let (paths, dialog_error) = file_dialog(a, w, dialog)
+    ret (paths, dialog_error)
 }
