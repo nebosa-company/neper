@@ -181,6 +181,8 @@ fn decoder(storage: []u8, window_limit: usize) -> (Decoder, err) {
     if needed_error != ok { ret (zero, needed_error) }
     if storage.len < needed { ret (zero, TooLarge) }
     let s = mem.cast[*DecoderState](&storage[0])
+    let blank: DecoderState = zero
+    *s = blank
     var at = mem.size_of[DecoderState]()
     s.window = storage[at..at + window_limit]
     at += window_limit
@@ -533,6 +535,8 @@ fn encoder(storage: []u8, level: Level) -> (Encoder, err) {
     let needed = encoder_storage(level)
     if storage.len < needed { ret (zero, TooLarge) }
     let s = mem.cast[*EncoderState](&storage[0])
+    let blank: EncoderState = zero
+    *s = blank
     var at = mem.size_of[EncoderState]()
     s.level = level
     s.buffer = storage[at..at + BLOCK]

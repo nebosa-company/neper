@@ -599,6 +599,8 @@ fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err) 
     let fixed = mem.size_of[State]() + 8usize + INPUT + BLOCK_MAX + BLOCK_MAX + (1usize << HUFF_LOG_MAX) * 2usize + SEQ_TABLE * 4usize * 4usize
     if storage.len < fixed + 1024usize { ret (zero, io.TooSmall) }
     let s = mem.cast[*State](&storage[0])
+    let blank: State = zero
+    *s = blank
     var at = mem.size_of[State]() + 8usize
     s.input = storage[at..at + INPUT]
     at += INPUT
@@ -1045,6 +1047,8 @@ fn writer_storage(level: Level) -> usize {
 fn writer(storage: []u8, sink: io.Writer, level: Level) -> (Writer, err) {
     if storage.len < writer_storage(level) { ret (zero, io.TooSmall) }
     let s = mem.cast[*WriterState](&storage[0])
+    let blank: WriterState = zero
+    *s = blank
     let at = mem.size_of[WriterState]() + 8usize
     s.buffer = storage[at..at + BLOCK_MAX]
     s.buffered = 0usize

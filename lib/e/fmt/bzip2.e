@@ -71,6 +71,8 @@ fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err) 
     let fixed = mem.size_of[State]() + 8usize + BUFFER + MAX_GROUPS * MAX_ALPHA + MAX_GROUPS * (MAX_CODE_BITS + 1usize) * 2usize + MAX_GROUPS * MAX_ALPHA * 2usize + MAX_SELECTORS + 256usize + 256usize + 257usize * 4usize
     if storage.len < fixed + 4usize { ret (zero, io.TooSmall) }
     let s = mem.cast[*State](&storage[0])
+    let blank: State = zero
+    *s = blank
     var at = mem.size_of[State]() + 8usize
     s.input = storage[at..at + BUFFER]
     at += BUFFER

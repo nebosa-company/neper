@@ -58,6 +58,8 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-SAFETY-0018` | a region value returned across a deferred reset of that region (D675) | spec §11 |
 | `E-SAFETY-0019` | an invalid or unprovable `@borrows` result-borrow contract | spec §§5, 11 |
 | `E-SAFETY-0020` | an invalid `@noescape` input set or a return, global store, unknown call, callback or thread handoff that may retain a named input | spec §§5, 11 |
+| `E-SAFETY-0021` | `undef` of a type holding a reference, read before every reference it holds is written (D918) | spec §11 |
+| `E-SAFETY-0022` | `mem.cast` to a pointer to a type that admits only its members, from bytes of another type, outside a placement or `@nocheck` (D919) | spec §11 |
 | `E-SAFETY-9999` | statically diagnosed safety-contract violation | spec §11 |
 | `E-MODULE-0001` | module is missing or defined by multiple roots | spec §2 |
 | `E-MODULE-0002` | import graph contains a cycle | spec §2 |

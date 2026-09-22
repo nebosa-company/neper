@@ -716,7 +716,10 @@ fn state[T: type](ctx: *BuildContext, key: Key, initial: T) -> (*T, StateId, err
             let id = e.state_ids[k]
             let c = &s.cells[usize(id.slot)]
             if c.size != size || c.align != align { ret (none, zero, StateType) }
-            ret (mem.cast[*T](&s.storage[c.offset]), id, ok)
+            let slot = &s.storage[c.offset]
+            // The cell was written as `T` when `key` first asked for it; that one key names
+            // one type is the caller's obligation (D919).
+            @nocheck { ret (mem.cast[*T](slot), id, ok) }
         }
         k += 1usize
     }

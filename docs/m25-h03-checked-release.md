@@ -88,13 +88,16 @@ exist only as artifacts.
 ## 4. Obligations not yet met
 
 - Check elimination with proofs, and the codegen tests for eliminated checks.
-- `invalid` in release: bytes introduced through `mem.cast` or a foreign write can
-  still carry an invalid representation. Direct `mem.bitcast` creation is closed for
-  `bool`, enums and tagged unions (D548, D554). The `zero`/`undef` half is closed at
+- `invalid` in release: bytes introduced through a foreign write can still carry an
+  invalid representation. Direct `mem.bitcast` creation is closed for `bool`, enums
+  and tagged unions (D548, D554), and `mem.cast` to a pointer to such a type from
+  bytes of another type is refused unless it is a placement or stands in `@nocheck`
+  (D919, `E-SAFETY-0022`). The `zero`/`undef` half is closed at
   compile time (D475): `= undef` of a type that admits only its members is refused as
   `E-SAFETY-0017`, as `= zero` of a type with no member at zero was.
-- Definite initialization of fields and elements: not checked beyond `undef` of a
-  resource (H01).
+- Definite initialization of fields and elements: `undef` of a resource (H01) and of
+  a type holding a reference (D918, `E-SAFETY-0021`) are checked; an `undef` array
+  of references read element by element is refused rather than tracked.
 - The arithmetic rows' debug/release divergence (trap against wrap) is unchanged
   and recorded as build-mode context, as H03 allows; reconciling it is a versioned
   language change, not this record's.

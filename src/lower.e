@@ -6197,6 +6197,8 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     if node.kind == .NocheckStmt {
         let was_nocheck = builder.nocheck
         builder.nocheck = true
+        // The checker the lowering re-asks sees the block too (D919).
+        c.nocheck_depth += 1usize
         var block_error: err = ok
         let end = usize(node.first_child) + usize(node.child_count)
         var at = usize(node.first_child)
@@ -6208,6 +6210,7 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
             at += 1usize
         }
         builder.nocheck = was_nocheck
+        c.nocheck_depth = c.nocheck_depth - 1usize
         ret block_error
     }
     if node.kind == .BreakStmt {

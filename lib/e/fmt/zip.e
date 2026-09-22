@@ -232,6 +232,8 @@ fn entry_reader(storage: []u8, archive: *Archive, index: usize) -> (io.Reader, e
     let (position, seek_error) = io.seek(&s.seeker, i64(s.offsets[index] + 30u64 + skip), .Start)
     if seek_error != ok { ret (zero, seek_error) }
     let e = mem.cast[*EntryState](&storage[0])
+    let blank: EntryState = zero
+    *e = blank
     let head = mem.size_of[EntryState]() + 7usize
     var at = head / 8usize * 8usize
     e.input = storage[at..at + BUFFER]

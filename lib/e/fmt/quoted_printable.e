@@ -39,6 +39,8 @@ fn reader(storage: []u8, source: io.Reader) -> Reader {
     let state_size = mem.size_of[ReaderState]()
     if storage.len < state_size + 3usize { ret r }
     let state = mem.cast[*ReaderState](&storage[0])
+    let blank: ReaderState = zero
+    *state = blank
     state.source = source
     state.buffer = storage[state_size..]
     state.start = 0usize

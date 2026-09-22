@@ -58,6 +58,8 @@ fn mem_round(n: usize) -> usize {
 fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err) {
     if storage.len < storage_required(.Fast) { ret (zero, io.TooSmall) }
     let s = mem.cast[*ReaderState](&storage[0])
+    let blank: ReaderState = zero
+    *s = blank
     var at = mem_round(mem.size_of[ReaderState]())
     s.input = storage[at..at + BUFFER]
     at += BUFFER
@@ -184,6 +186,8 @@ fn read(source_reader: *Reader, dst: []u8) -> (usize, err) {
 fn writer(storage: []u8, sink: io.Writer, level: deflate.Level) -> (Writer, err) {
     if storage.len < storage_required(level) { ret (zero, io.TooSmall) }
     let s = mem.cast[*WriterState](&storage[0])
+    let blank: WriterState = zero
+    *s = blank
     var at = mem_round(mem.size_of[WriterState]())
     s.staging = storage[at..at + BUFFER]
     at += BUFFER

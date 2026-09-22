@@ -18118,3 +18118,41 @@ first still compiles -- `tests/neper0/struct.e` is that case, and
 The compiler's own source declares no `undef` of a reference-holding type, so
 its image is unchanged; what this closes is a hole a program could have walked
 into, not one the toolchain was in.
+
+## D919 — A pointer cast keeps a representation
+
+D548 and D554 check a `mem.bitcast` into `bool`, an enum or a tagged union, and
+left the other door open: `mem.cast[*Color](&raw)` makes a pointer through which
+any byte reads as a `Color`, and no check stands between the read and a switch
+that trusts it. H03 names it -- "bytes introduced through `mem.cast`" -- and
+allows the answer to be conservative rejection.
+
+`mem.cast[*P](p)`, where `P` admits only its members (D475's predicate: `bool`,
+an enum, a tagged union, a struct or array holding one), is refused as
+E-SAFETY-0022 unless one of these holds:
+
+- `p` points to `P` itself -- the cast only changes constness -- or to `void`,
+  the erased pointer a callback's context travels as. Its origin is the program's
+  own `*P`, the trust D349 already extends to a resource's handle; laundering
+  bytes through `*void` on purpose is the boundary this row draws.
+- The cast is a placement: `let x = mem.cast[*P](bytes)` whose next mention of
+  `x`, at the binding's depth, is `*x = ...`. Every byte is then one the program
+  chose before any is read.
+- It stands in an `@nocheck` block, the explicit unchecked operation (H03), whose
+  obligation is the author's and which the manifest inventories.
+
+A pointee that admits any bytes -- integers, floats, slices -- is unaffected.
+
+The library had fifteen placements that wrote a state struct field by field
+into caller storage (deflate, bzip2, lzw, multipart, quoted-printable, zstd and
+the codecs over them): each now writes the whole value first, `let blank: T =
+zero` then `*s = blank` (`*s = zero` is still one of the checker's no-location
+refusals), so a field the construction does not name starts as zero rather than
+whatever the storage held. `e.ui.widget`'s
+state table hands out a cell written as `T` under a key; that one key names one
+type is the caller's obligation, and the lookup's cast is an `@nocheck` block
+saying so. The lowering re-asks the checker, so it counts the `@nocheck` blocks
+too. `accept/safety_cast_representation.e` holds the five accepted forms, and
+`reject/safety_cast_representation.e` and `reject/safety_cast_placement.e` a
+cast from a `u8` and a placement read before it is written. A foreign write into
+a `*bool` or an enum stays open.

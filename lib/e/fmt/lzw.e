@@ -67,6 +67,8 @@ fn reader(storage: []u8, source: io.Reader, order: Order, literal_width: u8, out
     if needed_error != ok { ret (zero, needed_error) }
     if storage.len < needed { ret (zero, io.TooSmall) }
     let s = mem.cast[*ReaderState](&storage[0])
+    let blank: ReaderState = zero
+    *s = blank
     var at = mem.size_of[ReaderState]()
     s.source = source
     s.order = order
@@ -209,6 +211,8 @@ fn writer(storage: []u8, sink: io.Writer, order: Order, literal_width: u8) -> (W
     if needed_error != ok { ret (zero, needed_error) }
     if storage.len < needed { ret (zero, io.TooSmall) }
     let s = mem.cast[*WriterState](&storage[0])
+    let blank: WriterState = zero
+    *s = blank
     var at = mem.size_of[WriterState]()
     s.sink = sink
     s.order = order

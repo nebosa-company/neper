@@ -35,7 +35,7 @@ Predecessor: queue item C084 (`docs/tasks/compiler/`) delivers the M1 debug subs
 
 ## Code anchors
 
-- `.dll`: `lib/e/os.windows.e`×124‡, `lib/e/os/shell.windows.e`×95‡, `src/link_pe.e`×2, `tests/conformance/tools/manifest_unsafe/src/main.e`×1
+- `.dll`: `lib/e/os.windows.e`×116‡, `lib/e/os/shell.windows.e`×95‡, `src/link_pe.e`×2, `tests/conformance/tools/manifest_unsafe/src/main.e`×1
 - nearest existing implementation: `src/link_pe.e`, `src/link_elf.e`, `src/em_link.e`†, `src/object_coff.e` († over 40 KB, ‡ over 120 KB — read by region)
 
 ## First session

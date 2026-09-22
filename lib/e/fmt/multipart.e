@@ -64,6 +64,8 @@ fn reader(storage: []u8, source: io.Reader, boundary: str, part_limit: u32, byte
     if !boundary_legal(boundary) { ret (zero, InvalidBoundary) }
     if storage.len < storage_required() { ret (zero, io.TooSmall) }
     let s = mem.cast[*ReaderState](&storage[0])
+    let blank: ReaderState = zero
+    *s = blank
     var at = mem.size_of[ReaderState]() + 8usize
     s.window = storage[at..at + WINDOW]
     at += WINDOW
@@ -256,6 +258,8 @@ fn writer(storage: []u8, sink: io.Writer, boundary: str) -> (Writer, err) {
     if !boundary_legal(boundary) { ret (zero, InvalidBoundary) }
     if storage.len < mem.size_of[WriterState]() + 8usize { ret (zero, io.TooSmall) }
     let s = mem.cast[*WriterState](&storage[0])
+    let blank: WriterState = zero
+    *s = blank
     s.sink = sink
     s.boundary = boundary
     s.started = false

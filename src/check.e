@@ -104,6 +104,7 @@ type DiagnosticKind = enum u8 {
     MissingZeroValue,
     MissingUndefValue,
     UndefReferenceRead,
+    CastRepresentation,
     IteratorImmutable,
     IteratorMissing,
     IteratorSignature,
@@ -670,6 +671,8 @@ type Checker = struct {
     // The resource pass runs in the body sweep alone (D345): the lowering re-walks
     // bodies in its own order and partially, and states depend on the walk.
     resources_on: bool,
+    // The `@nocheck` blocks the statement being checked sits in (D919).
+    nocheck_depth: usize,
     // The explain records (D359), when the command asked for them.
     explains: []Explain,
     explain_count: usize,
@@ -3209,6 +3212,35 @@ fn undef_written_before_read(c: *Checker, g: *graph.Graph, module_index: usize, 
     }
     // The block ended: what was never read was never read unwritten.
     ret (true, "")
+}
+
+// A placement (D919): `let x = mem.cast[*P](bytes)` whose next mention of `x`, at the
+// binding's own depth, writes the whole value -- `*x = ...` -- so no byte of the other
+// type is read through the pointer before the program has chosen every one.
+fn cast_placed(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node) -> bool {
+    let start = usize(node.token_start)
+    if start < 3usize { ret false }
+    if c.tokens[start - 1usize].kind != .PunctAssign || c.tokens[start - 2usize].kind != .Identifier { ret false }
+    let binder = c.tokens[start - 3usize].kind
+    if binder != .KwLet && binder != .KwVar { ret false }
+    let text = g.modules[module_index].text
+    let name_token = c.tokens[start - 2usize]
+    let name = text[name_token.start..name_token.end]
+    var depth = 0usize
+    var at = usize(node.token_end)
+    while at < c.tokens.len {
+        let token = c.tokens[at]
+        if token.kind == .PunctLBrace { depth += 1usize }
+        if token.kind == .PunctRBrace {
+            if depth == 0usize { ret false }
+            depth = depth - 1usize
+        }
+        if token.kind == .Identifier && same(text[token.start..token.end], name) && c.tokens[at - 1usize].kind != .PunctDot {
+            ret depth == 0usize && c.tokens[at - 1usize].kind == .PunctStar && at + 1usize < c.tokens.len && c.tokens[at + 1usize].kind == .PunctAssign
+        }
+        at += 1usize
+    }
+    ret false
 }
 
 fn aggregate_parameter(c: *Checker, template_index: usize, name: str) -> (usize, bool) {
@@ -9621,6 +9653,22 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                                 ret (info, ResourceViolation)
                             }
                         }
+                        // A pointer to a type that admits only its members is made from a
+                        // pointer to that type, or from the `*void` one was erased to (D919,
+                        // H03): other bytes read through it would be a representation no
+                        // check validates, the `invalid` row a release build does not keep.
+                        if info.cast.has_element && info.cast.element < c.type_count {
+                            let pointee = c.types[info.cast.element]
+                            let (pointee_admits, pointee_culprit) = type_has_undef_value(c, pointee, 0usize)
+                            if !pointee_admits {
+                                var same_representation = false
+                                if source.has_element && source.element < c.type_count { same_representation = type_equal(c, c.types[source.element], pointee) || c.types[source.element].kind == .Void }
+                                if !same_representation && c.nocheck_depth == 0usize && !cast_placed(c, g, module_index, node) {
+                                    record_failure(c, module_index, node, .CastRepresentation, pointee.name, pointee_culprit)
+                                    ret (info, InvalidType)
+                                }
+                            }
+                        }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -13443,7 +13491,9 @@ fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tre
     if node.kind == .DeferStmt { ret check_defer_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .NocheckStmt {
         let checkpoint = c.local_count
+        c.nocheck_depth += 1usize
         let child_error = check_children(c, r, g, tree, module_index, node, function)
+        c.nocheck_depth = c.nocheck_depth - 1usize
         c.local_count = checkpoint
         ret child_error
     }
@@ -14187,6 +14237,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ResourceUndef { ret "E-SAFETY-0007" }
     if kind == .MissingUndefValue { ret "E-SAFETY-0017" }
     if kind == .UndefReferenceRead { ret "E-SAFETY-0021" }
+    if kind == .CastRepresentation { ret "E-SAFETY-0022" }
     if kind == .ResourceUnchecked { ret "E-SAFETY-0008" }
     if kind == .ResourceDeferredConsumed { ret "E-SAFETY-0009" }
     if kind == .ResourceMovedInLoop { ret "E-SAFETY-0011" }
