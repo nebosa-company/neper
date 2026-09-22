@@ -72,7 +72,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `generator.inputs`: `src/main.e`×1‡
 - `nested_deep`: `tests/conformance/tools/nested_deep.e`×1, `tests/conformance/tools/nested_deep.e.map.json`×1, `tests/conformance/tools/nested_deep.expected.jsonl`×1, `tests/conformance/tools/nested_deep.mid1`×1, `tests/conformance/tools/nested_deep.mid1.map.json`×1, `tests/conformance/tools/nested_deep.mid2`×1, `tests/conformance/tools/nested_deep.mid2.map.json`×1, `tests/conformance/tools/nested_deep.mid3`×1
 - `inlined_from`: `src/tool.e`×2‡
-- `inlined`: `src/em.e`×34‡, `src/main.e`×28‡, `src/lower.e`×27‡, `src/nir.e`×17†, `src/tool.e`×14‡, `tests/conformance/tools/dis.x64-linux.expected.jsonl`×2, `tests/conformance/tools/dis.x64-windows.expected.jsonl`×2, `src/check.e`×1‡
+- `inlined`: `src/em.e`×34‡, `src/main.e`×28‡, `src/lower.e`×27‡, `src/nir.e`×19†, `src/tool.e`×14‡, `tests/conformance/tools/dis.x64-linux.expected.jsonl`×2, `tests/conformance/tools/dis.x64-windows.expected.jsonl`×2, `src/check.e`×1‡
 
 ## Verification
 

@@ -3610,6 +3610,18 @@ $nullOutput = & $nullPath store 2>&1
 if ($LASTEXITCODE -ne 134 -or ($nullOutput -join "`n") -notmatch 'main\.e:34:9: trap\[null\]: nil dereferenced as \*i32') { throw "the store case did not trap as section 11 says: exit $LASTEXITCODE, $($nullOutput -join "`n")" }
 & $nullPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'a dereference of a live pointer trapped' }
+# D923: a null check another check of the same pointer dominates is not made; a nil
+# pointer still traps at its first dereference, and one checked only inside an `if`
+# still traps at the later dereference.
+$elidedPath = Join-Path $testBuild 'trap-null-elided-selfhost.exe'
+$elidedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_null_elided\src\main.e') $repo 'x64' 'windows' $elidedPath
+if ($LASTEXITCODE -ne 0 -or $elidedWritten -ne 'executable written') { throw 'elided null trap fixture executable emission failed' }
+$elidedOutput = & $elidedPath twice 2>&1
+if ($LASTEXITCODE -ne 134 -or ($elidedOutput -join "`n") -notmatch 'main\.e:12:17: trap\[null\]: nil dereferenced as \*Pair') { throw "the twice case did not trap at its first read: exit $LASTEXITCODE, $($elidedOutput -join "`n")" }
+$elidedOutput = & $elidedPath branchy 2>&1
+if ($LASTEXITCODE -ne 134 -or ($elidedOutput -join "`n") -notmatch 'main\.e:19:15: trap\[null\]: nil dereferenced as \*Pair') { throw "the branchy case did not trap at its later read: exit $LASTEXITCODE, $($elidedOutput -join "`n")" }
+& $elidedPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'an elided null check trapped on a live pointer' }
 # The `align` row: `simd.load_aligned` and `store_aligned` at an address that is not a
 # multiple of the vector's width, each refused with the width named; aligned untouched.
 $alignPath = Join-Path $testBuild 'trap-align-selfhost.exe'

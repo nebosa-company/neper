@@ -18236,3 +18236,31 @@ The trap fixtures' output is byte for byte what it was, in debug and release, ov
 sixty-five runs; the checked compiler is 12.5% larger than the unchecked one (was
 30.5%) and 5.5% slower to build itself (was 14.2%). The cold-wall budget is met on
 that measure; the image budget is not, and what remains is the checks themselves.
+
+## D923 — A null check already made is not made again
+
+Of the checked compiler's twenty-four thousand trap sites, 11,810 were `null`, most of
+them the same parameter -- `c`, `builder`, `context` -- dereferenced again and again
+in one body, each with its own compare, branch and trap. The pointer is an SSA value
+and never changes, so once one check of it has passed, every block that check
+dominates holds it non-nil.
+
+Lowering now branches a null check on the pointer itself, non-zero onward, with no
+zero constant and no compare; the NIR verifier accepts an address as a condition. At
+the end of each function, with the dominators the verifier has just computed, a check
+whose block is dominated by a block the check of the same value alone enters -- its
+non-nil edge -- becomes a branch straight on, and so does a check of a stack object's
+address, which an inlined callee makes of its caller's `&local` and which is never
+nil. The trap block such a check leaves behind has no way in, and selection does not
+lay out a trap-only block no branch enters. A kernel's frame mode keeps the compare,
+since its fault path is not a trap.
+
+What a program does is unchanged: a nil pointer traps at the first dereference on the
+path it takes, with the same record. `link/trap_null_elided` pins both halves -- a nil
+pointer read twice traps at the first read, and one read inside an `if` and again
+after it traps at the later read when the `if` is not taken -- and the sixty-five trap
+runs are byte for byte what they were. The checked compiler is now 10.0% larger than
+the unchecked one (8,778,240 against 7,982,592 bytes; D922 left 12.5%).
+Its cold wall, measured on a host near its memory limit, is +11.5% against the old
+code generator's +13.7% in the same runs; D922's quieter measurement put the checked
+build at +5.5%, and this change removes work from it.

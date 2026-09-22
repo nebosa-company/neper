@@ -87,6 +87,9 @@ type FunctionContext = struct {
     trap_pair_messages: [TRAP_RECORDS]usize,
     trap_pair_stubs: [TRAP_RECORDS]usize,
     trap_pair_count: usize,
+    // Per block of the function being selected, whether a branch enters it (D923);
+    // empty when there is no arena to hold it, and then every block is laid out.
+    entered: []bool,
 }
 
 const TRAP_RECORDS: usize = 64usize
@@ -1872,6 +1875,38 @@ fn select_zero(builder: *nir.Builder, instruction: nir.Instruction, allocations:
     ret emit_x64.zero_memory(output, address_register, instruction.immediate)
 }
 
+// Which blocks a branch enters (D923): the entry, and every target of a terminator.
+fn mark_entered_blocks(builder: *nir.Builder, current: nir.Function, entered: []bool) {
+    var clear_at = 0usize
+    while clear_at < entered.len {
+        entered[clear_at] = false
+        clear_at += 1usize
+    }
+    if current.block_count != 0usize { entered[0usize] = true }
+    var block_at = 0usize
+    while block_at < current.block_count {
+        let block = builder.blocks[current.first_block + block_at]
+        if block.instruction_count != 0usize {
+            let terminator = builder.instructions[block.first_instruction + block.instruction_count - 1usize]
+            if terminator.opcode == .Branch || terminator.opcode == .BranchIf {
+                if terminator.target >= current.first_block && terminator.target < current.first_block + current.block_count { entered[terminator.target - current.first_block] = true }
+            }
+            if terminator.opcode == .BranchIf {
+                if terminator.target2 >= current.first_block && terminator.target2 < current.first_block + current.block_count { entered[terminator.target2 - current.first_block] = true }
+            }
+        }
+        block_at += 1usize
+    }
+}
+
+// A block of one trap that no branch enters: a null check found already made left it
+// so (D923), and it is not laid out.
+fn unentered_trap(builder: *nir.Builder, current: nir.Function, context: *FunctionContext, block_at: usize, at: usize) -> bool {
+    if block_at >= context.entered.len || context.entered[block_at] { ret false }
+    let block = builder.blocks[current.first_block + block_at]
+    ret block.first_instruction == at && block.instruction_count == 1usize && builder.instructions[at].opcode == .Trap
+}
+
 // A text's bytes, as they stand.
 fn emit_text(output: *emit_x64.Buffer, text: str) -> err {
     var at = 0usize
@@ -2272,6 +2307,7 @@ fn build_live_masks(builder: *nir.Builder, current: nir.Function, context: *Func
 fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
     if !context.has_arena || function_index >= builder.function_count {
         context.live_masks = context.live_masks[0usize..0usize]
+        context.entered = context.entered[0usize..0usize]
         ret function_body(builder, function_index, stack_slots, context)
     }
     let current = builder.functions[function_index]
@@ -2283,6 +2319,10 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     try build_live_masks(builder, current, context, deltas, masks)
     context.live_masks = masks[0usize..current.instruction_count]
     context.live_base = current.first_instruction
+    let (entered, entered_error) = mem.alloc[bool](context.arena, current.block_count + 1usize)
+    if entered_error != ok { ret entered_error }
+    mark_entered_blocks(builder, current, entered)
+    context.entered = entered
     // Each value's defining instruction (D326), for `value_type`.
     let (definers, definers_error) = mem.alloc[usize](context.arena, current.value_count + 1usize)
     if definers_error != ok { ret definers_error }
@@ -2363,6 +2403,10 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
         while next_block < current.block_count && builder.blocks[current.first_block + next_block].first_instruction == at {
             block_offsets[next_block] = output.count
             next_block += 1usize
+        }
+        if next_block != 0usize && unentered_trap(builder, current, context, next_block - 1usize, at) {
+            at += 1usize
+            continue
         }
         let instruction = builder.instructions[at]
         context.failure_token = nir.site_token(instruction.site)
@@ -2936,7 +2980,7 @@ fn self_test() -> err {
     var lines: [8]LineEntry = zero
     var line_count = 0usize
     let no_masks = block_offsets[0usize..0usize]
-    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize }
+    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, entered: zero }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 14usize || output.bytes[0usize] != 85u8 || output.bytes[4usize] != 184u8 || output.bytes[5usize] != 7u8 || output.bytes[12usize] != 93u8 || output.bytes[13usize] != 195u8 { ret Unsupported }
     allocations[0usize].kind = .Stack

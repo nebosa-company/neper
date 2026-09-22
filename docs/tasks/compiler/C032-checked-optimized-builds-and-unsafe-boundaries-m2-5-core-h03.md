@@ -60,7 +60,8 @@ The queue's own gap clause, split into checklist lines. Each line is one session
 - [ ] the load/store audit
 - [ ] the image budget -- a trap site is now the operand moves, `mov edx, line << 16 | column`
 - [ ] a call to its function's stub for that path and message
-- [ ] the text laid once per function (D922): the checked compiler is +12.5% over the unchecked one (was +30.5%) against +5%
+- [ ] the text laid once per function (D922): the checked compiler was +12.5% over the unchecked one (was +30.5%)
+- [ ] a null check a check of the same pointer dominates is not made (D923, `link/trap_null_elided`), leaving +10.0% against +5%
 - [ ] its cold wall +5.5% (was +14.2%), inside +10%
 
 ## Decisions to read first
@@ -88,6 +89,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 - `D920` — Bytes from across the C ABI do not arrive as a member (`docs/decisions.md:18160`)
 - `D921` — An untagged union holds no member-only field (`docs/decisions.md:18187`)
 - `D922` — A trap site is a call, and its text is laid once (`docs/decisions.md:18213`)
+- `D923` — A null check already made is not made again (`docs/decisions.md:18240`)
 
 ## Code anchors
 
@@ -98,6 +100,10 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `@unsafe`: `src/tool.e`×6‡, `lib/e/os.linux.e`×2‡, `lib/e/os.windows.e`×2‡, `src/check.e`×2‡, `tests/conformance/tools/manifest_unsafe/src/main.e`×2, `lib/e/proc.e`×1, `src/main.e`×1‡, `tests/conformance/reject/safety_opaque.expected.jsonl`×1
 - `mem.bitcast`: `lib/e/math.e`×26†, `lib/e/str.e`×16†, `lib/e/fmt/cbor.e`×13, `lib/e/math/float.e`×12, `lib/e/gfx/scene.e`×9‡, `lib/e/os.windows.e`×7‡, `lib/e/audio.e`×6, `lib/e/fmt/bson.e`×6
 - `e.ui.widget`: `lib/e/ui/accessibility.e`×2, `lib/e/ui/control.e`×2‡, `lib/e/ui/animation.e`×1, `lib/e/ui/app.e`×1†, `lib/e/ui/collection.e`×1†, `lib/e/ui/navigation.e`×1†, `lib/e/ui/overlay.e`×1†, `lib/e/ui/testing.e`×1
+
+## Existing fixtures
+
+- `tests/selfhost/fixtures/link/trap_null_elided`
 
 ## Verification
 

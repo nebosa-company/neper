@@ -3470,6 +3470,28 @@ case "$null_output" in
 ' "the store case did not trap as section 11 says: $null_output" >&2; exit 1 ;;
 esac
 "$null_path" none
+# D923: a null check another check of the same pointer dominates is not made; a nil
+# pointer still traps at its first dereference, and one checked only inside an `if`
+# still traps at the later dereference.
+elided_path="$test_build/trap-null-elided-selfhost"
+elided_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_null_elided/src/main.e" "$repo" x64 linux "$elided_path")
+[ "$elided_written" = 'executable written' ]
+chmod +x "$elided_path"
+elided_status=0
+elided_output=$("$elided_path" twice 2>&1) || elided_status=$?
+[ "$elided_status" -eq 134 ]
+case "$elided_output" in
+    *'main.e:12:17: trap[null]: nil dereferenced as *Pair'*) ;;
+    *) echo "the twice case did not trap at its first read: $elided_output" >&2; exit 1 ;;
+esac
+elided_status=0
+elided_output=$("$elided_path" branchy 2>&1) || elided_status=$?
+[ "$elided_status" -eq 134 ]
+case "$elided_output" in
+    *'main.e:19:15: trap[null]: nil dereferenced as *Pair'*) ;;
+    *) echo "the branchy case did not trap at its later read: $elided_output" >&2; exit 1 ;;
+esac
+"$elided_path" none
 # The `align` row: `simd.load_aligned` and `store_aligned` at an address that is not a
 # multiple of the vector's width, each refused with the width named; aligned untouched.
 align_path="$test_build/trap-align-selfhost"

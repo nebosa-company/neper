@@ -520,14 +520,20 @@ fn emit_align_check(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, ar
 // writes through a pointer value -- `*p`, `p.field` through the auto-dereference --
 // compares the pointer with zero first; a value that is already an address of a stack
 // object or an aggregate by address is never nil and never comes here.
+// The branch is on the pointer itself (D923), non-zero onward, which is what lets the
+// verifier's dominators find a check of the same value already made.
 fn emit_null_check(c: *check.Checker, pointer: usize, pointer_type: check.Type, builder: *nir.Builder, token: lex.Token) -> err {
     if pointer_type.kind != .Pointer || builder.nocheck { ret ok }
-    let usize_type = check.make_type(.Integer, "usize", pointer_type.module_index)
-    let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
-    if zero_error != ok { ret zero_error }
-    let boolean = check.make_type(.Bool, "bool", pointer_type.module_index)
-    let (nonzero, nonzero_error) = emit_supplied_compare(builder, .NotEqual, boolean, pointer, zero_value, token)
-    if nonzero_error != ok { ret nonzero_error }
+    var nonzero = pointer
+    if builder.frame_mode {
+        let usize_type = check.make_type(.Integer, "usize", pointer_type.module_index)
+        let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
+        if zero_error != ok { ret zero_error }
+        let boolean = check.make_type(.Bool, "bool", pointer_type.module_index)
+        let (compared, compared_error) = emit_supplied_compare(builder, .NotEqual, boolean, pointer, zero_value, token)
+        if compared_error != ok { ret compared_error }
+        nonzero = compared
+    }
     let trap_block = builder.block_count
     let after_block = builder.block_count + 1usize
     let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)

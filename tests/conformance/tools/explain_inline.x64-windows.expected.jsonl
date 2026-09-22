@@ -19,7 +19,7 @@
 {"record":"inline","symbol":"e.mem.slab_free","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.mem.buddy_order","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"e.mem.buddy_push","decision":"inlinable","reason":"at or under the cap","pass":1}
-{"record":"inline","symbol":"e.mem.buddy_largest_free","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.mem.buddy_largest_free","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.action_from_code","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.watch_close","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.mapping_region","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
@@ -113,6 +113,7 @@
 {"record":"inline","symbol":"e.mem.slab_class","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.mem.slab_free","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.mem.buddy_push","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.mem.buddy_largest_free","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.action_from_code","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.watch_close","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.mapping_flush","decision":"inlinable","reason":"at or under the cap","pass":2}

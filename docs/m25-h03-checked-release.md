@@ -152,3 +152,8 @@ generator, release, eight workers, five runs, p50, Windows:
 The cold-wall budget is met on this measure; the image budget is not, and the rest
 of the way is the checks themselves -- the compare and branch of 24,000 sites and
 their operand moves -- which only further proofs remove.
+
+D923 is the first such proof over NIR: a null check branches on the pointer, and a
+check that a check of the same SSA value dominates is not made, with the verifier's
+dominators as the proof; a check of a stack object's address, which inlining makes,
+is not made either. The checked compiler is then 8,778,240 bytes, +10.0%.

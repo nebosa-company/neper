@@ -1425,14 +1425,63 @@ fn verify_function(builder: *Builder, function: Function) -> err {
             if instruction.opcode == .BranchIf {
                 if instruction.operand_count != 1usize { ret refuse(builder, i, 0usize) }
                 let condition = builder.instructions[definer_index[builder.operands[instruction.first_operand]]]
-                if condition.ty.kind != .Bool { ret refuse(builder, i, 0usize) }
+                // An address is a condition too: a null check branches on it (D923), and
+                // an inlined one on the caller's stack object.
+                if condition.ty.kind == .Float || condition.ty.kind == .Void { ret refuse(builder, i, 0usize) }
             }
             if is_binary(instruction.opcode) && instruction.operand_count != 2usize { ret refuse(builder, i, 0usize) }
             i += 1usize
         }
         block_at += 1usize
     }
+    elide_null_checks(builder, function, definer_index, idom, pred_start, pred_count, preds, none)
     ret ok
+}
+
+// The null checks already made (D923). A null check branches on the pointer, to its
+// trap block when nil and on to a block the check alone enters; every block that one
+// dominates therefore holds the pointer non-nil, since a value never changes. A later
+// check of the same value in such a block is made a branch straight on, and its trap
+// block, left with no way in, is not laid out. The verifier's dominators are the proof.
+fn elide_null_checks(builder: *Builder, function: Function, definer_index: []usize, idom: []usize, pred_start: []usize, pred_count: []usize, preds: []usize, none: usize) {
+    var block_at = 0usize
+    while block_at < function.block_count {
+        let block = builder.blocks[function.first_block + block_at]
+        let terminator_index = block.first_instruction + block.instruction_count - 1usize
+        let terminator = builder.instructions[terminator_index]
+        if terminator.opcode == .BranchIf && idom[block_at] != none && terminator.operand_count == 1usize {
+            let pointer = builder.operands[terminator.first_operand]
+            let definer = builder.instructions[definer_index[pointer]]
+            // A stack object's address is never nil: an inlined callee's check of the
+            // caller's `&local` is made already.
+            let never_nil = definer.opcode == .Stack
+            if never_nil || (definer.ty.kind == .Pointer && checked_on_entry(builder, function, pointer, block_at, idom, pred_start, pred_count, preds, none)) {
+                builder.instructions[terminator_index].opcode = .Branch
+                builder.instructions[terminator_index].operand_count = 0usize
+                builder.instructions[terminator_index].target2 = 0usize
+            }
+        }
+        block_at += 1usize
+    }
+}
+
+// Whether a block on `block_at`'s dominator chain, itself included, is entered only
+// by the non-nil edge of a check of `pointer`.
+fn checked_on_entry(builder: *Builder, function: Function, pointer: usize, block_at: usize, idom: []usize, pred_start: []usize, pred_count: []usize, preds: []usize, none: usize) -> bool {
+    var at = block_at
+    var steps = 0usize
+    while steps <= function.block_count {
+        if at != 0usize && pred_count[at] == 1usize {
+            let entry = preds[pred_start[at]]
+            let entry_block = builder.blocks[function.first_block + entry]
+            let entry_terminator = builder.instructions[entry_block.first_instruction + entry_block.instruction_count - 1usize]
+            if entry_terminator.opcode == .BranchIf && entry_terminator.operand_count == 1usize && builder.operands[entry_terminator.first_operand] == pointer && entry_terminator.target == function.first_block + at && entry_terminator.target2 != entry_terminator.target { ret true }
+        }
+        if at == 0usize || idom[at] == none { ret false }
+        at = idom[at]
+        steps += 1usize
+    }
+    ret false
 }
 
 
