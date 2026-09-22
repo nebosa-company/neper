@@ -2098,6 +2098,36 @@ $fmtSnappyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $fmtSnappyWritten -ne 'executable written') { throw 'fmt_snappy emission failed' }
 & $fmtSnappyPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_snappy check failed: exit $LASTEXITCODE" }
+# `e.algo.egraph`: the egg README example saturating `(a*2)/2` to `a` in the replica's four iterations with its node and class counts, upward congruence after a merge, a capped associativity run still joining the two parenthesisations (D874).
+$algoEgraphPath = Join-Path $testBuild 'algo-egraph-selfhost.exe'
+$algoEgraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_egraph\src\main.e') $repo 'x64' 'windows' $algoEgraphPath
+if ($LASTEXITCODE -ne 0 -or $algoEgraphWritten -ne 'executable written') { throw 'algo_egraph emission failed' }
+& $algoEgraphPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_egraph check failed: exit $LASTEXITCODE" }
+# `e.algo.geo`: twenty-four cells bit-identical to s2sphere including poles, face centres, the antimeridian and level 30; parents, children, ranges, neighbours and tokens; London to Paris within a metre (D874).
+$algoGeoPath = Join-Path $testBuild 'algo-geo-selfhost.exe'
+$algoGeoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_geo\src\main.e') $repo 'x64' 'windows' $algoGeoPath
+if ($LASTEXITCODE -ne 0 -or $algoGeoWritten -ne 'executable written') { throw 'algo_geo emission failed' }
+& $algoGeoPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_geo check failed: exit $LASTEXITCODE" }
+# `e.algo.privacy`: noise samples equal to a PCG replica to 1e-12, 4000-sample moments within 5%, the exponential mechanism's picks and frequencies, composition bounds (D874).
+$algoPrivacyPath = Join-Path $testBuild 'algo-privacy-selfhost.exe'
+$algoPrivacyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_privacy\src\main.e') $repo 'x64' 'windows' $algoPrivacyPath
+if ($LASTEXITCODE -ne 0 -or $algoPrivacyWritten -ne 'executable written') { throw 'algo_privacy emission failed' }
+& $algoPrivacyPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_privacy check failed: exit $LASTEXITCODE" }
+# `e.algo.query`: orders and pointer-move counts equal to a replica (1372 against 3948 naive), distinct counts over sixty ranges equal to brute force (D874).
+$algoQueryPath = Join-Path $testBuild 'algo-query-selfhost.exe'
+$algoQueryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_query\src\main.e') $repo 'x64' 'windows' $algoQueryPath
+if ($LASTEXITCODE -ne 0 -or $algoQueryWritten -ne 'executable written') { throw 'algo_query emission failed' }
+& $algoQueryPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_query check failed: exit $LASTEXITCODE" }
+# `e.algo.smt`: the f^3(a)=a, f^5(a)=a textbook entailment, an unsatisfiable EUF instance, a forty-term partition equal to a replica, factoring 145 by bit-blasting, x<y<x unsatisfiable (D874).
+$algoSmtPath = Join-Path $testBuild 'algo-smt-selfhost.exe'
+$algoSmtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_smt\src\main.e') $repo 'x64' 'windows' $algoSmtPath
+if ($LASTEXITCODE -ne 0 -or $algoSmtWritten -ne 'executable written') { throw 'algo_smt emission failed' }
+& $algoSmtPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_smt check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

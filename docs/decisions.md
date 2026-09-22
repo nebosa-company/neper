@@ -17094,6 +17094,26 @@ reference unless the algorithm is replicated to the byte, so the fixture
 pins a roundtrip plus a decode of the reference's bytes, and the encoder's
 conformance is proved once in the agent's scratch run and recorded here.
 
+## D874 — Batch 32: e-graphs, S2 cells, differential privacy, Mo's ordering, SMT pieces
+
+Five `e.algo` modules from `docs/algos.md`, written by parallel agents:
+`e.algo.egraph` (an egg-style e-graph with hashcons, rebuild, naive
+e-matching, saturation and cost extraction, checked on the egg README
+example against a Python clone), `e.algo.geo` (S2 cell ids bit-identical
+to s2sphere, with the reference's two 1024-entry lookup tables replaced by
+a per-level two-bit Hilbert step over two sixteen-entry tables; haversine
+and bearing), `e.algo.privacy` (Laplace, Gaussian, exponential and
+report-noisy-max mechanisms, randomized response, composition bounds,
+noise reproducible against a bit-exact PCG64 replica), `e.algo.query`
+(Mo's ordering, its Hilbert variant and a generic driver) and `e.algo.smt`
+(congruence closure over `e.algo.disjoint_set`, bit-blasting into an
+`e.algo.sat` CNF). Deferred with `ponytail:` comments: the e-graph's
+per-goal node scan and full-table rebuild, and the closure's quadratic
+fixpoint sweep. Lesson from the geo agent: a fixture point on an S2 face
+diagonal is a one-ulp tie between faces, and `e.math` and libm disagree
+there, so test points must stay off the diagonals; the compiler needed no
+fix in this batch, and every agent reported a first-build pass.
+
 ## D885 — `e.os.shell` opens the host's shell: a capability record, never an emulation
 
 The widget plan's phase 4 waits on reviewed host primitives, and its

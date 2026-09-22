@@ -296,7 +296,12 @@
     "e.crypto.merkle",
     "e.crypto.secret",
     "e.fmt.lz4",
-    "e.fmt.snappy"
+    "e.fmt.snappy",
+    "e.algo.egraph",
+    "e.algo.geo",
+    "e.algo.privacy",
+    "e.algo.query",
+    "e.algo.smt"
    ]
   },
   {
@@ -3453,6 +3458,67 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.egraph",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.disjoint_set"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.geo",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.privacy",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.algo.rand.dist",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.query",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.sort",
+    "e.data.spatial",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.smt",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.disjoint_set",
+    "e.algo.sat"
    ],
    "blocked_by": []
   },

@@ -1,0 +1,20 @@
+{
+ "decision": "D874",
+ "modules": [
+  {"name": "e.algo.egraph", "deps": ["e.algo.disjoint_set"], "fixture": "algo_egraph", "anchor": "### `e.algo.exact_cover`\n",
+   "note": "An egg-style e-graph over caller arrays: `add`/`add_leaf` through a hashcons, `merge`,\n`rebuild` to a congruence fixpoint, `ematch` of patterns with up to four variables,\n`apply_rule`, `saturate` (match all rules, apply, rebuild, until nothing changes or the\nstorage fills) and `extract`/`extract_write` by bottom-up cost.",
+   "comment": "`e.algo.egraph`: the egg README example saturating `(a*2)/2` to `a` in the replica's four iterations with its node and class counts, upward congruence after a merge, a capped associativity run still joining the two parenthesisations"},
+  {"name": "e.algo.geo", "deps": ["e.bytes", "e.math"], "fixture": "algo_geo", "anchor": "### `e.algo.geom`\n",
+   "note": "Google S2 cell ids: `s2_cell`, `s2_cell_leaf`, `s2_level`, `s2_face`, `s2_parent`,\n`s2_children`, `s2_contains`, `s2_range`, `s2_center`, `s2_neighbors` (edge neighbours\nacross faces) and `s2_token`; `haversine_m` and `bearing_deg` on the mean sphere.",
+   "comment": "`e.algo.geo`: twenty-four cells bit-identical to s2sphere including poles, face centres, the antimeridian and level 30; parents, children, ranges, neighbours and tokens; London to Paris within a metre"},
+  {"name": "e.algo.privacy", "deps": ["e.algo.rand", "e.algo.rand.dist", "e.math"], "fixture": "algo_privacy", "anchor": "### `e.algo.rand`\n",
+   "note": "Differential privacy: `laplace` and `laplace_vector`, `gaussian` with `gaussian_sigma`\n(the analytic bound), `exponential` and `report_noisy_max`, `randomized_response` with\nWarner's estimate, `compose_basic` and `compose_advanced`, `clip`.",
+   "comment": "`e.algo.privacy`: noise samples equal to a PCG replica to 1e-12, 4000-sample moments within 5%, the exponential mechanism's picks and frequencies, composition bounds"},
+  {"name": "e.algo.query", "deps": ["e.algo.sort", "e.data.spatial", "e.math"], "fixture": "algo_query", "anchor": "### `e.algo.rand`\n",
+   "note": "Mo's algorithm: `mo_block_size`, `mo_order` (block of the left end, right end alternating\nby block parity), `mo_order_hilbert` over the 2-d Hilbert index, `mo_pointer_moves` and\nthe generic driver `mo_run` over caller add/remove/answer callbacks.",
+   "comment": "`e.algo.query`: orders and pointer-move counts equal to a replica (1372 against 3948 naive), distinct counts over sixty ranges equal to brute force"},
+  {"name": "e.algo.smt", "deps": ["e.algo.disjoint_set", "e.algo.sat"], "fixture": "algo_smt", "anchor": "### `e.algo.sort`\n",
+   "note": "`congruence_closure` over a term DAG with `euf_same`, `euf_class` and `euf_satisfiable`;\nbit-vectors as literal slices in an `e.algo.sat` CNF: `bv_const`, `bv_fresh`, the\nbitwise gates, `bv_add`, `bv_sub`, `bv_mul`, `bv_eq`, `bv_ult`, constant shifts,\n`bv_value`, and `bit_blast` lowering an expression tree.",
+   "comment": "`e.algo.smt`: the f^3(a)=a, f^5(a)=a textbook entailment, an unsatisfiable EUF instance, a forty-term partition equal to a replica, factoring 145 by bit-blasting, x<y<x unsatisfiable"}
+ ]
+}

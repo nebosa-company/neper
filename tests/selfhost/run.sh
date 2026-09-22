@@ -1894,6 +1894,31 @@ fmt_snappy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$fmt_snappy_written" = 'executable written' ]
 chmod +x "$test_build/fmt-snappy-selfhost"
 "$test_build/fmt-snappy-selfhost"
+# `e.algo.egraph`: the egg README example saturating `(a*2)/2` to `a` in the replica's four iterations with its node and class counts, upward congruence after a merge, a capped associativity run still joining the two parenthesisations (D874).
+algo_egraph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_egraph/src/main.e" "$repo" x64 linux "$test_build/algo-egraph-selfhost")
+[ "$algo_egraph_written" = 'executable written' ]
+chmod +x "$test_build/algo-egraph-selfhost"
+"$test_build/algo-egraph-selfhost"
+# `e.algo.geo`: twenty-four cells bit-identical to s2sphere including poles, face centres, the antimeridian and level 30; parents, children, ranges, neighbours and tokens; London to Paris within a metre (D874).
+algo_geo_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_geo/src/main.e" "$repo" x64 linux "$test_build/algo-geo-selfhost")
+[ "$algo_geo_written" = 'executable written' ]
+chmod +x "$test_build/algo-geo-selfhost"
+"$test_build/algo-geo-selfhost"
+# `e.algo.privacy`: noise samples equal to a PCG replica to 1e-12, 4000-sample moments within 5%, the exponential mechanism's picks and frequencies, composition bounds (D874).
+algo_privacy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_privacy/src/main.e" "$repo" x64 linux "$test_build/algo-privacy-selfhost")
+[ "$algo_privacy_written" = 'executable written' ]
+chmod +x "$test_build/algo-privacy-selfhost"
+"$test_build/algo-privacy-selfhost"
+# `e.algo.query`: orders and pointer-move counts equal to a replica (1372 against 3948 naive), distinct counts over sixty ranges equal to brute force (D874).
+algo_query_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_query/src/main.e" "$repo" x64 linux "$test_build/algo-query-selfhost")
+[ "$algo_query_written" = 'executable written' ]
+chmod +x "$test_build/algo-query-selfhost"
+"$test_build/algo-query-selfhost"
+# `e.algo.smt`: the f^3(a)=a, f^5(a)=a textbook entailment, an unsatisfiable EUF instance, a forty-term partition equal to a replica, factoring 145 by bit-blasting, x<y<x unsatisfiable (D874).
+algo_smt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_smt/src/main.e" "$repo" x64 linux "$test_build/algo-smt-selfhost")
+[ "$algo_smt_written" = 'executable written' ]
+chmod +x "$test_build/algo-smt-selfhost"
+"$test_build/algo-smt-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

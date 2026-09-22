@@ -1399,6 +1399,46 @@ are `i64` and never checked for overflow. The Li Chao tree covers an integer dom
 with `4 * (high - low + 1)` nodes; the convex hull trick wants lines in decreasing
 slope order and queries at increasing `x`.
 
+### `e.algo.geo`
+
+```neper
+fn pi() -> f64
+fn max_level() -> u32
+fn max_size() -> i64
+fn earth_radius_m() -> f64
+fn radians(deg: f64) -> f64
+fn degrees(rad: f64) -> f64
+fn pos_to_ij(o: u32, p: u32) -> u32
+fn ij_to_pos(o: u32, ij: u32) -> u32
+fn pos_to_orientation(p: u32) -> u32
+fn lsb(id: u64) -> u64
+fn from_face_ij(face: u32, i: u32, j: u32) -> u64
+fn to_face_ij(id: u64) -> (u32, u32, u32, u32)
+fn st_to_uv(s: f64) -> f64
+fn uv_to_st(u: f64) -> f64
+fn st_to_ij(s: f64) -> u32
+fn face_uv_to_xyz(face: u32, u: f64, v: f64) -> (f64, f64, f64)
+fn xyz_to_face_uv(x: f64, y: f64, z: f64) -> (u32, f64, f64)
+fn s2_cell(lat_deg: f64, lng_deg: f64, level: u32) -> u64
+fn s2_cell_leaf(lat_deg: f64, lng_deg: f64) -> u64
+fn s2_level(id: u64) -> u32
+fn s2_face(id: u64) -> u32
+fn s2_parent(id: u64, level: u32) -> u64
+fn s2_children(id: u64, out: []u64)
+fn s2_range(id: u64) -> (u64, u64)
+fn s2_contains(ancestor: u64, id: u64) -> bool
+fn s2_center(id: u64) -> (f64, f64)
+fn from_face_ij_wrap(face: u32, i: i64, j: i64) -> u64
+fn s2_neighbors(id: u64, out: []u64)
+fn s2_token(id: u64, out: []u8) -> usize
+fn haversine_m(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64
+fn bearing_deg(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64
+```
+
+Google S2 cell ids: `s2_cell`, `s2_cell_leaf`, `s2_level`, `s2_face`, `s2_parent`,
+`s2_children`, `s2_contains`, `s2_range`, `s2_center`, `s2_neighbors` (edge neighbours
+across faces) and `s2_token`; `haversine_m` and `bearing_deg` on the mean sphere.
+
 ### `e.algo.geom`
 
 ```neper
@@ -1463,6 +1503,50 @@ fn simplify_visvalingam(points: []const geom.Point, min_area: f64, keep: []u8) -
 window.len` points of `out` and `scratch`; `triangulate_ear_clip` writes
 `3 * (n - 2)` indices for a simple polygon in either winding; the simplifiers
 mark kept points with 1 in `keep`.
+
+### `e.algo.privacy`
+
+```neper
+error Invalid
+
+fn clip(x: f64, lo: f64, hi: f64) -> f64
+fn laplace_noise(b: f64, r: *rand.Pcg64) -> f64
+fn laplace(value: f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (f64, err)
+fn laplace_vector(values: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64, out: []f64) -> err
+fn gaussian_sigma(sensitivity: f64, epsilon: f64, delta: f64) -> (f64, err)
+fn gaussian(value: f64, sensitivity: f64, epsilon: f64, delta: f64, r: *rand.Pcg64) -> (f64, err)
+fn exponential(scores: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (usize, err)
+fn report_noisy_max(scores: []const f64, sensitivity: f64, epsilon: f64, r: *rand.Pcg64) -> (usize, err)
+fn randomized_response(bit: bool, p: f64, r: *rand.Pcg64) -> bool
+fn randomized_response_estimate(count_ones: usize, n: usize, p: f64) -> f64
+fn compose_basic(epsilons: []const f64) -> f64
+fn compose_advanced(epsilon: f64, k: usize, delta_prime: f64) -> (f64, err)
+```
+
+Differential privacy: `laplace` and `laplace_vector`, `gaussian` with `gaussian_sigma`
+(the analytic bound), `exponential` and `report_noisy_max`, `randomized_response` with
+Warner's estimate, `compose_basic` and `compose_advanced`, `clip`.
+
+### `e.algo.query`
+
+```neper
+type MoKey = struct { lefts: []const usize, rights: []const usize, block: usize }
+type HilbertKey = struct { lefts: []const usize, rights: []const usize, bits: u32 }
+error Invalid
+
+fn mo_block_size(n: usize, q: usize) -> usize
+fn mo_compare(k: *MoKey, a: usize, b: usize) -> i32
+fn mo_order(lefts: []const usize, rights: []const usize, block: usize, order: []usize) -> err
+fn hilbert_compare(k: *HilbertKey, a: usize, b: usize) -> i32
+fn mo_order_hilbert(lefts: []const usize, rights: []const usize, n: usize, order: []usize) -> err
+fn distance(a: i64, b: i64) -> usize
+fn mo_pointer_moves(lefts: []const usize, rights: []const usize, order: []const usize) -> usize
+fn mo_run[Ctx: type](ctx: *Ctx, lefts: []const usize, rights: []const usize, order: []const usize, add: fn(*Ctx, usize), remove: fn(*Ctx, usize), answer: fn(*Ctx, usize)) -> err
+```
+
+Mo's algorithm: `mo_block_size`, `mo_order` (block of the left end, right end alternating
+by block parity), `mo_order_hilbert` over the 2-d Hilbert index, `mo_pointer_moves` and
+the generic driver `mo_run` over caller add/remove/answer callbacks.
 
 ### `e.algo.rand`
 
@@ -1737,6 +1821,45 @@ trend, phase-mean season, two passes), the streaming detectors `Cusum`, `PageHin
 and `Adwin` (a ring of recent values cut by the Hoeffding bound), GARCH(1,1)
 (`garch_log_likelihood`, `garch_fit` by Nelder-Mead, `garch_forecast`) and the Hawkes
 process (`hawkes_intensity`, `hawkes_log_likelihood`, `hawkes_simulate` by thinning).
+
+### `e.algo.egraph`
+
+```neper
+type EGraph = struct { node_op: []u32, node_a: []u32, node_b: []u32, sets: dsu.DisjointSet, table: []u32, nodes: usize, dead: usize }
+type Pattern = struct { op: []const u32, a: []const u32, b: []const u32, root: u32 }
+type Rule = struct { lhs: Pattern, rhs: Pattern }
+error TooSmall
+error Invalid
+
+fn none() -> u32
+fn dead() -> u32
+fn variable(k: u32) -> u32
+fn match_words() -> usize
+fn table_required(max_nodes: usize) -> usize
+fn egraph(node_op: []u32, node_a: []u32, node_b: []u32, parent: []u32, rank: []u8, table: []u32) -> (EGraph, err)
+fn find(g: *EGraph, x: u32) -> u32
+fn canon(g: *EGraph, x: u32) -> u32
+fn class_count(g: *EGraph) -> usize
+fn node_count(g: *EGraph) -> usize
+fn probe(g: *EGraph, op: u32, a: u32, b: u32) -> (usize, bool)
+fn add(g: *EGraph, op: u32, a: u32, b: u32) -> (u32, err)
+fn add_leaf(g: *EGraph, op: u32) -> (u32, err)
+fn merge(g: *EGraph, x: u32, y: u32) -> u32
+fn rebuild(g: *EGraph)
+fn ematch(g: *EGraph, pat: Pattern, matches: []u32) -> (usize, err)
+fn match_goals(g: *EGraph, pat: Pattern, gp: []u32, gc: []u32, count: usize, bind: []u32, root: u32, matches: []u32, found: *usize) -> err
+fn instantiate(g: *EGraph, pat: Pattern, p: u32, bind: []const u32) -> (u32, err)
+fn apply_rule(g: *EGraph, rule: Rule, matches: []const u32, count: usize) -> err
+fn saturate(g: *EGraph, rules: []const Rule, max_iterations: usize, matches: []u32) -> (usize, err)
+fn extract(g: *EGraph, root: u32, cost_of_op: []const u32, best_cost: []u32, best_node: []u32) -> (u32, err)
+fn extract_write(g: *EGraph, class: u32, best_node: []const u32, out_op: []u32, out_a: []u32, out_b: []u32) -> (usize, err)
+fn write_tree(g: *EGraph, class: u32, best_node: []const u32, out_op: []u32, out_a: []u32, out_b: []u32, count: *usize) -> (u32, err)
+```
+
+An egg-style e-graph over caller arrays: `add`/`add_leaf` through a hashcons, `merge`,
+`rebuild` to a congruence fixpoint, `ematch` of patterns with up to four variables,
+`apply_rule`, `saturate` (match all rules, apply, rebuild, until nothing changes or the
+storage fills) and `extract`/`extract_write` by bottom-up cost.
 
 ### `e.algo.exact_cover`
 
@@ -2323,6 +2446,53 @@ fn eq(a: *const BitSet, b: *const BitSet) -> bool
 Bits at indices `len..storage.len*64` are always zero. Operations requiring two
 sets require equal logical lengths; a mismatch is a debug bounds trap and release
 undefined behavior, like incompatible slice bounds in other pure primitives.
+
+### `e.algo.smt`
+
+```neper
+error TooSmall
+error Invalid
+const OP_CONST: u8 = 0u8
+const OP_VAR: u8 = 1u8
+const OP_AND: u8 = 2u8
+const OP_OR: u8 = 3u8
+const OP_XOR: u8 = 4u8
+const OP_NOT: u8 = 5u8
+const OP_ADD: u8 = 6u8
+const OP_SUB: u8 = 7u8
+const OP_MUL: u8 = 8u8
+const OP_EQ: u8 = 9u8
+const OP_ULT: u8 = 10u8
+
+fn congruence_closure(symbols: []const u32, args: []const u32, arg_starts: []const usize, eq_lhs: []const u32, eq_rhs: []const u32, parent: []u32, rank: []u8) -> (dsu.DisjointSet, err)
+fn congruent(s: *dsu.DisjointSet, args: []const u32, arg_starts: []const usize, a: usize, b: usize) -> bool
+fn euf_same(closure: *dsu.DisjointSet, a: u32, b: u32) -> bool
+fn euf_class(closure: *dsu.DisjointSet, a: u32) -> u32
+fn euf_satisfiable(symbols: []const u32, args: []const u32, arg_starts: []const usize, eq_lhs: []const u32, eq_rhs: []const u32, neq_lhs: []const u32, neq_rhs: []const u32, parent: []u32, rank: []u8) -> (bool, err)
+fn bv_true(f: *sat.Cnf) -> (i32, err)
+fn bv_const(f: *sat.Cnf, value: u64, out: []i32) -> err
+fn bv_fresh(f: *sat.Cnf, out: []i32) -> err
+fn widths_match(a: []const i32, b: []const i32, out: []const i32) -> bool
+fn bv_and(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err
+fn bv_or(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err
+fn bv_xor(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err
+fn bv_not(a: []const i32, out: []i32) -> err
+fn bv_add(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err
+fn bv_sub(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32) -> err
+fn ripple(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32, invert_b: bool, carry: i32) -> err
+fn bv_mul(f: *sat.Cnf, a: []const i32, b: []const i32, out: []i32, scratch: []i32) -> err
+fn bv_eq(f: *sat.Cnf, a: []const i32, b: []const i32) -> (i32, err)
+fn bv_ult(f: *sat.Cnf, a: []const i32, b: []const i32) -> (i32, err)
+fn bv_shl_const(f: *sat.Cnf, a: []const i32, k: usize, out: []i32) -> err
+fn bv_lshr_const(f: *sat.Cnf, a: []const i32, k: usize, out: []i32) -> err
+fn bv_value(assignment: []const i8, bits: []const i32) -> u64
+fn bit_blast(f: *sat.Cnf, ops: []const u8, lhs: []const u32, rhs: []const u32, consts: []const u64, width: usize, bits: []i32, scratch: []i32) -> err
+```
+
+`congruence_closure` over a term DAG with `euf_same`, `euf_class` and `euf_satisfiable`;
+bit-vectors as literal slices in an `e.algo.sat` CNF: `bv_const`, `bv_fresh`, the
+bitwise gates, `bv_add`, `bv_sub`, `bv_mul`, `bv_eq`, `bv_ult`, constant shifts,
+`bv_value`, and `bit_blast` lowering an expression tree.
 
 ### `e.algo.sort`
 
