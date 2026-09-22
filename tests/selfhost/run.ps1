@@ -268,8 +268,11 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericArtifactExecutablePath)
 # Walk a compiled module's code section. The section directory is fixed, so the
 # code section offset is at byte 112 (D320: no NIR section); each record is a 24-byte header followed by
 # its machine code and its relocations of 28 bytes each (format 5, D319).
+# A module's code records, less the trap data and stub functions (D927), `trap.N`,
+# which every module with a check carries beside its own functions.
 function Get-EmCodeRecords([string]$path) {
     $bytes = [IO.File]::ReadAllBytes($path)
+    $strings = [int][BitConverter]::ToUInt64($bytes, 40)
     $code = [int][BitConverter]::ToUInt64($bytes, 112)
     $count = [int][BitConverter]::ToUInt32($bytes, $code)
     $records = @()
@@ -277,9 +280,14 @@ function Get-EmCodeRecords([string]$path) {
     for ($i = 0; $i -lt $count; $i++) {
         $length = [int][BitConverter]::ToUInt32($bytes, $cursor + 16)
         $relocations = [int][BitConverter]::ToUInt32($bytes, $cursor + 20)
-        $records += [pscustomobject]@{
-            Instance = [BitConverter]::ToUInt32($bytes, $cursor + 4)
-            ContentHash = [BitConverter]::ToUInt64($bytes, $cursor + 8)
+        $nameIndex = [int][BitConverter]::ToUInt32($bytes, $cursor)
+        $nameAt = $strings + [int][BitConverter]::ToUInt32($bytes, $strings + 4 + $nameIndex * 4)
+        $name = [Text.Encoding]::UTF8.GetString($bytes, $nameAt + 4, [int][BitConverter]::ToUInt32($bytes, $nameAt))
+        if (-not $name.StartsWith('trap.')) {
+            $records += [pscustomobject]@{
+                Instance = [BitConverter]::ToUInt32($bytes, $cursor + 4)
+                ContentHash = [BitConverter]::ToUInt64($bytes, $cursor + 8)
+            }
         }
         $cursor += 24 + $length + $relocations * 28
     }
