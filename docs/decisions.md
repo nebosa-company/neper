@@ -18077,3 +18077,44 @@ placed at its offset rounded to that: a fractional offset -- momentum, a drag,
 a wheel at 125% -- would have left the renderer no whole-pixel move to make and
 repainted the viewport. The stored offset stays as it was, so momentum decays as
 before; only the placement snaps.
+
+## D918 — Definite initialization of the references an `undef` value holds
+
+H03's acceptance asks that invalid `zero`/`undef` values not enter checked code
+unnoticed, and names the shape of the answer: "definite-initialization checks
+need field/element handling or conservative rejection; byte patterns are not
+proof". D475 refused `= undef` of a type that admits only its members, because
+a read of one would be an `invalid` check a release build does not keep. A
+reference is the other half, and the worse one: a slice's base and length, a
+pointer, a function value or a `str` left as whatever the stack held is not a
+value a check can rescue, since a bounds check establishes that an index is
+under a length, not that the length is one the program chose (D355).
+
+So `= undef` of a type that holds a reference at any depth is now refused --
+E-SAFETY-0021 -- unless the program writes every reference the value holds
+before it reads the value. The analysis is a scan from the declaration to the
+end of the enclosing block, which is where the name lives:
+
+- `x = ...` writes the whole value, and ends the obligation.
+- `x.f = ...` writes that field; the reference-holding fields are the ones owed,
+  one depth down, and a field that holds no reference answers for nothing.
+- `&x` is not a read. `tail.next = &tail` is how a node points at itself while it
+  is still being written, and the address of a value says nothing about what it
+  holds. A read through that pointer before the fields are written is out of the
+  analysis's reach, and is the boundary this row draws.
+- Any other mention of the name is a read, and the fields not yet written are
+  what the diagnostic names.
+- Only a write at the declaration's own block depth counts: a write inside an
+  `if` or a loop is made on some runs, so it answers for no later read.
+  `reject/safety_undef_branch.e` pins it.
+- More than 32 reference fields is refused rather than tracked.
+
+A type holding no reference is unchanged: `[4096]u8 = undef` is still the
+scratch buffer the spec describes, and `Link = undef` with `next: *Link` written
+first still compiles -- `tests/neper0/struct.e` is that case, and
+`accept/safety_undef_written.e` collects the four written forms.
+`reject/safety_undef_reference.e` reads a slice field that was never written.
+
+The compiler's own source declares no `undef` of a reference-holding type, so
+its image is unchanged; what this closes is a hole a program could have walked
+into, not one the toolchain was in.

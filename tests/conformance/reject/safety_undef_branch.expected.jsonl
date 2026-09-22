@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-SAFETY-0021","message":"`undef` leaves `f.items` a reference the program never wrote; no bounds or null check can validate a base and a length that were never chosen -- write it before the value is read","symbol":"f","span":{"source":{"root":"operand","path":"safety_undef_branch.e"},"byte_start":388,"byte_end":393,"line":7,"column":20,"end_line":7,"end_column":25,"column_utf16":20,"end_column_utf16":25},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

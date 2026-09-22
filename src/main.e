@@ -5815,6 +5815,18 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "` admits only its members; a read of it would be an `invalid` check")
     }
+    if checker.failure_kind == .UndefReferenceRead {
+        try write_all(file, "`undef` leaves `")
+        try write_all(file, checker.failure_detail)
+        if checker.failure_detail2.len == 0usize {
+            try write_all(file, "` a reference the program never wrote")
+        } else {
+            try write_all(file, ".")
+            try write_all(file, checker.failure_detail2)
+            try write_all(file, "` a reference the program never wrote")
+        }
+        ret write_all(file, "; no bounds or null check can validate a base and a length that were never chosen -- write it before the value is read")
+    }
     if checker.failure_kind == .IteratorMissing {
         try write_all(file, "protocol iteration needs `fn ")
         try write_snake_name(file, checker.failure_detail)

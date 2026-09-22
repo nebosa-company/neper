@@ -103,6 +103,7 @@ type DiagnosticKind = enum u8 {
     DuplicateEnumValue,
     MissingZeroValue,
     MissingUndefValue,
+    UndefReferenceRead,
     IteratorImmutable,
     IteratorMissing,
     IteratorSignature,
@@ -3086,6 +3087,127 @@ fn type_has_undef_value(c: *Checker, ty: Type, depth: usize) -> (bool, str) {
         }
         field_at += 1usize
     }
+    ret (true, "")
+}
+
+// Whether the type holds a reference at any depth (D918, H03): a slice, a pointer,
+// a function value or a `str`. An `undef` of such a type leaves a base and a length
+// the program never wrote, which no bounds or null check can validate -- a bounds
+// check establishes that an index is under a length, not that the length is one the
+// program chose (D355).
+fn type_holds_reference(c: *Checker, ty: Type, depth: usize) -> bool {
+    let (subject, canonical_error) = canonical_type(c, ty)
+    if canonical_error != ok { ret false }
+    if subject.kind == .Slice || subject.kind == .Pointer || subject.kind == .String || subject.kind == .Function { ret true }
+    if subject.kind == .Array {
+        if !subject.has_element || subject.element >= c.type_count { ret false }
+        ret type_holds_reference(c, c.types[subject.element], depth)
+    }
+    if subject.kind != .Named { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, subject)
+    if !found { ret false }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind != .Struct || depth >= c.aggregate_count { ret false }
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let field = c.aggregate_fields[aggregate.first_field + field_at]
+        if field.ty.kind != .Void && type_holds_reference(c, field.ty, depth + 1usize) { ret true }
+        field_at += 1usize
+    }
+    ret false
+}
+
+// Definite initialization of an `undef` value that holds a reference (D918, H03):
+// every field of it that holds one must be written -- or the whole value assigned --
+// before the value is read. The scan runs from the declaration to the end of the
+// enclosing block, since that is where the name lives; `&x` is not a read (it is how
+// `tail.next = &tail` writes the field it is part of), a write `x.f =` is not a read,
+// and anything else is. Only a write at the declaration's own depth counts: one
+// inside an `if` or a loop runs on some paths and not others, and a read after it
+// would be reading what those paths left. The answer names the field the read would
+// have found unwritten, or "" when the value itself is the one. More than
+// `UNDEF_FIELDS` reference fields is refused rather than tracked.
+const UNDEF_FIELDS: usize = 32usize
+
+fn undef_written_before_read(c: *Checker, g: *graph.Graph, module_index: usize, name: str, declared: Type, from: usize) -> (bool, str) {
+    // The fields that must be written: the reference-holding ones, one depth down.
+    var needed: [UNDEF_FIELDS]str = zero
+    var needed_count = 0usize
+    // The limit through a local: an uppercase name before a `{` is a literal.
+    let field_limit = UNDEF_FIELDS
+    var whole = true
+    let (subject, canonical_error) = canonical_type(c, declared)
+    if canonical_error != ok { ret (true, "") }
+    if subject.kind == .Named {
+        let (aggregate_index, found) = aggregate_for_type(c, subject)
+        if found && c.aggregates[aggregate_index].kind == .Struct {
+            let aggregate = c.aggregates[aggregate_index]
+            whole = false
+            var field_at = 0usize
+            while field_at < aggregate.field_count {
+                let field = c.aggregate_fields[aggregate.first_field + field_at]
+                if field.ty.kind != .Void && type_holds_reference(c, field.ty, 1usize) {
+                    if needed_count == field_limit { ret (false, field.name) }
+                    needed[needed_count] = field.name
+                    needed_count += 1usize
+                }
+                field_at += 1usize
+            }
+        }
+    }
+    var written: [UNDEF_FIELDS]bool = zero
+    var written_count = 0usize
+    let text = g.modules[module_index].text
+    var depth = 0usize
+    var at = from
+    while at < c.tokens.len {
+        let token = c.tokens[at]
+        if token.kind == .PunctLBrace { depth += 1usize }
+        if token.kind == .PunctRBrace {
+            if depth == 0usize { break }
+            depth = depth - 1usize
+        }
+        if token.kind != .Identifier || !same(text[token.start..token.end], name) {
+            at += 1usize
+            continue
+        }
+        // A field of something else that is spelled like the name is not the name (D528).
+        if at > from && c.tokens[at - 1usize].kind == .PunctDot {
+            at += 1usize
+            continue
+        }
+        // `&x`: the address of a value is not a read of what it holds.
+        if at > from && c.tokens[at - 1usize].kind == .PunctAmp {
+            at += 1usize
+            continue
+        }
+        // `x = ...`: the whole value written, where every path reaches it.
+        if depth == 0usize && at + 1usize < c.tokens.len && c.tokens[at + 1usize].kind == .PunctAssign { ret (true, "") }
+        // `x.f = ...`: that field written, and no other field read by it.
+        if depth == 0usize && at + 3usize < c.tokens.len && c.tokens[at + 1usize].kind == .PunctDot && c.tokens[at + 2usize].kind == .Identifier && c.tokens[at + 3usize].kind == .PunctAssign {
+            let field_token = c.tokens[at + 2usize]
+            let field_name = text[field_token.start..field_token.end]
+            var needed_at = 0usize
+            while needed_at < needed_count {
+                if same(needed[needed_at], field_name) && !written[needed_at] {
+                    written[needed_at] = true
+                    written_count += 1usize
+                }
+                needed_at += 1usize
+            }
+            at += 3usize
+            continue
+        }
+        // Any other mention is a read.
+        if whole { ret (false, "") }
+        var unwritten_at = 0usize
+        while unwritten_at < needed_count {
+            if !written[unwritten_at] { ret (false, needed[unwritten_at]) }
+            unwritten_at += 1usize
+        }
+        ret (true, "")
+    }
+    // The block ended: what was never read was never read unwritten.
     ret (true, "")
 }
 
@@ -11704,6 +11826,23 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
                 }
                 ret InvalidType
             }
+            // A reference it holds must be written before the value is read (D918).
+            if type_holds_reference(c, declared, 0usize) {
+                let (binding_name, has_binding_name) = first_name(c, g.modules[module_index].text, binding)
+                if !has_binding_name { ret InvalidType }
+                let (written, unwritten) = undef_written_before_read(c, g, module_index, binding_name, declared, usize(node.token_end))
+                if !written {
+                    var reference_at = usize(node.token_start)
+                    while reference_at < usize(node.token_end) {
+                        if c.tokens[reference_at].kind == .KwUndef {
+                            record_failure_token(c, module_index, c.tokens[reference_at], .UndefReferenceRead, binding_name, unwritten)
+                            break
+                        }
+                        reference_at += 1usize
+                    }
+                    ret InvalidType
+                }
+            }
         }
     }
     if is_untyped(result) { ret MissingContext }
@@ -14047,6 +14186,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ResourceOverwrite { ret "E-SAFETY-0006" }
     if kind == .ResourceUndef { ret "E-SAFETY-0007" }
     if kind == .MissingUndefValue { ret "E-SAFETY-0017" }
+    if kind == .UndefReferenceRead { ret "E-SAFETY-0021" }
     if kind == .ResourceUnchecked { ret "E-SAFETY-0008" }
     if kind == .ResourceDeferredConsumed { ret "E-SAFETY-0009" }
     if kind == .ResourceMovedInLoop { ret "E-SAFETY-0011" }
