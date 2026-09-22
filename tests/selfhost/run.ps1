@@ -2368,6 +2368,36 @@ $gameAiPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gameAiPlanWritten -ne 'executable written') { throw 'game_ai_plan emission failed' }
 & $gameAiPlanPath
 if ($LASTEXITCODE -ne 0) { throw "a game_ai_plan check failed: exit $LASTEXITCODE" }
+# `e.crypto.kdf` planned functions: PBKDF2 over both HMACs, scrypt on the RFC 7914 vector, bcrypt with Blowfish tables generated from pi and checked against the bcrypt package, Argon2id on the RFC 9106 vector and against cryptography, BLAKE2b against hashlib (D884).
+$cryptoKdfPlanPath = Join-Path $testBuild 'crypto-kdf-plan-selfhost.exe'
+$cryptoKdfPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_kdf_plan\src\main.e') $repo 'x64' 'windows' $cryptoKdfPlanPath
+if ($LASTEXITCODE -ne 0 -or $cryptoKdfPlanWritten -ne 'executable written') { throw 'crypto_kdf_plan emission failed' }
+& $cryptoKdfPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_kdf_plan check failed: exit $LASTEXITCODE" }
+# `e.crypto.sign` planned functions: RFC 6979 P-256 signing on the RFC's vectors, BIP-340 Schnorr over secp256k1 on all nineteen published rows, RSA-PSS byte-equal to a replica and verified by cryptography, ffdhe2048 DH, Poly1305 on the RFC 8439 vector, BLAKE3 on the official vectors in all three modes (D884).
+$cryptoSignPlanPath = Join-Path $testBuild 'crypto-sign-plan-selfhost.exe'
+$cryptoSignPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_sign_plan\src\main.e') $repo 'x64' 'windows' $cryptoSignPlanPath
+if ($LASTEXITCODE -ne 0 -or $cryptoSignPlanWritten -ne 'executable written') { throw 'crypto_sign_plan emission failed' }
+& $cryptoSignPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_sign_plan check failed: exit $LASTEXITCODE" }
+# `e.gfx.paint`, `e.gfx.image` and `e.gfx.geometry` planned functions: path flattening and stroking, the sRGB transfer pair, gradients with three spreads, all thirteen Porter-Duff operators, scanline coverage fills, subpixel glyph rendering and glyph distance fields, PSNR and an SSIM replica checked against scikit-image, average, difference and DCT hashes (D884).
+$gfxPaintPlanPath = Join-Path $testBuild 'gfx-paint-plan-selfhost.exe'
+$gfxPaintPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_paint_plan\src\main.e') $repo 'x64' 'windows' $gfxPaintPlanPath
+if ($LASTEXITCODE -ne 0 -or $gfxPaintPlanWritten -ne 'executable written') { throw 'gfx_paint_plan emission failed' }
+& $gfxPaintPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_paint_plan check failed: exit $LASTEXITCODE" }
+# `e.gfx.scene` planned functions: a perspective-correct rasterizer, painter's ordering, deferred shading, clustered lights, cascaded and PCF shadows, SSAO, screen-space reflections, temporal and FXAA anti-aliasing, depth peeling, sphere tracing and volumetric fog, each on a sixteen-pixel-square buffer against a numpy replica (D884).
+$gfxScenePlanPath = Join-Path $testBuild 'gfx-scene-plan-selfhost.exe'
+$gfxScenePlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_scene_plan\src\main.e') $repo 'x64' 'windows' $gfxScenePlanPath
+if ($LASTEXITCODE -ne 0 -or $gfxScenePlanWritten -ne 'executable written') { throw 'gfx_scene_plan emission failed' }
+& $gfxScenePlanPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_scene_plan check failed: exit $LASTEXITCODE" }
+# `e.math.fft` and `e.math.filter` planned functions: orthonormal DCT-II/III/IV against SciPy, an MDCT with exact overlap-add reconstruction, Haar and Daubechies-4 wavelets against PyWavelets, and one-call EKF, scaled UKF and particle filter steps over a tracking problem (D884).
+$mathFftFilterPlanPath = Join-Path $testBuild 'math-fft-filter-plan-selfhost.exe'
+$mathFftFilterPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_fft_filter_plan\src\main.e') $repo 'x64' 'windows' $mathFftFilterPlanPath
+if ($LASTEXITCODE -ne 0 -or $mathFftFilterPlanWritten -ne 'executable written') { throw 'math_fft_filter_plan emission failed' }
+& $mathFftFilterPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a math_fft_filter_plan check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

@@ -3103,17 +3103,30 @@ type Int = struct { sign: Sign, limbs: []u32, arena: *mem.Arena }
 type Rat = struct { num: Int, den: Int }
 error DivideByZero
 error Invalid
+const FORMAT_LIMBS: usize = 1024usize
 
 fn int_zero(a: *mem.Arena) -> Int
+fn make_int(a: *mem.Arena, sign: Sign, limbs: []u32) -> Int
 fn int_from_i64(a: *mem.Arena, v: i64) -> (Int, err)
-fn int_parse(a: *mem.Arena, s: str, radix: u8) -> (Int, err)
-fn int_format(v: Int, b: *str.Builder, radix: u8) -> err
+fn magnitude_cmp(x: []const u32, y: []const u32) -> i32
 fn int_cmp(a: Int, b: Int) -> i32
+fn magnitude_add(a: *mem.Arena, x: []const u32, y: []const u32) -> ([]u32, err)
+fn magnitude_sub(a: *mem.Arena, x: []const u32, y: []const u32) -> ([]u32, err)
+fn signed_add(a: *mem.Arena, x: Int, y_sign: Sign, y_limbs: []const u32) -> (Int, err)
+fn copy_limbs(a: *mem.Arena, limbs: []const u32) -> ([]u32, err)
+fn negate_sign(sign: Sign) -> Sign
 fn int_add(a: *mem.Arena, x: Int, y: Int) -> (Int, err)
 fn int_sub(a: *mem.Arena, x: Int, y: Int) -> (Int, err)
 fn int_mul(a: *mem.Arena, x: Int, y: Int) -> (Int, err)
+fn bit_of(limbs: []const u32, index: usize) -> bool
+fn magnitude_divmod(a: *mem.Arena, x: []const u32, y: []const u32) -> ([]u32, []u32, err)
+fn trimmed(limbs: []u32) -> []const u32
 fn int_divmod(a: *mem.Arena, x: Int, y: Int) -> (Int, Int, err)
 fn int_gcd(a: *mem.Arena, x: Int, y: Int) -> (Int, err)
+fn scale_add(limbs: []u32, count: usize, small: u32, add: u32) -> usize
+fn digit_value(c: u8) -> u32
+fn int_parse(a: *mem.Arena, s: str, radix: u8) -> (Int, err)
+fn int_format(v: Int, b: *str.Builder, radix: u8) -> err
 fn rat_make(a: *mem.Arena, num: Int, den: Int) -> (Rat, err)
 fn rat_add(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
 fn rat_sub(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
@@ -3121,6 +3134,13 @@ fn rat_mul(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
 fn rat_div(a: *mem.Arena, x: Rat, y: Rat) -> (Rat, err)
 fn rat_cmp(a: Rat, b: Rat) -> i32
 fn rat_format(v: Rat, b: *str.Builder) -> err
+fn int_bits(v: Int) -> usize
+fn int_from_bytes_be(a: *mem.Arena, bytes: []const u8) -> (Int, err)
+fn int_to_bytes_be(v: Int, out: []u8) -> err
+fn mont_inverse32(m0: u32) -> u32
+fn mont_mul(t: []u32, out: []u32, x: []const u32, y: []const u32, m: []const u32, m_prime: u32)
+fn mont_enter(a: *mem.Arena, value: []const u32, m: []const u32) -> ([]u32, err)
+fn int_mod_pow(a: *mem.Arena, base: Int, exponent: Int, modulus: Int) -> (Int, err)
 ```
 
 ### `e.algo.linalg.matrix`
@@ -3748,6 +3768,9 @@ type Transform = struct { m00: f32, m01: f32, m02: f32, m10: f32, m11: f32, m12:
 type PathVerb = enum u8 { Move, Line, Quad, Cubic, Close }
 type Path = struct { verbs: []const PathVerb, points: []const Point }
 type PathBuilder = struct { state: *void }
+type Cap = enum u8 { Butt, Round, Square }
+type Join = enum u8 { Miter, Round, Bevel }
+type BuilderState = struct { verbs: []PathVerb, points: []Point, verb_count: usize, point_count: usize, open: bool }
 error Invalid
 error TooLarge
 
@@ -3762,12 +3785,26 @@ fn transform_rotate(radians: f32) -> Transform
 fn transform_multiply(a: Transform, b: Transform) -> Transform
 fn transform_point(t: Transform, p: Point) -> Point
 fn path_builder(a: *mem.Arena, max_verbs: usize, max_points: usize) -> (PathBuilder, err)
+fn append(s: *BuilderState, verb: PathVerb, count: usize, first: Point, second: Point, third: Point) -> err
 fn move_to(b: *PathBuilder, p: Point) -> err
 fn line_to(b: *PathBuilder, p: Point) -> err
 fn quad_to(b: *PathBuilder, control: Point, end: Point) -> err
 fn cubic_to(b: *PathBuilder, first: Point, second: Point, end: Point) -> err
 fn close_path(b: *PathBuilder) -> err
 fn finish(b: *PathBuilder) -> Path
+fn lerp(a: Point, b: Point, t: f32) -> Point
+fn distance(a: Point, b: Point) -> f32
+fn chord_count(bound: f32, tolerance: f32) -> usize
+fn flatten(path: Path, tolerance: f32, verbs: []PathVerb, points: []Point) -> (Path, err)
+fn emit_polygon(s: *BuilderState, pts: []const Point) -> err
+fn emit_circle(s: *BuilderState, center: Point, hw: f32, tolerance: f32) -> err
+fn unit_normal(from: Point, to: Point) -> Point
+fn offset(p: Point, n: Point, k: f32) -> Point
+fn stroke_segment(s: *BuilderState, p: Point, q: Point, hw: f32) -> err
+fn stroke_join(s: *BuilderState, a: Point, p: Point, b: Point, hw: f32, join: Join, miter_limit: f32, tolerance: f32) -> err
+fn stroke_cap(s: *BuilderState, from: Point, p: Point, hw: f32, cap: Cap, tolerance: f32) -> err
+fn stroke_contour(s: *BuilderState, pts: []const Point, closed: bool, hw: f32, cap: Cap, join: Join, miter_limit: f32, tolerance: f32) -> err
+fn stroke(path: Path, width: f32, cap: Cap, join: Join, miter_limit: f32, tolerance: f32, verbs: []PathVerb, points: []Point) -> (Path, err)
 ```
 
 Coordinates are logical pixels. Values must be finite; rectangles and sizes have
@@ -3786,12 +3823,35 @@ type Stop = struct { offset: f32, color: Color }
 type Brush = union enum u8 { Solid: Color, Linear: LinearGradient, Radial: RadialGradient }
 type LinearGradient = struct { start: geometry.Point, end: geometry.Point, stops: []const Stop }
 type RadialGradient = struct { center: geometry.Point, radius: f32, stops: []const Stop }
+type Spread = enum u8 { Pad, Repeat, Reflect }
+type Operator = enum u8 { Clear, Src, Dst, SrcOver, DstOver, SrcIn, DstIn, SrcOut, DstOut, SrcAtop, DstAtop, Xor, Plus }
+type FillRule = enum u8 { NonZero, EvenOdd }
 error Invalid
+error TooLarge
 
 fn rgba(red: f32, green: f32, blue: f32, alpha: f32) -> Color
+fn srgb_to_linear(c: f32) -> f32
+fn linear_of(byte: u8) -> f32
+fn linear_to_srgb(linear: f32) -> f32
+fn root24(x: f32) -> f32
+fn pow24(x: f32) -> f32
 fn srgb8(red: u8, green: u8, blue: u8, alpha: u8) -> Color
 fn premultiply(color: Color) -> Color
+fn unit(v: f32) -> bool
+fn color_ok(c: Color) -> bool
+fn stops_ok(stops: []const Stop) -> bool
 fn validate(brush: *const Brush) -> err
+fn mix(a: Color, b: Color, t: f32) -> Color
+fn spread_of(t: f32, spread: Spread) -> f32
+fn stops_at(stops: []const Stop, t: f32) -> Color
+fn gradient(brush: *const Brush, spread: Spread, p: geometry.Point) -> Color
+fn composite(op: Operator, src: Color, dst: Color) -> Color
+fn fill_rule(rule: FillRule, winding: i32) -> bool
+fn crossings(path: geometry.Path, y: f32, scale_x: f32, xs: []f32, ds: []i32) -> (usize, err)
+fn rasterize(path: geometry.Path, rule: FillRule, scale_x: f32, width: usize, height: usize, coverage: []f32) -> err
+fn fill_path(path: geometry.Path, rule: FillRule, width: usize, height: usize, coverage: []f32) -> err
+fn glyph_subpixel(path: geometry.Path, rule: FillRule, width: usize, height: usize, wide: []f32, out: []f32) -> err
+fn glyph_sdf(coverage: []const f32, width: usize, height: usize, out: []f32) -> err
 ```
 
 Colors are linear-light floating-point RGBA; `srgb8` performs the defined sRGB
@@ -3807,13 +3867,29 @@ type Image = struct { pixels: []u8, width: u32, height: u32, stride: usize, form
 type ConstImage = struct { pixels: []const u8, width: u32, height: u32, stride: usize, format: Format, alpha: Alpha }
 error Invalid
 error TooLarge
+const MAX_PIXELS: u64 = 1073741824u64
 
+fn bytes_per_pixel(format: Format) -> usize
 fn required_bytes(width: u32, height: u32, format: Format, stride: usize) -> (usize, err)
 fn make(pixels: []u8, width: u32, height: u32, stride: usize, format: Format, alpha: Alpha) -> (Image, err)
 fn make_const(pixels: []const u8, width: u32, height: u32, stride: usize, format: Format, alpha: Alpha) -> (ConstImage, err)
 fn allocate(a: *mem.Arena, width: u32, height: u32, format: Format, alpha: Alpha) -> (Image, err)
+fn srgb_byte(linear: f32) -> u8
+fn unit_byte(v: f32) -> u8
+fn half_bits(v: f32) -> u32
+fn put16(pixels: []u8, at: usize, v: u32)
 fn clear(image: Image, color: paint.Color)
 fn copy(dst: Image, src: ConstImage, dst_origin: geometry.Point) -> err
+fn eight_bit(image: ConstImage) -> bool
+fn psnr(a: ConstImage, b: ConstImage) -> (f64, err)
+fn luma(image: ConstImage, x: usize, y: usize) -> u32
+fn ssim(a: ConstImage, b: ConstImage) -> (f64, err)
+fn cell_mean(image: ConstImage, cols: usize, rows: usize, cx: usize, cy: usize) -> f32
+fn hashable(image: ConstImage) -> bool
+fn ahash(image: ConstImage) -> (u64, err)
+fn dhash(image: ConstImage) -> (u64, err)
+fn phash(image: ConstImage) -> (u64, err)
+fn hamming_distance(a: u64, b: u64) -> u32
 ```
 
 Images are pixel views, not codecs or GPU resources. Encoders and decoders belong in
@@ -4281,26 +4357,84 @@ type Sha256 = struct { h: [8]u32, block: [64]u8, block_len: u8, total: u64 }
 type Sha512 = struct { h: [8]u64, block: [128]u8, block_len: u8, total_hi: u64, total_lo: u64 }
 type Sha3_256 = struct { lanes: [25]u64, block: [136]u8, block_len: u8 }
 type Sha3_512 = struct { lanes: [25]u64, block: [72]u8, block_len: u8 }
+type Blake2b = struct { h: [8]u64, t_lo: u64, t_hi: u64, block: [128]u8, block_len: usize, out_len: usize }
+type Blake3 = struct { key: [8]u32, cv: [8]u32, chunk_counter: u64, block: [64]u8, block_len: usize, blocks_compressed: usize, flags: u32, stack: [432]u32, stack_len: usize }
+type Blake3Output = struct { cv: [8]u32, block: [16]u32, counter: u64, block_len: u32, flags: u32 }
 
-fn sha256(data: []const u8) -> [32]u8
-fn sha512(data: []const u8) -> [64]u8
-fn sha3_256(data: []const u8) -> [32]u8
-fn sha3_512(data: []const u8) -> [64]u8
+fn rotr32(x: u32, n: u32) -> u32
+fn rotr64(x: u64, n: u32) -> u64
+fn rotl64(x: u64, n: u32) -> u64
+fn rotl32(x: u32, n: u32) -> u32
+fn load_be32(block: []const u8, at: usize) -> u32
+fn load_be64(block: []const u8, at: usize) -> u64
+fn store_be32(out: []u8, at: usize, value: u32)
+fn store_be64(out: []u8, at: usize, value: u64)
+fn sha256_k(index: usize) -> u32
 fn sha256_init() -> Sha256
+fn sha256_compress(s: *Sha256, block: []const u8)
 fn sha256_update(h: *Sha256, data: []const u8)
 fn sha256_done(h: *Sha256) -> [32]u8
+fn sha256(data: []const u8) -> [32]u8
+fn sha512_k(index: usize) -> u64
 fn sha512_init() -> Sha512
+fn sha512_compress(s: *Sha512, block: []const u8)
 fn sha512_update(h: *Sha512, data: []const u8)
 fn sha512_done(h: *Sha512) -> [64]u8
+fn sha512(data: []const u8) -> [64]u8
+fn keccak_round_constant(round: usize) -> u64
+fn keccak_rho(index: usize) -> u32
+fn keccak_f(lanes: []u64)
+fn keccak_absorb(lanes: []u64, block: []const u8)
+fn keccak_squeeze(lanes: []const u64, out: []u8)
 fn sha3_256_init() -> Sha3_256
 fn sha3_256_update(h: *Sha3_256, data: []const u8)
 fn sha3_256_done(h: *Sha3_256) -> [32]u8
+fn sha3_256(data: []const u8) -> [32]u8
 fn sha3_512_init() -> Sha3_512
 fn sha3_512_update(h: *Sha3_512, data: []const u8)
 fn sha3_512_done(h: *Sha3_512) -> [64]u8
+fn sha3_512(data: []const u8) -> [64]u8
+fn legacy_padded_len(length: usize) -> usize
 fn legacy_sha1(data: []const u8) -> [20]u8
+fn md5_k(index: usize) -> u32
+fn md5_shift(index: usize) -> u32
 fn legacy_md5(data: []const u8) -> [16]u8
 fn equal_constant_time(a: []const u8, b: []const u8) -> bool
+fn blake2b_sigma(round: usize, i: usize) -> usize
+fn load_le64(bytes: []const u8, at: usize) -> u64
+fn blake2b_g(v: []u64, a: usize, b: usize, c: usize, d: usize, x: u64, y: u64)
+fn blake2b_compress(s: *Blake2b, last: bool)
+fn blake2b_init(out_len: usize, key: []const u8) -> Blake2b
+fn blake2b_update(s: *Blake2b, bytes: []const u8)
+fn blake2b_done(s: *Blake2b) -> [64]u8
+fn blake2b(data: []const u8) -> [64]u8
+fn blake2b_keyed(key: []const u8, data: []const u8) -> [64]u8
+fn blake3_iv(index: usize) -> u32
+fn blake3_word(bytes: []const u8, at: usize) -> u32
+fn blake3_words(bytes: []const u8) -> [16]u32
+fn blake3_g(state: []u32, a: usize, b: usize, c: usize, d: usize, mx: u32, my: u32)
+fn blake3_round(state: []u32, m: []const u32)
+fn blake3_compress(cv: [8]u32, block: [16]u32, counter: u64, block_len: u32, flags: u32) -> [16]u32
+fn blake3_output_cv(o: Blake3Output) -> [8]u32
+fn blake3_output_root(o: Blake3Output, out: []u8)
+fn blake3_start_flag(h: *Blake3) -> u32
+fn blake3_chunk_output(h: *Blake3) -> Blake3Output
+fn blake3_parent(left: [8]u32, right: [8]u32, key: [8]u32, flags: u32) -> Blake3Output
+fn blake3_stack_get(h: *Blake3, index: usize) -> [8]u32
+fn blake3_stack_push(h: *Blake3, cv: [8]u32)
+fn blake3_add_chunk_cv(h: *Blake3, cv_in: [8]u32, total_chunks: u64)
+fn blake3_init_with(key: [8]u32, flags: u32) -> Blake3
+fn blake3_init() -> Blake3
+fn blake3_key_words(key: [32]u8) -> [8]u32
+fn blake3_keyed_init(key: [32]u8) -> Blake3
+fn blake3_derive_key_init(context: []const u8) -> Blake3
+fn blake3_clear_block(h: *Blake3)
+fn blake3_update(h: *Blake3, data: []const u8)
+fn blake3_done(h: *Blake3, out: []u8)
+fn blake3(data: []const u8) -> [32]u8
+fn blake3_xof(data: []const u8, out: []u8)
+fn blake3_keyed(key: [32]u8, data: []const u8) -> [32]u8
+fn blake3_derive_key(context: []const u8, key_material: []const u8, out: []u8)
 ```
 
 ### `e.crypto.mac`
@@ -4308,17 +4442,23 @@ fn equal_constant_time(a: []const u8, b: []const u8) -> bool
 ```neper
 type HmacSha256 = struct { inner: hash.Sha256, outer: hash.Sha256 }
 type HmacSha512 = struct { inner: hash.Sha512, outer: hash.Sha512 }
+type Poly1305 = struct { inner: aead.Poly, block: [16]u8, block_len: usize }
 
-fn hmac_sha256(key: []const u8, message: []const u8) -> [32]u8
-fn hmac_sha512(key: []const u8, message: []const u8) -> [64]u8
-fn verify_sha256(key: []const u8, message: []const u8, tag: [32]u8) -> bool
-fn verify_sha512(key: []const u8, message: []const u8, tag: [64]u8) -> bool
 fn sha256_init(key: []const u8) -> HmacSha256
 fn sha256_update(state: *HmacSha256, bytes: []const u8)
 fn sha256_done(state: *HmacSha256) -> [32]u8
+fn hmac_sha256(key: []const u8, message: []const u8) -> [32]u8
+fn verify_sha256(key: []const u8, message: []const u8, tag: [32]u8) -> bool
 fn sha512_init(key: []const u8) -> HmacSha512
 fn sha512_update(state: *HmacSha512, bytes: []const u8)
 fn sha512_done(state: *HmacSha512) -> [64]u8
+fn hmac_sha512(key: []const u8, message: []const u8) -> [64]u8
+fn verify_sha512(key: []const u8, message: []const u8, tag: [64]u8) -> bool
+fn poly1305_init(key: [32]u8) -> Poly1305
+fn poly1305_update(state: *Poly1305, bytes: []const u8)
+fn poly1305_done(state: *Poly1305) -> [16]u8
+fn poly1305(key: [32]u8, message: []const u8) -> [16]u8
+fn poly1305_verify(key: [32]u8, message: []const u8, tag: [16]u8) -> bool
 ```
 
 HMAC follows RFC 2104; verification compares fixed-length tags in constant time.
@@ -4330,12 +4470,56 @@ unbounded caller data. done consumes the message state; reinitialize before reus
 ### `e.crypto.kdf`
 
 ```neper
+type Hash = enum u8 { Sha256, Sha512 }
+type Blowfish = struct { p: [18]u32, s: [1024]u32 }
 error TooLarge
+error TooSmall
+error Invalid
 
 fn hkdf_sha256_extract(salt: []const u8, input_key: []const u8) -> [32]u8
 fn hkdf_sha256_expand(dst: []u8, prk: [32]u8, info: []const u8) -> err
 fn hkdf_sha512_extract(salt: []const u8, input_key: []const u8) -> [64]u8
 fn hkdf_sha512_expand(dst: []u8, prk: [64]u8, info: []const u8) -> err
+fn store_be32(out: []u8, at: usize, value: u32)
+fn store_le32(out: []u8, at: usize, value: u32)
+fn load_le32(bytes: []const u8, at: usize) -> u32
+fn load_le64(bytes: []const u8, at: usize) -> u64
+fn store_le64(out: []u8, at: usize, value: u64)
+fn pbkdf2_sha256(password: []const u8, salt: []const u8, iterations: u32, out: []u8) -> err
+fn pbkdf2_sha512(password: []const u8, salt: []const u8, iterations: u32, out: []u8) -> err
+fn pbkdf2(which: Hash, password: []const u8, salt: []const u8, iterations: u32, out: []u8) -> err
+fn rotl32(x: u32, n: u32) -> u32
+fn salsa_quarter(x: []u32, a: usize, b: usize, c: usize, d: usize)
+fn salsa20_8(block: []u8)
+fn scrypt_block_mix(scratch: []u8, b: usize, y: usize, r: usize)
+fn scrypt_ro_mix(scratch: []u8, b: usize, v: usize, x: usize, y: usize, n: usize, r: usize)
+fn scrypt_scratch_required(n: usize, r: usize, p: usize) -> usize
+fn scrypt(password: []const u8, salt: []const u8, n: usize, r: usize, p: usize, out: []u8, scratch: []u8) -> err
+fn blowfish_pi() -> str
+fn blowfish_init() -> Blowfish
+fn blowfish_f(bf: *Blowfish, x: u32) -> u32
+fn blowfish_encrypt(bf: *Blowfish, left: u32, right: u32) -> (u32, u32)
+fn stream_word(data: []const u8, at: usize) -> (u32, usize)
+fn blowfish_expand(bf: *Blowfish, salt: []const u8, key: []const u8)
+fn bcrypt(password: []const u8, salt: [16]u8, cost: u32) -> ([23]u8, err)
+fn bcrypt_alphabet(value: u8) -> u8
+fn bcrypt_digit(c: u8) -> u8
+fn bcrypt_encode(out: []u8, data: []const u8)
+fn bcrypt_decode_salt(text: []const u8) -> ([16]u8, bool)
+fn bcrypt_hash_text(password: []const u8, salt: [16]u8, cost: u32) -> ([60]u8, err)
+fn bcrypt_verify(password: []const u8, hash_text: []const u8) -> bool
+fn argon2_memory_required(m_kib: u32) -> usize
+fn argon2_gb(v: []u64, a: usize, b: usize, c: usize, d: usize)
+fn hash_rotr64(x: u64, n: u32) -> u64
+fn argon2_permute(z: []u64, first: usize, pair_step: usize)
+fn argon2_g_core(z: []u64)
+fn argon2_fill(memory: []u8, prev: usize, ref: usize, cur: usize, with_xor: bool)
+fn argon2_next_addresses(input: []u64, addresses: []u64)
+fn argon2_h_prime(out: []u8, input: []const u8)
+fn argon2_update_le32(s: *hash.Blake2b, value: u32)
+fn argon2_update_sized(s: *hash.Blake2b, data: []const u8)
+fn argon2id(password: []const u8, salt: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
+fn argon2id_keyed(password: []const u8, salt: []const u8, secret: []const u8, ad: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
 ```
 
 HKDF follows RFC 5869. Expand rejects output longer than 255 hash blocks before
@@ -4387,13 +4571,125 @@ type Ed25519PublicKey = struct { bytes: [32]u8 }
 type Ed25519SecretKey = struct { bytes: [32]u8 }
 type Ed25519Signature = struct { bytes: [64]u8 }
 type P256PublicKey = struct { bytes: [65]u8 }
+type Fe = struct { v: [10]i64 }
+type Pt = struct { x: Fe, y: Fe, z: Fe, t: Fe }
+type Sc = struct { v: [8]u32 }
+type P256Int = struct { v: [8]u32 }
+type P256Affine = struct { x: P256Int, y: P256Int }
+type P256Point = struct { x: P256Int, y: P256Int, z: P256Int }
+type P256SecretKey = struct { bytes: [32]u8 }
 error InvalidKey
 error InvalidSignature
+error TooSmall
+error Invalid
 
+fn fe_zero() -> Fe
+fn fe_one() -> Fe
+fn load24(bytes: []const u8, at: usize) -> i64
+fn load32(bytes: []const u8, at: usize) -> i64
+fn fe_from_bytes(bytes: []const u8) -> Fe
+fn fe_carry(f: Fe) -> Fe
+fn fe_add(a: Fe, b: Fe) -> Fe
+fn fe_sub(a: Fe, b: Fe) -> Fe
+fn fe_mul(a: Fe, b: Fe) -> Fe
+fn fe_square(a: Fe) -> Fe
+fn fe_mul_small(a: Fe, small: i64) -> Fe
+fn fe_to_bytes(f: Fe) -> [32]u8
+fn fe_neg(a: Fe) -> Fe
+fn bytes_equal(a: [32]u8, b: [32]u8) -> bool
+fn fe_equal(a: Fe, b: Fe) -> bool
+fn fe_is_zero(a: Fe) -> bool
+fn fe_is_negative(a: Fe) -> bool
+fn fe_pow(a: Fe, exponent: [32]u8) -> Fe
+fn fe_invert(a: Fe) -> Fe
+fn fe_d() -> Fe
+fn fe_2d() -> Fe
+fn fe_sqrt_m1() -> Fe
+fn pt_identity() -> Pt
+fn pt_add(p: Pt, q: Pt) -> Pt
+fn pt_mul(scalar: [32]u8, p: Pt) -> Pt
+fn pt_is_identity(p: Pt) -> bool
+fn pt_encode(p: Pt) -> [32]u8
+fn canonical_field(bytes: [32]u8) -> bool
+fn pt_decode(bytes: [32]u8) -> (Pt, bool)
+fn pt_base() -> Pt
+fn sc_l(index: usize) -> u32
+fn sc_geq_l(r: [9]u32) -> bool
+fn sc_sub_l(r_in: [9]u32) -> [9]u32
+fn sc_reduce_wide(wide: [16]u32) -> Sc
+fn sc_from_bytes(bytes: []const u8) -> Sc
+fn sc_to_bytes(s: Sc) -> [32]u8
+fn sc_mul(a: Sc, b: Sc) -> Sc
+fn sc_add(a: Sc, b: Sc) -> Sc
+fn sc_canonical(bytes: []const u8) -> bool
+fn clamp(bytes: []const u8) -> [32]u8
 fn ed25519_public_from_secret(secret: Ed25519SecretKey) -> (Ed25519PublicKey, err)
 fn ed25519_sign(secret: Ed25519SecretKey, message: []const u8) -> (Ed25519Signature, err)
 fn ed25519_verify(public: Ed25519PublicKey, message: []const u8, signature: Ed25519Signature) -> bool
+fn p256_p() -> P256Int
+fn p256_n() -> P256Int
+fn p256_b() -> P256Int
+fn p256_base() -> P256Affine
+fn p256_zero(a: P256Int) -> bool
+fn p256_equal(a: P256Int, b: P256Int) -> bool
+fn p256_compare(a: P256Int, b: P256Int) -> i32
+fn p256_sub_raw(a: P256Int, b: P256Int) -> P256Int
+fn p256_add_mod(a: P256Int, b: P256Int, modulus: P256Int) -> P256Int
+fn p256_sub_mod(a: P256Int, b: P256Int, modulus: P256Int) -> P256Int
+fn p256_bit(a: P256Int, bit: usize) -> bool
+fn p256_mul_mod(a: P256Int, b: P256Int, modulus: P256Int) -> P256Int
+fn p256_pow_mod(a: P256Int, exponent: P256Int, modulus: P256Int) -> P256Int
+fn p256_inverse(a: P256Int, modulus: P256Int) -> P256Int
+fn p256_from_be(bytes: []const u8) -> (P256Int, bool)
+fn p256_field_add(a: P256Int, b: P256Int) -> P256Int
+fn p256_field_sub(a: P256Int, b: P256Int) -> P256Int
+fn p256_field_mul(a: P256Int, b: P256Int) -> P256Int
+fn p256_field_square(a: P256Int) -> P256Int
+fn p256_field_double(a: P256Int) -> P256Int
+fn p256_field_four(a: P256Int) -> P256Int
+fn p256_field_eight(a: P256Int) -> P256Int
+fn p256_point_double(point: P256Point) -> P256Point
+fn p256_point_add_mixed(point: P256Point, affine: P256Affine) -> P256Point
+fn p256_public(public: P256PublicKey) -> (P256Affine, bool)
+fn p256_der_integer(encoded: []const u8, at: *usize) -> (P256Int, bool)
+fn p256_signature(encoded: []const u8) -> (P256Int, P256Int, bool)
+fn p256_joint_mul(u1: P256Int, u2: P256Int, public: P256Affine) -> P256Point
 fn p256_verify(public: P256PublicKey, message: []const u8, signature_der: []const u8) -> bool
+fn p256_to_be(a: P256Int) -> [32]u8
+fn p256_to_affine(point: P256Point) -> P256Affine
+fn p256_scalar_valid(k: P256Int) -> bool
+fn p256_base_mul(scalar: P256Int) -> P256Affine
+fn p256_public_from_secret(secret: P256SecretKey) -> (P256PublicKey, err)
+fn p256_der_put(out: []u8, at: usize, value: P256Int) -> usize
+fn p256_sign(secret: P256SecretKey, message: []const u8, out: []u8) -> (usize, err)
+fn k1_p() -> P256Int
+fn k1_n() -> P256Int
+fn k1_base() -> P256Affine
+fn k1_mul(a: P256Int, b: P256Int) -> P256Int
+fn k1_add(a: P256Int, b: P256Int) -> P256Int
+fn k1_sub(a: P256Int, b: P256Int) -> P256Int
+fn k1_double(point: P256Point) -> P256Point
+fn k1_add_mixed(point: P256Point, affine: P256Affine) -> P256Point
+fn k1_joint_mul(u1: P256Int, u2: P256Int, public: P256Affine) -> P256Point
+fn k1_to_affine(point: P256Point) -> P256Affine
+fn k1_odd(a: P256Int) -> bool
+fn k1_lift_x(x_bytes: []const u8) -> (P256Affine, bool)
+fn k1_scalar_mod_n(bytes: []const u8) -> P256Int
+fn tagged_hash_init(tag: []const u8) -> hash.Sha256
+fn schnorr_challenge(r_bytes: []const u8, public_x: []const u8, message: []const u8) -> P256Int
+fn schnorr_public_from_secret(secret: [32]u8) -> ([32]u8, err)
+fn schnorr_sign(secret: [32]u8, message: []const u8, aux: [32]u8) -> ([64]u8, err)
+fn schnorr(secret: [32]u8, message: []const u8, aux: [32]u8) -> ([64]u8, err)
+fn schnorr_verify(public_x: [32]u8, message: []const u8, signature: [64]u8) -> bool
+fn rsa_salt_len() -> usize
+fn rsa_max_bytes() -> usize
+fn mgf1_xor(seed: []const u8, mask: []u8)
+fn pss_hash(message: []const u8, salt: []const u8) -> [32]u8
+fn rsa_pss_sign(a: *mem.Arena, n: []const u8, d: []const u8, message: []const u8, salt: []const u8, out: []u8) -> (usize, err)
+fn rsa_pss(a: *mem.Arena, n: []const u8, d: []const u8, message: []const u8, salt: []const u8, out: []u8) -> (usize, err)
+fn rsa_public_op(a: *mem.Arena, n: []const u8, e: []const u8, signature: []const u8, out: []u8) -> bool
+fn rsa_pss_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8) -> bool
+fn rsa_pkcs1v15_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8) -> bool
 ```
 
 `Ed25519SecretKey.bytes` is the 32-byte seed form. Verification rejects non-canonical
@@ -4406,10 +4702,36 @@ P-256 verification hashes with SHA-256 and accepts strict DER ECDSA signatures.
 type X25519PublicKey = struct { bytes: [32]u8 }
 type X25519SecretKey = struct { bytes: [32]u8 }
 type X25519SharedKey = struct { bytes: [32]u8 }
+type Fe = struct { v: [10]i64 }
 error InvalidKey
+error TooSmall
 
+fn fe_zero() -> Fe
+fn fe_one() -> Fe
+fn load24(bytes: []const u8, at: usize) -> i64
+fn load32(bytes: []const u8, at: usize) -> i64
+fn fe_from_bytes(bytes: []const u8) -> Fe
+fn fe_carry(f: Fe) -> Fe
+fn fe_add(a: Fe, b: Fe) -> Fe
+fn fe_sub(a: Fe, b: Fe) -> Fe
+fn fe_mul(a: Fe, b: Fe) -> Fe
+fn fe_square(a: Fe) -> Fe
+fn fe_mul_small(a: Fe, small: i64) -> Fe
+fn fe_invert(z: Fe) -> Fe
+fn fe_to_bytes(f: Fe) -> [32]u8
+fn fe_cswap(a: *Fe, b: *Fe, swap: i64)
+fn x25519(scalar_in: [32]u8, point: [32]u8) -> [32]u8
 fn x25519_public_from_secret(secret: X25519SecretKey) -> X25519PublicKey
 fn x25519_exchange(secret: X25519SecretKey, peer: X25519PublicKey) -> (X25519SharedKey, err)
+fn ffdhe2048_hex() -> str
+fn dh_bytes() -> usize
+fn dh_prime(a: *mem.Arena) -> (bignum.Int, err)
+fn dh_in_range(a: *mem.Arena, value: bignum.Int, p: bignum.Int) -> bool
+fn dh_power(a: *mem.Arena, base: bignum.Int, exponent: []const u8, out: []u8) -> err
+fn dh_public(a: *mem.Arena, secret: []const u8, out: []u8) -> (usize, err)
+fn dh_valid_public(a: *mem.Arena, public: []const u8) -> bool
+fn dh_shared(a: *mem.Arena, secret: []const u8, peer_public: []const u8, out: []u8) -> (usize, err)
+fn dh(a: *mem.Arena, secret: []const u8, peer_public: []const u8, out: []u8) -> (usize, err)
 ```
 
 The scalar is clamped by the operation. An all-zero shared secret is `InvalidKey`.
@@ -7811,25 +8133,138 @@ type DisplayList = struct { commands: []const Command }
 type Builder = struct { state: *void }
 type Renderer = struct { state: *void }
 type Target = struct { state: *void }
+type BuilderState = struct { commands: []Command, count: usize, finished: bool }
+type Texture = struct { live: bool, generation: u32, width: u32, height: u32, pixels: []f32 }
+type Scene = struct { live: bool, generation: u32, storage: []u8, has_storage: bool, arena: mem.Arena, commands: []Command, count: usize }
+type FontEntry = struct { id: shape.FontId, data: []const u8, upem: f32, loca: usize, glyf: usize, glyf_len: usize, long_loca: bool, glyph_count: usize }
+type Edge = struct { x0: f32, y0: f32, x1: f32, y1: f32 }
+type Floats = struct { data: []f32, len: usize }
+type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32 }
+type RendererState = struct { arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, closed: bool }
+type TargetState = struct { target: *gpu.Target }
+type Flattener = struct { s: *RendererState, t: geometry.Transform, current: geometry.Point, start: geometry.Point, open: bool, stroke: bool, hw: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter_limit: f32, previous: geometry.Point, has_previous: bool, first_dir: geometry.Point, has_first: bool, last_dir: geometry.Point, segment_count: usize }
 error Invalid
 error TooLarge
 error OutOfMemory
 error Lost
+const SCENE_BYTES: usize = 262144usize
+const MAX_EDGES: usize = 65536usize
+const MAX_MASKS: usize = 8usize
+const MAX_LAYERS: usize = 4usize
+const MAX_FONTS: usize = 16usize
+const MAX_STATES: usize = 32usize
 
 fn builder(a: *mem.Arena, max_commands: usize) -> (Builder, err)
 fn push(b: *Builder, command: Command) -> err
 fn finish(b: *Builder) -> DisplayList
+fn finite(v: f32) -> bool
+fn unit(v: f32) -> bool
+fn rect_ok(r: geometry.Rect) -> bool
+fn path_ok(p: geometry.Path) -> bool
 fn renderer(a: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, max_scenes: u32, max_textures: u32) -> (Renderer, err)
+fn renderer_state(r: *Renderer) -> (*RendererState, err)
 fn register_font(r: *Renderer, font: shape.Font) -> err
+fn be16(d: []const u8, at: usize) -> u32
+fn be32(d: []const u8, at: usize) -> u32
+fn font_table(d: []const u8, face: u32, tag: u32) -> (usize, usize, bool)
+fn texture_slot(s: *RendererState, id: TextureId) -> (usize, err)
+fn read_pixel(view: image.ConstImage, x: usize, y: usize) -> (f32, f32, f32, f32)
+fn half_of(d: []const u8, at: usize) -> f32
+fn fill_texture(t: *Texture, view: image.ConstImage)
 fn upload_image(r: *Renderer, image_view: image.ConstImage) -> (TextureId, err)
 fn update_image(r: *Renderer, texture: TextureId, image_view: image.ConstImage) -> err
 fn release_image(r: *Renderer, texture: TextureId) -> err
+fn scene_slot(s: *RendererState, id: SceneId) -> (usize, err)
+fn copy_points(a: *mem.Arena, points: []const geometry.Point) -> ([]const geometry.Point, err)
+fn copy_path(a: *mem.Arena, path: geometry.Path) -> (geometry.Path, err)
+fn copy_brush(a: *mem.Arena, brush: paint.Brush) -> (paint.Brush, err)
+fn copy_layout(a: *mem.Arena, source: *const layout.Layout) -> (*const layout.Layout, err)
+fn copy_command(a: *mem.Arena, command: Command) -> (Command, err)
 fn compile(r: *Renderer, list: DisplayList) -> (SceneId, err)
-fn render(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Size) -> err
 fn release_scene(r: *Renderer, scene: SceneId) -> err
 fn close(r: *Renderer) -> err
-fn target_of(a: *mem.Arena, t: *gpu.Target) -> (Target, err)
 fn queue_of(r: *Renderer) -> *gpu.Queue
+fn target_of(a: *mem.Arena, t: *gpu.Target) -> (Target, err)
+fn transform_compose(outer: geometry.Transform, inner: geometry.Transform) -> geometry.Transform
+fn transform_invert(t: geometry.Transform) -> (geometry.Transform, bool)
+fn ensure_canvas(s: *RendererState, index: usize) -> err
+fn ensure_mask(s: *RendererState, index: usize) -> err
+fn clear_floats(data: []f32, count: usize)
+fn add_edge(s: *RendererState, x0: f32, y0: f32, x1: f32, y1: f32) -> err
+fn segments_for(length: f32) -> usize
+fn distance(a: geometry.Point, b: geometry.Point) -> f32
+fn flat_point(f: *Flattener, p: geometry.Point) -> geometry.Point
+fn flat_line(f: *Flattener, to: geometry.Point) -> err
+fn flat_quad(f: *Flattener, control: geometry.Point, end: geometry.Point) -> err
+fn flat_cubic(f: *Flattener, c1: geometry.Point, c2: geometry.Point, end: geometry.Point) -> err
+fn flat_close(f: *Flattener) -> err
+fn flat_end(f: *Flattener) -> err
+fn flatten(f: *Flattener, path: geometry.Path) -> err
+fn add_polygon(s: *RendererState, corners: []const geometry.Point) -> err
+fn stroke_segment(f: *Flattener, a: geometry.Point, b: geometry.Point) -> err
+fn add_disc(s: *RendererState, center: geometry.Point, radius: f32) -> err
+fn stroke_join(f: *Flattener, p: geometry.Point, d0: geometry.Point, d1: geometry.Point) -> err
+fn stroke_cap(f: *Flattener, p: geometry.Point, dir: geometry.Point) -> err
+fn accumulate_edge(acc: []f32, width: usize, height: usize, e: Edge)
+fn resolve_coverage(s: *RendererState, out: []f32)
+fn rasterize_edges(s: *RendererState, coverage: []f32)
+fn brush_at(brush: *const paint.Brush, inverse: geometry.Transform, px: f32, py: f32) -> paint.Color
+fn stops_at(stops: []const paint.Stop, t: f32) -> paint.Color
+fn blend_pixel(canvas: []f32, at: usize, color: paint.Color, weight: f32)
+fn paint_coverage(s: *RendererState, state: DrawState, coverage: []f32, brush: *const paint.Brush)
+fn scissor_bounds(s: *RendererState, r: geometry.Rect) -> (usize, usize, usize, usize)
+fn rect_path(r: geometry.Rect) -> ([5]geometry.PathVerb, [4]geometry.Point)
+fn rrect_edges(f: *Flattener, rr: geometry.RRect) -> err
+fn clamp_radius(radius: geometry.Radius, r: geometry.Rect) -> geometry.Radius
+fn fill_flattener(s: *RendererState, t: geometry.Transform) -> Flattener
+fn stroke_flattener(s: *RendererState, t: geometry.Transform, stroke: paint.Stroke) -> Flattener
+fn glyph_outline(f: *Flattener, font: *const FontEntry, glyph: u32, ox: f32, oy: f32, sx: f32, sy: f32, depth: usize) -> err
+fn composite_outline(f: *Flattener, font: *const FontEntry, g: usize, len: usize, ox: f32, oy: f32, sx: f32, sy: f32, depth: usize) -> err
+fn f2dot14(d: []const u8, at: usize) -> f32
+fn font_of(s: *RendererState, id: shape.FontId) -> (usize, bool)
+fn text_edges(s: *RendererState, f: *Flattener, text: DrawText) -> err
+fn draw_image(s: *RendererState, state: DrawState, draw: DrawImage) -> err
+fn sample_texture(t: *const Texture, sx: f32, sy: f32) -> paint.Color
+fn merge_layer(s: *RendererState, from: usize, into: usize, opacity: f32)
+fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err
+fn push_mask(s: *RendererState, current: *DrawState, mask_count: *usize, coverage: []f32) -> err
+fn from_gpu(e: err) -> err
+fn render(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Size) -> err
+fn channel_byte(v: f32) -> u32
+fn v3_norm(x: f32, y: f32, z: f32) -> (f32, f32, f32)
+fn saturate(v: f32) -> f32
+fn smoothstep01(v: f32) -> f32
+fn mat4_mul(a: []const f32, b: []const f32, out: []f32) -> err
+fn mat4_apply(m: []const f32, x: f32, y: f32, z: f32) -> (f32, f32, f32, f32)
+fn screen_of(cx: f32, cy: f32, cw: f32, width: usize, height: usize) -> (f32, f32)
+fn clamp_index(v: f32, count: usize) -> usize
+fn bilinear(buf: []const f32, channels: usize, width: usize, height: usize, fx: f32, fy: f32, c: usize) -> f32
+fn edge_fn(ax: f32, ay: f32, bx: f32, by: f32, px: f32, py: f32) -> f32
+fn top_left(ax: f32, ay: f32, bx: f32, by: f32) -> bool
+fn covers(w: f32, tl: bool) -> bool
+fn raster_tri(v: []const f32, stride: usize, width: usize, height: usize, depth: []f32, out: []f32, peel: []const f32, cull: bool)
+fn raster_core(v: []const f32, stride: usize, width: usize, height: usize, depth: []f32, out: []f32, peel: []const f32, cull: bool) -> err
+fn rasterize(tris: []const f32, width: usize, height: usize, depth: []f32, color: []f32, cull: bool) -> err
+fn paint_order(centres: []const f32, view: []const f32, order: []u32, depths: []f32) -> err
+fn shade_pixel(g: []const f32, lights: []const f32, eye: []const f32, ambient: f32, out: []f32)
+fn deferred(tris: []const f32, width: usize, height: usize, depth: []f32, gbuffer: []f32, lights: []const f32, eye: []const f32, ambient: f32, color: []f32, cull: bool) -> err
+fn axis_gap(v: f32, lo: f32, hi: f32) -> f32
+fn clustered_lights(tan_x: f32, tan_y: f32, near: f32, far: f32, nx: usize, ny: usize, nz: usize, lights: []const f32, max_per: usize, counts: []u32, lists: []u32) -> err
+fn shadow_cascades(near: f32, far: f32, lambda: f32, cam_to_world: []const f32, tan_x: f32, tan_y: f32, light_dir: []const f32, splits: []f32, matrices: []f32) -> err
+fn shadow_pcf(map: []const f32, map_width: usize, map_height: usize, frags: []const f32, taps: usize, bias: f32, out: []f32) -> err
+fn ssao(positions: []const f32, normals: []const f32, width: usize, height: usize, kernel: []const f32, noise: []const f32, proj: []const f32, radius: f32, bias: f32, ao: []f32, scratch: []f32) -> err
+fn ssr(positions: []const f32, normals: []const f32, width: usize, height: usize, proj: []const f32, step: f32, max_steps: usize, thickness: f32, refine: usize, hit_uv: []f32, mask: []f32) -> err
+fn ssr_probe(positions: []const f32, width: usize, height: usize, proj: []const f32, x: f32, y: f32, z: f32, thickness: f32) -> (bool, bool)
+fn taa(current: []const f32, history: []const f32, depth: []const f32, width: usize, height: usize, inv_view_proj: []const f32, prev_view_proj: []const f32, alpha: f32, out: []f32) -> err
+fn luma_at(luma: []const f32, width: usize, height: usize, x: usize, y: usize, dx: usize, dy: usize) -> f32
+fn fxaa_quality_step(index: usize) -> f32
+fn fxaa(rgb: []const f32, width: usize, height: usize, luma: []f32, out: []f32) -> err
+fn fxaa_pixel(rgb: []const f32, luma: []const f32, width: usize, height: usize, x: usize, y: usize, out: []f32)
+fn fxaa_luma_tex(luma: []const f32, width: usize, height: usize, u: f32, v: f32) -> f32
+fn fill_floats(data: []f32, count: usize, v: f32)
+fn depth_peel(tris: []const f32, width: usize, height: usize, layers: usize, depth_a: []f32, depth_b: []f32, layer_color: []f32, out: []f32) -> err
+fn sdf_raymarch[Ctx: type](ctx: *Ctx, sdf: fn(*Ctx, f32, f32, f32) -> f32, width: usize, height: usize, eye: []const f32, tan_x: f32, tan_y: f32, max_steps: usize, epsilon: f32, max_dist: f32, hits: []f32, normals: []f32) -> err
+fn volumetric_fog(positions: []const f32, width: usize, height: usize, steps: usize, density: f32, falloff: f32, light: []const f32, albedo: f32, fog: []f32, transmittance: []f32) -> err
 ```
 
 Display lists borrow their paths, gradients and text layouts until `compile`
@@ -11508,6 +11943,7 @@ answer NaN. Accurate to about fifteen digits away from the tails.
 ### `e.math.fft`
 
 ```neper
+type Wavelet = enum u8 { Haar, Db4 }
 error Invalid
 error TooSmall
 const MODULUS: u64 = 998244353u64
@@ -11528,6 +11964,18 @@ fn convolve_mod(x: []const u64, y: []const u64, out: []u64, scratch: []u64) -> e
 fn fwht(values: []i64) -> err
 fn dct2(x: []const f64, out: []f64) -> err
 fn dct3(x: []const f64, out: []f64) -> err
+fn dct4(x: []const f64, out: []f64) -> err
+fn dct(x: []const f64, out: []f64, kind: u8, ortho: bool) -> err
+fn sine_window(i: usize, length: usize) -> f64
+fn mdct_window(out: []f64)
+fn mdct(frame: []const f64, out: []f64) -> err
+fn imdct(coefficients: []const f64, out: []f64) -> err
+fn wavelet_lowpass(wavelet: Wavelet, lo: []f64) -> usize
+fn wavelet_highpass(lo: []const f64, taps: usize, j: usize) -> f64
+fn dwt(x: []const f64, wavelet: Wavelet, approx: []f64, detail: []f64) -> err
+fn idwt(approx: []const f64, detail: []const f64, wavelet: Wavelet, out: []f64) -> err
+fn wavedec(x: []const f64, wavelet: Wavelet, levels: usize, out: []f64, scratch: []f64) -> err
+fn waverec(coefficients: []const f64, wavelet: Wavelet, levels: usize, out: []f64, scratch: []f64) -> err
 ```
 
 `fft`/`ifft` transform split real and imaginary arrays of a power-of-two length in
@@ -11571,9 +12019,12 @@ fn kalman_predict(x: []f64, p: []f64, f: []const f64, q: []const f64, n: usize, 
 fn kalman_update(x: []f64, p: []f64, h: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err
 fn ekf_predict[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), jacobian: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, n: usize, scratch: []f64) -> err
 fn ekf_update[Ctx: type](ctx: *Ctx, observe: fn(*Ctx, []const f64, []f64), jacobian: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err
+fn ekf[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), transition_jacobian: fn(*Ctx, []const f64, []f64), observe: fn(*Ctx, []const f64, []f64), observe_jacobian: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err
 fn ukf_step[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), observe: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err
+fn ukf[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), observe: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, alpha: f64, beta: f64, kappa: f64, scratch: []f64) -> err
 fn cholesky(p: []const f64, n: usize, out: []f64) -> err
 fn particle_step[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, propagate: fn(*Ctx, *rand.Pcg64, []f64), likelihood: fn(*Ctx, []const f64, []const f64) -> f64, particles: []f64, weights: []f64, count: usize, n: usize, z: []const f64, scratch: []f64) -> err
+fn particle[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, propagate: fn(*Ctx, *rand.Pcg64, []f64), likelihood: fn(*Ctx, []const f64, []const f64) -> f64, particles: []f64, weights: []f64, count: usize, n: usize, z: []const f64, resample_threshold: f64, scratch: []f64) -> err
 fn particle_mean(particles: []const f64, weights: []const f64, count: usize, n: usize, out: []f64) -> err
 fn complementary(angle: f64, rate: f64, accelerometer_angle: f64, dt: f64, alpha: f64) -> f64
 fn quaternion_normalize(q: []f64)

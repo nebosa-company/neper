@@ -1,9 +1,10 @@
 // State estimation over `f64` vectors and row-major matrices in caller
 // storage: the linear Kalman filter (predict and update), the extended form
-// with caller-supplied models and Jacobians, the unscented form with sigma
-// points from a Cholesky factor, a bootstrap particle filter with systematic
-// resampling, and the attitude filters over a unit quaternion (complementary,
-// Madgwick, Mahony).
+// with caller-supplied models and Jacobians (`ekf` runs one whole cycle), the
+// scaled unscented form with sigma points from a Cholesky factor (`ukf` takes
+// alpha, beta and kappa; `ukf_step` fixes them), a bootstrap particle filter
+// with systematic resampling (`particle` takes the resampling threshold), and
+// the attitude filters over a unit quaternion (complementary, Madgwick, Mahony).
 //
 // A state of `n` entries has an `n x n` covariance; a measurement of `m`
 // entries has an `m x n` model and an `m x m` noise. Scratch sizes are stated
@@ -268,12 +269,32 @@ fn ekf_update[Ctx: type](ctx: *Ctx, observe: fn(*Ctx, []const f64, []f64), jacob
     ret kalman_update(x, p, h, r, predicted, n, m, scratch[extra..])
 }
 
+// The extended Kalman filter cycle: `ekf_predict` under `transition` and
+// `transition_jacobian`, then `ekf_update` of `z` under `observe` and
+// `observe_jacobian`; the scratch is reused, so its length is the larger of
+// the two requirements.
+fn ekf[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), transition_jacobian: fn(*Ctx, []const f64, []f64), observe: fn(*Ctx, []const f64, []f64), observe_jacobian: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err {
+    let e = ekf_predict[Ctx](ctx, transition, transition_jacobian, x, p, q, n, scratch)
+    if e != ok { ret e }
+    ret ekf_update[Ctx](ctx, observe, observe_jacobian, x, p, r, z, n, m, scratch)
+}
+
 // Unscented Kalman step (predict then update) with the symmetric sigma set
 // (`2n + 1` points, `kappa = 3 - n` weighting, scaled by `alpha = 1`):
 // `transition(ctx, x, next)` and `observe(ctx, x, z_predicted)` are the
 // nonlinear models. `scratch.len >= (2n + 1) * (n + m) + 4 * n * n + 3 * m * m +
 // 2 * n * m + 2 * n + 2 * m`.
 fn ukf_step[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), observe: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err {
+    ret ukf[Ctx](ctx, transition, observe, x, p, q, r, z, n, m, 1.0f64, 0.0f64, 3.0f64 - f64(n), scratch)
+}
+
+// The scaled unscented Kalman filter cycle (predict then update) of Wan and
+// van der Merwe: `lambda = alpha^2 (n + kappa) - n`, mean weights
+// `lambda / (n + lambda)` and `1 / 2(n + lambda)`, the centre covariance
+// weight raised by `1 - alpha^2 + beta` (`beta = 2` is optimal for a
+// Gaussian). Models and scratch as `ukf_step`, which is `alpha = 1`,
+// `beta = 0`, `kappa = 3 - n`.
+fn ukf[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), observe: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, alpha: f64, beta: f64, kappa: f64, scratch: []f64) -> err {
     let points = 2usize * n + 1usize
     let need = points * (n + m) + 4usize * n * n + 3usize * m * m + 2usize * n * m + 2usize * n + 2usize * m
     if scratch.len < need { ret TooSmall }
@@ -304,10 +325,11 @@ fn ukf_step[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), obse
     at += n
     var pn = scratch[at..at + n * n]
     at += n * n
-    let kappa = 3.0f64 - f64(n)
-    let spread = math.sqrt[f64](f64(n) + kappa)
-    let w0 = kappa / (f64(n) + kappa)
-    let wi = 1.0f64 / (2.0f64 * (f64(n) + kappa))
+    let lambda = alpha * alpha * (f64(n) + kappa) - f64(n)
+    let spread = math.sqrt[f64](f64(n) + lambda)
+    let w0 = lambda / (f64(n) + lambda)
+    let w0c = w0 + (1.0f64 - alpha * alpha + beta)
+    let wi = 1.0f64 / (2.0f64 * (f64(n) + lambda))
     // Cholesky of P (lower), scaled sigma points around x.
     let chol_error = cholesky(p, n, chol)
     if chol_error != ok { ret chol_error }
@@ -382,7 +404,7 @@ fn ukf_step[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), obse
     s = 0usize
     while s < points {
         var w = wi
-        if s == 0usize { w = w0 }
+        if s == 0usize { w = w0c }
         var a = 0usize
         while a < n {
             let da = sigma[s * n + a] - xm[a]
@@ -489,6 +511,14 @@ fn cholesky(p: []const f64, n: usize, out: []f64) -> err {
 // weights are normalised and the set resampled systematically when the
 // effective sample size drops below `count / 2`. `scratch.len >= count * (n + 1)`.
 fn particle_step[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, propagate: fn(*Ctx, *rand.Pcg64, []f64), likelihood: fn(*Ctx, []const f64, []const f64) -> f64, particles: []f64, weights: []f64, count: usize, n: usize, z: []const f64, scratch: []f64) -> err {
+    ret particle[Ctx](ctx, r, propagate, likelihood, particles, weights, count, n, z, 0.5f64, scratch)
+}
+
+// The particle filter cycle with a chosen resampling rule: as `particle_step`,
+// but the set is resampled (systematically, one draw from `r`) when the
+// effective sample size `1 / sum w^2` drops below `resample_threshold * count`
+// (`0` never resamples, `1` always does).
+fn particle[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, propagate: fn(*Ctx, *rand.Pcg64, []f64), likelihood: fn(*Ctx, []const f64, []const f64) -> f64, particles: []f64, weights: []f64, count: usize, n: usize, z: []const f64, resample_threshold: f64, scratch: []f64) -> err {
     if particles.len < count * n || weights.len < count || scratch.len < count * (n + 1usize) { ret TooSmall }
     var total = 0.0f64
     var i = 0usize
@@ -513,7 +543,7 @@ fn particle_step[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, propagate: fn(*Ctx, *rand
         sum_squares += weights[i] * weights[i]
         i += 1usize
     }
-    if 1.0f64 / sum_squares >= f64(count) / 2.0f64 { ret ok }
+    if 1.0f64 / sum_squares >= resample_threshold * f64(count) { ret ok }
     // Systematic resampling into scratch, then copy back.
     var copy = scratch[..count * n]
     var cumulative = scratch[count * n..count * (n + 1usize)]

@@ -5,6 +5,7 @@
 // tag is verified in constant time.
 
 use e.crypto.hash as hash
+use e.crypto.aead as aead
 
 type HmacSha256 = struct { inner: hash.Sha256, outer: hash.Sha256 }
 type HmacSha512 = struct { inner: hash.Sha512, outer: hash.Sha512 }
@@ -108,5 +109,57 @@ fn hmac_sha512(key: []const u8, message: []const u8) -> [64]u8 {
 
 fn verify_sha512(key: []const u8, message: []const u8, tag: [64]u8) -> bool {
     let computed = hmac_sha512(key, message)
+    ret hash.equal_constant_time(computed[0..], tag[0..])
+}
+
+// --- Poly1305 by RFC 8439 as a bare one-time authenticator, over the 26-bit limb
+// arithmetic `e.crypto.aead` keeps for ChaCha20-Poly1305. The streaming state holds
+// the last partial block, because the final block is padded differently from the
+// full ones; `done` consumes the state. The key must never authenticate two messages.
+type Poly1305 = struct { inner: aead.Poly, block: [16]u8, block_len: usize }
+
+fn poly1305_init(key: [32]u8) -> Poly1305 {
+    var s: Poly1305 = zero
+    s.inner = aead.poly_init(key[0..])
+    ret s
+}
+
+fn poly1305_update(state: *Poly1305, bytes: []const u8) {
+    var at = 0usize
+    if state.block_len > 0usize {
+        while state.block_len < 16usize && at < bytes.len {
+            state.block[state.block_len] = bytes[at]
+            state.block_len += 1usize
+            at += 1usize
+        }
+        if state.block_len < 16usize { ret }
+        aead.poly_block(&state.inner, state.block[0..], false)
+        state.block_len = 0usize
+    }
+    while at + 16usize <= bytes.len {
+        aead.poly_block(&state.inner, bytes[at..at + 16usize], false)
+        at += 16usize
+    }
+    while at < bytes.len {
+        state.block[state.block_len] = bytes[at]
+        state.block_len += 1usize
+        at += 1usize
+    }
+}
+
+fn poly1305_done(state: *Poly1305) -> [16]u8 {
+    if state.block_len > 0usize { aead.poly_block(&state.inner, state.block[..state.block_len], true) }
+    state.block_len = 0usize
+    ret aead.poly_tag(&state.inner)
+}
+
+fn poly1305(key: [32]u8, message: []const u8) -> [16]u8 {
+    var s = poly1305_init(key)
+    poly1305_update(&s, message)
+    ret poly1305_done(&s)
+}
+
+fn poly1305_verify(key: [32]u8, message: []const u8, tag: [16]u8) -> bool {
+    let computed = poly1305(key, message)
     ret hash.equal_constant_time(computed[0..], tag[0..])
 }

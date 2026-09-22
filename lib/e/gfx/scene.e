@@ -65,27 +65,7 @@ type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32 }
-type RendererState = struct {
-    arena: *mem.Arena,
-    device: *gpu.Device,
-    queue: *gpu.Queue,
-    scenes: []Scene,
-    textures: []Texture,
-    fonts: [16]FontEntry,
-    font_count: usize,
-    edges: []Edge,
-    edge_count: usize,
-    // The canvases: layer 0 is the frame, the rest opacity layers; `width * height`
-    // premultiplied RGBA floats each, remade when a frame is larger than the last.
-    canvases: [4]Floats,
-    masks: [8]Floats,
-    acc: []f32,
-    coverage: []f32,
-    pixels: []u32,
-    width: usize,
-    height: usize,
-    closed: bool,
-}
+type RendererState = struct { arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, closed: bool }
 type TargetState = struct { target: *gpu.Target }
 
 // ------------------------------------------------------------------ the builder
@@ -1708,4 +1688,1063 @@ fn channel_byte(v: f32) -> u32 {
     if !(c >= 0.0) { c = 0.0 }
     if c > 1.0 { c = 1.0 }
     ret u32(math.floor[f32](c * 255.0 + 0.5))
+}
+
+// ------------------------------------------------------------ 3-D techniques (algos.md)
+// CPU passes over caller buffers, the reference the driver backend's kernels are
+// measured against. Images are row-major, `width * height` pixels, `k` floats per
+// pixel; a `[16]f32` matrix is row-major over column vectors (`p' = M p`); a depth
+// buffer holds NDC z (`z / w`, -1 near .. 1 far, less is nearer) and is cleared by
+// the caller to `1.0`; view space has the eye at the origin looking down -z, and
+// `tan_x`/`tan_y` are the tangents of the half field of view. A vertex is `x y z w`
+// in clip space followed by its attributes.
+
+fn v3_norm(x: f32, y: f32, z: f32) -> (f32, f32, f32) {
+    let l = math.sqrt[f32](x * x + y * y + z * z)
+    if !(l > 0.0) { ret (0.0, 0.0, 0.0) }
+    ret (x / l, y / l, z / l)
+}
+
+fn saturate(v: f32) -> f32 {
+    if !(v > 0.0) { ret 0.0 }
+    if v > 1.0 { ret 1.0 }
+    ret v
+}
+
+fn smoothstep01(v: f32) -> f32 {
+    let t = saturate(v)
+    ret t * t * (3.0 - 2.0 * t)
+}
+
+// `out = a * b`, sixteen floats each, row-major.
+fn mat4_mul(a: []const f32, b: []const f32, out: []f32) -> err {
+    if a.len < 16usize || b.len < 16usize || out.len < 16usize { ret Invalid }
+    var r = 0usize
+    while r < 4usize {
+        var c = 0usize
+        while c < 4usize {
+            out[r * 4usize + c] = a[r * 4usize] * b[c] + a[r * 4usize + 1usize] * b[4usize + c] + a[r * 4usize + 2usize] * b[8usize + c] + a[r * 4usize + 3usize] * b[12usize + c]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+// `m * (x, y, z, 1)`, homogeneous.
+fn mat4_apply(m: []const f32, x: f32, y: f32, z: f32) -> (f32, f32, f32, f32) {
+    ret (m[0] * x + m[1] * y + m[2] * z + m[3], m[4] * x + m[5] * y + m[6] * z + m[7], m[8] * x + m[9] * y + m[10] * z + m[11], m[12] * x + m[13] * y + m[14] * z + m[15])
+}
+
+// A clip-space point's pixel coordinates: x right, y down, the centre of pixel
+// (i, j) at (i + 0.5, j + 0.5).
+fn screen_of(cx: f32, cy: f32, cw: f32, width: usize, height: usize) -> (f32, f32) {
+    ret ((cx / cw * 0.5 + 0.5) * f32(width), (0.5 - cy / cw * 0.5) * f32(height))
+}
+
+fn clamp_index(v: f32, count: usize) -> usize {
+    let f = math.floor[f32](v)
+    if !(f > 0.0) { ret 0usize }
+    if f >= f32(count) { ret count - 1usize }
+    ret usize(f)
+}
+
+// Bilinear fetch of channel `c` at continuous pixel coordinates, edges clamped.
+fn bilinear(buf: []const f32, channels: usize, width: usize, height: usize, fx: f32, fy: f32, c: usize) -> f32 {
+    var x = fx - 0.5
+    var y = fy - 0.5
+    if !(x > 0.0) { x = 0.0 }
+    if !(y > 0.0) { y = 0.0 }
+    if x > f32(width - 1usize) { x = f32(width - 1usize) }
+    if y > f32(height - 1usize) { y = f32(height - 1usize) }
+    let x0 = usize(math.floor[f32](x))
+    let y0 = usize(math.floor[f32](y))
+    var x1 = x0 + 1usize
+    var y1 = y0 + 1usize
+    if x1 >= width { x1 = x0 }
+    if y1 >= height { y1 = y0 }
+    let u = x - f32(x0)
+    let v = y - f32(y0)
+    let p00 = buf[(y0 * width + x0) * channels + c]
+    let p10 = buf[(y0 * width + x1) * channels + c]
+    let p01 = buf[(y1 * width + x0) * channels + c]
+    let p11 = buf[(y1 * width + x1) * channels + c]
+    ret (p00 * (1.0 - u) + p10 * u) * (1.0 - v) + (p01 * (1.0 - u) + p11 * u) * v
+}
+
+// ------------------------------------------------------------ triangle rasterizer
+
+fn edge_fn(ax: f32, ay: f32, bx: f32, by: f32, px: f32, py: f32) -> f32 {
+    ret (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+}
+
+// The top-left rule: a pixel centre exactly on an edge belongs to the triangle on
+// one side only, and an edge and its reverse never agree.
+fn top_left(ax: f32, ay: f32, bx: f32, by: f32) -> bool {
+    let dx = bx - ax
+    let dy = by - ay
+    ret dy < 0.0 || (dy == 0.0 && dx > 0.0)
+}
+
+fn covers(w: f32, tl: bool) -> bool {
+    ret w > 0.0 || (w == 0.0 && tl)
+}
+
+// One triangle: three vertices of `stride` floats each (`x y z w` then attributes)
+// through the depth test into `out` (`stride - 4` floats per pixel), attributes
+// perspective-correct. `peel` non-empty admits only fragments strictly behind it.
+fn raster_tri(v: []const f32, stride: usize, width: usize, height: usize, depth: []f32, out: []f32, peel: []const f32, cull: bool) {
+    let attrs = stride - 4usize
+    var sx: [3]f32 = zero
+    var sy: [3]f32 = zero
+    var sz: [3]f32 = zero
+    var iw: [3]f32 = zero
+    var i = 0usize
+    while i < 3usize {
+        let w = v[i * stride + 3usize]
+        // ponytail: no near-plane clipping; a vertex behind the eye drops the triangle.
+        if !(w > 0.0) { ret }
+        let (fx, fy) = screen_of(v[i * stride], v[i * stride + 1usize], w, width, height)
+        sx[i] = fx
+        sy[i] = fy
+        sz[i] = v[i * stride + 2usize] / w
+        iw[i] = 1.0 / w
+        i += 1usize
+    }
+    var area = edge_fn(sx[0], sy[0], sx[1], sy[1], sx[2], sy[2])
+    // Counter-clockwise in NDC is front-facing; y points down here, so that is negative.
+    if area == 0.0 || (cull && area > 0.0) { ret }
+    var i1 = 1usize
+    var i2 = 2usize
+    if area < 0.0 {
+        i1 = 2usize
+        i2 = 1usize
+        area = 0.0 - area
+    }
+    let ax = sx[0]
+    let ay = sy[0]
+    let bx = sx[i1]
+    let by = sy[i1]
+    let cx = sx[i2]
+    let cy = sy[i2]
+    var x_lo = math.floor[f32](math.min[f32](ax, math.min[f32](bx, cx)))
+    var y_lo = math.floor[f32](math.min[f32](ay, math.min[f32](by, cy)))
+    var x_hi = math.ceil[f32](math.max[f32](ax, math.max[f32](bx, cx)))
+    var y_hi = math.ceil[f32](math.max[f32](ay, math.max[f32](by, cy)))
+    if !(x_lo > 0.0) { x_lo = 0.0 }
+    if !(y_lo > 0.0) { y_lo = 0.0 }
+    if x_hi > f32(width) { x_hi = f32(width) }
+    if y_hi > f32(height) { y_hi = f32(height) }
+    if !(x_lo < x_hi) || !(y_lo < y_hi) { ret }
+    let tl0 = top_left(bx, by, cx, cy)
+    let tl1 = top_left(cx, cy, ax, ay)
+    let tl2 = top_left(ax, ay, bx, by)
+    var py = usize(y_lo)
+    while py < usize(y_hi) {
+        var px = usize(x_lo)
+        while px < usize(x_hi) {
+            let pxf = f32(px) + 0.5
+            let pyf = f32(py) + 0.5
+            let w0 = edge_fn(bx, by, cx, cy, pxf, pyf)
+            let w1 = edge_fn(cx, cy, ax, ay, pxf, pyf)
+            let w2 = edge_fn(ax, ay, bx, by, pxf, pyf)
+            if covers(w0, tl0) && covers(w1, tl1) && covers(w2, tl2) {
+                let l0 = w0 / area
+                let l1 = w1 / area
+                let l2 = w2 / area
+                let z = l0 * sz[0] + l1 * sz[i1] + l2 * sz[i2]
+                let p = py * width + px
+                var pass = z < depth[p]
+                if peel.len != 0usize && !(z > peel[p]) { pass = false }
+                if pass {
+                    depth[p] = z
+                    let q = l0 * iw[0] + l1 * iw[i1] + l2 * iw[i2]
+                    var k = 0usize
+                    while k < attrs {
+                        out[p * attrs + k] = (l0 * v[4usize + k] * iw[0] + l1 * v[i1 * stride + 4usize + k] * iw[i1] + l2 * v[i2 * stride + 4usize + k] * iw[i2]) / q
+                        k += 1usize
+                    }
+                }
+            }
+            px += 1usize
+        }
+        py += 1usize
+    }
+}
+
+fn raster_core(v: []const f32, stride: usize, width: usize, height: usize, depth: []f32, out: []f32, peel: []const f32, cull: bool) -> err {
+    let pixels = width * height
+    if stride < 4usize || width == 0usize || height == 0usize || v.len % (3usize * stride) != 0usize { ret Invalid }
+    if depth.len < pixels || out.len < pixels * (stride - 4usize) || (peel.len != 0usize && peel.len < pixels) { ret Invalid }
+    var t = 0usize
+    while t < v.len {
+        raster_tri(v[t..t + 3usize * stride], stride, width, height, depth, out, peel, cull)
+        t += 3usize * stride
+    }
+    ret ok
+}
+
+// Triangles of `x y z w r g b` per vertex through the depth test (less) into a
+// caller depth buffer and an RGB colour buffer (three floats per pixel), the
+// top-left rule deciding shared edges; `cull` drops back faces (clockwise in NDC).
+fn rasterize(tris: []const f32, width: usize, height: usize, depth: []f32, color: []f32, cull: bool) -> err {
+    var none: []const f32 = zero
+    ret raster_core(tris, 7usize, width, height, depth, color, none, cull)
+}
+
+// The painter's order: object indices from the farthest to the nearest view-space
+// depth of their centres (`x y z` each) under `view`, ties keeping their order.
+fn paint_order(centres: []const f32, view: []const f32, order: []u32, depths: []f32) -> err {
+    let n = centres.len / 3usize
+    if centres.len % 3usize != 0usize || view.len < 16usize || order.len < n || depths.len < n { ret Invalid }
+    var i = 0usize
+    while i < n {
+        depths[i] = 0.0 - (view[8] * centres[3usize * i] + view[9] * centres[3usize * i + 1usize] + view[10] * centres[3usize * i + 2usize] + view[11])
+        order[i] = u32(i)
+        i += 1usize
+    }
+    // ponytail: insertion sort, O(n^2); e.algo.sort's stable sort is the upgrade
+    // past a few thousand objects.
+    i = 1usize
+    while i < n {
+        let key = order[i]
+        var j = i
+        while j > 0usize && depths[usize(order[j - 1usize])] < depths[usize(key)] {
+            order[j] = order[j - 1usize]
+            j = j - 1usize
+        }
+        order[j] = key
+        i += 1usize
+    }
+    ret ok
+}
+
+// ------------------------------------------------------------- deferred shading
+
+fn shade_pixel(g: []const f32, lights: []const f32, eye: []const f32, ambient: f32, out: []f32) {
+    let px = g[0]
+    let py = g[1]
+    let pz = g[2]
+    let ar = g[3]
+    let ag = g[4]
+    let ab = g[5]
+    let (nx, ny, nz) = v3_norm(g[6], g[7], g[8])
+    let ks = g[9]
+    let shine = g[10]
+    let (vx, vy, vz) = v3_norm(eye[0] - px, eye[1] - py, eye[2] - pz)
+    var r = ar * ambient
+    var gr = ag * ambient
+    var b = ab * ambient
+    var l = 0usize
+    while l < lights.len {
+        let (lx, ly, lz) = v3_norm(lights[l] - px, lights[l + 1usize] - py, lights[l + 2usize] - pz)
+        let diff = nx * lx + ny * ly + nz * lz
+        if diff > 0.0 {
+            let (hx, hy, hz) = v3_norm(lx + vx, ly + vy, lz + vz)
+            var nh = nx * hx + ny * hy + nz * hz
+            if nh < 0.0 { nh = 0.0 }
+            let spec = ks * math.pow[f32](nh, shine)
+            r = r + (ar * diff + spec) * lights[l + 3usize]
+            gr = gr + (ag * diff + spec) * lights[l + 4usize]
+            b = b + (ab * diff + spec) * lights[l + 5usize]
+        }
+        l += 6usize
+    }
+    out[0] = r
+    out[1] = gr
+    out[2] = b
+}
+
+// Deferred shading: a G-buffer pass rasterises vertices of `x y z w | px py pz |
+// r g b | nx ny nz | ks shininess` into eleven floats per pixel (world position,
+// albedo, normal, material) beside the depth buffer, then a lighting pass shades
+// every covered pixel with Lambert diffuse and Blinn-Phong specular from point
+// lights of `x y z r g b` and an ambient factor, into an RGB colour buffer.
+fn deferred(tris: []const f32, width: usize, height: usize, depth: []f32, gbuffer: []f32, lights: []const f32, eye: []const f32, ambient: f32, color: []f32, cull: bool) -> err {
+    let pixels = width * height
+    if eye.len < 3usize || lights.len % 6usize != 0usize || color.len < pixels * 3usize { ret Invalid }
+    var none: []const f32 = zero
+    try raster_core(tris, 15usize, width, height, depth, gbuffer, none, cull)
+    var p = 0usize
+    while p < pixels {
+        if depth[p] < 1.0 {
+            shade_pixel(gbuffer[p * 11usize..p * 11usize + 11usize], lights, eye, ambient, color[p * 3usize..p * 3usize + 3usize])
+        } else {
+            color[p * 3usize] = 0.0
+            color[p * 3usize + 1usize] = 0.0
+            color[p * 3usize + 2usize] = 0.0
+        }
+        p += 1usize
+    }
+    ret ok
+}
+
+// ------------------------------------------------------------- clustered lights
+
+fn axis_gap(v: f32, lo: f32, hi: f32) -> f32 {
+    if v < lo { ret lo - v }
+    if v > hi { ret v - hi }
+    ret 0.0
+}
+
+// The view frustum as `nx * ny * nz` clusters -- uniform tiles in x and y,
+// exponential slices in depth from `near` to `far` -- and every point light
+// (`x y z radius`, view space) assigned to the clusters whose box its sphere
+// reaches: `counts[c]` lights, listed at `lists[c * max_per ..]`. Cluster
+// `(i, j, k)` is index `(k * ny + j) * nx + i`, tile `j = 0` at the bottom.
+fn clustered_lights(tan_x: f32, tan_y: f32, near: f32, far: f32, nx: usize, ny: usize, nz: usize, lights: []const f32, max_per: usize, counts: []u32, lists: []u32) -> err {
+    let clusters = nx * ny * nz
+    if nx == 0usize || ny == 0usize || nz == 0usize || !(near > 0.0) || !(far > near) { ret Invalid }
+    if lights.len % 4usize != 0usize || counts.len < clusters || lists.len < clusters * max_per { ret Invalid }
+    let ratio = far / near
+    var k = 0usize
+    while k < nz {
+        let d0 = near * math.pow[f32](ratio, f32(k) / f32(nz))
+        let d1 = near * math.pow[f32](ratio, f32(k + 1usize) / f32(nz))
+        var j = 0usize
+        while j < ny {
+            let y0 = (f32(j) * 2.0 / f32(ny) - 1.0) * tan_y
+            let y1 = (f32(j + 1usize) * 2.0 / f32(ny) - 1.0) * tan_y
+            var i = 0usize
+            while i < nx {
+                let x0 = (f32(i) * 2.0 / f32(nx) - 1.0) * tan_x
+                let x1 = (f32(i + 1usize) * 2.0 / f32(nx) - 1.0) * tan_x
+                let min_x = math.min[f32](x0 * d0, x0 * d1)
+                let max_x = math.max[f32](x1 * d0, x1 * d1)
+                let min_y = math.min[f32](y0 * d0, y0 * d1)
+                let max_y = math.max[f32](y1 * d0, y1 * d1)
+                let min_z = 0.0 - d1
+                let max_z = 0.0 - d0
+                let c = (k * ny + j) * nx + i
+                var n = 0usize
+                var l = 0usize
+                while l < lights.len {
+                    let gx = axis_gap(lights[l], min_x, max_x)
+                    let gy = axis_gap(lights[l + 1usize], min_y, max_y)
+                    let gz = axis_gap(lights[l + 2usize], min_z, max_z)
+                    let radius = lights[l + 3usize]
+                    if gx * gx + gy * gy + gz * gz <= radius * radius {
+                        if n >= max_per { ret TooLarge }
+                        lists[c * max_per + n] = u32(l / 4usize)
+                        n += 1usize
+                    }
+                    l += 4usize
+                }
+                counts[c] = u32(n)
+                i += 1usize
+            }
+            j += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// ------------------------------------------------------------- cascaded shadows
+
+// Cascaded shadow maps: the view range split by the practical scheme (`lambda`
+// between logarithmic and uniform) into `splits.len - 1` cascades, each with the
+// orthographic light matrix (`16` floats at `matrices[c * 16 ..]`) that bounds its
+// frustum slice in light space. The camera is `cam_to_world` with the half-angle
+// tangents; the light is a direction; the answer's `splits[0]` is `near`.
+fn shadow_cascades(near: f32, far: f32, lambda: f32, cam_to_world: []const f32, tan_x: f32, tan_y: f32, light_dir: []const f32, splits: []f32, matrices: []f32) -> err {
+    if splits.len < 2usize || !(near > 0.0) || !(far > near) || cam_to_world.len < 16usize || light_dir.len < 3usize { ret Invalid }
+    let n = splits.len - 1usize
+    if matrices.len < 16usize * n { ret Invalid }
+    splits[0] = near
+    var i = 1usize
+    while i <= n {
+        let t = f32(i) / f32(n)
+        let uniform = near + (far - near) * t
+        let logarithmic = near * math.pow[f32](far / near, t)
+        splits[i] = lambda * logarithmic + (1.0 - lambda) * uniform
+        i += 1usize
+    }
+    let (fx, fy, fz) = v3_norm(light_dir[0], light_dir[1], light_dir[2])
+    var ux: f32 = 0.0
+    var uy: f32 = 1.0
+    if math.abs[f32](fy) > 0.99 {
+        ux = 1.0
+        uy = 0.0
+    }
+    // right = up x forward, up' = forward x right; the light looks along `forward`.
+    let (rx, ry, rz) = v3_norm(uy * fz, 0.0 - ux * fz, ux * fy - uy * fx)
+    let px = fy * rz - fz * ry
+    let py = fz * rx - fx * rz
+    let pz = fx * ry - fy * rx
+    var view: [16]f32 = zero
+    view[0] = rx
+    view[1] = ry
+    view[2] = rz
+    view[4] = px
+    view[5] = py
+    view[6] = pz
+    view[8] = 0.0 - fx
+    view[9] = 0.0 - fy
+    view[10] = 0.0 - fz
+    view[15] = 1.0
+    var c = 0usize
+    while c < n {
+        var min_x: f32 = 3.4e38
+        var min_y: f32 = 3.4e38
+        var min_z: f32 = 3.4e38
+        var max_x: f32 = -3.4e38
+        var max_y: f32 = -3.4e38
+        var max_z: f32 = -3.4e38
+        var corner = 0usize
+        while corner < 8usize {
+            var d = splits[c]
+            if corner >= 4usize { d = splits[c + 1usize] }
+            var sx: f32 = -1.0
+            if (corner & 1usize) == 1usize { sx = 1.0 }
+            var sy: f32 = -1.0
+            if (corner & 2usize) == 2usize { sy = 1.0 }
+            let (wx, wy, wz, ww) = mat4_apply(cam_to_world, sx * d * tan_x, sy * d * tan_y, 0.0 - d)
+            let (lx, ly, lz, lw) = mat4_apply(view[0..], wx, wy, wz)
+            if lx < min_x { min_x = lx }
+            if ly < min_y { min_y = ly }
+            if lz < min_z { min_z = lz }
+            if lx > max_x { max_x = lx }
+            if ly > max_y { max_y = ly }
+            if lz > max_z { max_z = lz }
+            corner += 1usize
+        }
+        var ortho: [16]f32 = zero
+        ortho[0] = 2.0 / (max_x - min_x)
+        ortho[3] = 0.0 - (max_x + min_x) / (max_x - min_x)
+        ortho[5] = 2.0 / (max_y - min_y)
+        ortho[7] = 0.0 - (max_y + min_y) / (max_y - min_y)
+        ortho[10] = -2.0 / (max_z - min_z)
+        ortho[11] = (max_z + min_z) / (max_z - min_z)
+        ortho[15] = 1.0
+        try mat4_mul(ortho[0..], view[0..], matrices[c * 16usize..c * 16usize + 16usize])
+        c += 1usize
+    }
+    ret ok
+}
+
+// Percentage-closer filtering: each fragment (`u v z` in shadow-map space, `z`
+// the light-space depth) is compared, less `bias`, against the `taps x taps`
+// texels around its own, and the answer is the lit fraction.
+fn shadow_pcf(map: []const f32, map_width: usize, map_height: usize, frags: []const f32, taps: usize, bias: f32, out: []f32) -> err {
+    if map_width == 0usize || map_height == 0usize || taps == 0usize || taps % 2usize == 0usize { ret Invalid }
+    if map.len < map_width * map_height || frags.len % 3usize != 0usize || out.len < frags.len / 3usize { ret Invalid }
+    let half = taps / 2usize
+    var f = 0usize
+    while f < frags.len {
+        let tx = clamp_index(frags[f] * f32(map_width), map_width)
+        let ty = clamp_index(frags[f + 1usize] * f32(map_height), map_height)
+        let z = frags[f + 2usize] - bias
+        var lit = 0usize
+        var dy = 0usize
+        while dy < taps {
+            var dx = 0usize
+            while dx < taps {
+                var sx = tx + dx
+                var sy = ty + dy
+                if sx < half { sx = 0usize } else { sx = sx - half }
+                if sy < half { sy = 0usize } else { sy = sy - half }
+                if sx >= map_width { sx = map_width - 1usize }
+                if sy >= map_height { sy = map_height - 1usize }
+                if z <= map[sy * map_width + sx] { lit += 1usize }
+                dx += 1usize
+            }
+            dy += 1usize
+        }
+        out[f / 3usize] = f32(lit) / f32(taps * taps)
+        f += 3usize
+    }
+    ret ok
+}
+
+// ------------------------------------------------------------ screen-space passes
+
+// Screen-space ambient occlusion over view-space position and normal buffers
+// (three floats per pixel each): every pixel's hemisphere `kernel` (`x y z` per
+// sample, z along the normal) is rotated by the 4x4 `noise` tile (`x y z` per
+// entry), offset by `radius`, projected through `proj`, and counted as occluding
+// when the surface there is nearer than the sample by more than `bias`, weighted
+// by the range check; a 4x4 box blur of the raw answer (kept in `scratch`) is `ao`.
+fn ssao(positions: []const f32, normals: []const f32, width: usize, height: usize, kernel: []const f32, noise: []const f32, proj: []const f32, radius: f32, bias: f32, ao: []f32, scratch: []f32) -> err {
+    let pixels = width * height
+    if width == 0usize || height == 0usize || positions.len < pixels * 3usize || normals.len < pixels * 3usize { ret Invalid }
+    if kernel.len == 0usize || kernel.len % 3usize != 0usize || noise.len < 48usize || proj.len < 16usize || ao.len < pixels || scratch.len < pixels { ret Invalid }
+    let samples = kernel.len / 3usize
+    var y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            let p = y * width + x
+            let px = positions[p * 3usize]
+            let py = positions[p * 3usize + 1usize]
+            let pz = positions[p * 3usize + 2usize]
+            let (nx, ny, nz) = v3_norm(normals[p * 3usize], normals[p * 3usize + 1usize], normals[p * 3usize + 2usize])
+            let ni = ((y % 4usize) * 4usize + (x % 4usize)) * 3usize
+            let rx = noise[ni]
+            let ry = noise[ni + 1usize]
+            let rz = noise[ni + 2usize]
+            let rn = rx * nx + ry * ny + rz * nz
+            let (t0, t1, t2) = v3_norm(rx - nx * rn, ry - ny * rn, rz - nz * rn)
+            var tx = t0
+            var ty = t1
+            var tz = t2
+            if tx == 0.0 && ty == 0.0 && tz == 0.0 {
+                let (ax, ay, az) = v3_norm(1.0 - nx * nx, 0.0 - nx * ny, 0.0 - nx * nz)
+                tx = ax
+                ty = ay
+                tz = az
+            }
+            let bx = ny * tz - nz * ty
+            let by = nz * tx - nx * tz
+            let bz = nx * ty - ny * tx
+            var occlusion: f32 = 0.0
+            var s = 0usize
+            while s < samples {
+                let kx = kernel[s * 3usize]
+                let ky = kernel[s * 3usize + 1usize]
+                let kz = kernel[s * 3usize + 2usize]
+                let sx = px + (tx * kx + bx * ky + nx * kz) * radius
+                let sy = py + (ty * kx + by * ky + ny * kz) * radius
+                let sz = pz + (tz * kx + bz * ky + nz * kz) * radius
+                let (cx, cy, cz, cw) = mat4_apply(proj, sx, sy, sz)
+                if cw != 0.0 {
+                    let (fx, fy) = screen_of(cx, cy, cw, width, height)
+                    let q = clamp_index(fy, height) * width + clamp_index(fx, width)
+                    let sample_depth = positions[q * 3usize + 2usize]
+                    let gap = math.abs[f32](pz - sample_depth)
+                    var range: f32 = 1.0
+                    if gap > 0.0 { range = smoothstep01(radius / gap) }
+                    if sample_depth >= sz + bias { occlusion = occlusion + range }
+                }
+                s += 1usize
+            }
+            scratch[p] = 1.0 - occlusion / f32(samples)
+            x += 1usize
+        }
+        y += 1usize
+    }
+    y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            var sum: f32 = 0.0
+            var dy = 0usize
+            while dy < 4usize {
+                var dx = 0usize
+                while dx < 4usize {
+                    var sx = x + dx
+                    var sy = y + dy
+                    if sx < 2usize { sx = 0usize } else { sx = sx - 2usize }
+                    if sy < 2usize { sy = 0usize } else { sy = sy - 2usize }
+                    if sx >= width { sx = width - 1usize }
+                    if sy >= height { sy = height - 1usize }
+                    sum = sum + scratch[sy * width + sx]
+                    dx += 1usize
+                }
+                dy += 1usize
+            }
+            ao[y * width + x] = sum / 16.0
+            x += 1usize
+        }
+        y += 1usize
+    }
+    ret ok
+}
+
+// Screen-space reflections over the same view-space position and normal buffers:
+// the eye ray reflects at each pixel and marches `max_steps` steps of `step` in
+// view space, projecting through `proj`; a march point behind the surface at its
+// pixel by less than `thickness` is a hit, refined by `refine` bisections. The
+// answers are the hit's pixel coordinates (`u v`, in pixels) and a 0/1 mask.
+fn ssr(positions: []const f32, normals: []const f32, width: usize, height: usize, proj: []const f32, step: f32, max_steps: usize, thickness: f32, refine: usize, hit_uv: []f32, mask: []f32) -> err {
+    let pixels = width * height
+    if width == 0usize || height == 0usize || positions.len < pixels * 3usize || normals.len < pixels * 3usize { ret Invalid }
+    if proj.len < 16usize || !(step > 0.0) || hit_uv.len < pixels * 2usize || mask.len < pixels { ret Invalid }
+    var p = 0usize
+    while p < pixels {
+        let px = positions[p * 3usize]
+        let py = positions[p * 3usize + 1usize]
+        let pz = positions[p * 3usize + 2usize]
+        let (nx, ny, nz) = v3_norm(normals[p * 3usize], normals[p * 3usize + 1usize], normals[p * 3usize + 2usize])
+        let (vx, vy, vz) = v3_norm(px, py, pz)
+        let vn = vx * nx + vy * ny + vz * nz
+        let rx = vx - 2.0 * vn * nx
+        let ry = vy - 2.0 * vn * ny
+        let rz = vz - 2.0 * vn * nz
+        var lo: f32 = 0.0
+        var hi: f32 = 0.0
+        var found = false
+        var stop = false
+        var i = 1usize
+        while i <= max_steps && !stop {
+            let t = step * f32(i)
+            let (behind, inside) = ssr_probe(positions, width, height, proj, px + rx * t, py + ry * t, pz + rz * t, thickness)
+            if !inside { stop = true }
+            if inside && behind {
+                found = true
+                stop = true
+                hi = t
+                lo = t - step
+            }
+            i += 1usize
+        }
+        var hx: f32 = 0.0
+        var hy: f32 = 0.0
+        if found {
+            var r = 0usize
+            while r < refine {
+                let mid = (lo + hi) * 0.5
+                let (behind, inside) = ssr_probe(positions, width, height, proj, px + rx * mid, py + ry * mid, pz + rz * mid, thickness)
+                if inside && behind { hi = mid } else { lo = mid }
+                r += 1usize
+            }
+            let (cx, cy, cz, cw) = mat4_apply(proj, px + rx * hi, py + ry * hi, pz + rz * hi)
+            let (fx, fy) = screen_of(cx, cy, cw, width, height)
+            hx = fx
+            hy = fy
+        }
+        hit_uv[p * 2usize] = hx
+        hit_uv[p * 2usize + 1usize] = hy
+        if found { mask[p] = 1.0 } else { mask[p] = 0.0 }
+        p += 1usize
+    }
+    ret ok
+}
+
+// A view-space march point against the surface at its pixel: (behind it within
+// `thickness`, inside the image and in front of the eye).
+fn ssr_probe(positions: []const f32, width: usize, height: usize, proj: []const f32, x: f32, y: f32, z: f32, thickness: f32) -> (bool, bool) {
+    let (cx, cy, cz, cw) = mat4_apply(proj, x, y, z)
+    if !(cw > 0.0) { ret (false, false) }
+    let (fx, fy) = screen_of(cx, cy, cw, width, height)
+    if !(fx >= 0.0) || !(fy >= 0.0) || fx >= f32(width) || fy >= f32(height) { ret (false, false) }
+    let scene_z = positions[(usize(fy) * width + usize(fx)) * 3usize + 2usize]
+    let gap = scene_z - z
+    ret (gap > 0.0 && gap < thickness, true)
+}
+
+// Temporal anti-aliasing: each pixel's NDC position (its depth from `depth`) goes
+// back to the world through `inv_view_proj` and forward through `prev_view_proj`
+// to the previous frame, whose `history` is fetched bilinearly, clamped to the
+// colour box of the current 3x3 neighbourhood and blended: `alpha` of the current
+// frame. A reprojection off the image, or behind the previous eye, keeps the
+// current colour. RGB, three floats per pixel.
+fn taa(current: []const f32, history: []const f32, depth: []const f32, width: usize, height: usize, inv_view_proj: []const f32, prev_view_proj: []const f32, alpha: f32, out: []f32) -> err {
+    let pixels = width * height
+    if width == 0usize || height == 0usize || current.len < pixels * 3usize || history.len < pixels * 3usize || depth.len < pixels { ret Invalid }
+    if inv_view_proj.len < 16usize || prev_view_proj.len < 16usize || out.len < pixels * 3usize { ret Invalid }
+    var y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            let p = y * width + x
+            let ndc_x = (f32(x) + 0.5) / f32(width) * 2.0 - 1.0
+            let ndc_y = 1.0 - (f32(y) + 0.5) / f32(height) * 2.0
+            let (wx, wy, wz, ww) = mat4_apply(inv_view_proj, ndc_x, ndc_y, depth[p])
+            var use_history = ww != 0.0
+            var fx: f32 = 0.0
+            var fy: f32 = 0.0
+            if use_history {
+                let (cx, cy, cz, cw) = mat4_apply(prev_view_proj, wx / ww, wy / ww, wz / ww)
+                if cw > 0.0 {
+                    let (sx, sy) = screen_of(cx, cy, cw, width, height)
+                    fx = sx
+                    fy = sy
+                    if !(fx >= 0.0) || !(fy >= 0.0) || fx > f32(width) || fy > f32(height) { use_history = false }
+                } else {
+                    use_history = false
+                }
+            }
+            var c = 0usize
+            while c < 3usize {
+                let cur = current[p * 3usize + c]
+                var value = cur
+                if use_history {
+                    var lo = cur
+                    var hi = cur
+                    var dy = 0usize
+                    while dy < 3usize {
+                        var dx = 0usize
+                        while dx < 3usize {
+                            var sx = x + dx
+                            var sy = y + dy
+                            if sx == 0usize { sx = 1usize }
+                            if sy == 0usize { sy = 1usize }
+                            sx = sx - 1usize
+                            sy = sy - 1usize
+                            if sx >= width { sx = width - 1usize }
+                            if sy >= height { sy = height - 1usize }
+                            let v = current[(sy * width + sx) * 3usize + c]
+                            if v < lo { lo = v }
+                            if v > hi { hi = v }
+                            dx += 1usize
+                        }
+                        dy += 1usize
+                    }
+                    var h = bilinear(history, 3usize, width, height, fx, fy, c)
+                    if h < lo { h = lo }
+                    if h > hi { h = hi }
+                    value = h * (1.0 - alpha) + cur * alpha
+                }
+                out[p * 3usize + c] = value
+                c += 1usize
+            }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    ret ok
+}
+
+// --------------------------------------------------------------------- FXAA 3.11
+
+fn luma_at(luma: []const f32, width: usize, height: usize, x: usize, y: usize, dx: usize, dy: usize) -> f32 {
+    // `dx`, `dy` are offsets plus one: 0 is left/up, 1 here, 2 right/down.
+    var sx = x + dx
+    var sy = y + dy
+    if sx == 0usize { sx = 1usize }
+    if sy == 0usize { sy = 1usize }
+    sx = sx - 1usize
+    sy = sy - 1usize
+    if sx >= width { sx = width - 1usize }
+    if sy >= height { sy = height - 1usize }
+    ret luma[sy * width + sx]
+}
+
+fn fxaa_quality_step(index: usize) -> f32 {
+    if index == 0usize { ret 1.0 }
+    if index == 1usize { ret 1.5 }
+    if index == 2usize { ret 2.0 }
+    if index == 3usize { ret 4.0 }
+    ret 12.0
+}
+
+// FXAA 3.11, quality preset 12 (five edge-search steps of 1, 1.5, 2, 4, 12 texels),
+// sub-pixel quality 0.75, edge threshold 0.166, minimum 0.0833: the luma of every
+// pixel (Rec. 601 weights) is written into `luma`, then each pixel above the local
+// contrast threshold finds its edge direction, searches both ways along the edge
+// for its ends, and refetches the colour offset towards the edge, at least by the
+// sub-pixel blend. The answer is the filtered RGB buffer; both are three floats
+// per pixel with bilinear fetches at the half-texel search points.
+fn fxaa(rgb: []const f32, width: usize, height: usize, luma: []f32, out: []f32) -> err {
+    let pixels = width * height
+    if width == 0usize || height == 0usize || rgb.len < pixels * 3usize || luma.len < pixels || out.len < pixels * 3usize { ret Invalid }
+    var p = 0usize
+    while p < pixels {
+        luma[p] = rgb[p * 3usize] * 0.299 + rgb[p * 3usize + 1usize] * 0.587 + rgb[p * 3usize + 2usize] * 0.114
+        p += 1usize
+    }
+    var y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            fxaa_pixel(rgb, luma, width, height, x, y, out[(y * width + x) * 3usize..(y * width + x) * 3usize + 3usize])
+            x += 1usize
+        }
+        y += 1usize
+    }
+    ret ok
+}
+
+fn fxaa_pixel(rgb: []const f32, luma: []const f32, width: usize, height: usize, x: usize, y: usize, out: []f32) {
+    let p = y * width + x
+    let luma_m = luma[p]
+    var luma_s = luma_at(luma, width, height, x, y, 1usize, 2usize)
+    var luma_e = luma_at(luma, width, height, x, y, 2usize, 1usize)
+    var luma_n = luma_at(luma, width, height, x, y, 1usize, 0usize)
+    var luma_w = luma_at(luma, width, height, x, y, 0usize, 1usize)
+    let max_sm = math.max[f32](luma_s, luma_m)
+    let min_sm = math.min[f32](luma_s, luma_m)
+    let max_esm = math.max[f32](luma_e, max_sm)
+    let min_esm = math.min[f32](luma_e, min_sm)
+    let max_wn = math.max[f32](luma_n, luma_w)
+    let min_wn = math.min[f32](luma_n, luma_w)
+    let range_max = math.max[f32](max_wn, max_esm)
+    let range_min = math.min[f32](min_wn, min_esm)
+    let range = range_max - range_min
+    let threshold_min: f32 = 0.0833
+    let range_max_clamped = math.max[f32](threshold_min, range_max * 0.166)
+    if range < range_max_clamped {
+        out[0] = rgb[p * 3usize]
+        out[1] = rgb[p * 3usize + 1usize]
+        out[2] = rgb[p * 3usize + 2usize]
+        ret
+    }
+    let luma_nw = luma_at(luma, width, height, x, y, 0usize, 0usize)
+    let luma_se = luma_at(luma, width, height, x, y, 2usize, 2usize)
+    let luma_ne = luma_at(luma, width, height, x, y, 2usize, 0usize)
+    let luma_sw = luma_at(luma, width, height, x, y, 0usize, 2usize)
+    let luma_ns = luma_n + luma_s
+    let luma_we = luma_w + luma_e
+    let subpix_rcp_range = 1.0 / range
+    let subpix_nswe = luma_ns + luma_we
+    let edge_horz1 = -2.0 * luma_m + luma_ns
+    let edge_vert1 = -2.0 * luma_m + luma_we
+    let luma_nese = luma_ne + luma_se
+    let luma_nwne = luma_nw + luma_ne
+    let edge_horz2 = -2.0 * luma_e + luma_nese
+    let edge_vert2 = -2.0 * luma_n + luma_nwne
+    let luma_nwsw = luma_nw + luma_sw
+    let luma_swse = luma_sw + luma_se
+    let edge_horz4 = math.abs[f32](edge_horz1) * 2.0 + math.abs[f32](edge_horz2)
+    let edge_vert4 = math.abs[f32](edge_vert1) * 2.0 + math.abs[f32](edge_vert2)
+    let edge_horz3 = -2.0 * luma_w + luma_nwsw
+    let edge_vert3 = -2.0 * luma_s + luma_swse
+    let edge_horz = math.abs[f32](edge_horz3) + edge_horz4
+    let edge_vert = math.abs[f32](edge_vert3) + edge_vert4
+    let subpix_nwswnese = luma_nwsw + luma_nese
+    let horz_span = edge_horz >= edge_vert
+    var length_sign = 1.0 / f32(width)
+    let subpix_a = subpix_nswe * 2.0 + subpix_nwswnese
+    if !horz_span {
+        luma_n = luma_w
+        luma_s = luma_e
+    }
+    if horz_span { length_sign = 1.0 / f32(height) }
+    let subpix_b = subpix_a * (1.0 / 12.0) - luma_m
+    let gradient_n = luma_n - luma_m
+    let gradient_s = luma_s - luma_m
+    var luma_nn = luma_n + luma_m
+    let luma_ss = luma_s + luma_m
+    let pair_n = math.abs[f32](gradient_n) >= math.abs[f32](gradient_s)
+    let gradient = math.max[f32](math.abs[f32](gradient_n), math.abs[f32](gradient_s))
+    if pair_n { length_sign = 0.0 - length_sign }
+    let subpix_c = saturate(math.abs[f32](subpix_b) * subpix_rcp_range)
+    // Positions are in texture units, 0..1 across the image.
+    let pos_m_x = (f32(x) + 0.5) / f32(width)
+    let pos_m_y = (f32(y) + 0.5) / f32(height)
+    var pos_b_x = pos_m_x
+    var pos_b_y = pos_m_y
+    var off_x: f32 = 0.0
+    var off_y: f32 = 0.0
+    if horz_span { off_x = 1.0 / f32(width) } else { off_y = 1.0 / f32(height) }
+    if !horz_span { pos_b_x = pos_b_x + length_sign * 0.5 }
+    if horz_span { pos_b_y = pos_b_y + length_sign * 0.5 }
+    var pos_n_x = pos_b_x - off_x * fxaa_quality_step(0usize)
+    var pos_n_y = pos_b_y - off_y * fxaa_quality_step(0usize)
+    var pos_p_x = pos_b_x + off_x * fxaa_quality_step(0usize)
+    var pos_p_y = pos_b_y + off_y * fxaa_quality_step(0usize)
+    let subpix_d = -2.0 * subpix_c + 3.0
+    var luma_end_n = fxaa_luma_tex(luma, width, height, pos_n_x, pos_n_y)
+    let subpix_e = subpix_c * subpix_c
+    var luma_end_p = fxaa_luma_tex(luma, width, height, pos_p_x, pos_p_y)
+    if !pair_n { luma_nn = luma_ss }
+    let gradient_scaled = gradient * 0.25
+    let luma_mm = luma_m - luma_nn * 0.5
+    let subpix_f = subpix_d * subpix_e
+    let luma_m_lt_zero = luma_mm < 0.0
+    luma_end_n = luma_end_n - luma_nn * 0.5
+    luma_end_p = luma_end_p - luma_nn * 0.5
+    var done_n = math.abs[f32](luma_end_n) >= gradient_scaled
+    var done_p = math.abs[f32](luma_end_p) >= gradient_scaled
+    if !done_n {
+        pos_n_x = pos_n_x - off_x * fxaa_quality_step(1usize)
+        pos_n_y = pos_n_y - off_y * fxaa_quality_step(1usize)
+    }
+    var done_np = !done_n || !done_p
+    if !done_p {
+        pos_p_x = pos_p_x + off_x * fxaa_quality_step(1usize)
+        pos_p_y = pos_p_y + off_y * fxaa_quality_step(1usize)
+    }
+    var s = 2usize
+    while s < 5usize && done_np {
+        if !done_n { luma_end_n = fxaa_luma_tex(luma, width, height, pos_n_x, pos_n_y) - luma_nn * 0.5 }
+        if !done_p { luma_end_p = fxaa_luma_tex(luma, width, height, pos_p_x, pos_p_y) - luma_nn * 0.5 }
+        done_n = math.abs[f32](luma_end_n) >= gradient_scaled
+        done_p = math.abs[f32](luma_end_p) >= gradient_scaled
+        if !done_n {
+            pos_n_x = pos_n_x - off_x * fxaa_quality_step(s)
+            pos_n_y = pos_n_y - off_y * fxaa_quality_step(s)
+        }
+        done_np = !done_n || !done_p
+        if !done_p {
+            pos_p_x = pos_p_x + off_x * fxaa_quality_step(s)
+            pos_p_y = pos_p_y + off_y * fxaa_quality_step(s)
+        }
+        s += 1usize
+    }
+    var dst_n = pos_m_x - pos_n_x
+    var dst_p = pos_p_x - pos_m_x
+    if !horz_span {
+        dst_n = pos_m_y - pos_n_y
+        dst_p = pos_p_y - pos_m_y
+    }
+    let good_span_n = (luma_end_n < 0.0) != luma_m_lt_zero
+    let span_length = dst_p + dst_n
+    let good_span_p = (luma_end_p < 0.0) != luma_m_lt_zero
+    let span_length_rcp = 1.0 / span_length
+    let direction_n = dst_n < dst_p
+    let dst = math.min[f32](dst_n, dst_p)
+    var good_span = good_span_p
+    if direction_n { good_span = good_span_n }
+    let subpix_g = subpix_f * subpix_f
+    let pixel_offset = dst * (0.0 - span_length_rcp) + 0.5
+    let subpix_h = subpix_g * 0.75
+    var pixel_offset_good: f32 = 0.0
+    if good_span { pixel_offset_good = pixel_offset }
+    let pixel_offset_subpix = math.max[f32](pixel_offset_good, subpix_h)
+    var final_x = pos_m_x
+    var final_y = pos_m_y
+    if !horz_span { final_x = final_x + pixel_offset_subpix * length_sign }
+    if horz_span { final_y = final_y + pixel_offset_subpix * length_sign }
+    var c = 0usize
+    while c < 3usize {
+        out[c] = bilinear(rgb, 3usize, width, height, final_x * f32(width), final_y * f32(height), c)
+        c += 1usize
+    }
+}
+
+fn fxaa_luma_tex(luma: []const f32, width: usize, height: usize, u: f32, v: f32) -> f32 {
+    ret bilinear(luma, 1usize, width, height, u * f32(width), v * f32(height), 0usize)
+}
+
+// --------------------------------------------------------------- depth peeling
+
+fn fill_floats(data: []f32, count: usize, v: f32) {
+    var i = 0usize
+    while i < count {
+        data[i] = v
+        i += 1usize
+    }
+}
+
+// Order-independent transparency by depth peeling: `layers` passes over vertices
+// of `x y z w r g b a`, each pass rasterising only fragments strictly behind the
+// previous layer's depth and keeping the nearest, composited front to back into
+// `out` (premultiplied RGBA, four floats per pixel). `depth_a`, `depth_b` and
+// `layer_color` (four floats per pixel) are the passes' scratch.
+fn depth_peel(tris: []const f32, width: usize, height: usize, layers: usize, depth_a: []f32, depth_b: []f32, layer_color: []f32, out: []f32) -> err {
+    let pixels = width * height
+    if width == 0usize || height == 0usize || depth_a.len < pixels || depth_b.len < pixels || layer_color.len < pixels * 4usize || out.len < pixels * 4usize { ret Invalid }
+    fill_floats(out, pixels * 4usize, 0.0)
+    fill_floats(depth_a, pixels, -2.0)
+    var pass = 0usize
+    while pass < layers {
+        fill_floats(depth_b, pixels, 1.0)
+        fill_floats(layer_color, pixels * 4usize, 0.0)
+        try raster_core(tris, 8usize, width, height, depth_b, layer_color, depth_a, false)
+        var p = 0usize
+        while p < pixels {
+            if depth_b[p] < 1.0 {
+                let a = layer_color[p * 4usize + 3usize]
+                let keep = 1.0 - out[p * 4usize + 3usize]
+                out[p * 4usize] = out[p * 4usize] + keep * a * layer_color[p * 4usize]
+                out[p * 4usize + 1usize] = out[p * 4usize + 1usize] + keep * a * layer_color[p * 4usize + 1usize]
+                out[p * 4usize + 2usize] = out[p * 4usize + 2usize] + keep * a * layer_color[p * 4usize + 2usize]
+                out[p * 4usize + 3usize] = out[p * 4usize + 3usize] + keep * a
+            }
+            depth_a[p] = depth_b[p]
+            p += 1usize
+        }
+        pass += 1usize
+    }
+    ret ok
+}
+
+// ----------------------------------------------------------------- ray marching
+
+// Sphere tracing of a signed distance field: a ray per pixel from `eye` (looking
+// down -z with the half-angle tangents) advances by the field's distance until
+// it is under `epsilon` (a hit) or past `max_dist` or `max_steps` (a miss).
+// `hits` is the hit distance or -1; `normals` (three per pixel) the central
+// difference gradient at the hit, zero at a miss.
+fn sdf_raymarch[Ctx: type](ctx: *Ctx, sdf: fn(*Ctx, f32, f32, f32) -> f32, width: usize, height: usize, eye: []const f32, tan_x: f32, tan_y: f32, max_steps: usize, epsilon: f32, max_dist: f32, hits: []f32, normals: []f32) -> err {
+    let pixels = width * height
+    if width == 0usize || height == 0usize || eye.len < 3usize || !(epsilon > 0.0) || hits.len < pixels || normals.len < pixels * 3usize { ret Invalid }
+    var y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            let p = y * width + x
+            let (dx, dy, dz) = v3_norm(((f32(x) + 0.5) / f32(width) * 2.0 - 1.0) * tan_x, (1.0 - (f32(y) + 0.5) / f32(height) * 2.0) * tan_y, -1.0)
+            var t: f32 = 0.0
+            var hit = false
+            var stop = false
+            var s = 0usize
+            while s < max_steps && !stop {
+                let d = sdf(ctx, eye[0] + dx * t, eye[1] + dy * t, eye[2] + dz * t)
+                if d < epsilon {
+                    hit = true
+                    stop = true
+                } else {
+                    t = t + d
+                    if t > max_dist { stop = true }
+                }
+                s += 1usize
+            }
+            hits[p] = -1.0
+            normals[p * 3usize] = 0.0
+            normals[p * 3usize + 1usize] = 0.0
+            normals[p * 3usize + 2usize] = 0.0
+            if hit {
+                hits[p] = t
+                let hx = eye[0] + dx * t
+                let hy = eye[1] + dy * t
+                let hz = eye[2] + dz * t
+                let gx = sdf(ctx, hx + epsilon, hy, hz) - sdf(ctx, hx - epsilon, hy, hz)
+                let gy = sdf(ctx, hx, hy + epsilon, hz) - sdf(ctx, hx, hy - epsilon, hz)
+                let gz = sdf(ctx, hx, hy, hz + epsilon) - sdf(ctx, hx, hy, hz - epsilon)
+                let (nx, ny, nz) = v3_norm(gx, gy, gz)
+                normals[p * 3usize] = nx
+                normals[p * 3usize + 1usize] = ny
+                normals[p * 3usize + 2usize] = nz
+            }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    ret ok
+}
+
+// Volumetric fog: the eye ray to each pixel's view-space position is marched in
+// `steps` equal segments; the density at a point is `density * exp(-falloff * y)`
+// (an exponential height fog), the in-scattering from the point `light` (`x y z r
+// g b`, view space) is isotropic (`albedo / 4pi`) with `1 / (1 + d^2)` falloff, and
+// Beer-Lambert transmittance accumulates along the ray. The answers are the
+// scattered colour (three per pixel) and the transmittance to the surface.
+// ponytail: one march per pixel rather than a froxel volume, and no shadowing
+// of the light; a froxel grid with a shadow test is the upgrade.
+fn volumetric_fog(positions: []const f32, width: usize, height: usize, steps: usize, density: f32, falloff: f32, light: []const f32, albedo: f32, fog: []f32, transmittance: []f32) -> err {
+    let pixels = width * height
+    if width == 0usize || height == 0usize || steps == 0usize || positions.len < pixels * 3usize || light.len < 6usize { ret Invalid }
+    if fog.len < pixels * 3usize || transmittance.len < pixels { ret Invalid }
+    let inv_4pi: f32 = 0.079577472
+    var p = 0usize
+    while p < pixels {
+        let px = positions[p * 3usize]
+        let py = positions[p * 3usize + 1usize]
+        let pz = positions[p * 3usize + 2usize]
+        let dist = math.sqrt[f32](px * px + py * py + pz * pz)
+        var tr: f32 = 1.0
+        var fr: f32 = 0.0
+        var fg: f32 = 0.0
+        var fb: f32 = 0.0
+        if dist > 0.0 {
+            let dt = dist / f32(steps)
+            var s = 0usize
+            while s < steps {
+                let t = (f32(s) + 0.5) * dt
+                let qx = px / dist * t
+                let qy = py / dist * t
+                let qz = pz / dist * t
+                let rho = density * math.exp[f32](0.0 - falloff * qy)
+                let lx = light[0] - qx
+                let ly = light[1] - qy
+                let lz = light[2] - qz
+                let attenuation = 1.0 / (1.0 + lx * lx + ly * ly + lz * lz)
+                let scatter = tr * albedo * inv_4pi * rho * attenuation * dt
+                fr = fr + scatter * light[3]
+                fg = fg + scatter * light[4]
+                fb = fb + scatter * light[5]
+                tr = tr * math.exp[f32](0.0 - rho * dt)
+                s += 1usize
+            }
+        }
+        fog[p * 3usize] = fr
+        fog[p * 3usize + 1usize] = fg
+        fog[p * 3usize + 2usize] = fb
+        transmittance[p] = tr
+        p += 1usize
+    }
+    ret ok
 }

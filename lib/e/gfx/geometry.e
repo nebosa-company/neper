@@ -14,6 +14,13 @@
 // and answers `TooLarge` when the bound is reached, and `finish` views what was built.
 // `contains` takes the left and top edges and leaves the right and bottom, so two
 // rectangles sharing an edge never both contain a point on it.
+//
+// `flatten` rewrites a path as `Move`/`Line`/`Close` verbs over caller storage, cutting
+// each curve into the chord count its second derivative bounds under a tolerance;
+// `stroke` turns such a flat path into closed polygons -- one per segment, join and
+// cap, all wound the same way -- whose non-zero union is the stroked outline. Round
+// joins and caps are whole circles, which is the exact Minkowski sum of the polyline
+// and a disc; a miter past `miter_limit` falls back to a bevel.
 
 use e.math
 use e.mem
@@ -28,6 +35,8 @@ type Transform = struct { m00: f32, m01: f32, m02: f32, m10: f32, m11: f32, m12:
 type PathVerb = enum u8 { Move, Line, Quad, Cubic, Close }
 type Path = struct { verbs: []const PathVerb, points: []const Point }
 type PathBuilder = struct { state: *void }
+type Cap = enum u8 { Butt, Round, Square }
+type Join = enum u8 { Miter, Round, Bevel }
 error Invalid
 error TooLarge
 
@@ -166,4 +175,253 @@ fn close_path(b: *PathBuilder) -> err {
 fn finish(b: *PathBuilder) -> Path {
     let s = mem.cast[*BuilderState](b.state)
     ret Path { verbs: s.verbs[..s.verb_count], points: s.points[..s.point_count] }
+}
+
+fn lerp(a: Point, b: Point, t: f32) -> Point {
+    ret Point { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+}
+
+fn distance(a: Point, b: Point) -> f32 {
+    let dx = b.x - a.x
+    let dy = b.y - a.y
+    ret math.sqrt[f32](dx * dx + dy * dy)
+}
+
+// The chord count whose largest deviation, `bound / (8 n^2)` for a curve whose second
+// derivative is at most `bound`, stays under `tolerance`.
+fn chord_count(bound: f32, tolerance: f32) -> usize {
+    let n = math.ceil[f32](math.sqrt[f32](bound / (8.0 * tolerance)))
+    if n < 1.0 { ret 1usize }
+    ret usize(i64(n))
+}
+
+fn flatten(path: Path, tolerance: f32, verbs: []PathVerb, points: []Point) -> (Path, err) {
+    if !(tolerance > 0.0) { ret (zero, Invalid) }
+    var s = BuilderState { verbs: verbs, points: points, verb_count: 0usize, point_count: 0usize, open: false }
+    var current: Point = zero
+    var first: Point = zero
+    var pi = 0usize
+    var vi = 0usize
+    while vi < path.verbs.len {
+        let verb = path.verbs[vi]
+        var e: err = ok
+        if verb == .Move {
+            current = path.points[pi]
+            first = current
+            pi += 1usize
+            e = append(&s, .Move, 1usize, current, current, current)
+        } else if verb == .Line {
+            current = path.points[pi]
+            pi += 1usize
+            e = append(&s, .Line, 1usize, current, current, current)
+        } else if verb == .Quad {
+            let c = path.points[pi]
+            let end = path.points[pi + 1usize]
+            pi += 2usize
+            let ddx = current.x - 2.0 * c.x + end.x
+            let ddy = current.y - 2.0 * c.y + end.y
+            let n = chord_count(2.0 * math.sqrt[f32](ddx * ddx + ddy * ddy), tolerance)
+            var k = 1usize
+            while k <= n && e == ok {
+                let t = f32(k) / f32(n)
+                let p = lerp(lerp(current, c, t), lerp(c, end, t), t)
+                e = append(&s, .Line, 1usize, p, p, p)
+                k += 1usize
+            }
+            current = end
+        } else if verb == .Cubic {
+            let c1 = path.points[pi]
+            let c2 = path.points[pi + 1usize]
+            let end = path.points[pi + 2usize]
+            pi += 3usize
+            let d1 = distance(Point { x: 2.0 * c1.x - c2.x, y: 2.0 * c1.y - c2.y }, current)
+            let d2 = distance(Point { x: 2.0 * c2.x - c1.x, y: 2.0 * c2.y - c1.y }, end)
+            var bound = d1
+            if d2 > bound { bound = d2 }
+            let n = chord_count(6.0 * bound, tolerance)
+            var k = 1usize
+            while k <= n && e == ok {
+                let t = f32(k) / f32(n)
+                let a = lerp(current, c1, t)
+                let b = lerp(c1, c2, t)
+                let c = lerp(c2, end, t)
+                let p = lerp(lerp(a, b, t), lerp(b, c, t), t)
+                e = append(&s, .Line, 1usize, p, p, p)
+                k += 1usize
+            }
+            current = end
+        } else {
+            e = append(&s, .Close, 0usize, zero, zero, zero)
+            current = first
+        }
+        if e != ok { ret (zero, e) }
+        vi += 1usize
+    }
+    ret (Path { verbs: verbs[..s.verb_count], points: points[..s.point_count] }, ok)
+}
+
+// Appends one closed polygon, reversed when its shoelace area is positive, so every
+// polygon `stroke` emits winds the same way and their non-zero union never cancels.
+fn emit_polygon(s: *BuilderState, pts: []const Point) -> err {
+    var area: f32 = 0.0
+    var i = 0usize
+    while i < pts.len {
+        var j = i + 1usize
+        if j == pts.len { j = 0usize }
+        area += pts[i].x * pts[j].y - pts[j].x * pts[i].y
+        i += 1usize
+    }
+    i = 0usize
+    while i < pts.len {
+        var k = i
+        if area > 0.0 { k = pts.len - 1usize - i }
+        var verb: PathVerb = .Line
+        if i == 0usize { verb = .Move }
+        let e = append(s, verb, 1usize, pts[k], pts[k], pts[k])
+        if e != ok { ret e }
+        i += 1usize
+    }
+    ret append(s, .Close, 0usize, zero, zero, zero)
+}
+
+// A circle of radius `hw` as the fewest chords (8 to 64) whose sagitta stays under `tolerance`.
+fn emit_circle(s: *BuilderState, center: Point, hw: f32, tolerance: f32) -> err {
+    var n = 8usize
+    while n < 64usize && hw * (1.0 - math.cos[f32](3.14159265 / f32(n))) > tolerance { n += 1usize }
+    var ring: [64]Point = zero
+    var i = 0usize
+    while i < n {
+        let angle = 6.2831853 * f32(i) / f32(n)
+        ring[i] = Point { x: center.x + hw * math.cos[f32](angle), y: center.y + hw * math.sin[f32](angle) }
+        i += 1usize
+    }
+    ret emit_polygon(s, ring[..n])
+}
+
+fn unit_normal(from: Point, to: Point) -> Point {
+    let len = distance(from, to)
+    ret Point { x: (from.y - to.y) / len, y: (to.x - from.x) / len }
+}
+
+fn offset(p: Point, n: Point, k: f32) -> Point {
+    ret Point { x: p.x + n.x * k, y: p.y + n.y * k }
+}
+
+fn stroke_segment(s: *BuilderState, p: Point, q: Point, hw: f32) -> err {
+    let n = unit_normal(p, q)
+    let quad = [4]Point{ offset(p, n, hw), offset(q, n, hw), offset(q, n, 0.0 - hw), offset(p, n, 0.0 - hw) }
+    ret emit_polygon(s, quad[..])
+}
+
+// The join at `p` between the segments `a -> p` and `p -> b`.
+fn stroke_join(s: *BuilderState, a: Point, p: Point, b: Point, hw: f32, join: Join, miter_limit: f32, tolerance: f32) -> err {
+    if join == .Round { ret emit_circle(s, p, hw, tolerance) }
+    let n1 = unit_normal(a, p)
+    let n2 = unit_normal(p, b)
+    let cross = (p.x - a.x) * (b.y - p.y) - (p.y - a.y) * (b.x - p.x)
+    if cross == 0.0 { ret ok }
+    var side = hw
+    if cross > 0.0 { side = 0.0 - hw }
+    let outer1 = offset(p, n1, side)
+    let outer2 = offset(p, n2, side)
+    let dot = n1.x * n2.x + n1.y * n2.y
+    if join == .Miter && dot > -1.0 && 2.0 / (1.0 + dot) <= miter_limit * miter_limit {
+        let k = side / (1.0 + dot)
+        let tip = Point { x: p.x + (n1.x + n2.x) * k, y: p.y + (n1.y + n2.y) * k }
+        let quad = [4]Point{ p, outer1, tip, outer2 }
+        ret emit_polygon(s, quad[..])
+    }
+    let tri = [3]Point{ p, outer1, outer2 }
+    ret emit_polygon(s, tri[..])
+}
+
+// The cap at `p`, the end of the segment `from -> p`.
+fn stroke_cap(s: *BuilderState, from: Point, p: Point, hw: f32, cap: Cap, tolerance: f32) -> err {
+    if cap == .Butt { ret ok }
+    if cap == .Round { ret emit_circle(s, p, hw, tolerance) }
+    let n = unit_normal(from, p)
+    let d = Point { x: 0.0 - n.y, y: n.x }
+    let far = offset(p, d, hw)
+    let quad = [4]Point{ offset(p, n, hw), offset(far, n, hw), offset(far, n, 0.0 - hw), offset(p, n, 0.0 - hw) }
+    ret emit_polygon(s, quad[..])
+}
+
+fn stroke_contour(s: *BuilderState, pts: []const Point, closed: bool, hw: f32, cap: Cap, join: Join, miter_limit: f32, tolerance: f32) -> err {
+    // Coincident neighbours would give a normal of nothing: keep the distinct run.
+    var kept: [256]Point = zero
+    var n = 0usize
+    var i = 0usize
+    while i < pts.len {
+        if n == 0usize || distance(kept[n - 1usize], pts[i]) > 0.0 {
+            if n == 256usize { ret TooLarge }
+            kept[n] = pts[i]
+            n += 1usize
+        }
+        i += 1usize
+    }
+    if closed && n > 1usize && distance(kept[n - 1usize], kept[0usize]) == 0.0 { n -= 1usize }
+    if n < 2usize { ret ok }
+    i = 0usize
+    while i + 1usize < n {
+        let e = stroke_segment(s, kept[i], kept[i + 1usize], hw)
+        if e != ok { ret e }
+        i += 1usize
+    }
+    i = 1usize
+    while i + 1usize < n {
+        let e = stroke_join(s, kept[i - 1usize], kept[i], kept[i + 1usize], hw, join, miter_limit, tolerance)
+        if e != ok { ret e }
+        i += 1usize
+    }
+    if closed && n > 2usize {
+        let e = stroke_segment(s, kept[n - 1usize], kept[0usize], hw)
+        if e != ok { ret e }
+        let e1 = stroke_join(s, kept[n - 2usize], kept[n - 1usize], kept[0usize], hw, join, miter_limit, tolerance)
+        if e1 != ok { ret e1 }
+        ret stroke_join(s, kept[n - 1usize], kept[0usize], kept[1usize], hw, join, miter_limit, tolerance)
+    }
+    let e = stroke_cap(s, kept[1usize], kept[0usize], hw, cap, tolerance)
+    if e != ok { ret e }
+    ret stroke_cap(s, kept[n - 2usize], kept[n - 1usize], hw, cap, tolerance)
+}
+
+// Strokes a flat path (`Move`/`Line`/`Close` only, else `Invalid`) of `width` into
+// closed polygons over caller storage; `tolerance` bounds the chords of round joins
+// and caps. A contour of one distinct point emits nothing.
+// ponytail: a contour keeps at most 256 distinct points on the stack; stream the
+// segments when glyph outlines outgrow it.
+fn stroke(path: Path, width: f32, cap: Cap, join: Join, miter_limit: f32, tolerance: f32, verbs: []PathVerb, points: []Point) -> (Path, err) {
+    if !(width > 0.0) || !(tolerance > 0.0) { ret (zero, Invalid) }
+    var s = BuilderState { verbs: verbs, points: points, verb_count: 0usize, point_count: 0usize, open: false }
+    let hw = width / 2.0
+    var start = 0usize
+    var count = 0usize
+    var vi = 0usize
+    var pi = 0usize
+    while vi < path.verbs.len {
+        let verb = path.verbs[vi]
+        if verb == .Quad || verb == .Cubic { ret (zero, Invalid) }
+        if verb == .Move {
+            if count > 0usize {
+                let e = stroke_contour(&s, path.points[start..start + count], false, hw, cap, join, miter_limit, tolerance)
+                if e != ok { ret (zero, e) }
+            }
+            start = pi
+            count = 1usize
+            pi += 1usize
+        } else if verb == .Line {
+            count += 1usize
+            pi += 1usize
+        } else {
+            let e = stroke_contour(&s, path.points[start..start + count], true, hw, cap, join, miter_limit, tolerance)
+            if e != ok { ret (zero, e) }
+            count = 0usize
+        }
+        vi += 1usize
+    }
+    if count > 0usize {
+        let e = stroke_contour(&s, path.points[start..start + count], false, hw, cap, join, miter_limit, tolerance)
+        if e != ok { ret (zero, e) }
+    }
+    ret (Path { verbs: verbs[..s.verb_count], points: points[..s.point_count] }, ok)
 }

@@ -7,6 +7,9 @@
 // ponytail: scalar multiplication is double-and-add and varies with the scalar; the
 // field core is duplicated from kx.e because a fence admits no shared private helper.
 use e.crypto.hash as hash
+use e.crypto.mac as mac
+use e.algo.bignum as bignum
+use e.mem
 
 type Ed25519PublicKey = struct { bytes: [32]u8 }
 type Ed25519SecretKey = struct { bytes: [32]u8 }
@@ -14,6 +17,8 @@ type Ed25519Signature = struct { bytes: [64]u8 }
 type P256PublicKey = struct { bytes: [65]u8 }
 error InvalidKey
 error InvalidSignature
+error TooSmall
+error Invalid
 
 type Fe = struct { v: [10]i64 }
 
@@ -851,4 +856,482 @@ fn p256_verify(public: P256PublicKey, message: []const u8, signature_der: []cons
     var x = p256_field_mul(result.x, p256_field_square(z_inverse))
     if p256_compare(x, order) >= 0i32 { x = p256_sub_raw(x, order) }
     ret p256_equal(x, r)
+}
+
+// --- ECDSA P-256 signing with RFC 6979 deterministic nonces over the verifier's
+// arithmetic above. The nonce comes from HMAC-SHA256 of the key and the reduced
+// digest, so a signature is a pure function of key and message and needs no
+// randomness; the DER output is the strict form `p256_verify` accepts.
+// ponytail: the scalar multiplication is the verifier's variable-time double-and-add;
+// timing leaks the secret on a shared host, so a ladder is the upgrade for signing.
+type P256SecretKey = struct { bytes: [32]u8 }
+
+fn p256_to_be(a: P256Int) -> [32]u8 {
+    var out: [32]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        let from_end = 31usize - i
+        out[i] = u8((a.v[from_end / 4usize] >> u32((from_end % 4usize) * 8usize)) & 255u32)
+        i += 1usize
+    }
+    ret out
+}
+
+fn p256_to_affine(point: P256Point) -> P256Affine {
+    let z_inverse = p256_inverse(point.z, p256_p())
+    let zz = p256_field_square(z_inverse)
+    ret P256Affine { x: p256_field_mul(point.x, zz), y: p256_field_mul(point.y, p256_field_mul(zz, z_inverse)) }
+}
+
+fn p256_scalar_valid(k: P256Int) -> bool { ret !p256_zero(k) && p256_compare(k, p256_n()) < 0i32 }
+
+fn p256_base_mul(scalar: P256Int) -> P256Affine {
+    var none: P256Int = zero
+    ret p256_to_affine(p256_joint_mul(scalar, none, p256_base()))
+}
+
+fn p256_public_from_secret(secret: P256SecretKey) -> (P256PublicKey, err) {
+    let (d, d_ok) = p256_from_be(secret.bytes[0..])
+    if !d_ok || !p256_scalar_valid(d) { ret (zero, InvalidKey) }
+    let point = p256_base_mul(d)
+    let x = p256_to_be(point.x)
+    let y = p256_to_be(point.y)
+    var public: P256PublicKey = zero
+    public.bytes[0] = 4u8
+    var i = 0usize
+    while i < 32usize {
+        public.bytes[1usize + i] = x[i]
+        public.bytes[33usize + i] = y[i]
+        i += 1usize
+    }
+    ret (public, ok)
+}
+
+// One DER INTEGER, minimal: leading zero bytes dropped, a zero byte prepended when
+// the top bit is set. Returns the bytes written.
+fn p256_der_put(out: []u8, at: usize, value: P256Int) -> usize {
+    let bytes = p256_to_be(value)
+    var start = 0usize
+    while start < 31usize && bytes[start] == 0u8 { start += 1usize }
+    let length = 32usize - start
+    var pad = 0usize
+    if (bytes[start] & 128u8) != 0u8 { pad = 1usize }
+    out[at] = 2u8
+    out[at + 1usize] = u8(length + pad)
+    if pad == 1usize { out[at + 2usize] = 0u8 }
+    var i = 0usize
+    while i < length {
+        out[at + 2usize + pad + i] = bytes[start + i]
+        i += 1usize
+    }
+    ret 2usize + pad + length
+}
+
+fn p256_sign(secret: P256SecretKey, message: []const u8, out: []u8) -> (usize, err) {
+    let (d, d_ok) = p256_from_be(secret.bytes[0..])
+    if !d_ok || !p256_scalar_valid(d) { ret (0usize, InvalidKey) }
+    if out.len < 72usize { ret (0usize, TooSmall) }
+    let order = p256_n()
+    let digest = hash.sha256(message)
+    let (h, _) = p256_from_be(digest[0..])
+    var z = h
+    if p256_compare(z, order) >= 0i32 { z = p256_sub_raw(z, order) }
+    let z_bytes = p256_to_be(z)
+    // RFC 6979 3.2: K and V seeded from the key and the reduced digest.
+    var v: [32]u8 = zero
+    var k_key: [32]u8 = zero
+    var seed: [97]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        v[i] = 1u8
+        seed[i] = 1u8
+        seed[33usize + i] = secret.bytes[i]
+        seed[65usize + i] = z_bytes[i]
+        i += 1usize
+    }
+    k_key = mac.hmac_sha256(k_key[0..], seed[0..])
+    v = mac.hmac_sha256(k_key[0..], v[0..])
+    i = 0usize
+    while i < 32usize {
+        seed[i] = v[i]
+        i += 1usize
+    }
+    seed[32] = 1u8
+    k_key = mac.hmac_sha256(k_key[0..], seed[0..])
+    v = mac.hmac_sha256(k_key[0..], v[0..])
+    var attempts = 0usize
+    while attempts < 64usize {
+        attempts += 1usize
+        v = mac.hmac_sha256(k_key[0..], v[0..])
+        let (nonce, _) = p256_from_be(v[0..])
+        if p256_scalar_valid(nonce) {
+            let point = p256_base_mul(nonce)
+            var r = point.x
+            if p256_compare(r, order) >= 0i32 { r = p256_sub_raw(r, order) }
+            if !p256_zero(r) {
+                let s = p256_mul_mod(p256_inverse(nonce, order), p256_add_mod(z, p256_mul_mod(r, d, order), order), order)
+                if !p256_zero(s) {
+                    let r_len = p256_der_put(out, 2usize, r)
+                    let s_len = p256_der_put(out, 2usize + r_len, s)
+                    out[0] = 48u8
+                    out[1] = u8(r_len + s_len)
+                    ret (2usize + r_len + s_len, ok)
+                }
+            }
+        }
+        var step: [33]u8 = zero
+        i = 0usize
+        while i < 32usize {
+            step[i] = v[i]
+            i += 1usize
+        }
+        k_key = mac.hmac_sha256(k_key[0..], step[0..])
+        v = mac.hmac_sha256(k_key[0..], v[0..])
+    }
+    ret (0usize, InvalidKey)
+}
+
+// --- BIP-340 Schnorr over secp256k1 (a = 0, b = 7), on the same 256-bit integer
+// routines with the curve's own p and n; the group is Jacobian double-and-add.
+// ponytail: nothing here is constant time; the nonce derivation is the BIP's, so a
+// signature never repeats a nonce, but timing still leaks on a shared host.
+fn k1_p() -> P256Int {
+    ret P256Int { v: [8]u32{ 4294966319, 4294967294, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295 } }
+}
+
+fn k1_n() -> P256Int {
+    ret P256Int { v: [8]u32{ 3493216577, 3218235020, 2940772411, 3132021990, 4294967294, 4294967295, 4294967295, 4294967295 } }
+}
+
+fn k1_base() -> P256Affine {
+    let x = P256Int { v: [8]u32{ 385357720, 1509065051, 768485593, 43777243, 3464956679, 1436574357, 4191992748, 2042521214 } }
+    let y = P256Int { v: [8]u32{ 4212184248, 2621952143, 2793755673, 4246189128, 235997352, 1571093500, 648266853, 1211816567 } }
+    ret P256Affine { x: x, y: y }
+}
+
+fn k1_mul(a: P256Int, b: P256Int) -> P256Int { ret p256_mul_mod(a, b, k1_p()) }
+fn k1_add(a: P256Int, b: P256Int) -> P256Int { ret p256_add_mod(a, b, k1_p()) }
+fn k1_sub(a: P256Int, b: P256Int) -> P256Int { ret p256_sub_mod(a, b, k1_p()) }
+
+fn k1_double(point: P256Point) -> P256Point {
+    if p256_zero(point.z) || p256_zero(point.y) { ret zero }
+    let yy = k1_mul(point.y, point.y)
+    let xyy = k1_mul(point.x, yy)
+    let s = k1_add(k1_add(xyy, xyy), k1_add(xyy, xyy))
+    let xx = k1_mul(point.x, point.x)
+    let m = k1_add(k1_add(xx, xx), xx)
+    let x = k1_sub(k1_mul(m, m), k1_add(s, s))
+    let yyyy = k1_mul(yy, yy)
+    let four = k1_add(k1_add(yyyy, yyyy), k1_add(yyyy, yyyy))
+    let y = k1_sub(k1_mul(m, k1_sub(s, x)), k1_add(four, four))
+    let yz = k1_mul(point.y, point.z)
+    ret P256Point { x: x, y: y, z: k1_add(yz, yz) }
+}
+
+fn k1_add_mixed(point: P256Point, affine: P256Affine) -> P256Point {
+    if p256_zero(point.z) {
+        var one: P256Int = zero
+        one.v[0] = 1u32
+        ret P256Point { x: affine.x, y: affine.y, z: one }
+    }
+    let zz = k1_mul(point.z, point.z)
+    let u2 = k1_mul(affine.x, zz)
+    let s2 = k1_mul(affine.y, k1_mul(point.z, zz))
+    let h = k1_sub(u2, point.x)
+    let r = k1_sub(s2, point.y)
+    if p256_zero(h) {
+        if p256_zero(r) { ret k1_double(point) }
+        ret zero
+    }
+    let hh = k1_mul(h, h)
+    let hhh = k1_mul(h, hh)
+    let xhh = k1_mul(point.x, hh)
+    let x = k1_sub(k1_sub(k1_mul(r, r), hhh), k1_add(xhh, xhh))
+    let y = k1_sub(k1_mul(r, k1_sub(xhh, x)), k1_mul(point.y, hhh))
+    ret P256Point { x: x, y: y, z: k1_mul(point.z, h) }
+}
+
+fn k1_joint_mul(u1: P256Int, u2: P256Int, public: P256Affine) -> P256Point {
+    let base = k1_base()
+    var out: P256Point = zero
+    var bit = 256usize
+    while bit > 0usize {
+        bit -= 1usize
+        out = k1_double(out)
+        if p256_bit(u1, bit) { out = k1_add_mixed(out, base) }
+        if p256_bit(u2, bit) { out = k1_add_mixed(out, public) }
+    }
+    ret out
+}
+
+fn k1_to_affine(point: P256Point) -> P256Affine {
+    let z_inverse = p256_inverse(point.z, k1_p())
+    let zz = k1_mul(z_inverse, z_inverse)
+    ret P256Affine { x: k1_mul(point.x, zz), y: k1_mul(point.y, k1_mul(zz, z_inverse)) }
+}
+
+fn k1_odd(a: P256Int) -> bool { ret (a.v[0] & 1u32) == 1u32 }
+
+// The point with the given x and even y, when x is on the curve: y = (x^3 + 7)^((p+1)/4).
+fn k1_lift_x(x_bytes: []const u8) -> (P256Affine, bool) {
+    let (x, x_ok) = p256_from_be(x_bytes)
+    if !x_ok || p256_compare(x, k1_p()) >= 0i32 { ret (zero, false) }
+    var seven: P256Int = zero
+    seven.v[0] = 7u32
+    let c = k1_add(k1_mul(k1_mul(x, x), x), seven)
+    let exponent = P256Int { v: [8]u32{ 3221225228, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 1073741823 } }
+    var y = p256_pow_mod(c, exponent, k1_p())
+    if !p256_equal(k1_mul(y, y), c) { ret (zero, false) }
+    if k1_odd(y) { y = p256_sub_raw(k1_p(), y) }
+    ret (P256Affine { x: x, y: y }, true)
+}
+
+fn k1_scalar_mod_n(bytes: []const u8) -> P256Int {
+    let (value, _) = p256_from_be(bytes)
+    if p256_compare(value, k1_n()) >= 0i32 { ret p256_sub_raw(value, k1_n()) }
+    ret value
+}
+
+fn tagged_hash_init(tag: []const u8) -> hash.Sha256 {
+    let tag_digest = hash.sha256(tag)
+    var h = hash.sha256_init()
+    hash.sha256_update(&h, tag_digest[0..])
+    hash.sha256_update(&h, tag_digest[0..])
+    ret h
+}
+
+fn schnorr_challenge(r_bytes: []const u8, public_x: []const u8, message: []const u8) -> P256Int {
+    var h = tagged_hash_init("BIP0340/challenge")
+    hash.sha256_update(&h, r_bytes)
+    hash.sha256_update(&h, public_x)
+    hash.sha256_update(&h, message)
+    let digest = hash.sha256_done(&h)
+    ret k1_scalar_mod_n(digest[0..])
+}
+
+// The x-only public key of a secret scalar.
+fn schnorr_public_from_secret(secret: [32]u8) -> ([32]u8, err) {
+    let (d, d_ok) = p256_from_be(secret[0..])
+    if !d_ok || p256_zero(d) || p256_compare(d, k1_n()) >= 0i32 { ret (zero, InvalidKey) }
+    var none: P256Int = zero
+    ret (p256_to_be(k1_to_affine(k1_joint_mul(d, none, k1_base())).x), ok)
+}
+
+// BIP-340 signing of a message (any length) with 32 bytes of auxiliary randomness (all
+// zero is allowed and still yields a sound, deterministic signature).
+fn schnorr_sign(secret: [32]u8, message: []const u8, aux: [32]u8) -> ([64]u8, err) {
+    let (d0, d_ok) = p256_from_be(secret[0..])
+    let order = k1_n()
+    if !d_ok || p256_zero(d0) || p256_compare(d0, order) >= 0i32 { ret (zero, InvalidKey) }
+    var none: P256Int = zero
+    let public = k1_to_affine(k1_joint_mul(d0, none, k1_base()))
+    var d = d0
+    if k1_odd(public.y) { d = p256_sub_raw(order, d0) }
+    let public_x = p256_to_be(public.x)
+    let d_bytes = p256_to_be(d)
+    var aux_hash = tagged_hash_init("BIP0340/aux")
+    hash.sha256_update(&aux_hash, aux[0..])
+    let aux_digest = hash.sha256_done(&aux_hash)
+    var t: [32]u8 = zero
+    var i = 0usize
+    while i < 32usize {
+        t[i] = d_bytes[i] ^ aux_digest[i]
+        i += 1usize
+    }
+    var nonce_hash = tagged_hash_init("BIP0340/nonce")
+    hash.sha256_update(&nonce_hash, t[0..])
+    hash.sha256_update(&nonce_hash, public_x[0..])
+    hash.sha256_update(&nonce_hash, message)
+    let nonce_digest = hash.sha256_done(&nonce_hash)
+    let k0 = k1_scalar_mod_n(nonce_digest[0..])
+    if p256_zero(k0) { ret (zero, InvalidKey) }
+    let r_point = k1_to_affine(k1_joint_mul(k0, none, k1_base()))
+    var k = k0
+    if k1_odd(r_point.y) { k = p256_sub_raw(order, k0) }
+    let r_bytes = p256_to_be(r_point.x)
+    let e = schnorr_challenge(r_bytes[0..], public_x[0..], message)
+    let s_bytes = p256_to_be(p256_add_mod(k, p256_mul_mod(e, d, order), order))
+    var signature: [64]u8 = zero
+    i = 0usize
+    while i < 32usize {
+        signature[i] = r_bytes[i]
+        signature[32usize + i] = s_bytes[i]
+        i += 1usize
+    }
+    ret (signature, ok)
+}
+
+fn schnorr(secret: [32]u8, message: []const u8, aux: [32]u8) -> ([64]u8, err) {
+    let (signature, sign_error) = schnorr_sign(secret, message, aux)
+    ret (signature, sign_error)
+}
+
+fn schnorr_verify(public_x: [32]u8, message: []const u8, signature: [64]u8) -> bool {
+    let (public, public_ok) = k1_lift_x(public_x[0..])
+    if !public_ok { ret false }
+    let (r, r_ok) = p256_from_be(signature[0..32])
+    let (s, s_ok) = p256_from_be(signature[32..64])
+    let order = k1_n()
+    if !r_ok || !s_ok || p256_compare(r, k1_p()) >= 0i32 || p256_compare(s, order) >= 0i32 { ret false }
+    let e = schnorr_challenge(signature[0..32], public_x[0..], message)
+    let result = k1_joint_mul(s, p256_sub_raw(order, e), public)
+    if p256_zero(result.z) { ret false }
+    let affine = k1_to_affine(result)
+    if k1_odd(affine.y) { ret false }
+    ret p256_equal(affine.x, r)
+}
+
+// --- RSASSA-PSS and PKCS#1 v1.5 verification with SHA-256 over `e.algo.bignum`.
+// Keys are big-endian byte strings; the modulus may be up to 4096 bits. PSS uses
+// MGF1-SHA256 and a 32-byte salt, the shape `cryptography`'s default checks.
+fn rsa_salt_len() -> usize { ret 32usize }
+fn rsa_max_bytes() -> usize { ret 512usize }
+
+// MGF1-SHA256 of `seed`, XORed into all of `mask`.
+fn mgf1_xor(seed: []const u8, mask: []u8) {
+    var counter = 0u32
+    var at = 0usize
+    while at < mask.len {
+        var h = hash.sha256_init()
+        hash.sha256_update(&h, seed)
+        var counter_bytes: [4]u8 = zero
+        counter_bytes[0] = u8(counter >> 24u32)
+        counter_bytes[1] = u8((counter >> 16u32) & 255u32)
+        counter_bytes[2] = u8((counter >> 8u32) & 255u32)
+        counter_bytes[3] = u8(counter & 255u32)
+        hash.sha256_update(&h, counter_bytes[0..])
+        let block = hash.sha256_done(&h)
+        var i = 0usize
+        while i < 32usize && at < mask.len {
+            mask[at] = mask[at] ^ block[i]
+            at += 1usize
+            i += 1usize
+        }
+        counter += 1u32
+    }
+}
+
+// H = SHA-256(eight zero bytes || SHA-256(message) || salt).
+fn pss_hash(message: []const u8, salt: []const u8) -> [32]u8 {
+    let m_hash = hash.sha256(message)
+    var zeros: [8]u8 = zero
+    var h = hash.sha256_init()
+    hash.sha256_update(&h, zeros[0..])
+    hash.sha256_update(&h, m_hash[0..])
+    hash.sha256_update(&h, salt)
+    ret hash.sha256_done(&h)
+}
+
+fn rsa_pss_sign(a: *mem.Arena, n: []const u8, d: []const u8, message: []const u8, salt: []const u8, out: []u8) -> (usize, err) {
+    if salt.len != rsa_salt_len() { ret (0usize, Invalid) }
+    let (modulus, n_error) = bignum.int_from_bytes_be(a, n)
+    if n_error != ok { ret (0usize, n_error) }
+    let (exponent, d_error) = bignum.int_from_bytes_be(a, d)
+    if d_error != ok { ret (0usize, d_error) }
+    let mod_bits = bignum.int_bits(modulus)
+    let em_bits = mod_bits - 1usize
+    let em_len = (em_bits + 7usize) / 8usize
+    let k = (mod_bits + 7usize) / 8usize
+    if mod_bits < 8usize * (salt.len + 34usize) + 2usize || k > rsa_max_bytes() { ret (0usize, InvalidKey) }
+    if out.len < k { ret (0usize, TooSmall) }
+    var em: [512]u8 = zero
+    let h = pss_hash(message, salt)
+    let db_len = em_len - 33usize
+    em[db_len - salt.len - 1usize] = 1u8
+    var i = 0usize
+    while i < salt.len {
+        em[db_len - salt.len + i] = salt[i]
+        i += 1usize
+    }
+    mgf1_xor(h[0..], em[..db_len])
+    em[0] = em[0] & (255u8 >> u8(8usize * em_len - em_bits))
+    i = 0usize
+    while i < 32usize {
+        em[db_len + i] = h[i]
+        i += 1usize
+    }
+    em[em_len - 1usize] = 188u8
+    let (m, m_error) = bignum.int_from_bytes_be(a, em[..em_len])
+    if m_error != ok { ret (0usize, m_error) }
+    let (s, s_error) = bignum.int_mod_pow(a, m, exponent, modulus)
+    if s_error != ok { ret (0usize, s_error) }
+    let store_error = bignum.int_to_bytes_be(s, out[..k])
+    if store_error != ok { ret (0usize, store_error) }
+    ret (k, ok)
+}
+
+fn rsa_pss(a: *mem.Arena, n: []const u8, d: []const u8, message: []const u8, salt: []const u8, out: []u8) -> (usize, err) {
+    let (written, sign_error) = rsa_pss_sign(a, n, d, message, salt, out)
+    ret (written, sign_error)
+}
+
+// signature^e mod n as exactly `out.len` bytes; false when the signature is not a
+// valid representative or the result does not fit.
+fn rsa_public_op(a: *mem.Arena, n: []const u8, e: []const u8, signature: []const u8, out: []u8) -> bool {
+    let (modulus, n_error) = bignum.int_from_bytes_be(a, n)
+    if n_error != ok { ret false }
+    let (exponent, e_error) = bignum.int_from_bytes_be(a, e)
+    if e_error != ok { ret false }
+    let (s, s_error) = bignum.int_from_bytes_be(a, signature)
+    if s_error != ok || bignum.int_cmp(s, modulus) >= 0i32 { ret false }
+    let (m, m_error) = bignum.int_mod_pow(a, s, exponent, modulus)
+    if m_error != ok { ret false }
+    ret bignum.int_to_bytes_be(m, out) == ok
+}
+
+fn rsa_pss_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8) -> bool {
+    let (modulus, n_error) = bignum.int_from_bytes_be(a, n)
+    if n_error != ok { ret false }
+    let mod_bits = bignum.int_bits(modulus)
+    let em_bits = mod_bits - 1usize
+    let em_len = (em_bits + 7usize) / 8usize
+    let k = (mod_bits + 7usize) / 8usize
+    let salt_len = rsa_salt_len()
+    if mod_bits < 8usize * (salt_len + 34usize) + 2usize || k > rsa_max_bytes() || signature.len != k { ret false }
+    var em: [512]u8 = zero
+    if !rsa_public_op(a, n, e, signature, em[..em_len]) { ret false }
+    if em[em_len - 1usize] != 188u8 { ret false }
+    let db_len = em_len - 33usize
+    let top_mask = 255u8 >> u8(8usize * em_len - em_bits)
+    if (em[0] & ~top_mask) != 0u8 { ret false }
+    mgf1_xor(em[db_len..db_len + 32usize], em[..db_len])
+    em[0] = em[0] & top_mask
+    var i = 0usize
+    while i < db_len - salt_len - 1usize {
+        if em[i] != 0u8 { ret false }
+        i += 1usize
+    }
+    if em[db_len - salt_len - 1usize] != 1u8 { ret false }
+    let expected = pss_hash(message, em[db_len - salt_len..db_len])
+    ret hash.equal_constant_time(expected[0..], em[db_len..db_len + 32usize])
+}
+
+// RSASSA-PKCS1-v1_5 with SHA-256: the encoded message is rebuilt and compared whole.
+fn rsa_pkcs1v15_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8) -> bool {
+    let (modulus, n_error) = bignum.int_from_bytes_be(a, n)
+    if n_error != ok { ret false }
+    let k = (bignum.int_bits(modulus) + 7usize) / 8usize
+    if k < 62usize || k > rsa_max_bytes() || signature.len != k { ret false }
+    var em: [512]u8 = zero
+    if !rsa_public_op(a, n, e, signature, em[..k]) { ret false }
+    var expected: [512]u8 = zero
+    expected[1] = 1u8
+    var i = 2usize
+    while i < k - 52usize {
+        expected[i] = 255u8
+        i += 1usize
+    }
+    let prefix: [19]u8 = [19]u8{ 48, 49, 48, 13, 6, 9, 96, 134, 72, 1, 101, 3, 4, 2, 1, 5, 0, 4, 32 }
+    i = 0usize
+    while i < 19usize {
+        expected[k - 51usize + i] = prefix[i]
+        i += 1usize
+    }
+    let digest = hash.sha256(message)
+    i = 0usize
+    while i < 32usize {
+        expected[k - 32usize + i] = digest[i]
+        i += 1usize
+    }
+    ret hash.equal_constant_time(expected[..k], em[..k])
 }

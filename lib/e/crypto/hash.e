@@ -648,3 +648,454 @@ fn equal_constant_time(a: []const u8, b: []const u8) -> bool {
     }
     ret difference == 0u8
 }
+
+// BLAKE2b (RFC 7693): twelve rounds of the 64-bit G over 128-byte blocks, the SHA-512
+// initial values as its IV, a digest of 1..64 bytes and an optional key of at most 64
+// bytes that is absorbed as a padded first block. The streaming form mirrors SHA-2's;
+// `blake2b_init` takes the digest length and the key so Argon2's H' can ask for a
+// short digest.
+
+type Blake2b = struct { h: [8]u64, t_lo: u64, t_hi: u64, block: [128]u8, block_len: usize, out_len: usize }
+
+fn blake2b_sigma(round: usize, i: usize) -> usize {
+    let table: [160]u8 = [160]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3, 11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4, 7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8, 9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13, 2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9, 12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11, 13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10, 6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5, 10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0 }
+    ret usize(table[(round % 10usize) * 16usize + i])
+}
+
+fn load_le64(bytes: []const u8, at: usize) -> u64 {
+    var value = 0u64
+    var i = 0usize
+    while i < 8usize {
+        value = value | (u64(bytes[at + i]) << u32(i * 8usize))
+        i += 1usize
+    }
+    ret value
+}
+
+fn blake2b_g(v: []u64, a: usize, b: usize, c: usize, d: usize, x: u64, y: u64) {
+    v[a] = v[a] +% v[b] +% x
+    v[d] = rotr64(v[d] ^ v[a], 32u32)
+    v[c] = v[c] +% v[d]
+    v[b] = rotr64(v[b] ^ v[c], 24u32)
+    v[a] = v[a] +% v[b] +% y
+    v[d] = rotr64(v[d] ^ v[a], 16u32)
+    v[c] = v[c] +% v[d]
+    v[b] = rotr64(v[b] ^ v[c], 63u32)
+}
+
+fn blake2b_compress(s: *Blake2b, last: bool) {
+    var m: [16]u64 = zero
+    var i = 0usize
+    while i < 16usize {
+        m[i] = load_le64(s.block[0..], i * 8usize)
+        i += 1usize
+    }
+    let iv = sha512_init()
+    var v: [16]u64 = zero
+    i = 0usize
+    while i < 8usize {
+        v[i] = s.h[i]
+        v[i + 8usize] = iv.h[i]
+        i += 1usize
+    }
+    v[12] = v[12] ^ s.t_lo
+    v[13] = v[13] ^ s.t_hi
+    if last { v[14] = ~v[14] }
+    var round = 0usize
+    while round < 12usize {
+        blake2b_g(v[0..], 0usize, 4usize, 8usize, 12usize, m[blake2b_sigma(round, 0usize)], m[blake2b_sigma(round, 1usize)])
+        blake2b_g(v[0..], 1usize, 5usize, 9usize, 13usize, m[blake2b_sigma(round, 2usize)], m[blake2b_sigma(round, 3usize)])
+        blake2b_g(v[0..], 2usize, 6usize, 10usize, 14usize, m[blake2b_sigma(round, 4usize)], m[blake2b_sigma(round, 5usize)])
+        blake2b_g(v[0..], 3usize, 7usize, 11usize, 15usize, m[blake2b_sigma(round, 6usize)], m[blake2b_sigma(round, 7usize)])
+        blake2b_g(v[0..], 0usize, 5usize, 10usize, 15usize, m[blake2b_sigma(round, 8usize)], m[blake2b_sigma(round, 9usize)])
+        blake2b_g(v[0..], 1usize, 6usize, 11usize, 12usize, m[blake2b_sigma(round, 10usize)], m[blake2b_sigma(round, 11usize)])
+        blake2b_g(v[0..], 2usize, 7usize, 8usize, 13usize, m[blake2b_sigma(round, 12usize)], m[blake2b_sigma(round, 13usize)])
+        blake2b_g(v[0..], 3usize, 4usize, 9usize, 14usize, m[blake2b_sigma(round, 14usize)], m[blake2b_sigma(round, 15usize)])
+        round += 1usize
+    }
+    i = 0usize
+    while i < 8usize {
+        s.h[i] = s.h[i] ^ v[i] ^ v[i + 8usize]
+        i += 1usize
+    }
+}
+
+// A BLAKE2b state for `out_len` bytes (1..64) of digest; a non-empty `key` (at most 64
+// bytes) makes the keyed variant, which is BLAKE2b's own MAC.
+fn blake2b_init(out_len: usize, key: []const u8) -> Blake2b {
+    var s: Blake2b = zero
+    let iv = sha512_init()
+    var i = 0usize
+    while i < 8usize {
+        s.h[i] = iv.h[i]
+        i += 1usize
+    }
+    s.h[0] = s.h[0] ^ 16842752u64 ^ u64(out_len & 255usize) ^ (u64(key.len & 255usize) << 8u32)
+    s.out_len = out_len
+    if key.len > 0usize {
+        var padded: [128]u8 = zero
+        i = 0usize
+        while i < key.len {
+            padded[i] = key[i]
+            i += 1usize
+        }
+        blake2b_update(&s, padded[0..])
+    }
+    ret s
+}
+
+fn blake2b_update(s: *Blake2b, bytes: []const u8) {
+    var i = 0usize
+    while i < bytes.len {
+        if s.block_len == 128usize {
+            s.t_lo += 128u64
+            if s.t_lo < 128u64 { s.t_hi += 1u64 }
+            blake2b_compress(s, false)
+            s.block_len = 0usize
+        }
+        s.block[s.block_len] = bytes[i]
+        s.block_len += 1usize
+        i += 1usize
+    }
+}
+
+// The digest in the first `out_len` bytes of the answer; the state is spent.
+fn blake2b_done(s: *Blake2b) -> [64]u8 {
+    s.t_lo += u64(s.block_len)
+    if s.t_lo < u64(s.block_len) { s.t_hi += 1u64 }
+    while s.block_len < 128usize {
+        s.block[s.block_len] = 0u8
+        s.block_len += 1usize
+    }
+    blake2b_compress(s, true)
+    var out: [64]u8 = zero
+    var i = 0usize
+    while i < s.out_len {
+        out[i] = u8((s.h[i / 8usize] >> u32((i % 8usize) * 8usize)) & 255u64)
+        i += 1usize
+    }
+    ret out
+}
+
+fn blake2b(data: []const u8) -> [64]u8 {
+    let none: [0]u8 = zero
+    var s = blake2b_init(64usize, none[0..])
+    blake2b_update(&s, data)
+    ret blake2b_done(&s)
+}
+
+fn blake2b_keyed(key: []const u8, data: []const u8) -> [64]u8 {
+    var s = blake2b_init(64usize, key)
+    blake2b_update(&s, data)
+    ret blake2b_done(&s)
+}
+
+// --- BLAKE3 by the specification's reference implementation: 1024-byte chunks of
+// sixteen 64-byte blocks through the seven-round compression, chunk chaining values
+// merged up a binary tree by a stack of at most 54 subtree values, and the root
+// output extended by counter for any length. The same state serves the plain, keyed
+// and derive-key modes, which differ only in the key words and the domain flags.
+// ponytail: chunks are compressed one at a time in order; the tree structure
+// permits parallel chunk hashing, and that is the upgrade for large inputs.
+type Blake3 = struct { key: [8]u32, cv: [8]u32, chunk_counter: u64, block: [64]u8, block_len: usize, blocks_compressed: usize, flags: u32, stack: [432]u32, stack_len: usize }
+type Blake3Output = struct { cv: [8]u32, block: [16]u32, counter: u64, block_len: u32, flags: u32 }
+
+fn blake3_iv(index: usize) -> u32 {
+    let iv: [8]u32 = [8]u32{ 1779033703, 3144134277, 1013904242, 2773480762, 1359893119, 2600822924, 528734635, 1541459225 }
+    ret iv[index]
+}
+
+fn blake3_word(bytes: []const u8, at: usize) -> u32 {
+    let low = u32(bytes[at]) | (u32(bytes[at + 1usize]) << 8u32)
+    ret low | (u32(bytes[at + 2usize]) << 16u32) | (u32(bytes[at + 3usize]) << 24u32)
+}
+
+fn blake3_words(bytes: []const u8) -> [16]u32 {
+    var words: [16]u32 = zero
+    var i = 0usize
+    while i < 16usize {
+        words[i] = blake3_word(bytes, i * 4usize)
+        i += 1usize
+    }
+    ret words
+}
+
+fn blake3_g(state: []u32, a: usize, b: usize, c: usize, d: usize, mx: u32, my: u32) {
+    state[a] = state[a] +% state[b] +% mx
+    state[d] = rotr32(state[d] ^ state[a], 16u32)
+    state[c] = state[c] +% state[d]
+    state[b] = rotr32(state[b] ^ state[c], 12u32)
+    state[a] = state[a] +% state[b] +% my
+    state[d] = rotr32(state[d] ^ state[a], 8u32)
+    state[c] = state[c] +% state[d]
+    state[b] = rotr32(state[b] ^ state[c], 7u32)
+}
+
+fn blake3_round(state: []u32, m: []const u32) {
+    blake3_g(state, 0usize, 4usize, 8usize, 12usize, m[0], m[1])
+    blake3_g(state, 1usize, 5usize, 9usize, 13usize, m[2], m[3])
+    blake3_g(state, 2usize, 6usize, 10usize, 14usize, m[4], m[5])
+    blake3_g(state, 3usize, 7usize, 11usize, 15usize, m[6], m[7])
+    blake3_g(state, 0usize, 5usize, 10usize, 15usize, m[8], m[9])
+    blake3_g(state, 1usize, 6usize, 11usize, 12usize, m[10], m[11])
+    blake3_g(state, 2usize, 7usize, 8usize, 13usize, m[12], m[13])
+    blake3_g(state, 3usize, 4usize, 9usize, 14usize, m[14], m[15])
+}
+
+fn blake3_compress(cv: [8]u32, block: [16]u32, counter: u64, block_len: u32, flags: u32) -> [16]u32 {
+    var state: [16]u32 = zero
+    var i = 0usize
+    while i < 8usize {
+        state[i] = cv[i]
+        i += 1usize
+    }
+    state[8] = blake3_iv(0usize)
+    state[9] = blake3_iv(1usize)
+    state[10] = blake3_iv(2usize)
+    state[11] = blake3_iv(3usize)
+    state[12] = u32(counter & 4294967295u64)
+    state[13] = u32(counter >> 32u32)
+    state[14] = block_len
+    state[15] = flags
+    let permutation: [16]usize = [16]usize{ 2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8 }
+    var m = block
+    var round = 0usize
+    while round < 7usize {
+        blake3_round(state[0..], m[0..])
+        var permuted: [16]u32 = zero
+        i = 0usize
+        while i < 16usize {
+            permuted[i] = m[permutation[i]]
+            i += 1usize
+        }
+        m = permuted
+        round += 1usize
+    }
+    i = 0usize
+    while i < 8usize {
+        state[i] = state[i] ^ state[i + 8usize]
+        state[i + 8usize] = state[i + 8usize] ^ cv[i]
+        i += 1usize
+    }
+    ret state
+}
+
+fn blake3_output_cv(o: Blake3Output) -> [8]u32 {
+    let words = blake3_compress(o.cv, o.block, o.counter, o.block_len, o.flags)
+    var cv: [8]u32 = zero
+    var i = 0usize
+    while i < 8usize {
+        cv[i] = words[i]
+        i += 1usize
+    }
+    ret cv
+}
+
+// The root output: 64 bytes per counter value, as many as `out` takes.
+fn blake3_output_root(o: Blake3Output, out: []u8) {
+    var at = 0usize
+    var counter = 0u64
+    while at < out.len {
+        let words = blake3_compress(o.cv, o.block, counter, o.block_len, o.flags | 8u32)
+        var i = 0usize
+        while i < 64usize && at < out.len {
+            out[at] = u8((words[i / 4usize] >> u32((i % 4usize) * 8usize)) & 255u32)
+            at += 1usize
+            i += 1usize
+        }
+        counter += 1u64
+    }
+}
+
+fn blake3_start_flag(h: *Blake3) -> u32 {
+    if h.blocks_compressed == 0usize { ret 1u32 }
+    ret 0u32
+}
+
+// The current chunk's output node, with CHUNK_END set.
+fn blake3_chunk_output(h: *Blake3) -> Blake3Output {
+    var o: Blake3Output = zero
+    o.cv = h.cv
+    o.block = blake3_words(h.block[0..])
+    o.counter = h.chunk_counter
+    o.block_len = u32(h.block_len)
+    o.flags = h.flags | blake3_start_flag(h) | 2u32
+    ret o
+}
+
+fn blake3_parent(left: [8]u32, right: [8]u32, key: [8]u32, flags: u32) -> Blake3Output {
+    var o: Blake3Output = zero
+    o.cv = key
+    var i = 0usize
+    while i < 8usize {
+        o.block[i] = left[i]
+        o.block[8usize + i] = right[i]
+        i += 1usize
+    }
+    o.counter = 0u64
+    o.block_len = 64u32
+    o.flags = flags | 4u32
+    ret o
+}
+
+fn blake3_stack_get(h: *Blake3, index: usize) -> [8]u32 {
+    var cv: [8]u32 = zero
+    var i = 0usize
+    while i < 8usize {
+        cv[i] = h.stack[index * 8usize + i]
+        i += 1usize
+    }
+    ret cv
+}
+
+fn blake3_stack_push(h: *Blake3, cv: [8]u32) {
+    var i = 0usize
+    while i < 8usize {
+        h.stack[h.stack_len * 8usize + i] = cv[i]
+        i += 1usize
+    }
+    h.stack_len += 1usize
+}
+
+// A finished chunk's value joins the stack, merging with its left siblings for every
+// trailing zero bit of the chunk count.
+fn blake3_add_chunk_cv(h: *Blake3, cv_in: [8]u32, total_chunks: u64) {
+    var cv = cv_in
+    var remaining = total_chunks
+    while (remaining & 1u64) == 0u64 {
+        h.stack_len -= 1usize
+        cv = blake3_output_cv(blake3_parent(blake3_stack_get(h, h.stack_len), cv, h.key, h.flags))
+        remaining = remaining >> 1u32
+    }
+    blake3_stack_push(h, cv)
+}
+
+fn blake3_init_with(key: [8]u32, flags: u32) -> Blake3 {
+    var h: Blake3 = zero
+    h.key = key
+    h.cv = key
+    h.flags = flags
+    ret h
+}
+
+fn blake3_init() -> Blake3 {
+    var key: [8]u32 = zero
+    var i = 0usize
+    while i < 8usize {
+        key[i] = blake3_iv(i)
+        i += 1usize
+    }
+    ret blake3_init_with(key, 0u32)
+}
+
+fn blake3_key_words(key: [32]u8) -> [8]u32 {
+    var words: [8]u32 = zero
+    var i = 0usize
+    while i < 8usize {
+        words[i] = blake3_word(key[0..], i * 4usize)
+        i += 1usize
+    }
+    ret words
+}
+
+fn blake3_keyed_init(key: [32]u8) -> Blake3 { ret blake3_init_with(blake3_key_words(key), 16u32) }
+
+// Derive-key mode: the context string is hashed in DERIVE_KEY_CONTEXT mode and its
+// 32-byte digest keys the DERIVE_KEY_MATERIAL hasher.
+fn blake3_derive_key_init(context: []const u8) -> Blake3 {
+    var iv: [8]u32 = zero
+    var i = 0usize
+    while i < 8usize {
+        iv[i] = blake3_iv(i)
+        i += 1usize
+    }
+    var context_hasher = blake3_init_with(iv, 32u32)
+    blake3_update(&context_hasher, context)
+    var context_key: [32]u8 = zero
+    blake3_done(&context_hasher, context_key[0..])
+    ret blake3_init_with(blake3_key_words(context_key), 64u32)
+}
+
+// The output node reads all sixteen words of the buffer, so a compressed block is cleared.
+fn blake3_clear_block(h: *Blake3) {
+    var i = 0usize
+    while i < 64usize {
+        h.block[i] = 0u8
+        i += 1usize
+    }
+}
+
+fn blake3_update(h: *Blake3, data: []const u8) {
+    var at = 0usize
+    while at < data.len {
+        if h.blocks_compressed * 64usize + h.block_len == 1024usize {
+            let chunk_cv = blake3_output_cv(blake3_chunk_output(h))
+            let total_chunks = h.chunk_counter + 1u64
+            blake3_add_chunk_cv(h, chunk_cv, total_chunks)
+            h.cv = h.key
+            h.chunk_counter = total_chunks
+            h.block_len = 0usize
+            h.blocks_compressed = 0usize
+            blake3_clear_block(h)
+        }
+        if h.block_len == 64usize {
+            let words = blake3_compress(h.cv, blake3_words(h.block[0..]), h.chunk_counter, 64u32, h.flags | blake3_start_flag(h))
+            var i = 0usize
+            while i < 8usize {
+                h.cv[i] = words[i]
+                i += 1usize
+            }
+            h.blocks_compressed += 1usize
+            h.block_len = 0usize
+            blake3_clear_block(h)
+        }
+        var take = 64usize - h.block_len
+        if take > data.len - at { take = data.len - at }
+        var i = 0usize
+        while i < take {
+            h.block[h.block_len + i] = data[at + i]
+            i += 1usize
+        }
+        h.block_len += take
+        at += take
+    }
+}
+
+// Fills `out` with the root output; the state is left intact and may take more data.
+fn blake3_done(h: *Blake3, out: []u8) {
+    var o = blake3_chunk_output(h)
+    var remaining = h.stack_len
+    while remaining > 0usize {
+        remaining -= 1usize
+        o = blake3_parent(blake3_stack_get(h, remaining), blake3_output_cv(o), h.key, h.flags)
+    }
+    blake3_output_root(o, out)
+}
+
+fn blake3(data: []const u8) -> [32]u8 {
+    var h = blake3_init()
+    blake3_update(&h, data)
+    var out: [32]u8 = zero
+    blake3_done(&h, out[0..])
+    ret out
+}
+
+fn blake3_xof(data: []const u8, out: []u8) {
+    var h = blake3_init()
+    blake3_update(&h, data)
+    blake3_done(&h, out)
+}
+
+fn blake3_keyed(key: [32]u8, data: []const u8) -> [32]u8 {
+    var h = blake3_keyed_init(key)
+    blake3_update(&h, data)
+    var out: [32]u8 = zero
+    blake3_done(&h, out[0..])
+    ret out
+}
+
+fn blake3_derive_key(context: []const u8, key_material: []const u8, out: []u8) {
+    var h = blake3_derive_key_init(context)
+    blake3_update(&h, key_material)
+    blake3_done(&h, out)
+}

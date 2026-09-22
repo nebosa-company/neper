@@ -1,0 +1,29 @@
+{
+ "decision": "D884",
+ "modules": [
+  {"name": "e.algo.bignum", "refresh": true,
+   "comment": "`e.algo.bignum` (Montgomery exponentiation and byte conversions; shared fixture with e.crypto.sign)"},
+  {"name": "e.crypto.hash", "refresh": true,
+   "comment": "`e.crypto.hash` (BLAKE2b and BLAKE3; shared fixtures with e.crypto.kdf and e.crypto.sign)"},
+  {"name": "e.crypto.kdf", "refresh": true, "fixture": "crypto_kdf_plan", "deps": ["e.crypto.hash", "e.crypto.mac"],
+   "comment": "`e.crypto.kdf` planned functions: PBKDF2 over both HMACs, scrypt on the RFC 7914 vector, bcrypt with Blowfish tables generated from pi and checked against the bcrypt package, Argon2id on the RFC 9106 vector and against cryptography, BLAKE2b against hashlib"},
+  {"name": "e.crypto.kx", "refresh": true, "deps": ["e.algo.bignum", "e.mem"],
+   "comment": "`e.crypto.kx` (ffdhe2048 Diffie-Hellman; shared fixture with e.crypto.sign)"},
+  {"name": "e.crypto.mac", "refresh": true, "deps": ["e.crypto.aead", "e.crypto.hash"],
+   "comment": "`e.crypto.mac` (Poly1305; shared fixture with e.crypto.sign)"},
+  {"name": "e.crypto.sign", "refresh": true, "fixture": "crypto_sign_plan", "deps": ["e.algo.bignum", "e.crypto.hash", "e.crypto.mac", "e.mem"],
+   "comment": "`e.crypto.sign` planned functions: RFC 6979 P-256 signing on the RFC's vectors, BIP-340 Schnorr over secp256k1 on all nineteen published rows, RSA-PSS byte-equal to a replica and verified by cryptography, ffdhe2048 DH, Poly1305 on the RFC 8439 vector, BLAKE3 on the official vectors in all three modes"},
+  {"name": "e.gfx.geometry", "refresh": true,
+   "comment": "`e.gfx.geometry` (flatten and stroke; shared fixture with e.gfx.paint)"},
+  {"name": "e.gfx.image", "refresh": true, "deps": ["e.bytes", "e.gfx.geometry", "e.gfx.paint", "e.math", "e.math.fft", "e.mem"],
+   "comment": "`e.gfx.image` (PSNR, SSIM, perceptual hashes; shared fixture with e.gfx.paint)"},
+  {"name": "e.gfx.paint", "refresh": true, "fixture": "gfx_paint_plan", "deps": ["e.gfx.geometry", "e.math"],
+   "comment": "`e.gfx.paint`, `e.gfx.image` and `e.gfx.geometry` planned functions: path flattening and stroking, the sRGB transfer pair, gradients with three spreads, all thirteen Porter-Duff operators, scanline coverage fills, subpixel glyph rendering and glyph distance fields, PSNR and an SSIM replica checked against scikit-image, average, difference and DCT hashes"},
+  {"name": "e.gfx.scene", "refresh": true, "fixture": "gfx_scene_plan",
+   "comment": "`e.gfx.scene` planned functions: a perspective-correct rasterizer, painter's ordering, deferred shading, clustered lights, cascaded and PCF shadows, SSAO, screen-space reflections, temporal and FXAA anti-aliasing, depth peeling, sphere tracing and volumetric fog, each on a sixteen-pixel-square buffer against a numpy replica"},
+  {"name": "e.math.fft", "refresh": true, "fixture": "math_fft_filter_plan",
+   "comment": "`e.math.fft` and `e.math.filter` planned functions: orthonormal DCT-II/III/IV against SciPy, an MDCT with exact overlap-add reconstruction, Haar and Daubechies-4 wavelets against PyWavelets, and one-call EKF, scaled UKF and particle filter steps over a tracking problem"},
+  {"name": "e.math.filter", "refresh": true,
+   "comment": "`e.math.filter` (shared fixture with e.math.fft)"}
+ ]
+}

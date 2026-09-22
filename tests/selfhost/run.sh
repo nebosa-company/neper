@@ -2119,6 +2119,31 @@ game_ai_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$game_ai_plan_written" = 'executable written' ]
 chmod +x "$test_build/game-ai-plan-selfhost"
 "$test_build/game-ai-plan-selfhost"
+# `e.crypto.kdf` planned functions: PBKDF2 over both HMACs, scrypt on the RFC 7914 vector, bcrypt with Blowfish tables generated from pi and checked against the bcrypt package, Argon2id on the RFC 9106 vector and against cryptography, BLAKE2b against hashlib (D884).
+crypto_kdf_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_kdf_plan/src/main.e" "$repo" x64 linux "$test_build/crypto-kdf-plan-selfhost")
+[ "$crypto_kdf_plan_written" = 'executable written' ]
+chmod +x "$test_build/crypto-kdf-plan-selfhost"
+"$test_build/crypto-kdf-plan-selfhost"
+# `e.crypto.sign` planned functions: RFC 6979 P-256 signing on the RFC's vectors, BIP-340 Schnorr over secp256k1 on all nineteen published rows, RSA-PSS byte-equal to a replica and verified by cryptography, ffdhe2048 DH, Poly1305 on the RFC 8439 vector, BLAKE3 on the official vectors in all three modes (D884).
+crypto_sign_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_sign_plan/src/main.e" "$repo" x64 linux "$test_build/crypto-sign-plan-selfhost")
+[ "$crypto_sign_plan_written" = 'executable written' ]
+chmod +x "$test_build/crypto-sign-plan-selfhost"
+"$test_build/crypto-sign-plan-selfhost"
+# `e.gfx.paint`, `e.gfx.image` and `e.gfx.geometry` planned functions: path flattening and stroking, the sRGB transfer pair, gradients with three spreads, all thirteen Porter-Duff operators, scanline coverage fills, subpixel glyph rendering and glyph distance fields, PSNR and an SSIM replica checked against scikit-image, average, difference and DCT hashes (D884).
+gfx_paint_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_paint_plan/src/main.e" "$repo" x64 linux "$test_build/gfx-paint-plan-selfhost")
+[ "$gfx_paint_plan_written" = 'executable written' ]
+chmod +x "$test_build/gfx-paint-plan-selfhost"
+"$test_build/gfx-paint-plan-selfhost"
+# `e.gfx.scene` planned functions: a perspective-correct rasterizer, painter's ordering, deferred shading, clustered lights, cascaded and PCF shadows, SSAO, screen-space reflections, temporal and FXAA anti-aliasing, depth peeling, sphere tracing and volumetric fog, each on a sixteen-pixel-square buffer against a numpy replica (D884).
+gfx_scene_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_scene_plan/src/main.e" "$repo" x64 linux "$test_build/gfx-scene-plan-selfhost")
+[ "$gfx_scene_plan_written" = 'executable written' ]
+chmod +x "$test_build/gfx-scene-plan-selfhost"
+"$test_build/gfx-scene-plan-selfhost"
+# `e.math.fft` and `e.math.filter` planned functions: orthonormal DCT-II/III/IV against SciPy, an MDCT with exact overlap-add reconstruction, Haar and Daubechies-4 wavelets against PyWavelets, and one-call EKF, scaled UKF and particle filter steps over a tracking problem (D884).
+math_fft_filter_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_fft_filter_plan/src/main.e" "$repo" x64 linux "$test_build/math-fft-filter-plan-selfhost")
+[ "$math_fft_filter_plan_written" = 'executable written' ]
+chmod +x "$test_build/math-fft-filter-plan-selfhost"
+"$test_build/math-fft-filter-plan-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

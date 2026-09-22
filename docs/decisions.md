@@ -17350,6 +17350,37 @@ in both runners, and the rule for extending a pinned module is to append
 only. Lesson: ARC, LFU and 2Q all beat LRU on the hot-set-plus-scan trace
 the fixture constructs, which is the property that justifies their place.
 
+## D884 — Batch 42: rendering techniques, painting, key derivation, signatures and transforms
+
+Twelve modules touched for sixty planned names. `e.gfx.scene` gained
+thirteen CPU-side 3-D techniques over caller float buffers, sharing one
+perspective-correct rasterizer between `rasterize`, `deferred` and
+`depth_peel`, each checked against a numpy replica on sixteen-pixel-square
+images; `e.gfx.geometry`, `e.gfx.paint` and `e.gfx.image` gained
+flattening and stroking, gradients, Porter-Duff compositing, coverage
+fills, subpixel glyphs and distance fields, PSNR, SSIM and the three
+perceptual hashes (SSIM is the uniform-window form; the replica agrees
+with scikit-image to 1e-15 at an odd window, the even window being
+scikit-image's own asymmetry). `e.crypto.kdf` gained PBKDF2, scrypt,
+bcrypt (Blowfish tables generated from pi with mpmath and checked against
+the classic vector) and Argon2id on the RFC 9106 vector, with BLAKE2b
+appended to `e.crypto.hash`; `e.crypto.sign` gained RFC 6979 P-256
+signing, BIP-340 Schnorr over secp256k1 (the generic modular routines
+already there serve a second curve), RSA-PSS and PKCS#1 v1.5
+verification; `e.crypto.kx` gained ffdhe2048 Diffie-Hellman; `e.crypto.mac`
+gained Poly1305 over `e.crypto.aead`'s arithmetic; `e.crypto.hash` gained
+BLAKE3 on the official vectors; and `e.algo.bignum` gained Montgomery
+exponentiation because the module's bit-serial division would have made a
+2048-bit private exponent cost billions of limb operations. `e.math.fft`
+gained orthonormal DCTs, an MDCT and Haar/db4 wavelets checked against
+PyWavelets; `e.math.filter`'s one-call `ekf`, `ukf` and `particle` now hold
+the bodies the older step functions wrap. Six modules' dependency lists
+changed and follow their sources. Post-quantum (`ml_kem`, `ml_dsa`, `xmss`)
+is deliberately left for its own batch. This closes the stream's first
+number block; the next rows start at D910 by agreement with the UI session.
+Compiler notes: `h.block = zero` through a pointer is refused (loop
+instead), and `a += b - c` traps on the subtraction before the add.
+
 ## D885 — `e.os.shell` opens the host's shell: a capability record, never an emulation
 
 The widget plan's phase 4 waits on reviewed host primitives, and its

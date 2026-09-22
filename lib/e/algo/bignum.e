@@ -467,3 +467,217 @@ fn rat_format(v: Rat, b: *str.Builder) -> err {
     try str.push_byte(b, 47u8)
     ret int_format(v.den, b, 10u8)
 }
+
+// --- Bytes and modular exponentiation (for e.crypto.sign and e.crypto.kx).
+
+// The number of significant bits: zero for zero.
+fn int_bits(v: Int) -> usize {
+    if v.sign == .Zero { ret 0usize }
+    var top = v.limbs[v.limbs.len - 1usize]
+    var bits = 0usize
+    while top != 0u32 {
+        top = top >> 1u32
+        bits += 1usize
+    }
+    ret (v.limbs.len - 1usize) * 32usize + bits
+}
+
+// A non-negative value from big-endian bytes; leading zero bytes are fine.
+fn int_from_bytes_be(a: *mem.Arena, bytes: []const u8) -> (Int, err) {
+    let (limbs, limbs_error) = mem.alloc[u32](a, bytes.len / 4usize + 1usize)
+    if limbs_error != ok { ret (zero, limbs_error) }
+    var at = 0usize
+    while at < limbs.len {
+        limbs[at] = 0u32
+        at += 1usize
+    }
+    at = 0usize
+    while at < bytes.len {
+        let from_end = bytes.len - 1usize - at
+        limbs[from_end / 4usize] = limbs[from_end / 4usize] | (u32(bytes[at]) << u32((from_end % 4usize) * 8usize))
+        at += 1usize
+    }
+    ret (make_int(a, .Positive, limbs), ok)
+}
+
+// The magnitude big-endian into all of `out`, zero-padded on the left; `Invalid` when
+// the value is negative or does not fit.
+fn int_to_bytes_be(v: Int, out: []u8) -> err {
+    if v.sign == .Negative { ret Invalid }
+    if int_bits(v) > out.len * 8usize { ret Invalid }
+    var at = 0usize
+    while at < out.len {
+        let from_end = out.len - 1usize - at
+        var byte = 0u8
+        if from_end / 4usize < v.limbs.len {
+            byte = u8((v.limbs[from_end / 4usize] >> u32((from_end % 4usize) * 8usize)) & 255u32)
+        }
+        out[at] = byte
+        at += 1usize
+    }
+    ret ok
+}
+
+// -m^-1 mod 2^32 for an odd m, by Newton's iteration from the trivial inverse mod 2.
+fn mont_inverse32(m0: u32) -> u32 {
+    var inverse = 1u32
+    var round = 0usize
+    while round < 5usize {
+        inverse = inverse *% (2u32 -% m0 *% inverse)
+        round += 1usize
+    }
+    ret 0u32 -% inverse
+}
+
+// CIOS Montgomery product: out = x * y * R^-1 mod m with R = 2^(32 k), for x, y < m
+// and k = m.len. `t` is scratch of k + 2 limbs; `out` may alias x or y.
+fn mont_mul(t: []u32, out: []u32, x: []const u32, y: []const u32, m: []const u32, m_prime: u32) {
+    let k = m.len
+    var at = 0usize
+    while at < k + 2usize {
+        t[at] = 0u32
+        at += 1usize
+    }
+    var i = 0usize
+    while i < k {
+        let xi = u64(x[i])
+        var carry = 0u64
+        var j = 0usize
+        while j < k {
+            let sum = u64(t[j]) + xi * u64(y[j]) + carry
+            t[j] = u32(sum & 4294967295u64)
+            carry = sum >> 32u32
+            j += 1usize
+        }
+        var sum = u64(t[k]) + carry
+        t[k] = u32(sum & 4294967295u64)
+        t[k + 1usize] = u32(sum >> 32u32)
+        let u = u64(t[0] *% m_prime)
+        carry = 0u64
+        j = 0usize
+        while j < k {
+            let sum2 = u64(t[j]) + u * u64(m[j]) + carry
+            t[j] = u32(sum2 & 4294967295u64)
+            carry = sum2 >> 32u32
+            j += 1usize
+        }
+        sum = u64(t[k]) + carry
+        t[k] = u32(sum & 4294967295u64)
+        t[k + 1usize] = t[k + 1usize] +% u32(sum >> 32u32)
+        j = 0usize
+        while j < k + 1usize {
+            t[j] = t[j + 1usize]
+            j += 1usize
+        }
+        t[k + 1usize] = 0u32
+        i += 1usize
+    }
+    // t < 2m here: one conditional subtraction settles it.
+    if t[k] != 0u32 || magnitude_cmp(trimmed(t[..k]), m) >= 0i32 {
+        var borrow = 0u64
+        at = 0usize
+        while at < k {
+            let have = u64(t[at])
+            let take = u64(m[at]) + borrow
+            if have >= take {
+                t[at] = u32(have - take)
+                borrow = 0u64
+            } else {
+                t[at] = u32(have + 4294967296u64 - take)
+                borrow = 1u64
+            }
+            at += 1usize
+        }
+    }
+    at = 0usize
+    while at < k {
+        out[at] = t[at]
+        at += 1usize
+    }
+}
+
+// (value * 2^(32 k)) mod m as exactly k limbs, by the module's division.
+fn mont_enter(a: *mem.Arena, value: []const u32, m: []const u32) -> ([]u32, err) {
+    let k = m.len
+    let (shifted, shifted_error) = mem.alloc[u32](a, value.len + k)
+    if shifted_error != ok { ret (zero, shifted_error) }
+    var at = 0usize
+    while at < shifted.len {
+        shifted[at] = 0u32
+        if at >= k { shifted[at] = value[at - k] }
+        at += 1usize
+    }
+    let (_, remainder, divide_error) = magnitude_divmod(a, shifted, m)
+    if divide_error != ok { ret (zero, divide_error) }
+    ret (remainder[..k], ok)
+}
+
+// base^exponent mod modulus for a non-negative exponent. An odd modulus runs
+// Montgomery multiplication in place over scratch from the arena; an even one falls
+// back to multiply-and-divide with the module's operations.
+// ponytail: the exponent is scanned bit by bit and no window is used; enough for a
+// 2048-bit RSA signature in well under a second.
+fn int_mod_pow(a: *mem.Arena, base: Int, exponent: Int, modulus: Int) -> (Int, err) {
+    if modulus.sign == .Zero { ret (zero, DivideByZero) }
+    if exponent.sign == .Negative { ret (zero, Invalid) }
+    let (_, reduced, reduce_error) = int_divmod(a, base, modulus)
+    if reduce_error != ok { ret (zero, reduce_error) }
+    var residue = reduced
+    if residue.sign == .Negative {
+        let (fixed, fix_error) = int_add(a, residue, modulus)
+        if fix_error != ok { ret (zero, fix_error) }
+        residue = fixed
+    }
+    let m = modulus.limbs
+    let k = m.len
+    let bits = int_bits(exponent)
+    if (m[0] & 1u32) == 0u32 {
+        let (one, one_error) = int_from_i64(a, 1i64)
+        if one_error != ok { ret (zero, one_error) }
+        var acc = one
+        var bit = bits
+        while bit > 0usize {
+            bit -= 1usize
+            let (square, square_error) = int_mul(a, acc, acc)
+            if square_error != ok { ret (zero, square_error) }
+            let (_, square_mod, square_mod_error) = int_divmod(a, square, modulus)
+            if square_mod_error != ok { ret (zero, square_mod_error) }
+            acc = square_mod
+            if bit_of(exponent.limbs, bit) {
+                let (product, product_error) = int_mul(a, acc, residue)
+                if product_error != ok { ret (zero, product_error) }
+                let (_, product_mod, product_mod_error) = int_divmod(a, product, modulus)
+                if product_mod_error != ok { ret (zero, product_mod_error) }
+                acc = product_mod
+            }
+        }
+        let (_, final_mod, final_error) = int_divmod(a, acc, modulus)
+        if final_error != ok { ret (zero, final_error) }
+        ret (final_mod, ok)
+    }
+    let m_prime = mont_inverse32(m[0])
+    let (t, t_error) = mem.alloc[u32](a, k + 2usize)
+    if t_error != ok { ret (zero, t_error) }
+    let (base_mont, base_error) = mont_enter(a, residue.limbs, m)
+    if base_error != ok { ret (zero, base_error) }
+    var one_limb: [1]u32 = zero
+    one_limb[0] = 1u32
+    let (acc, acc_error) = mont_enter(a, one_limb[0..], m)
+    if acc_error != ok { ret (zero, acc_error) }
+    var bit = bits
+    while bit > 0usize {
+        bit -= 1usize
+        mont_mul(t, acc, acc, acc, m, m_prime)
+        if bit_of(exponent.limbs, bit) { mont_mul(t, acc, acc, base_mont, m, m_prime) }
+    }
+    let (plain, plain_error) = mem.alloc[u32](a, k)
+    if plain_error != ok { ret (zero, plain_error) }
+    var at = 0usize
+    while at < k {
+        plain[at] = 0u32
+        at += 1usize
+    }
+    plain[0] = 1u32
+    mont_mul(t, acc, acc, plain, m, m_prime)
+    ret (make_int(a, .Positive, acc), ok)
+}
