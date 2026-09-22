@@ -3325,6 +3325,45 @@ fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child)
 Layout is a deterministic pure constraint solver. Scroll state, widget measurement
 and render-tree traversal remain in `e.ui.widget`.
 
+### `e.crypto.classic`
+
+```neper
+error TooSmall
+error Invalid
+
+fn is_upper(c: u8) -> bool
+fn is_lower(c: u8) -> bool
+fn is_letter(c: u8) -> bool
+fn shift_letter(c: u8, k: u32) -> u8
+fn caesar(text: []const u8, shift: u32, out: []u8) -> (usize, err)
+fn caesar_decrypt(text: []const u8, shift: u32, out: []u8) -> (usize, err)
+fn rot13(text: []const u8, out: []u8) -> (usize, err)
+fn atbash(text: []const u8, out: []u8) -> (usize, err)
+fn vigenere(text: []const u8, key: []const u8, out: []u8) -> (usize, err)
+fn vigenere_decrypt(text: []const u8, key: []const u8, out: []u8) -> (usize, err)
+fn vigenere_walk(text: []const u8, key: []const u8, out: []u8, decrypt: bool) -> (usize, err)
+fn key_table(key: []const u8, table: []u8) -> err
+fn apply_table(text: []const u8, table: []const u8, out: []u8) -> (usize, err)
+fn substitution(text: []const u8, key: []const u8, out: []u8) -> (usize, err)
+fn substitution_decrypt(text: []const u8, key: []const u8, out: []u8) -> (usize, err)
+fn inverse26(a: u32) -> u32
+fn affine(text: []const u8, a: u32, b: u32, out: []u8) -> (usize, err)
+fn affine_decrypt(text: []const u8, a: u32, b: u32, out: []u8) -> (usize, err)
+fn rail_fence(text: []const u8, rails: usize, out: []u8) -> (usize, err)
+fn rail_fence_decrypt(text: []const u8, rails: usize, out: []u8) -> (usize, err)
+fn rail_walk(text: []const u8, rails: usize, out: []u8, decrypt: bool) -> (usize, err)
+fn playfair_square(key: []const u8, square: []u8)
+fn square_index(square: []const u8, c: u8) -> usize
+fn playfair_pairs(buf: []u8, n: usize, square: []const u8, step: usize)
+fn playfair_filler(c: u8) -> u8
+fn playfair(text: []const u8, key: []const u8, out: []u8) -> (usize, err)
+fn playfair_decrypt(text: []const u8, key: []const u8, out: []u8) -> (usize, err)
+```
+
+Classical ciphers over ASCII letters into caller output: `caesar`, `rot13`, `atbash`,
+`vigenere`, `substitution`, `affine`, `rail_fence` and `playfair` (5x5, J folded into I,
+X filler), each with its `_decrypt` where the cipher is not an involution.
+
 ### `e.crypto.hash`
 
 ```neper
@@ -3413,6 +3452,24 @@ fn chacha20_poly1305_open(dst: []u8, key: [32]u8, nonce: [12]u8, aad: []const u8
 
 The sealed representation is ciphertext followed by the 16-byte authentication tag.
 
+### `e.crypto.secret`
+
+```neper
+error Invalid
+error TooSmall
+
+fn gf_mul(a: u8, b: u8) -> u8
+fn gf_inv(a: u8) -> u8
+fn share_size(len: usize, n: u8) -> usize
+fn split(secret: []const u8, n: u8, k: u8, coefficients: []const u8, shares: []u8) -> err
+fn split_random(secret: []const u8, n: u8, k: u8, rng: *rand.Pcg64, shares: []u8) -> err
+fn combine(xs: []const u8, shares: []const u8, len: usize, out: []u8) -> err
+```
+
+Shamir secret sharing byte-wise over GF(2^8) with the AES polynomial: `split` with
+caller coefficients, `split_random` over a PCG stream, `combine` by Lagrange
+interpolation at zero; `gf_mul`, `gf_inv`, `share_size`.
+
 ### `e.crypto.sign`
 
 ```neper
@@ -3446,6 +3503,34 @@ fn x25519_exchange(secret: X25519SecretKey, peer: X25519PublicKey) -> (X25519Sha
 ```
 
 The scalar is clamped by the operation. An all-zero shared secret is `InvalidKey`.
+
+### `e.crypto.merkle`
+
+```neper
+type Tree = struct { nodes: []u8, n: usize }
+error TooSmall
+error Invalid
+
+fn nodes_required(n: usize) -> usize
+fn leaf_hash(data: []const u8) -> [32]u8
+fn inner_hash(left: []const u8, right: []const u8) -> [32]u8
+fn split_point(n: usize) -> usize
+fn copy_hash(out: []u8, at: usize, h: [32]u8)
+fn build_range(leaves: []const []const u8, nodes: []u8, lo: usize, hi: usize, base: usize)
+fn build(leaves: []const []const u8, nodes: []u8) -> (Tree, err)
+fn root(t: *const Tree) -> [32]u8
+fn audit_path(t: *const Tree, index: usize, out: []u8) -> (usize, err)
+fn same(a: [32]u8, b: [32]u8) -> bool
+fn verify(root_hash: [32]u8, leaf_data: []const u8, index: usize, n: usize, path: []const u8) -> bool
+fn consistency_proof(t: *const Tree, m: usize, out: []u8) -> (usize, err)
+fn root_at(t: *const Tree, index: usize) -> [32]u8
+fn verify_consistency(old_root: [32]u8, new_root: [32]u8, m: usize, n: usize, proof: []const u8) -> bool
+fn root_at_slice(bytes: []const u8, at: usize) -> [32]u8
+```
+
+RFC 6962 Merkle trees over caller node storage: `build` (`nodes_required`), `root`,
+`leaf_hash`, `inner_hash`, `audit_path` with `verify`, `consistency_proof` with
+`verify_consistency`.
 
 ### `e.crypto.random`
 
@@ -7366,6 +7451,43 @@ fn storage_required(block_limit: usize) -> (usize, err)
 Version 1 provides bounded bzip2 decompression. Compression is deliberately omitted
 until a workload justifies its larger implementation and memory surface.
 
+### `e.fmt.lz4`
+
+```neper
+error Invalid
+error TooSmall
+const TABLE: usize = 4096usize
+const MIN_MATCH: usize = 4usize
+const LAST_LITERALS: usize = 5usize
+const MATCH_LIMIT: usize = 12usize
+const MAX_OFFSET: usize = 65535usize
+const BLOCK: usize = 65536usize
+
+fn table_required() -> usize
+fn bound(n: usize) -> usize
+fn read32(src: []const u8, at: usize) -> u32
+fn hash_of(v: u32) -> usize
+fn put_length(dst: []u8, at: usize, n: usize) -> usize
+fn put_sequence(src: []const u8, anchor: usize, lit: usize, offset: usize, mlen: usize, dst: []u8, at: usize) -> (usize, err)
+fn encode(src: []const u8, dst: []u8, table: []u32) -> (usize, err)
+fn get_length(src: []const u8, at: usize, base: usize) -> (usize, usize, err)
+fn decode_into(src: []const u8, dst: []u8, start: usize) -> (usize, err)
+fn decode(src: []const u8, dst: []u8) -> (usize, err)
+fn rotl32(x: u32, r: u32) -> u32
+fn xxh32_round(acc: u32, w: u32) -> u32
+fn xxh32(data: []const u8, seed: u32) -> u32
+fn put32(dst: []u8, at: usize, v: u32)
+fn frame_bound(n: usize) -> usize
+fn encode_frame(src: []const u8, dst: []u8, table: []u32) -> (usize, err)
+fn decode_frame(src: []const u8, dst: []u8) -> (usize, err)
+fn decode_body(src: []const u8, start: usize, dst: []u8) -> (usize, err)
+```
+
+LZ4 block format (`encode` over a caller `[]u32` hash table, strict `decode`, `bound`)
+and the v1 frame format (`encode_frame` with independent 64 KiB blocks and a content
+checksum, `decode_frame` accepting dependent blocks, block checksums and content size)
+with `xxh32`.
+
 ### `e.fmt.lzw`
 
 ```neper
@@ -7425,6 +7547,40 @@ fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
 Version 1 reads stored and DEFLATE entries, ZIP64 sizes and UTF-8 names. It rejects
 encrypted entries, absolute paths and names containing a `..` segment. CRC and all
 per-entry/aggregate limits are checked before successful extraction.
+
+### `e.fmt.snappy`
+
+```neper
+error Invalid
+error TooSmall
+error Checksum
+
+fn block_size() -> usize
+fn table_bits() -> u32
+fn table_required() -> usize
+fn bound(n: usize) -> usize
+fn bound_framed(n: usize) -> usize
+fn load32(src: []const u8, at: usize) -> u32
+fn hash(v: u32, shift: u32) -> u32
+fn put_varint(dst: []u8, v: usize) -> (usize, err)
+fn emit_literal(dst: []u8, d: usize, lit: []const u8) -> (usize, err)
+fn emit_copy2(dst: []u8, d: usize, offset: usize, length: usize) -> (usize, err)
+fn emit_copy(dst: []u8, d: usize, offset: usize, length: usize) -> (usize, err)
+fn encode_block(src: []const u8, dst: []u8, d0: usize, table: []u16) -> (usize, err)
+fn encode(src: []const u8, dst: []u8, table: []u16) -> (usize, err)
+fn get_varint(src: []const u8) -> (usize, usize, err)
+fn decoded_length(src: []const u8) -> (usize, err)
+fn decode(src: []const u8, dst: []u8) -> (usize, err)
+fn crc32c(data: []const u8) -> u32
+fn masked_crc(data: []const u8) -> u32
+fn put_chunk_head(dst: []u8, at: usize, kind: u8, size: usize, crc: u32)
+fn encode_framed(src: []const u8, dst: []u8, table: []u16) -> (usize, err)
+fn decode_framed(src: []const u8, dst: []u8) -> (usize, err)
+```
+
+Snappy raw format (`encode` as the reference encoder over 64 KiB blocks, strict `decode`,
+`decoded_length`, `bound`) and the framing format (`encode_framed`, `decode_framed` with
+masked CRC32C chunks) with `crc32c`.
 
 ### `e.fmt.tar`
 

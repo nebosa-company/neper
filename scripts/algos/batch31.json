@@ -1,0 +1,20 @@
+{
+ "decision": "D873",
+ "modules": [
+  {"name": "e.crypto.classic", "deps": [], "fixture": "crypto_classic", "anchor": "### `e.crypto.hash`\n",
+   "note": "Classical ciphers over ASCII letters into caller output: `caesar`, `rot13`, `atbash`,\n`vigenere`, `substitution`, `affine`, `rail_fence` and `playfair` (5x5, J folded into I,\nX filler), each with its `_decrypt` where the cipher is not an involution.",
+   "comment": "`e.crypto.classic`: eight ciphers against a replica, the ROT13, LEMON and Playfair textbook vectors, every decrypt a roundtrip"},
+  {"name": "e.crypto.merkle", "deps": ["e.crypto.hash"], "fixture": "crypto_merkle", "anchor": "### `e.crypto.random`\n",
+   "note": "RFC 6962 Merkle trees over caller node storage: `build` (`nodes_required`), `root`,\n`leaf_hash`, `inner_hash`, `audit_path` with `verify`, `consistency_proof` with\n`verify_consistency`.",
+   "comment": "`e.crypto.merkle`: the RFC 6962 eight-leaf roots, every inclusion proof, four consistency proofs, tampering rejected"},
+  {"name": "e.crypto.secret", "deps": ["e.algo.rand"], "fixture": "crypto_secret", "anchor": "### `e.crypto.sign`\n",
+   "note": "Shamir secret sharing byte-wise over GF(2^8) with the AES polynomial: `split` with\ncaller coefficients, `split_random` over a PCG stream, `combine` by Lagrange\ninterpolation at zero; `gf_mul`, `gf_inv`, `share_size`.",
+   "comment": "`e.crypto.secret`: a 3-of-5 split equal to a replica row for row, all ten subsets reconstructing, two shares not"},
+  {"name": "e.fmt.lz4", "deps": [], "fixture": "fmt_lz4", "anchor": "### `e.fmt.lzw`\n",
+   "note": "LZ4 block format (`encode` over a caller `[]u32` hash table, strict `decode`, `bound`)\nand the v1 frame format (`encode_frame` with independent 64 KiB blocks and a content\nchecksum, `decode_frame` accepting dependent blocks, block checksums and content size)\nwith `xxh32`.",
+   "comment": "`e.fmt.lz4`: cramjam blocks and frames decoded, our blocks and frames decoded by cramjam, roundtrips of compressible, incompressible and empty input"},
+  {"name": "e.fmt.snappy", "deps": [], "fixture": "fmt_snappy", "anchor": "### `e.fmt.tar`\n",
+   "note": "Snappy raw format (`encode` as the reference encoder over 64 KiB blocks, strict `decode`,\n`decoded_length`, `bound`) and the framing format (`encode_framed`, `decode_framed` with\nmasked CRC32C chunks) with `crc32c`.",
+   "comment": "`e.fmt.snappy`: byte-identical to cramjam on six inputs including three-block streams, CRC32C vector, a flipped checksum refused"}
+ ]
+}

@@ -1869,6 +1869,31 @@ instance_local_names_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$instance_local_names_written" = 'executable written' ]
 chmod +x "$test_build/instance-local-names-selfhost"
 "$test_build/instance-local-names-selfhost"
+# `e.crypto.classic`: eight ciphers against a replica, the ROT13, LEMON and Playfair textbook vectors, every decrypt a roundtrip (D873).
+crypto_classic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_classic/src/main.e" "$repo" x64 linux "$test_build/crypto-classic-selfhost")
+[ "$crypto_classic_written" = 'executable written' ]
+chmod +x "$test_build/crypto-classic-selfhost"
+"$test_build/crypto-classic-selfhost"
+# `e.crypto.merkle`: the RFC 6962 eight-leaf roots, every inclusion proof, four consistency proofs, tampering rejected (D873).
+crypto_merkle_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_merkle/src/main.e" "$repo" x64 linux "$test_build/crypto-merkle-selfhost")
+[ "$crypto_merkle_written" = 'executable written' ]
+chmod +x "$test_build/crypto-merkle-selfhost"
+"$test_build/crypto-merkle-selfhost"
+# `e.crypto.secret`: a 3-of-5 split equal to a replica row for row, all ten subsets reconstructing, two shares not (D873).
+crypto_secret_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_secret/src/main.e" "$repo" x64 linux "$test_build/crypto-secret-selfhost")
+[ "$crypto_secret_written" = 'executable written' ]
+chmod +x "$test_build/crypto-secret-selfhost"
+"$test_build/crypto-secret-selfhost"
+# `e.fmt.lz4`: cramjam blocks and frames decoded, our blocks and frames decoded by cramjam, roundtrips of compressible, incompressible and empty input (D873).
+fmt_lz4_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_lz4/src/main.e" "$repo" x64 linux "$test_build/fmt-lz4-selfhost")
+[ "$fmt_lz4_written" = 'executable written' ]
+chmod +x "$test_build/fmt-lz4-selfhost"
+"$test_build/fmt-lz4-selfhost"
+# `e.fmt.snappy`: byte-identical to cramjam on six inputs including three-block streams, CRC32C vector, a flipped checksum refused (D873).
+fmt_snappy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_snappy/src/main.e" "$repo" x64 linux "$test_build/fmt-snappy-selfhost")
+[ "$fmt_snappy_written" = 'executable written' ]
+chmod +x "$test_build/fmt-snappy-selfhost"
+"$test_build/fmt-snappy-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

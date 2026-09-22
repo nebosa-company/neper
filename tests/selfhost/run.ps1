@@ -2068,6 +2068,36 @@ $instanceLocalNamesWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $instanceLocalNamesWritten -ne 'executable written') { throw 'instance_local_names emission failed' }
 & $instanceLocalNamesPath
 if ($LASTEXITCODE -ne 0) { throw "a instance_local_names check failed: exit $LASTEXITCODE" }
+# `e.crypto.classic`: eight ciphers against a replica, the ROT13, LEMON and Playfair textbook vectors, every decrypt a roundtrip (D873).
+$cryptoClassicPath = Join-Path $testBuild 'crypto-classic-selfhost.exe'
+$cryptoClassicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_classic\src\main.e') $repo 'x64' 'windows' $cryptoClassicPath
+if ($LASTEXITCODE -ne 0 -or $cryptoClassicWritten -ne 'executable written') { throw 'crypto_classic emission failed' }
+& $cryptoClassicPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_classic check failed: exit $LASTEXITCODE" }
+# `e.crypto.merkle`: the RFC 6962 eight-leaf roots, every inclusion proof, four consistency proofs, tampering rejected (D873).
+$cryptoMerklePath = Join-Path $testBuild 'crypto-merkle-selfhost.exe'
+$cryptoMerkleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_merkle\src\main.e') $repo 'x64' 'windows' $cryptoMerklePath
+if ($LASTEXITCODE -ne 0 -or $cryptoMerkleWritten -ne 'executable written') { throw 'crypto_merkle emission failed' }
+& $cryptoMerklePath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_merkle check failed: exit $LASTEXITCODE" }
+# `e.crypto.secret`: a 3-of-5 split equal to a replica row for row, all ten subsets reconstructing, two shares not (D873).
+$cryptoSecretPath = Join-Path $testBuild 'crypto-secret-selfhost.exe'
+$cryptoSecretWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_secret\src\main.e') $repo 'x64' 'windows' $cryptoSecretPath
+if ($LASTEXITCODE -ne 0 -or $cryptoSecretWritten -ne 'executable written') { throw 'crypto_secret emission failed' }
+& $cryptoSecretPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_secret check failed: exit $LASTEXITCODE" }
+# `e.fmt.lz4`: cramjam blocks and frames decoded, our blocks and frames decoded by cramjam, roundtrips of compressible, incompressible and empty input (D873).
+$fmtLz4Path = Join-Path $testBuild 'fmt-lz4-selfhost.exe'
+$fmtLz4Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_lz4\src\main.e') $repo 'x64' 'windows' $fmtLz4Path
+if ($LASTEXITCODE -ne 0 -or $fmtLz4Written -ne 'executable written') { throw 'fmt_lz4 emission failed' }
+& $fmtLz4Path
+if ($LASTEXITCODE -ne 0) { throw "a fmt_lz4 check failed: exit $LASTEXITCODE" }
+# `e.fmt.snappy`: byte-identical to cramjam on six inputs including three-block streams, CRC32C vector, a flipped checksum refused (D873).
+$fmtSnappyPath = Join-Path $testBuild 'fmt-snappy-selfhost.exe'
+$fmtSnappyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_snappy\src\main.e') $repo 'x64' 'windows' $fmtSnappyPath
+if ($LASTEXITCODE -ne 0 -or $fmtSnappyWritten -ne 'executable written') { throw 'fmt_snappy emission failed' }
+& $fmtSnappyPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_snappy check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

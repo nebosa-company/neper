@@ -291,7 +291,12 @@
     "e.gfx.vision",
     "e.audio.analysis",
     "e.audio.fx",
-    "e.audio.synth"
+    "e.audio.synth",
+    "e.crypto.classic",
+    "e.crypto.merkle",
+    "e.crypto.secret",
+    "e.fmt.lz4",
+    "e.fmt.snappy"
    ]
   },
   {
@@ -901,6 +906,37 @@
     "e.time",
     "e.fmt.asn1",
     "e.fmt.pem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.classic",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.merkle",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.crypto.hash"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.secret",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand"
    ],
    "blocked_by": []
   },
@@ -3917,6 +3953,24 @@
    "direct_dependencies": [
     "e.str"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.lz4",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.snappy",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {

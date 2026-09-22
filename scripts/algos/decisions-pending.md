@@ -619,3 +619,26 @@ instantiating module's scope -- cost a day of instrumentation, and a
 stale three-parameter copy of the reproduction's generic in the
 reproduction's own project `lib/` cost an evening; the compiler's
 `--explain`-less "lowering failed" was the reason both took as long.
+
+## D873 — Batch 31: classical ciphers, Merkle trees, secret sharing, LZ4 and Snappy
+
+Five modules from `docs/algos.md`, written by parallel agents and verified
+against Python references: `e.crypto.classic` (Caesar, ROT13, Atbash,
+Vigenere, substitution, affine, rail fence, Playfair with the J-into-I and
+X-filler convention documented in the header), `e.crypto.merkle` (RFC 6962
+exactly: 0x00/0x01 domain prefixes, the unbalanced split at the largest
+power of two, inclusion and consistency proofs, checked against the RFC's
+eight-leaf tree), `e.crypto.secret` (Shamir over GF(2^8) with the AES
+polynomial, coefficients supplied by the caller so a split is
+deterministic, `split_random` over a PCG stream), `e.fmt.lz4` (block and
+v1 frame format, own `xxh32` since `e.algo.hash` only had the 64-bit
+form) and `e.fmt.snappy` (raw and framing format, own `crc32c` since
+`e.algo.hash.crc32` is the ISO polynomial). Both compressors were checked
+with cramjam in both directions: our output decodes there, theirs decodes
+here; Snappy is byte-identical to the reference encoder on every input
+tried, LZ4 is about two percent larger (single-probe greedy, no backward
+extension -- the `ponytail:` comment names the upgrade). Lesson: a
+compression module's fixture cannot pin the encoder's bytes against the
+reference unless the algorithm is replicated to the byte, so the fixture
+pins a roundtrip plus a decode of the reference's bytes, and the encoder's
+conformance is proved once in the agent's scratch run and recorded here.
