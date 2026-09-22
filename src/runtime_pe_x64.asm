@@ -1006,12 +1006,14 @@ np_crc_done:
     ret
 neper_os_crc32c_bytes ENDP
 
-; A failed check (spec section 11): the record text, then the two operands wherever the
-; text holds a byte below 2 -- 0 prints the operand unsigned, 1 signed -- then a
-; newline, then the symbolised backtrace from the table r10 points at, all to stderr,
-; and exit 134. The generated code
-; jumps here with rcx = text, rdx = its length, r8 and r9 = the operands; nothing
-; returns, so the stack is simply realigned and the callee-saved registers are not kept.
+; A failed check (spec section 11): the site's path, `:line:column`, then the message
+; with the two operands wherever it holds a byte below 2 -- 0 prints the operand
+; unsigned, 1 signed -- then a newline, then the symbolised backtrace from the table r10
+; points at, all to stderr, and exit 134. The generated code calls its function's stub,
+; which jumps here, with rcx = the path's record and rax = the message's -- each a
+; 16-bit length and the bytes (D922) -- rdx = line << 16 | column, and r8 and r9 = the
+; operands; nothing returns, so the stack is simply realigned and the callee-saved
+; registers are not kept.
 np_trap_write PROC
     sub rsp, 56
     mov rcx, rdi
@@ -1050,14 +1052,34 @@ neper_trap PROC
     mov [rsp+64], rbp
     mov [rsp+72], r10
     mov [rsp+80], r11
+    mov [rsp+88], rdx
     mov rbx, rcx
-    lea rsi, [rcx+rdx]
+    mov rbp, rax
     mov r12, r8
     mov r13, r9
     xor r14d, r14d
     mov ecx, -12
     call qword ptr [__imp_GetStdHandle]
     mov rdi, rax
+    movzx r8d, word ptr [rbx]
+    lea rdx, [rbx+2]
+    call np_trap_write
+    mov byte ptr [rsp+32], 58
+    lea rdx, [rsp+32]
+    mov r8d, 1
+    call np_trap_write
+    mov rax, [rsp+88]
+    shr rax, 16
+    call np_trap_number
+    mov byte ptr [rsp+32], 58
+    lea rdx, [rsp+32]
+    mov r8d, 1
+    call np_trap_write
+    movzx eax, word ptr [rsp+88]
+    call np_trap_number
+    movzx eax, word ptr [rbp]
+    lea rbx, [rbp+2]
+    lea rsi, [rbx+rax]
 trap_segment:
     mov rdx, rbx
 trap_scan:

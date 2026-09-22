@@ -546,12 +546,14 @@ neper_os_crc32c_bytes:
     pop rbx
     ret
 
-# A failed check (spec section 11): the record text, then the two operands wherever the
-# text holds a byte below 2 -- 0 prints the operand unsigned, 1 signed -- then a
-# newline, then the symbolised backtrace from the table r10 points at, all to stderr,
-# and exit 134. The generated code
-# jumps here with rdi = text, rsi = its length, rdx and rcx = the operands; nothing
-# returns, so the stack is simply realigned and the callee-saved registers are not kept.
+# A failed check (spec section 11): the site's path, `:line:column`, then the message
+# with the two operands wherever it holds a byte below 2 -- 0 prints the operand
+# unsigned, 1 signed -- then a newline, then the symbolised backtrace from the table
+# r10 points at, all to stderr, and exit 134. The generated code calls its function's
+# stub, which jumps here, with rdi = the path's record and rax = the message's -- each
+# a 16-bit length and the bytes (D922) -- rsi = line << 16 | column, and rdx and rcx =
+# the operands; nothing returns, so the stack is simply realigned and the callee-saved
+# registers are not kept.
 # rax in decimal to stderr; a subroutine of neper_trap alone.
 np_trap_number:
     sub rsp,32
@@ -582,11 +584,37 @@ neper_trap:
     mov QWORD PTR [rsp+32],rbp
     mov QWORD PTR [rsp+40],r10
     mov QWORD PTR [rsp+48],r11
+    mov QWORD PTR [rsp+56],rsi
     mov rbx,rdi
-    lea r13,[rdi+rsi]
+    mov r13,rax
     mov r12,rdx
     mov r14,rcx
     xor r15d,r15d
+    movzx edx,WORD PTR [rbx]
+    lea rsi,[rbx+2]
+    mov edi,2
+    mov eax,1
+    syscall
+    mov BYTE PTR [rsp],58
+    mov rsi,rsp
+    mov edx,1
+    mov edi,2
+    mov eax,1
+    syscall
+    mov rax,QWORD PTR [rsp+56]
+    shr rax,16
+    call np_trap_number
+    mov BYTE PTR [rsp],58
+    mov rsi,rsp
+    mov edx,1
+    mov edi,2
+    mov eax,1
+    syscall
+    movzx eax,WORD PTR [rsp+56]
+    call np_trap_number
+    movzx eax,WORD PTR [r13]
+    lea rbx,[r13+2]
+    lea r13,[rbx+rax]
 .Ltrap_segment:
     mov rsi,rbx
 .Ltrap_scan:

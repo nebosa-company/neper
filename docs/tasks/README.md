@@ -147,7 +147,7 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 
 | file | title | status |
 |---|---|---|
-| [`compiler/C032-checked-optimized-builds-and-unsafe-boundaries-m2-5-core-h03.md`](compiler/C032-checked-optimized-builds-and-unsafe-boundaries-m2-5-core-h03.md) | Checked optimized builds and unsafe boundaries (M2.5-core H03) | score 0.97, queue #1 |
+| [`compiler/C032-checked-optimized-builds-and-unsafe-boundaries-m2-5-core-h03.md`](compiler/C032-checked-optimized-builds-and-unsafe-boundaries-m2-5-core-h03.md) | Checked optimized builds and unsafe boundaries (M2.5-core H03) | score 0.98, queue #1 |
 | [`compiler/C033-reproducible-performance-gate-evidence-for-e2-h25.md`](compiler/C033-reproducible-performance-gate-evidence-for-e2-h25.md) | Reproducible performance gate (evidence for E2 H25) | score 0.72, queue #2 |
 | [`compiler/C035-diagnosis-recovery-and-transactional-repair-v1-precursor-for.md`](compiler/C035-diagnosis-recovery-and-transactional-repair-v1-precursor-for.md) | Diagnosis, recovery and transactional repair (v1 precursor for T2 H09) | score 0.86, queue #3 |
 | [`compiler/C036-declaration-level-incremental-semantic-work-v1-precursor-for.md`](compiler/C036-declaration-level-incremental-semantic-work-v1-precursor-for.md) | Declaration-level incremental semantic work (v1 precursor for T2 H14) | score 0.87, queue #4 |

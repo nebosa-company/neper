@@ -75,7 +75,21 @@ type FunctionContext = struct {
     fused: bool,
     fused_value: usize,
     fused_condition: usize,
+    // The trap records of the function being selected (D922): each path and message is
+    // laid once, where a site first needs it, and later sites address that copy; the
+    // stub that loads the symbol table and enters `neper_trap` likewise, and one stub
+    // per path and message that loads both and jumps to it.
+    trap_records: [TRAP_RECORDS]usize,
+    trap_record_count: usize,
+    trap_stub: usize,
+    has_trap_stub: bool,
+    trap_pair_paths: [TRAP_RECORDS]usize,
+    trap_pair_messages: [TRAP_RECORDS]usize,
+    trap_pair_stubs: [TRAP_RECORDS]usize,
+    trap_pair_count: usize,
 }
+
+const TRAP_RECORDS: usize = 64usize
 
 fn add_fixup(fixups: []Fixup, count: *usize, displacement_at: usize, block: usize) -> err {
     if *count == fixups.len { ret Unsupported }
@@ -1858,11 +1872,7 @@ fn select_zero(builder: *nir.Builder, instruction: nir.Instruction, allocations:
     ret emit_x64.zero_memory(output, address_register, instruction.immediate)
 }
 
-// Section 11's trap protocol. A check that fails reaches the runtime's `neper_trap` with
-// the record -- `file:line:col: trap[kind]: ` and the values' text, a NUL where each of
-// the two operands goes -- and the operands themselves, and never returns. The text is
-// laid out inline and jumped over, the way a string constant is. The operands move
-// first, since the text's register is one they may sit in.
+// A text's bytes, as they stand.
 fn emit_text(output: *emit_x64.Buffer, text: str) -> err {
     var at = 0usize
     while at < text.len {
@@ -1872,69 +1882,203 @@ fn emit_text(output: *emit_x64.Buffer, text: str) -> err {
     ret ok
 }
 
-fn emit_decimal(output: *emit_x64.Buffer, value: usize) -> err {
-    if value >= 10usize { try emit_decimal(output, value / 10usize) }
-    ret emit_x64.byte(output, 48usize + value % 10usize)
+// A trap record (D922): a little-endian `u16` length and the bytes, the pieces of one
+// text laid end to end -- a single piece is one byte, an operand's separator.
+type TrapPiece = struct { text: str, single: usize, is_single: bool }
+
+fn trap_piece(text: str) -> TrapPiece {
+    ret TrapPiece { text: text, single: 0usize, is_single: false }
 }
 
+fn trap_pieces_length(pieces: []const TrapPiece) -> usize {
+    var length = 0usize
+    var at = 0usize
+    while at < pieces.len {
+        if pieces[at].is_single {
+            length += 1usize
+        } else {
+            length += pieces[at].text.len
+        }
+        at += 1usize
+    }
+    ret length
+}
+
+// Whether the record at `offset` holds exactly these pieces.
+fn trap_record_matches(output: *emit_x64.Buffer, offset: usize, pieces: []const TrapPiece, length: usize) -> bool {
+    if offset + 2usize + length > output.count { ret false }
+    if usize(output.bytes[offset]) + usize(output.bytes[offset + 1usize]) * 256usize != length { ret false }
+    var cursor = offset + 2usize
+    var at = 0usize
+    while at < pieces.len {
+        if pieces[at].is_single {
+            if usize(output.bytes[cursor]) != pieces[at].single { ret false }
+            cursor += 1usize
+        } else {
+            var index = 0usize
+            while index < pieces[at].text.len {
+                if output.bytes[cursor] != pieces[at].text[index] { ret false }
+                cursor += 1usize
+                index += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret true
+}
+
+// The offset of the function's record holding these pieces, laid now -- jumped over --
+// when no earlier site of the function laid it. Past the pool's capacity a record is
+// laid at every site that needs it, as every record was before.
+fn trap_record(context: *FunctionContext, pieces: []const TrapPiece) -> (usize, err) {
+    let output = context.output
+    let length = trap_pieces_length(pieces)
+    if length >= 65536usize { ret (0usize, Unsupported) }
+    var at = 0usize
+    while at < context.trap_record_count {
+        if trap_record_matches(output, context.trap_records[at], pieces, length) { ret (context.trap_records[at], ok) }
+        at += 1usize
+    }
+    let (skip, skip_error) = emit_x64.jump(output)
+    if skip_error != ok { ret (0usize, skip_error) }
+    let offset = output.count
+    let low_error = emit_x64.byte(output, length % 256usize)
+    if low_error != ok { ret (0usize, low_error) }
+    let high_error = emit_x64.byte(output, length / 256usize)
+    if high_error != ok { ret (0usize, high_error) }
+    at = 0usize
+    while at < pieces.len {
+        var piece_error: err = ok
+        if pieces[at].is_single {
+            piece_error = emit_x64.byte(output, pieces[at].single)
+        } else {
+            piece_error = emit_text(output, pieces[at].text)
+        }
+        if piece_error != ok { ret (0usize, piece_error) }
+        at += 1usize
+    }
+    let patch_error = emit_x64.patch_relative32(output, skip, output.count)
+    if patch_error != ok { ret (0usize, patch_error) }
+    if context.trap_record_count < context.trap_records.len {
+        context.trap_records[context.trap_record_count] = offset
+        context.trap_record_count += 1usize
+    }
+    ret (offset, ok)
+}
+
+// Section 11's trap protocol (D922). A failing check calls the function's stub for its
+// path and message, which loads both records and jumps to the stub that loads the
+// symbol table the driver appends after the code (D206) into r10 and enters
+// `neper_trap` -- so the return address is still the site's. The site itself passes
+// the line and column as one number, `line << 16 | column`, and the operands; the
+// runtime prints `path:line:col` and then the message, an operand where each separator
+// byte stands (0 unsigned, 1 signed). The operands move first, since the other
+// registers are ones they may sit in.
 fn emit_trap(builder: *nir.Builder, current: nir.Function, site: nir.Site, token_path: str, kind: str, first: str, second: str, third: str, values: usize, signed: bool, a: usize, b: usize, tail: str, context: *FunctionContext) -> err {
     let output = context.output
     var first_register = 8usize
     var second_register = 9usize
-    var text_register = 1usize
-    var length_register = 2usize
+    var path_register = 1usize
+    var position_register = 2usize
     if context.abi != .Windows {
         first_register = 2usize
         second_register = 1usize
-        text_register = 7usize
-        length_register = 6usize
+        path_register = 7usize
+        position_register = 6usize
     }
     if values >= 1usize && a != first_register { try emit_x64.mov_register(output, first_register, a) }
     if values >= 2usize && b != second_register { try emit_x64.mov_register(output, second_register, b) }
-    let (skip, skip_error) = emit_x64.jump(output)
-    if skip_error != ok { ret skip_error }
-    let text_start = output.count
     var site_path = token_path
     if site_path.len == 0usize { site_path = current.path }
-    try emit_text(output, site_path)
-    try emit_x64.byte(output, 58usize)
-    try emit_decimal(output, site.line)
-    try emit_x64.byte(output, 58usize)
-    try emit_decimal(output, site.column)
-    try emit_text(output, ": trap[")
-    try emit_text(output, kind)
-    try emit_text(output, "]: ")
-    try emit_text(output, first)
-    // The separator byte says how the runtime prints the operand: 0 unsigned, 1 signed.
+    var path_pieces: [1]TrapPiece = zero
+    path_pieces[0usize] = trap_piece(site_path)
+    let (path_record, path_error) = trap_record(context, path_pieces[0usize..1usize])
+    if path_error != ok { ret path_error }
     var separator = 0usize
     if signed { separator = 1usize }
+    var message: [9]TrapPiece = zero
+    message[0usize] = trap_piece(": trap[")
+    message[1usize] = trap_piece(kind)
+    message[2usize] = trap_piece("]: ")
+    message[3usize] = trap_piece(first)
+    var count = 4usize
     if values >= 1usize {
-        try emit_x64.byte(output, separator)
-        try emit_text(output, second)
+        message[count] = TrapPiece { text: "", single: separator, is_single: true }
+        message[count + 1usize] = trap_piece(second)
+        count += 2usize
     }
     if values >= 2usize {
-        try emit_x64.byte(output, separator)
-        try emit_text(output, third)
+        message[count] = TrapPiece { text: "", single: separator, is_single: true }
+        message[count + 1usize] = trap_piece(third)
+        count += 2usize
     }
-    try emit_text(output, tail)
-    let text_end = output.count
-    try emit_x64.patch_relative32(output, skip, text_end)
-    let (text_displacement, address_error) = emit_x64.relative_address(output, text_register)
-    if address_error != ok { ret address_error }
-    try emit_x64.patch_relative32(output, text_displacement, text_start)
-    try emit_x64.mov_immediate(output, length_register, text_end - text_start)
-    // r10 carries the symbol table the driver appends after the code (D206); the
-    // reference is resolved there, not by a linker.
-    let (symbols_ref, symbols_error) = nir.intern_function(builder, current.module_index, "neper_symbols", 0usize)
-    if symbols_error != ok { ret symbols_error }
-    let (symbols_displacement, symbols_address_error) = emit_x64.relative_address(output, 10usize)
-    if symbols_address_error != ok { ret symbols_address_error }
-    try add_relocation(context.relocations, context.relocation_count, symbols_displacement, symbols_ref)
-    let (function_ref, reference_error) = nir.intern_function(builder, current.module_index, "neper_trap", 0usize)
-    if reference_error != ok { ret reference_error }
+    message[count] = trap_piece(tail)
+    count += 1usize
+    let (message_record, message_error) = trap_record(context, message[0usize..count])
+    if message_error != ok { ret message_error }
+    if !context.has_trap_stub {
+        let (stub_skip, stub_skip_error) = emit_x64.jump(output)
+        if stub_skip_error != ok { ret stub_skip_error }
+        context.trap_stub = output.count
+        let (symbols_ref, symbols_error) = nir.intern_function(builder, current.module_index, "neper_symbols", 0usize)
+        if symbols_error != ok { ret symbols_error }
+        let (symbols_displacement, symbols_address_error) = emit_x64.relative_address(output, 10usize)
+        if symbols_address_error != ok { ret symbols_address_error }
+        try add_relocation(context.relocations, context.relocation_count, symbols_displacement, symbols_ref)
+        let (function_ref, reference_error) = nir.intern_function(builder, current.module_index, "neper_trap", 0usize)
+        if reference_error != ok { ret reference_error }
+        let (enter_displacement, enter_error) = emit_x64.jump(output)
+        if enter_error != ok { ret enter_error }
+        try add_relocation(context.relocations, context.relocation_count, enter_displacement, function_ref)
+        try emit_x64.patch_relative32(output, stub_skip, output.count)
+        context.has_trap_stub = true
+    }
+    // The stub for this path and message: laid once, jumped over, and called by every
+    // site of the function that traps with both; past the pool's capacity the site
+    // loads the two records itself and calls the common stub.
+    var stub_at = context.trap_stub
+    var pair_at = 0usize
+    var paired = false
+    while pair_at < context.trap_pair_count {
+        if context.trap_pair_paths[pair_at] == path_record && context.trap_pair_messages[pair_at] == message_record {
+            stub_at = context.trap_pair_stubs[pair_at]
+            paired = true
+            break
+        }
+        pair_at += 1usize
+    }
+    if !paired && context.trap_pair_count < context.trap_pair_stubs.len {
+        let (pair_skip, pair_skip_error) = emit_x64.jump(output)
+        if pair_skip_error != ok { ret pair_skip_error }
+        stub_at = output.count
+        try emit_trap_records(output, path_register, path_record, message_record)
+        let (common_displacement, common_error) = emit_x64.jump(output)
+        if common_error != ok { ret common_error }
+        try emit_x64.patch_relative32(output, common_displacement, context.trap_stub)
+        try emit_x64.patch_relative32(output, pair_skip, output.count)
+        context.trap_pair_paths[context.trap_pair_count] = path_record
+        context.trap_pair_messages[context.trap_pair_count] = message_record
+        context.trap_pair_stubs[context.trap_pair_count] = stub_at
+        context.trap_pair_count += 1usize
+        paired = true
+    }
+    if !paired { try emit_trap_records(output, path_register, path_record, message_record) }
+    var column = site.column
+    if column > 65535usize { column = 65535usize }
+    try emit_x64.mov_immediate(output, position_register, site.line * 65536usize + column)
     let (call_displacement, call_error) = emit_x64.call(output)
     if call_error != ok { ret call_error }
-    ret add_relocation(context.relocations, context.relocation_count, call_displacement, function_ref)
+    ret emit_x64.patch_relative32(output, call_displacement, stub_at)
+}
+
+// The two records' addresses, the path's in its register and the message's in rax.
+fn emit_trap_records(output: *emit_x64.Buffer, path_register: usize, path_record: usize, message_record: usize) -> err {
+    let (path_displacement, path_address_error) = emit_x64.relative_address(output, path_register)
+    if path_address_error != ok { ret path_address_error }
+    try emit_x64.patch_relative32(output, path_displacement, path_record)
+    let (message_displacement, message_address_error) = emit_x64.relative_address(output, 0usize)
+    if message_address_error != ok { ret message_address_error }
+    ret emit_x64.patch_relative32(output, message_displacement, message_record)
 }
 
 // Section 11's `overflow` row for `+ - *` and unary `-`, which trap in a debug build
@@ -2165,6 +2309,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
 }
 
 fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
+    context.trap_record_count = 0usize
+    context.has_trap_stub = false
+    context.trap_pair_count = 0usize
     let allocations = context.allocations
     let abi = context.abi
     let block_offsets = context.block_offsets
@@ -2789,7 +2936,7 @@ fn self_test() -> err {
     var lines: [8]LineEntry = zero
     var line_count = 0usize
     let no_masks = block_offsets[0usize..0usize]
-    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize }
+    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 14usize || output.bytes[0usize] != 85u8 || output.bytes[4usize] != 184u8 || output.bytes[5usize] != 7u8 || output.bytes[12usize] != 93u8 || output.bytes[13usize] != 195u8 { ret Unsupported }
     allocations[0usize].kind = .Stack

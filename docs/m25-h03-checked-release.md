@@ -130,3 +130,25 @@ the policy narrowed, because H03 asks for the policy and the way back under
 budget is section 1's further proofs, not check removal. `--unchecked`
 reproduces the old numbers for a measurement or a build that accepts the
 boundary.
+
+### The trap records (D922)
+
+A check's failure path had laid its whole record inline -- `path:line:col:
+trap[kind]: ...`, 63 bytes on average -- behind a jump, and loaded it, the symbol
+table and the runtime's entry at every site: about 100 bytes a check, and the
+compiler holds some 24,000 (11,810 `null`, 11,389 `bounds`, 700 `divide`). Now each
+function lays each path and message once, as a 16-bit length and the bytes; one stub
+per path and message loads both and jumps to one stub that loads the symbol table and
+enters `neper_trap`; and the site passes the line and column as a number, so it is
+the operand moves, a `mov edx` and a `call`. The runtimes print the same text from
+the pieces. Measured against the same sources, the compiler built with each code
+generator, release, eight workers, five runs, p50, Windows:
+
+| measure | checked (before) | checked (D922) | unchecked | budget |
+|---|---|---|---|---|
+| compiler image | 10,567,168 B (+30.5%) | 9,005,056 B (+12.5%) | 8,005,120 B | +5% |
+| compiler cold wall | 578 ms (+14.2%) | 533 ms (+5.5%) | 505 ms | +10% |
+
+The cold-wall budget is met on this measure; the image budget is not, and the rest
+of the way is the checks themselves -- the compare and branch of 24,000 sites and
+their operand moves -- which only further proofs remove.

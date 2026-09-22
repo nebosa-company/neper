@@ -824,14 +824,27 @@ fn relative_target(c: *Cursor, displacement: usize, bits: usize) -> bool {
     ret okay(put_number(c, landing))
 }
 
-// Section 11's trap record is laid inline after an unconditional forward jump; a sweep
-// would read it as code. The bytes a `jmp` skips are listed as one `text` line when
-// they are text, and decoded as the else-branch they otherwise are.
+// Section 11's trap records are laid inline after an unconditional forward jump; a
+// sweep would read them as code. The bytes a `jmp` skips are listed as one `text` line
+// when they are text, and decoded as the else-branch they otherwise are.
 fn skipped_is_trap_text(code: []const usize, from: usize, to: usize) -> bool {
-    // Printable ASCII, NUL and newlines and nothing else is text, not code: the record's
-    // own bytes, or a value's name laid inline the same way; a jump over code always
-    // crosses an opcode outside that range.
     if to <= from { ret false }
+    if text_bytes(code, from, to) { ret true }
+    // Records (D922): a 16-bit length and that many bytes of text, end to end, filling
+    // the skipped bytes exactly.
+    var at = from
+    while at + 2usize <= to {
+        let length = (code[at] & 255usize) + (code[at + 1usize] & 255usize) * 256usize
+        if at + 2usize + length > to || !text_bytes(code, at + 2usize, at + 2usize + length) { ret false }
+        at += 2usize + length
+    }
+    ret at == to
+}
+
+// Printable ASCII, NUL and newlines and nothing else is text, not code: a record's
+// bytes, or a value's name laid inline the same way; a jump over code always crosses an
+// opcode outside that range.
+fn text_bytes(code: []const usize, from: usize, to: usize) -> bool {
     var at = from
     while at < to {
         let value = code[at] & 255usize

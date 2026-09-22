@@ -18209,3 +18209,30 @@ as it did.
 while bodies are checked is not re-examined; the tree's two, `e.ui.app.Pun` and
 `e.ui.widget.ChangeBits`, pun a function value with a `usize`, whatever their
 argument.
+
+## D922 — A trap site is a call, and its text is laid once
+
+D355's policy keeps `bounds`, `null`, `tag` and `align` in a release build, and its
+cost was recorded against budgets it broke: the checked compiler's image was 30%
+larger than the unchecked one's and its cold wall 14% slower, against +5% and +10%.
+Most of that was not the checks. Each site laid its whole trap record inline --
+`path:line:col: trap[kind]: ` and the operand text, 63 bytes on average -- behind a
+jump, then loaded the record, its length, the symbol table and `neper_trap`: about a
+hundred bytes of failure path per check, twenty-four thousand times in the compiler,
+and all of it in the hot code's cache lines.
+
+Now a function lays each distinct path and message once, as a record of a 16-bit
+length and the bytes, at the first site that needs it, jumped over; one stub per path
+and message loads both records and jumps to one stub per function that loads the
+symbol table into r10 and enters `neper_trap`. The site is the operand moves, `mov
+edx, line << 16 | column` and a `call` -- the return address is still the site's, so
+the backtrace is unchanged. Both runtimes print `path`, `:line:column`, then the
+message with its operands exactly as before; a column past 65,535 prints as 65,535.
+A function with more than sixty-four distinct records or pairs lays the rest at the
+site, as every record was laid before. The disassembler lists a run of records as
+text, as it listed a record.
+
+The trap fixtures' output is byte for byte what it was, in debug and release, over
+sixty-five runs; the checked compiler is 12.5% larger than the unchecked one (was
+30.5%) and 5.5% slower to build itself (was 14.2%). The cold-wall budget is met on
+that measure; the image budget is not, and what remains is the checks themselves.
