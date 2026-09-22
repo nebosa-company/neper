@@ -596,3 +596,26 @@ tempo and beats, chroma, LUFS loudness, voice activity) landed with
 batch twenty-nine. A lesson the agent recorded: `mem.alloc` hands back
 unzeroed memory, so a module clears any scratch it reads before it
 writes.
+
+## D872 — A body is lowered over an empty local table
+
+The checker's local table is per body and starts empty when a body is
+checked; the generic instances are checked last, after every module's
+bodies, so when lowering began the table still held the last instance's
+parameters and locals. Lowering keeps its own bindings for names but
+asks the checker for types, and `find_local` searches that table: a
+name that is not a local of the body being lowered but was one of that
+instance's answered from the instance. The shape that showed it: a
+generic with a parameter `gradient: []f64`, instantiated by a module
+that passes its own `fn gradient` as a value -- the call argument read
+as `[]f64` and lowering refused `main` with a bare "lowering failed"
+(D850's mcmc fixture renamed its function to `grad` to get past it).
+Now `lower_function_index` starts the table at zero, as
+`check_function_body` does, and a lowering failure names its error and,
+for a mismatch, the two types. The fixture `instance_local_names`
+carries the generic in its own `lib/` and fails under the previous
+compiler. The wrong first hypothesis -- locals resolving in the
+instantiating module's scope -- cost a day of instrumentation, and a
+stale three-parameter copy of the reproduction's generic in the
+reproduction's own project `lib/` cost an evening; the compiler's
+`--explain`-less "lowering failed" was the reason both took as long.

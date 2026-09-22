@@ -1864,6 +1864,11 @@ audio_synth_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$audio_synth_written" = 'executable written' ]
 chmod +x "$test_build/audio-synth-selfhost"
 "$test_build/audio-synth-selfhost"
+# A generic instance's parameter or local named like a module-scope function of the instantiating module: the checker's local table starts empty when a body is lowered (D872).
+instance_local_names_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/instance_local_names/src/main.e" "$repo" x64 linux "$test_build/instance-local-names-selfhost")
+[ "$instance_local_names_written" = 'executable written' ]
+chmod +x "$test_build/instance-local-names-selfhost"
+"$test_build/instance-local-names-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

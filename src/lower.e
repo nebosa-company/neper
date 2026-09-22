@@ -6331,7 +6331,13 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if block_error != ok { ret block_error }
     // Lowering asks the checker again per call, so it has to know a kernel's body too.
     c.body_is_kernel = function.gpu
-    let local_checkpoint = c.local_count
+    // The checker's local table still holds the last body it checked -- the last
+    // generic instance, checked after every module's bodies -- and a name that is not
+    // a local of this body but was one of that instance's would answer from it (D872):
+    // a module-scope `fn gradient` passed as a value read as the instance's `gradient:
+    // []f64`. A body is lowered on its own, as it is checked: the table starts empty.
+    c.local_count = 0usize
+    let local_checkpoint = 0usize
     var binding_count = 0usize
     // The defer stack is the caller's, one per module sweep (D306): zeroing its 256
     // entries here cost every function more than lowering its body did.

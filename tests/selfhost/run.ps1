@@ -2062,6 +2062,12 @@ $audioSynthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $audioSynthWritten -ne 'executable written') { throw 'audio_synth emission failed' }
 & $audioSynthPath
 if ($LASTEXITCODE -ne 0) { throw "a audio_synth check failed: exit $LASTEXITCODE" }
+# A generic instance's parameter or local named like a module-scope function of the instantiating module: the checker's local table starts empty when a body is lowered (D872).
+$instanceLocalNamesPath = Join-Path $testBuild 'instance-local-names-selfhost.exe'
+$instanceLocalNamesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\instance_local_names\src\main.e') $repo 'x64' 'windows' $instanceLocalNamesPath
+if ($LASTEXITCODE -ne 0 -or $instanceLocalNamesWritten -ne 'executable written') { throw 'instance_local_names emission failed' }
+& $instanceLocalNamesPath
+if ($LASTEXITCODE -ne 0) { throw "a instance_local_names check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

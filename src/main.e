@@ -7129,6 +7129,29 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
                             if lower_error == regalloc.NoRegisters { try write_all(&message, ": the allocator ran out of registers") }
                             if lower_error == lower.FunctionNotFound { try write_all(&message, ": a function was not found") }
                             if lower_error == codegen_x64.Unsupported { try write_all(&message, ": the selector does not support the instruction") }
+                            // Anything else names itself (D872): the error value is the only
+                            // evidence of which step refused the body.
+                            let lower_name = check.error_name(lower_error)
+                            if lower_name.len != 0usize {
+                                try write_all(&message, ": ")
+                                try write_all(&message, lower_name)
+                            }
+                            // A mismatch names its two types here as it does at check time (D401).
+                            if lower_error == check.TypeMismatch && checker.failure_expected.kind != .Invalid {
+                                var expected_storage: [256]u8 = zero
+                                var expected_out: tool.Out = zero
+                                expected_out.bytes = expected_storage[..]
+                                try tool.type_text(&expected_out, checker, g, checker.failure_expected, 0usize)
+                                var actual_storage: [256]u8 = zero
+                                var actual_out: tool.Out = zero
+                                actual_out.bytes = actual_storage[..]
+                                try tool.type_text(&actual_out, checker, g, checker.failure_actual, 0usize)
+                                try write_all(&message, ": expected `")
+                                try write_all(&message, expected_storage[..expected_out.count])
+                                try write_all(&message, "`, found `")
+                                try write_all(&message, actual_storage[..actual_out.count])
+                                try write_all(&message, "`")
+                            }
                         }
                     }
                 }
