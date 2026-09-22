@@ -734,3 +734,28 @@ reaches 3000 ms at the top of the random range), which is the right
 direction of trust. Compiler notes: `i64` minimum cannot be written as a
 negative literal in an array literal (the unary minus overflows at run
 time), and the no-hex-literal convention holds across `lib/e`.
+
+## D878 — Batch 36: Noise IK, Brotli, DNS and DNSSEC, HTTP/3 framing, QUIC migration
+
+Five modules from `docs/algos.md`: `e.crypto.noise` (BLAKE2s written
+in-module since `e.crypto.hash` lacked it, HMAC and the Noise HKDF, the IK
+and IKpsk2 handshakes over the existing X25519 and ChaCha20-Poly1305;
+WireGuard's packet framing is the deferred layer above), `e.fmt.brotli` (a
+complete RFC 7932 decoder; the 122,784-byte static dictionary, the 121
+transforms and the context tables were extracted from the Python brotli
+extension by byte-pattern search, checked by the dictionary's known
+SHA-256, and embedded as eight 16 KB string-literal functions the way
+`e.text.unicode` holds its tables -- both compilers take 64 KB literal
+lines without complaint), `e.net.dns` (wire format, DNSSEC validation with
+canonical ordering for Ed25519 and P-256, DS and chain validation, DoH and
+DoT byte builders; the RFC 8080 RRSIG example has known errata and does
+not verify, so the fixture carries a signature re-made from the RFC's own
+private key), `e.net.http3` (varints, frames, settings and a QPACK codec
+over the static table alone) and `e.net.quic` (headers, the migration
+frames, connection-id sets and path validation with the amplification
+limit; the varint is duplicated from http3 on purpose to keep the two
+modules independent). Every network module again takes `now` and bytes
+and answers bytes, which kept all five fixtures deterministic. No compiler
+change; every module passed its first build on both compilers, and the
+brotli agent fuzzed every single-bit flip and truncation of six streams
+without a trap.

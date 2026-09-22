@@ -3804,6 +3804,64 @@ RFC 6962 Merkle trees over caller node storage: `build` (`nodes_required`), `roo
 `leaf_hash`, `inner_hash`, `audit_path` with `verify`, `consistency_proof` with
 `verify_consistency`.
 
+### `e.crypto.noise`
+
+```neper
+type Blake2s = struct { h: [8]u32, t: u64, block: [64]u8, block_len: usize, out_len: usize }
+type Hkdf = struct { a: [32]u8, b: [32]u8, c: [32]u8 }
+type CipherState = struct { k: [32]u8, n: u64, has_key: bool }
+type SymmetricState = struct { cipher: CipherState, ck: [32]u8, h: [32]u8 }
+type HandshakeState = struct { sym: SymmetricState, s_secret: [32]u8, s_public: [32]u8, e_secret: [32]u8, e_public: [32]u8, rs: [32]u8, re: [32]u8, initiator: bool, psk: [32]u8, has_psk: bool, step: u8 }
+type Transport = struct { send: CipherState, recv: CipherState, h: [32]u8 }
+error Invalid
+error TooSmall
+error Authentication
+
+fn iv(i: usize) -> u32
+fn sigma(round: usize, i: usize) -> usize
+fn load_le32(bytes: []const u8, at: usize) -> u32
+fn rotr(x: u32, n: u32) -> u32
+fn g(v: []u32, a: usize, b: usize, c: usize, d: usize, x: u32, y: u32)
+fn compress(s: *Blake2s, last: bool)
+fn blake2s_init(out_len: usize, key: []const u8) -> Blake2s
+fn blake2s_update(s: *Blake2s, bytes: []const u8)
+fn blake2s_done(s: *Blake2s) -> [32]u8
+fn blake2s(data: []const u8) -> [32]u8
+fn blake2s_keyed(key: []const u8, data: []const u8) -> [32]u8
+fn blake2s_new() -> Blake2s
+fn zero_key() -> [32]u8
+fn hmac_blake2s(key: []const u8, data: []const u8) -> [32]u8
+fn hkdf3(chaining_key: [32]u8, input_key_material: []const u8) -> Hkdf
+fn hkdf2(chaining_key: [32]u8, input_key_material: []const u8) -> Hkdf
+fn cipher_state(k: [32]u8) -> CipherState
+fn nonce_bytes(n: u64) -> [12]u8
+fn encrypt_with_ad(cs: *CipherState, ad: []const u8, plain: []const u8, out: []u8) -> (usize, err)
+fn decrypt_with_ad(cs: *CipherState, ad: []const u8, sealed: []const u8, out: []u8) -> (usize, err)
+fn rekey(cs: *CipherState)
+fn copy(dst: []u8, src: []const u8)
+fn symmetric_state(protocol_name: str) -> SymmetricState
+fn mix_hash(s: *SymmetricState, data: []const u8)
+fn mix_key(s: *SymmetricState, input_key_material: []const u8)
+fn mix_key_and_hash(s: *SymmetricState, input_key_material: []const u8)
+fn encrypt_and_hash(s: *SymmetricState, plain: []const u8, out: []u8) -> (usize, err)
+fn decrypt_and_hash(s: *SymmetricState, sealed: []const u8, out: []u8) -> (usize, err)
+fn initialize(protocol_name: str, initiator: bool, prologue: []const u8, s_secret: [32]u8, rs: [32]u8, psk: []const u8) -> HandshakeState
+fn public_key(secret: [32]u8) -> [32]u8
+fn dh(hs: *HandshakeState, secret: [32]u8, point: [32]u8)
+fn write_e(hs: *HandshakeState, ephemeral_secret: [32]u8, out: []u8)
+fn read_e(hs: *HandshakeState, message: []const u8)
+fn write_message(hs: *HandshakeState, payload: []const u8, out: []u8, ephemeral_secret: [32]u8) -> (usize, err)
+fn read_message(hs: *HandshakeState, message: []const u8, payload_out: []u8) -> (usize, err)
+fn split(hs: *HandshakeState) -> (Transport, err)
+fn handshake_ik(protocol_name: str, prologue: []const u8, i_static: [32]u8, r_static: [32]u8, i_ephemeral: [32]u8, r_ephemeral: [32]u8, psk: []const u8, message1: []u8, message2: []u8) -> (Transport, Transport, err)
+fn equal(a: []const u8, b: []const u8) -> bool
+```
+
+BLAKE2s (`blake2s`, keyed, `hmac_blake2s`, Noise `hkdf2`/`hkdf3`) and the Noise
+framework over caller state: `CipherState` (`encrypt_with_ad`, `decrypt_with_ad`, `rekey`),
+`SymmetricState`, `HandshakeState` for IK and IKpsk2 (`initialize`, `write_message`,
+`read_message`, `split`) and the two-message `handshake_ik`.
+
 ### `e.crypto.random`
 
 ```neper
@@ -5852,6 +5910,242 @@ STUN messages (`encode_binding_request`, `encode_binding_response`, `decode`,
 `attribute_next`, `xor_mapped_address`, MESSAGE-INTEGRITY over HMAC-SHA1, FINGERPRINT)
 and ICE gathering without sockets: `gather_candidates`, `gather_reflexive`, `priority`,
 `foundation`, `sort_candidates`, `pair_priority`, `candidate_pairs`.
+
+### `e.net.dns`
+
+```neper
+type Header = struct { id: u16, flags: u16, qdcount: u16, ancount: u16, nscount: u16, arcount: u16 }
+type Rr = struct { name_len: usize, kind: u16, class: u16, ttl: u32, rdata: []const u8, rdata_at: usize }
+type Rrsig = struct { type_covered: u16, algorithm: u8, labels: u8, original_ttl: u32, expiration: u32, inception: u32, key_tag: u16, signer: []const u8, signature: []const u8 }
+type Dnskey = struct { flags: u16, protocol: u8, algorithm: u8, public_key: []const u8 }
+type Ds = struct { key_tag: u16, algorithm: u8, digest_type: u8, digest: []const u8 }
+error Malformed
+error Invalid
+error TooSmall
+error Unsupported
+error Expired
+error NotYetValid
+error BadSignature
+const TYPE_A: u16 = 1u16
+const TYPE_NS: u16 = 2u16
+const TYPE_CNAME: u16 = 5u16
+const TYPE_SOA: u16 = 6u16
+const TYPE_PTR: u16 = 12u16
+const TYPE_MX: u16 = 15u16
+const TYPE_TXT: u16 = 16u16
+const TYPE_AAAA: u16 = 28u16
+const TYPE_SRV: u16 = 33u16
+const TYPE_DNAME: u16 = 39u16
+const TYPE_OPT: u16 = 41u16
+const TYPE_DS: u16 = 43u16
+const TYPE_RRSIG: u16 = 46u16
+const TYPE_DNSKEY: u16 = 48u16
+const CLASS_IN: u16 = 1u16
+const FLAG_RD: u16 = 256u16
+const DNSKEY_SEP: u16 = 256u16
+const ALG_RSASHA256: u8 = 8u8
+const ALG_ECDSAP256SHA256: u8 = 13u8
+const ALG_ED25519: u8 = 15u8
+const DS_SHA256: u8 = 2u8
+const MAX_NAME: usize = 255usize
+const MAX_RRS: usize = 64usize
+
+fn store16(dst: []u8, at: usize, value: u16)
+fn store32(dst: []u8, at: usize, value: u32)
+fn load16(src: []const u8, at: usize) -> u16
+fn load32(src: []const u8, at: usize) -> u32
+fn lower(c: u8) -> u8
+fn put(dst: []u8, at: *usize, text: []const u8) -> err
+fn put_decimal(dst: []u8, at: *usize, value: usize) -> err
+fn encode_name(dst: []u8, at: usize, name: str) -> (usize, err)
+fn encode_query(dst: []u8, id: u16, name: str, qtype: u16, qclass: u16, recursion_desired: bool, edns_udp_size: u16, dnssec_ok: bool) -> (usize, err)
+fn decode_header(src: []const u8) -> (Header, err)
+fn header_is_response(h: Header) -> bool
+fn header_rcode(h: Header) -> u8
+fn header_authentic_data(h: Header) -> bool
+fn header_truncated(h: Header) -> bool
+fn decode_name(src: []const u8, pos: *usize, out: []u8) -> (usize, err)
+fn skip_question(src: []const u8, pos: *usize) -> err
+fn decode_question(src: []const u8, pos: *usize, out_name: []u8) -> (usize, u16, u16, err)
+fn decode_rr(src: []const u8, pos: *usize, out_name: []u8) -> (Rr, err)
+fn rdata_a(rdata: []const u8) -> ([4]u8, err)
+fn rdata_aaaa(rdata: []const u8) -> ([16]u8, err)
+fn rdata_txt(rdata: []const u8, pos: *usize, out: []u8) -> (usize, err)
+fn rdata_mx(src: []const u8, r: Rr, out_name: []u8) -> (u16, usize, err)
+fn rdata_name(src: []const u8, r: Rr, out_name: []u8) -> (usize, err)
+fn wire_name_len(name: []const u8) -> (usize, err)
+fn canonical_name(name: []const u8, out: []u8) -> (usize, err)
+fn name_text(name: []const u8, out: []u8) -> (usize, err)
+fn name_equal_fold(a: []const u8, b: []const u8) -> bool
+fn name_is_within(name: []const u8, ancestor: []const u8) -> bool
+fn rdata_rrsig(rdata: []const u8) -> (Rrsig, err)
+fn rdata_dnskey(rdata: []const u8) -> (Dnskey, err)
+fn rdata_ds(rdata: []const u8) -> (Ds, err)
+fn key_tag(dnskey_rdata: []const u8) -> u16
+fn ds_digest(owner: []const u8, dnskey_rdata: []const u8, digest_type: u8) -> ([32]u8, err)
+fn lower_name_in_place(data: []u8, at: usize) -> (usize, err)
+fn canonical_rdata_in_place(data: []u8, at: usize, end: usize, kind: u16) -> err
+fn less_bytes(a: []const u8, b: []const u8) -> bool
+fn equal_bytes(a: []const u8, b: []const u8) -> bool
+fn der_from_raw(raw: []const u8, out: []u8) -> (usize, err)
+fn verify_with(algorithm: u8, public_key: []const u8, message: []const u8, signature: []const u8) -> err
+fn dnssec_validate(rrset: []const u8, rrsig_rdata: []const u8, dnskey_rdata: []const u8, now: u32, scratch: []u8) -> err
+fn chain_validate(ds_rdata: []const u8, dnskey_rrset: []const u8, rrsig_rdata: []const u8, now: u32, scratch: []u8) -> err
+fn query_doh(dst: []u8, host: str, path: str, wire_query: []const u8, method_get: bool) -> (usize, err)
+fn ascii_fold_equal(a: []const u8, b: str) -> bool
+fn doh_response_body(http_response: []const u8) -> ([]const u8, err)
+fn query_dot_frame(dst: []u8, wire_query: []const u8) -> (usize, err)
+```
+
+RFC 1035 wire format (`encode_query` with EDNS, `decode_header`, `decode_name` with
+backward-only compression, `decode_rr`, rdata readers), DNSSEC (`key_tag`, `ds_digest`,
+`dnssec_validate` with canonical ordering for Ed25519 and P-256, `chain_validate`) and
+the DoH/DoT byte builders `query_doh`, `doh_response_body`, `query_dot_frame`.
+
+### `e.net.http3`
+
+```neper
+type Frame = struct { kind: u64, payload: []const u8 }
+error Invalid
+error Incomplete
+error TooSmall
+error Unsupported
+error Malformed
+
+fn frame_data() -> u64
+fn frame_headers() -> u64
+fn frame_cancel_push() -> u64
+fn frame_settings() -> u64
+fn frame_push_promise() -> u64
+fn frame_goaway() -> u64
+fn frame_max_push_id() -> u64
+fn stream_control() -> u64
+fn stream_push() -> u64
+fn stream_qpack_encoder() -> u64
+fn stream_qpack_decoder() -> u64
+fn setting_qpack_max_table_capacity() -> u64
+fn setting_max_field_section_size() -> u64
+fn setting_qpack_blocked_streams() -> u64
+fn frame_forbidden(kind: u64) -> bool
+fn frame_reserved(kind: u64) -> bool
+fn varint_max() -> u64
+fn varint_len(v: u64) -> usize
+fn varint_encode(dst: []u8, v: u64) -> (usize, err)
+fn varint_decode(src: []const u8) -> (u64, usize, err)
+fn append(dst: []u8, p: usize, src: []const u8) -> usize
+fn frame_encode(dst: []u8, kind: u64, payload: []const u8) -> (usize, err)
+fn frame_decode(src: []const u8) -> (Frame, usize, err)
+fn frames(stream: []const u8, out: []Frame) -> (usize, usize, err)
+fn setting_forbidden(id: u64) -> bool
+fn settings_encode(dst: []u8, ids: []const u64, values: []const u64) -> (usize, err)
+fn settings_decode(payload: []const u8, ids: []u64, values: []u64) -> (usize, err)
+fn goaway_encode(dst: []u8, id: u64) -> (usize, err)
+fn goaway_decode(payload: []const u8) -> (u64, err)
+fn stream_type_encode(dst: []u8, kind: u64) -> (usize, err)
+fn stream_type_decode(src: []const u8) -> (u64, usize, err)
+fn static_count() -> usize
+fn static_name(i: usize) -> str
+fn static_value(i: usize) -> str
+fn same(a: str, b: str) -> bool
+fn static_find(name: str, value: str) -> (usize, bool, bool)
+fn prefix_int_encode(dst: []u8, flags: u8, bits: u32, v: u64) -> (usize, err)
+fn prefix_int_decode(src: []const u8, bits: u32) -> (u64, usize, err)
+fn string_encode(dst: []u8, s: str) -> (usize, err)
+fn string_decode(src: []const u8, scratch: []u8, used: *usize) -> (str, usize, err)
+fn headers_encode(dst: []u8, names: []const str, values: []const str) -> (usize, err)
+fn headers_decode(block: []const u8, names_out: []str, values_out: []str, scratch: []u8) -> (usize, err)
+```
+
+QUIC varints, RFC 9114 frames (`frame_encode`, `frame_decode`, `frames` splitting a
+stream and reporting a partial tail), settings, goaway and stream types, and a QPACK
+static-table codec (`headers_encode`, `headers_decode`, prefix integers, the 99-entry
+table generated from the RFC text).
+
+### `e.net.quic`
+
+```neper
+type Header = struct { long: bool, kind: u8, version: u32, spin: bool, key_phase: bool, dcid: []const u8, scid: []const u8, token: []const u8, payload_offset: usize, length: u64 }
+type Frame = struct { kind: u8, seq: u64, retire_prior_to: u64, cid: []const u8, token: []const u8, data: [8]u8, largest: u64, delay: u64, range_count: u64, ranges: []const u8, ecn: [3]u64, error_code: u64, frame_type: u64, reason: []const u8 }
+type Address = struct { family: u8, port: u16, ip: [16]u8 }
+type PathState = enum u8 { Unvalidated, Validating, Validated, Failed }
+type Path = struct { local: Address, remote: Address, state: PathState, challenge: [8]u8, sent_at: u64, dcid_index: u32, bytes_sent: u64, bytes_received: u64 }
+type CidSet = struct { seq: []u64, cid: []u8, cid_len: []u8, token: []u8, active: []u8, retire_prior_to: u64, count: usize }
+type Connection = struct { paths: []Path, path_count: usize, active_path: u32, previous_path: u32, retire_pending: bool, cids: CidSet, peer_cids: CidSet }
+error Malformed
+error Invalid
+error TooSmall
+error Full
+error NoCid
+const KIND_INITIAL: u8 = 0u8
+const KIND_ZERO_RTT: u8 = 1u8
+const KIND_HANDSHAKE: u8 = 2u8
+const KIND_RETRY: u8 = 3u8
+const KIND_VERSION_NEGOTIATION: u8 = 4u8
+const FRAME_PADDING: u8 = 0u8
+const FRAME_PING: u8 = 1u8
+const FRAME_ACK: u8 = 2u8
+const FRAME_ACK_ECN: u8 = 3u8
+const FRAME_NEW_CONNECTION_ID: u8 = 24u8
+const FRAME_RETIRE_CONNECTION_ID: u8 = 25u8
+const FRAME_PATH_CHALLENGE: u8 = 26u8
+const FRAME_PATH_RESPONSE: u8 = 27u8
+const FRAME_CONNECTION_CLOSE: u8 = 28u8
+const FRAME_APPLICATION_CLOSE: u8 = 29u8
+const MAX_CID: usize = 20usize
+const TOKEN_LEN: usize = 16usize
+const MIN_DATAGRAM: usize = 1200usize
+const FAMILY_IPV4: u8 = 1u8
+const FAMILY_IPV6: u8 = 2u8
+const CID_RETIRED: u8 = 0u8
+const CID_UNUSED: u8 = 1u8
+const CID_IN_USE: u8 = 2u8
+
+fn varint_encode(dst: []u8, v: u64) -> (usize, err)
+fn varint_decode(src: []const u8) -> (u64, usize, err)
+fn put_varint(dst: []u8, at: *usize, v: u64) -> err
+fn load32(src: []const u8, at: usize) -> u32
+fn copy_bytes(dst: []u8, at: usize, src: []const u8)
+fn header_decode(src: []const u8, short_dcid_len: usize) -> (Header, err)
+fn header_encode_short(dst: []u8, dcid: []const u8, spin: bool, key_phase: bool) -> (usize, err)
+fn header_encode_long(dst: []u8, kind: u8, version: u32, dcid: []const u8, scid: []const u8, token: []const u8, length: u64) -> (usize, err)
+fn frame_decode(src: []const u8) -> (Frame, usize, err)
+fn ack_ranges(f: *const Frame, lo: []u64, hi: []u64) -> (usize, err)
+fn frame_encode_padding(dst: []u8, n: usize) -> (usize, err)
+fn frame_encode_ping(dst: []u8) -> (usize, err)
+fn encode_eight(dst: []u8, kind: u8, data: [8]u8) -> (usize, err)
+fn frame_encode_path_challenge(dst: []u8, data: [8]u8) -> (usize, err)
+fn frame_encode_path_response(dst: []u8, data: [8]u8) -> (usize, err)
+fn frame_encode_new_connection_id(dst: []u8, seq: u64, retire_prior_to: u64, cid: []const u8, token: []const u8) -> (usize, err)
+fn frame_encode_retire_connection_id(dst: []u8, seq: u64) -> (usize, err)
+fn frame_encode_ack(dst: []u8, delay: u64, lo: []const u64, hi: []const u64, ecn: bool, ecn_counts: [3]u64) -> (usize, err)
+fn frame_encode_connection_close(dst: []u8, kind: u8, error_code: u64, frame_type: u64, reason: []const u8) -> (usize, err)
+fn cid_set(seq: []u64, cid: []u8, cid_len: []u8, token: []u8, active: []u8) -> (CidSet, err)
+fn cid_bytes(s: *const CidSet, index: usize) -> []const u8
+fn cids_find(s: *const CidSet, seq: u64) -> (usize, bool)
+fn bytes_equal(a: []const u8, b: []const u8) -> bool
+fn cids_insert(s: *CidSet, seq: u64, retire_prior_to: u64, cid: []const u8, token: []const u8) -> err
+fn cids_add(s: *CidSet, f: *const Frame) -> err
+fn cids_retire(s: *CidSet, seq: u64) -> bool
+fn cids_active_count(s: *const CidSet) -> usize
+fn cids_pick_unused(s: *const CidSet) -> (usize, bool)
+fn ipv4(a: u8, b: u8, c: u8, d: u8, port: u16) -> Address
+fn address_equal(a: Address, b: Address) -> bool
+fn amplification_allowance(p: *const Path) -> u64
+fn can_send(p: *const Path, n: u64) -> bool
+fn connection(paths: []Path, cids: CidSet, peer_cids: CidSet, local: Address, remote: Address, dcid_index: usize) -> (Connection, err)
+fn path_received(c: *Connection, index: usize, n: u64)
+fn migrate(c: *Connection, new_remote: Address, now: u64, challenge: [8]u8, out: []u8) -> (usize, err)
+fn on_path_response(c: *Connection, data: [8]u8, now: u64) -> (bool, err)
+fn retire_old(c: *Connection, out: []u8) -> (usize, err)
+fn on_path_challenge(c: *Connection, data: [8]u8, index: usize, out: []u8) -> (usize, err)
+fn path_timeout(c: *Connection, now: u64, pto: u64) -> bool
+```
+
+RFC 9000 headers (`header_decode`, long and short encoders), the migration frames
+(`frame_decode`, ACK ranges, encoders), connection-id sets (`cids_add`, `cids_retire`,
+`cids_pick_unused`), path state with the amplification limit, and migration itself:
+`migrate` (a fresh connection id, PATH_CHALLENGE padded to 1200), `on_path_response`,
+`on_path_challenge`, `retire_old`, `path_timeout`.
 
 ### `e.net.tls`
 
@@ -8335,6 +8629,99 @@ fn writer_storage(level: Level) -> usize
 Version 1 supports standard frames without dictionaries. Window and decompressed
 output limits are mandatory; unsupported skippable or dictionary frames return
 `Unsupported`.
+
+### `e.fmt.brotli`
+
+```neper
+type Br = struct { src: []const u8, bit: usize, bad: bool, done: bool, pos: usize, max_back: usize, rb: [4]u32, rb_idx: u32, npostfix: u32, ndirect: u32, nbl: [3]u32, btype: [3]u32, bprev: [3]u32, bcount: [3]u32, modes: [256]u8, ntrees_l: u32, ntrees_d: u32 }
+error Malformed
+error TooSmall
+error Unsupported
+const CL: usize = 0usize
+const BT: usize = 68usize
+const BC: usize = 1712usize
+const MC: usize = 1964usize
+const LENS: usize = 2540usize
+const MTF: usize = 3244usize
+const MAP_L: usize = 3500usize
+const MAP_D: usize = 19884usize
+const LIT: usize = 20908usize
+const CMD: usize = 160172usize
+const DIST: usize = 528812usize
+const SCRATCH: usize = 803244usize
+const BT_CODE: usize = 548usize
+const BC_CODE: usize = 84usize
+const LIT_CODE: usize = 544usize
+const CMD_CODE: usize = 1440usize
+const DIST_CODE: usize = 1072usize
+
+fn decode_scratch_required() -> usize
+fn bits(d: *Br, n: u32) -> u32
+fn peek4(d: *Br) -> u32
+fn skip(d: *Br, n: u32)
+fn align(d: *Br) -> err
+fn varlen(d: *Br) -> u32
+fn read_window_bits(d: *Br) -> (u32, err)
+fn window_bits(src: []const u8) -> (u32, err)
+fn get16(s: []u8, p: usize) -> u32
+fn put16(s: []u8, p: usize, v: u32)
+fn set_single(s: []u8, base: usize, sym: u32)
+fn build_code(s: []u8, base: usize, alphabet: u32)
+fn decode_sym(d: *Br, s: []u8, base: usize) -> u32
+fn alphabet_bits(n: u32) -> u32
+fn clear_lengths(s: []u8, alphabet: u32)
+fn simple_code(d: *Br, s: []u8, base: usize, alphabet: u32) -> err
+fn code_length_code(d: *Br, s: []u8, hskip: usize) -> err
+fn complex_code(d: *Br, s: []u8, base: usize, alphabet: u32, hskip: usize) -> err
+fn read_code(d: *Br, s: []u8, base: usize, alphabet: u32) -> err
+fn block_len(d: *Br, s: []u8, base: usize) -> u32
+fn block_switch(d: *Br, s: []u8, cat: usize) -> err
+fn inverse_mtf(s: []u8, base: usize, size: usize)
+fn context_map(d: *Br, s: []u8, base: usize, ntrees: u32, size: usize) -> err
+fn header(d: *Br, s: []u8) -> err
+fn literal_context(mode: u8, p1: u32, p2: u32) -> usize
+fn literals(d: *Br, dst: []u8, s: []u8, n: usize) -> err
+fn read_distance(d: *Br, dcode: u32) -> (usize, err)
+fn append_affix(tmp: []u8, n0: usize, index: u32) -> usize
+fn uppercase(tmp: []u8, lo: usize, hi: usize, all: bool)
+fn dict_word(d: *Br, dst: []u8, word_id: usize, clen: u32, remaining: usize) -> (usize, err)
+fn commands(d: *Br, dst: []u8, s: []u8, mlen: usize) -> err
+fn meta_block(d: *Br, dst: []u8, s: []u8) -> err
+fn decode(src: []const u8, dst: []u8, scratch: []u8) -> (usize, err)
+fn insert_base(code: u32) -> u32
+fn insert_extra(code: u32) -> u32
+fn copy_base(code: u32) -> u32
+fn copy_extra(code: u32) -> u32
+fn block_base(code: u32) -> u32
+fn block_extra(code: u32) -> u32
+fn insert_range(code: u32) -> u32
+fn copy_range(code: u32) -> u32
+fn code_length_order(code: u32) -> usize
+fn cl_prefix_length(code: u32) -> u32
+fn cl_prefix_value(code: u32) -> u32
+fn ndbits(code: u32) -> u32
+fn dict_offset(code: u32) -> usize
+fn utf8_p1() -> str
+fn utf8_p2() -> str
+fn lut2() -> str
+fn transform_data() -> str
+fn prefix_suffix() -> str
+fn prefix_suffix_offset(index: u32) -> usize
+fn dictionary_0() -> str
+fn dictionary_1() -> str
+fn dictionary_2() -> str
+fn dictionary_3() -> str
+fn dictionary_4() -> str
+fn dictionary_5() -> str
+fn dictionary_6() -> str
+fn dictionary_7() -> str
+fn dict_byte(i: usize) -> u8
+```
+
+A complete RFC 7932 decoder over caller storage (`decode`, `decode_scratch_required`,
+`window_bits`): meta-blocks, block switches, context maps, simple and complex prefix
+codes, distance short codes, and the full static dictionary with its 121 transforms
+embedded as string chunks.
 
 ### `e.fmt.bzip2`
 

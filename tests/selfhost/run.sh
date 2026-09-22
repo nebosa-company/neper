@@ -1994,6 +1994,31 @@ net_stun_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$net_stun_written" = 'executable written' ]
 chmod +x "$test_build/net-stun-selfhost"
 "$test_build/net-stun-selfhost"
+# `e.crypto.noise`: BLAKE2s against hashlib, IK messages byte-equal to a cryptography replica, both sides splitting to the same keys, a transport message crossing, tampering and a wrong psk refused (D878).
+crypto_noise_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_noise/src/main.e" "$repo" x64 linux "$test_build/crypto-noise-selfhost")
+[ "$crypto_noise_written" = 'executable written' ]
+chmod +x "$test_build/crypto-noise-selfhost"
+"$test_build/crypto-noise-selfhost"
+# `e.fmt.brotli`: streams from the brotli package at qualities 0 to 11 including 29 dictionary references and multi-block texts decoded exactly; truncation, trailing bytes and short buffers reported (D878).
+fmt_brotli_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_brotli/src/main.e" "$repo" x64 linux "$test_build/fmt-brotli-selfhost")
+[ "$fmt_brotli_written" = 'executable written' ]
+chmod +x "$test_build/fmt-brotli-selfhost"
+"$test_build/fmt-brotli-selfhost"
+# `e.net.dns`: the RFC 8080 key tag and a re-signed MX RRset validated in mixed case, expiry and tampering refused, a P-256 signature, DS digests against hashlib, DoH GET and POST bytes (D878).
+net_dns_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_dns/src/main.e" "$repo" x64 linux "$test_build/net-dns-selfhost")
+[ "$net_dns_written" = 'executable written' ]
+chmod +x "$test_build/net-dns-selfhost"
+"$test_build/net-dns-selfhost"
+# `e.net.http3`: the RFC 9000 varint vectors, a control stream split into frames with a partial tail, a six-header request block byte-equal to a replica and decoded back (D878).
+net_http3_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http3/src/main.e" "$repo" x64 linux "$test_build/net-http3-selfhost")
+[ "$net_http3_written" = 'executable written' ]
+chmod +x "$test_build/net-http3-selfhost"
+"$test_build/net-http3-selfhost"
+# `e.net.quic`: the RFC 9001 client Initial header, a scripted migration whose probe bytes equal a replica, validation switching the path and retiring the old id, no unused id refused, a timed-out probe failing (D878).
+net_quic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_quic/src/main.e" "$repo" x64 linux "$test_build/net-quic-selfhost")
+[ "$net_quic_written" = 'executable written' ]
+chmod +x "$test_build/net-quic-selfhost"
+"$test_build/net-quic-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

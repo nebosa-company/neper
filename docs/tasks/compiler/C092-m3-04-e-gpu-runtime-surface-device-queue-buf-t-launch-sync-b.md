@@ -39,8 +39,8 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2†, `src/resolve.e`×2†, `lib/e/gpu.e`×1, `lib/e/gpu/tensor.e`×1, `lib/e/ui/app.e`×1†, `lib/e/ui/testing.e`×1
 - `queue_with`: `lib/e/gpu.e`×2
-- `upload`: `lib/e/ui/asset.e`×8, `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2, `lib/e/gfx/image.e`×1, `lib/e/gfx/scene.e`×1†
-- `download`: `lib/e/gpu.e`×4, `lib/e/gpu/tensor.e`×3
+- `upload`: `lib/e/ui/asset.e`×8, `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2, `lib/e/fmt/brotli.e`×1‡, `lib/e/gfx/image.e`×1, `lib/e/gfx/scene.e`×1†
+- `download`: `lib/e/gpu.e`×4, `lib/e/gpu/tensor.e`×3, `lib/e/fmt/brotli.e`×1‡
 - `wait_for`: `lib/e/task.e`×4, `lib/e/sync.e`×3, `lib/e/concurrent/queue.e`×2, `lib/e/dist/deadlock.e`×2, `lib/e/os.windows.e`×2‡, `lib/e/gpu.e`×1, `scripts/algos/batch28.json`×1
 - `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1, `src/lower.e`×1‡
 - `FaultRecord`: `lib/e/gpu.e`×4
@@ -48,8 +48,8 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `last_fault`: `lib/e/gpu.e`×3
 - `Image`: `lib/e/gfx/image.e`×10, `lib/e/gfx/scene.e`×10†, `lib/e/gpu.e`×9, `lib/e/ui/widget.e`×9‡, `scripts/build-docs-pdf.py`×7, `lib/e/fmt/png.e`×6, `lib/e/fmt/webp.e`×5†, `lib/e/fmt/markdown.e`×4
 - `open_target`: `lib/e/ui/window.e`×2, `lib/e/gpu.e`×1, `lib/e/ui/testing.e`×1
-- `presented`: `lib/e/gpu.e`×4, `lib/e/ui/testing.e`×2, `lib/e/ui/window.e`×2, `lib/e/gfx/scene.e`×1†, `lib/e/os.linux.e`×1‡, `lib/e/os.windows.e`×1‡, `lib/e/ui/app.e`×1†, `src/check.e`×1‡
-- `resize`: `lib/e/ui/collection.e`×18†, `lib/e/ui/window.e`×2, `lib/e/gpu.e`×1, `lib/e/os.linux.e`×1‡, `lib/e/ui/app.e`×1†, `lib/e/ui/navigation.e`×1†
+- `presented`: `lib/e/fmt/brotli.e`×4‡, `lib/e/gpu.e`×4, `lib/e/ui/testing.e`×2, `lib/e/ui/window.e`×2, `lib/e/gfx/scene.e`×1†, `lib/e/os.linux.e`×1‡, `lib/e/os.windows.e`×1‡, `lib/e/ui/app.e`×1†
+- `resize`: `lib/e/ui/collection.e`×18†, `lib/e/ui/window.e`×2, `lib/e/fmt/brotli.e`×1‡, `lib/e/gpu.e`×1, `lib/e/os.linux.e`×1‡, `lib/e/ui/app.e`×1†, `lib/e/ui/navigation.e`×1†
 
 ## Verification
 

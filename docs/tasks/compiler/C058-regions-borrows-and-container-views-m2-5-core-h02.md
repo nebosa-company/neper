@@ -121,7 +121,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `.len`: `src/main.e`×535‡, `src/check.e`×326‡, `src/tool.e`×309‡, `src/em.e`×158‡, `lib/e/os.linux.e`×139‡, `lib/e/fmt/json.e`×131†, `lib/e/net/tls.e`×116†, `lib/e/dsp.e`×107†
 - `mem.reset`: `lib/e/os.windows.e`×70‡, `lib/e/os.linux.e`×54‡, `lib/e/fmt/json.e`×26†, `lib/e/net/http.e`×26†, `lib/e/io.e`×17, `lib/e/fs.e`×14, `lib/e/grep.e`×10, `lib/e/net/ws.e`×7
 - `context_moves.ends`: `tests/conformance/tools/context_moves.x64-linux.expected.jsonl`×1, `tests/conformance/tools/context_moves.x64-windows.expected.jsonl`×1
-- `Resource`: `src/check.e`×144‡, `src/main.e`×16‡
+- `Resource`: `src/check.e`×144‡, `src/main.e`×16‡, `lib/e/fmt/brotli.e`×1‡
 - `@borrows`: `src/check.e`×3‡, `tests/conformance/accept/regions_borrow_contract_aggregate.e`×1, `tests/conformance/accept/regions_borrow_contract_artifact.e`×1, `tests/conformance/reject/regions_borrow_contract_body.e`×1, `tests/conformance/reject/regions_borrow_contract_body.expected.jsonl`×1, `tests/conformance/reject/regions_borrow_contract_call.e`×1, `tests/conformance/reject/regions_borrow_contract_generic.e`×1, `tests/conformance/reject/regions_borrow_contract_name.e`×1
 
 ## Verification

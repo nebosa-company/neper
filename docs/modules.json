@@ -316,7 +316,12 @@
     "e.fmt.parquet",
     "e.net.coap",
     "e.net.mqtt",
-    "e.net.stun"
+    "e.net.stun",
+    "e.crypto.noise",
+    "e.fmt.brotli",
+    "e.net.dns",
+    "e.net.http3",
+    "e.net.quic"
    ]
   },
   {
@@ -969,6 +974,19 @@
    "direct_dependencies": [
     "e.crypto.aead",
     "e.crypto.random"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.noise",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.crypto.aead",
+    "e.crypto.hash",
+    "e.crypto.kx"
    ],
    "blocked_by": []
   },
@@ -2486,6 +2504,38 @@
     "e.algo.hash",
     "e.crypto.hash"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.dns",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.crypto.hash",
+    "e.crypto.sign",
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.http3",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.quic",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {
@@ -4226,6 +4276,15 @@
     "e.fmt.snappy",
     "e.mem"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.brotli",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {

@@ -2218,6 +2218,36 @@ $netStunWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netStunWritten -ne 'executable written') { throw 'net_stun emission failed' }
 & $netStunPath
 if ($LASTEXITCODE -ne 0) { throw "a net_stun check failed: exit $LASTEXITCODE" }
+# `e.crypto.noise`: BLAKE2s against hashlib, IK messages byte-equal to a cryptography replica, both sides splitting to the same keys, a transport message crossing, tampering and a wrong psk refused (D878).
+$cryptoNoisePath = Join-Path $testBuild 'crypto-noise-selfhost.exe'
+$cryptoNoiseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_noise\src\main.e') $repo 'x64' 'windows' $cryptoNoisePath
+if ($LASTEXITCODE -ne 0 -or $cryptoNoiseWritten -ne 'executable written') { throw 'crypto_noise emission failed' }
+& $cryptoNoisePath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_noise check failed: exit $LASTEXITCODE" }
+# `e.fmt.brotli`: streams from the brotli package at qualities 0 to 11 including 29 dictionary references and multi-block texts decoded exactly; truncation, trailing bytes and short buffers reported (D878).
+$fmtBrotliPath = Join-Path $testBuild 'fmt-brotli-selfhost.exe'
+$fmtBrotliWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_brotli\src\main.e') $repo 'x64' 'windows' $fmtBrotliPath
+if ($LASTEXITCODE -ne 0 -or $fmtBrotliWritten -ne 'executable written') { throw 'fmt_brotli emission failed' }
+& $fmtBrotliPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_brotli check failed: exit $LASTEXITCODE" }
+# `e.net.dns`: the RFC 8080 key tag and a re-signed MX RRset validated in mixed case, expiry and tampering refused, a P-256 signature, DS digests against hashlib, DoH GET and POST bytes (D878).
+$netDnsPath = Join-Path $testBuild 'net-dns-selfhost.exe'
+$netDnsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_dns\src\main.e') $repo 'x64' 'windows' $netDnsPath
+if ($LASTEXITCODE -ne 0 -or $netDnsWritten -ne 'executable written') { throw 'net_dns emission failed' }
+& $netDnsPath
+if ($LASTEXITCODE -ne 0) { throw "a net_dns check failed: exit $LASTEXITCODE" }
+# `e.net.http3`: the RFC 9000 varint vectors, a control stream split into frames with a partial tail, a six-header request block byte-equal to a replica and decoded back (D878).
+$netHttp3Path = Join-Path $testBuild 'net-http3-selfhost.exe'
+$netHttp3Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http3\src\main.e') $repo 'x64' 'windows' $netHttp3Path
+if ($LASTEXITCODE -ne 0 -or $netHttp3Written -ne 'executable written') { throw 'net_http3 emission failed' }
+& $netHttp3Path
+if ($LASTEXITCODE -ne 0) { throw "a net_http3 check failed: exit $LASTEXITCODE" }
+# `e.net.quic`: the RFC 9001 client Initial header, a scripted migration whose probe bytes equal a replica, validation switching the path and retiring the old id, no unused id refused, a timed-out probe failing (D878).
+$netQuicPath = Join-Path $testBuild 'net-quic-selfhost.exe'
+$netQuicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_quic\src\main.e') $repo 'x64' 'windows' $netQuicPath
+if ($LASTEXITCODE -ne 0 -or $netQuicWritten -ne 'executable written') { throw 'net_quic emission failed' }
+& $netQuicPath
+if ($LASTEXITCODE -ne 0) { throw "a net_quic check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

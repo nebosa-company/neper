@@ -1,0 +1,20 @@
+{
+ "decision": "D878",
+ "modules": [
+  {"name": "e.crypto.noise", "deps": ["e.crypto.aead", "e.crypto.hash", "e.crypto.kx"], "fixture": "crypto_noise", "anchor": "### `e.crypto.random`\n",
+   "note": "BLAKE2s (`blake2s`, keyed, `hmac_blake2s`, Noise `hkdf2`/`hkdf3`) and the Noise\nframework over caller state: `CipherState` (`encrypt_with_ad`, `decrypt_with_ad`, `rekey`),\n`SymmetricState`, `HandshakeState` for IK and IKpsk2 (`initialize`, `write_message`,\n`read_message`, `split`) and the two-message `handshake_ik`.",
+   "comment": "`e.crypto.noise`: BLAKE2s against hashlib, IK messages byte-equal to a cryptography replica, both sides splitting to the same keys, a transport message crossing, tampering and a wrong psk refused"},
+  {"name": "e.fmt.brotli", "deps": [], "fixture": "fmt_brotli", "anchor": "### `e.fmt.bzip2`\n",
+   "note": "A complete RFC 7932 decoder over caller storage (`decode`, `decode_scratch_required`,\n`window_bits`): meta-blocks, block switches, context maps, simple and complex prefix\ncodes, distance short codes, and the full static dictionary with its 121 transforms\nembedded as string chunks.",
+   "comment": "`e.fmt.brotli`: streams from the brotli package at qualities 0 to 11 including 29 dictionary references and multi-block texts decoded exactly; truncation, trailing bytes and short buffers reported"},
+  {"name": "e.net.dns", "deps": ["e.bytes", "e.crypto.hash", "e.crypto.sign", "e.mem"], "fixture": "net_dns", "anchor": "### `e.net.tls`\n",
+   "note": "RFC 1035 wire format (`encode_query` with EDNS, `decode_header`, `decode_name` with\nbackward-only compression, `decode_rr`, rdata readers), DNSSEC (`key_tag`, `ds_digest`,\n`dnssec_validate` with canonical ordering for Ed25519 and P-256, `chain_validate`) and\nthe DoH/DoT byte builders `query_doh`, `doh_response_body`, `query_dot_frame`.",
+   "comment": "`e.net.dns`: the RFC 8080 key tag and a re-signed MX RRset validated in mixed case, expiry and tampering refused, a P-256 signature, DS digests against hashlib, DoH GET and POST bytes"},
+  {"name": "e.net.http3", "deps": [], "fixture": "net_http3", "anchor": "### `e.net.tls`\n",
+   "note": "QUIC varints, RFC 9114 frames (`frame_encode`, `frame_decode`, `frames` splitting a\nstream and reporting a partial tail), settings, goaway and stream types, and a QPACK\nstatic-table codec (`headers_encode`, `headers_decode`, prefix integers, the 99-entry\ntable generated from the RFC text).",
+   "comment": "`e.net.http3`: the RFC 9000 varint vectors, a control stream split into frames with a partial tail, a six-header request block byte-equal to a replica and decoded back"},
+  {"name": "e.net.quic", "deps": [], "fixture": "net_quic", "anchor": "### `e.net.tls`\n",
+   "note": "RFC 9000 headers (`header_decode`, long and short encoders), the migration frames\n(`frame_decode`, ACK ranges, encoders), connection-id sets (`cids_add`, `cids_retire`,\n`cids_pick_unused`), path state with the amplification limit, and migration itself:\n`migrate` (a fresh connection id, PATH_CHALLENGE padded to 1200), `on_path_response`,\n`on_path_challenge`, `retire_old`, `path_timeout`.",
+   "comment": "`e.net.quic`: the RFC 9001 client Initial header, a scripted migration whose probe bytes equal a replica, validation switching the path and retiring the old id, no unused id refused, a timed-out probe failing"}
+ ]
+}
