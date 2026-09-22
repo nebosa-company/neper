@@ -164,6 +164,20 @@ type Element = struct {
     generation: u32,
     key: Key,
     kind: u8,
+    // The subtree as it was reconciled (D916): its content hash, whether it holds
+    // nothing the runtime moves on its own (a scroll, an editor, a slider, a zoom,
+    // a custom paint, an overlay), whether this frame's node hashed the same, the
+    // rect it was placed in, the commands it painted (in the scene compiled then)
+    // and the size its last measure answered under which constraints.
+    subtree_hash: u64,
+    static_subtree: bool,
+    unchanged: bool,
+    placed_outer: geometry.Rect,
+    replay_from: u32,
+    replay_to: u32,
+    has_replay: bool,
+    sizes: [4]Sized,
+    size_next: u8,
     parent: u32,
     has_parent: bool,
     // Children in order, linked; rebuilt every reconcile.
@@ -269,6 +283,11 @@ type Arena = struct { pressed: bool, candidate: u32, down: geometry.Point, last:
 // measures its children to place them and every ancestor measured them before
 // it, so without this a text is shaped once per level of nesting.
 type Measured = struct { node: usize, limits: ui_layout.Constraints, size: geometry.Size, laid: layout.Layout, stamp: u32 }
+// A node's element for the frame, by the node's address.
+type Owner = struct { node: usize, element: u32, stamp: u32 }
+// A size an element's measure answered under some constraints; an element keeps its
+// last four, since a parent asks under more than one set per frame.
+type Sized = struct { limits: ui_layout.Constraints, size: geometry.Size, valid: bool }
 
 type State = struct {
     arena: *mem.Arena,
@@ -279,6 +298,9 @@ type State = struct {
     storage: []u8,
     measured: []Measured,
     measure_stamp: u32,
+    replay_scene: scene.SceneId,
+    has_replay_scene: bool,
+    owners: []Owner,
     storage_used: usize,
     root: u32,
     has_root: bool,
@@ -551,6 +573,8 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
     }
     let (measured, measured_error) = mem.alloc[Measured](a, limits.max_elements * 4usize)
     if measured_error != ok { ret (zero, TooLarge) }
+    let (owners, owners_error) = mem.alloc[Owner](a, limits.max_elements * 4usize)
+    if owners_error != ok { ret (zero, TooLarge) }
     var s: State = zero
     s.arena = a
     s.renderer = renderer
@@ -559,6 +583,7 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
     s.cells = cells
     s.storage = storage
     s.measured = measured
+    s.owners = owners
     s.scratch = scratch
     states[0usize] = s
     ret (Runtime { state: mem.cast[*void](&states[0usize]) }, ok)
@@ -793,6 +818,191 @@ fn copy_short(into: []u8, from: str, most: usize) -> usize {
 
 // The node's subtree matched to elements: children rebuilt in the node's order,
 // the old children not matched retired.
+// ------------------------------------------------------- unchanged subtrees (D916)
+//
+// A subtree that hashes as it did last frame, holds nothing the runtime moves by
+// itself, and is placed in the same rect is neither measured nor painted again:
+// its measure is answered from the element and its commands replayed from the
+// scene compiled last frame. The hash is over content -- a text's bytes, not its
+// slice -- since the build arena hands the same addresses to different frames.
+
+const FNV_OFFSET: u64 = 14695981039346656037u64
+const FNV_PRIME: u64 = 1099511628211u64
+
+fn hash_bytes(seed: u64, bytes: []const u8) -> u64 {
+    var h = seed
+    var i = 0usize
+    while i < bytes.len {
+        h = (h ^ u64(bytes[i])) *% FNV_PRIME
+        i += 1usize
+    }
+    ret h
+}
+
+fn hash_u64(seed: u64, v: u64) -> u64 {
+    var h = seed
+    var i = 0usize
+    while i < 8usize {
+        h = (h ^ ((v >> (u64(i) * 8u64)) & 255u64)) *% FNV_PRIME
+        i += 1usize
+    }
+    ret h
+}
+
+fn hash_f32(seed: u64, v: f32) -> u64 {
+    ret hash_u64(seed, u64(mem.bitcast[u32](v)))
+}
+
+fn bytes_of[T: type](p: *const T) -> []const u8 {
+    let n = mem.size_of[T]()
+    var over: mem.Arena = zero
+    over.base = mem.cast[*u8](p)
+    over.cap = n
+    over.off = n
+    ret mem.view(&over, 0usize, n)
+}
+
+fn hash_submit(seed: u64, v: Submit) -> u64 {
+    var pun: SubmitBits = zero
+    pun.function = v.invoke
+    ret hash_u64(hash_u64(seed, u64(mem.address_of(v.ctx))), u64(pun.bits))
+}
+
+fn hash_text_style(seed: u64, st: layout.Style) -> u64 {
+    var h = hash_f32(seed, st.line_height)
+    h = hash_bytes(h, st.language)
+    var i = 0usize
+    while i < st.fonts.len {
+        h = hash_u64(h, u64(st.fonts[i].font.id))
+        h = hash_f32(h, st.fonts[i].size)
+        i += 1usize
+    }
+    ret h
+}
+
+// The node's own content (not its children) into the hash; answers whether the
+// node is static -- one the runtime never moves or paints from its own state.
+fn hash_node(seed: u64, node: *const Node) -> (u64, bool) {
+    var h = hash_u64(seed, node.key)
+    h = hash_bytes(h, bytes_of[style.Style](&node.style))
+    h = hash_u64(h, u64(kind_tag(node.kind)))
+    var static = true
+    switch node.kind {
+    case .Text as t:
+        h = hash_bytes(h, t.value)
+        h = hash_text_style(h, t.style)
+        h = hash_bytes(h, bytes_of[paint.Color](&t.color))
+        if t.wrap == .Word { h = hash_u64(h, 1u64) }
+        if t.wrap == .Character { h = hash_u64(h, 2u64) }
+        if t.align == .End { h = hash_u64(h, 3u64) }
+        if t.align == .Center { h = hash_u64(h, 4u64) }
+        if t.align == .Justify { h = hash_u64(h, 5u64) }
+        h = hash_u64(h, u64(t.max_lines))
+        h = hash_bytes(h, t.ellipsis)
+    case .Flex as f:
+        h = hash_bytes(h, bytes_of[ui_layout.Flex](&f))
+    case .Grid as g:
+        h = hash_bytes(h, bytes_of[ui_layout.Grid](&g))
+    case .Wrap as w:
+        h = hash_bytes(h, bytes_of[ui_layout.Wrap](&w))
+    case .Aspect as ratio:
+        h = hash_f32(h, ratio)
+    case .Button as bt:
+        h = hash_bytes(h, bytes_of[Button](&bt))
+    case .Image as im:
+        h = hash_bytes(h, bytes_of[Image](&im))
+    case .Region as r:
+        h = hash_bytes(h, bytes_of[Region](&r))
+    case .Scope as sc:
+        if sc.traps_focus { h = hash_u64(h, 1u64) }
+        h = hash_submit(h, sc.default_action)
+        h = hash_submit(h, sc.cancel_action)
+        h = hash_u64(h, u64(mem.address_of(sc.keys.ctx)))
+        var i = 0usize
+        while i < sc.shortcuts.len {
+            h = hash_u64(h, u64(sc.shortcuts[i].key))
+            h = hash_bytes(h, bytes_of[input.Modifiers](&sc.shortcuts[i].modifiers))
+            h = hash_submit(h, sc.shortcuts[i].action)
+            i += 1usize
+        }
+    case .Semantics as sm:
+        h = hash_bytes(h, sm.label)
+        h = hash_bytes(h, sm.value)
+        h = hash_bytes(h, sm.hint)
+        h = hash_bytes(h, bytes_of[Semantics](&sm))
+    case .Box:
+        static = true
+    case .Stack:
+        static = true
+    case .Fitted:
+        static = true
+    default:
+        static = false
+    }
+    ret (h, static)
+}
+
+// A replayed subtree's elements keep ranges into the scene compiled from it;
+// they now stand `to - from` further along.
+fn shift_replay(s: *State, element: usize, to: usize, from: usize) {
+    let e = &s.elements[element]
+    if e.has_replay {
+        e.replay_from = u32(usize(e.replay_from) + to - from)
+        e.replay_to = u32(usize(e.replay_to) + to - from)
+    }
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        shift_replay(s, usize(at), to, from)
+        has = s.elements[usize(at)].has_sibling
+        at = s.elements[usize(at)].next_sibling
+    }
+}
+
+// A moved subtree's elements stand where they did, moved.
+fn shift_bounds(s: *State, element: usize, dx: f32, dy: f32) {
+    let e = &s.elements[element]
+    e.bounds.x = e.bounds.x + dx
+    e.bounds.y = e.bounds.y + dy
+    e.placed_outer.x = e.placed_outer.x + dx
+    e.placed_outer.y = e.placed_outer.y + dy
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        shift_bounds(s, usize(at), dx, dy)
+        has = s.elements[usize(at)].has_sibling
+        at = s.elements[usize(at)].next_sibling
+    }
+}
+
+fn owner_store(s: *State, key: usize, element: usize) {
+    let cap = s.owners.len
+    var slot = (key >> 3usize) % cap
+    var probes = 0usize
+    while probes < 16usize {
+        let entry = &s.owners[slot]
+        if entry.stamp != s.measure_stamp || entry.node == key { break }
+        slot = (slot + 1usize) % cap
+        probes += 1usize
+    }
+    if probes >= 16usize { slot = (key >> 3usize) % cap }
+    s.owners[slot] = Owner { node: key, element: u32(element), stamp: s.measure_stamp }
+}
+
+fn owner_of(s: *State, key: usize) -> (usize, bool) {
+    let cap = s.owners.len
+    var slot = (key >> 3usize) % cap
+    var probes = 0usize
+    while probes < 16usize {
+        let entry = &s.owners[slot]
+        if entry.stamp != s.measure_stamp { ret (0usize, false) }
+        if entry.node == key { ret (usize(entry.element), true) }
+        slot = (slot + 1usize) % cap
+        probes += 1usize
+    }
+    ret (0usize, false)
+}
+
 fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool, position: usize, old_siblings: []const u32, depth: usize) -> (usize, err) {
     if depth > usize(s.limits.max_depth) { ret (0usize, TooDeep) }
     if style.validate(&node.style) != ok { ret (0usize, InvalidTree) }
@@ -965,10 +1175,15 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     var last = 0usize
     var has_last = false
     e.has_child = false
+    let (own_hash, own_static) = hash_node(FNV_OFFSET, node)
+    var subtree_hash = own_hash
+    var static_subtree = own_static
     i = 0usize
     while i < node.children.len {
         let (child, child_error) = reconcile_node(s, &node.children[i], index, true, i, old_children[0usize..old_count], depth + 1usize)
         if child_error != ok { ret (0usize, child_error) }
+        subtree_hash = hash_u64(subtree_hash, s.elements[child].subtree_hash)
+        if !s.elements[child].static_subtree { static_subtree = false }
         let owner = &s.elements[index]
         if has_last {
             s.elements[last].next_sibling = u32(child)
@@ -988,6 +1203,20 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         let old = &s.elements[usize(old_children[o])]
         if old.live && !old.visited { retire_element(s, usize(old_children[o])) }
         o += 1usize
+    }
+    let me = &s.elements[index]
+    me.unchanged = me.has_replay && me.static_subtree && static_subtree && me.subtree_hash == subtree_hash && !me.invalid
+    me.subtree_hash = subtree_hash
+    me.static_subtree = static_subtree
+    let key = mem.address_of(node)
+    owner_store(s, key, index)
+    // An unchanged subtree measures as it did, without a walk.
+    if me.unchanged {
+        var k = 0usize
+        while k < 4usize {
+            if me.sizes[k].valid { measured_store(s, key, me.sizes[k].limits, me.sizes[k].size, zero) }
+            k += 1usize
+        }
     }
     ret (index, ok)
 }
@@ -1100,6 +1329,23 @@ fn measure(s: *State, a: *mem.Arena, node: *const Node, limits: ui_layout.Constr
     let (size, size_error) = measure_uncached(s, a, node, limits)
     if size_error != ok { ret (size, size_error) }
     measured_store(s, key, limits, size, zero)
+    let (element, owned) = owner_of(s, key)
+    if owned {
+        let e = &s.elements[element]
+        var k = 0usize
+        var found = false
+        while k < 4usize {
+            if e.sizes[k].valid && same_limits(e.sizes[k].limits, limits) {
+                e.sizes[k].size = size
+                found = true
+            }
+            k += 1usize
+        }
+        if !found {
+            e.sizes[usize(e.size_next)] = Sized { limits: limits, size: size, valid: true }
+            e.size_next = (e.size_next + 1u8) % 4u8
+        }
+    }
     ret (size, ok)
 }
 
@@ -1284,8 +1530,28 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     let padding = edges_px(node.style.padding, outer.width)
     let bounds = geometry.Rect { x: outer.x + margin.left, y: outer.y + margin.top, width: max_f(outer.width - margin.left - margin.right, 0.0), height: max_f(outer.height - margin.top - margin.bottom, 0.0) }
     let e = &s.elements[element]
+    let from = scene.builder_count(b)
+    if e.unchanged && e.has_replay && s.has_replay_scene && outer.width == e.placed_outer.width && outer.height == e.placed_outer.height && !(outer.x == e.placed_outer.x && outer.y == e.placed_outer.y) {
+        // The same subtree, moved: its commands and its elements' bounds move with it.
+        let dx = outer.x - e.placed_outer.x
+        let dy = outer.y - e.placed_outer.y
+        if scene.replay_shifted(s.renderer, s.replay_scene, usize(e.replay_from), usize(e.replay_to), dx, dy, a, b) {
+            shift_replay(s, element, from, usize(e.replay_from))
+            shift_bounds(s, element, dx, dy)
+            ret ok
+        }
+    }
+    if e.unchanged && e.has_replay && s.has_replay_scene && outer.x == e.placed_outer.x && outer.y == e.placed_outer.y && outer.width == e.placed_outer.width && outer.height == e.placed_outer.height {
+        if scene.replay(s.renderer, s.replay_scene, usize(e.replay_from), usize(e.replay_to), b) {
+            // The subtree's own ranges move with it.
+            shift_replay(s, element, from, usize(e.replay_from))
+            ret ok
+        }
+    }
+    e.has_replay = false
     e.bounds = bounds
     e.invalid = false
+    e.placed_outer = outer
     let inner = geometry.Rect { x: bounds.x + padding.left, y: bounds.y + padding.top, width: max_f(bounds.width - padding.left - padding.right, 0.0), height: max_f(bounds.height - padding.top - padding.bottom, 0.0) }
     let inner_limits = ui_layout.Constraints { min_width: 0.0, max_width: inner.width, min_height: 0.0, max_height: inner.height }
     var save: scene.Command = .Save
@@ -1399,7 +1665,14 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     case .Scroll as sc:
         try place_scroll(s, a, node, element, sc, inner, inner_limits, b, depth)
     }
-    ret finish_place(b, clipped, layered)
+    try finish_place(b, clipped, layered)
+    let placed = &s.elements[element]
+    if placed.static_subtree {
+        placed.replay_from = u32(from)
+        placed.replay_to = u32(scene.builder_count(b))
+        placed.has_replay = true
+    }
+    ret ok
 }
 
 fn edit_options(width: f32, multiline: bool) -> layout.Options {
@@ -2045,6 +2318,8 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     }
     let old_root = s.root
     let old_has = s.has_root
+    s.measure_stamp += 1u32
+    if s.measure_stamp == 0u32 { s.measure_stamp = 1u32 }
     let (root_index, reconcile_error) = reconcile_node(s, &root, 0usize, false, 0usize, old_roots[0usize..old_root_count], 1usize)
     if reconcile_error != ok { ret (zero, reconcile_error) }
     if old_has && usize(old_root) != root_index { retire_element(s, usize(old_root)) }
@@ -2052,8 +2327,6 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     s.has_root = true
     s.elements[root_index].has_sibling = false
     // Layout and paint into a fresh list, compiled into the renderer.
-    s.measure_stamp += 1u32
-    if s.measure_stamp == 0u32 { s.measure_stamp = 1u32 }
     let (size, size_error) = measure(s, frame_arena, &root, constraints)
     if size_error != ok { ret (zero, size_error) }
     let (b, builder_error) = scene.builder(frame_arena, s.limits.max_commands)
@@ -2087,6 +2360,8 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     }
     s.scene_id = compiled
     s.has_scene = true
+    s.replay_scene = compiled
+    s.has_replay_scene = true
     ret (compiled, ok)
 }
 

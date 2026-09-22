@@ -18014,3 +18014,48 @@ every refreshed golden was diffed field by field and accepted only when
 the differences were snapshot hashes, `e.mem` digests, the inline rows or
 the moved span -- a golden refresh must never hide a changed answer. The
 refreshing variants of the runners are generated, not committed.
+
+## D916 — Unchanged subtrees are replayed, scrolling moves pixels: the dirty-layout half of Flutter's frame
+
+D914 made paint cost what changed; layout still walked and measured every
+node, and a scroll repainted its whole viewport. Measured against the tag
+`perf-before-subtree-skip` with the same scripted interaction on the same
+window (1000×700 at 150%):
+
+| frame | before (µs, reconcile / render) | after |
+|---|---|---|
+| hover a checkbox | 1 700 / 900 | 500 / 1 100 |
+| click a checkbox | 1 550 / 340 | 470 / 1 000 |
+| wheel two notches | 1 550 / 20 700 | 380 / 8 200 |
+| switch tab (whole window) | 1 400 / 21 100 | 1 100 / 21 200 |
+
+Reconcile is four times cheaper on every frame and a scroll frame is 23 ms →
+10 ms; a whole-window repaint is what it was, as it must be.
+
+1. **Unchanged subtrees.** `reconcile_node` hashes each node's content (a
+   text's bytes, not its slice: the build arena hands the same addresses to
+   different frames) up the tree and marks the subtree *static* when nothing
+   in it moves or paints from the runtime's own state (no scroll, editor,
+   slider, zoom, custom paint or overlay). A static subtree whose hash equals
+   last frame's is `unchanged`: its element seeds the frame's measure cache
+   with the last four (constraints, size) pairs it answered, so no ancestor
+   descends into it; and `place` replays the commands it recorded last frame
+   (`scene.replay`, from the scene compiled then, kept released-but-live by
+   D914) instead of walking it. A subtree that is the same but moved -- a
+   scrolled row -- is replayed moved (`scene.replay_shifted`; paths copied,
+   a transform inside refuses) and its elements' bounds move with it, so hit
+   testing holds.
+2. **Scrolling.** The renderer's diff, at the end of the equal prefix, looks
+   for a run of commands that are the old ones moved by one delta inside one
+   axis-aligned clip; when the delta is whole device pixels it moves the
+   canvas and the packed pixels of the clip by it and damages only the strip
+   the move exposed, as its own box beside the ordinary damage (joined with
+   the scrollbar's column they would be the viewport again). A stretch may
+   now restore into the prefix's saves, since the suffix does so in both
+   lists, and the old commands' boxes are damaged where they were *and* where
+   the move took them, or a thumb leaves a ghost.
+
+Not done: a fractional scroll delta (momentum, a drag at 125%) repaints the
+viewport; a subtree containing a custom paint is never skipped, which is every
+checkbox, radio and star -- a custom paint that declared itself pure would
+skip too; the first frame after a page change is whole.

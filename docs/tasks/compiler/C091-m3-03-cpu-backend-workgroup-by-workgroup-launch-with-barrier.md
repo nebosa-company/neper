@@ -39,7 +39,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `.Cpu`: `lib/e/gpu.e`×6†
 - `gpu.gid`: `lib/e/gpu/tensor.e`×18, `lib/e/gpu.e`×1†, `src/check.e`×1‡
 - `FieldAddress`: `src/lower.e`×35‡, `src/codegen_x64.e`×4‡, `src/nir.e`×3†, `scripts/algos/decisions-pending.md`×1†, `src/em.e`×1‡
-- `Stack`: `src/lower.e`×35‡, `lib/e/ui/undo.e`×21, `lib/e/data/stack.e`×11, `lib/e/concurrent/stack.e`×10, `src/codegen_x64.e`×9‡, `lib/e/data/window.e`×7, `lib/e/ui/widget.e`×7‡, `src/regalloc.e`×7
+- `Stack`: `src/lower.e`×35‡, `lib/e/ui/undo.e`×21, `lib/e/data/stack.e`×11, `lib/e/concurrent/stack.e`×10, `src/codegen_x64.e`×9‡, `lib/e/ui/widget.e`×8‡, `lib/e/data/window.e`×7, `src/regalloc.e`×7
 - `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1†, `src/lower.e`×1‡
 - `launch_run`: `lib/e/gpu.e`×6†, `src/lower.e`×3‡
 - `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2‡, `lib/e/gpu.e`×2†, `scripts/algos/batch45.json`×2, `scripts/algos/decisions-pending.md`×2†, `src/resolve.e`×2†, `lib/e/gpu/tensor.e`×1
