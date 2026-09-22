@@ -57,6 +57,9 @@ apis.write_text(text, encoding='utf-8', newline='\n')
 plan_path = root / 'docs' / 'modules.json'
 plan = json.loads(plan_path.read_text(encoding='utf-8'))
 mods = plan['modules']
+for m in [x for x in batch['modules'] if x.get('refresh') and 'deps' in x]:
+    # A refreshed module may have gained imports; its dependency list follows its source.
+    [x for x in mods if x['name'] == m['name']][0]['direct_dependencies'] = m['deps']
 for m in [x for x in batch['modules'] if not x.get('refresh')]:
     assert not any(x['name'] == m['name'] for x in mods), m['name']
     prefix = m['name'].rsplit('.', 1)[0] + '.'

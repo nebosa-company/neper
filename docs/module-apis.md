@@ -1444,6 +1444,8 @@ across faces) and `s2_token`; `haversine_m` and `bearing_deg` on the mean sphere
 ```neper
 type Point = struct { x: f64, y: f64 }
 type Circle = struct { center: Point, radius: f64 }
+type Op = enum u8 { Union, Intersection, Difference }
+type Node = struct { p: Point, alpha: f64, crossing: bool, entry: bool, visited: bool, after: usize, before: usize, neighbor: usize }
 error TooSmall
 error Invalid
 
@@ -1474,6 +1476,52 @@ fn morton_encode(x: u32, y: u32) -> u64
 fn spread(v: u32) -> u64
 fn morton_decode(code: u64) -> (u32, u32)
 fn compact(v: u64) -> u32
+fn clip_polygon(subject: []const Point, window: []const Point, out: []Point, scratch: []Point) -> (usize, err)
+fn line_intersection(a: Point, b: Point, c: Point, d: Point) -> Point
+fn hull_graham(points: []Point, out: []Point) -> (usize, err)
+fn angle_before(pivot: Point, a: Point, b: Point) -> bool
+fn hull_quick(points: []const Point, out: []Point) -> (usize, err)
+fn quick_side(points: []const Point, a: Point, b: Point, out: []Point, m: usize) -> usize
+fn rotating_calipers(hull_points: []const Point) -> (f64, f64, err)
+fn delaunay(points: []const Point, triangles: []usize, scratch: []usize) -> (usize, err)
+fn insert_point(points: []const Point, triangles: []usize, scratch: []usize, count: usize, p: usize) -> (usize, err)
+fn circle_holds(points: []const Point, triangles: []const usize, t: usize, q: Point) -> bool
+fn beyond(u: Point, v: Point, q: Point) -> bool
+fn has_edge(triangles: []const usize, t: usize, a: usize, b: usize) -> bool
+fn has_vertex(triangles: []const usize, t: usize, v: usize) -> bool
+fn make_ccw(points: []const Point, triangles: []usize, t: usize)
+fn shared_edge(triangles: []const usize, i: usize, j: usize) -> (usize, usize, usize, usize, bool)
+fn flip(points: []const Point, triangles: []usize, i: usize, j: usize, u: usize, v: usize, p: usize, q: usize) -> bool
+fn is_fixed(fixed: []const usize, u: usize, v: usize) -> bool
+fn delaunay_flip(points: []const Point, triangles: []usize, written: usize) -> usize
+fn lawson(points: []const Point, triangles: []usize, written: usize, fixed: []const usize) -> usize
+fn crosses(a: Point, b: Point, c: Point, d: Point) -> bool
+fn delaunay_constrained(points: []const Point, triangles: []usize, written: usize, edges: []const usize) -> err
+fn circumcircle(a: Point, b: Point, c: Point) -> Circle
+fn largest_empty_circle(points: []const Point, triangles: []const usize, written: usize) -> (Circle, err)
+fn covered(points: []const Point, triangles: []const usize, written: usize, p: Point) -> bool
+fn fan_edges(triangles: []const usize, t: usize, site: usize) -> (usize, usize)
+fn fan_find(triangles: []const usize, count: usize, site: usize, x: usize, leading: bool) -> usize
+fn voronoi_cell(points: []const Point, triangles: []const usize, written: usize, site: usize, lo: Point, hi: Point, out: []Point, scratch: []Point) -> (usize, err)
+fn outward(s: Point, v: Point, w: Point) -> (f64, f64)
+fn voronoi_from_delaunay(points: []const Point, triangles: []const usize, written: usize, lo: Point, hi: Point, cells: []Point, starts: []usize, scratch: []Point) -> err
+fn voronoi(points: []const Point, lo: Point, hi: Point, cells: []Point, starts: []usize, triangles: []usize, scratch: []usize, cell_scratch: []Point) -> err
+fn lloyd_relax(points: []const Point, lo: Point, hi: Point, out: []Point, triangles: []usize, tri_scratch: []usize, scratch: []Point) -> err
+fn polygon_centroid(polygon: []const Point) -> Point
+fn lowest(polygon: []const Point) -> usize
+fn minkowski_sum(a: []const Point, b: []const Point, out: []Point) -> (usize, err)
+fn reverse_points(points: []Point)
+fn emit_polygon(polygon: []const Point, out: []Point, starts: []usize, count: usize) -> (usize, err)
+fn link_after(nodes: []Node, head: usize, node: usize)
+fn mark_entries(nodes: []Node, head: usize, other: []const Point, invert: bool)
+fn polygon_boolean(a: []const Point, b: []const Point, op: Op, out: []Point, starts: []usize, nodes: []Node) -> (usize, err)
+fn edge_normal(a: Point, b: Point, sign: f64) -> (f64, f64, bool)
+fn polygon_offset(polygon: []const Point, d: f64, out: []Point) -> (usize, err)
+fn segment_intersections(segments: []const Point, pairs: []usize, crossings: []Point) -> (usize, err)
+fn above(p: Point, q: Point) -> bool
+fn is_monotone(polygon: []const Point) -> bool
+fn emit_triangle(points: []const Point, triangles: []usize, written: usize, a: usize, b: usize, c: usize) -> usize
+fn triangulate_monotone(polygon: []const Point, triangles: []usize, scratch: []usize) -> (usize, err)
 ```
 
 Points are `f64` pairs; polygons are point slices in either winding and
@@ -2262,16 +2310,63 @@ ZIP framing belong to `e.fmt.gzip` and `e.fmt.zip`.
 type Traversal = struct { order: []const graph.NodeId, parent: []const graph.NodeId }
 type Components = struct { component: []const u32, count: u32 }
 type Paths = struct { distance: []const f64, previous: []const graph.NodeId }
+type Entry = struct { distance: f64, node: graph.NodeId }
+type Forest = struct { edges: []const usize, weight: f64, trees: usize }
+type WeightedEdge = struct { weight: f64, index: usize }
+type LowLinks = struct { disc: []u32, low: []u32, is_bridge: []u8, is_cut: []u8, time: u32 }
 error Cycle
 error InvalidWeight
 error TooLarge
+error NegativeCycle
+error NoPath
+error NoArborescence
+error NotEulerian
+error Disconnected
+error TooSmall
 
+fn fresh_parents(a: *mem.Arena, count: usize, start: graph.NodeId) -> ([]graph.NodeId, err)
 fn bfs[E: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId) -> (Traversal, err)
 fn dfs[E: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId) -> (Traversal, err)
 fn topological[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> ([]const graph.NodeId, err)
 fn weak_components[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (Components, err)
+fn build_reverse[E: type](g: *const graph.Graph[E], reverse_offsets: []usize, reverse: []graph.NodeId)
 fn strong_components[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (Components, err)
+fn entry_cmp(ctx: *u8, x: Entry, y: Entry) -> i32
 fn dijkstra[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Paths, err)
+fn unreached() -> f64
+fn path_to(a: *mem.Arena, previous: []const graph.NodeId, start: graph.NodeId, goal: graph.NodeId) -> ([]const graph.NodeId, err)
+fn bellman_ford[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Paths, err)
+fn floyd_warshall[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> ([]f64, err)
+fn dijkstra_indexed[E: type](g: *const graph.Graph[E], start: graph.NodeId, w: []const f64, distance: []f64, queue: *heap.HeapBy[Entry, u8]) -> err
+fn johnson[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> ([]f64, err)
+fn dial[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, max_weight: usize, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> usize) -> ([]usize, err)
+fn bucket_of(key: u32, last: u32) -> usize
+fn dijkstra_radix_heap[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> u32) -> ([]u32, err)
+fn bfs_levels[E: type](g: *const graph.Graph[E], start: graph.NodeId, level: []u32, queue: []graph.NodeId) -> u32
+fn eccentricities[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> ([]u32, err)
+fn center[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> ([]const graph.NodeId, err)
+fn diameter[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (u32, err)
+fn count_triangles[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (u64, err)
+fn k_core[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> ([]u32, err)
+fn twin[E: type](g: *const graph.Graph[E], k: usize) -> usize
+fn k_truss[E: type](a: *mem.Arena, g: *const graph.Graph[E], k: u32) -> ([]u8, err)
+fn clique_search[Ctx: type](ctx: *Ctx, visit: fn(*Ctx, []const graph.NodeId), adj: []const u8, n: usize, r: []graph.NodeId, depth: usize, members: []graph.NodeId, p_count: usize, scratch: []graph.NodeId) -> usize
+fn max_cliques[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ctx, visit: fn(*Ctx, []const graph.NodeId)) -> (usize, err)
+fn find_top(above: []const u32, x: u32) -> u32
+fn arborescence[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], root: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64, chosen: []usize) -> (Forest, err)
+fn low_visit[E: type](g: *const graph.Graph[E], s: *LowLinks, u: graph.NodeId, from: graph.NodeId)
+fn low_links[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (LowLinks, err)
+fn articulation_points[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> ([]const graph.NodeId, err)
+fn bridges[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> ([]const usize, err)
+fn euler_path[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> ([]const graph.NodeId, err)
+fn transitive_closure[E: type](g: *const graph.Graph[E], reach: []u8) -> err
+fn set_find(sets: []u32, x: u32) -> u32
+fn set_join(sets: []u32, x: u32, y: u32) -> bool
+fn fresh_sets(a: *mem.Arena, n: usize) -> ([]u32, err)
+fn weighted_edge_cmp(ctx: *u8, x: WeightedEdge, y: WeightedEdge) -> i32
+fn mst_kruskal[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64, chosen: []usize) -> (Forest, err)
+fn mst_prim[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64, chosen: []usize) -> (Forest, err)
+fn mst_boruvka[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64, chosen: []usize) -> (Forest, err)
 ```
 
 Traversal order is deterministic from node order and each adjacency list's insertion
@@ -2403,6 +2498,15 @@ Scratch: `mann_whitney` `2 * (a.len + b.len)` floats, `wilcoxon` `3 * a.len`,
 ```neper
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
+type QuantileMethod = enum u8 { R1, R2, R3, R4, R5, R6, R7, R8, R9, Nearest }
+type Bandwidth = enum u8 { Silverman, Scott }
+type Distribution = enum u8 { Normal, Exponential, Gamma, Beta }
+type Fit = struct { a: f64, b: f64 }
+type Interval = struct { low: f64, high: f64 }
+type Jackknife = struct { estimate: f64, bias: f64, standard_error: f64 }
+type RankKey = struct { values: []const f64 }
+error TooSmall
+error Invalid
 
 fn moments() -> Moments
 fn moments_add(s: *Moments, x: f64)
@@ -2416,6 +2520,37 @@ fn regression_add(s: *Regression, x: f64, y: f64)
 fn regression_slope(s: *const Regression) -> (f64, bool)
 fn regression_intercept(s: *const Regression) -> (f64, bool)
 fn correlation(s: *const Regression) -> (f64, bool)
+fn sum_plain(values: []const f64) -> f64
+fn mean_compensated(values: []const f64) -> (f64, bool)
+fn lerp(a: f64, b: f64, t: f64) -> f64
+fn quantile(sorted: []const f64, p: f64, method: QuantileMethod) -> (f64, bool)
+fn central_moments(values: []const f64) -> (f64, f64, f64, f64)
+fn skewness(values: []const f64) -> (f64, bool)
+fn kurtosis(values: []const f64) -> (f64, bool)
+fn entropy(weights: []const f64) -> (f64, bool)
+fn entropy_counts(counts: []const u64) -> (f64, bool)
+fn cross_products(rows: []const f64, columns: usize, out: []f64, divisor: f64) -> err
+fn covariance_matrix(rows: []const f64, columns: usize, out: []f64) -> err
+fn covariance_shrink(rows: []const f64, columns: usize, out: []f64) -> (f64, err)
+fn correlation_pearson(x: []const f64, y: []const f64) -> (f64, bool)
+fn compare_by_value(k: *RankKey, a: usize, b: usize) -> i32
+fn compare_floats(k: *RankKey, a: f64, b: f64) -> i32
+fn rank(values: []const f64, out: []f64, order: []usize) -> err
+fn correlation_spearman(x: []const f64, y: []const f64, scratch: []f64, order: []usize) -> (f64, err)
+fn correlation_kendall(x: []const f64, y: []const f64) -> (f64, bool)
+fn kde_bandwidth(values: []const f64, rule: Bandwidth) -> (f64, bool)
+fn kde(values: []const f64, bandwidth: f64, points: []const f64, out: []f64) -> err
+fn bootstrap[Ctx: type](r: *rand.Pcg64, values: []const f64, ctx: *Ctx, statistic: fn(*Ctx, []const f64) -> f64, rounds: usize, confidence: f64, sample: []f64, stats: []f64) -> (Interval, err)
+fn jackknife[Ctx: type](values: []const f64, ctx: *Ctx, statistic: fn(*Ctx, []const f64) -> f64, scratch: []f64) -> (Jackknife, err)
+fn interval_wilson(successes: u64, trials: u64, confidence: f64) -> (Interval, err)
+fn beta_quantile(p: f64, a: f64, b: f64) -> f64
+fn interval_clopper_pearson(successes: u64, trials: u64, confidence: f64) -> (Interval, err)
+fn value_at_risk(sorted: []const f64, level: f64) -> (f64, bool)
+fn expected_shortfall(sorted: []const f64, level: f64) -> (f64, bool)
+fn fit_moments(values: []const f64, distribution: Distribution) -> (Fit, err)
+fn digamma(x: f64) -> f64
+fn trigamma(x: f64) -> f64
+fn fit_mle(values: []const f64, distribution: Distribution) -> (Fit, err)
 ```
 
 ### `e.algo.bitset`
@@ -2537,8 +2672,26 @@ type CountingBloom = struct { counts: []u8, hashes: u32 }
 type CountMin = struct { counts: []u32, width: usize, depth: usize }
 type HyperLogLog = struct { registers: []u8, precision: u8 }
 type Counter = struct { key: u64, count: u64 }
+type CountSketch = struct { counts: []i64, width: usize, depth: usize }
+type Kmv = struct { hashes: []u64, size: usize }
+type Theta = struct { hashes: []u64, size: usize, theta: u64 }
+type StaticFilter = struct { fingerprints: []u8, seed: u64, kind: u8, segment_length: usize, segment_count_length: usize }
+type CuckooFilter = struct { slots: []u8, buckets: usize, state: u64 }
+type QuotientFilter = struct { slots: []u64, counts: []u32, quotient_bits: u8, remainder_bits: u8, size: usize }
+type StableBloom = struct { cells: []u8, hashes: u32, decrements: u32, max: u8, state: u64 }
+type WindowedBloom = struct { bits: []u64, slice_words: usize, hashes: u32, slices: u32, head: u32, generation: usize, inserted: usize }
+type DdSketch = struct { bins: []u64, offset: i64, count: u64, zeros: u64, gamma: f64, log_gamma: f64 }
+type Gk = struct { values: []f64, gaps: []u64, deltas: []u64, size: usize, count: u64, epsilon: f64 }
+type Kll = struct { items: []f64, sizes: []usize, k: usize, levels: usize, total: u64, state: u64 }
+type TDigest = struct { means: []f64, weights: []f64, buffer: []f64, size: usize, buffered: usize, compression: f64, total: f64, min: f64, max: f64 }
+type PSquare = struct { heights: []f64, positions: []f64, desired: []f64, increments: []f64, count: usize, p: f64 }
+type SparseHll = struct { entries: []u32, size: usize, precision: u8 }
+type SlidingHll = struct { entries: []u64, depth: usize, precision: u8 }
+type TopK = struct { sketch: CountMin, heap: []Counter, size: usize }
+type LossyCounter = struct { counters: []Counter, deltas: []u64, size: usize, seen: u64, width: u64 }
 error Invalid
 error TooSmall
+error Full
 
 fn bloom_size(items: usize, rate: f64) -> (usize, u32)
 fn bloom_init(bits: []u64, hashes: u32) -> (Bloom, err)
@@ -2566,6 +2719,116 @@ fn minhash(keys: []const u64, signature: []u64)
 fn minhash_similarity(a: []const u64, b: []const u64) -> f64
 fn simhash(features: []const u64, weights: []const u32) -> u64
 fn simhash_distance(a: u64, b: u64) -> u32
+fn pi() -> f64
+fn sort_f64(xs: []f64)
+fn unit(h: u64) -> f64
+fn sorted_insert(xs: []u64, size: usize, h: u64) -> usize
+fn sorted_contains(xs: []const u64, h: u64) -> bool
+fn misra_gries(counters: []Counter, keys: []const u64)
+fn space_saving(counters: []Counter, keys: []const u64)
+fn count_min_add_key(s: *CountMin, key: u64, amount: u32)
+fn count_min_estimate_key(s: *const CountMin, key: u64) -> u32
+fn count_min_range_add(levels: []CountMin, key: u64, amount: u32)
+fn count_min_range(levels: []const CountMin, lo: u64, hi: u64) -> u64
+fn count_sketch_init(counts: []i64, width: usize, depth: usize) -> (CountSketch, err)
+fn count_sketch_add(s: *CountSketch, key: u64, amount: i64)
+fn count_sketch(s: *const CountSketch, key: u64) -> i64
+fn ams_f2_add(counters: []i64, key: u64, amount: i64)
+fn ams_f2(counters: []const i64) -> f64
+fn flajolet_martin_add(bitmaps: []u64, key: u64)
+fn flajolet_martin(bitmaps: []const u64) -> f64
+fn linear_counting_add(bits: []u64, key: u64)
+fn linear_counting(bits: []const u64) -> f64
+fn kmv_init(hashes: []u64) -> Kmv
+fn kmv_add(s: *Kmv, key: u64)
+fn kmv(s: *const Kmv) -> f64
+fn theta_init(hashes: []u64) -> Theta
+fn theta_push(s: *Theta, h: u64)
+fn theta_add(s: *Theta, key: u64)
+fn theta_estimate(s: *const Theta) -> f64
+fn theta_union(dst: *Theta, src: *const Theta)
+fn theta_intersection(a: *const Theta, b: *const Theta, out: *Theta) -> err
+fn static_seed(attempt: usize) -> u64
+fn static_fingerprint(h: u64) -> u8
+fn reduce(x: u64, n: usize) -> usize
+fn static_positions(f: *const StaticFilter, h: u64) -> (usize, usize, usize)
+fn static_peel(keys: []const u64, f: *StaticFilter, scratch: []u64) -> bool
+fn static_build(keys: []const u64, f: *StaticFilter, scratch: []u64) -> err
+fn xor_filter_size(n: usize) -> (usize, usize)
+fn xor_filter(keys: []const u64, fingerprints: []u8, scratch: []u64) -> (StaticFilter, err)
+fn binary_fuse_layout(n: usize) -> (usize, usize, usize)
+fn binary_fuse_size(n: usize) -> (usize, usize)
+fn binary_fuse_filter(keys: []const u64, fingerprints: []u8, scratch: []u64) -> (StaticFilter, err)
+fn ribbon_row(f: *const StaticFilter, h: u64) -> (usize, u64)
+fn ribbon_size(n: usize) -> usize
+fn ribbon_filter(keys: []const u64, solution: []u8, scratch: []u64) -> (StaticFilter, err)
+fn static_filter_contains(f: *const StaticFilter, key: u64) -> bool
+fn cuckoo_init(slots: []u8) -> (CuckooFilter, err)
+fn cuckoo_split(f: *const CuckooFilter, key: u64) -> (u8, usize, usize)
+fn cuckoo_slot(f: *const CuckooFilter, bucket: usize, fp: u8) -> (usize, bool)
+fn cuckoo_insert(f: *CuckooFilter, key: u64) -> err
+fn cuckoo_contains(f: *const CuckooFilter, key: u64) -> bool
+fn cuckoo_remove(f: *CuckooFilter, key: u64) -> bool
+fn quotient_filter_setup(slots: []u64, counts: []u32, quotient_bits: u8, remainder_bits: u8) -> (QuotientFilter, err)
+fn quotient_filter(slots: []u64, quotient_bits: u8, remainder_bits: u8) -> (QuotientFilter, err)
+fn counting_quotient_filter(slots: []u64, counts: []u32, quotient_bits: u8, remainder_bits: u8) -> (QuotientFilter, err)
+fn quotient_split(f: *const QuotientFilter, key: u64) -> (usize, u64)
+fn quotient_run_start(f: *const QuotientFilter, fq: usize) -> usize
+fn quotient_find(f: *const QuotientFilter, fq: usize, fr: u64) -> (usize, bool)
+fn quotient_filter_insert(f: *QuotientFilter, key: u64) -> err
+fn quotient_filter_contains(f: *const QuotientFilter, key: u64) -> bool
+fn counting_quotient_filter_count(f: *const QuotientFilter, key: u64) -> u32
+fn counting_quotient_filter_remove(f: *QuotientFilter, key: u64) -> bool
+fn stable_bloom(cells: []u8, hashes: u32, decrements: u32, max: u8) -> (StableBloom, err)
+fn stable_bloom_insert(s: *StableBloom, key: u64)
+fn stable_bloom_contains(s: *const StableBloom, key: u64) -> bool
+fn bloom_windowed(bits: []u64, hashes: u32, extra: u32, generation: usize) -> (WindowedBloom, err)
+fn windowed_bit(w: *const WindowedBloom, slice: u32, key: u64) -> (usize, u64)
+fn bloom_windowed_insert(w: *WindowedBloom, key: u64)
+fn bloom_windowed_contains(w: *const WindowedBloom, key: u64) -> bool
+fn ddsketch(bins: []u64, alpha: f64) -> (DdSketch, err)
+fn ddsketch_add(s: *DdSketch, x: f64) -> err
+fn ddsketch_quantile(s: *const DdSketch, q: f64) -> f64
+fn gk_quantiles(values: []f64, gaps: []u64, deltas: []u64, epsilon: f64) -> (Gk, err)
+fn gk_compress(s: *Gk)
+fn gk_add(s: *Gk, x: f64) -> err
+fn gk_quantile(s: *const Gk, q: f64) -> f64
+fn kll(items: []f64, sizes: []usize, k: usize) -> (Kll, err)
+fn kll_capacity(s: *const Kll, h: usize) -> usize
+fn kll_add(s: *Kll, x: f64) -> err
+fn kll_rank(s: *const Kll, x: f64) -> f64
+fn kll_quantile(s: *const Kll, q: f64, scratch: []f64) -> (f64, err)
+fn tdigest(means: []f64, weights: []f64, buffer: []f64, compression: f64) -> (TDigest, err)
+fn tdigest_limit(s: *const TDigest, q: f64) -> f64
+fn tdigest_flush(s: *TDigest) -> err
+fn tdigest_add(s: *TDigest, x: f64) -> err
+fn tdigest_quantile(s: *TDigest, q: f64) -> (f64, err)
+fn p_square(state: []f64, p: f64) -> (PSquare, err)
+fn p_square_add(s: *PSquare, x: f64)
+fn p_square_estimate(s: *const PSquare) -> f64
+fn frugal_median(estimate: i64, x: i64) -> i64
+fn hll_add_key(h: *HyperLogLog, key: u64)
+fn hll_sparse(entries: []u32, precision: u8) -> (SparseHll, err)
+fn hll_sparse_add(s: *SparseHll, key: u64) -> bool
+fn hll_sparse_estimate(s: *const SparseHll) -> f64
+fn hll_sparse_to_dense(s: *const SparseHll, h: *HyperLogLog) -> err
+fn hll_sliding(entries: []u64, depth: usize, precision: u8) -> (SlidingHll, err)
+fn hll_sliding_add(s: *SlidingHll, key: u64, time: u64)
+fn hll_sliding_estimate(s: *const SlidingHll, registers: []u8, now: u64, window: u64) -> (f64, err)
+fn lsh_bucket(signature: []const u64, band: usize, rows: usize) -> u64
+fn lsh_random_projection(vector: []const f64, bits: u32, seed: u64) -> u64
+fn lsh_p_stable(vector: []const f64, width: f64, seed: u64) -> i64
+fn minhash_one_permutation(keys: []const u64, signature: []u64)
+fn minhash_one_permutation_similarity(a: []const u64, b: []const u64) -> f64
+fn minhash_b_bit(signature: []const u64, bits: u32, out: []u64) -> (usize, err)
+fn minhash_b_bit_similarity(a: []const u64, b: []const u64, bits: u32, count: usize) -> f64
+fn top_k(counts: []u32, width: usize, depth: usize, heap: []Counter) -> (TopK, err)
+fn top_k_sift_down(heap: []Counter, size: usize, start: usize)
+fn top_k_add(t: *TopK, key: u64)
+fn top_k_get(t: *const TopK, key: u64) -> (u64, bool)
+fn lossy_counting(counters: []Counter, deltas: []u64, epsilon: f64) -> (LossyCounter, err)
+fn lossy_counting_add(s: *LossyCounter, key: u64) -> err
+fn lossy_counting_get(s: *const LossyCounter, key: u64) -> (u64, bool)
 ```
 
 Every summary lives in caller storage; items are bytes hashed with

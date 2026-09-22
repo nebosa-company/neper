@@ -2064,6 +2064,26 @@ thread_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$thread_pool_written" = 'executable written' ]
 chmod +x "$test_build/thread-pool-selfhost"
 "$test_build/thread-pool-selfhost"
+# `e.algo.geom` planned functions: Bowyer-Watson Delaunay equal to scipy's triangles, Voronoi cells against a half-plane replica, Graham and quickhull equal to the existing hull, Greiner-Hormann booleans checked on a point grid, Minkowski sums, calipers, monotone triangulation, offsets (D881).
+algo_geom_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_geom_plan/src/main.e" "$repo" x64 linux "$test_build/algo-geom-plan-selfhost")
+[ "$algo_geom_plan_written" = 'executable written' ]
+chmod +x "$test_build/algo-geom-plan-selfhost"
+"$test_build/algo-geom-plan-selfhost"
+# `e.algo.graph` planned functions: Bellman-Ford, Floyd-Warshall, Johnson, Dial, a radix-heap Dijkstra, three MSTs agreeing with networkx, an arborescence, articulation points and bridges, cores and trusses, triangles, maximal cliques, Euler paths (D881).
+algo_graph_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_plan/src/main.e" "$repo" x64 linux "$test_build/algo-graph-plan-selfhost")
+[ "$algo_graph_plan_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-plan-selfhost"
+"$test_build/algo-graph-plan-selfhost"
+# `e.algo.sketch` planned functions: thirty-one sketches and filters against a bit-exact replica: xor, binary fuse, ribbon, cuckoo and quotient filters, KLL, t-digest, DDSketch, GK, P-square, theta, KMV, sparse and sliding HLL, LSH (D881).
+algo_sketch_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sketch_plan/src/main.e" "$repo" x64 linux "$test_build/algo-sketch-plan-selfhost")
+[ "$algo_sketch_plan_written" = 'executable written' ]
+chmod +x "$test_build/algo-sketch-plan-selfhost"
+"$test_build/algo-sketch-plan-selfhost"
+# `e.algo.stat` planned functions: numpy's nine quantile methods bit-exact, moments, entropies, covariance and Ledoit-Wolf shrinkage, three correlations, KDE, bootstrap and jackknife, Wilson and Clopper-Pearson intervals, expected shortfall, moment and likelihood fits (D881).
+algo_stat_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_plan/src/main.e" "$repo" x64 linux "$test_build/algo-stat-plan-selfhost")
+[ "$algo_stat_plan_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-plan-selfhost"
+"$test_build/algo-stat-plan-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

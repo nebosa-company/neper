@@ -573,7 +573,10 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.math"
+    "e.algo.rand",
+    "e.algo.sort",
+    "e.math",
+    "e.math.special"
    ],
    "blocked_by": []
   },

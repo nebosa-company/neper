@@ -29,6 +29,7 @@ EOF
 python scripts/check_module_surfaces.py | tail -1
 git add docs/decisions.md docs/module-apis.md docs/modules.json tests/selfhost/run.ps1 tests/selfhost/run.sh
 git add $(git status --short | grep '^??' | grep -E 'lib/e/|fixtures/link/' | cut -c4-)
+git add -u lib/e tests/selfhost/fixtures/link
 python scripts/render_progress.py | tail -1
 python scripts/render_tasks.py | tail -1
 git add docs/progress.html docs/tasks

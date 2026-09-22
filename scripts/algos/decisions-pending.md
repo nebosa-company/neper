@@ -814,3 +814,31 @@ memory is not zeroed, which bit two agents' bitmaps. Deferred on purpose:
 lines of tables and DSP and do not fit one agent pass; it stays the one
 planned module without a file. What remains of `docs/algos.md` are named
 functions owed to modules that already exist.
+
+## D881 — Batch 39: the first batch of planned functions owed to existing modules
+
+With every planned module but Opus in place, the stream turns to the 402
+functions `docs/algos.md` names inside modules that already exist. This
+batch extends four thin modules: `e.algo.sketch` (thirty-one names: xor,
+binary-fuse and ribbon filters, cuckoo and quotient filters, KLL, t-digest,
+DDSketch, Greenwald-Khanna, P-square, theta and KMV sketches, sparse and
+sliding HyperLogLog, banding and p-stable LSH, and the whole-stream forms
+of Misra-Gries and Space-Saving over the existing steps), `e.algo.geom`
+(twenty: a ghost-vertex Bowyer-Watson equal to scipy's triangulation,
+Lawson flips and constrained edges, the Voronoi dual, Lloyd relaxation,
+Graham and quickhull pinned to the existing hull's output, Greiner-Hormann
+booleans, Minkowski sums, calipers, monotone triangulation and offsets;
+Sutherland-Hodgman is duplicated from `e.algo.geom.clip` because that
+module imports this one), `e.algo.graph` (twenty: the shortest-path,
+spanning-tree and closure algorithms re-implemented here because the
+`e.algo.graph.*` sub-modules import this module, plus an arborescence,
+low-link points and bridges, cores, trusses, triangles and Bron-Kerbosch)
+and `e.algo.stat` (twenty-four: numpy's nine quantile methods reproduced
+bit for bit, entropies, shrinkage covariance, three correlations, KDE,
+bootstrap and jackknife over a bit-exact PCG64, binomial intervals, tail
+risk, moment and likelihood fits with a local digamma). Each extension has
+its own `<module>_plan` fixture and the module's earlier fixtures still
+pass; `add_batch.py` learned to refresh a module's dependency list along
+with its fence. The rule for a planned name that an existing function
+already covers: add the planned name as the natural entry point, not a
+bare alias, unless the existing function already is the algorithm.

@@ -1,0 +1,13 @@
+{
+ "decision": "D881",
+ "modules": [
+  {"name": "e.algo.geom", "refresh": true, "fixture": "algo_geom_plan",
+   "comment": "`e.algo.geom` planned functions: Bowyer-Watson Delaunay equal to scipy's triangles, Voronoi cells against a half-plane replica, Graham and quickhull equal to the existing hull, Greiner-Hormann booleans checked on a point grid, Minkowski sums, calipers, monotone triangulation, offsets"},
+  {"name": "e.algo.graph", "refresh": true, "fixture": "algo_graph_plan",
+   "comment": "`e.algo.graph` planned functions: Bellman-Ford, Floyd-Warshall, Johnson, Dial, a radix-heap Dijkstra, three MSTs agreeing with networkx, an arborescence, articulation points and bridges, cores and trusses, triangles, maximal cliques, Euler paths"},
+  {"name": "e.algo.sketch", "refresh": true, "fixture": "algo_sketch_plan",
+   "comment": "`e.algo.sketch` planned functions: thirty-one sketches and filters against a bit-exact replica: xor, binary fuse, ribbon, cuckoo and quotient filters, KLL, t-digest, DDSketch, GK, P-square, theta, KMV, sparse and sliding HLL, LSH"},
+  {"name": "e.algo.stat", "refresh": true, "fixture": "algo_stat_plan", "deps": ["e.algo.rand", "e.algo.sort", "e.math", "e.math.special"],
+   "comment": "`e.algo.stat` planned functions: numpy's nine quantile methods bit-exact, moments, entropies, covariance and Ledoit-Wolf shrinkage, three correlations, KDE, bootstrap and jackknife, Wilson and Clopper-Pearson intervals, expected shortfall, moment and likelihood fits"}
+ ]
+}

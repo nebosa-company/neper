@@ -2302,6 +2302,30 @@ $threadPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $threadPoolWritten -ne 'executable written') { throw 'thread_pool emission failed' }
 & $threadPoolPath
 if ($LASTEXITCODE -ne 0) { throw "a thread_pool check failed: exit $LASTEXITCODE" }
+# `e.algo.geom` planned functions: Bowyer-Watson Delaunay equal to scipy's triangles, Voronoi cells against a half-plane replica, Graham and quickhull equal to the existing hull, Greiner-Hormann booleans checked on a point grid, Minkowski sums, calipers, monotone triangulation, offsets (D881).
+$algoGeomPlanPath = Join-Path $testBuild 'algo-geom-plan-selfhost.exe'
+$algoGeomPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_geom_plan\src\main.e') $repo 'x64' 'windows' $algoGeomPlanPath
+if ($LASTEXITCODE -ne 0 -or $algoGeomPlanWritten -ne 'executable written') { throw 'algo_geom_plan emission failed' }
+& $algoGeomPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_geom_plan check failed: exit $LASTEXITCODE" }
+# `e.algo.graph` planned functions: Bellman-Ford, Floyd-Warshall, Johnson, Dial, a radix-heap Dijkstra, three MSTs agreeing with networkx, an arborescence, articulation points and bridges, cores and trusses, triangles, maximal cliques, Euler paths (D881).
+$algoGraphPlanPath = Join-Path $testBuild 'algo-graph-plan-selfhost.exe'
+$algoGraphPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_plan\src\main.e') $repo 'x64' 'windows' $algoGraphPlanPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphPlanWritten -ne 'executable written') { throw 'algo_graph_plan emission failed' }
+& $algoGraphPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph_plan check failed: exit $LASTEXITCODE" }
+# `e.algo.sketch` planned functions: thirty-one sketches and filters against a bit-exact replica: xor, binary fuse, ribbon, cuckoo and quotient filters, KLL, t-digest, DDSketch, GK, P-square, theta, KMV, sparse and sliding HLL, LSH (D881).
+$algoSketchPlanPath = Join-Path $testBuild 'algo-sketch-plan-selfhost.exe'
+$algoSketchPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_sketch_plan\src\main.e') $repo 'x64' 'windows' $algoSketchPlanPath
+if ($LASTEXITCODE -ne 0 -or $algoSketchPlanWritten -ne 'executable written') { throw 'algo_sketch_plan emission failed' }
+& $algoSketchPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_sketch_plan check failed: exit $LASTEXITCODE" }
+# `e.algo.stat` planned functions: numpy's nine quantile methods bit-exact, moments, entropies, covariance and Ledoit-Wolf shrinkage, three correlations, KDE, bootstrap and jackknife, Wilson and Clopper-Pearson intervals, expected shortfall, moment and likelihood fits (D881).
+$algoStatPlanPath = Join-Path $testBuild 'algo-stat-plan-selfhost.exe'
+$algoStatPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_plan\src\main.e') $repo 'x64' 'windows' $algoStatPlanPath
+if ($LASTEXITCODE -ne 0 -or $algoStatPlanWritten -ne 'executable written') { throw 'algo_stat_plan emission failed' }
+& $algoStatPlanPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_plan check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
