@@ -1,4 +1,4 @@
 {"schema":"neper-stream","version":1,"record":"header","command":"uses","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"use","relation":"value","provenance":"compiler-proved","in":"main.main","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":494,"byte_end":494,"line":16,"column":16,"end_line":16,"end_column":16,"column_utf16":16,"end_column_utf16":16}}
 {"record":"use","relation":"value","provenance":"compiler-proved","in":"main.main","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":544,"byte_end":544,"line":17,"column":45,"end_line":17,"end_column":45,"column_utf16":45,"end_column_utf16":45}}
-{"record":"result","ok":true,"exit_code":0,"data":{"uses":2,"roots":0,"indirect_calls":1,"complete":true}}
+{"record":"result","ok":true,"exit_code":0,"data":{"uses":2,"roots":0,"indirect_calls":2,"complete":true}}

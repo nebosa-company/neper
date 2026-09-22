@@ -3,4 +3,4 @@
 {"record":"use","relation":"call","provenance":"compiler-proved","in":"explain.main","span":{"source":{"root":"operand","path":"explain.e"},"byte_start":717,"byte_end":717,"line":23,"column":22,"end_line":23,"end_column":22,"column_utf16":22,"end_column_utf16":22}}
 {"record":"use","relation":"instance","provenance":"compiler-proved","in":"explain.main","span":{"source":{"root":"operand","path":"explain.e"},"byte_start":756,"byte_end":756,"line":24,"column":22,"end_line":24,"end_column":22,"column_utf16":22,"end_column_utf16":22}}
 {"record":"use","relation":"call","provenance":"compiler-proved","in":"explain.main","span":{"source":{"root":"operand","path":"explain.e"},"byte_start":756,"byte_end":756,"line":24,"column":22,"end_line":24,"end_column":22,"column_utf16":22,"end_column_utf16":22}}
-{"record":"result","ok":true,"exit_code":0,"data":{"uses":4,"roots":0,"indirect_calls":0,"complete":true}}
+{"record":"result","ok":true,"exit_code":0,"data":{"uses":4,"roots":0,"indirect_calls":1,"complete":true}}

@@ -103,6 +103,13 @@
 {"record":"inline","symbol":"e.os.window_native","decision":"not-a-candidate","reason":"more than one result","pass":1}
 {"record":"inline","symbol":"e.os.clipboard_open","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.accessibility_publish","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.signal_index","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.signal_dispatch","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.signal_console_routine","decision":"rejected","reason":"its body is over the cap","pass":1}
+{"record":"inline","symbol":"e.os.signal_ensure_console","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.signal_ensure_vectored","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.signal_default","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.sandbox","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"contract.bump","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"contract.first","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"contract.total","decision":"inlinable","reason":"at or under the cap","pass":2}
@@ -164,4 +171,9 @@
 {"record":"inline","symbol":"e.os.window_capture","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.clipboard_open","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.accessibility_publish","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.signal_index","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.signal_dispatch","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.signal_ensure_console","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.signal_ensure_vectored","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.signal_default","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"result","ok":true,"exit_code":0,"data":{"executable":"conformance-tools-explain-inline.out","diagnostics":0}}
