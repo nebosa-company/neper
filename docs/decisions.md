@@ -17114,6 +17114,29 @@ diagonal is a one-ulp tie between faces, and `e.math` and libm disagree
 there, so test points must stay off the diagonals; the compiler needed no
 fix in this batch, and every agent reported a first-build pass.
 
+## D875 — Batch 33: block ciphers, Avro resolution, FlatBuffers, JWT and IDNA
+
+Five modules from `docs/algos.md`: `e.crypto.cipher` (AES in both
+directions with ECB, CBC, CTR and PKCS#7, ChaCha20 and HChaCha20; the key
+schedule and forward block are `e.crypto.aead`'s, reused rather than
+copied, because every module-scope function is reachable), `e.fmt.avro`
+(binary encoding plus writer-to-reader schema resolution that re-encodes
+the value in the reader's schema, checked against fastavro byte for byte),
+`e.fmt.flatbuffers` (a bounds-checked zero-copy reader and a
+back-to-front builder), `e.fmt.jwt` (HS256/384/512 and EdDSA over a flat
+JSON member scanner instead of `json.parse`, so verification allocates
+nothing; the caller names the algorithm it expects and the header must
+agree, `none` is never accepted) and `e.net.idna` (RFC 3492 Punycode and
+the label rules; NFC and simple lowercasing from the text modules, the
+UTS #46 mapping table and the IDNA 2008 property tables deferred with a
+`ponytail:` comment rather than hand-tabled). SHA-384 did not exist, so
+`jwt` seeds a `hash.Sha512` state with the FIPS 180-4 initial words and
+cuts the digest; a proper `sha384` in `e.crypto.hash` is the tidy-up.
+Reserved words met this batch: `default` (struct fields and parameters
+became `fallback`) and `at`; an enum literal in a `var` needs its type
+annotation (`var x: jwt.Alg = .HS256`). Every agent reported a first-build
+pass on both compilers.
+
 ## D885 — `e.os.shell` opens the host's shell: a capability record, never an emulation
 
 The widget plan's phase 4 waits on reviewed host primitives, and its

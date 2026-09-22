@@ -1,0 +1,20 @@
+{
+ "decision": "D875",
+ "modules": [
+  {"name": "e.crypto.cipher", "deps": ["e.crypto.aead", "e.crypto.random"], "fixture": "crypto_cipher", "anchor": "### `e.crypto.classic`\n",
+   "note": "AES over `aead`'s key schedule: `aes_key`, `aes_block`, `aes_block_decrypt` (the\ninverse cipher), `ecb_encrypt/decrypt`, `cbc_encrypt/decrypt`, `ctr` and `ctr_at`\n(seekable), `pad_pkcs7`/`unpad_pkcs7`; `chacha20_block`, `chacha20` and `hchacha20`.",
+   "comment": "`e.crypto.cipher`: FIPS-197 and SP 800-38A vectors both ways, RFC 8439 block and sunscreen text, a CTR seek, PKCS#7 against cryptography, refusals"},
+  {"name": "e.fmt.avro", "deps": ["e.mem", "e.str"], "fixture": "fmt_avro", "anchor": "### `e.fmt.asn1`\n",
+   "note": "Avro binary encoding over caller cursors (`decoder`, `sink`, zigzag varints, the\nprimitive readers and writers, `skip`) and schema resolution between a writer and a\nreader schema held in caller arrays: `promotable`, `first_branch`, `resolve` and\n`decode_resolved`, which re-encodes the writer's value in the reader's schema (field\nreordering, defaults, promotions, union reindexing, enum defaults).",
+   "comment": "`e.fmt.avro`: zigzag vectors, a record resolved across promotions, dropped and defaulted fields and reordering to fastavro's bytes, union reindexing, `Mismatch` and `Malformed`"},
+  {"name": "e.fmt.flatbuffers", "deps": ["e.bytes", "e.mem"], "fixture": "fmt_flatbuffers", "anchor": "### `e.fmt.asn1`\n",
+   "note": "Zero-copy FlatBuffers reading with every offset bounds-checked: `root`,\n`root_with_identifier`, `field_offset` (the vtable walk), typed `get_*`, `get_string`,\n`get_table`, `get_struct`, `get_vector` with element accessors, `union_type` and\n`union_value`; and a back-to-front `Builder` over caller storage (`start_table`, `add_*`,\n`end_table`, `create_string`, vectors, `finish`).",
+   "comment": "`e.fmt.flatbuffers`: the Monster built by the Python package read field by field including defaults, a struct, a vector of tables and a union; truncation and range errors answered, not trapped; a Neper-built Monster reading back equal"},
+  {"name": "e.fmt.jwt", "deps": ["e.bytes", "e.crypto.hash", "e.crypto.mac", "e.crypto.sign", "e.mem", "e.str"], "fixture": "fmt_jwt", "anchor": "### `e.fmt.asn1`\n",
+   "note": "JWS compact serialisation: `split`, `header`, `payload`, `member` (an allocation-free\nJSON member scanner), `algorithm`, `verify` (HS256/384/512 and EdDSA; the header's\n`alg` must equal the caller's expectation, `none` is never accepted), `verify_ed25519`,\n`claims_check` (exp, nbf, iat, iss, aud with leeway) and `sign_hmac`/`sign_hs256`/\n`sign_ed25519`.",
+   "comment": "`e.fmt.jwt`: the RFC 7515 A.1 token, PyJWT tokens for four algorithms verified and every tamper refused, `alg: none` refused, claim windows, and signatures byte-equal to PyJWT"},
+  {"name": "e.net.idna", "deps": ["e.text.normalize", "e.text.unicode", "e.text.utf8"], "fixture": "net_idna", "anchor": "### `e.net.tls`\n",
+   "note": "RFC 3492 `punycode_encode`/`punycode_decode` and IDNA labels: `to_ascii` (NFC, simple\nlowercase, `xn--` A-labels, length and hyphen rules), `to_unicode`, `is_ascii_label`,\n`label_valid`.",
+   "comment": "`e.net.idna`: all nineteen RFC 3492 samples both ways, eight domains against the idna package and back, every refusal"}
+ ]
+}

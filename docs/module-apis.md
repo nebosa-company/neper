@@ -3495,6 +3495,38 @@ fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child)
 Layout is a deterministic pure constraint solver. Scroll state, widget measurement
 and render-tree traversal remain in `e.ui.widget`.
 
+### `e.crypto.cipher`
+
+```neper
+type AesKey = aead.AesKey
+error Invalid
+error TooSmall
+
+fn inverse_sbox(index: u8) -> u8
+fn gf_mul(a: u8, b: u8) -> u8
+fn aes_key(key: []const u8) -> (AesKey, err)
+fn aes_block(k: *const AesKey, block: []u8)
+fn aes_block_decrypt(k: *const AesKey, block: []u8)
+fn ecb_encrypt(k: *const AesKey, data: []u8) -> err
+fn ecb_decrypt(k: *const AesKey, data: []u8) -> err
+fn cbc_encrypt(k: *const AesKey, iv: [16]u8, data: []u8) -> err
+fn cbc_decrypt(k: *const AesKey, iv: [16]u8, data: []u8) -> err
+fn ctr_at(k: *const AesKey, iv: [16]u8, block_index: u64, data: []u8)
+fn ctr(k: *const AesKey, iv: [16]u8, data: []u8)
+fn pad_pkcs7(dst: []u8, src: []const u8) -> (usize, err)
+fn unpad_pkcs7(data: []const u8) -> (usize, err)
+fn chacha_state(key: [32]u8, counter: u32, nonce: [12]u8) -> [16]u32
+fn chacha_rounds(state: []u32)
+fn store_le32(out: []u8, off: usize, word: u32)
+fn chacha20_block(key: [32]u8, counter: u32, nonce: [12]u8, out: []u8) -> err
+fn chacha20(key: [32]u8, counter: u32, nonce: [12]u8, data: []u8)
+fn hchacha20(key: [32]u8, nonce: [16]u8) -> [32]u8
+```
+
+AES over `aead`'s key schedule: `aes_key`, `aes_block`, `aes_block_decrypt` (the
+inverse cipher), `ecb_encrypt/decrypt`, `cbc_encrypt/decrypt`, `ctr` and `ctr_at`
+(seekable), `pad_pkcs7`/`unpad_pkcs7`; `chacha20_block`, `chacha20` and `hchacha20`.
+
 ### `e.crypto.classic`
 
 ```neper
@@ -5407,6 +5439,44 @@ a host transfer wins a later request; a wait observes cancellation before timeou
 restores blocking mode before acknowledging either. The synchronous host resolver cannot
 provide that bound: after the common precheck, a still-live token or deadline returns
 `os.Unsupported`; an uncontrolled `Control` uses the ordinary resolver.
+
+### `e.net.idna`
+
+```neper
+error Invalid
+error TooLong
+error TooSmall
+
+fn base() -> u64
+fn tmin() -> u64
+fn tmax() -> u64
+fn skew() -> u64
+fn damp() -> u64
+fn initial_bias() -> u64
+fn initial_n() -> u64
+fn max_label() -> usize
+fn max_domain() -> usize
+fn adapt(delta_in: u64, num_points: u64, first: bool) -> u64
+fn threshold(k: u64, bias: u64) -> u64
+fn digit_char(d: u64) -> u8
+fn digit_value(c: u8) -> (u64, bool)
+fn is_scalar(n: u64) -> bool
+fn punycode_encode(points: []const u32, out: []u8) -> (usize, err)
+fn punycode_decode(text: []const u8, out: []u32) -> (usize, err)
+fn is_ascii_label(label: str) -> bool
+fn is_ldh(c: u8) -> bool
+fn has_xn_prefix(label: str) -> bool
+fn label_valid(label: str) -> bool
+fn hyphens_ok(points: []const u32) -> bool
+fn is_label_separator(scalar: u32) -> bool
+fn label_to_ascii(label: str, out: []u8, scratch: []u32) -> (usize, err)
+fn to_ascii(domain: str, out: []u8, scratch: []u32) -> (usize, err)
+fn to_unicode(domain: str, out: []u8) -> (usize, err)
+```
+
+RFC 3492 `punycode_encode`/`punycode_decode` and IDNA labels: `to_ascii` (NFC, simple
+lowercase, `xn--` A-labels, length and hyphen rules), `to_unicode`, `is_ascii_label`,
+`label_valid`.
 
 ### `e.net.tls`
 
@@ -7465,6 +7535,180 @@ fn header(headers: []const Header, name: str) -> (str, bool)
 ```
 
 Header names compare by ASCII case folding. Obsolete line folding is rejected.
+
+### `e.fmt.avro`
+
+```neper
+type Kind = enum u8 { Null, Boolean, Int, Long, Float, Double, Bytes, String, Record, Enum, Array, Map, Union, Fixed }
+type Schema = struct { kind: []Kind, name: []str, child_start: []usize, child_count: []usize, children: []u32, size: []usize, fallback: []str }
+type Decoder = struct { data: []const u8, pos: usize }
+type Sink = struct { data: []u8, used: usize }
+error Mismatch
+error Malformed
+error TooSmall
+
+fn decoder(data: []const u8) -> Decoder
+fn sink(data: []u8) -> Sink
+fn decode_zigzag(n: u64) -> i64
+fn encode_zigzag(v: i64) -> u64
+fn read_varint(d: *Decoder) -> (u64, err)
+fn read_long(d: *Decoder) -> (i64, err)
+fn read_int(d: *Decoder) -> (i32, err)
+fn read_raw(d: *Decoder, n: usize) -> ([]const u8, err)
+fn skip_raw(d: *Decoder, n: usize) -> err
+fn read_le(d: *Decoder, width: usize) -> (u64, err)
+fn read_boolean(d: *Decoder) -> (bool, err)
+fn read_float(d: *Decoder) -> (f32, err)
+fn read_double(d: *Decoder) -> (f64, err)
+fn read_bytes(d: *Decoder) -> ([]const u8, err)
+fn read_string(d: *Decoder) -> (str, err)
+fn write_raw(o: *Sink, data: []const u8) -> err
+fn write_varint(o: *Sink, value: u64) -> err
+fn write_long(o: *Sink, v: i64) -> err
+fn write_boolean(o: *Sink, v: bool) -> err
+fn write_le(o: *Sink, value: u64, width: usize) -> err
+fn write_float(o: *Sink, v: f32) -> err
+fn write_double(o: *Sink, v: f64) -> err
+fn write_bytes(o: *Sink, data: []const u8) -> err
+fn child(s: *const Schema, node: u32, i: usize) -> u32
+fn find_child(s: *const Schema, node: u32, name: str) -> (usize, bool)
+fn read_index(d: *Decoder, s: *const Schema, node: u32) -> (usize, err)
+fn skip(s: *const Schema, node: u32, d: *Decoder) -> err
+fn promotable(wk: Kind, rk: Kind) -> bool
+fn first_branch(w: *const Schema, wn: u32, r: *const Schema, rn: u32) -> (usize, bool)
+fn resolve(w: *const Schema, wn: u32, r: *const Schema, rn: u32) -> err
+fn copy_value(w: *const Schema, wn: u32, d: *Decoder, o: *Sink) -> err
+fn decode_resolved(w: *const Schema, wn0: u32, r: *const Schema, rn0: u32, d: *Decoder, o: *Sink) -> err
+```
+
+Avro binary encoding over caller cursors (`decoder`, `sink`, zigzag varints, the
+primitive readers and writers, `skip`) and schema resolution between a writer and a
+reader schema held in caller arrays: `promotable`, `first_branch`, `resolve` and
+`decode_resolved`, which re-encodes the writer's value in the reader's schema (field
+reordering, defaults, promotions, union reindexing, enum defaults).
+
+### `e.fmt.flatbuffers`
+
+```neper
+type Vector = struct { at: usize, len: usize }
+type Builder = struct { buf: []u8, head: usize, minalign: usize, slots: [64]usize, slot_count: usize, table_end: usize, vector_count: usize }
+error Invalid
+error TooSmall
+
+fn load[T: type](buf: []const u8, at: usize) -> (T, err)
+fn uoffset(buf: []const u8, at: usize) -> (usize, err)
+fn root(buf: []const u8) -> (usize, err)
+fn has_identifier(buf: []const u8, ident: str) -> bool
+fn root_with_identifier(buf: []const u8, ident: str) -> (usize, err)
+fn field_offset(buf: []const u8, table_pos: usize, field_index: usize) -> (usize, err)
+fn get[T: type](buf: []const u8, table: usize, field: usize, fallback: T) -> (T, err)
+fn get_u8(buf: []const u8, table: usize, field: usize, fallback: u8) -> (u8, err)
+fn get_u16(buf: []const u8, table: usize, field: usize, fallback: u16) -> (u16, err)
+fn get_u32(buf: []const u8, table: usize, field: usize, fallback: u32) -> (u32, err)
+fn get_u64(buf: []const u8, table: usize, field: usize, fallback: u64) -> (u64, err)
+fn get_i8(buf: []const u8, table: usize, field: usize, fallback: i8) -> (i8, err)
+fn get_i16(buf: []const u8, table: usize, field: usize, fallback: i16) -> (i16, err)
+fn get_i32(buf: []const u8, table: usize, field: usize, fallback: i32) -> (i32, err)
+fn get_i64(buf: []const u8, table: usize, field: usize, fallback: i64) -> (i64, err)
+fn get_f32(buf: []const u8, table: usize, field: usize, fallback: f32) -> (f32, err)
+fn get_f64(buf: []const u8, table: usize, field: usize, fallback: f64) -> (f64, err)
+fn get_bool(buf: []const u8, table: usize, field: usize, fallback: bool) -> (bool, err)
+fn string_at(buf: []const u8, at: usize) -> (str, err)
+fn get_string(buf: []const u8, table: usize, field: usize) -> (str, err)
+fn get_table(buf: []const u8, table: usize, field: usize) -> (usize, err)
+fn get_struct(buf: []const u8, table: usize, field: usize) -> (usize, err)
+fn get_vector(buf: []const u8, table: usize, field: usize) -> (Vector, err)
+fn vector_u8(buf: []const u8, v: Vector) -> ([]const u8, err)
+fn vector_at[T: type](buf: []const u8, v: Vector, i: usize) -> (T, err)
+fn vector_u16_at(buf: []const u8, v: Vector, i: usize) -> (u16, err)
+fn vector_u32_at(buf: []const u8, v: Vector, i: usize) -> (u32, err)
+fn vector_u64_at(buf: []const u8, v: Vector, i: usize) -> (u64, err)
+fn vector_i32_at(buf: []const u8, v: Vector, i: usize) -> (i32, err)
+fn vector_i64_at(buf: []const u8, v: Vector, i: usize) -> (i64, err)
+fn vector_f32_at(buf: []const u8, v: Vector, i: usize) -> (f32, err)
+fn vector_f64_at(buf: []const u8, v: Vector, i: usize) -> (f64, err)
+fn vector_string_at(buf: []const u8, v: Vector, i: usize) -> (str, err)
+fn vector_table_at(buf: []const u8, v: Vector, i: usize) -> (usize, err)
+fn union_type(buf: []const u8, table: usize, field: usize) -> (u8, err)
+fn union_value(buf: []const u8, table: usize, field: usize) -> (usize, err)
+fn builder(storage: []u8) -> Builder
+fn offset(b: *const Builder) -> usize
+fn prep(b: *Builder, size: usize, additional: usize) -> err
+fn put[T: type](b: *Builder, v: T) -> err
+fn put_bytes(b: *Builder, data: []const u8) -> err
+fn put_offset(b: *Builder, off: usize) -> err
+fn start_table(b: *Builder, field_count: usize) -> err
+fn slot(b: *Builder, field: usize)
+fn add[T: type](b: *Builder, field: usize, v: T, fallback: T) -> err
+fn add_u8(b: *Builder, field: usize, v: u8, fallback: u8) -> err
+fn add_u16(b: *Builder, field: usize, v: u16, fallback: u16) -> err
+fn add_u32(b: *Builder, field: usize, v: u32, fallback: u32) -> err
+fn add_u64(b: *Builder, field: usize, v: u64, fallback: u64) -> err
+fn add_i16(b: *Builder, field: usize, v: i16, fallback: i16) -> err
+fn add_i32(b: *Builder, field: usize, v: i32, fallback: i32) -> err
+fn add_i64(b: *Builder, field: usize, v: i64, fallback: i64) -> err
+fn add_f32(b: *Builder, field: usize, v: f32, fallback: f32) -> err
+fn add_f64(b: *Builder, field: usize, v: f64, fallback: f64) -> err
+fn add_bool(b: *Builder, field: usize, v: bool, fallback: bool) -> err
+fn add_offset(b: *Builder, field: usize, off: usize) -> err
+fn end_table(b: *Builder) -> (usize, err)
+fn create_string(b: *Builder, s: str) -> (usize, err)
+fn start_vector(b: *Builder, elem_size: usize, count: usize, alignment: usize) -> err
+fn end_vector(b: *Builder) -> (usize, err)
+fn create_vector_u8(b: *Builder, data: []const u8) -> (usize, err)
+fn finish(b: *Builder, root_offset: usize, identifier: str) -> err
+fn bytes(b: *const Builder) -> []const u8
+```
+
+Zero-copy FlatBuffers reading with every offset bounds-checked: `root`,
+`root_with_identifier`, `field_offset` (the vtable walk), typed `get_*`, `get_string`,
+`get_table`, `get_struct`, `get_vector` with element accessors, `union_type` and
+`union_value`; and a back-to-front `Builder` over caller storage (`start_table`, `add_*`,
+`end_table`, `create_string`, vectors, `finish`).
+
+### `e.fmt.jwt`
+
+```neper
+type Alg = enum u8 { None, HS256, HS384, HS512, EdDSA }
+type Parts = struct { header: str, payload: str, signature: str }
+error Malformed
+error Unsupported
+error TooSmall
+error Expired
+error NotYetValid
+error WrongIssuer
+error WrongAudience
+
+fn split(token: str) -> (Parts, err)
+fn decode_segment(segment: str, dst: []u8) -> ([]u8, err)
+fn header(token: str, dst: []u8) -> (str, err)
+fn payload(token: str, dst: []u8) -> (str, err)
+fn skip_space(s: str, from: usize) -> usize
+fn skip_string(s: str, from: usize) -> (usize, err)
+fn skip_value(s: str, from: usize, depth: usize) -> (usize, err)
+fn member(object: str, name: str) -> (str, bool, err)
+fn string_of(raw: str) -> (str, bool)
+fn time_of(raw: str) -> (i64, err)
+fn algorithm(header_json: str) -> (Alg, err)
+fn sha384_init() -> hash.Sha512
+fn hmac_sha384(key: []const u8, message: []const u8) -> [48]u8
+fn hmac_tag(alg: Alg, key: []const u8, message: []const u8) -> ([64]u8, usize)
+fn verify(token: str, key: []const u8, expected: Alg) -> (bool, err)
+fn verify_ed25519(token: str, public: sign.Ed25519PublicKey) -> (bool, err)
+fn claims_check(payload_json: str, now: i64, issuer: str, audience: str, leeway: i64) -> err
+fn put_segment(dst: []u8, from: usize, data: []const u8) -> (usize, err)
+fn compose(header_json: str, payload_json: str, dst: []u8) -> (usize, err)
+fn finish(dst: []u8, signed_len: usize, tag: []const u8) -> (usize, err)
+fn sign_hmac(header_json: str, payload_json: str, key: []const u8, alg: Alg, dst: []u8) -> (usize, err)
+fn sign_hs256(header_json: str, payload_json: str, key: []const u8, dst: []u8) -> (usize, err)
+fn sign_ed25519(header_json: str, payload_json: str, secret: sign.Ed25519SecretKey, dst: []u8) -> (usize, err)
+```
+
+JWS compact serialisation: `split`, `header`, `payload`, `member` (an allocation-free
+JSON member scanner), `algorithm`, `verify` (HS256/384/512 and EdDSA; the header's
+`alg` must equal the caller's expectation, `none` is never accepted), `verify_ed25519`,
+`claims_check` (exp, nbf, iat, iss, aud with leeway) and `sign_hmac`/`sign_hs256`/
+`sign_ed25519`.
 
 ### `e.fmt.asn1`
 

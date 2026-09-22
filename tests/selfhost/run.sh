@@ -1919,6 +1919,31 @@ algo_smt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$algo_smt_written" = 'executable written' ]
 chmod +x "$test_build/algo-smt-selfhost"
 "$test_build/algo-smt-selfhost"
+# `e.crypto.cipher`: FIPS-197 and SP 800-38A vectors both ways, RFC 8439 block and sunscreen text, a CTR seek, PKCS#7 against cryptography, refusals (D875).
+crypto_cipher_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_cipher/src/main.e" "$repo" x64 linux "$test_build/crypto-cipher-selfhost")
+[ "$crypto_cipher_written" = 'executable written' ]
+chmod +x "$test_build/crypto-cipher-selfhost"
+"$test_build/crypto-cipher-selfhost"
+# `e.fmt.avro`: zigzag vectors, a record resolved across promotions, dropped and defaulted fields and reordering to fastavro's bytes, union reindexing, `Mismatch` and `Malformed` (D875).
+fmt_avro_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_avro/src/main.e" "$repo" x64 linux "$test_build/fmt-avro-selfhost")
+[ "$fmt_avro_written" = 'executable written' ]
+chmod +x "$test_build/fmt-avro-selfhost"
+"$test_build/fmt-avro-selfhost"
+# `e.fmt.flatbuffers`: the Monster built by the Python package read field by field including defaults, a struct, a vector of tables and a union; truncation and range errors answered, not trapped; a Neper-built Monster reading back equal (D875).
+fmt_flatbuffers_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_flatbuffers/src/main.e" "$repo" x64 linux "$test_build/fmt-flatbuffers-selfhost")
+[ "$fmt_flatbuffers_written" = 'executable written' ]
+chmod +x "$test_build/fmt-flatbuffers-selfhost"
+"$test_build/fmt-flatbuffers-selfhost"
+# `e.fmt.jwt`: the RFC 7515 A.1 token, PyJWT tokens for four algorithms verified and every tamper refused, `alg: none` refused, claim windows, and signatures byte-equal to PyJWT (D875).
+fmt_jwt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_jwt/src/main.e" "$repo" x64 linux "$test_build/fmt-jwt-selfhost")
+[ "$fmt_jwt_written" = 'executable written' ]
+chmod +x "$test_build/fmt-jwt-selfhost"
+"$test_build/fmt-jwt-selfhost"
+# `e.net.idna`: all nineteen RFC 3492 samples both ways, eight domains against the idna package and back, every refusal (D875).
+net_idna_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_idna/src/main.e" "$repo" x64 linux "$test_build/net-idna-selfhost")
+[ "$net_idna_written" = 'executable written' ]
+chmod +x "$test_build/net-idna-selfhost"
+"$test_build/net-idna-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

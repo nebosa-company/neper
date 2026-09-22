@@ -2128,6 +2128,36 @@ $algoSmtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $algoSmtWritten -ne 'executable written') { throw 'algo_smt emission failed' }
 & $algoSmtPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_smt check failed: exit $LASTEXITCODE" }
+# `e.crypto.cipher`: FIPS-197 and SP 800-38A vectors both ways, RFC 8439 block and sunscreen text, a CTR seek, PKCS#7 against cryptography, refusals (D875).
+$cryptoCipherPath = Join-Path $testBuild 'crypto-cipher-selfhost.exe'
+$cryptoCipherWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_cipher\src\main.e') $repo 'x64' 'windows' $cryptoCipherPath
+if ($LASTEXITCODE -ne 0 -or $cryptoCipherWritten -ne 'executable written') { throw 'crypto_cipher emission failed' }
+& $cryptoCipherPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_cipher check failed: exit $LASTEXITCODE" }
+# `e.fmt.avro`: zigzag vectors, a record resolved across promotions, dropped and defaulted fields and reordering to fastavro's bytes, union reindexing, `Mismatch` and `Malformed` (D875).
+$fmtAvroPath = Join-Path $testBuild 'fmt-avro-selfhost.exe'
+$fmtAvroWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_avro\src\main.e') $repo 'x64' 'windows' $fmtAvroPath
+if ($LASTEXITCODE -ne 0 -or $fmtAvroWritten -ne 'executable written') { throw 'fmt_avro emission failed' }
+& $fmtAvroPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_avro check failed: exit $LASTEXITCODE" }
+# `e.fmt.flatbuffers`: the Monster built by the Python package read field by field including defaults, a struct, a vector of tables and a union; truncation and range errors answered, not trapped; a Neper-built Monster reading back equal (D875).
+$fmtFlatbuffersPath = Join-Path $testBuild 'fmt-flatbuffers-selfhost.exe'
+$fmtFlatbuffersWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_flatbuffers\src\main.e') $repo 'x64' 'windows' $fmtFlatbuffersPath
+if ($LASTEXITCODE -ne 0 -or $fmtFlatbuffersWritten -ne 'executable written') { throw 'fmt_flatbuffers emission failed' }
+& $fmtFlatbuffersPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_flatbuffers check failed: exit $LASTEXITCODE" }
+# `e.fmt.jwt`: the RFC 7515 A.1 token, PyJWT tokens for four algorithms verified and every tamper refused, `alg: none` refused, claim windows, and signatures byte-equal to PyJWT (D875).
+$fmtJwtPath = Join-Path $testBuild 'fmt-jwt-selfhost.exe'
+$fmtJwtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_jwt\src\main.e') $repo 'x64' 'windows' $fmtJwtPath
+if ($LASTEXITCODE -ne 0 -or $fmtJwtWritten -ne 'executable written') { throw 'fmt_jwt emission failed' }
+& $fmtJwtPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_jwt check failed: exit $LASTEXITCODE" }
+# `e.net.idna`: all nineteen RFC 3492 samples both ways, eight domains against the idna package and back, every refusal (D875).
+$netIdnaPath = Join-Path $testBuild 'net-idna-selfhost.exe'
+$netIdnaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_idna\src\main.e') $repo 'x64' 'windows' $netIdnaPath
+if ($LASTEXITCODE -ne 0 -or $netIdnaWritten -ne 'executable written') { throw 'net_idna emission failed' }
+& $netIdnaPath
+if ($LASTEXITCODE -ne 0) { throw "a net_idna check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

@@ -301,7 +301,12 @@
     "e.algo.geo",
     "e.algo.privacy",
     "e.algo.query",
-    "e.algo.smt"
+    "e.algo.smt",
+    "e.crypto.cipher",
+    "e.fmt.avro",
+    "e.fmt.flatbuffers",
+    "e.fmt.jwt",
+    "e.net.idna"
    ]
   },
   {
@@ -942,6 +947,18 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.cipher",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.crypto.aead",
+    "e.crypto.random"
    ],
    "blocked_by": []
   },
@@ -2391,6 +2408,19 @@
     "e.io",
     "e.mem",
     "e.net.http"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.idna",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.text.normalize",
+    "e.text.unicode",
+    "e.text.utf8"
    ],
    "blocked_by": []
   },
@@ -4037,6 +4067,46 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.avro",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.flatbuffers",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.jwt",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.crypto.hash",
+    "e.crypto.mac",
+    "e.crypto.sign",
+    "e.mem",
+    "e.str"
+   ],
    "blocked_by": []
   },
   {
