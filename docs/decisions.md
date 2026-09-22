@@ -18337,3 +18337,35 @@ rather than half-written. The legend line of `docs/algos.md` now keeps its
 arrow inside the code span, so the counter stops reading the legend as a
 planned function.
 
+
+## D927 — A trap's text and stub are shared by the program
+
+D922 laid each trap message once per function and D923 left out the null checks a
+check of the same pointer dominates; the checked compiler was still 10.0% larger
+than the unchecked one against H03's +5%. Measured by elimination, the rest was the
+per-function trap records and stubs (about 459 KB, 273 KB of it message text that
+every function carried its own copy of), the compare and branch of each check
+(185 KB), and each site's call (152 KB).
+
+A trap's path and message are now data functions: a function whose one instruction,
+`Data`, lays a record's bytes -- a 16-bit length and the text. A second kind of
+function, `TrapStub`, moves the check's operands to where the runtime reads them,
+loads the two records and the symbol table by relocation, and jumps into
+`neper_trap`; a trapping site is `mov edx, line << 16 | column` and a `call` to its
+stub, and the return address the runtime walks from is still the site's. Each module
+makes one data function per distinct record and one stub per path, message and
+operand registers, named `trap.N` in the order the module asks -- so a module lowered
+by any worker names them alike -- and the link keeps what a relocation reaches and
+folds records two modules share, as it folds any two functions with the same bytes.
+The names go in storage the builder keeps; without it, or without room for one more
+function, a site keeps D922's records in its own function. A trap function holds no
+return address, so it has no row in the symbol table. A check's jump over a shared
+site is the two-byte `jcc rel8`, and a null check's `jnz` over a trap-only block is
+too, patched when the block after it begins.
+
+The trap fixtures print byte for byte what they did, over seventy runs in debug and
+release; the compiler reproduces itself. The checked compiler is 8,330,240 bytes
+against the unchecked 7,963,136: +4.6%, inside H03's +5% (D922 had it at +30.5%).
+Its cold wall, on a host near its memory limit, measured +9.9% against the D923
+pair's +10.6% in the same interleaved runs, and +5.5% on a quiet host (D922); it is
+inside +10% either way.

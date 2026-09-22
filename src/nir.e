@@ -85,6 +85,14 @@ type Opcode = enum u8 {
     // at the sixteen-byte width reach here -- lowering keeps its lane loop for the rest,
     // and gives an operand wider than a register one instruction per sixteen-byte chunk.
     VectorBinary = 56,
+    // A function that is data, not code (D927): its one instruction lays the string whose
+    // index is its immediate, byte for byte. A trap message shared by every function of a
+    // program is one, reached by relocation and folded with its copies at the link.
+    Data = 57,
+    // A trap's shared stub (D927): its function refs name the path's and the message's
+    // data functions (`target`, `target2`), and it loads both and the symbol table and
+    // enters `neper_trap`; a trapping site calls it with its line and column.
+    TrapStub = 58,
 }
 
 // `operation` is the rank below, `lane` the lane shape (0, 1, 2, 3 for an integer of
@@ -440,6 +448,22 @@ type Builder = struct {
     // The verifier's scratch (D342): words for every value and block of the largest
     // function; empty, and nothing is verified beyond the terminators.
     verify_scratch: []usize,
+    // The trap messages laid as data functions (D927): their bytes and names in storage
+    // that outlives a function's selection, and the current module's, by string, so a
+    // module makes one function per distinct message. Empty storage lays every message
+    // inside the function that traps with it, as before.
+    trap_text: []u8,
+    trap_text_count: usize,
+    trap_data_module: usize,
+    trap_data_count: usize,
+    trap_data_strings: []usize,
+    trap_data_refs: []usize,
+    trap_stub_count: usize,
+    trap_stub_paths: []usize,
+    trap_stub_messages: []usize,
+    trap_stub_refs: []usize,
+    trap_stub_moves: []usize,
+    trap_name_count: usize,
     // What the verifier refused, for the diagnostic: the instruction and the operand.
     verify_instruction: usize,
     verify_operand: usize,
@@ -754,7 +778,7 @@ fn compact_references(builder: *Builder) -> err {
 }
 
 fn is_terminator(opcode: Opcode) -> bool {
-    ret opcode == .Trap || opcode == .Branch || opcode == .BranchIf || opcode == .Switch || opcode == .Return || opcode == .Unreachable
+    ret opcode == .Trap || opcode == .Branch || opcode == .BranchIf || opcode == .Switch || opcode == .Return || opcode == .Unreachable || opcode == .Data || opcode == .TrapStub
 }
 
 fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions: []Instruction, operands: []usize, function_refs: []FunctionRef, strings: []StringConstant) -> err {
@@ -1149,6 +1173,8 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
 }
 
 const FRAME_WORDS: usize = 128usize
+
+const TRAP_DATA: usize = 256usize
 
 // The frame's words, addressed once in the entry block of a kernel's CPU build.
 // `values`, `instructions` and `resume` are the caller's tables, FRAME_WORDS and

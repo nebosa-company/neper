@@ -3546,6 +3546,18 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     let (verify_scratch, verify_scratch_error) = mem.alloc[usize](a, instruction_capacity * 2usize + block_capacity * 8usize + 16usize)
     if verify_scratch_error != ok { ret verify_scratch_error }
     builder.verify_scratch = verify_scratch
+    // The shared trap messages' bytes and names (D927), committed as they are written.
+    let (trap_text, trap_text_error) = mem.alloc[u8](a, 4194304usize / scale)
+    if trap_text_error != ok { ret trap_text_error }
+    builder.trap_text = trap_text
+    let (trap_tables, trap_tables_error) = mem.alloc[usize](a, nir.TRAP_DATA * 6usize)
+    if trap_tables_error != ok { ret trap_tables_error }
+    builder.trap_data_strings = trap_tables[0usize..nir.TRAP_DATA]
+    builder.trap_data_refs = trap_tables[nir.TRAP_DATA..nir.TRAP_DATA * 2usize]
+    builder.trap_stub_paths = trap_tables[nir.TRAP_DATA * 2usize..nir.TRAP_DATA * 3usize]
+    builder.trap_stub_messages = trap_tables[nir.TRAP_DATA * 3usize..nir.TRAP_DATA * 4usize]
+    builder.trap_stub_refs = trap_tables[nir.TRAP_DATA * 4usize..nir.TRAP_DATA * 5usize]
+    builder.trap_stub_moves = trap_tables[nir.TRAP_DATA * 5usize..nir.TRAP_DATA * 6usize]
     let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, sized(8192usize / scale, total, 128usize))
     if function_refs_error != ok { ret function_refs_error }
     report.build.pools[stats.POOL_NIR_REFS] = function_refs.len
@@ -7807,7 +7819,7 @@ fn emit_whole_program(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
     report.build.pools[stats.POOL_RELOCATIONS] = relocations.len
     // Indexed by NIR function index, like the signature table above: sized to the
     // function count and not to a constant of its own.
-    let (function_offsets, function_offsets_error) = mem.alloc[usize](a, builder.function_count + 1usize)
+    let (function_offsets, function_offsets_error) = mem.alloc[usize](a, builder.functions.len + 1usize)
     if function_offsets_error != ok { ret function_offsets_error }
     // Two functions that compile to the same bytes -- a duplicate generic instance, or two
     // distinct functions that happen to agree -- share one copy in the image, keyed by the

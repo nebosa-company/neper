@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.86 of 1 |
-| queue position | 10 of 49 (only position 1 is eligible for the next session; see README) |
+| queue position | 9 of 48 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done

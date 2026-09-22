@@ -87,6 +87,11 @@ type FunctionContext = struct {
     trap_pair_messages: [TRAP_RECORDS]usize,
     trap_pair_stubs: [TRAP_RECORDS]usize,
     trap_pair_count: usize,
+    // A short jump over a trap block (D927): where its byte is, and the block it lands
+    // on, patched when that block begins.
+    short_pending: usize,
+    short_block: usize,
+    has_short: bool,
     // Per block of the function being selected, whether a branch enters it (D923);
     // empty when there is no arena to hold it, and then every block is laid out.
     entered: []bool,
@@ -1553,6 +1558,9 @@ fn line_rows_of(lines: []LineEntry, line_count: usize, start: usize, end: usize)
 // `placed_max` is the running maximum the caller threads through its loop.
 fn is_placed_after(builder: *nir.Builder, function_offsets: []usize, index: usize, placed_max: *usize) -> bool {
     if index >= function_offsets.len || index >= builder.function_count { ret false }
+    // A trap's data or stub function (D927) holds no return address -- the stub is
+    // jumped through -- so a backtrace never looks it up, and it has no row.
+    if is_trap_function(builder.functions[index].name) { ret false }
     if index != 0usize && function_offsets[index] <= *placed_max { ret false }
     *placed_max = function_offsets[index]
     ret true
@@ -1907,6 +1915,77 @@ fn unentered_trap(builder: *nir.Builder, current: nir.Function, context: *Functi
     ret block.first_instruction == at && block.instruction_count == 1usize && builder.instructions[at].opcode == .Trap
 }
 
+// A trap's shared stub (D927): the path's record into the path register and the
+// message's into rax, the symbol table into r10, and a jump into `neper_trap` -- the
+// return address on the stack is still the trapping site's.
+fn emit_trap_stub(builder: *nir.Builder, current: nir.Function, stub: nir.Instruction, context: *FunctionContext) -> err {
+    let output = context.output
+    var path_register = 1usize
+    if context.abi != .Windows { path_register = 7usize }
+    try emit_trap_moves(output, stub.immediate, context.abi)
+    let (path_displacement, path_error) = emit_x64.relative_address(output, path_register)
+    if path_error != ok { ret path_error }
+    try add_relocation(context.relocations, context.relocation_count, path_displacement, stub.target)
+    let (message_displacement, message_error) = emit_x64.relative_address(output, 0usize)
+    if message_error != ok { ret message_error }
+    try add_relocation(context.relocations, context.relocation_count, message_displacement, stub.target2)
+    let (symbols_ref, symbols_error) = nir.intern_function(builder, current.module_index, "neper_symbols", 0usize)
+    if symbols_error != ok { ret symbols_error }
+    let (symbols_displacement, symbols_address_error) = emit_x64.relative_address(output, 10usize)
+    if symbols_address_error != ok { ret symbols_address_error }
+    try add_relocation(context.relocations, context.relocation_count, symbols_displacement, symbols_ref)
+    let (trap_ref, trap_error) = nir.intern_function(builder, current.module_index, "neper_trap", 0usize)
+    if trap_error != ok { ret trap_error }
+    let (enter_displacement, enter_error) = emit_x64.jump(output)
+    if enter_error != ok { ret enter_error }
+    ret add_relocation(context.relocations, context.relocation_count, enter_displacement, trap_ref)
+}
+
+// A trap's data or stub function by its name, `trap.N` (D927): no declared name has a dot.
+fn is_trap_function(name: str) -> bool {
+    ret name.len > 5usize && name[0usize] == 116u8 && name[1usize] == 114u8 && name[2usize] == 97u8 && name[3usize] == 112u8 && name[4usize] == 46u8
+}
+
+// What a `.Trap` or `.Unreachable` prints: `unreachable()`'s message or a check's, and
+// the kind its type names.
+fn trap_instruction_text(builder: *nir.Builder, instruction: nir.Instruction) -> (str, str, err) {
+    var message = "control reached a point the compiler took as unreachable"
+    var kind = "unreachable"
+    if instruction.opcode == .Trap {
+        message = "unreachable() reached"
+        if instruction.ty.kind == .Other { kind = instruction.ty.name }
+        if instruction.immediate != 0usize {
+            if instruction.immediate > builder.string_count { ret ("", "", Unsupported) }
+            let spelling = builder.strings[instruction.immediate - 1usize].spelling
+            message = spelling
+            if spelling.len != 0usize && (spelling[0usize] == 34u8 || spelling[0usize] == 114u8) {
+                var text_start = 0usize
+                var text_end = 0usize
+                var raw = false
+                let contents_error = string_contents(spelling, &text_start, &text_end, &raw)
+                if contents_error != ok { ret ("", "", contents_error) }
+                message = spelling[text_start..text_end]
+            }
+        }
+    }
+    ret (kind, message, ok)
+}
+
+// Whether a branch whose false edge falls into `trap_block` and whose true edge lands
+// right after it jumps over a shared trap site (D927): a trap with no operands, whose
+// code is a `mov` and a `call`, so a short jump reaches past it.
+fn short_over_trap(builder: *nir.Builder, current: nir.Function, branch_at: usize, true_block: usize, trap_block: usize, context_abi: Abi) -> (bool, err) {
+    let trap = builder.blocks[trap_block]
+    if trap.first_instruction != branch_at + 1usize || trap.instruction_count != 1usize { ret (false, ok) }
+    if builder.blocks[true_block].first_instruction != trap.first_instruction + 1usize { ret (false, ok) }
+    let instruction = builder.instructions[trap.first_instruction]
+    if (instruction.opcode != .Trap && instruction.opcode != .Unreachable) || instruction.operand_count != 0usize || instruction.has_result { ret (false, ok) }
+    let (kind, message, text_error) = trap_instruction_text(builder, instruction)
+    if text_error != ok { ret (false, text_error) }
+    let (stub_ref, is_shared, shared_error) = trap_site_stub(builder, current, instruction.path, kind, message, "", "", 0usize, false, "", 0usize, 0usize, context_abi)
+    ret (is_shared, shared_error)
+}
+
 // A text's bytes, as they stand.
 fn emit_text(output: *emit_x64.Buffer, text: str) -> err {
     var at = 0usize
@@ -2009,29 +2088,15 @@ fn trap_record(context: *FunctionContext, pieces: []const TrapPiece) -> (usize, 
 // runtime prints `path:line:col` and then the message, an operand where each separator
 // byte stands (0 unsigned, 1 signed). The operands move first, since the other
 // registers are ones they may sit in.
-fn emit_trap(builder: *nir.Builder, current: nir.Function, site: nir.Site, token_path: str, kind: str, first: str, second: str, third: str, values: usize, signed: bool, a: usize, b: usize, tail: str, context: *FunctionContext) -> err {
-    let output = context.output
-    var first_register = 8usize
-    var second_register = 9usize
-    var path_register = 1usize
-    var position_register = 2usize
-    if context.abi != .Windows {
-        first_register = 2usize
-        second_register = 1usize
-        path_register = 7usize
-        position_register = 6usize
-    }
-    if values >= 1usize && a != first_register { try emit_x64.mov_register(output, first_register, a) }
-    if values >= 2usize && b != second_register { try emit_x64.mov_register(output, second_register, b) }
+// A trap's text in its two records' pieces: the site's path, and the message --
+// `: trap[kind]: ` then `first`, an operand's separator and `second`, the other's and
+// `third`, then `tail`. The count of the message's pieces is the answer.
+fn trap_pieces(current: nir.Function, token_path: str, kind: str, first: str, second: str, third: str, values: usize, signed: bool, tail: str, path_pieces: []TrapPiece, message: []TrapPiece) -> usize {
     var site_path = token_path
     if site_path.len == 0usize { site_path = current.path }
-    var path_pieces: [1]TrapPiece = zero
     path_pieces[0usize] = trap_piece(site_path)
-    let (path_record, path_error) = trap_record(context, path_pieces[0usize..1usize])
-    if path_error != ok { ret path_error }
     var separator = 0usize
     if signed { separator = 1usize }
-    var message: [9]TrapPiece = zero
     message[0usize] = trap_piece(": trap[")
     message[1usize] = trap_piece(kind)
     message[2usize] = trap_piece("]: ")
@@ -2048,7 +2113,110 @@ fn emit_trap(builder: *nir.Builder, current: nir.Function, site: nir.Site, token
         count += 2usize
     }
     message[count] = trap_piece(tail)
-    count += 1usize
+    ret count + 1usize
+}
+
+// The shared stub a site with this text calls (D927), when it can be made.
+fn trap_site_stub(builder: *nir.Builder, current: nir.Function, token_path: str, kind: str, first: str, second: str, third: str, values: usize, signed: bool, tail: str, a: usize, b: usize, abi: Abi) -> (usize, bool, err) {
+    var path_pieces: [1]TrapPiece = zero
+    var message: [9]TrapPiece = zero
+    let count = trap_pieces(current, token_path, kind, first, second, third, values, signed, tail, path_pieces[..], message[..])
+    let (stub_ref, is_shared, shared_error) = trap_shared_stub(builder, current, path_pieces[0usize..1usize], message[0usize..count], trap_moves(values, a, b, abi))
+    ret (stub_ref, is_shared, shared_error)
+}
+
+// The operand moves a shared stub makes for its sites (D927), as one number: none, or
+// 1 | values << 1 | a << 4 | b << 8 when an operand is not already where the runtime
+// reads it. Every site of a check sits its operands in the same registers, so one stub
+// moves them for all of them.
+fn trap_moves(values: usize, a: usize, b: usize, abi: Abi) -> usize {
+    var first_register = 8usize
+    var second_register = 9usize
+    if abi != .Windows {
+        first_register = 2usize
+        second_register = 1usize
+    }
+    let first_moves = values >= 1usize && a != first_register
+    let second_moves = values >= 2usize && b != second_register
+    if !first_moves && !second_moves { ret 0usize }
+    ret 1usize + values * 2usize + a * 16usize + b * 256usize
+}
+
+// The moves `trap_moves` describes, in the site's order: the first operand, then the
+// second.
+fn emit_trap_moves(output: *emit_x64.Buffer, moves: usize, abi: Abi) -> err {
+    if moves == 0usize { ret ok }
+    var first_register = 8usize
+    var second_register = 9usize
+    if abi != .Windows {
+        first_register = 2usize
+        second_register = 1usize
+    }
+    let values = (moves / 2usize) % 4usize
+    let a = (moves / 16usize) % 16usize
+    let b = (moves / 256usize) % 16usize
+    if values >= 1usize && a != first_register { try emit_x64.mov_register(output, first_register, a) }
+    if values >= 2usize && b != second_register { try emit_x64.mov_register(output, second_register, b) }
+    ret ok
+}
+
+// The shared form of a site (D927): the line and column as one number and a call to
+// the stub, which moves the operands -- at most fifteen bytes.
+fn emit_shared_site(site: nir.Site, stub_ref: usize, context: *FunctionContext) -> err {
+    let output = context.output
+    var position_register = 2usize
+    if context.abi != .Windows { position_register = 6usize }
+    var column = site.column
+    if column > 65535usize { column = 65535usize }
+    try emit_x64.mov_immediate(output, position_register, site.line * 65536usize + column)
+    let (shared_call, shared_call_error) = emit_x64.call(output)
+    if shared_call_error != ok { ret shared_call_error }
+    ret add_relocation(context.relocations, context.relocation_count, shared_call, stub_ref)
+}
+
+// `jcc over; <trap>; over:` -- the check passes when `condition` holds. The jump is the
+// short form over a shared site (D927), whose code the jump's byte always reaches.
+fn emit_guarded_trap(builder: *nir.Builder, current: nir.Function, site: nir.Site, token_path: str, condition: usize, kind: str, first: str, second: str, third: str, values: usize, signed: bool, a: usize, b: usize, tail: str, context: *FunctionContext) -> err {
+    let (stub_ref, is_shared, shared_error) = trap_site_stub(builder, current, token_path, kind, first, second, third, values, signed, tail, a, b, context.abi)
+    if shared_error != ok { ret shared_error }
+    if is_shared {
+        let (short_over, short_error) = emit_x64.jump_condition_short(context.output, condition)
+        if short_error != ok { ret short_error }
+        try emit_shared_site(site, stub_ref, context)
+        ret emit_x64.patch_relative8(context.output, short_over, context.output.count)
+    }
+    let (over, over_error) = emit_x64.jump_condition(context.output, condition)
+    if over_error != ok { ret over_error }
+    try emit_trap(builder, current, site, token_path, kind, first, second, third, values, signed, a, b, tail, context)
+    ret emit_x64.patch_relative32(context.output, over, context.output.count)
+}
+
+fn emit_trap(builder: *nir.Builder, current: nir.Function, site: nir.Site, token_path: str, kind: str, first: str, second: str, third: str, values: usize, signed: bool, a: usize, b: usize, tail: str, context: *FunctionContext) -> err {
+    let output = context.output
+    var first_register = 8usize
+    var second_register = 9usize
+    var path_register = 1usize
+    var position_register = 2usize
+    if context.abi != .Windows {
+        first_register = 2usize
+        second_register = 1usize
+        path_register = 7usize
+        position_register = 6usize
+    }
+    var path_pieces: [1]TrapPiece = zero
+    var message: [9]TrapPiece = zero
+    let count = trap_pieces(current, token_path, kind, first, second, third, values, signed, tail, path_pieces[..], message[..])
+    // The shared form (D927): the module's stub for this path and message, called.
+    let (stub_ref, is_shared, shared_error) = trap_shared_stub(builder, current, path_pieces[0usize..1usize], message[0usize..count], trap_moves(values, a, b, context.abi))
+    if shared_error != ok { ret shared_error }
+    if is_shared { ret emit_shared_site(site, stub_ref, context) }
+    if values >= 1usize && a != first_register { try emit_x64.mov_register(output, first_register, a) }
+    if values >= 2usize && b != second_register { try emit_x64.mov_register(output, second_register, b) }
+    var column = site.column
+    if column > 65535usize { column = 65535usize }
+    // Without the builder's lasting storage, the function's own records and stubs (D922).
+    let (path_record, path_error) = trap_record(context, path_pieces[0usize..1usize])
+    if path_error != ok { ret path_error }
     let (message_record, message_error) = trap_record(context, message[0usize..count])
     if message_error != ok { ret message_error }
     if !context.has_trap_stub {
@@ -2098,8 +2266,6 @@ fn emit_trap(builder: *nir.Builder, current: nir.Function, site: nir.Site, token
         paired = true
     }
     if !paired { try emit_trap_records(output, path_register, path_record, message_record) }
-    var column = site.column
-    if column > 65535usize { column = 65535usize }
     try emit_x64.mov_immediate(output, position_register, site.line * 65536usize + column)
     let (call_displacement, call_error) = emit_x64.call(output)
     if call_error != ok { ret call_error }
@@ -2114,6 +2280,133 @@ fn emit_trap_records(output: *emit_x64.Buffer, path_register: usize, path_record
     let (message_displacement, message_address_error) = emit_x64.relative_address(output, 0usize)
     if message_address_error != ok { ret message_address_error }
     ret emit_x64.patch_relative32(output, message_displacement, message_record)
+}
+
+// A trap's shared stub (D927): the module's own for this path and message when an
+// earlier site made it, else made now over the two records' data functions. The
+// functions are the module's, named `trap.N` in the order the module asks, so a module
+// lowered by any worker names them alike; the link folds records two modules share, as
+// it folds any two functions with the same bytes. Without the builder's lasting storage
+// or the room for the functions, the site keeps the function's own records (`false`).
+fn trap_shared_stub(builder: *nir.Builder, current: nir.Function, path: []const TrapPiece, message: []const TrapPiece, moves: usize) -> (usize, bool, err) {
+    if builder.trap_text.len == 0usize { ret (0usize, false, ok) }
+    if builder.trap_data_module != current.module_index + 1usize {
+        builder.trap_data_module = current.module_index + 1usize
+        builder.trap_data_count = 0usize
+        builder.trap_stub_count = 0usize
+        builder.trap_name_count = 0usize
+    }
+    let (path_ref, path_made, path_error) = trap_data_function(builder, current, path)
+    if path_error != ok || !path_made { ret (0usize, false, path_error) }
+    let (message_ref, message_made, message_error) = trap_data_function(builder, current, message)
+    if message_error != ok || !message_made { ret (0usize, false, message_error) }
+    var at = 0usize
+    while at < builder.trap_stub_count {
+        if builder.trap_stub_paths[at] == path_ref && builder.trap_stub_messages[at] == message_ref && builder.trap_stub_moves[at] == moves { ret (builder.trap_stub_refs[at], true, ok) }
+        at += 1usize
+    }
+    if builder.trap_stub_count == builder.trap_stub_refs.len { ret (0usize, false, ok) }
+    let (stub_ref, stub_made, stub_error) = trap_function(builder, current, .TrapStub, moves, path_ref, message_ref)
+    if stub_error != ok || !stub_made { ret (0usize, false, stub_error) }
+    builder.trap_stub_paths[builder.trap_stub_count] = path_ref
+    builder.trap_stub_messages[builder.trap_stub_count] = message_ref
+    builder.trap_stub_moves[builder.trap_stub_count] = moves
+    builder.trap_stub_refs[builder.trap_stub_count] = stub_ref
+    builder.trap_stub_count += 1usize
+    ret (stub_ref, true, ok)
+}
+
+// The data function holding one record (D927), the module's own when it has it.
+fn trap_data_function(builder: *nir.Builder, current: nir.Function, pieces: []const TrapPiece) -> (usize, bool, err) {
+    let length = trap_pieces_length(pieces)
+    if length >= 65536usize { ret (0usize, false, ok) }
+    // The record, written where the next one would go; kept only when it is new.
+    let start = builder.trap_text_count
+    if start + 2usize + length + 32usize > builder.trap_text.len { ret (0usize, false, ok) }
+    var cursor = start
+    builder.trap_text[cursor] = u8(length % 256usize)
+    builder.trap_text[cursor + 1usize] = u8(length / 256usize)
+    cursor += 2usize
+    var at = 0usize
+    while at < pieces.len {
+        if pieces[at].is_single {
+            builder.trap_text[cursor] = u8(pieces[at].single)
+            cursor += 1usize
+        } else {
+            var index = 0usize
+            while index < pieces[at].text.len {
+                builder.trap_text[cursor] = pieces[at].text[index]
+                cursor += 1usize
+                index += 1usize
+            }
+        }
+        at += 1usize
+    }
+    let record = builder.trap_text[start..cursor]
+    at = 0usize
+    while at < builder.trap_data_count {
+        if check.same(builder.strings[builder.trap_data_strings[at]].spelling, record) { ret (builder.trap_data_refs[at], true, ok) }
+        at += 1usize
+    }
+    if builder.trap_data_count == builder.trap_data_strings.len || builder.string_count == builder.strings.len { ret (0usize, false, ok) }
+    builder.trap_text_count = cursor
+    let (string_index, string_error) = nir.intern_string(builder, record)
+    if string_error != ok { ret (0usize, false, string_error) }
+    let (reference, made, function_error) = trap_function(builder, current, .Data, string_index, 0usize, 0usize)
+    if function_error != ok || !made { ret (0usize, false, function_error) }
+    builder.trap_data_strings[builder.trap_data_count] = string_index
+    builder.trap_data_refs[builder.trap_data_count] = reference
+    builder.trap_data_count += 1usize
+    ret (reference, true, ok)
+}
+
+// One function of the module, `trap.N`, whose single instruction is `opcode`: the name
+// in the builder's lasting storage, and a reference to it for a relocation.
+fn trap_function(builder: *nir.Builder, current: nir.Function, opcode: nir.Opcode, immediate: usize, first_ref: usize, second_ref: usize) -> (usize, bool, err) {
+    if builder.function_count == builder.functions.len || builder.block_count == builder.blocks.len || builder.instruction_count == builder.instructions.len || builder.function_ref_count == builder.function_refs.len { ret (0usize, false, ok) }
+    var cursor = builder.trap_text_count
+    if cursor + 32usize > builder.trap_text.len { ret (0usize, false, ok) }
+    let name_start = cursor
+    let prefix = "trap."
+    var at = 0usize
+    while at < prefix.len {
+        builder.trap_text[cursor] = prefix[at]
+        cursor += 1usize
+        at += 1usize
+    }
+    var digits: [20]u8 = zero
+    var digit_count = 0usize
+    var value = builder.trap_name_count
+    while true {
+        digits[digit_count] = u8(48usize + value % 10usize)
+        digit_count += 1usize
+        value = value / 10usize
+        if value == 0usize { break }
+    }
+    while digit_count > 0usize {
+        digit_count = digit_count - 1usize
+        builder.trap_text[cursor] = digits[digit_count]
+        cursor += 1usize
+    }
+    let name = builder.trap_text[name_start..cursor]
+    builder.trap_text_count = cursor
+    builder.trap_name_count += 1usize
+    let (function_index, begin_error) = nir.begin_function(builder, current.module_index, name, 0usize)
+    if begin_error != ok { ret (0usize, false, begin_error) }
+    builder.functions[function_index].path = current.path
+    builder.functions[function_index].module_name = current.module_name
+    let (block_index, block_error) = nir.begin_block(builder)
+    if block_error != ok { ret (0usize, false, block_error) }
+    let no_type = check.make_type(.Void, "", current.module_index)
+    let (instruction, ignored_value, instruction_error) = nir.emit(builder, opcode, no_type, false, immediate, zero)
+    if instruction_error != ok { ret (0usize, false, instruction_error) }
+    builder.instructions[instruction].target = first_ref
+    builder.instructions[instruction].target2 = second_ref
+    let end_error = nir.end_function(builder)
+    if end_error != ok { ret (0usize, false, end_error) }
+    let (reference, reference_error) = nir.intern_function(builder, current.module_index, name, 0usize)
+    if reference_error != ok { ret (0usize, false, reference_error) }
+    ret (reference, true, ok)
 }
 
 // Section 11's `overflow` row for `+ - *` and unary `-`, which trap in a debug build
@@ -2148,10 +2441,7 @@ fn emit_overflow_check(builder: *nir.Builder, current: nir.Function, site: nir.S
 // `cmp a, b; jcc over; <trap>; over:` -- the check passes when `condition` holds.
 fn emit_checked(builder: *nir.Builder, current: nir.Function, site: nir.Site, token_path: str, condition: usize, kind: str, first: str, second: str, third: str, a: usize, b: usize, context: *FunctionContext) -> err {
     try emit_x64.compare_register(context.output, a, b)
-    let (over, over_error) = emit_x64.jump_condition(context.output, condition)
-    if over_error != ok { ret over_error }
-    try emit_trap(builder, current, site, token_path, kind, first, second, third, 2usize, false, a, b, "", context)
-    ret emit_x64.patch_relative32(context.output, over, context.output.count)
+    ret emit_guarded_trap(builder, current, site, token_path, condition, kind, first, second, third, 2usize, false, a, b, "", context)
 }
 
 // Section 11's `divide` rows, which trap in every mode: the divisor is zero, or the
@@ -2162,10 +2452,7 @@ fn emit_divide_checks(builder: *nir.Builder, current: nir.Function, site: nir.Si
     var operator = " / "
     if remainder { operator = " % " }
     try emit_x64.test_register(output, 11usize)
-    let (nonzero, nonzero_error) = emit_x64.jump_condition(output, 5usize)
-    if nonzero_error != ok { ret nonzero_error }
-    try emit_trap(builder, current, site, token_path, "divide", "", operator, " divides by zero", 2usize, signed, 0usize, 11usize, "", context)
-    try emit_x64.patch_relative32(output, nonzero, output.count)
+    try emit_guarded_trap(builder, current, site, token_path, 5usize, "divide", "", operator, " divides by zero", 2usize, signed, 0usize, 11usize, "", context)
     if !signed { ret ok }
     let all_ones = 0usize -% 1usize
     try emit_x64.mov_immediate(output, 10usize, all_ones)
@@ -2349,9 +2636,20 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
 }
 
 fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
+    // A data function (D927) is its string's bytes: no frame, no instructions.
+    let data_function = builder.functions[function_index]
+    if data_function.block_count == 1usize && data_function.instruction_count == 1usize && builder.instructions[data_function.first_instruction].opcode == .Data {
+        let data = builder.instructions[data_function.first_instruction]
+        if data.immediate >= builder.string_count { ret Unsupported }
+        ret emit_text(context.output, builder.strings[data.immediate].spelling)
+    }
+    if data_function.block_count == 1usize && data_function.instruction_count == 1usize && builder.instructions[data_function.first_instruction].opcode == .TrapStub {
+        ret emit_trap_stub(builder, data_function, builder.instructions[data_function.first_instruction], context)
+    }
     context.trap_record_count = 0usize
     context.has_trap_stub = false
     context.trap_pair_count = 0usize
+    context.has_short = false
     let allocations = context.allocations
     let abi = context.abi
     let block_offsets = context.block_offsets
@@ -2402,6 +2700,10 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
     while at < end {
         while next_block < current.block_count && builder.blocks[current.first_block + next_block].first_instruction == at {
             block_offsets[next_block] = output.count
+            if context.has_short && context.short_block == next_block {
+                try emit_x64.patch_relative8(output, context.short_pending, output.count)
+                context.has_short = false
+            }
             next_block += 1usize
         }
         if next_block != 0usize && unentered_trap(builder, current, context, next_block - 1usize, at) {
@@ -2818,9 +3120,20 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                         } else {
                             let (condition, condition_error) = read_value(allocations, condition_value, 10usize, output)
                             if condition_error != ok { ret condition_error }
-                            let (true_displacement, true_error) = emit_x64.jump_nonzero(output, condition)
-                            if true_error != ok { ret true_error }
-                            try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
+                            let (short, short_error) = short_over_trap(builder, current, at, instruction.target, instruction.target2, context.abi)
+                            if short_error != ok { ret short_error }
+                            if short && !context.has_short {
+                                try emit_x64.test_register(output, condition)
+                                let (short_at, short_jump_error) = emit_x64.jump_condition_short(output, 5usize)
+                                if short_jump_error != ok { ret short_jump_error }
+                                context.short_pending = short_at
+                                context.short_block = instruction.target - current.first_block
+                                context.has_short = true
+                            } else {
+                                let (true_displacement, true_error) = emit_x64.jump_nonzero(output, condition)
+                                if true_error != ok { ret true_error }
+                                try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
+                            }
                         }
                         if builder.blocks[instruction.target2].first_instruction != at + 1usize {
                             let (false_displacement, false_error) = emit_x64.jump(output)
@@ -2834,25 +3147,9 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     // constant plus one, or a check lowering emitted: then its type
                     // names the kind and its operands are the values, printed after
                     // the message. `.Unreachable` is a point the compiler inferred.
-                    var message = "control reached a point the compiler took as unreachable"
-                    var kind = "unreachable"
+                    let (kind, message, text_error) = trap_instruction_text(builder, instruction)
+                    if text_error != ok { ret text_error }
                     var signed = false
-                    if instruction.opcode == .Trap {
-                        message = "unreachable() reached"
-                        if instruction.ty.kind == .Other { kind = instruction.ty.name }
-                        if instruction.immediate != 0usize {
-                            if instruction.immediate > builder.string_count { ret Unsupported }
-                            let spelling = builder.strings[instruction.immediate - 1usize].spelling
-                            message = spelling
-                            if spelling.len != 0usize && (spelling[0usize] == 34u8 || spelling[0usize] == 114u8) {
-                                var text_start = 0usize
-                                var text_end = 0usize
-                                var raw = false
-                                try string_contents(spelling, &text_start, &text_end, &raw)
-                                message = spelling[text_start..text_end]
-                            }
-                        }
-                    }
                     var operand_at = 0usize
                     while operand_at < instruction.operand_count {
                         let operand_value = builder.operands[instruction.first_operand + operand_at]
@@ -2980,7 +3277,7 @@ fn self_test() -> err {
     var lines: [8]LineEntry = zero
     var line_count = 0usize
     let no_masks = block_offsets[0usize..0usize]
-    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, entered: zero }
+    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize, trap_records: zero, trap_record_count: 0usize, trap_stub: 0usize, has_trap_stub: false, trap_pair_paths: zero, trap_pair_messages: zero, trap_pair_stubs: zero, trap_pair_count: 0usize, short_pending: 0usize, short_block: 0usize, has_short: false, entered: zero }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 14usize || output.bytes[0usize] != 85u8 || output.bytes[4usize] != 184u8 || output.bytes[5usize] != 7u8 || output.bytes[12usize] != 93u8 || output.bytes[13usize] != 195u8 { ret Unsupported }
     allocations[0usize].kind = .Stack

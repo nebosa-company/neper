@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.80 of 1 |
-| queue position | 9 of 49 (only position 1 is eligible for the next session; see README) |
+| queue position | 8 of 48 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done

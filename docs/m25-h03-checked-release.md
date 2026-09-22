@@ -158,6 +158,13 @@ check that a check of the same SSA value dominates is not made, with the verifie
 dominators as the proof; a check of a stack object's address, which inlining makes,
 is not made either. The checked compiler is then 8,778,240 bytes, +10.0%.
 
+D927 shares what was left per function: each distinct trap path and message is a data
+function the link folds program-wide, each site calls a stub function that moves its
+operands and enters the runtime, and the jump over a site is the short form. The
+checked compiler is 8,330,240 bytes against 7,963,136 unchecked, **+4.6%, inside the
++5% budget**; its cold wall measured +9.9% on a loaded host and +5.5% on a quiet one,
+inside +10%.
+
 ## 6. The load and store audit (D925)
 
 What the x86-64 code generator emits to touch memory, and what each form assumes.

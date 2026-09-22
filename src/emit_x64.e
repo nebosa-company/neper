@@ -534,6 +534,24 @@ fn jump_condition(buffer: *Buffer, condition: usize) -> (usize, err) {
     ret (displacement_at, ok)
 }
 
+// `jcc rel8` (D927): the short form, for a jump over a few bytes the caller bounds.
+fn jump_condition_short(buffer: *Buffer, condition: usize) -> (usize, err) {
+    if condition >= 16usize { ret (0usize, InvalidByte) }
+    let opcode_error = byte(buffer, 112usize + condition)
+    if opcode_error != ok { ret (0usize, opcode_error) }
+    let displacement_at = buffer.count
+    let placeholder_error = byte(buffer, 0usize)
+    if placeholder_error != ok { ret (0usize, placeholder_error) }
+    ret (displacement_at, ok)
+}
+
+// A short jump's one byte, forward only and within reach.
+fn patch_relative8(buffer: *Buffer, displacement_at: usize, destination: usize) -> err {
+    if destination < displacement_at + 1usize || destination - (displacement_at + 1usize) > 127usize { ret InvalidByte }
+    buffer.bytes[displacement_at] = u8(destination - (displacement_at + 1usize))
+    ret ok
+}
+
 fn frame_size(stack_slots: usize) -> usize {
     let bytes = stack_slots * 8usize
     let rounded = bytes + 15usize

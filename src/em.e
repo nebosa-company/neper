@@ -378,6 +378,8 @@ fn opcode_id(opcode: nir.Opcode) -> usize {
     if opcode == .GlobalAddress { ret 54usize }
     if opcode == .Sqrt { ret 55usize }
     if opcode == .VectorBinary { ret 56usize }
+    if opcode == .Data { ret 57usize }
+    if opcode == .TrapStub { ret 58usize }
     ret 0usize
 }
 
