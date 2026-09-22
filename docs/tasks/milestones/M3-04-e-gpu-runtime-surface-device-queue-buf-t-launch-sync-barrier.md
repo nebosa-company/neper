@@ -32,11 +32,11 @@ M2.5 froze the contracts this bullet implements: `docs/m25-gpu-contracts.md` and
 
 ## Code anchors
 
-- `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2†, `lib/e/gpu.e`×2†, `scripts/algos/batch45.json`×2, `scripts/algos/decisions-pending.md`×2†, `src/resolve.e`×2†, `lib/e/gpu/tensor.e`×1
-- `Device`: `lib/e/gpu.e`×38†, `lib/e/gfx/scene.e`×2†, `lib/e/os.windows.e`×2‡, `lib/e/ui/input.e`×2, `lib/e/os/shell.windows.e`×1‡, `lib/e/ui/app.e`×1†, `lib/e/ui/window.e`×1
+- `e.gpu`: `src/check.e`×6‡, `src/lower.e`×5‡, `lib/e/gfx/scene.e`×2‡, `lib/e/gpu.e`×2†, `scripts/algos/batch45.json`×2, `scripts/algos/decisions-pending.md`×2†, `src/resolve.e`×2†, `lib/e/gpu/tensor.e`×1
+- `Device`: `lib/e/gpu.e`×38†, `lib/e/gfx/scene.e`×2‡, `lib/e/os.windows.e`×2‡, `lib/e/ui/input.e`×2, `lib/e/os/shell.windows.e`×1‡, `lib/e/ui/app.e`×1†, `lib/e/ui/window.e`×1
 - `Queue`: `lib/e/gpu.e`×38†, `lib/e/concurrent/queue.e`×13, `lib/e/data/cache.e`×12, `lib/e/data/queue.e`×11, `lib/e/ui/input.e`×9, `lib/e/data/window.e`×7, `lib/e/db/pool.e`×5, `lib/e/gpu/tensor.e`×5
-- `upload`: `lib/e/ui/asset.e`×8, `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2†, `lib/e/fmt/brotli.e`×1‡, `lib/e/gfx/image.e`×1, `lib/e/gfx/scene.e`×1†
-- `download`: `lib/e/gpu.e`×4†, `lib/e/gpu/tensor.e`×3, `lib/e/fmt/brotli.e`×1‡
+- `upload`: `lib/e/ui/asset.e`×8, `lib/e/gpu/tensor.e`×7, `lib/e/gpu.e`×2†, `lib/e/fmt/brotli.e`×1‡, `lib/e/gfx/image.e`×1, `lib/e/gfx/scene.e`×1‡
+- `download`: `lib/e/gpu.e`×5†, `lib/e/gpu/tensor.e`×3, `lib/e/fmt/brotli.e`×1‡
 - `gpu.barrier`: `src/check.e`×5‡, `lib/e/gpu.e`×1†, `src/lower.e`×1‡
 - `module-apis.md`: `scripts/check_module_surfaces.py`×5, `scripts/algos/add_batch.py`×3, `scripts/render_module_apis.py`×3, `scripts/render_progress.py`×2, `scripts/algos/reapply.sh`×1, `scripts/audit_repo_coverage.py`×1, `scripts/build-docs-pdf.py`×1, `scripts/check_gpu_contracts.py`×1
 - nearest existing implementation: `src/nir.e`†, `src/lower.e`‡, `src/codegen_x64.e`‡, `lib/e/simd.e`, `lib/e/thread.e`, `docs/m25-gpu-contracts.md`, `scripts/check_gpu_contracts.py` († over 40 KB, ‡ over 120 KB — read by region)

@@ -58,14 +58,14 @@ type BuilderState = struct { commands: []Command, count: usize, finished: bool }
 
 // A texture is premultiplied RGBA, four floats per pixel.
 type Texture = struct { live: bool, generation: u32, width: u32, height: u32, pixels: []f32 }
-type Scene = struct { live: bool, generation: u32, storage: []u8, has_storage: bool, arena: mem.Arena, commands: []Command, count: usize }
+type Scene = struct { live: bool, released: bool, generation: u32, storage: []u8, has_storage: bool, arena: mem.Arena, commands: []Command, count: usize }
 type FontEntry = struct { id: shape.FontId, data: []const u8, upem: f32, loca: usize, glyf: usize, glyf_len: usize, long_loca: bool, glyph_count: usize }
 type Edge = struct { x0: f32, y0: f32, x1: f32, y1: f32 }
 type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
-type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32 }
-type RendererState = struct { arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, closed: bool }
+type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
+type RendererState = struct { arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, closed: bool }
 type TargetState = struct { target: *gpu.Target }
 
 // ------------------------------------------------------------------ the builder
@@ -393,7 +393,7 @@ fn release_image(r: *Renderer, texture: TextureId) -> err {
 fn scene_slot(s: *RendererState, id: SceneId) -> (usize, err) {
     if usize(id.slot) >= s.scenes.len { ret (0usize, Invalid) }
     let scene = &s.scenes[usize(id.slot)]
-    if !scene.live || scene.generation != id.generation { ret (0usize, Invalid) }
+    if !scene.live || scene.released || scene.generation != id.generation { ret (0usize, Invalid) }
     ret (usize(id.slot), ok)
 }
 
@@ -549,6 +549,7 @@ fn compile(r: *Renderer, list: DisplayList) -> (SceneId, err) {
     }
     if depth != 0usize { ret (zero, Invalid) }
     scene.live = true
+    scene.released = false
     scene.generation += 1u32
     scene.commands = commands
     scene.count = list.commands.len
@@ -560,6 +561,13 @@ fn release_scene(r: *Renderer, scene: SceneId) -> err {
     if state_error != ok { ret state_error }
     let (slot, slot_error) = scene_slot(s, scene)
     if slot_error != ok { ret slot_error }
+    // The last rendered scene's storage stays until the next render has compared
+    // against it (D914); to its caller it is released, and its slot is freed then.
+    if s.has_last && slot == s.last_scene {
+        s.retiring = true
+        s.scenes[slot].released = true
+        ret ok
+    }
     s.scenes[slot].live = false
     ret ok
 }
@@ -631,6 +639,11 @@ fn ensure_mask(s: *RendererState, index: usize) -> err {
 
 fn clear_floats(data: []f32, count: usize) {
     var i = 0usize
+    while i + 2usize <= count {
+        let pair = mem.cast[*u64](&data[i])
+        *pair = 0u64
+        i += 2usize
+    }
     while i < count {
         data[i] = 0.0
         i += 1usize
@@ -1027,6 +1040,13 @@ fn edge_box(s: *RendererState) {
     if y1 < f32(s.height) { s.box_y1 = usize(math.ceil[f32](y1)) }
     if s.box_x0 > s.width { s.box_x0 = s.width }
     if s.box_y0 > s.height { s.box_y0 = s.height }
+    // Nothing outside the frame's damage is painted, so nothing there is resolved.
+    if s.box_x0 < s.dx0 { s.box_x0 = s.dx0 }
+    if s.box_y0 < s.dy0 { s.box_y0 = s.dy0 }
+    if s.box_x1 > s.dx1 { s.box_x1 = s.dx1 }
+    if s.box_y1 > s.dy1 { s.box_y1 = s.dy1 }
+    if s.box_x1 < s.box_x0 { s.box_x1 = s.box_x0 }
+    if s.box_y1 < s.box_y0 { s.box_y1 = s.box_y0 }
 }
 
 fn rasterize_edges(s: *RendererState, coverage: []f32) {
@@ -1106,18 +1126,41 @@ fn paint_coverage(s: *RendererState, state: DrawState, coverage: []f32, brush: *
     if s.box_y0 > y0 { y0 = s.box_y0 }
     if s.box_x1 < x1 { x1 = s.box_x1 }
     if s.box_y1 < y1 { y1 = s.box_y1 }
+    // A solid brush is one colour: premultiplied once, stored where it covers a
+    // pixel whole and opaque, blended elsewhere (D914).
+    var solid: paint.Color = zero
+    var is_solid = false
+    switch *brush {
+    case .Solid as color:
+        solid = paint.premultiply(color)
+        is_solid = true
+    default:
+        is_solid = false
+    }
+    let opaque = is_solid && solid.alpha >= 1.0
     var y = y0
     while y < y1 {
         var x = x0
+        var index = y * s.width + x0
         while x < x1 {
-            let index = y * s.width + x
             var c = coverage[index]
             if state.has_mask { c = c * s.masks[state.mask].data[index] }
             if c > 0.0 {
-                let color = brush_at(brush, inverse, f32(x) + 0.5, f32(y) + 0.5)
-                blend_pixel(canvas, index * 4usize, color, c)
+                if opaque && c >= 1.0 {
+                    let at = index * 4usize
+                    canvas[at] = solid.red
+                    canvas[at + 1usize] = solid.green
+                    canvas[at + 2usize] = solid.blue
+                    canvas[at + 3usize] = 1.0
+                } else if is_solid {
+                    blend_pixel(canvas, index * 4usize, solid, c)
+                } else {
+                    let color = brush_at(brush, inverse, f32(x) + 0.5, f32(y) + 0.5)
+                    blend_pixel(canvas, index * 4usize, color, c)
+                }
             }
             x += 1usize
+            index += 1usize
         }
         y += 1usize
     }
@@ -1526,21 +1569,523 @@ fn sample_texture(t: *const Texture, sx: f32, sy: f32) -> paint.Color {
 }
 
 // A layer composited onto the one below it at its opacity.
-fn merge_layer(s: *RendererState, from: usize, into: usize, opacity: f32) {
+fn merge_layer(s: *RendererState, from: usize, into: usize, opacity: f32, x0: usize, y0: usize, x1: usize, y1: usize) {
     let src = s.canvases[from].data
     let dst = s.canvases[into].data
-    let count = s.width * s.height
+    if x1 <= x0 { ret }
+    var y = y0
+    while y < y1 {
+        var i = y * s.width + x0
+        let end = y * s.width + x1
+        while i < end {
+            let at = i * 4usize
+            let a = src[at + 3usize] * opacity
+            let keep = 1.0 - a
+            dst[at] = src[at] * opacity + dst[at] * keep
+            dst[at + 1usize] = src[at + 1usize] * opacity + dst[at + 1usize] * keep
+            dst[at + 2usize] = src[at + 2usize] * opacity + dst[at + 2usize] * keep
+            dst[at + 3usize] = a + dst[at + 3usize] * keep
+            i += 1usize
+        }
+        y += 1usize
+    }
+}
+
+// ------------------------------------------------------------ damage (D914)
+//
+// What a frame changes is found by comparing its commands with the last rendered
+// scene's: with the same structure (every Save, Restore, Transform, Clip and layer
+// alike), the damage is the union of the device bounds of the drawing commands that
+// differ, old and new; a structural difference, a first frame or a resize damages
+// the frame. A command clear of the damage is skipped, the canvas and the pixels are
+// touched inside it alone, and the rows written to the frame are the damage's plus
+// the previous frame's (the back image missed that one).
+
+fn color_eq(a: paint.Color, b: paint.Color) -> bool {
+    ret a.red == b.red && a.green == b.green && a.blue == b.blue && a.alpha == b.alpha
+}
+
+fn stops_eq(a: []const paint.Stop, b: []const paint.Stop) -> bool {
+    if a.len != b.len { ret false }
     var i = 0usize
-    while i < count {
-        let at = i * 4usize
-        let a = src[at + 3usize] * opacity
-        let keep = 1.0 - a
-        dst[at] = src[at] * opacity + dst[at] * keep
-        dst[at + 1usize] = src[at + 1usize] * opacity + dst[at + 1usize] * keep
-        dst[at + 2usize] = src[at + 2usize] * opacity + dst[at + 2usize] * keep
-        dst[at + 3usize] = a + dst[at + 3usize] * keep
+    while i < a.len {
+        if a[i].offset != b[i].offset || !color_eq(a[i].color, b[i].color) { ret false }
         i += 1usize
     }
+    ret true
+}
+
+fn point_eq(a: geometry.Point, b: geometry.Point) -> bool {
+    ret a.x == b.x && a.y == b.y
+}
+
+fn rect_eq(a: geometry.Rect, b: geometry.Rect) -> bool {
+    ret a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height
+}
+
+fn brush_eq(a: *const paint.Brush, b: *const paint.Brush) -> bool {
+    if a.tag != b.tag { ret false }
+    switch *a {
+    case .Solid as ca:
+        switch *b {
+        case .Solid as cb:
+            ret color_eq(ca, cb)
+        default:
+            ret false
+        }
+    case .Linear as la:
+        switch *b {
+        case .Linear as lb:
+            ret point_eq(la.start, lb.start) && point_eq(la.end, lb.end) && stops_eq(la.stops, lb.stops)
+        default:
+            ret false
+        }
+    case .Radial as ra:
+        switch *b {
+        case .Radial as rb:
+            ret point_eq(ra.center, rb.center) && ra.radius == rb.radius && stops_eq(ra.stops, rb.stops)
+        default:
+            ret false
+        }
+    }
+    ret false
+}
+
+fn path_eq(a: geometry.Path, b: geometry.Path) -> bool {
+    if a.verbs.len != b.verbs.len || a.points.len != b.points.len { ret false }
+    var i = 0usize
+    while i < a.verbs.len {
+        if a.verbs[i] != b.verbs[i] { ret false }
+        i += 1usize
+    }
+    i = 0usize
+    while i < a.points.len {
+        if !point_eq(a.points[i], b.points[i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn rrect_eq(a: geometry.RRect, b: geometry.RRect) -> bool {
+    ret rect_eq(a.rect, b.rect) && a.top_left.x == b.top_left.x && a.top_left.y == b.top_left.y && a.top_right.x == b.top_right.x && a.top_right.y == b.top_right.y && a.bottom_right.x == b.bottom_right.x && a.bottom_right.y == b.bottom_right.y && a.bottom_left.x == b.bottom_left.x && a.bottom_left.y == b.bottom_left.y
+}
+
+fn transform_eq(a: geometry.Transform, b: geometry.Transform) -> bool {
+    ret a.m00 == b.m00 && a.m01 == b.m01 && a.m02 == b.m02 && a.m10 == b.m10 && a.m11 == b.m11 && a.m12 == b.m12
+}
+
+fn layout_eq(a: *const layout.Layout, b: *const layout.Layout) -> bool {
+    if !rect_eq(a.bounds, b.bounds) || a.lines.len != b.lines.len { ret false }
+    var l = 0usize
+    while l < a.lines.len {
+        let la = &a.lines[l]
+        let lb = &b.lines[l]
+        if la.runs.len != lb.runs.len || la.baseline != lb.baseline || !rect_eq(la.bounds, lb.bounds) { ret false }
+        var r = 0usize
+        while r < la.runs.len {
+            let ra = &la.runs[r]
+            let rb = &lb.runs[r]
+            if ra.size != rb.size || !point_eq(ra.origin, rb.origin) || ra.run.font != rb.run.font || ra.run.glyphs.len != rb.run.glyphs.len { ret false }
+            var g = 0usize
+            while g < ra.run.glyphs.len {
+                let ga = ra.run.glyphs[g]
+                let gb = rb.run.glyphs[g]
+                if ga.id != gb.id || ga.advance_x != gb.advance_x || ga.advance_y != gb.advance_y || ga.offset_x != gb.offset_x || ga.offset_y != gb.offset_y { ret false }
+                g += 1usize
+            }
+            r += 1usize
+        }
+        l += 1usize
+    }
+    ret true
+}
+
+fn command_eq(a: *const Command, b: *const Command) -> bool {
+    if a.tag != b.tag { ret false }
+    switch *a {
+    case .Save:
+        ret true
+    case .Restore:
+        ret true
+    case .Transform as ta:
+        switch *b {
+        case .Transform as tb:
+            ret transform_eq(ta, tb)
+        default:
+            ret false
+        }
+    case .Clip as ca:
+        switch *b {
+        case .Clip as cb:
+            if ca.tag != cb.tag { ret false }
+            switch ca {
+            case .Rect as ra:
+                switch cb {
+                case .Rect as rb:
+                    ret rect_eq(ra, rb)
+                default:
+                    ret false
+                }
+            case .Rounded as ra:
+                switch cb {
+                case .Rounded as rb:
+                    ret rrect_eq(ra, rb)
+                default:
+                    ret false
+                }
+            case .Path as pa:
+                switch cb {
+                case .Path as pb:
+                    ret path_eq(pa, pb)
+                default:
+                    ret false
+                }
+            }
+            ret false
+        default:
+            ret false
+        }
+    case .FillRect as fa:
+        switch *b {
+        case .FillRect as fb:
+            ret rect_eq(fa.rect, fb.rect) && brush_eq(&fa.brush, &fb.brush)
+        default:
+            ret false
+        }
+    case .FillPath as fa:
+        switch *b {
+        case .FillPath as fb:
+            ret path_eq(fa.path, fb.path) && brush_eq(&fa.brush, &fb.brush)
+        default:
+            ret false
+        }
+    case .StrokePath as sa:
+        switch *b {
+        case .StrokePath as sb:
+            ret path_eq(sa.path, sb.path) && brush_eq(&sa.brush, &sb.brush) && sa.stroke.width == sb.stroke.width && sa.stroke.cap == sb.stroke.cap && sa.stroke.join == sb.stroke.join && sa.stroke.miter_limit == sb.stroke.miter_limit
+        default:
+            ret false
+        }
+    case .Image as ia:
+        switch *b {
+        case .Image as ib:
+            ret ia.texture.slot == ib.texture.slot && ia.texture.generation == ib.texture.generation && rect_eq(ia.source, ib.source) && rect_eq(ia.destination, ib.destination) && ia.opacity == ib.opacity
+        default:
+            ret false
+        }
+    case .Text as ta:
+        switch *b {
+        case .Text as tb:
+            ret point_eq(ta.origin, tb.origin) && brush_eq(&ta.brush, &tb.brush) && layout_eq(ta.layout, tb.layout)
+        default:
+            ret false
+        }
+    case .OpacityLayer as la:
+        switch *b {
+        case .OpacityLayer as lb:
+            ret rect_eq(la.bounds, lb.bounds) && la.opacity == lb.opacity
+        default:
+            ret false
+        }
+    }
+    ret false
+}
+
+// The device-space box of a rect under a transform.
+fn transform_rect(t: geometry.Transform, r: geometry.Rect) -> geometry.Rect {
+    let p0 = geometry.transform_point(t, geometry.Point { x: r.x, y: r.y })
+    let p1 = geometry.transform_point(t, geometry.Point { x: r.x + r.width, y: r.y })
+    let p2 = geometry.transform_point(t, geometry.Point { x: r.x, y: r.y + r.height })
+    let p3 = geometry.transform_point(t, geometry.Point { x: r.x + r.width, y: r.y + r.height })
+    var x0 = p0.x
+    var x1 = p0.x
+    var y0 = p0.y
+    var y1 = p0.y
+    if p1.x < x0 { x0 = p1.x }
+    if p2.x < x0 { x0 = p2.x }
+    if p3.x < x0 { x0 = p3.x }
+    if p1.x > x1 { x1 = p1.x }
+    if p2.x > x1 { x1 = p2.x }
+    if p3.x > x1 { x1 = p3.x }
+    if p1.y < y0 { y0 = p1.y }
+    if p2.y < y0 { y0 = p2.y }
+    if p3.y < y0 { y0 = p3.y }
+    if p1.y > y1 { y1 = p1.y }
+    if p2.y > y1 { y1 = p2.y }
+    if p3.y > y1 { y1 = p3.y }
+    ret geometry.Rect { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+}
+
+fn path_bounds(p: geometry.Path) -> geometry.Rect {
+    if p.points.len == 0usize { ret geometry.Rect { x: 0.0, y: 0.0, width: 0.0, height: 0.0 } }
+    var x0 = p.points[0usize].x
+    var x1 = x0
+    var y0 = p.points[0usize].y
+    var y1 = y0
+    var i = 1usize
+    while i < p.points.len {
+        let q = p.points[i]
+        if q.x < x0 { x0 = q.x }
+        if q.x > x1 { x1 = q.x }
+        if q.y < y0 { y0 = q.y }
+        if q.y > y1 { y1 = q.y }
+        i += 1usize
+    }
+    ret geometry.Rect { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+}
+
+// A drawing command's device box, padded for anti-aliasing and glyphs past their
+// line box; a structural command has none.
+fn command_bounds(t: geometry.Transform, c: *const Command) -> (geometry.Rect, bool) {
+    var user: geometry.Rect = zero
+    var pad: f32 = 2.0
+    switch *c {
+    case .FillRect as fill:
+        user = fill.rect
+    case .FillPath as fill:
+        user = path_bounds(fill.path)
+    case .StrokePath as stroke:
+        user = path_bounds(stroke.path)
+        pad = pad + stroke.stroke.width * 2.0
+    case .Image as draw:
+        user = draw.destination
+    case .Text as text:
+        let b = text.layout.bounds
+        user = geometry.Rect { x: text.origin.x + b.x, y: text.origin.y + b.y, width: b.width, height: b.height }
+        pad = pad + 12.0
+    default:
+        ret (zero, false)
+    }
+    let device = transform_rect(t, user)
+    ret (geometry.Rect { x: device.x - pad, y: device.y - pad, width: device.width + 2.0 * pad, height: device.height + 2.0 * pad }, true)
+}
+
+// The damage of `scene` against the last rendered one, as a pixel box; `full`
+// when the frame is damaged whole. `s.skip` is set for the drawing commands the
+// damage misses.
+// One list's walk from a prefix's end: the bounds of every drawing command in
+// `commands[from..to)` joined into `damage`, the transform stack kept from `t`
+// at `base` depth. Answers false when the stretch is not self-contained -- it
+// ends at another depth, restores past its start, or moves the transform or the
+// clip at its own depth, which the commands after it would feel.
+fn damage_stretch(commands: []const Command, from: usize, to: usize, t: geometry.Transform, damage: *geometry.Rect) -> bool {
+    var stack: [32]geometry.Transform = zero
+    var depth = 0usize
+    var current = t
+    var i = from
+    while i < to {
+        let c = &commands[i]
+        let (bounds, drawing) = command_bounds(current, c)
+        if drawing {
+            *damage = geometry.union_rect(*damage, bounds)
+        } else {
+            switch *c {
+            case .Save:
+                if depth >= 32usize { ret false }
+                stack[depth] = current
+                depth += 1usize
+            case .OpacityLayer as layer:
+                if depth >= 32usize { ret false }
+                stack[depth] = current
+                depth += 1usize
+                *damage = geometry.union_rect(*damage, transform_rect(current, layer.bounds))
+            case .Restore:
+                if depth == 0usize { ret false }
+                depth = depth - 1usize
+                current = stack[depth]
+            case .Transform as change:
+                if depth == 0usize { ret false }
+                current = transform_compose(current, change)
+            case .Clip as clip:
+                if depth == 0usize { ret false }
+            default:
+                current = current
+            }
+        }
+        i += 1usize
+    }
+    ret depth == 0usize
+}
+
+// The damage of `scene` against the last rendered one, as a pixel box; `full`
+// when the frame is damaged whole. The lists are aligned by their longest equal
+// prefix and suffix; what lies between in either list is the damage, when that
+// middle is self-contained (`damage_stretch`), so a tooltip appearing, a menu
+// opening or a row added repaint their own box. `s.skip` is set for the drawing
+// commands the damage misses.
+fn damage_of(s: *RendererState, scene: *const Scene) -> bool {
+    var full = !s.has_last || s.last_width != s.width || s.last_height != s.height || s.last_scale != s.scale
+    var old: *const Scene = scene
+    if !full { old = &s.scenes[s.last_scene] }
+    var damage: geometry.Rect = zero
+    var stack: [32]geometry.Transform = zero
+    var depth = 0usize
+    var t = geometry.transform_scale(s.scale, s.scale)
+    // The prefix: equal commands, the transform followed.
+    var i = 0usize
+    while !full && i < scene.count && i < old.count {
+        let c = &scene.commands[i]
+        if !command_eq(c, &old.commands[i]) { break }
+        switch *c {
+        case .Save:
+            if depth >= 32usize {
+                full = true
+                break
+            }
+            stack[depth] = t
+            depth += 1usize
+        case .OpacityLayer as layer:
+            if depth >= 32usize {
+                full = true
+                break
+            }
+            stack[depth] = t
+            depth += 1usize
+        case .Restore:
+            if depth == 0usize {
+                full = true
+                break
+            }
+            depth = depth - 1usize
+            t = stack[depth]
+        case .Transform as change:
+            t = transform_compose(t, change)
+        default:
+            t = t
+        }
+        i += 1usize
+    }
+    if !full && (i < scene.count || i < old.count) {
+        // The suffix: equal commands from the ends, never past the prefix.
+        var tail = 0usize
+        while i + tail < scene.count && i + tail < old.count {
+            if !command_eq(&scene.commands[scene.count - 1usize - tail], &old.commands[old.count - 1usize - tail]) { break }
+            tail += 1usize
+        }
+        if !damage_stretch(scene.commands, i, scene.count - tail, t, &damage) { full = true }
+        if !full && !damage_stretch(old.commands, i, old.count - tail, t, &damage) { full = true }
+    }
+    if full {
+        s.dx0 = 0usize
+        s.dy0 = 0usize
+        s.dx1 = s.width
+        s.dy1 = s.height
+    } else {
+        let (x0, y0, x1, y1) = scissor_bounds(s, damage)
+        s.dx0 = x0
+        s.dy0 = y0
+        s.dx1 = x1
+        s.dy1 = y1
+    }
+    // Skips: only inside a partial frame; recomputed against the final damage.
+    if s.skip.len < scene.count {
+        let (grown, grown_error) = mem.alloc[bool](s.arena, scene.count + 256usize)
+        if grown_error == ok { s.skip = grown }
+    }
+    let box = geometry.Rect { x: f32(s.dx0), y: f32(s.dy0), width: f32(s.dx1 - s.dx0), height: f32(s.dy1 - s.dy0) }
+    depth = 0usize
+    t = geometry.transform_scale(s.scale, s.scale)
+    i = 0usize
+    while i < scene.count && i < s.skip.len {
+        let c = &scene.commands[i]
+        s.skip[i] = false
+        let (bounds, drawing) = command_bounds(t, c)
+        if drawing {
+            if !full {
+                let hit = geometry.intersect(bounds, box)
+                if hit.width <= 0.0 || hit.height <= 0.0 { s.skip[i] = true }
+            }
+        } else {
+            switch *c {
+            case .Save:
+                if depth < 32usize {
+                    stack[depth] = t
+                    depth += 1usize
+                }
+            case .OpacityLayer as layer:
+                if depth < 32usize {
+                    stack[depth] = t
+                    depth += 1usize
+                }
+            case .Restore:
+                if depth > 0usize {
+                    depth = depth - 1usize
+                    t = stack[depth]
+                }
+            case .Transform as change:
+                t = transform_compose(t, change)
+            default:
+                t = t
+            }
+        }
+        i += 1usize
+    }
+    ret full
+}
+
+// Clears a canvas inside a pixel box.
+fn clear_box(s: *RendererState, data: []f32, x0: usize, y0: usize, x1: usize, y1: usize) {
+    if x1 <= x0 { ret }
+    var y = y0
+    while y < y1 {
+        let from = (y * s.width + x0) * 4usize
+        clear_floats(data[from..from + (x1 - x0) * 4usize], (x1 - x0) * 4usize)
+        y += 1usize
+    }
+}
+
+// An axis-aligned rect with one colour and no mask, painted without the
+// rasteriser (D914): the pixels it covers whole take the colour by two eight-byte
+// stores each, the rim blends its fractional overlap. Answers false when the
+// general path is needed.
+fn fill_rect_fast(s: *RendererState, state: DrawState, fill: FillRect) -> bool {
+    if state.has_mask || state.transform.m01 != 0.0 || state.transform.m10 != 0.0 { ret false }
+    var color: paint.Color = zero
+    switch fill.brush {
+    case .Solid as c:
+        color = paint.premultiply(c)
+    default:
+        ret false
+    }
+    let device = geometry.intersect(transform_rect(state.transform, fill.rect), state.scissor)
+    if !(device.width > 0.0) || !(device.height > 0.0) { ret true }
+    let (px0, py0, px1, py1) = scissor_bounds(s, device)
+    if px1 <= px0 || py1 <= py0 { ret true }
+    let right = device.x + device.width
+    let bottom = device.y + device.height
+    let opaque = color.alpha >= 1.0
+    let rg = u64(mem.bitcast[u32](color.red)) | (u64(mem.bitcast[u32](color.green)) << 32u64)
+    let ba = u64(mem.bitcast[u32](color.blue)) | (u64(mem.bitcast[u32](color.alpha)) << 32u64)
+    let canvas = s.canvases[state.layer].data
+    var y = py0
+    while y < py1 {
+        var row_cover: f32 = 1.0
+        let top = f32(y)
+        if device.y > top { row_cover = row_cover - (device.y - top) }
+        if bottom < top + 1.0 { row_cover = row_cover - (top + 1.0 - bottom) }
+        if row_cover > 0.0 {
+            var x = px0
+            var index = y * s.width + px0
+            while x < px1 {
+                var cover = row_cover
+                let left = f32(x)
+                if device.x > left { cover = cover - (device.x - left) }
+                if right < left + 1.0 { cover = cover - (left + 1.0 - right) }
+                if cover >= 1.0 && opaque {
+                    let first = mem.cast[*u64](&canvas[index * 4usize])
+                    *first = rg
+                    let second = mem.cast[*u64](&canvas[index * 4usize + 2usize])
+                    *second = ba
+                } else if cover > 0.0 {
+                    blend_pixel(canvas, index * 4usize, color, cover)
+                }
+                x += 1usize
+                index += 1usize
+            }
+        }
+        y += 1usize
+    }
+    ret true
 }
 
 fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err {
@@ -1548,13 +2093,17 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
     var depth = 0usize
     var current: DrawState = zero
     current.transform = geometry.transform_scale(s.scale, s.scale)
-    current.scissor = geometry.Rect { x: 0.0, y: 0.0, width: f32(s.width), height: f32(s.height) }
+    current.scissor = geometry.Rect { x: f32(s.dx0), y: f32(s.dy0), width: f32(s.dx1 - s.dx0), height: f32(s.dy1 - s.dy0) }
     current.opacity = 1.0
     var mask_count = 0usize
     var layer_count = 1usize
     var i = 0usize
     while i < scene.count {
         let command = scene.commands[i]
+        if i < s.skip.len && s.skip[i] {
+            i += 1usize
+            continue
+        }
         switch command {
         case .Save:
             if depth >= MAX_STATES { ret TooLarge }
@@ -1565,7 +2114,7 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
             if depth == 0usize { ret Invalid }
             depth = depth - 1usize
             if current.opens_layer {
-                merge_layer(s, current.layer, states[depth].layer, current.opacity)
+                merge_layer(s, current.layer, states[depth].layer, current.opacity, current.layer_x0, current.layer_y0, current.layer_x1, current.layer_y1)
                 layer_count = layer_count - 1usize
             }
             if current.has_mask && !states[depth].has_mask { mask_count = 0usize }
@@ -1608,11 +2157,13 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
                 try push_mask(s, &current, &mask_count, coverage)
             }
         case .FillRect as fill:
-            let (verbs, points) = rect_path(fill.rect)
-            var f = fill_flattener(s, current.transform)
-            try flatten(&f, geometry.Path { verbs: verbs[0..], points: points[0..] })
-            rasterize_edges(s, coverage)
-            paint_coverage(s, current, coverage, &fill.brush)
+            if !fill_rect_fast(s, current, fill) {
+                let (verbs, points) = rect_path(fill.rect)
+                var f = fill_flattener(s, current.transform)
+                try flatten(&f, geometry.Path { verbs: verbs[0..], points: points[0..] })
+                rasterize_edges(s, coverage)
+                paint_coverage(s, current, coverage, &fill.brush)
+            }
         case .FillPath as fill:
             var f = fill_flattener(s, current.transform)
             try flatten(&f, fill.path)
@@ -1636,7 +2187,16 @@ fn run_commands(s: *RendererState, scene: *const Scene, coverage: []f32) -> err 
             states[depth] = current
             depth += 1usize
             try ensure_canvas(s, layer_count)
-            clear_floats(s.canvases[layer_count].data, s.width * s.height * 4usize)
+            // The layer lives inside its bounds (under the transform and the
+            // scissor): cleared and merged there and nowhere else.
+            let device = transform_rect(current.transform, layer.bounds)
+            let (lx0, ly0, lx1, ly1) = scissor_bounds(s, geometry.intersect(current.scissor, geometry.Rect { x: device.x - 1.0, y: device.y - 1.0, width: device.width + 2.0, height: device.height + 2.0 }))
+            current.layer_x0 = lx0
+            current.layer_y0 = ly0
+            current.layer_x1 = lx1
+            current.layer_y1 = ly1
+            current.scissor = geometry.Rect { x: f32(lx0), y: f32(ly0), width: f32(lx1 - lx0), height: f32(ly1 - ly0) }
+            clear_box(s, s.canvases[layer_count].data, lx0, ly0, lx1, ly1)
             current.layer = layer_count
             current.opens_layer = true
             current.opacity = layer.opacity
@@ -1653,16 +2213,18 @@ fn push_mask(s: *RendererState, current: *DrawState, mask_count: *usize, coverag
     rasterize_edges(s, coverage)
     try ensure_mask(s, *mask_count)
     let mask = s.masks[*mask_count].data
-    let count = s.width * s.height
-    var i = 0usize
-    while i < count {
-        var c: f32 = 0.0
-        let x = i % s.width
-        let y = i / s.width
-        if x >= s.box_x0 && x < s.box_x1 && y >= s.box_y0 && y < s.box_y1 { c = coverage[i] }
-        if current.has_mask { c = c * s.masks[current.mask].data[i] }
-        mask[i] = c
-        i += 1usize
+    var y = s.dy0
+    while y < s.dy1 {
+        var x = s.dx0
+        while x < s.dx1 {
+            let i = y * s.width + x
+            var c: f32 = 0.0
+            if x >= s.box_x0 && x < s.box_x1 && y >= s.box_y0 && y < s.box_y1 { c = coverage[i] }
+            if current.has_mask { c = c * s.masks[current.mask].data[i] }
+            mask[i] = c
+            x += 1usize
+        }
+        y += 1usize
     }
     current.mask = *mask_count
     current.has_mask = true
@@ -1692,13 +2254,12 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     if mem.address_of(target_state) == 0usize { ret Invalid }
     if !(size.width >= 1.0) || !(size.height >= 1.0) || !finite(size.width) || !finite(size.height) { ret Invalid }
     if !(scale > 0.0) || !finite(scale) { ret Invalid }
-    let (frame, acquire_error) = gpu.acquire(target_state.target)
-    if acquire_error != ok { ret from_gpu(acquire_error) }
-    s.scale = scale
+    let (extent_width, extent_height) = gpu.extent(target_state.target)
     var width = usize(math.ceil[f32](size.width * scale))
     var height = usize(math.ceil[f32](size.height * scale))
-    if width > usize(frame.image.width) { width = usize(frame.image.width) }
-    if height > usize(frame.image.height) { height = usize(frame.image.height) }
+    if width > usize(extent_width) { width = usize(extent_width) }
+    if height > usize(extent_height) { height = usize(extent_height) }
+    s.scale = scale
     // The buffers, each remade when a frame outgrows it.
     s.width = width
     s.height = height
@@ -1719,38 +2280,74 @@ fn render_scaled(r: *Renderer, scene: SceneId, render_target: Target, size: geom
     }
     try ensure_canvas(s, 0usize)
     let coverage = s.coverage
-    clear_floats(s.canvases[0usize].data, width * height * 4usize)
-    s.edge_count = 0usize
-    let run_error = run_commands(s, &s.scenes[slot], coverage)
-    if run_error != ok { ret run_error }
-    // The canvas as packed pixels in the frame's channel order.
-    let canvas = s.canvases[0usize].data
-    var i = 0usize
-    while i < width * height {
-        let at = i * 4usize
-        let r8 = channel_byte(canvas[at])
-        let g8 = channel_byte(canvas[at + 1usize])
-        let b8 = channel_byte(canvas[at + 2usize])
-        let a8 = channel_byte(canvas[at + 3usize])
-        if frame.image.format == .Bgra8 {
-            s.pixels[i] = b8 | (g8 << 8u32) | (r8 << 16u32) | (a8 << 24u32)
-        } else {
-            s.pixels[i] = r8 | (g8 << 8u32) | (b8 << 16u32) | (a8 << 24u32)
-        }
-        i += 1usize
+    let full = damage_of(s, &s.scenes[slot])
+    let changed = s.dx1 > s.dx0 && s.dy1 > s.dy0
+    if changed {
+        clear_box(s, s.canvases[0usize].data, s.dx0, s.dy0, s.dx1, s.dy1)
+        s.edge_count = 0usize
+        let run_error = run_commands(s, &s.scenes[slot], coverage)
+        if run_error != ok { ret run_error }
     }
-    let write_error = gpu.write_image(s.queue, frame.image, 0u32, 0u32, u32(width), u32(height), s.pixels[0usize..width * height])
+    // The last rendered scene has been compared against; this one takes its place.
+    if s.has_last && s.retiring && s.last_scene != slot { s.scenes[s.last_scene].live = false }
+    s.retiring = false
+    s.has_last = true
+    s.last_scene = slot
+    s.last_width = width
+    s.last_height = height
+    s.last_scale = scale
+    if !changed { ret ok }
+    let (frame, acquire_error) = gpu.acquire(target_state.target)
+    if acquire_error != ok { ret from_gpu(acquire_error) }
+    // The damaged canvas as packed pixels in the frame's channel order.
+    let canvas = s.canvases[0usize].data
+    let bgra = frame.image.format == .Bgra8
+    var y = s.dy0
+    while y < s.dy1 {
+        var i = y * s.width + s.dx0
+        let end = y * s.width + s.dx1
+        while i < end {
+            let at = i * 4usize
+            let r8 = channel_byte(canvas[at])
+            let g8 = channel_byte(canvas[at + 1usize])
+            let b8 = channel_byte(canvas[at + 2usize])
+            let a8 = channel_byte(canvas[at + 3usize])
+            if bgra {
+                s.pixels[i] = b8 | (g8 << 8u32) | (r8 << 16u32) | (a8 << 24u32)
+            } else {
+                s.pixels[i] = r8 | (g8 << 8u32) | (b8 << 16u32) | (a8 << 24u32)
+            }
+            i += 1usize
+        }
+        y += 1usize
+    }
+    // The rows written cover this damage and the last one: the back image is two
+    // frames old.
+    var wy0 = s.dy0
+    var wy1 = s.dy1
+    if full || s.wrote_y1 > s.wrote_y0 {
+        if s.wrote_y0 < wy0 { wy0 = s.wrote_y0 }
+        if s.wrote_y1 > wy1 { wy1 = s.wrote_y1 }
+    }
+    if full {
+        wy0 = 0usize
+        wy1 = height
+    }
+    if wy1 > height { wy1 = height }
+    let write_error = gpu.write_image(s.queue, frame.image, 0u32, u32(wy0), u32(width), u32(wy1 - wy0), s.pixels[wy0 * width..wy1 * width])
     if write_error != ok { ret from_gpu(write_error) }
+    s.wrote_y0 = s.dy0
+    s.wrote_y1 = s.dy1
     let (shown, present_error) = gpu.present(s.queue, target_state.target, frame)
     if present_error != ok { ret from_gpu(present_error) }
     ret ok
 }
 
 fn channel_byte(v: f32) -> u32 {
-    var c = v
-    if !(c >= 0.0) { c = 0.0 }
-    if c > 1.0 { c = 1.0 }
-    ret u32(math.floor[f32](c * 255.0 + 0.5))
+    // A positive float truncates to its floor; the clamps make it positive.
+    if !(v > 0.0) { ret 0u32 }
+    if v >= 1.0 { ret 255u32 }
+    ret u32(v * 255.0 + 0.5)
 }
 
 // ------------------------------------------------------------ 3-D techniques (algos.md)

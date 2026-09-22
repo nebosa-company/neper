@@ -17951,3 +17951,46 @@ the model, since a control's custom paint keeps `*mem.Arena` for its paint
 callback. And a frame arena of 8 MB is not enough for a page of text under
 Segoe UI -- shaping asks the arena per character -- so the gallery gives
 `e.ui.app` 64 MB, reserved not committed.
+
+## D914 — Frames that cost what changed: damage, one measure per node, fast rects, eight-byte copies
+
+The gallery ran at 9 frames a second: 87 ms to paint the window and 14 ms to
+lay it out, on every mouse move. Flutter reaches sixty by never paying for
+what did not change -- a retained render tree relaid only where it is dirty,
+repaint boundaries, layers composited on a GPU. The chain now does the first
+two of those on the CPU and the frame's cost follows the change, not the
+control count:
+
+1. **Damage.** `scene.render_scaled` compares the scene with the last rendered
+   one (kept, released-to-the-caller, until the comparison is made) by its
+   longest equal prefix and suffix; the middle of either list, when it is
+   self-contained (no restore past its start, no transform or clip at its own
+   depth, the depth back where it began), damages the union of its drawing
+   commands' device boxes, else the frame. Commands clear of the damage are
+   skipped, the canvas is cleared, painted and converted inside it alone, the
+   frame is written for its rows plus the previous frame's (the back image is
+   two frames old), and an unchanged scene does not acquire a frame. A hover,
+   a click, a tooltip, a menu opening: 1-6 ms.
+2. **One measure per node.** `place` measured its children and every ancestor
+   had measured them before, so a text was shaped once per level -- 335 layouts
+   a frame for 27 texts. The runtime remembers each node's measure for the
+   frame (by the node's address and constraints, stamped per reconcile), a
+   text's by its width alone, a one-line text's for any width that holds it,
+   and the paint reuses the measure's layout when it fits. 29 layouts, 14 ms
+   to 1.8 ms.
+3. **Rects without the rasteriser.** An axis-aligned rect with one colour and no
+   mask stores its whole pixels by two eight-byte writes each and blends its
+   rim by overlap; an opacity layer is cleared and merged inside its own
+   bounds, not the frame (one disabled checkbox's layer was 9 ms); a canvas
+   clears eight bytes at a time; the channel conversion no longer calls
+   `floor`.
+4. **`gpu` copies eight bytes at a time.** `mem.copy[u8]` moves a byte per
+   iteration; the frame's download through it was 4 ms of every present, now
+   0.6.
+
+A whole-window repaint (a tab switch, the theme) is ~22 ms on this machine at
+1000×700, down from 87; what remains there is the per-pixel float canvas and
+its conversion. Not done, in Flutter's order of worth: skipping reconcile for
+unchanged subtrees (the walk is ~6 µs an element, so thousands of *visible*
+elements would need it), a pixel shift for scrolling, a glyph cache, a u8
+canvas.

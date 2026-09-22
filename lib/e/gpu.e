@@ -322,7 +322,7 @@ fn write[T: type](q: *Queue, dst: Buf[T], off: usize, src: []const T) -> err {
     if off > buffer.count || src.len > buffer.count - off { ret TooLarge }
     if src.len == 0usize { ret ok }
     let elem = buffer.elem
-    mem.copy[u8](buffer.bytes[off * elem..(off + src.len) * elem], host_bytes[T](src))
+    copy_bytes(buffer.bytes[off * elem..(off + src.len) * elem], host_bytes[T](src))
     ret ok
 }
 
@@ -400,6 +400,24 @@ fn fault(kind: u32, site: u32) {
     state.fault = FaultRecord { kernel: u32(state.serial), kind: fault_kind, site: site, gid: gid }
 }
 
+// A byte copy eight at a time: `mem.copy[u8]` moves a byte per iteration, and a
+// frame's download through it was a quarter of the frame (D914).
+fn copy_bytes(dst: []u8, src: []const u8) {
+    var count = src.len
+    if dst.len < count { count = dst.len }
+    var at = 0usize
+    while at + 8usize <= count {
+        let to = mem.cast[*u64](&dst[at])
+        let from = mem.cast[*const u64](&src[at])
+        *to = *from
+        at += 8usize
+    }
+    while at < count {
+        dst[at] = src[at]
+        at += 1usize
+    }
+}
+
 fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err {
     let (state, state_error) = queue_state(q)
     if state_error != ok { ret state_error }
@@ -409,7 +427,7 @@ fn download[T: type](q: *Queue, src: Buf[T], dst: []T) -> err {
     let buffer = state.device.buffers[slot]
     if dst.len < buffer.count { ret TooLarge }
     if buffer.count == 0usize { ret ok }
-    mem.copy[u8](host_bytes[T](dst[..buffer.count]), buffer.bytes)
+    copy_bytes(host_bytes[T](dst[..buffer.count]), buffer.bytes)
     ret ok
 }
 
@@ -834,14 +852,14 @@ fn device_slice[T: type](state: *QueueState, buf: Buf[T]) -> ([]T, err) {
     let top = mem.mark(a)
     let (held, held_error) = mem.alloc[u8](a, buffer.bytes.len)
     if held_error != ok { ret (zero, held_error) }
-    mem.copy[u8](held, buffer.bytes)
+    copy_bytes(held, buffer.bytes)
     var over: mem.Arena = zero
     over.base = &buffer.bytes[0usize]
     over.cap = buffer.bytes.len
     over.off = 0usize
     let (elements, elements_error) = mem.alloc[T](&over, buffer.count)
     if elements_error != ok { ret (zero, elements_error) }
-    mem.copy[u8](buffer.bytes, held)
+    copy_bytes(buffer.bytes, held)
     mem.reset(a, top)
     ret (elements, ok)
 }

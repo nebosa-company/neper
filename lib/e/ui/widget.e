@@ -264,6 +264,12 @@ type Undo = struct { element: u32, at: usize, removed_off: usize, removed_len: u
 // The gesture arena: one pointer, the region it went down on, where, whether it has
 // become a drag, and the region hovered last.
 type Arena = struct { pressed: bool, candidate: u32, down: geometry.Point, last: geometry.Point, dragging: bool, hovered: u32, has_hovered: bool }
+// A measure remembered for the frame: the node (by its address in the frame's
+// tree), the constraints it was measured under and the answer (D914). A parent
+// measures its children to place them and every ancestor measured them before
+// it, so without this a text is shaped once per level of nesting.
+type Measured = struct { node: usize, limits: ui_layout.Constraints, size: geometry.Size, laid: layout.Layout, stamp: u32 }
+
 type State = struct {
     arena: *mem.Arena,
     renderer: *scene.Renderer,
@@ -271,6 +277,8 @@ type State = struct {
     elements: []Element,
     cells: []Cell,
     storage: []u8,
+    measured: []Measured,
+    measure_stamp: u32,
     storage_used: usize,
     root: u32,
     has_root: bool,
@@ -541,6 +549,8 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
         cells[i] = empty_cell
         i += 1usize
     }
+    let (measured, measured_error) = mem.alloc[Measured](a, limits.max_elements * 4usize)
+    if measured_error != ok { ret (zero, TooLarge) }
     var s: State = zero
     s.arena = a
     s.renderer = renderer
@@ -548,6 +558,7 @@ fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime
     s.elements = elements
     s.cells = cells
     s.storage = storage
+    s.measured = measured
     s.scratch = scratch
     states[0usize] = s
     ret (Runtime { state: mem.cast[*void](&states[0usize]) }, ok)
@@ -1032,7 +1043,67 @@ fn min_f(a: f32, b: f32) -> f32 {
 
 // The size a node takes under `limits`: its style's own, else its content's,
 // then clamped by its min/max and the limits, margins included.
+fn same_limits(a: ui_layout.Constraints, b: ui_layout.Constraints) -> bool {
+    ret a.min_width == b.min_width && a.max_width == b.max_width && a.min_height == b.min_height && a.max_height == b.max_height
+}
+
+fn measured_lookup(s: *State, key: usize, limits: ui_layout.Constraints) -> (geometry.Size, bool) {
+    let (entry, found) = measured_entry(s, key, limits, false, 0.0)
+    if !found { ret (zero, false) }
+    ret (entry.size, true)
+}
+
+// The entry for `key` under `limits` exactly, or, `loose`, any single-line entry
+// for `key` whose line fits `max_width`.
+fn measured_entry(s: *State, key: usize, limits: ui_layout.Constraints, loose: bool, max_width: f32) -> (*Measured, bool) {
+    let cap = s.measured.len
+    var slot = (key >> 3usize) % cap
+    var probes = 0usize
+    while probes < 16usize {
+        let entry = &s.measured[slot]
+        if entry.stamp != s.measure_stamp { ret (entry, false) }
+        if entry.node == key {
+            if !loose && same_limits(entry.limits, limits) { ret (entry, true) }
+            if loose && entry.limits.min_height == 1.0 && entry.size.width <= max_width { ret (entry, true) }
+        }
+        slot = (slot + 1usize) % cap
+        probes += 1usize
+    }
+    ret (&s.measured[0usize], false)
+}
+
+// A single-line measure of the text whose line fits `max_width`.
+fn measured_single(s: *State, key: usize, max_width: f32) -> (geometry.Size, bool) {
+    let (entry, found) = measured_entry(s, key, zero, true, max_width)
+    if !found { ret (zero, false) }
+    ret (entry.size, true)
+}
+
+fn measured_store(s: *State, key: usize, limits: ui_layout.Constraints, size: geometry.Size, laid: layout.Layout) {
+    let cap = s.measured.len
+    var slot = (key >> 3usize) % cap
+    var probes = 0usize
+    while probes < 16usize {
+        let entry = &s.measured[slot]
+        if entry.stamp != s.measure_stamp || (entry.node == key && same_limits(entry.limits, limits)) { break }
+        slot = (slot + 1usize) % cap
+        probes += 1usize
+    }
+    if probes >= 16usize { slot = (key >> 3usize) % cap }
+    s.measured[slot] = Measured { node: key, limits: limits, size: size, laid: laid, stamp: s.measure_stamp }
+}
+
 fn measure(s: *State, a: *mem.Arena, node: *const Node, limits: ui_layout.Constraints) -> (geometry.Size, err) {
+    let key = mem.address_of(node)
+    let (known, has_known) = measured_lookup(s, key, limits)
+    if has_known { ret (known, ok) }
+    let (size, size_error) = measure_uncached(s, a, node, limits)
+    if size_error != ok { ret (size, size_error) }
+    measured_store(s, key, limits, size, zero)
+    ret (size, ok)
+}
+
+fn measure_uncached(s: *State, a: *mem.Arena, node: *const Node, limits: ui_layout.Constraints) -> (geometry.Size, err) {
     let margin = edges_px(node.style.margin, limits.max_width)
     let padding = edges_px(node.style.padding, limits.max_width)
     let horizontal_extra = margin.left + margin.right + padding.left + padding.right
@@ -1065,8 +1136,21 @@ fn measure_content(s: *State, a: *mem.Arena, node: *const Node, inner: ui_layout
         // A text with no font choice measures as nothing and paints nothing: a
         // label that exists for the semantic tree alone.
         if t.style.fonts.len == 0usize { ret (geometry.Size { width: 0.0, height: 0.0 }, ok) }
+        // A text's extent depends on its width alone: remembered under the node's
+        // odd key, whatever the other constraints (D914).
+        let text_key = mem.address_of(node) | 1usize
+        let text_limits = ui_layout.Constraints { min_width: 0.0, max_width: inner.max_width, min_height: 0.0, max_height: 0.0 }
+        let (known, has_known) = measured_lookup(s, text_key, text_limits)
+        if has_known { ret (known, ok) }
+        // A text laid on one line under some width is the same under any width
+        // that holds that line.
+        let (single, has_single) = measured_single(s, text_key, inner.max_width)
+        if has_single { ret (single, ok) }
         let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.max_width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis })
         if layout_error != ok { ret (zero, InvalidTree) }
+        var remembered = text_limits
+        if laid.lines.len <= 1usize { remembered.min_height = 1.0 }
+        measured_store(s, text_key, remembered, geometry.Size { width: laid.bounds.width, height: laid.bounds.height }, laid)
         ret (geometry.Size { width: laid.bounds.width, height: laid.bounds.height }, ok)
     case .Custom as c:
         ret (c.measure(c.ctx, inner), ok)
@@ -1248,8 +1332,27 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     switch node.kind {
     case .Text as t:
         if t.style.fonts.len == 0usize { ret finish_place(b, clipped, layered) }
-        let (laid, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis })
-        if layout_error != ok { ret InvalidTree }
+        // The measure's layout serves the paint when it was made under this width,
+        // or is one start-aligned line that fits it (D914).
+        var laid: layout.Layout = zero
+        var reused = false
+        let text_key = mem.address_of(node) | 1usize
+        let (exact, has_exact) = measured_entry(s, text_key, ui_layout.Constraints { min_width: 0.0, max_width: inner.width, min_height: 0.0, max_height: 0.0 }, false, 0.0)
+        if has_exact {
+            laid = exact.laid
+            reused = true
+        } else if t.align == .Start {
+            let (loose, has_loose) = measured_entry(s, text_key, zero, true, inner.width)
+            if has_loose {
+                laid = loose.laid
+                reused = true
+            }
+        }
+        if !reused {
+            let (fresh, layout_error) = layout.layout(a, t.value, t.style, layout.Options { width: inner.width, max_lines: t.max_lines, align: t.align, wrap: t.wrap, ellipsis: t.ellipsis })
+            if layout_error != ok { ret InvalidTree }
+            laid = fresh
+        }
         let (copies, copies_error) = mem.alloc[layout.Layout](a, 1usize)
         if copies_error != ok { ret TooLarge }
         copies[0usize] = laid
@@ -1949,6 +2052,8 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     s.has_root = true
     s.elements[root_index].has_sibling = false
     // Layout and paint into a fresh list, compiled into the renderer.
+    s.measure_stamp += 1u32
+    if s.measure_stamp == 0u32 { s.measure_stamp = 1u32 }
     let (size, size_error) = measure(s, frame_arena, &root, constraints)
     if size_error != ok { ret (zero, size_error) }
     let (b, builder_error) = scene.builder(frame_arena, s.limits.max_commands)
