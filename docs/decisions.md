@@ -17211,6 +17211,33 @@ change; every module passed its first build on both compilers, and the
 brotli agent fuzzed every single-bit flip and truncation of six streams
 without a trap.
 
+## D879 — Batch 37: the database trio, FLAC and the bidirectional algorithm
+
+Five modules from `docs/algos.md`, the largest of the stream: `e.db.query`
+(a Volcano iterator and a vectorized executor over flat `i64` tables, six
+join algorithms, Selinger's left-deep dynamic programme, predicate and
+projection pushdown, partition pruning, covering-index scans and CTE
+materialisation; `optimize` reorders joins before pushing projections so
+the inserted Project nodes do not hide the join chain), `e.db.storage`
+(all eighteen plan names: B+tree, dense/sparse/bitmap indexes, linear and
+extendible hashing, an LSM with Bloom filters, a CRC-checked WAL whose
+recovery stops cleanly at a torn tail, LRU/CLOCK/LRU-K eviction, 2PL with
+`e.dist.deadlock`'s cycle check, MVCC with vacuum, OCC validation),
+`e.db.pool` (a HikariCP-shaped pool as a clock-free state machine),
+`e.fmt.flac` (RFC 9639 decoding verified by the STREAMINFO MD5 on seven
+libFLAC streams covering every channel assignment and subframe kind) and
+`e.text.bidi` (UAX #9 complete: it passes every line of
+BidiCharacterTest.txt and every case of BidiTest.txt for Unicode 15.0
+through a scratch driver, with the class table generated from
+DerivedBidiClass so unassigned code points carry their block defaults).
+Compiler notes from the agents: E-SAFETY-0014 refuses a slice kept across
+a call that mutates its container (re-take it after the call), and a `let`
+tuple name bound in one sibling block cannot be re-bound in a later one.
+No compiler change was needed; every module passed its first build on both
+compilers. The stream now stands at 212 modules; only `e.fmt.opus`,
+`e.text.segment`, `e.thread.pool` and the three `e.concurrent` modules
+remain as whole modules, plus named functions owed to existing ones.
+
 ## D885 — `e.os.shell` opens the host's shell: a capability record, never an emulation
 
 The widget plan's phase 4 waits on reviewed host primitives, and its

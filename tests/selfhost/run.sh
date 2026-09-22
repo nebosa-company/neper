@@ -2019,6 +2019,31 @@ net_quic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$net_quic_written" = 'executable written' ]
 chmod +x "$test_build/net-quic-selfhost"
 "$test_build/net-quic-selfhost"
+# `e.db.pool`: MRU reuse, FIFO hand-off to waiters, a broken release replaced, the housekeeper's evictions, a 300-event script equal to a replica's fold and final counts (D879).
+db_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_pool/src/main.e" "$repo" x64 linux "$test_build/db-pool-selfhost")
+[ "$db_pool_written" = 'executable written' ]
+chmod +x "$test_build/db-pool-selfhost"
+"$test_build/db-pool-selfhost"
+# `e.db.query`: iterator and vectorized results equal, six joins equal to brute force as multisets, the four-relation Selinger order and cost, pushdowns producing the expected plan arrays, pruning and covering-index counts (D879).
+db_query_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_query/src/main.e" "$repo" x64 linux "$test_build/db-query-selfhost")
+[ "$db_query_written" = 'executable written' ]
+chmod +x "$test_build/db-query-selfhost"
+"$test_build/db-query-selfhost"
+# `e.db.storage`: twenty-one checks against Python replicas: range scans, index lookups, both hash indexes, LSM finds through compaction, WAL recovery after truncation, eviction hit counts, a 2PL deadlock, snapshot reads, OCC outcomes (D879).
+db_storage_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_storage/src/main.e" "$repo" x64 linux "$test_build/db-storage-selfhost")
+[ "$db_storage_written" = 'executable written' ]
+chmod +x "$test_build/db-storage-selfhost"
+"$test_build/db-storage-selfhost"
+# `e.fmt.flac`: seven libFLAC streams covering every channel assignment and subframe kind decoded sample for sample with the STREAMINFO MD5 verified; flipped and truncated streams reported (D879).
+fmt_flac_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_flac/src/main.e" "$repo" x64 linux "$test_build/fmt-flac-selfhost")
+[ "$fmt_flac_written" = 'executable written' ]
+chmod +x "$test_build/fmt-flac-selfhost"
+"$test_build/fmt-flac-selfhost"
+# `e.text.bidi`: 150 BidiCharacterTest lines in the fixture, and the module passes all 91,707 lines of BidiCharacterTest.txt and all 770,241 cases of BidiTest.txt through a scratch driver (D879).
+text_bidi_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_bidi/src/main.e" "$repo" x64 linux "$test_build/text-bidi-selfhost")
+[ "$text_bidi_written" = 'executable written' ]
+chmod +x "$test_build/text-bidi-selfhost"
+"$test_build/text-bidi-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

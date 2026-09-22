@@ -3366,6 +3366,76 @@ fn copy(dst: Image, src: ConstImage, dst_origin: geometry.Point) -> err
 Images are pixel views, not codecs or GPU resources. Encoders and decoders belong in
 `e.fmt.*`; upload and caching belong in `e.gfx.scene`.
 
+### `e.text.bidi`
+
+```neper
+type Class = enum u8 { L, R, AL, EN, ES, ET, AN, CS, NSM, BN, B, S, WS, ON, LRE, LRO, RLE, RLO, PDF, LRI, RLI, FSI, PDI }
+error TooSmall
+error Invalid
+const K_L: u32 = 0u32
+const K_R: u32 = 1u32
+const K_AL: u32 = 2u32
+const K_EN: u32 = 3u32
+const K_ES: u32 = 4u32
+const K_ET: u32 = 5u32
+const K_AN: u32 = 6u32
+const K_CS: u32 = 7u32
+const K_NSM: u32 = 8u32
+const K_BN: u32 = 9u32
+const K_B: u32 = 10u32
+const K_S: u32 = 11u32
+const K_WS: u32 = 12u32
+const K_ON: u32 = 13u32
+const K_LRE: u32 = 14u32
+const K_LRO: u32 = 15u32
+const K_RLE: u32 = 16u32
+const K_RLO: u32 = 17u32
+const K_PDF: u32 = 18u32
+const K_LRI: u32 = 19u32
+const K_RLI: u32 = 20u32
+const K_FSI: u32 = 21u32
+const K_PDI: u32 = 22u32
+const NEUTRAL: u32 = 255u32
+const NONE: u32 = 4294967295u32
+const MAX_DEPTH: u32 = 125u32
+const MAX_OPENERS: usize = 63usize
+
+fn version() -> str
+fn scalar_at(table: str, pos: usize) -> u32
+fn read_u32(table: str, pos: usize) -> u32
+fn run_value(table: str, scalar: u32) -> u8
+fn pair_lookup(table: str, scalar: u32) -> (u32, bool)
+fn class_code(cp: u32) -> u32
+fn class_of(cp: u32) -> Class
+fn is_removed(code: u32) -> bool
+fn is_isolate_initiator(code: u32) -> bool
+fn is_neutral(code: u32) -> bool
+fn strong_direction(code: u32) -> u32
+fn first_strong(text: []const u32, start: usize, end: usize, stop_at_pdi: bool) -> u8
+fn paragraph_level(text: []const u32) -> u8
+fn next_odd(level: u32) -> u32
+fn next_even(level: u32) -> u32
+fn match_isolates(orig: []const u32, matches: []u32, stack: []u32)
+fn explicit_levels(text: []const u32, types: []u32, explicit: []u32, para: u32)
+fn starts_run(orig: []const u32, explicit: []const u32, i: usize) -> bool
+fn bracket_lookup(cp: u32) -> (u32, u32)
+fn canonical_bracket(cp: u32) -> u32
+fn resolve_brackets(text: []const u32, types: []u32, orig: []const u32, seq: []const u32, pairs: []u32, sos: u32, embed: u32)
+fn resolve_sequence(text: []const u32, types: []u32, orig: []const u32, levels: []u8, explicit: []const u32, seq: []const u32, pairs: []u32, para: u32)
+fn resolve_levels(text: []const u32, base_level: i8, levels: []u8, scratch: []u32) -> (u8, err)
+fn reorder(levels: []const u8, line_start: usize, line_end: usize, out_order: []usize) -> err
+fn reorder_line(text: []const u32, levels: []u8, para: u8, line_start: usize, line_end: usize, out_order: []usize) -> err
+fn mirror(cp: u32) -> u32
+fn is_mirrored(cp: u32) -> bool
+fn bidi_table() -> str
+fn bracket_table() -> str
+fn mirror_table() -> str
+```
+
+UAX #9 for Unicode 15.0 over generated tables: `class_of`, `paragraph_level`,
+`resolve_levels` (explicit embeddings and isolates, weak and neutral types, bracket pairs,
+implicit levels), `reorder` and `reorder_line` (L1 and L2), `mirror` and `is_mirrored`.
+
 ### `e.text.shape`
 
 ```neper
@@ -6303,6 +6373,269 @@ HTTP exchange and preserve the first frame boundary. `receive` enforces role mas
 minimal lengths, control bounds and fragmentation state while allocating only the
 accepted payload in the caller arena. `send`, `ping` and `close` provide bounded output,
 including extended lengths and fragmentation state.
+
+### `e.db.pool`
+
+```neper
+type Config = struct { min_idle: usize, max_size: usize, max_lifetime: u64, idle_timeout: u64, connection_timeout: u64, validation_interval: u64 }
+type Pool = struct { handle: []u64, state: []u8, created_at: []u64, last_used: []u64, uses: []u32, waiters: []u32, waiter_since: []u64, wait_head: usize, wait_len: usize, min_idle: usize, max_size: usize, max_lifetime: u64, idle_timeout: u64, connection_timeout: u64, validation_interval: u64 }
+type Outcome = enum u8 { Acquired, NeedsCreate, Queued, Timeout }
+error Invalid
+error Full
+error TooSmall
+const FREE: u8 = 0u8
+const IN_USE: u8 = 1u8
+const CLOSED: u8 = 2u8
+const PENDING: u8 = 3u8
+const NONE: u32 = 0xffffffffu32
+
+fn pool(handle: []u64, state: []u8, created_at: []u64, last_used: []u64, uses: []u32, waiters: []u32, waiter_since: []u64, c: Config) -> (Pool, err)
+fn count(p: *const Pool, s: u8) -> usize
+fn close_slot(p: *Pool, i: usize)
+fn unqueue(p: *Pool, w: u32)
+fn mru_free(p: *const Pool) -> u32
+fn acquire(p: *Pool, w: u32, now: u64) -> (u32, Outcome, err)
+fn reserve(p: *Pool, now: u64) -> (u32, err)
+fn attach(p: *Pool, index: u32, handle: u64, now: u64) -> err
+fn release(p: *Pool, index: u32, now: u64, broken: bool) -> (u32, err)
+fn evict_expired(p: *Pool, now: u64, out_closed: []u32) -> usize
+fn validate_due(p: *const Pool, index: u32, now: u64) -> bool
+fn timeouts(p: *Pool, now: u64, out_waiters: []u32) -> usize
+fn stats(p: *const Pool) -> (usize, usize, usize, usize)
+fn warm(p: *const Pool) -> usize
+fn close_all(p: *Pool) -> usize
+```
+
+A connection pool as a clock-free state machine over caller slots: `acquire` (idle
+most-recently-used first, `NeedsCreate` when the pool may grow, FIFO `Queued` otherwise),
+`attach`, `release` (handing off to the head waiter, closing broken or aged connections),
+`evict_expired`, `validate_due`, `timeouts`, `warm`, `stats`, `close_all`.
+
+### `e.db.query`
+
+```neper
+type Table = struct { cells: []const i64, columns: usize }
+type Op = struct { kind: u8, cmp: u8, input_a: u32, input_b: u32, column: u32, column_b: u32, value: i64, cols: []const u32 }
+type Cursor = struct { plan: []const Op, root: u32, tables: []const Table, state: []usize, buf: []i64, width: usize, batch: usize }
+type Planner = struct { plan: []Op, count: usize, tables: []const Table, cols: []u32, cols_used: usize }
+type KeyOrder = struct { t: Table, column: usize }
+type HashJoin = struct { a: Table, ca: usize, ia: []const u32, b: Table, cb: usize, ib: []const u32, build_a: bool }
+error Invalid
+error TooSmall
+const SCAN: u8 = 0u8
+const FILTER: u8 = 1u8
+const PROJECT: u8 = 2u8
+const JOIN: u8 = 3u8
+const LIMIT: u8 = 4u8
+const EQ: u8 = 0u8
+const NE: u8 = 1u8
+const LT: u8 = 2u8
+const LE: u8 = 3u8
+const GT: u8 = 4u8
+const GE: u8 = 5u8
+const STRIDE: usize = 5usize
+const MAX_RELATIONS: usize = 8usize
+
+fn table(cells: []const i64, columns: usize) -> Table
+fn rows(t: Table) -> usize
+fn cell(t: Table, row: usize, col: usize) -> i64
+fn copy_row(t: Table, row: usize, out: []i64)
+fn scan(table_index: u32) -> Op
+fn filter(input: u32, column: u32, cmp: u8, value: i64) -> Op
+fn project(input: u32, cols: []const u32) -> Op
+fn join(a: u32, b: u32, column_a: u32, column_b: u32) -> Op
+fn limit(input: u32, count: usize) -> Op
+fn output_columns(plan: []const Op, tables: []const Table, node: u32) -> usize
+fn validate(plan: []const Op, tables: []const Table) -> err
+fn validate_columns(plan: []const Op, tables: []const Table, node: u32) -> err
+fn passes(cmp: u8, x: i64, v: i64) -> bool
+fn cursor(plan: []const Op, root: u32, tables: []const Table, batch: usize, state: []usize, buf: []i64) -> (Cursor, err)
+fn iterator(plan: []const Op, root: u32, tables: []const Table, state: []usize, buf: []i64) -> (Cursor, err)
+fn slot(c: *Cursor, node: u32, side: usize, w: usize) -> []i64
+fn reset(c: *Cursor, node: u32)
+fn next(c: *Cursor, out: []i64) -> (bool, err)
+fn pull(c: *Cursor, node: u32, out: []i64) -> (bool, err)
+fn pull_filter(c: *Cursor, op: Op, out: []i64) -> (bool, err)
+fn pull_project(c: *Cursor, node: u32, op: Op, out: []i64) -> (bool, err)
+fn pull_join(c: *Cursor, node: u32, op: Op, out: []i64) -> (bool, err)
+fn pull_limit(c: *Cursor, node: u32, op: Op, out: []i64) -> (bool, err)
+fn vectorized(plan: []const Op, root: u32, tables: []const Table, batch_size: usize, state: []usize, buf: []i64, out: []i64) -> (usize, err)
+fn next_batch(c: *Cursor, out: []i64) -> (usize, err)
+fn pull_batch(c: *Cursor, node: u32, out: []i64) -> (usize, err)
+fn filter_batch(c: *Cursor, node: u32, op: Op, out: []i64) -> (usize, err)
+fn project_batch(c: *Cursor, node: u32, op: Op, out: []i64) -> (usize, err)
+fn join_batch(c: *Cursor, node: u32, op: Op, out: []i64) -> (usize, err)
+fn emit_pair(left: []const i64, right: []const i64, out: []i64)
+fn limit_batch(c: *Cursor, node: u32, op: Op, out: []i64) -> (usize, err)
+fn emit(a: Table, ra: usize, b: Table, rb: usize, out: []i64, n: usize) -> err
+fn join_nested_loop(a: Table, ca: usize, b: Table, cb: usize, out: []i64) -> (usize, err)
+fn hash_key(k: i64) -> u64
+fn bucket_of(key: i64, buckets: usize) -> usize
+fn count_of(t: Table, index: []const u32) -> usize
+fn row_at(index: []const u32, i: usize) -> usize
+fn side_key(j: *const HashJoin, from_a: bool, i: usize) -> (usize, i64)
+fn side_count(j: *const HashJoin, from_a: bool) -> usize
+fn build_side(j: *const HashJoin, buckets: []u32, chain: []u32) -> err
+fn hash_join_rows(j: *const HashJoin, out: []i64, buckets: []u32, chain: []u32, start: usize) -> (usize, err)
+fn join_hash(a: Table, ca: usize, b: Table, cb: usize, out: []i64, buckets: []u32, chain: []u32) -> (usize, err)
+fn gather(t: Table, col: usize, part: usize, partitions: usize, index: []u32) -> usize
+fn join_hash_parallel(a: Table, ca: usize, b: Table, cb: usize, out: []i64, partitions: usize, index_a: []u32, index_b: []u32, buckets: []u32, chain: []u32) -> (usize, err)
+fn key_order(k: *KeyOrder, x: u32, y: u32) -> i32
+fn sorted_rows(t: Table, col: usize, index: []u32) -> usize
+fn build_index(t: Table, col: usize, index_keys: []i64, index_rows: []u32) -> (usize, err)
+fn join_sort_merge(a: Table, ca: usize, b: Table, cb: usize, out: []i64, index_a: []u32, index_b: []u32) -> (usize, err)
+fn semi_anti(a: Table, ca: usize, b: Table, cb: usize, out: []i64, buckets: []u32, chain: []u32, want: bool) -> (usize, err)
+fn join_semi(a: Table, ca: usize, b: Table, cb: usize, out: []i64, buckets: []u32, chain: []u32) -> (usize, err)
+fn join_anti(a: Table, ca: usize, b: Table, cb: usize, out: []i64, buckets: []u32, chain: []u32) -> (usize, err)
+fn estimate_join_size(rows_a: u64, rows_b: u64, distinct_a: u64, distinct_b: u64) -> f64
+fn prune_partitions(partition_min: []const i64, partition_max: []const i64, lo: i64, hi: i64, out: []u32) -> (usize, err)
+fn lower_bound(keys: []const i64, key: i64) -> usize
+fn upper_bound(keys: []const i64, key: i64) -> usize
+fn index_only_scan(index_keys: []const i64, index_rows: []const u32, lo: i64, hi: i64, out_rows: []u32) -> (usize, err)
+fn materialize_cte(plan: []const Op, cte_root: u32, tables: []const Table, state: []usize, buf: []i64, out_cells: []i64) -> (Table, err)
+fn subset_size(cards: []const u64, sel: []const f64, s: usize) -> f64
+fn join_order(cardinalities: []const u64, selectivities: []const f64, out_order: []u32, cost: []f64, best: []u32) -> (f64, err)
+fn push_predicates(plan: []Op, root: u32, tables: []const Table) -> u32
+fn planner(plan: []Op, count: usize, tables: []const Table, cols: []u32) -> Planner
+fn needed(c: usize, base: usize, key: u32, cols: []const u32) -> bool
+fn position_of(list: []const u32, c: usize) -> usize
+fn take_cols(p: *Planner, n: usize) -> ([]u32, err)
+fn narrow_side(p: *Planner, side: u32, width: usize, base: usize, key: u32, cols: []const u32) -> (u32, usize, err)
+fn new_position(p: *const Planner, side_new: u32, side_old: u32, c: usize) -> usize
+fn narrow_join(p: *Planner, project_index: u32) -> err
+fn push_projections(p: *Planner, root: u32) -> err
+fn chain_of(p: *const Planner, top: u32, joins: []u32, leaves: []u32) -> usize
+fn leaf_rows(p: *const Planner, leaf: u32) -> usize
+fn locate(offsets: []const usize, widths: []const usize, q: usize) -> (usize, usize)
+fn in_prefix(order: []const u32, k: usize, leaf: usize) -> bool
+fn connecting_edge(order: []const u32, k: usize, edge_leaf: []const usize, edge_col: []const usize, edge_right: []const usize) -> (bool, usize, usize, usize)
+fn remap_above(p: *Planner, root: u32, top: u32, old_off: []const usize, widths: []const usize, new_off: []const usize) -> err
+fn reorder_joins(p: *Planner, root: u32, selectivities: []const f64, cost: []f64, best: []u32) -> err
+fn optimize(p: *Planner, root: u32, selectivities: []const f64, cost: []f64, best: []u32) -> (u32, err)
+```
+
+An in-memory relational executor over flat `i64` tables: a Volcano `iterator` and a
+batched `vectorized` executor over scan, filter, project, join and limit; `join_nested_loop`,
+`join_hash`, `join_hash_parallel` (radix partitions), `join_sort_merge`, `join_semi`,
+`join_anti`; `estimate_join_size`, Selinger `join_order`, `push_predicates`,
+`push_projections`, `optimize`, `prune_partitions`, `index_only_scan`, `materialize_cte`.
+
+### `e.db.storage`
+
+```neper
+type BTree = struct { keys: []u64, vals: []i64, children: []u32, next_leaf: []u32, n: []u32, leaf: []bool, fanout: usize, root: u32, used: usize, height: usize }
+type IndexEntry = struct { key: u64, page: u32, slot: u32 }
+type LinearHash = struct { slots: []u64, vals: []i64, filled: []bool, overflow: []u32, bucket_size: usize, initial: usize, level: u32, split_ptr: usize, top: usize, n: usize, max_load: usize }
+type ExtHash = struct { directory: []u32, global_depth: u32, slots: []u64, vals: []i64, filled: []bool, local_depth: []u32, bucket_size: usize, used: usize, n: usize }
+type SsTable = struct { keys: []u64, vals: []i64, tomb: []bool, n: usize, index_keys: []u64, index_pos: []u32, index_n: usize, bloom: []u64, stride: usize }
+type Wal = struct { log: []u8, used: usize, next_lsn: u64 }
+type Table = struct { keys: []u64, vals: []i64, n: usize }
+type Policy = enum u8 { Lru, Clock, LruK }
+type Pool = struct { frames: []u64, valid: []bool, stamp: []u64, hist: []u64, ref_bit: []bool, policy: Policy, hand: usize, clock: u64, hits: usize, misses: usize }
+type LockTable = struct { keys: []u64, owners: []u32, exclusive: []bool, n: usize, waits: []dl.Edge, wait_n: usize, scratch: []usize, txns: usize }
+type Mvcc = struct { keys: []u64, vals: []i64, begin: []u64, end: []u64, writer: []u32, n: usize }
+type Occ = struct { start_ts: u64, read_keys: []u64, read_n: usize, write_keys: []u64, write_vals: []i64, write_n: usize }
+type CommitLog = struct { keys: []u64, ts: []u64, n: usize }
+error Full
+error TooSmall
+error Invalid
+error Corrupt
+const NONE: u32 = 4294967295u32
+const FOREVER: u64 = 18446744073709551615u64
+const RECORD: usize = 29usize
+const KIND_PUT: u8 = 0u8
+const KIND_DELETE: u8 = 1u8
+const KIND_CHECKPOINT: u8 = 2u8
+
+fn mix(key: u64) -> u64
+fn btree(keys: []u64, vals: []i64, children: []u32, next_leaf: []u32, n: []u32, leaf: []bool, fanout: usize) -> (BTree, err)
+fn kslot(t: *const BTree, node: u32, i: usize) -> usize
+fn cslot(t: *const BTree, node: u32, i: usize) -> usize
+fn btree_new_node(t: *BTree, is_leaf: bool) -> (u32, err)
+fn btree_lower(t: *const BTree, node: u32, key: u64) -> usize
+fn btree_insert_rec(t: *BTree, node: u32, key: u64, val: i64) -> (u64, u32, bool, err)
+fn btree_insert(t: *BTree, key: u64, val: i64) -> err
+fn btree_leaf_for(t: *const BTree, key: u64) -> u32
+fn btree_find(t: *const BTree, key: u64) -> (i64, bool)
+fn btree_next_leaf(t: *const BTree, leaf: u32) -> (u32, bool)
+fn btree_first_leaf(t: *const BTree) -> u32
+fn btree_range(t: *const BTree, lo: u64, hi: u64, out_keys: []u64, out_vals: []i64) -> usize
+fn btree_height(t: *const BTree) -> usize
+fn index_dense(keys: []const u64, page_size: usize, out: []IndexEntry) -> (usize, err)
+fn index_sparse(keys: []const u64, page_size: usize, out: []IndexEntry) -> (usize, err)
+fn index_upper(index: []const IndexEntry, key: u64) -> usize
+fn index_lookup_dense(index: []const IndexEntry, key: u64) -> (u32, u32, bool)
+fn index_lookup_sparse(index: []const IndexEntry, keys: []const u64, page_size: usize, key: u64) -> (u32, u32, bool)
+fn index_bitmap(values: []const u8, cardinality: usize, out: []u64) -> (usize, err)
+fn bitmap_and(a: []const u64, b: []const u64, out: []u64) -> err
+fn bitmap_or(a: []const u64, b: []const u64, out: []u64) -> err
+fn bitmap_count(a: []const u64) -> usize
+fn hash_index_linear(slots: []u64, vals: []i64, filled: []bool, overflow: []u32, bucket_size: usize, initial: usize, max_load: usize) -> (LinearHash, err)
+fn lh_primary(h: *const LinearHash) -> usize
+fn lh_address(h: *const LinearHash, key: u64) -> usize
+fn lh_locate(h: *const LinearHash, bucket: usize, key: u64) -> (usize, bool)
+fn lh_place(h: *LinearHash, bucket: usize, key: u64, val: i64) -> err
+fn lh_split(h: *LinearHash) -> err
+fn lh_insert(h: *LinearHash, key: u64, val: i64) -> err
+fn lh_find(h: *const LinearHash, key: u64) -> (i64, bool)
+fn lh_remove(h: *LinearHash, key: u64) -> bool
+fn hash_index_extendible(directory: []u32, slots: []u64, vals: []i64, filled: []bool, local_depth: []u32, bucket_size: usize) -> (ExtHash, err)
+fn eh_bucket(h: *const ExtHash, key: u64) -> usize
+fn eh_locate(h: *const ExtHash, bucket: usize, key: u64) -> (usize, bool)
+fn eh_split(h: *ExtHash, bucket: usize) -> err
+fn eh_insert(h: *ExtHash, key: u64, val: i64) -> err
+fn eh_find(h: *const ExtHash, key: u64) -> (i64, bool)
+fn eh_remove(h: *ExtHash, key: u64) -> bool
+fn sstable(keys: []u64, vals: []i64, tomb: []bool, index_keys: []u64, index_pos: []u32, bloom: []u64, stride: usize) -> (SsTable, err)
+fn bloom_bit(s: *const SsTable, key: u64, k: u64) -> (usize, u64)
+fn sstable_build(s: *SsTable)
+fn memtable_flush(mem_keys: []const u64, mem_vals: []const i64, mem_tomb: []const bool, s: *SsTable) -> err
+fn sstable_locate(s: *const SsTable, key: u64) -> (usize, bool)
+fn sstable_find(s: *const SsTable, key: u64) -> (i64, bool)
+fn lsm_compact(runs: []const SsTable, heads: []usize, out: *SsTable, bottom: bool) -> (usize, err)
+fn lsm_find(levels: []const SsTable, key: u64) -> (i64, bool)
+fn table(keys: []u64, vals: []i64) -> Table
+fn table_slot(t: *const Table, key: u64) -> (usize, bool)
+fn table_get(t: *const Table, key: u64) -> (i64, bool)
+fn table_put(t: *Table, key: u64, val: i64) -> err
+fn table_delete(t: *Table, key: u64) -> bool
+fn put64(dst: []u8, off: usize, v: u64)
+fn get64(src: []const u8, off: usize) -> u64
+fn wal(log: []u8) -> Wal
+fn wal_append(w: *Wal, kind: u8, key: u64, val: i64) -> (u64, err)
+fn checkpoint(w: *Wal) -> (u64, err)
+fn wal_truncate(w: *Wal, checkpoint_lsn: u64) -> usize
+fn wal_record(log: []const u8, off: usize) -> (u64, u8, u64, i64, err)
+fn recover(log: []const u8, used: usize, t: *Table, applied_upto: u64) -> (usize, err)
+fn buffer_pool(frames: []u64, valid: []bool, stamp: []u64, hist: []u64, ref_bit: []bool, policy: Policy) -> (Pool, err)
+fn buffer_pool_evict(p: *Pool) -> usize
+fn pool_access(p: *Pool, page: u64) -> (usize, bool)
+fn lock_table(keys: []u64, owners: []u32, exclusive: []bool, waits: []dl.Edge, scratch: []usize, txns: usize) -> (LockTable, err)
+fn drop_waits_from(lt: *LockTable, txn: u32)
+fn txn_lock_2pl(lt: *LockTable, txn: u32, key: u64, exclusive: bool) -> (bool, bool, err)
+fn txn_unlock_all(lt: *LockTable, txn: u32) -> usize
+fn txn_mvcc(keys: []u64, vals: []i64, begin: []u64, end: []u64, writer: []u32) -> (Mvcc, err)
+fn mvcc_write(m: *Mvcc, txn: u32, key: u64, val: i64) -> err
+fn mvcc_read(m: *const Mvcc, snapshot_ts: u64, key: u64) -> (i64, bool)
+fn mvcc_commit(m: *Mvcc, txn: u32, commit_ts: u64) -> usize
+fn mvcc_abort(m: *Mvcc, txn: u32) -> usize
+fn mvcc_remove_at(m: *Mvcc, i: usize)
+fn vacuum(m: *Mvcc, oldest_active_ts: u64) -> usize
+fn commit_log(keys: []u64, ts: []u64) -> CommitLog
+fn txn_occ(start_ts: u64, read_keys: []u64, write_keys: []u64, write_vals: []i64) -> Occ
+fn occ_begin(start_ts: u64, read_keys: []u64, write_keys: []u64, write_vals: []i64) -> Occ
+fn occ_read(t: *Occ, store: *const Table, key: u64) -> (i64, bool, err)
+fn occ_write(t: *Occ, key: u64, val: i64) -> err
+fn occ_validate(t: *const Occ, log: *const CommitLog) -> bool
+fn occ_commit(t: *const Occ, store: *Table, log: *CommitLog, commit_ts: u64) -> (bool, err)
+```
+
+Storage structures over caller arrays: a B+tree (`btree_insert`, `btree_find`,
+`btree_range`, `btree_next_leaf`), dense, sparse and bitmap indexes, linear and
+extendible hashing, an LSM (`memtable_flush`, `sstable_find`, `lsm_compact`), a WAL
+(`wal_append`, `wal_truncate`, `recover` stopping at a torn tail), a buffer pool with LRU,
+CLOCK and LRU-K eviction, and transactions: 2PL with deadlock detection, MVCC with
+`vacuum`, OCC validation.
 
 ### `e.db`
 
@@ -10320,6 +10653,45 @@ fn active(m: Mixer) -> usize
 fn mix_into(m: *Mixer, out: *audio.Frames) -> (usize, err)
 fn resample(a: *mem.Arena, src: audio.Frames, rate: u32) -> (audio.Frames, err)
 ```
+
+### `e.fmt.flac`
+
+```neper
+type StreamInfo = struct { min_block: u32, max_block: u32, min_frame: u32, max_frame: u32, rate: u32, channels: u32, bits: u32, total: u64, md5: [16]u8 }
+type Assignment = enum u8 { Independent, LeftSide, RightSide, MidSide }
+type FrameHeader = struct { variable: bool, block_size: u32, rate: u32, channels: u32, assignment: Assignment, bits: u32, number: u64, size: usize }
+type Decoder = struct { src: []const u8, pos: usize, info: StreamInfo }
+type Bits = struct { data: []const u8, pos: usize, bad: bool }
+error Malformed
+error Unsupported
+error TooSmall
+error Checksum
+
+fn read(b: *Bits, n: u32) -> u64
+fn read_signed(b: *Bits, n: u32) -> i64
+fn unary(b: *Bits) -> u32
+fn align(b: *Bits)
+fn crc8(data: []const u8) -> u8
+fn crc16(data: []const u8) -> u16
+fn big(src: []const u8, at: usize, n: usize) -> u64
+fn metadata(src: []const u8) -> (StreamInfo, usize, err)
+fn stream_info(src: []const u8) -> (StreamInfo, err)
+fn decoder(src: []const u8) -> (Decoder, err)
+fn at_end(d: Decoder) -> bool
+fn rate_code(code: u32) -> u32
+fn header(src: []const u8, at: usize, info: StreamInfo) -> (FrameHeader, err)
+fn frame_header(src: []const u8, pos: usize) -> (FrameHeader, err)
+fn residual(b: *Bits, out: []i64, block: usize, order: usize) -> err
+fn subframe(b: *Bits, out: []i64, block: usize, width_in: u32) -> err
+fn decode_frame(d: *Decoder, out: []i32, scratch: []i64) -> (usize, err)
+fn decode(src: []const u8, out: []i32, scratch: []i64) -> (usize, err)
+fn md5_check(out: []const i32, info: StreamInfo, bytes: []u8) -> bool
+```
+
+FLAC decoding over caller storage: `stream_info`, `frame_header` (CRC-8), `decode_frame`
+and `decode` (constant, verbatim, fixed and LPC subframes, Rice residuals with escapes,
+wasted bits, all four channel assignments, CRC-16), `crc8`, `crc16` and `md5_check`
+against STREAMINFO.
 
 ### `e.fmt.wav`
 

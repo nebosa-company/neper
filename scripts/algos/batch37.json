@@ -1,0 +1,20 @@
+{
+ "decision": "D879",
+ "modules": [
+  {"name": "e.db.pool", "deps": [], "fixture": "db_pool", "anchor": "### `e.db`\n",
+   "note": "A connection pool as a clock-free state machine over caller slots: `acquire` (idle\nmost-recently-used first, `NeedsCreate` when the pool may grow, FIFO `Queued` otherwise),\n`attach`, `release` (handing off to the head waiter, closing broken or aged connections),\n`evict_expired`, `validate_due`, `timeouts`, `warm`, `stats`, `close_all`.",
+   "comment": "`e.db.pool`: MRU reuse, FIFO hand-off to waiters, a broken release replaced, the housekeeper's evictions, a 300-event script equal to a replica's fold and final counts"},
+  {"name": "e.db.query", "deps": ["e.algo.sort"], "fixture": "db_query", "anchor": "### `e.db`\n",
+   "note": "An in-memory relational executor over flat `i64` tables: a Volcano `iterator` and a\nbatched `vectorized` executor over scan, filter, project, join and limit; `join_nested_loop`,\n`join_hash`, `join_hash_parallel` (radix partitions), `join_sort_merge`, `join_semi`,\n`join_anti`; `estimate_join_size`, Selinger `join_order`, `push_predicates`,\n`push_projections`, `optimize`, `prune_partitions`, `index_only_scan`, `materialize_cte`.",
+   "comment": "`e.db.query`: iterator and vectorized results equal, six joins equal to brute force as multisets, the four-relation Selinger order and cost, pushdowns producing the expected plan arrays, pruning and covering-index counts"},
+  {"name": "e.db.storage", "deps": ["e.algo.hash", "e.dist.deadlock"], "fixture": "db_storage", "anchor": "### `e.db`\n",
+   "note": "Storage structures over caller arrays: a B+tree (`btree_insert`, `btree_find`,\n`btree_range`, `btree_next_leaf`), dense, sparse and bitmap indexes, linear and\nextendible hashing, an LSM (`memtable_flush`, `sstable_find`, `lsm_compact`), a WAL\n(`wal_append`, `wal_truncate`, `recover` stopping at a torn tail), a buffer pool with LRU,\nCLOCK and LRU-K eviction, and transactions: 2PL with deadlock detection, MVCC with\n`vacuum`, OCC validation.",
+   "comment": "`e.db.storage`: twenty-one checks against Python replicas: range scans, index lookups, both hash indexes, LSM finds through compaction, WAL recovery after truncation, eviction hit counts, a 2PL deadlock, snapshot reads, OCC outcomes"},
+  {"name": "e.fmt.flac", "deps": ["e.crypto.hash"], "fixture": "fmt_flac", "anchor": "### `e.fmt.wav`\n",
+   "note": "FLAC decoding over caller storage: `stream_info`, `frame_header` (CRC-8), `decode_frame`\nand `decode` (constant, verbatim, fixed and LPC subframes, Rice residuals with escapes,\nwasted bits, all four channel assignments, CRC-16), `crc8`, `crc16` and `md5_check`\nagainst STREAMINFO.",
+   "comment": "`e.fmt.flac`: seven libFLAC streams covering every channel assignment and subframe kind decoded sample for sample with the STREAMINFO MD5 verified; flipped and truncated streams reported"},
+  {"name": "e.text.bidi", "deps": [], "fixture": "text_bidi", "anchor": "### `e.text.shape`\n",
+   "note": "UAX #9 for Unicode 15.0 over generated tables: `class_of`, `paragraph_level`,\n`resolve_levels` (explicit embeddings and isolates, weak and neutral types, bracket pairs,\nimplicit levels), `reorder` and `reorder_line` (L1 and L2), `mirror` and `is_mirrored`.",
+   "comment": "`e.text.bidi`: 150 BidiCharacterTest lines in the fixture, and the module passes all 91,707 lines of BidiCharacterTest.txt and all 770,241 cases of BidiTest.txt through a scratch driver"}
+ ]
+}

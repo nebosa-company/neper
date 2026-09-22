@@ -321,7 +321,12 @@
     "e.fmt.brotli",
     "e.net.dns",
     "e.net.http3",
-    "e.net.quic"
+    "e.net.quic",
+    "e.db.pool",
+    "e.db.query",
+    "e.db.storage",
+    "e.fmt.flac",
+    "e.text.bidi"
    ]
   },
   {
@@ -2998,6 +3003,15 @@
    "blocked_by": []
   },
   {
+   "name": "e.text.bidi",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
    "name": "e.thread",
    "layer": 4,
    "surface": "source",
@@ -4288,6 +4302,17 @@
    "blocked_by": []
   },
   {
+   "name": "e.fmt.flac",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.crypto.hash"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.robot.kinematics",
    "layer": 2,
    "surface": "source",
@@ -4345,6 +4370,38 @@
     "e.math",
     "e.math.fft",
     "e.math.filter"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.db.pool",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.db.query",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.sort"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.db.storage",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.dist.deadlock"
    ],
    "blocked_by": []
   }

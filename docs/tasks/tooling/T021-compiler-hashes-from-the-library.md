@@ -47,11 +47,11 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `e.algo.hash`: `src/artifact_hash.e`×3, `lib/e/algo/sketch.e`×2, `scripts/algos/batch35.json`×2, `scripts/algos/decisions-pending.md`×2†, `lib/e/algo/consistent_hash.e`×1, `lib/e/algo/uuid.e`×1, `lib/e/fmt/gzip.e`×1, `lib/e/fmt/lz4.e`×1
+- `e.algo.hash`: `src/artifact_hash.e`×3, `lib/e/algo/sketch.e`×2, `scripts/algos/batch35.json`×2, `scripts/algos/decisions-pending.md`×2†, `lib/e/algo/consistent_hash.e`×1, `lib/e/algo/uuid.e`×1, `lib/e/db/storage.e`×1†, `lib/e/fmt/gzip.e`×1
 - `program_snapshot`: `src/tool.e`×10‡
 - `fnv1a32_step`: `src/artifact_hash.e`×4, `src/em.e`×3‡
 - `rotate_left`: `lib/e/data/tree.e`×3, `src/artifact_hash.e`×2, `lib/e/bytes.e`×1
-- `read_u32`: `src/em.e`×92‡, `lib/e/text/unicode.e`×6‡, `src/binary.e`×4, `lib/e/audio.e`×3
+- `read_u32`: `src/em.e`×92‡, `lib/e/text/unicode.e`×6‡, `src/binary.e`×4, `lib/e/audio.e`×3, `lib/e/text/bidi.e`×3†
 - `read_u64`: `src/em.e`×14‡, `lib/e/fmt/protobuf.e`×6, `src/binary.e`×3
 - `artifact_hash.self_test`: `src/main.e`×1‡
 

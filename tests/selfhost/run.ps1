@@ -2248,6 +2248,36 @@ $netQuicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netQuicWritten -ne 'executable written') { throw 'net_quic emission failed' }
 & $netQuicPath
 if ($LASTEXITCODE -ne 0) { throw "a net_quic check failed: exit $LASTEXITCODE" }
+# `e.db.pool`: MRU reuse, FIFO hand-off to waiters, a broken release replaced, the housekeeper's evictions, a 300-event script equal to a replica's fold and final counts (D879).
+$dbPoolPath = Join-Path $testBuild 'db-pool-selfhost.exe'
+$dbPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_pool\src\main.e') $repo 'x64' 'windows' $dbPoolPath
+if ($LASTEXITCODE -ne 0 -or $dbPoolWritten -ne 'executable written') { throw 'db_pool emission failed' }
+& $dbPoolPath
+if ($LASTEXITCODE -ne 0) { throw "a db_pool check failed: exit $LASTEXITCODE" }
+# `e.db.query`: iterator and vectorized results equal, six joins equal to brute force as multisets, the four-relation Selinger order and cost, pushdowns producing the expected plan arrays, pruning and covering-index counts (D879).
+$dbQueryPath = Join-Path $testBuild 'db-query-selfhost.exe'
+$dbQueryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_query\src\main.e') $repo 'x64' 'windows' $dbQueryPath
+if ($LASTEXITCODE -ne 0 -or $dbQueryWritten -ne 'executable written') { throw 'db_query emission failed' }
+& $dbQueryPath
+if ($LASTEXITCODE -ne 0) { throw "a db_query check failed: exit $LASTEXITCODE" }
+# `e.db.storage`: twenty-one checks against Python replicas: range scans, index lookups, both hash indexes, LSM finds through compaction, WAL recovery after truncation, eviction hit counts, a 2PL deadlock, snapshot reads, OCC outcomes (D879).
+$dbStoragePath = Join-Path $testBuild 'db-storage-selfhost.exe'
+$dbStorageWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_storage\src\main.e') $repo 'x64' 'windows' $dbStoragePath
+if ($LASTEXITCODE -ne 0 -or $dbStorageWritten -ne 'executable written') { throw 'db_storage emission failed' }
+& $dbStoragePath
+if ($LASTEXITCODE -ne 0) { throw "a db_storage check failed: exit $LASTEXITCODE" }
+# `e.fmt.flac`: seven libFLAC streams covering every channel assignment and subframe kind decoded sample for sample with the STREAMINFO MD5 verified; flipped and truncated streams reported (D879).
+$fmtFlacPath = Join-Path $testBuild 'fmt-flac-selfhost.exe'
+$fmtFlacWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_flac\src\main.e') $repo 'x64' 'windows' $fmtFlacPath
+if ($LASTEXITCODE -ne 0 -or $fmtFlacWritten -ne 'executable written') { throw 'fmt_flac emission failed' }
+& $fmtFlacPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_flac check failed: exit $LASTEXITCODE" }
+# `e.text.bidi`: 150 BidiCharacterTest lines in the fixture, and the module passes all 91,707 lines of BidiCharacterTest.txt and all 770,241 cases of BidiTest.txt through a scratch driver (D879).
+$textBidiPath = Join-Path $testBuild 'text-bidi-selfhost.exe'
+$textBidiWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_bidi\src\main.e') $repo 'x64' 'windows' $textBidiPath
+if ($LASTEXITCODE -ne 0 -or $textBidiWritten -ne 'executable written') { throw 'text_bidi emission failed' }
+& $textBidiPath
+if ($LASTEXITCODE -ne 0) { throw "a text_bidi check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
