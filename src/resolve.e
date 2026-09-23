@@ -202,7 +202,9 @@ fn last_segment(name: str) -> str {
 // The resolver's token table is the module's own list (D316): no scan, a slice.
 fn tokenize_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
     if r.has_tokens_module && r.tokens_module == module_index { ret ok }
-    if g.modules[module_index].has_invalid { ret lex.InvalidSource }
+    // Going on (D954), the invalid bytes are inside declarations already reported and
+    // left out; the module's other tokens are whole.
+    if g.modules[module_index].has_invalid && !r.keep_going { ret lex.InvalidSource }
     r.tokens = g.modules[module_index].tokens
     r.token_count = r.tokens.len
     r.tokens_module = module_index
@@ -1172,7 +1174,14 @@ fn validate_top_levels(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level {
+        // A declaration recovery went past (D954): its syntax failure is reported, and
+        // what remains of it is not validated.
+        var syntax_broken = false
+        if node.top_level && r.keep_going {
+            let (broken, in_body) = parse.declaration_broken(tree, node)
+            syntax_broken = broken
+        }
+        if node.top_level && !syntax_broken {
             var declaration_error = ok
             if node.kind == .FnDecl || node.kind == .ExternDecl || node.kind == .TypeDecl {
                 declaration_error = validate_declaration_scope(r, g, tree, module_index, node)

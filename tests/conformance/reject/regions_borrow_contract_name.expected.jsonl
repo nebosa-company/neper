@@ -1,3 +1,3 @@
 {"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"diagnostic","severity":"error","code":"E-SAFETY-0019","message":"@borrows must name one borrowed pointer-bearing parameter of a function with a pointer-bearing result","symbol":"missing","span":{"source":{"root":"operand","path":"regions_borrow_contract_name.e"},"byte_start":88,"byte_end":90,"line":3,"column":1,"end_line":3,"end_column":3,"column_utf16":1,"end_column_utf16":3},"parent":null,"related":[],"fixes":[]}
-{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1,"unchecked":1}}

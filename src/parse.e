@@ -2053,6 +2053,41 @@ fn parse(tree: *Tree, source: str) -> err {
 }
 
 // The parse over a module's token list (D316): the same parser, its scanner replaying.
+// Whether a top-level declaration holds a syntax failure recovery went past (D954):
+// an error node within its tokens, and whether that node is inside its body -- then the
+// declaration's interface parsed whole -- or outside it, in its signature or its type.
+fn declaration_broken(tree: *Tree, node: syntax.Node) -> (bool, bool) {
+    if tree.errors == 0usize { ret (false, false) }
+    let start = usize(node.token_start)
+    let end = usize(node.token_end)
+    var body_start = end
+    var body_end = end
+    let child_end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < child_end {
+        if child_is_node_at(tree, at) {
+            let child = tree.nodes[child_index_at(tree, at)]
+            if child.kind == .Block {
+                body_start = usize(child.token_start)
+                body_end = usize(child.token_end)
+            }
+        }
+        at += 1usize
+    }
+    var broken = false
+    var outside_body = false
+    var index = 0usize
+    while index < tree.count {
+        let candidate = tree.nodes[index]
+        if candidate.kind == .ErrorNode && usize(candidate.token_start) >= start && usize(candidate.token_start) < end {
+            broken = true
+            if usize(candidate.token_start) < body_start || usize(candidate.token_start) >= body_end { outside_body = true }
+        }
+        index += 1usize
+    }
+    ret (broken, broken && !outside_body)
+}
+
 fn parse_tokens(tree: *Tree, source: str, tokens: []const lex.Token) -> err {
     if tree.nodes.len == 0usize || tree.children.len == 0usize { ret InvalidSyntax }
     var p = init(tree, source)

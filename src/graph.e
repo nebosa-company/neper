@@ -153,6 +153,10 @@ fn load_file(a: *mem.Arena, path: str) -> (str, err) {
 }
 
 type Graph = struct {
+    // Going on past a syntax failure (D954): `check-file --json` keeps a module's
+    // recovered tree -- lossless, the failures as error nodes and in its failure list --
+    // where the first failure ended the load.
+    keep_going: bool,
     modules: []Module,
     imports: []Import,
     // The root module's text when the operand was `-` (D488): read from stdin by the
@@ -499,9 +503,10 @@ fn parse_into_pool(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     } else {
         parse_error = parse.parse_tokens(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
     }
-    if parse_error == ok {
+    if parse_error == ok || (g.keep_going && tree.has_failure) {
         try keep_tree(a, g, module_index, &tree)
         g.modules[module_index].headers_only = headers
+        ret ok
     }
     if parse_error != ok {
         // Every module is parsed here first, so this is where a syntax error is
@@ -667,7 +672,7 @@ fn worker_module(w: *Worker, module_index: usize) -> err {
     } else {
         parse_error = parse.parse_tokens(&tree, text, tokens)
     }
-    if parse_error != ok {
+    if parse_error != ok && !(w.g.keep_going && tree.has_failure) {
         if tree.has_failure {
             w.syntax_failure = true
             w.failure_tree = tree

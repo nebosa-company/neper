@@ -131,7 +131,14 @@ declarations whose own signature or type failed. A later failure that is a use o
 one of those -- a call, a type, a value named at its token -- is a `note` whose
 `parent` is that declaration's error (``f` failed in its declaration, reported
 above, so this use of it is not checked``), and any other failure is an error of its
-own. The plain output still stops at the first. `applicability` is
+own. A syntax failure no longer ends the check either (D954): each failure the
+parser recovered past is reported at its own token, a later failure in the tokens
+recovery skipped to resynchronize is a `note` under it, and the declaration it
+broke is left out as above -- its interface when the failure is outside its body,
+else its body alone -- while the rest of the program is checked. When the check left
+anything out, the result carries `unchecked`, the number of declarations whose
+interface or body it did not check; a result without it checked everything it
+reports on. The plain output still stops at the first. `applicability` is
 `machine` only when applying all edits cannot change a valid program's behavior;
 otherwise it is `maybe`. Edits within one fix are non-overlapping and sorted by
 source then descending `byte_start`, so they can be applied without offset repair.

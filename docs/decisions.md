@@ -19258,3 +19258,43 @@ or Clear needs actions the call does not take). SliderSpec stays open for the
 value label, hover halo, pressed handle and ticks, which need the runtime to
 paint by the handle's own state. The select's menu is at least 112 wide rather
 than the field's own width.
+
+## D954 — A check goes on past a syntax failure, and says what it left unchecked
+
+D950 took `check-file --json` past failing declarations, but a syntax failure still
+ended the load: the parser recovered past it (D341 -- error nodes, invalid bytes
+kept, input consumed at each step), and the graph threw the recovered tree away.
+H09 asks for recovery that loses nothing and output that says whether it is
+recovered, incomplete or fully checked.
+
+A JSON check now keeps the recovered tree (`graph.keep_going`) and goes on:
+
+- **Every syntax failure** the parser recovered past is printed at its own token,
+  module by module, the first carrying the reserved-name and nesting-bound flags as
+  before. A later failure in the same top-level declaration, or in the debris
+  recovery skipped to resynchronize -- outside every declaration or in a top-level
+  error node, with no whole declaration between it and the previous failure -- is a
+  `note` under the first one's error. Anything else is an error of its own.
+- **The declaration a failure breaks** is left out as in D950
+  (`parse.declaration_broken`): the resolver does not validate it, and it goes on
+  the poison list, accounted to its first failure's record -- its interface when the
+  failure is outside its body, so a use of it is a note under that error, else its
+  body alone, so its callers are checked. An error node names a declaration only
+  when it begins with `fn`, `type`, `const` or `var`; the debris names nothing.
+- **Invalid bytes** no longer stop the resolver or the checker once a poison list is
+  in force: they lie inside declarations already reported and left out.
+
+The result record gains `unchecked`, the number of declarations whose interface or
+body the check did not check, when there is one. A result without it checked
+everything it reports on; a result with it is recovered and incomplete. That is
+H09's distinction between rejected-and-complete and rejected-and-partial, carried
+by the real schema rather than inferred from messages. The plain output and the
+build still stop at their first failure, and nothing is repaired: the recovered
+tree is only ever checked around, never compiled.
+
+`reject/syntax_recovery.e` pins it: a signature with a missing parameter type (one
+error and its two debris tokens as notes), a call of that function (a note under
+it), a body cut off mid-expression whose caller is checked without a cascade, and an
+independent return mismatch give three errors and three notes, `unchecked: 3`.
+Fifteen reject goldens gain `unchecked` and nothing else; the other 158 cases of
+`accept/` and `reject/` are unchanged.

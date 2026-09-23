@@ -1354,7 +1354,9 @@ fn apply_context(c: *Checker, actual: Type, expected: Type) -> (Type, err) {
 // The checker's token table is the module's own list (D316): no scan, a slice.
 fn tokenize_module(c: *Checker, g: *graph.Graph, module_index: usize) -> err {
     if c.has_tokens_module && c.tokens_module == module_index { ret ok }
-    if g.modules[module_index].has_invalid { ret lex.InvalidSource }
+    // Going on (D954) -- a poison list is installed -- the invalid bytes are inside
+    // declarations already reported and left out.
+    if g.modules[module_index].has_invalid && c.poison_names.len == 0usize { ret lex.InvalidSource }
     c.tokens = g.modules[module_index].tokens
     c.token_count = c.tokens.len
     c.tokens_module = module_index

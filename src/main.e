@@ -4499,6 +4499,13 @@ fn finish_report(report: *Sink) -> err {
     if report.count == 0usize { try write_all(report, "true,\"exit_code\":0") } else { try write_all(report, "false,\"exit_code\":1") }
     try write_all(report, ",\"data\":{\"diagnostics\":")
     try write_usize(report, report.count)
+    // What the check went past (D954): the declarations whose interface or body was not
+    // checked because a failure already accounts for them -- output that is recovered
+    // and incomplete, where a result without it checked everything it reports on.
+    if report.cascade.on && report.cascade.count != 0usize {
+        try write_all(report, ",\"unchecked\":")
+        try write_usize(report, report.cascade.count)
+    }
     ret write_all(report, "}}\n")
 }
 
@@ -7470,10 +7477,141 @@ fn print_kept_resolve_failures(report: *Sink, g: *graph.Graph, resolver: *resolv
     var at = 0usize
     while at < resolver.kept_count {
         let failure = resolve.select_kept(resolver, at)
-        let record = report.count
-        try print_resolve_diagnostic(report, g, resolver, failure)
+        // A name that failed because its declaration's syntax did (D954): a note under
+        // that failure, and the declaration it is in accounted to the same one.
+        let (parent, cascaded) = cascade_parent(g, report, resolver.kept[at].module_index, resolver.kept[at].token)
+        var record = report.count
+        if cascaded { record = parent }
+        report.as_note = cascaded
+        report.note_parent = parent
+        let printed = print_resolve_diagnostic(report, g, resolver, failure)
+        report.as_note = false
+        if printed != ok { ret printed }
         add_poison(report, resolver.kept[at].module_index, resolver.kept[at].declaration, resolver.kept[at].interface, record)
         at += 1usize
+    }
+    ret ok
+}
+
+// Every syntax failure recovery went past (D954), module by module in the order they
+// were loaded, each at its own token; then each top-level declaration holding one on
+// the poison list, accounted to its first failure's record -- its interface when the
+// failure is outside its body, else its body alone.
+fn print_recovered_syntax(report: *Sink, g: *graph.Graph) -> err {
+    var module_index = 0usize
+    while module_index < g.count {
+        if g.modules[module_index].has_tree && g.modules[module_index].tree.failure_count != 0usize {
+            try print_module_syntax(report, g, module_index)
+        }
+        module_index += 1usize
+    }
+    ret ok
+}
+
+fn print_module_syntax(report: *Sink, g: *graph.Graph, module_index: usize) -> err {
+    // The kept tree, as every pass takes it: one copy in a local, read from there.
+    var tree: parse.Tree = zero
+    try graph.parse_module(g, module_index, &tree)
+    let path = g.modules[module_index].path
+    let text = g.modules[module_index].text
+    let tokens = g.modules[module_index].tokens
+    let first_record = report.count
+    // Each failure's declaration, by its top-level node: the first failure in a
+    // declaration is its error, and a later one in the same declaration -- recovery
+    // resynchronizing -- a note under it.
+    var declaration_of: [64]usize = zero
+    var record_of: [64]usize = zero
+    var group_of: [64]usize = zero
+    var failure = 0usize
+    while failure < tree.failure_count && failure < 64usize {
+        let at = tree.failures[failure]
+        var owner = 0usize
+        var node_at = 1usize
+        while node_at < tree.count {
+            let candidate = tree.nodes[node_at]
+            if candidate.top_level && usize(candidate.token_end) > usize(candidate.token_start) && usize(candidate.token_end) <= tokens.len {
+                if at.start >= tokens[usize(candidate.token_start)].start && at.start < tokens[usize(candidate.token_end) - 1usize].end { owner = node_at }
+            }
+            node_at += 1usize
+        }
+        declaration_of[failure] = owner
+        var earlier = failure
+        var scan = 0usize
+        while scan < failure {
+            if owner != 0usize && declaration_of[scan] == owner && earlier == failure { earlier = scan }
+            scan += 1usize
+        }
+        // Outside every declaration or in a top-level error node, right after another failure with no whole
+        // declaration between them: the tokens recovery skipped to resynchronize, a
+        // note under that failure's own error.
+        var debris = owner == 0usize
+        if owner != 0usize && tree.nodes[owner].kind == .ErrorNode { debris = true }
+        if debris && earlier == failure && failure > 0usize {
+            let previous = tree.failures[failure - 1usize]
+            var between = false
+            var node_scan = 1usize
+            while node_scan < tree.count {
+                let candidate = tree.nodes[node_scan]
+                if candidate.top_level && candidate.kind != .ErrorNode && usize(candidate.token_end) > usize(candidate.token_start) && usize(candidate.token_end) <= tokens.len {
+                    if tokens[usize(candidate.token_start)].start > previous.start && tokens[usize(candidate.token_end) - 1usize].end <= at.start { between = true }
+                }
+                node_scan += 1usize
+            }
+            if !between { earlier = failure - 1usize }
+        }
+        record_of[failure] = report.count
+        if earlier != failure {
+            // The root of the earlier failure's group: its own record when it is an
+            // error, its parent when it is a note.
+            report.as_note = true
+            report.note_parent = record_of[earlier]
+            if group_of[earlier] != earlier { report.note_parent = record_of[group_of[earlier]] }
+        }
+        group_of[failure] = failure
+        if earlier != failure { group_of[failure] = group_of[earlier] }
+        if tree.failure_barriers[failure] {
+            try print_barrier_failure(report, path, text, at, tree.failure_keywords[failure])
+        } else {
+            // The reserved name and the nesting bound are the first failure's flags.
+            let first = failure == 0usize
+            try print_parse_failure(report, path, text, at, first && tree.failure_reserved_name, first && tree.failure_too_deep)
+        }
+        report.as_note = false
+        failure += 1usize
+    }
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && usize(node.token_end) > usize(node.token_start) && usize(node.token_end) <= tokens.len {
+            let (broken, in_body) = parse.declaration_broken(&tree, node)
+            if broken {
+                let start = tokens[usize(node.token_start)].start
+                let end = tokens[usize(node.token_end) - 1usize].end
+                var record = first_record
+                var scan = 0usize
+                while scan < tree.failure_count && scan < 64usize {
+                    if tree.failures[scan].start >= start && tree.failures[scan].start < end {
+                        record = record_of[scan]
+                        scan = tree.failure_count
+                    } else {
+                        scan += 1usize
+                    }
+                }
+                var name_at = usize(node.token_start) + 1usize
+                if node.kind == .ExternDecl { name_at += 1usize }
+                // An error node names a declaration only when it starts as one; the
+                // debris recovery skipped (`ret y`) names nothing.
+                var named = true
+                if node.kind == .ErrorNode {
+                    let lead = tokens[usize(node.token_start)].kind
+                    named = lead == .KwFn || lead == .KwType || lead == .KwConst || lead == .KwVar
+                }
+                if named && name_at < usize(node.token_end) && tokens[name_at].kind == .Identifier {
+                    add_poison(report, module_index, text[tokens[name_at].start..tokens[name_at].end], !in_body, record)
+                }
+            }
+        }
+        node_index += 1usize
     }
     ret ok
 }
@@ -10173,6 +10311,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         // The overlays (D524): an editor's buffers, for a check as for a build.
         try load_overlays(a, args, &loaded)
+        // A JSON check keeps a module's recovered tree and goes on (D954).
+        if report.json { loaded.keep_going = true }
         let load_error = load_graph(a, &report, &loaded, operand, args[3usize], args[4usize], args[5usize])
         if load_error == ok && loaded.count != 0usize && !loaded.root_text_given { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
         // The ranges the generator owns (D512), for the plans' edit records.
@@ -10191,6 +10331,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // Going on past a failing declaration (D950, H09): a JSON check reports each
         // declaration's first failure and checks the rest without it.
         if report.json { try begin_cascade(a, &resolver, &report) }
+        if report.json { try print_recovered_syntax(&report, &loaded) }
         let resolve_error = resolve.collect(&resolver, &loaded)
         if resolve_error == resolve.KeptFailures {
             try print_kept_resolve_failures(&report, &loaded, &resolver)
