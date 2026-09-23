@@ -290,7 +290,7 @@ fn append_globals(builder: *nir.Builder, output: *emit_x64.Buffer, area_offset: 
     var at = 0usize
     while at < builder.global_count {
         let item = builder.globals[at]
-        if item.has_initial && item.initial != 0usize {
+        if item.live && item.has_initial && item.initial != 0usize {
             try pad_to(output, area_offset + nir.global_area_offset(builder, at))
             var byte_at = 0usize
             var remaining = item.initial
@@ -518,6 +518,7 @@ fn site_of(machine_start: usize, displacement_at: usize) -> usize {
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len { ret InvalidExecutable }
     if relocation_count > relocations.len { ret InvalidExecutable }
+    codegen_x64.mark_live_globals(builder, relocations, relocation_count)
     // Only an `@import` makes this image need a loader. Without one it stays the
     // freestanding static executable it has always been, byte for byte.
     if nir.import_library_count(builder) != 0usize {
@@ -529,7 +530,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     // `var` keeps the single read-execute segment it has always had, byte for byte -- which the
     // determinism harness compares, so the absence of the feature has to cost nothing.
     var segments = 1usize
-    if builder.global_count != 0usize { segments = 2usize }
+    if nir.live_global_count(builder) != 0usize { segments = 2usize }
     // The code starts where the program headers end. The loader asks only that a segment's file
     // offset and address agree modulo the page, not that either be a page boundary; padding the
     // code out to 4096 cost an empty program half its size for nothing (D149). The address is
@@ -618,11 +619,11 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let code_end = output.count
     try patch_little_u64(output, 96usize, code_end)
     try patch_little_u64(output, 104usize, code_end)
-    if builder.global_count != 0usize {
+    if nir.live_global_count(builder) != 0usize {
         var area_alignment = 1usize
         var alignment_at = 0usize
         while alignment_at < builder.global_count {
-            if builder.globals[alignment_at].alignment > area_alignment { area_alignment = builder.globals[alignment_at].alignment }
+            if builder.globals[alignment_at].live && builder.globals[alignment_at].alignment > area_alignment { area_alignment = builder.globals[alignment_at].alignment }
             alignment_at += 1usize
         }
         let area_offset = align_up_to(code_end, area_alignment)

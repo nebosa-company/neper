@@ -124,6 +124,23 @@ fn add_global_relocation(relocations: []Relocation, count: *usize, displacement_
 // live if a relocation of the kept code names it -- the same edges, since every
 // instruction that names a function emits one -- and the relocations are the carriers
 // renumbered before the references move.
+// Which globals the image's code reaches (D946): those a relocation names, the only way
+// code addresses one. The functions `main` does not reach are gone by now, and their
+// relocations with them, so a global only they used is left out of the image the way
+// they are -- where every module-scope `var` of every imported module was laid out.
+fn mark_live_globals(builder: *nir.Builder, relocations: []Relocation, relocation_count: usize) {
+    var at = 0usize
+    while at < builder.global_count {
+        builder.globals[at].live = false
+        at += 1usize
+    }
+    at = 0usize
+    while at < relocation_count && at < relocations.len {
+        if relocations[at].global && relocations[at].function_ref < builder.global_count { builder.globals[relocations[at].function_ref].live = true }
+        at += 1usize
+    }
+}
+
 fn prune_references(builder: *nir.Builder, relocations: []Relocation, relocation_count: usize) -> err {
     if relocation_count > relocations.len { ret Unsupported }
     var reference_at = 0usize

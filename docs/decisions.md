@@ -18946,3 +18946,28 @@ with the button's sides, the trailing one 36 wide at pointer density (44 at touc
 round an 18px chevron. `ui_actions_v2` holds the gap, the width and all four
 corners by pixel; all 64 `ui_*` fixtures pass on Windows and Linux. With it the
 nine action cards of P5-03 are delivered.
+
+## D946 — An image lays out only the globals its code reaches
+
+D943 found the CPU programs' images two to three times the baseline's for the same code:
+dead-function elimination (D128) removed the functions `main` does not reach, but every
+module-scope `var` of every imported module was still laid out. With `e.os`'s window
+buffers and per-thread error slots, that came to 37,940 bytes of data in a program that
+prints one number.
+
+A global is reached exactly when a relocation of the image's code names it: code
+addresses a global no other way, and the relocations of unreached functions are gone
+before the image is written. Both image writers (`link_elf.write`, `link_pe.write`) now
+mark each global live or dead from the relocations first. The shared layout
+(`nir.global_area_offset`, `nir.global_area_size`, used by both linkers on the source
+path and on the artifact path) gives a dead global no space. Its initial bytes are not
+written, and the ELF image gets a data segment only if some global is live. A global
+is live until marked, so an artifact still records every global of its module, and a
+link from artifacts decides the same way the source path does.
+
+The CPU programs' images, Windows / Linux, against the baseline's: `sieve` 20,992 /
+18,555 bytes (was 36,352 / 56,556; baseline 19,968 / 18,032), `sort` 25,088 / 22,963,
+`hash` 19,968 / 17,749, `records` 22,528 / 20,478 -- within a few hundred bytes of M2
+where they were up to three times it. sc500k's debug image is 1,628,672 bytes (was
+1,644,032) and the compiler's own 7,827,968 (was 7,840,768). The compiler reproduces
+itself, the 70 trap runs and every program print what they did.

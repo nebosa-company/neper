@@ -239,7 +239,7 @@ fn append_globals(builder: *nir.Builder, output: *emit_x64.Buffer, area_offset: 
     var at = 0usize
     while at < builder.global_count {
         let item = builder.globals[at]
-        if item.has_initial && item.initial != 0usize {
+        if item.live && item.has_initial && item.initial != 0usize {
             try pad_to(output, area_offset + nir.global_area_offset(builder, at))
             var byte_at = 0usize
             var remaining = item.initial
@@ -276,6 +276,7 @@ fn runtime_prefix(builder: *nir.Builder, relocations: []codegen_x64.Relocation, 
 
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len { ret InvalidExecutable }
+    codegen_x64.mark_live_globals(builder, relocations, relocation_count)
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
     let headers_size = 512usize

@@ -260,6 +260,10 @@ type GlobalData = struct {
     alignment: usize,
     initial: usize,
     has_initial: bool,
+    // Reached by the image's code (D946): an image lays out only the globals a relocation
+    // of its code names, as it emits only the functions `main` reaches. True until
+    // `codegen_x64.mark_live_globals` says otherwise, so an artifact writes every global.
+    live: bool,
 }
 
 type Signatures = struct {
@@ -535,7 +539,7 @@ fn init_globals(builder: *Builder, globals: []GlobalData) -> err {
 // a fresh entry each time, which showed up as a data segment far larger than its five variables.
 fn add_global(builder: *Builder, module_index: usize, name: str, size: usize, alignment: usize, initial: usize, has_initial: bool) -> (usize, err) {
     if builder.global_count == builder.globals.len { ret (0usize, Capacity) }
-    builder.globals[builder.global_count] = GlobalData { module_index: module_index, name: name, size: size, alignment: alignment, initial: initial, has_initial: has_initial }
+    builder.globals[builder.global_count] = GlobalData { module_index: module_index, name: name, size: size, alignment: alignment, initial: initial, has_initial: has_initial, live: true }
     builder.global_count += 1usize
     ret (builder.global_count - 1usize, ok)
 }
@@ -546,6 +550,11 @@ fn global_area_offset(builder: *Builder, index: usize) -> usize {
     var offset = 0usize
     var at = 0usize
     while at < builder.global_count {
+        if !builder.globals[at].live {
+            if at == index { ret offset }
+            at += 1usize
+            continue
+        }
         let item = builder.globals[at]
         var alignment = item.alignment
         if alignment == 0usize { alignment = 1usize }
@@ -559,9 +568,23 @@ fn global_area_offset(builder: *Builder, index: usize) -> usize {
 }
 
 fn global_area_size(builder: *Builder) -> usize {
-    if builder.global_count == 0usize { ret 0usize }
-    let last = builder.global_count - 1usize
-    ret global_area_offset(builder, last) + builder.globals[last].size
+    // The end of the last global laid out: past the last live one.
+    var at = builder.global_count
+    while at > 0usize {
+        at = at - 1usize
+        if builder.globals[at].live { ret global_area_offset(builder, at) + builder.globals[at].size }
+    }
+    ret 0usize
+}
+
+fn live_global_count(builder: *Builder) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < builder.global_count {
+        if builder.globals[at].live { count += 1usize }
+        at += 1usize
+    }
+    ret count
 }
 
 // The two opcodes that name a function: a call, and taking its address. `e.os.thread_create` hands
