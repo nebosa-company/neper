@@ -2175,6 +2175,7 @@ fn chip(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, kind: ChipK
 
 // A rating's star, painted: five points about the middle, filled or outlined in
 // the primary colour.
+// v2 (D953): an empty star is a 1.75 stroke.
 type Star = struct { color: paint.Color, filled: bool, arena: *mem.Arena }
 
 fn star_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
@@ -2205,7 +2206,7 @@ fn star_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     try geometry.close_path(&builder)
     let path = geometry.finish(&builder)
     if star.filled { ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: star.color } } }) }
-    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: path, brush: paint.Brush { Solid: star.color }, stroke: paint.Stroke { width: 1.0, cap: .Butt, join: .Miter, miter_limit: 4.0 } } })
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: path, brush: paint.Brush { Solid: star.color }, stroke: paint.Stroke { width: 1.75, cap: .Round, join: .Round, miter_limit: 4.0 } } })
 }
 
 // A rating's keyboard: Left and Right move the value by one within `0..max`.
@@ -2244,16 +2245,41 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     if rated_error != ok { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, count)
     if items_error != ok { ret (zero, TooLarge) }
-    let size = t.tokens.metrics.control_height - 2.0 * t.tokens.spacing.xs
+    // v2 (D953, docs/ux/components/Rating): each star centred in a round cell the
+    // control height across (32 with a pointer, 40 on touch) that carries the hover
+    // layer; the star 20 (24 on touch), filled `primary`, empty `on-surface-variant`;
+    // while the pointer is over a star, the stars up to it preview in `primary` at 60%.
+    let cell = t.tokens.metrics.control_height
+    var size: f32 = 20.0
+    if cell > t.tokens.sizes.control_sm { size = t.tokens.sizes.icon_md }
+    let primary = style.color(t.tokens, .Primary)
+    var hovered = count
+    var h = 0usize
+    while h < count {
+        if control_state(t, key + 1u64 + u64(h), true, false).hovered { hovered = h }
+        h += 1usize
+    }
     var none: []const widget.Node = zero
     var i = 0usize
     while i < count {
-        stars[i] = Star { color: style.color(t.tokens, .Primary), filled: u32(i) < value, arena: a }
+        var ink = style.color(t.tokens, .OnSurfaceVariant)
+        var filled = u32(i) < value
+        if filled { ink = primary }
+        if hovered < count && i <= hovered && !filled {
+            ink = with_alpha(primary, 0.6)
+            filled = true
+        }
+        stars[i] = Star { color: ink, filled: filled, arena: a }
         rated[i] = Rated { value: u32(i) + 1u32, change: change }
         let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&stars[i]), measure: mark_measure, paint: star_paint, state: widget.bytes_of[Star](&stars[i]) } }, style: sized_style(size, size), children: none }
-        items[i] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, style.defaults(), body[0usize..1usize])
+        var cell_style = sized_style(cell, cell)
+        cell_style.radius = cell * 0.5
+        let inset = style.Length { Px: (cell - size) * 0.5 }
+        cell_style.padding = style.EdgeLengths { left: inset, top: inset, right: inset, bottom: inset }
+        if i == hovered { cell_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), t.tokens.states.hover) } }
+        items[i] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, cell_style, body[0usize..1usize])
         i += 1usize
     }
     let (steps, steps_error) = mem.alloc[Rate](a, 2usize)
@@ -2478,25 +2504,51 @@ fn spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer:
 // angle, which runs three quarters of a turn from the lower left clockwise.
 type Knob = struct { runtime: *widget.Runtime, key: widget.Key, track: paint.Color, fill: paint.Color, share: f32, low: f32, high: f32, change: widget.Change[f32], arena: *mem.Arena }
 
+// v2 (D953, docs/ux/components/Dial): a 270-degree track from the lower left,
+// radius 40% of the face and 6% wide in `secondary-container` with round caps, the
+// active arc over it in `primary` up to the value, and a round `primary` handle
+// 14% of the face across at its end.
 fn knob_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let k = mem.cast[*Knob](ctx)
     let cx = area.x + area.width * 0.5
     let cy = area.y + area.height * 0.5
-    var radius = area.width
-    if area.height < radius { radius = area.height }
-    radius = radius * 0.5 - 2.0
+    var face = area.width
+    if area.height < face { face = area.height }
+    let radius = face * 0.4
     if radius <= 0.0 { ret ok }
-    let (ring, ring_error) = arc_path(k.arena, cx, cy, radius, 1.0)
-    if ring_error != ok { ret ring_error }
-    let stroke = paint.Stroke { width: 2.0, cap: .Round, join: .Round, miter_limit: 4.0 }
-    try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: ring, brush: paint.Brush { Solid: k.track }, stroke: stroke } })
-    let angle = 0.0 - 2.3561945 + k.share * 4.712389
-    let (pb, pb_error) = geometry.path_builder(k.arena, 2usize, 2usize)
-    if pb_error != ok { ret TooLarge }
+    let stroke = paint.Stroke { width: face * 0.06, cap: .Round, join: .Round, miter_limit: 4.0 }
+    let start: f32 = 0.0 - 2.3561945
+    let (track, track_error) = sweep_path(k.arena, cx, cy, radius, start, 4.712389)
+    if track_error != ok { ret track_error }
+    try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: track, brush: paint.Brush { Solid: k.track }, stroke: stroke } })
+    let sweep = k.share * 4.712389
+    if sweep > 0.001 {
+        let (active, active_error) = sweep_path(k.arena, cx, cy, radius, start, sweep)
+        if active_error != ok { ret active_error }
+        try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: active, brush: paint.Brush { Solid: k.fill }, stroke: stroke } })
+    }
+    let end = start + sweep
+    let (handle, handle_error) = arc_path(k.arena, cx + math.sin[f32](end) * radius, cy - math.cos[f32](end) * radius, face * 0.07, 1.0)
+    if handle_error != ok { ret handle_error }
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: handle, brush: paint.Brush { Solid: k.fill } } })
+}
+
+// An open arc as chords: from `start` (radians clockwise from the top) through
+// `sweep`, a chord every sixteenth of a turn or less.
+fn sweep_path(a: *mem.Arena, cx: f32, cy: f32, radius: f32, start: f32, sweep: f32) -> (geometry.Path, err) {
+    var steps = usize(sweep / 0.19634955) + 2usize
+    if steps > 40usize { steps = 40usize }
+    let (pb, pb_error) = geometry.path_builder(a, steps + 2usize, steps + 2usize)
+    if pb_error != ok { ret (zero, TooLarge) }
     var builder = pb
-    try geometry.move_to(&builder, geometry.Point { x: cx, y: cy })
-    try geometry.line_to(&builder, geometry.Point { x: cx + math.sin[f32](angle) * radius, y: cy - math.cos[f32](angle) * radius })
-    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&builder), brush: paint.Brush { Solid: k.fill }, stroke: stroke } })
+    if geometry.move_to(&builder, geometry.Point { x: cx + math.sin[f32](start) * radius, y: cy - math.cos[f32](start) * radius }) != ok { ret (zero, TooLarge) }
+    var i = 1usize
+    while i <= steps {
+        let angle = start + sweep * f32(i) / f32(steps)
+        if geometry.line_to(&builder, geometry.Point { x: cx + math.sin[f32](angle) * radius, y: cy - math.cos[f32](angle) * radius }) != ok { ret (zero, TooLarge) }
+        i += 1usize
+    }
+    ret (geometry.finish(&builder), ok)
 }
 
 // The pointer's angle about the knob's middle, clockwise from the top, becomes
@@ -2553,7 +2605,7 @@ fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32,
     if share > 1.0 { share = 1.0 }
     let (knobs, knobs_error) = mem.alloc[Knob](a, 1usize)
     if knobs_error != ok { ret (zero, TooLarge) }
-    knobs[0usize] = Knob { runtime: t.runtime, key: key, track: style.color(t.tokens, .Border), fill: style.color(t.tokens, .Primary), share: share, low: low, high: high, change: change, arena: a }
+    knobs[0usize] = Knob { runtime: t.runtime, key: key, track: style.color(t.tokens, .SecondaryContainer), fill: style.color(t.tokens, .Primary), share: share, low: low, high: high, change: change, arena: a }
     let (turns, turns_error) = mem.alloc[Turn](a, 2usize)
     if turns_error != ok { ret (zero, TooLarge) }
     turns[0usize] = Turn { knob: &knobs[0usize], up: false }
@@ -2572,7 +2624,32 @@ fn dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32,
     body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&knobs[0usize]), measure: mark_measure, paint: knob_paint, state: zero } }, style: sized_style(size, size), children: none }
     let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
     if hit_error != ok { ret (zero, TooLarge) }
-    hit[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&knobs[0usize]), invoke: knob_gesture }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: true }, sized_style(size, size), body[0usize..1usize])
+    // The readout in the middle: `title-large` (`label-large` on a small face) in
+    // `on-surface`, over the face.
+    let (readout_digits, readout_error) = mem.alloc[u8](a, 21usize)
+    if readout_error != ok { ret (zero, TooLarge) }
+    var readout_value = value + 0.5
+    if value < 0.0 { readout_value = value - 0.5 }
+    let readout_len = write_i64(readout_digits, i64(readout_value))
+    var readout = text_options()
+    readout.role = .TitleLarge
+    if size < 100.0 { readout.role = .LabelLarge }
+    readout.color = .OnSurface
+    readout.wrap = .None
+    let (readout_node, readout_node_error) = text_node(a, 0u64, readout_digits[0usize..readout_len], t, readout)
+    if readout_node_error != ok { ret (zero, readout_node_error) }
+    let (faces, faces_error) = mem.alloc[widget.Node](a, 3usize)
+    if faces_error != ok { ret (zero, TooLarge) }
+    faces[0usize] = readout_node
+    faces[1usize] = body[0usize]
+    faces[2usize] = widget.aligned(0u64, .Center, .Center, sized_style(size, size), faces[0usize..1usize])
+    let face = widget.stack(0u64, sized_style(size, size), faces[1usize..3usize])
+    let (faced, faced_error) = mem.alloc[widget.Node](a, 1usize)
+    if faced_error != ok { ret (zero, TooLarge) }
+    faced[0usize] = face
+    var hit_style = sized_style(size, size)
+    hit_style.radius = size * 0.5
+    hit[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&knobs[0usize]), invoke: knob_gesture }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: true }, hit_style, faced[0usize..1usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), hit[0usize..1usize])
@@ -2662,14 +2739,48 @@ fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var shown_len = write_chord(text_bytes, chord)
     if recording { shown_len = write_word(text_bytes, 0usize, "Press keys") }
     let shown: str = text_bytes[0usize..shown_len]
-    var state = control_state(t, key, true, recording)
-    let look = style.resolve(t.tokens, .Outlined, state)
-    var caption = text_options()
-    caption.role = .Body
-    caption.wrap = .None
-    let (label_node, label_error) = colored_text(a, 0u64, shown, t, caption, look.foreground)
-    if label_error != ok { ret (zero, label_error) }
-    let (field_node, field_error) = pressable_states(a, key, t, 3u8, label, look, true, recording, 0u32, 0u32, 0u64, start, label_node)
+    // v2 (D953, docs/ux/components/ShortcutRecorder): a field-shaped box 40 tall
+    // (32 dense) and 220 wide, 12 before its content and 4 after, 1px `outline`
+    // (`on-surface` hovered); recording, a 2px `primary` outline over `primary` at
+    // 8% and the hint in `on-surface`; the chord as key caps 24 tall, 4 apart.
+    let state = control_state(t, key, true, false)
+    var look = style.resolve(t.tokens, .Outlined, state)
+    look.border = style.color(t.tokens, .Outline)
+    if state.hovered { look.border = style.color(t.tokens, .OnSurface) }
+    look.border_width = t.tokens.sizes.divider
+    look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if recording {
+        look.border = style.color(t.tokens, .Primary)
+        look.border_width = t.tokens.sizes.outline_focused
+        look.background = style.layer(look.background, look.border, 0.08)
+    }
+    look.radius = t.tokens.radii.xs
+    var box_h = t.tokens.sizes.control_md
+    if t.tokens.metrics.control_height < t.tokens.sizes.control_sm { box_h = t.tokens.sizes.control_sm }
+    look.custom_padding = true
+    look.padding_start = 12.0
+    look.padding = 4.0
+    look.padding_y = max_zero((box_h - 24.0) * 0.5)
+    look.min_height = box_h
+    look.min_width = 220.0
+    var content: widget.Node = zero
+    if recording || chord.key == 0u32 {
+        var hint = text_options()
+        hint.role = .BodyMedium
+        hint.color = .OnSurfaceVariant
+        if recording { hint.color = .OnSurface }
+        hint.wrap = .None
+        var words = shown
+        if !recording { words = label }
+        let (hint_node, hint_error) = text_node(a, 0u64, words, t, hint)
+        if hint_error != ok { ret (zero, hint_error) }
+        content = hint_node
+    } else {
+        let (caps, caps_error) = key_caps(a, t, shown)
+        if caps_error != ok { ret (zero, caps_error) }
+        content = caps
+    }
+    let (field_node, field_error) = pressable_states(a, key, t, 3u8, label, look, true, recording, 0u32, 0u32, 0u64, start, content)
     if field_error != ok { ret (zero, field_error) }
     var keys: widget.Change[input.KeyEvent] = zero
     if recording {
@@ -2690,6 +2801,53 @@ fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     sem.label = label
     sem.value = shown
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// A chord's key caps (D953): each `+`-separated part a cap 24 tall with 6px sides,
+// `radius-xs`, a 1px `outline-variant` edge on `surface-container-lowest`, its
+// name in `code` and `on-surface-variant`; 4 apart.
+fn key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, err) {
+    var parts_count = 1usize
+    var i = 0usize
+    while i < chord_text.len {
+        if chord_text[i] == 43u8 && i + 1usize < chord_text.len { parts_count += 1usize }
+        i += 1usize
+    }
+    let (caps, caps_error) = mem.alloc[widget.Node](a, parts_count)
+    if caps_error != ok { ret (zero, TooLarge) }
+    var cap_text = text_options()
+    cap_text.role = .Code
+    cap_text.color = .OnSurfaceVariant
+    cap_text.wrap = .None
+    var from = 0usize
+    var at = 0usize
+    i = 0usize
+    while i <= chord_text.len {
+        let boundary = i == chord_text.len || (chord_text[i] == 43u8 && i + 1usize < chord_text.len && i > from)
+        if boundary {
+            let (name, name_error) = text_node(a, 0u64, chord_text[from..i], t, cap_text)
+            if name_error != ok { ret (zero, name_error) }
+            let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+            if inner_error != ok { ret (zero, TooLarge) }
+            inner[0usize] = name
+            var cap = style.defaults()
+            cap.min_height = style.Length { Px: 24.0 }
+            cap.min_width = style.Length { Px: 24.0 }
+            cap.radius = t.tokens.radii.xs
+            cap.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+            cap.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+            let side = style.Length { Px: 6.0 }
+            let tb = style.Length { Px: 2.0 }
+            cap.padding = style.EdgeLengths { left: side, top: tb, right: side, bottom: tb }
+            if at < parts_count {
+                caps[at] = widget.box(0u64, cap, inner[0usize..1usize])
+                at += 1usize
+            }
+            from = i + 1usize
+        }
+        i += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), caps[0usize..at]), ok)
 }
 
 // ------------------------------------- advanced text and choice input (D831, P2-03)

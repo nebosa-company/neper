@@ -19170,3 +19170,21 @@ function and a local of the struct give three notes under their causes. Two fixt
 changed as intended: `safety_foreign_callback` and `safety_union_representation` each
 failed at a declaration and now carry the use in `main` as a note under it, where the
 use went unreported. The other 166 fixtures of `accept/` and `reject/` are unchanged.
+
+## D953 — The rating, the dial and the shortcut recorder draw their v2 specifications
+
+P5-04's last three before the spin box. A rating's stars stand in cells the control
+height square (32 with a pointer, 40 on touch), each under the hover layer of
+`on-surface` when pointed at; a star is 20 across with a pointer and 24 on touch,
+a rated one filled `primary`, an unrated one a 1.75 stroke of `on-surface-variant`,
+and under the pointer the stars up to it preview in `primary` at 60%. The dial's
+face is `docs/ux`'s knob: a 270-degree track in `secondary-container`, the arc up to
+the value and the handle in `primary`, the readout in the middle. The shortcut
+recorder is a 220 x 40 outlined box (1px `outline`, 2px `primary` while recording)
+holding its chord as key caps, one per modifier and one for the key, instead of
+one text run.
+
+`ui_inputs3_v2` holds the rating's cells, fill, hollow and hover preview, the dial's
+track, arc and handle, and the recorder's size and both outlines; `ui_numeric`'s
+chord checks now look for the caps. All 67 `ui_*` fixtures pass on Windows and
+Linux. SpinBoxSpec stays open (D952).

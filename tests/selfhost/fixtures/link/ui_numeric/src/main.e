@@ -189,7 +189,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // says so, a lone Shift is waited through, Ctrl+Shift+S is captured; Escape
     // captures none.
     let (recorder, has_recorder) = find(tree, .Group, "Shortcut")
-    if !has_recorder || !same(recorder.value, "Ctrl+S") || testing.by_text(&harness, "Ctrl+S").count == 0usize { os.exit(28i32) }
+    // v2 (D953): the chord shows as key caps, one per part.
+    if !has_recorder || !same(recorder.value, "Ctrl+S") || testing.by_text(&harness, "Ctrl").count == 0usize || testing.by_text(&harness, "S").count == 0usize { os.exit(28i32) }
     let (recorder_at, has_recorder_at) = centre_of(&harness, &runtime, 30u64)
     if !has_recorder_at || testing.tap(&harness, recorder_at.x, recorder_at.y) != ok || logs[0usize].starts != 1usize { os.exit(29i32) }
     let (root_2, build_2_error) = build(&frame, &theme, ctx, buffer, &starts[0usize], 5i64, 43i64, 50.0, control_s, true)
@@ -210,7 +211,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_3, build_3_error) = build(&frame, &theme, ctx, buffer, &starts[0usize], 5i64, 43i64, 50.0, captured, false)
     if build_3_error != ok { os.exit(38i32) }
     if testing.pump(&harness, root_3, now) != ok { os.exit(39i32) }
-    if testing.by_text(&harness, "Ctrl+Shift+S").count == 0usize { os.exit(40i32) }
+    if testing.by_text(&harness, "Ctrl").count == 0usize || testing.by_text(&harness, "Shift").count == 0usize || testing.by_text(&harness, "S").count == 0usize { os.exit(40i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui numeric ok\n")
     ret ok

@@ -1160,18 +1160,21 @@
           ],
           "delivered": [
             "AutocompleteSpec",
+            "DialSpec",
             "FieldLabelSpec",
             "FieldMessageSpec",
-            "FormSpec",
             "FormFieldSpec",
+            "FormSpec",
             "FormattedFieldSpec",
+            "RatingSpec",
             "SearchBarSpec",
+            "ShortcutRecorderSpec",
             "StepperSpec",
             "TextFieldSpec",
             "TokenFieldSpec",
             "ValidationSummarySpec"
           ],
-          "evidence": "lib/e/ui/control.e (D951): control.field outlined or filled, 16 taller than the control height (48/56/40) with 16px sides, the floating label in a notch or at the top of the filled box, body-large on-surface values, placeholder only when focused (or unlabelled), the 2px primary / error edge, the hover, disabled (4%/38%) and read-only looks, prefix and suffix; field_label title-small, field_message body-small by validity, form_field's 6/4, form's 20/16 and 24 gutter, the validation summary on the error container; tests/selfhost/fixtures/link/ui_inputs_v2 on both hosts; (D952) the search bar pill on surface-container-high at 40/56, the shared suggestion list (surface-container, 8 corners, elevation 2, 36/48 rows with the focus layer on the active one), the token field's one outlined box, the stepper's pill with round 28/32 buttons, a formatted field not invalid while empty; tests/selfhost/fixtures/link/ui_inputs2_v2 on both hosts"
+          "evidence": "lib/e/ui/control.e (D951): control.field outlined or filled, 16 taller than the control height (48/56/40) with 16px sides, the floating label in a notch or at the top of the filled box, body-large on-surface values, placeholder only when focused (or unlabelled), the 2px primary / error edge, the hover, disabled (4%/38%) and read-only looks, prefix and suffix; field_label title-small, field_message body-small by validity, form_field's 6/4, form's 20/16 and 24 gutter, the validation summary on the error container; tests/selfhost/fixtures/link/ui_inputs_v2 on both hosts; (D952) the search bar pill on surface-container-high at 40/56, the shared suggestion list (surface-container, 8 corners, elevation 2, 36/48 rows with the focus layer on the active one), the token field's one outlined box, the stepper's pill with round 28/32 buttons, a formatted field not invalid while empty; tests/selfhost/fixtures/link/ui_inputs2_v2 on both hosts; (D953) the rating's stars in control-height cells with the hover layer and a 60% preview, the dial's 270-degree track in secondary-container with its active arc and handle in primary, the shortcut recorder's 220 x 40 outlined box with key caps and a 2px primary outline while recording; tests/selfhost/fixtures/link/ui_inputs3_v2 on both hosts"
         },
         {
           "id": "P5-05",
