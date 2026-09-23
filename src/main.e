@@ -6374,9 +6374,19 @@ fn artifact_identity(a: *mem.Arena, old: []const u8, old_error: err, text_now: s
     if old_error == em.InvalidArtifact { ret (6u8, false) }
     if old_error != ok { ret (0u8, false) }
     let (old_hash, old_hash_error) = em.artifact_source_hash(old)
-    let (new_hash, new_hash_error) = em.source_text_hash(a, text_now)
     let (old_mode, old_mode_error) = em.artifact_mode(old)
     let (old_compiler, old_compiler_error) = em.artifact_compiler_hash(old)
+    // The canonical text's hash is this compiler's function of the bytes (D933): an
+    // artifact this compiler wrote from the same bytes -- its SHA-256 is the one the
+    // verification below trusts -- holds the value the text would hash to now, so the
+    // text is not stripped of its comments again at every warm build.
+    var new_hash = old_hash
+    var new_hash_error = old_hash_error
+    let (written_sha, written_interface, written_error) = em.artifact_manifest_digests(old)
+    let same_bytes = written_error == ok && same(written_sha, sha_now)
+    if !(same_bytes && compiler_identity != 0usize && old_compiler_error == ok && old_compiler == compiler_identity) {
+        (new_hash, new_hash_error) = em.source_text_hash(a, text_now)
+    }
     if old_hash_error != ok || old_mode_error != ok || old_compiler_error != ok || new_hash_error != ok { ret (6u8, false) }
     if old_mode != mode_id { ret (2u8, false) }
     if old_hash != new_hash && !fault_collision { ret (1u8, false) }

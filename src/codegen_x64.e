@@ -1197,9 +1197,8 @@ fn parameter_count(builder: *nir.Builder, current: nir.Function) -> (usize, err)
     let end = current.first_instruction + current.instruction_count
     var at = current.first_instruction
     while at < end {
-        let instruction = builder.instructions[at]
-        if instruction.opcode == .Parameter {
-            if instruction.immediate != count { ret (0usize, Unsupported) }
+        if builder.instructions[at].opcode == .Parameter {
+            if builder.instructions[at].immediate != count { ret (0usize, Unsupported) }
             count += 1usize
         }
         at += 1usize
@@ -1620,11 +1619,14 @@ fn max_call_arguments(builder: *nir.Builder, current: nir.Function) -> usize {
     var maximum = 0usize
     let end = current.first_instruction + current.instruction_count
     var at = current.first_instruction
+    // Fields read, not instructions copied (D934), here and in the two counts below.
     while at < end {
-        let instruction = builder.instructions[at]
-        if instruction.opcode == .Call && instruction.operand_count > maximum { maximum = instruction.operand_count }
+        let opcode = builder.instructions[at].opcode
         // An indirect call also parks its callee in the outgoing area.
-        if instruction.opcode == .IndirectCall && instruction.operand_count > maximum { maximum = instruction.operand_count }
+        if opcode == .Call || opcode == .IndirectCall {
+            let operand_count = builder.instructions[at].operand_count
+            if operand_count > maximum { maximum = operand_count }
+        }
         at += 1usize
     }
     ret maximum
@@ -1754,11 +1756,11 @@ fn stack_object_count(builder: *nir.Builder, current: nir.Function) -> usize {
     var count = 0usize
     var at = current.first_instruction
     while at < end {
-        let instruction = builder.instructions[at]
-        if instruction.opcode == .Stack || instruction.opcode == .ConstString {
+        let opcode = builder.instructions[at].opcode
+        if opcode == .Stack || opcode == .ConstString {
             var slots = 2usize
-            if instruction.opcode == .Stack {
-                slots = instruction.immediate
+            if opcode == .Stack {
+                slots = builder.instructions[at].immediate
                 if slots == 0usize { slots = 1usize }
             }
             count += slots

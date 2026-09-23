@@ -5188,7 +5188,7 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         if right_block_error != ok || right_block_index != right_block { ret (0usize, boolean, nir.InvalidControlFlow) }
         let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], boolean, builder, bindings, binding_count)
         if right_error != ok { ret (0usize, right_type, right_error) }
-        let (right_store, right_store_ignored, right_store_error) = nir.emit(builder, .Store, boolean, false, 0usize, c.tokens[usize(node.token_start)])
+        let (right_store, right_store_ignored, right_store_error) = nir.emit(builder, .Store, boolean, false, 1usize, c.tokens[usize(node.token_start)])
         if right_store_error != ok { ret (0usize, boolean, right_store_error) }
         let right_address_error = nir.add_operand(builder, right_store, stack)
         if right_address_error != ok { ret (0usize, boolean, right_address_error) }
@@ -5204,7 +5204,7 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         if operator == .PunctOrOr { short_immediate = 1usize }
         let (short_constant_instruction, short_value, short_constant_error) = nir.emit(builder, .ConstBool, boolean, true, short_immediate, c.tokens[usize(node.token_start)])
         if short_constant_error != ok { ret (0usize, boolean, short_constant_error) }
-        let (short_store, short_store_ignored, short_store_error) = nir.emit(builder, .Store, boolean, false, 0usize, c.tokens[usize(node.token_start)])
+        let (short_store, short_store_ignored, short_store_error) = nir.emit(builder, .Store, boolean, false, 1usize, c.tokens[usize(node.token_start)])
         if short_store_error != ok { ret (0usize, boolean, short_store_error) }
         let short_address_error = nir.add_operand(builder, short_store, stack)
         if short_address_error != ok { ret (0usize, boolean, short_address_error) }
@@ -5227,7 +5227,10 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         if right_target_error != ok { ret (0usize, boolean, right_target_error) }
         let short_target_error = nir.set_branch_targets(builder, short_exit, merge_block, 0usize)
         if short_target_error != ok { ret (0usize, boolean, short_target_error) }
-        let (load_instruction, result, load_error) = nir.emit(builder, .Load, boolean, true, 0usize, c.tokens[usize(node.token_start)])
+        // The slot's accesses are a byte wide, as a `bool`'s are anyway (D934): with the
+        // width written, `promote_locals` keeps the result in a register, where a width
+        // of zero left every `&&` and `||` a store and a load through the frame.
+        let (load_instruction, result, load_error) = nir.emit(builder, .Load, boolean, true, 1usize, c.tokens[usize(node.token_start)])
         if load_error != ok { ret (0usize, boolean, load_error) }
         let load_operand_error = nir.add_operand(builder, load_instruction, stack)
         if load_operand_error != ok { ret (0usize, boolean, load_operand_error) }

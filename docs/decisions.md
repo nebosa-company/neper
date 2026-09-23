@@ -18557,3 +18557,38 @@ the 70 trap runs print what they did, sc500k prints its expected value. sc500k,
 single worker: 109.90 G -> 92.50 G instructions (-15.8%); CPU time, seven runs each in
 one session, D932 6,667 ms, this 5,626 (-15.6%), the M2 baseline 5,118 -- +9.9%, inside
 H25's cold budget on this instrument, where D930 found +40%.
+
+## D934 — The warm build trusts its own hash of the same bytes
+
+D933's paired gate on Windows (`results/paired-windows-d933.json`, eight workers)
+passed sc500k in both modes and sc1m debug, and breached sc1m release: cold 1.123,
+warm 1.219. Single-worker instruction counts had the release build under the baseline
+(84.8 G against 87.5 G without the software SHA), so the rest was looked for where the
+count does not see:
+
+- **Warm.** A profile of ten warm builds found 30% of their time in stripping the
+  comments of every unchanged module, to compare its canonical hash (D504) with the
+  artifact's. The artifact also carries the source's SHA-256, which the warm build
+  computes anyway and the verification trusts (D507). When this same compiler wrote
+  the artifact -- its identity is in it (D398) -- from bytes with that SHA-256, the
+  canonical hash is the one it stored: this compiler's function of the same bytes. The
+  text is stripped only when the bytes or the compiler differ, so every reason code a
+  manifest names is the one it named. sc1m release warm, median of five: baseline 260
+  ms, D933 330, this 275.
+- **The platform.** At one worker the Windows compilers took 15% more user time than
+  the baseline where the Linux ones took the same CPU. A sampling profiler that suspends
+  the compiler's threads and reads their RIP (no elevation; `build/examples/winprof.py`)
+  put it in no one place: the NIR verifier, the canonical text, the lowering's proof
+  scans, the code generator, time in the system's DLLs. The artifact rename (D343)
+  costs 1,000 files about 170 ms on NTFS, but a build without it measured the same,
+  and H24 keeps it.
+- **Short-circuit results.** `&&` and `||` lowered their result through a stack slot
+  whose loads and stores carried width 0, and `promote_locals` promotes only accesses
+  of 1 to 8 bytes, so every one went through the frame. The accesses now carry the
+  `bool`'s byte width, which selects the same instructions when the slot stays.
+- The verifier reads a block's terminator into a five-field `Exit`, where it copied the
+  184-byte instruction in four walks; `max_call_arguments`, `parameter_count` and
+  `stack_object_count` read the fields they test.
+
+The compiler reproduces itself, the 70 trap runs print what they did, sc500k its
+expected value. sc500k single worker: 92.50 G -> 91.45 G instructions.

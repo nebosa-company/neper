@@ -1275,6 +1275,14 @@ fn validate_target(function: Function, destination: usize) -> bool {
     ret destination >= function.first_block && destination < function.first_block + function.block_count
 }
 
+// What the walks over a function's blocks read of a terminator (D934), field by field:
+// the instruction copied whole to read these was 184 bytes a block, several times over.
+type Exit = struct { opcode: Opcode, target: usize, target2: usize, first_operand: usize, operand_count: usize }
+
+fn exit_of(builder: *Builder, index: usize) -> Exit {
+    ret Exit { opcode: builder.instructions[index].opcode, target: builder.instructions[index].target, target2: builder.instructions[index].target2, first_operand: builder.instructions[index].first_operand, operand_count: builder.instructions[index].operand_count }
+}
+
 fn validate_function(builder: *Builder, function: Function) -> err {
     let block_end = function.first_block + function.block_count
     var block_at = function.first_block
@@ -1282,7 +1290,7 @@ fn validate_function(builder: *Builder, function: Function) -> err {
         let block = builder.blocks[block_at]
         if !block.terminated || block.instruction_count == 0usize { ret InvalidControlFlow }
         let terminator_index = block.first_instruction + block.instruction_count - 1usize
-        let terminator = builder.instructions[terminator_index]
+        let terminator = exit_of(builder, terminator_index)
         if terminator.opcode == .Branch {
             if !validate_target(function, terminator.target) { ret InvalidControlFlow }
         } else {
@@ -1363,7 +1371,7 @@ fn verify_function(builder: *Builder, function: Function) -> err {
             }
             i += 1usize
         }
-        let terminator = builder.instructions[end - 1usize]
+        let terminator = exit_of(builder, end - 1usize)
         if terminator.opcode == .Branch || terminator.opcode == .BranchIf {
             pred_count[terminator.target - function.first_block] += 1usize
             if terminator.opcode == .BranchIf { pred_count[terminator.target2 - function.first_block] += 1usize }
@@ -1381,7 +1389,7 @@ fn verify_function(builder: *Builder, function: Function) -> err {
     block_at = 0usize
     while block_at < block_count {
         let block = builder.blocks[function.first_block + block_at]
-        let terminator = builder.instructions[block.first_instruction + block.instruction_count - 1usize]
+        let terminator = exit_of(builder, block.first_instruction + block.instruction_count - 1usize)
         if terminator.opcode == .Branch || terminator.opcode == .BranchIf {
             let t1 = terminator.target - function.first_block
             preds[pred_start[t1] + pred_count[t1]] = block_at
@@ -1404,7 +1412,7 @@ fn verify_function(builder: *Builder, function: Function) -> err {
     while top > 0usize {
         let b = stack[top - 1usize]
         let block = builder.blocks[function.first_block + b]
-        let terminator = builder.instructions[block.first_instruction + block.instruction_count - 1usize]
+        let terminator = exit_of(builder, block.first_instruction + block.instruction_count - 1usize)
         var pushed = false
         if terminator.opcode == .Branch || terminator.opcode == .BranchIf {
             let s1 = terminator.target - function.first_block
@@ -1525,14 +1533,14 @@ fn elide_null_checks(builder: *Builder, function: Function, definer_index: []usi
     while block_at < function.block_count {
         let block = builder.blocks[function.first_block + block_at]
         let terminator_index = block.first_instruction + block.instruction_count - 1usize
-        let terminator = builder.instructions[terminator_index]
+        let terminator = exit_of(builder, terminator_index)
         if terminator.opcode == .BranchIf && idom[block_at] != none && terminator.operand_count == 1usize {
             let pointer = builder.operands[terminator.first_operand]
-            let definer = builder.instructions[definer_index[pointer]]
+            let definer_at = definer_index[pointer]
             // A stack object's address is never nil: an inlined callee's check of the
             // caller's `&local` is made already.
-            let never_nil = definer.opcode == .Stack
-            if never_nil || (definer.ty.kind == .Pointer && checked_on_entry(builder, function, pointer, block_at, idom, pred_start, pred_count, preds, none)) {
+            let never_nil = builder.instructions[definer_at].opcode == .Stack
+            if never_nil || (builder.instructions[definer_at].ty.kind == .Pointer && checked_on_entry(builder, function, pointer, block_at, idom, pred_start, pred_count, preds, none)) {
                 builder.instructions[terminator_index].opcode = .Branch
                 builder.instructions[terminator_index].operand_count = 0usize
                 builder.instructions[terminator_index].target2 = 0usize
@@ -1551,7 +1559,7 @@ fn checked_on_entry(builder: *Builder, function: Function, pointer: usize, block
         if at != 0usize && pred_count[at] == 1usize {
             let entry = preds[pred_start[at]]
             let entry_block = builder.blocks[function.first_block + entry]
-            let entry_terminator = builder.instructions[entry_block.first_instruction + entry_block.instruction_count - 1usize]
+            let entry_terminator = exit_of(builder, entry_block.first_instruction + entry_block.instruction_count - 1usize)
             if entry_terminator.opcode == .BranchIf && entry_terminator.operand_count == 1usize && builder.operands[entry_terminator.first_operand] == pointer && entry_terminator.target == function.first_block + at && entry_terminator.target2 != entry_terminator.target { ret true }
         }
         if at == 0usize || idom[at] == none { ret false }
