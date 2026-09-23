@@ -18661,3 +18661,27 @@ No budget is exceeded by a change in what the compiler costs, so none is raised 
 none is re-pinned. Two rules follow for later rows: a timed cell is decided by a paired
 run against the baseline compiler; the compiler cell is read per line of the source it
 builds, since that source grows with every row.
+
+## D937 — The Neper UI v2 design language is the specification `e.ui` builds to
+
+`docs/ux` is the design system the widgets are to look and behave like on all
+six hosts: a tonal colour system seeded from the logo's ink in four themes
+(light, dark, high contrast, high contrast dark), fifteen type styles, a shape
+scale, six elevation levels, state-layer opacities, density steps, motion
+durations and easings (`tokens.json`); the brand book and the per-host rules
+(`README.md`, `platforms.md`); a specification and a static preview for each
+of the 111 controls (`components/<Name>/`), each ending in what the current
+function does and what must change; and 55 icons (`icons/`). It replaces the
+reference theme of D805 as the target, not yet as the code: the tokens'
+contrast pairs are checked (text 4.5:1 in light and dark, 7:1 in both
+high-contrast themes, marks and the focus ring 3:1), and the palette is a
+function of the seed, so a host's accent can regenerate it.
+
+The widget plan gains phase P5 so the work is counted where UI readiness
+already is: P5-01 the tokens in `e.ui.style`, P5-02 the focus ring, state
+layer and ripple painted by `e.ui.widget` for every focusable element, and
+P5-03 to P5-12 one capability per component card, grouped as the cards are.
+A component is delivered when its function draws what its card specifies and
+a fixture holds it on both hosts. The UI meter falls from 100% to 64% on this
+row, which is the honest reading: every earlier capability exists, and none
+yet has the look it is meant to have.

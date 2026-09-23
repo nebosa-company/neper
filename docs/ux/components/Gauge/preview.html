@@ -1,0 +1,32 @@
+<!-- @dsCard group="Status" height=504 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Default 160: normal, and past the warning threshold (the band marks it; the arc turns warning and says so)</span>
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start">
+<div class="nu-a3-gauge" role="meter" aria-label="CPU" aria-valuenow="72" aria-valuetext="72 percent">
+<div class="face"><svg viewBox="0 0 80 80" aria-hidden="true"><path class="track" d="M17.37 62.63A32 32 0 1 1 62.63 62.63"/><path class="band" d="M71.61 34.99A32 32 0 0 1 62.63 62.63"/><path class="act" d="M17.37 62.63A32 32 0 1 1 67.54 23.71"/></svg><div class="readout"><span>72</span><span class="unit">% of 8 cores</span></div></div>
+<span class="name">CPU</span><span class="nu-a3-status">Normal</span>
+</div>
+<div class="nu-a3-gauge warning" role="meter" aria-label="Memory" aria-valuenow="92" aria-valuetext="92 percent, high">
+<div class="face"><svg viewBox="0 0 80 80" aria-hidden="true"><path class="track" d="M17.37 62.63A32 32 0 1 1 62.63 62.63"/><path class="band" d="M71.61 34.99A32 32 0 0 1 62.63 62.63"/><path class="act" d="M17.37 62.63A32 32 0 1 1 69.37 52.71"/></svg><div class="readout"><span>92</span><span class="unit">% of 32 GB</span></div></div>
+<span class="name">Memory</span><span class="nu-a3-status warning"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4L3.5 19h17z"/><path d="M12 10v4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg>High, above 80%</span>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Small 96 in a dashboard card: normal, critical, no data</span>
+<div class="nu-surface-demo nu-row" style="gap:var(--space-8);align-items:flex-start">
+<div class="nu-a3-gauge sm"><div class="face"><svg viewBox="0 0 80 80" aria-hidden="true"><path class="track" d="M17.37 62.63A32 32 0 1 1 62.63 62.63"/><path class="act" d="M17.37 62.63A32 32 0 0 1 32.53 8.88"/></svg><div class="readout"><span>45</span><span class="unit">%</span></div></div><span class="name">Disk</span></div>
+<div class="nu-a3-gauge sm error"><div class="face"><svg viewBox="0 0 80 80" aria-hidden="true"><path class="track" d="M17.37 62.63A32 32 0 1 1 62.63 62.63"/><path class="act" d="M17.37 62.63A32 32 0 1 1 69.37 52.71"/></svg><div class="readout"><span>98</span><span class="unit">%</span></div></div><span class="name">Build cache</span><span class="nu-a3-status error"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Full</span></div>
+<div class="nu-a3-gauge sm"><div class="face"><svg viewBox="0 0 80 80" aria-hidden="true"><path class="track" d="M17.37 62.63A32 32 0 1 1 62.63 62.63"/></svg><div class="readout" style="color:var(--on-surface-variant)"><span>&ndash;</span><span class="unit">No data</span></div></div><span class="name">GPU</span></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

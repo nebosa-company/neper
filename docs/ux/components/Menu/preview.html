@@ -1,0 +1,70 @@
+<!-- @dsCard group="Overlays" height=805 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Pointer, 32 rows: a check column, shortcuts, a disabled item, a submenu open to the end, keyboard focus</span>
+<div class="nu-a5-screen" style="width:100%;height:352px">
+<div class="nu-a5-bar" style="gap:0">
+<button class="nu-btn text sm" style="--on:var(--on-surface)">File</button>
+<button class="nu-btn text sm" style="--on:var(--on-surface)">Edit</button>
+<button class="nu-btn text sm nu-a5-anchor-on">View</button>
+<button class="nu-btn text sm" style="--on:var(--on-surface)">Build</button>
+</div>
+<div class="nu-a5-ghosts" style="padding-top:var(--space-6)"><span class="nu-a5-ghost" style="width:60%"></span><span class="nu-a5-ghost" style="width:80%"></span><span class="nu-a5-ghost" style="width:45%"></span><span class="nu-a5-ghost" style="width:70%"></span></div>
+<div class="nu-menu nu-a5-ptr nu-a5-abs" role="menu" style="top:44px;left:118px;width:280px;max-width:none">
+<div class="mi"><span class="nu-a5-slot"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Word wrap<span class="kbd">Alt+Z</span></div>
+<div class="mi"><span class="nu-a5-slot"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Minimap</div>
+<div class="mi"><span class="nu-a5-slot"></span>Line numbers</div>
+<div class="sep"></div>
+<div class="mi nu-a5-open"><span class="nu-a5-slot"></span>Appearance<span class="nu-a5-end nu-muted"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+<div class="mi"><span class="nu-a5-slot"></span>Zoom in<span class="kbd">Ctrl+=</span></div>
+<div class="mi"><span class="nu-a5-slot"></span>Zoom out<span class="kbd">Ctrl+-</span></div>
+<div class="mi is-disabled"><span class="nu-a5-slot"></span>Reset zoom<span class="kbd">Ctrl+0</span></div>
+<div class="sep"></div>
+<div class="mi is-focus"><span class="nu-a5-slot"></span>Command palette…<span class="kbd">Ctrl+Shift+P</span></div>
+</div>
+<div class="nu-menu nu-a5-ptr nu-a5-abs" role="menu" style="top:153px;left:394px;width:220px;min-width:0">
+<div class="nu-a5-mhead">Theme</div>
+<div class="mi"><span class="nu-a5-slot"></span>Light</div>
+<div class="mi is-hover"><span class="nu-a5-slot"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>Dark</div>
+<div class="mi"><span class="nu-a5-slot"></span>Match system</div>
+<div class="sep"></div>
+<div class="mi"><span class="nu-a5-slot"></span>High contrast</div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Touch, 48 rows: leading icons, a two-line item, destructive last; a submenu replaces the menu on compact</span>
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-2);align-items:flex-end;width:280px">
+<button class="nu-icon-btn is-pressed"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.5" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="12" cy="18.5" r="1.25"/></svg></button>
+<div class="nu-menu" role="menu" style="width:248px">
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L15.5 5.5l3 3L9 18z"/><path d="M13.5 7.5l3 3"/></svg>Rename</div>
+<div class="mi is-pressed"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg>Duplicate</div>
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>Move to<span class="nu-a5-end nu-muted"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+<div class="mi nu-a5-two"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/></svg><span class="nu-a5-mtext">Export build<span class="s">Zip archive, 24 MB</span></span></div>
+<div class="sep"></div>
+<div class="mi nu-a5-danger"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 4h4M7 7l1 13h8l1-13"/></svg>Delete project</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-2);width:280px">
+<span class="nu-caption" style="height:40px;display:flex;align-items:center">After "Move to"</span>
+<div class="nu-menu" role="menu" style="width:248px">
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span class="nu-a5-title-s">Move to</span></div>
+<div class="sep" style="margin-top:0"></div>
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>Archive</div>
+<div class="mi is-focus"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>Client work</div>
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>Experiments</div>
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New folder…</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

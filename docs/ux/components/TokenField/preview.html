@@ -1,0 +1,43 @@
+<!-- @dsCard group="Inputs" height=496 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Focused and typing: tokens wrap, an invalid token is marked, suggestions sit below the frame</span>
+<div class="nu-a3-anchor" style="width:440px">
+<div class="nu-a3-tokens is-focus" role="group" aria-label="Reviewers">
+<span class="flabel">Reviewers</span>
+<span class="nu-chip has-lead has-trail"><span class="avatar">AL</span>Ada Lovelace<span class="x" aria-label="Remove Ada Lovelace"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="nu-chip has-lead has-trail"><span class="avatar">AK</span>Adria Kovac<span class="x" aria-label="Remove Adria Kovac"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="nu-chip has-lead has-trail nu-a3-bad"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>mira@exmaple<span class="x" aria-label="Remove mira@exmaple"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="input">gr<span class="caret"></span></span>
+</div>
+<span class="nu-a3-help error" style="padding:0 var(--space-4);margin-top:0">mira@exmaple is not a valid address</span>
+<div class="nu-menu nu-a3-pop" role="listbox">
+<div class="mi is-focus" role="option"><span class="nu-avatar sm">GH</span><span><b>Gr</b>ace Hopper</span><span class="sub">grace@neper.dev</span></div>
+<div class="mi" role="option"><span class="nu-avatar sm tertiary">GM</span><span><b>Gr</b>eta Moss</span><span class="sub">greta@neper.dev</span></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">At rest: overflow collapses to a count</span>
+<div class="nu-a3-tokens" style="width:440px;flex-wrap:nowrap">
+<span class="flabel">Labels</span>
+<span class="nu-chip">compiler</span><span class="nu-chip">regression</span><span class="nu-chip">windows</span><span class="more">+3 more</span>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Token states: hover, focus (Backspace or Delete removes it), disabled field</span>
+<div class="nu-row" style="gap:var(--space-3)">
+<span class="nu-chip has-trail is-hover">linux<span class="x" style="display:flex"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="nu-chip has-trail is-focus">macos<span class="x" style="display:flex"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="nu-chip is-disabled">android</span>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

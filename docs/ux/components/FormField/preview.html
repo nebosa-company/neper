@@ -1,0 +1,39 @@
+<!-- @dsCard group="Inputs" height=470 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Text control: touch (the field's own floating label), pointer (label above), both invalid</span>
+<div class="nu-a2-grid two">
+<div class="nu-a2-ff"><div class="nu-field filled floated invalid"><div class="box"><div class="body"><span class="label">Project name*</span><span class="value">Neper Compiler</span></div><span class="trail nu-a2-trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg></span></div></div><span class="nu-a2-msg error"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Use lowercase letters, digits and hyphens</span></div>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel invalid">Project name<span class="req" aria-hidden="true">*</span></span><div class="nu-field outlined dense invalid"><div class="box"><div class="body"><span class="value">Neper Compiler</span></div><span class="trail nu-a2-trail"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg></span></div></div><span class="nu-a2-msg error"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Use lowercase letters, digits and hyphens</span></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Around other controls: a select with help, a checkbox group with an error, a slider with its value</span>
+<div class="nu-a2-grid">
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Target platform</span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value">Windows x64</span></div><span class="trail nu-a2-trail"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div><span class="nu-a2-msg">Cross-builds need the toolchain installed</span></div>
+<div class="nu-a2-ff outside" role="group"><span class="nu-a2-flabel invalid">Run tests on<span class="req" aria-hidden="true">*</span></span>
+<div class="nu-col" style="gap:0;margin-left:calc(-1 * var(--space-2))">
+<label class="nu-select-row nu-a2-body-m" style="min-height:var(--control-md)"><span class="nu-hit invalid"><span class="nu-checkbox"></span></span>Linux</label>
+<label class="nu-select-row nu-a2-body-m" style="min-height:var(--control-md)"><span class="nu-hit invalid"><span class="nu-checkbox"></span></span>Windows</label>
+</div>
+<span class="nu-a2-msg error"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Choose at least one host</span></div>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Parallel jobs</span>
+<div class="nu-a2-sl-row" style="gap:var(--space-3)"><div class="nu-slider" style="--v:50%;width:132px"><span class="track active"></span><span class="track inactive"></span><span class="handle"></span></div><span class="nu-a2-num" style="width:48px">8</span></div>
+<span class="nu-a2-msg">Up to 16 on this machine</span></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Disabled, with the reason kept readable</span>
+<div class="nu-a2-grid two">
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel is-disabled">Signing certificate</span><div class="nu-field outlined dense is-disabled nu-a2-odis"><div class="box"><div class="body"><span class="value">None</span></div><span class="trail nu-a2-trail"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div><span class="nu-a2-msg">Turn on release builds to sign</span></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

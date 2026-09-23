@@ -1,0 +1,44 @@
+<!-- @dsCard group="Status" height=408 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-10);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Continuous: normal, warning, critical, with the limit marked</span>
+<div class="nu-col" style="gap:var(--space-5)">
+<div class="nu-a3-level" style="--v:42%" role="meter" aria-label="Storage" aria-valuetext="27 of 64 gigabytes used">
+<div class="top"><span>Storage</span><span class="val">27 of 64 GB</span></div>
+<div class="bar"><span class="fill"></span><span class="rest"></span><span class="mark" style="--m:80%"></span></div>
+<span class="nu-a3-status">37 GB free</span></div>
+<div class="nu-a3-level warning" style="--v:86%" role="meter" aria-label="Build minutes" aria-valuetext="1,720 of 2,000 minutes used, almost used up">
+<div class="top"><span>Build minutes</span><span class="val">1,720 of 2,000</span></div>
+<div class="bar"><span class="fill"></span><span class="rest"></span><span class="mark" style="--m:80%"></span></div>
+<span class="nu-a3-status warning"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4L3.5 19h17z"/><path d="M12 10v4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg>Almost used up. Resets on 1 October</span></div>
+<div class="nu-a3-level error" style="--v:98%" role="meter" aria-label="Artifact cache">
+<div class="top"><span>Artifact cache</span><span class="val">9.8 of 10 GB</span></div>
+<div class="bar"><span class="fill"></span><span class="rest"></span><span class="mark" style="--m:80%"></span></div>
+<span class="nu-a3-status error"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Full. New artifacts will not be cached</span></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Discrete: segments and bars, always with a word</span>
+<div class="nu-col" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:6px"><span class="label-large">Passphrase strength</span><span class="nu-a3-segs success" role="meter" aria-label="Passphrase strength" aria-valuetext="Strong"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span></span><span class="nu-a3-status success"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg>Strong</span></div>
+<div class="nu-col" style="gap:6px"><span class="label-large">Passphrase strength</span><span class="nu-a3-segs warning"><span class="on"></span><span class="on"></span><span></span><span></span></span><span class="nu-a3-status warning"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4L3.5 19h17z"/><path d="M12 10v4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg>Fair. Add a few more words</span></div>
+<div class="nu-row" style="gap:var(--space-3)"><span class="nu-a3-segs bars" role="meter" aria-label="Runner connection" aria-valuetext="Good, 3 of 4"><span class="on" style="height:6px"></span><span class="on" style="height:10px"></span><span class="on" style="height:14px"></span><span style="height:18px"></span></span><span class="body-medium">Runner connection: good</span></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);width:100%">
+<span class="nu-caption">Small 4, as the trailing part of a list row</span>
+<div class="nu-list" style="padding:0;width:100%">
+<div class="nu-li two"><span class="lead"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.2-3.3 3.8-5 7-5s5.8 1.7 7 5"/></svg></span><span class="text"><span class="headline">Team seats</span><span class="supporting">7 of 10 used</span></span><span class="nu-a3-level sm" style="--v:70%;width:160px"><span class="bar"><span class="fill"></span><span class="rest"></span></span></span></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

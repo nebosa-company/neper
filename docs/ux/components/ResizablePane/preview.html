@@ -1,0 +1,62 @@
+<!-- @dsCard group="Containers" height=640 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Sidebar pane, pointer host: the grip appears on hover over the 8px sash</span>
+<div class="nu-a3-panes">
+<div class="nu-a3-pane" style="width:200px;flex:none">
+<div class="hd">Explorer</div>
+<div class="nu-a3-mrow"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>src</div>
+<div class="nu-a3-mrow" style="padding-left:var(--space-5)"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg>main.e</div>
+<div class="nu-a3-mrow" style="padding-left:var(--space-5)"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg>lower.e</div>
+<div class="nu-a3-mrow"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>tests</div>
+</div>
+<div class="nu-a3-sash is-hover" role="separator" aria-label="Resize explorer"><span class="grip"></span></div>
+<div class="nu-a3-pane fill"><div class="hd">main.e</div><div class="code nu-muted">fn main() -&gt; i32 {<br>&nbsp;&nbsp;let args = os.args()<br>&nbsp;&nbsp;return build(args)<br>}</div></div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-4);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Dragged: primary line and a size readout</span>
+<div class="nu-a3-panes" style="height:140px;position:relative">
+<div class="nu-a3-pane" style="width:140px;flex:none"><div class="hd">Explorer</div><div class="nu-a3-mrow">src</div><div class="nu-a3-mrow">tests</div></div>
+<div class="nu-a3-sash is-dragged"><span class="grip"></span></div>
+<div class="nu-a3-pane fill"><div class="hd">main.e</div></div>
+<span class="nu-tooltip" style="position:absolute;top:var(--space-2);left:160px">240 px</span>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Focus: arrow keys move it 8px (Shift 48px)</span>
+<div class="nu-a3-panes" style="height:140px">
+<div class="nu-a3-pane" style="width:110px;flex:none"><div class="hd">Explorer</div><div class="nu-a3-mrow">src</div><div class="nu-a3-mrow">tests</div></div>
+<div class="nu-a3-sash is-focus"><span class="grip"></span></div>
+<div class="nu-a3-pane fill"><div class="hd">main.e</div></div>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-4);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Bottom panel: vertical axis</span>
+<div class="nu-a3-panes vertical" style="height:140px">
+<div class="nu-a3-pane fill"><div class="hd">main.e</div></div>
+<div class="nu-a3-sash is-hover"><span class="grip"></span></div>
+<div class="nu-a3-pane" style="height:56px;flex:none"><div class="hd">Terminal</div><div class="code nu-muted">$ neper build</div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Touch: a 4x48 handle is always shown, 24 wide target</span>
+<div class="nu-a3-panes" style="height:140px">
+<div class="nu-a3-pane" style="width:120px;flex:none"><div class="hd">Projects</div><div class="nu-a3-mrow">neper</div><div class="nu-a3-mrow">celvyx</div></div>
+<div class="nu-a3-sash touch" style="background:var(--surface-container-low)"><span class="grip"></span></div>
+<div class="nu-a3-pane fill"><div class="hd">Build 4128</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

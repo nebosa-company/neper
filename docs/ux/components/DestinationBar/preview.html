@@ -1,0 +1,74 @@
+<!-- @dsCard group="Navigation" height=824 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">The form follows the window size class, never the device</span>
+<div class="nu-row" style="gap:var(--space-4);align-items:flex-end;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-2);align-items:center">
+<div class="nu-a4-mini" style="width:84px;height:140px">
+<div class="mc"><span class="bar" style="width:70%"></span><span class="bar"></span><span class="bar" style="width:80%"></span></div>
+<div class="mbar"><span class="pip on"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+</div>
+<span class="nu-a4-note">Compact, under 600: bar</span>
+</div>
+<div class="nu-col" style="gap:var(--space-2);align-items:center">
+<div class="nu-a4-mini" style="width:168px;height:140px;flex-direction:row">
+<div class="mrail"><span class="pip on"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span></div>
+<div class="mc"><span class="bar" style="width:70%"></span><span class="bar"></span><span class="bar" style="width:80%"></span></div>
+</div>
+<span class="nu-a4-note">Medium and expanded, 600-1199: rail</span>
+</div>
+<div class="nu-col" style="gap:var(--space-2);align-items:center;flex:1">
+<div class="nu-a4-mini" style="width:100%;height:140px;flex-direction:row">
+<div class="mside"><span class="bar on"></span><span class="bar"></span><span class="bar"></span><span class="bar" style="width:70%"></span></div>
+<div class="mc"><span class="bar" style="width:70%"></span><span class="bar"></span><span class="bar" style="width:80%"></span><span class="bar" style="width:60%"></span></div>
+</div>
+<span class="nu-a4-note">Large, 1200 and up: sidebar</span>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Navigation bar (80): 3-5 destinations, the active one in a pill, a badge, hover and focus</span>
+<nav class="nu-navbar" aria-label="Main" style="width:420px">
+<span class="item active" aria-current="page"><span class="pill"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V20h-5.5v-6h-5v6H4z"/></svg></span>Home</span>
+<span class="item is-hover"><span class="pill"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg></span>Projects</span>
+<span class="item"><span class="pill"><span class="nu-badge-anchor"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg><span class="nu-badge">3</span></span></span>Builds</span>
+<span class="item is-focus"><span class="pill"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg></span>Settings</span>
+</nav>
+</div>
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Rail (80) with the FAB</span>
+<nav class="nu-rail" aria-label="Main" style="border:var(--divider) solid var(--outline-variant);border-radius:var(--radius-md);gap:var(--space-3)">
+<button class="nu-icon-btn" aria-label="Open navigation"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+<button class="nu-fab" aria-label="New project" style="box-shadow:none;margin-bottom:var(--space-2)"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+<span class="item"><span class="pill"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V20h-5.5v-6h-5v6H4z"/></svg></span>Home</span>
+<span class="item active" aria-current="page"><span class="pill"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg></span>Projects</span>
+<span class="item"><span class="pill"><span class="nu-badge-anchor"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg><span class="nu-badge dot"></span></span></span>Builds</span>
+<span class="item"><span class="pill"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg></span>Settings</span>
+</nav>
+</div>
+<div class="nu-col" style="gap:var(--space-3);flex:1">
+<span class="nu-caption">Sidebar, pointer density (40 items): sections, counts, the active item</span>
+<nav class="nu-a4-drawer nu-drawer nu-a4-drawer-std nu-a4-drawer-dense" aria-label="Main" style="width:280px;border:var(--divider) solid var(--outline-variant);border-radius:var(--radius-md)">
+<div class="head">Neper Studio</div>
+<span class="item"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V20h-5.5v-6h-5v6H4z"/></svg>Home</span>
+<span class="item active" aria-current="page"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>Projects<span class="meta">12</span></span>
+<span class="item is-hover"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg>Builds<span class="meta">3 failed</span></span>
+<span class="item"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></svg>Notifications</span>
+<div class="sub">Teams</div>
+<span class="item"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>Compiler</span>
+<span class="item"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>Documentation</span>
+<div class="nu-divider" style="margin:var(--space-2) var(--space-4)"></div>
+<span class="item"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>Settings</span>
+</nav>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

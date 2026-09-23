@@ -1,0 +1,84 @@
+<!-- @dsCard group="Containers" height=484 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-4);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Focused: primary line, header actions</span>
+<div class="nu-a4-win" style="width:216px;height:224px">
+<section class="nu-a4-panel focused" style="height:100%" aria-label="Explorer">
+<div class="ph"><span class="nm">Explorer</span>
+<button class="nu-icon-btn sm" aria-label="New file"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Refresh"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Explorer options"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="18.5" cy="12" r="1.25"/></svg></button>
+</div>
+<div class="pb">
+<div class="nu-a4-row"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>src</div>
+<div class="nu-a4-row" style="padding-left:32px"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg>codegen_x64.e</div>
+<div class="nu-a4-row sel" style="padding-left:32px"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg>lower.e</div>
+<div class="nu-a4-row" style="padding-left:32px"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg>main.e</div>
+<div class="nu-a4-row" style="padding-left:32px"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg>nir.e</div>
+<div class="nu-a4-row"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>docs</div>
+<div class="nu-a4-row"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>tests</div>
+</div>
+</section>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Tab group, not focused: panels share one slot</span>
+<div class="nu-a4-win" style="height:224px">
+<section class="nu-a4-panel" style="height:100%" aria-label="Problems">
+<div class="ph" style="padding-left:0">
+<div class="nu-a4-ptabs" role="tablist">
+<span class="pt cur" role="tab" aria-selected="true">Problems <span class="nu-badge">3</span></span>
+<span class="pt is-hover" role="tab">Output</span>
+<span class="pt" role="tab">Terminal</span>
+</div>
+<button class="nu-icon-btn sm" aria-label="Filter problems"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Maximise panel"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Close panel"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</div>
+<div class="pb" style="padding-top:var(--space-1)">
+<div class="nu-a4-row"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--error)"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Error: unknown local `target` (reserved)<span class="m">lower.e 42:9</span></div>
+<div class="nu-a4-row"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--error)"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Error: expected `)` after argument list<span class="m">lower.e 57:31</span></div>
+<div class="nu-a4-row"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--warning)"><path d="M12 4L3.5 19h17z"/><path d="M12 10v4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg>Warning: unused import e.fmt<span class="m">main.e 3:1</span></div>
+</div>
+</section>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-4);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Collapsed and empty</span>
+<div class="nu-a4-win" style="width:216px">
+<section class="nu-a4-panel" aria-label="Outline">
+<div class="ph"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><span class="nm">Outline</span></div>
+</section>
+<div class="nu-divider"></div>
+<section class="nu-a4-panel" aria-label="Breakpoints">
+<div class="ph"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg><span class="nm">Breakpoints</span></div>
+<div class="pb" style="padding:var(--space-2) var(--space-3) var(--space-4)"><span class="nu-a4-note">No breakpoints. Click in the gutter to add one.</span></div>
+</section>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Floating: torn off the dock, radius-md, elevation-3</span>
+<div class="nu-surface-demo" style="padding:var(--space-4) var(--space-5)">
+<section class="nu-a4-panel floating" style="width:300px" aria-label="Terminal">
+<div class="ph"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="1.1"/><circle cx="15" cy="7" r="1.1"/><circle cx="9" cy="12" r="1.1"/><circle cx="15" cy="12" r="1.1"/><circle cx="9" cy="17" r="1.1"/><circle cx="15" cy="17" r="1.1"/></svg><span class="nm">Terminal</span>
+<button class="nu-icon-btn sm" aria-label="Dock panel"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Close panel"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</div>
+<div class="pb" style="padding:var(--space-2) var(--space-3) var(--space-3)"><div class="nu-a4-code">$ neper build --release
+Built neper-self in 4.2 s</div></div>
+</section>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

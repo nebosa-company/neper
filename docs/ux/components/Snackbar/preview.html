@@ -1,0 +1,41 @@
+<!-- @dsCard group="Status" height=668 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Snackbar: text only, with an action, with an action and close</span>
+<div class="nu-snackbar" role="status" style="width:420px"><span class="msg">Settings saved</span></div>
+<div class="nu-snackbar" role="status" style="width:420px"><span class="msg">3 files moved to Trash</span><button class="nu-btn text">Undo</button></div>
+<div class="nu-snackbar" role="status" style="width:420px"><span class="msg">Build 4128 queued on 8 workers</span><button class="nu-btn text">View</button><button class="nu-icon-btn" aria-label="Dismiss"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Two lines: the action drops under the text; the action focused</span>
+<div class="nu-snackbar nu-a3-two" role="status" style="width:420px"><span class="msg">Couldn't push to origin. The remote has commits you don't have yet.</span><span class="acts"><button class="nu-btn text is-focus">Pull and retry</button><button class="nu-icon-btn" aria-label="Dismiss"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Placement: bottom centre on compact, above the navigation bar; desktop toast at the top end for background events</span>
+<div class="nu-row" style="gap:var(--space-4);align-items:flex-start;flex-wrap:nowrap;width:100%">
+<div class="nu-a3-phone" style="height:220px;width:250px">
+<div class="nu-a3-slot" style="bottom:calc(var(--nav-bar) + var(--space-2))"><div class="nu-snackbar" style="width:100%"><span class="msg">Link copied</span><button class="nu-btn text">Open</button></div></div>
+<div class="nu-navbar" style="margin-top:auto">
+<div class="item active"><span class="pill"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V20h-5.5v-6h-5v6H4z"/></svg></span>Home</div>
+<div class="item"><span class="pill"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg></span>Files</div>
+<div class="item"><span class="pill"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></svg></span>Activity</div>
+</div>
+</div>
+<div class="nu-a3-screen" style="height:220px;flex:1">
+<div class="nu-appbar scrolled" style="height:40px"><span class="title" style="font-size:14px;font-weight:600">neper - Builds</span></div>
+<div class="nu-a3-slot topend" style="top:52px;padding:0 var(--space-3)">
+<div class="nu-a3-toast" role="status" style="width:300px"><span class="nu-a3-well sm success"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg></span><span class="body"><span class="t">Build 4128 passed</span><span class="m">All 1,204 tests on 3 hosts</span><span class="acts"><button class="nu-btn text sm">View log</button></span></span><button class="nu-icon-btn sm" aria-label="Dismiss"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+</div>
+<div class="nu-a3-slot start" style="padding:0 var(--space-3);bottom:var(--space-3)"><div class="nu-snackbar"><span class="msg">Branch deleted</span><button class="nu-btn text">Undo</button></div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

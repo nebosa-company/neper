@@ -1,0 +1,58 @@
+<!-- @dsCard group="Inputs" height=816 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Filled: empty, with a value, focused</span>
+<div class="nu-a2-grid">
+<div class="nu-field filled"><div class="box"><div class="body"><span class="label">Project name</span></div></div><div class="support"><span>Shown in the sidebar</span></div></div>
+<div class="nu-field filled floated"><div class="box"><div class="body"><span class="label">Project name</span><span class="value">neper-compiler</span></div></div><div class="support"><span>Shown in the sidebar</span></div></div>
+<div class="nu-field filled floated is-focus"><div class="box"><div class="body"><span class="label">Project name</span><span class="value">neper-comp<span class="caret"></span></span></div></div><div class="support"><span>Shown in the sidebar</span></div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Outlined: empty, hover, focused</span>
+<div class="nu-a2-grid">
+<div class="nu-field outlined"><div class="box"><div class="body"><span class="label">Branch</span></div></div><div class="support"><span>Defaults to master</span></div></div>
+<div class="nu-field outlined floated is-hover"><div class="box"><div class="body"><span class="label">Branch</span><span class="value">release/0.9</span></div></div><div class="support"><span>Defaults to master</span></div></div>
+<div class="nu-field outlined floated is-focus"><div class="box"><div class="body"><span class="label">Branch</span><span class="value">release/0.9<span class="caret"></span></span></div></div><div class="support"><span>Defaults to master</span></div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Leading icon, prefix, suffix</span>
+<div class="nu-a2-grid">
+<div class="nu-field outlined floated"><div class="box"><span class="nu-a2-lead"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7l8 6 8-6"/></svg></span><div class="body"><span class="label">Notification email</span><span class="value">ada@neper.dev</span></div></div></div>
+<div class="nu-field outlined floated"><div class="box"><div class="body"><span class="label">Repository URL</span><span class="value"><span class="nu-a2-affix">https://</span>neper.dev/core</span></div></div></div>
+<div class="nu-field outlined floated"><div class="box"><div class="body"><span class="label">Build timeout</span><span class="value">30000</span></div><span class="nu-a2-affix" style="font:400 16px/24px var(--font-sans)">ms</span></div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Character counter, error, password with reveal</span>
+<div class="nu-a2-grid">
+<div class="nu-field filled floated"><div class="box"><div class="body"><span class="label">Commit summary</span><span class="value">Fix arena overflow in the resolver</span></div></div><div class="support"><span>Keep it under 72</span><span>34 / 72</span></div></div>
+<div class="nu-field outlined floated invalid"><div class="box"><div class="body"><span class="label">Port</span><span class="value">80800</span></div><span class="trail nu-a2-trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg></span></div><div class="support"><span>Enter a port from 1 to 65535</span></div></div>
+<div class="nu-field outlined floated"><div class="box" style="padding-right:var(--space-1)"><div class="body"><span class="label">Password</span><span class="value" style="letter-spacing:2px">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span></div><span class="trail nu-a2-trail"><button class="nu-icon-btn" aria-label="Show password"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></div><div class="support"><span>At least 12 characters</span></div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Disabled, read-only, dense 40 (tool UIs, label above)</span>
+<div class="nu-a2-grid">
+<div class="nu-field filled floated is-disabled"><div class="box"><div class="body"><span class="label">Workspace ID</span><span class="value">ws-4f2a91</span></div></div><div class="support"><span>Set by your organization</span></div></div>
+<div class="nu-field outlined floated nu-a2-readonly"><div class="box"><div class="body"><span class="label">Created by</span><span class="value">Ada Lovelace</span></div></div><div class="support"><span>Read only</span></div></div>
+<div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value placeholder">Filter branches</span></div></div><div class="support"><span>Dense fields take an outside label</span></div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Multiline (text area): outlined with counter, filled focused</span>
+<div class="nu-a2-grid two">
+<div class="nu-field outlined floated multiline"><div class="box"><div class="body" style="padding-top:var(--space-2)"><span class="label">Release notes</span><span class="value">Faster incremental builds. The resolver no longer truncates long import chains, and error messages name the module that failed.</span></div></div><div class="support"><span>Markdown is supported</span><span>131 / 2000</span></div></div>
+<div class="nu-field filled floated multiline is-focus"><div class="box"><div class="body"><span class="label">Description</span><span class="value">Nightly build for the Windows and Linux hosts<span class="caret"></span></span></div></div><div class="support"><span>Optional</span><span>45 / 500</span></div></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!-- @dsCard group="Content" height=340 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Interactive canvas, keyboard focus on a data point, with a text alternative</span>
+<div class="nu-a1-canvas is-focus" style="width:400px;height:220px">
+<svg viewBox="0 0 400 220" width="400" height="220" aria-hidden="true">
+<path class="nu-a1-stroke-grid" d="M44 30H388M44 80H388M44 130H388M44 180H388"/>
+<text class="nu-a1-svg-label" x="36" y="34" text-anchor="end">90 s</text>
+<text class="nu-a1-svg-label" x="36" y="84" text-anchor="end">60 s</text>
+<text class="nu-a1-svg-label" x="36" y="134" text-anchor="end">30 s</text>
+<text class="nu-a1-svg-label" x="36" y="184" text-anchor="end">0 s</text>
+<text class="nu-a1-svg-label" x="52" y="204">Mon</text>
+<text class="nu-a1-svg-label" x="164" y="204">Wed</text>
+<text class="nu-a1-svg-label" x="276" y="204">Fri</text>
+<text class="nu-a1-svg-label" x="372" y="204" text-anchor="end">Sun</text>
+<path class="nu-a1-area-primary" d="M56 120L110 104L164 112L218 70L272 88L326 60L380 76V180H56z"/>
+<path class="nu-a1-stroke-tertiary" d="M56 100L110 96L164 98L218 92L272 94L326 90L380 92"/>
+<path class="nu-a1-stroke-primary" d="M56 120L110 104L164 112L218 70L272 88L326 60L380 76"/>
+<path class="nu-a1-svg-cursor" d="M218 30V180"/>
+<circle class="nu-a1-dot" cx="218" cy="70" r="5"/>
+</svg>
+<div class="nu-tooltip rich nu-a1-chart-tip" style="left:232px;top:36px;padding:var(--space-2) var(--space-3)"><span class="sub">Thursday</span>Build 66 s, target 53 s</div>
+</div>
+<div class="nu-row" style="gap:var(--space-4)">
+<span class="nu-row label-medium nu-muted" style="gap:var(--space-1)"><svg width="16" height="4" aria-hidden="true"><path class="nu-a1-stroke-primary" d="M1 2H15"/></svg>Build time</span>
+<span class="nu-row label-medium nu-muted" style="gap:var(--space-1)"><svg width="16" height="4" aria-hidden="true"><path class="nu-a1-stroke-tertiary" d="M1 2H15"/></svg>Target</span>
+<button class="nu-btn text sm">Show as table</button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-4)">
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Loading: frame reserved, ring centred</span>
+<div class="nu-a1-canvas" style="width:208px;height:108px;display:flex;align-items:center;justify-content:center">
+<svg class="nu-ring" viewBox="0 0 48 48" style="width:32px;height:32px" aria-hidden="true"><circle class="rest" cx="24" cy="24" r="20" stroke-dasharray="126" stroke-dashoffset="0"/><circle class="fill" cx="24" cy="24" r="20" stroke-dasharray="126" stroke-dashoffset="90"/></svg>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Empty: says why, offers the next step</span>
+<div class="nu-a1-canvas" style="width:208px;height:108px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-1);color:var(--on-surface-variant)">
+<svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+<span class="body-small">No builds in this range</span>
+<button class="nu-btn text sm" style="height:28px">Show last 30 days</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

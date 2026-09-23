@@ -1,0 +1,66 @@
+<!-- @dsCard group="Navigation" height=512 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-4);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Expanded: a stepper, the step's content, a split footer</span>
+<div class="nu-a4-win" style="height:352px">
+<div style="padding:var(--space-5) var(--space-6) 0" class="headline-small">New project</div>
+<ol class="nu-a4-steps" style="list-style:none;margin:0;padding:var(--space-4) var(--space-6)">
+<li class="st done"><span class="dot"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="lab">Template</span></li>
+<li class="bar on" aria-hidden="true"></li>
+<li class="st cur" aria-current="step"><span class="dot">2</span><span class="lab">Build</span></li>
+<li class="bar" aria-hidden="true"></li>
+<li class="st"><span class="dot">3</span><span class="lab">Repository</span></li>
+<li class="bar" aria-hidden="true"></li>
+<li class="st"><span class="dot">4</span><span class="lab">Review</span></li>
+</ol>
+<div class="nu-col" style="padding:var(--space-2) var(--space-6);gap:var(--space-3);flex:1">
+<div class="nu-field outlined dense floated" style="width:100%"><div class="box"><div class="body"><span class="label">Build target</span><span class="value">x86_64-windows</span></div><span class="trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div>
+<div class="nu-field outlined dense floated is-focus" style="width:100%"><div class="box"><div class="body"><span class="label">Output folder</span><span class="value">build/release<span class="caret"></span></span></div></div></div>
+</div>
+<div class="nu-row" style="padding:var(--space-4) var(--space-6);gap:var(--space-2);flex-wrap:nowrap">
+<button class="nu-btn text sm">Cancel</button>
+<span class="nu-a4-grow"></span>
+<button class="nu-btn outlined sm">Back</button>
+<button class="nu-btn sm">Next</button>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Compact: a count and a bar</span>
+<div class="nu-a4-phone" style="height:352px">
+<div class="nu-appbar" style="height:56px"><button class="nu-icon-btn" aria-label="Close new project"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="title" style="font-size:18px;padding:0">New project</span></div>
+<div class="nu-col" style="padding:0 var(--space-4);gap:var(--space-2);align-items:stretch">
+<span class="label-medium nu-muted">Step 2 of 4: Build</span>
+<div class="nu-progress" style="--v:50%;width:100%" role="progressbar" aria-valuenow="2" aria-valuemin="1" aria-valuemax="4"><span class="fill"></span><span class="rest"></span></div>
+</div>
+<div class="nu-col" style="padding:var(--space-4);gap:var(--space-3);flex:1;align-items:stretch">
+<div class="nu-field outlined dense floated" style="width:100%"><div class="box"><div class="body"><span class="label">Build target</span><span class="value">x86_64-linux</span></div></div></div>
+</div>
+<div class="nu-col" style="padding:var(--space-4);gap:var(--space-2);align-items:stretch">
+<button class="nu-btn">Next</button>
+</div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">A step that needs attention: an icon and words, never colour alone; focus on a finished step</span>
+<ol class="nu-a4-steps" style="list-style:none;margin:0;padding:0">
+<li class="st done is-focus"><span class="dot"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="lab">Template</span></li>
+<li class="bar on" aria-hidden="true"></li>
+<li class="st done"><span class="dot"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="lab">Build</span></li>
+<li class="bar on" aria-hidden="true"></li>
+<li class="st err"><span class="dot"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg></span><span class="lab">Repository<small>Fix 1 field</small></span></li>
+<li class="bar" aria-hidden="true"></li>
+<li class="st cur" aria-current="step"><span class="dot">4</span><span class="lab">Review<small>Optional</small></span></li>
+</ol>
+</div>
+</div>
+</div>
+</body>
+</html>

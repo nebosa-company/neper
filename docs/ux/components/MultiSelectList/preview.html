@@ -1,0 +1,34 @@
+<!-- @dsCard group="Selection" height=488 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Touch: checkbox rows, a count bar with select all; hover and focus shown</span>
+<div class="nu-a3-msl" role="listbox" aria-multiselectable="true" aria-label="Build targets">
+<div class="bar"><span class="grow">3 of 6 selected</span><button class="nu-btn text sm">Select all</button></div>
+<div class="nu-li selected" role="option" aria-selected="true"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span><span class="text"><span class="headline">Windows x86-64</span></span></div>
+<div class="nu-li selected" role="option" aria-selected="true"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span><span class="text"><span class="headline">macOS arm64</span></span></div>
+<div class="nu-li selected is-focus" role="option" aria-selected="true"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span><span class="text"><span class="headline">Linux x86-64</span></span></div>
+<div class="nu-li is-hover" role="option"><span class="nu-hit"><span class="nu-checkbox"></span></span><span class="text"><span class="headline">Linux arm64</span></span></div>
+<div class="nu-li" role="option"><span class="nu-hit"><span class="nu-checkbox"></span></span><span class="text"><span class="headline">Android arm64</span></span></div>
+<div class="nu-li" role="option" aria-disabled="true" style="color:color-mix(in srgb, var(--on-surface) 38%, transparent)"><span class="nu-hit is-disabled"><span class="nu-checkbox"></span></span><span class="text"><span class="headline">iOS arm64</span><span class="supporting" style="color:inherit">Needs a macOS runner</span></span></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Pointer, dense: selection by fill, Ctrl or Shift extends it</span>
+<div class="nu-a3-msl" role="listbox" aria-multiselectable="true" aria-label="Files">
+<div class="bar"><span class="grow">2 selected</span><button class="nu-btn text sm">Clear</button></div>
+<div class="nu-li dense"><span class="lead"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></span><span class="text"><span class="headline">codegen_x64.e</span></span><span class="trail">159 KB</span></div>
+<div class="nu-li dense selected"><span class="lead" style="color:inherit"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></span><span class="text"><span class="headline">lower.e</span></span><span class="trail" style="color:inherit">82 KB</span></div>
+<div class="nu-li dense selected is-focus"><span class="lead" style="color:inherit"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></span><span class="text"><span class="headline">main.e</span></span><span class="trail" style="color:inherit">41 KB</span></div>
+<div class="nu-li dense is-hover"><span class="lead"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></span><span class="text"><span class="headline">nir.e</span></span><span class="trail">64 KB</span></div>
+<div class="nu-li dense"><span class="lead"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></span><span class="text"><span class="headline">parse.e</span></span><span class="trail">58 KB</span></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

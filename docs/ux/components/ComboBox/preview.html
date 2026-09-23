@@ -1,0 +1,43 @@
+<!-- @dsCard group="Selection" height=464 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Closed: type a value or open the list</span>
+<div class="nu-field outlined floated" style="width:280px"><div class="box" style="padding-right:var(--space-1)"><span class="label">Zoom</span><div class="body"><span class="value">100%</span></div><button class="nu-icon-btn" aria-label="Show zoom presets" aria-expanded="false"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div></div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Hover on the chevron; disabled</span>
+<div class="nu-field outlined floated" style="width:280px"><div class="box" style="padding-right:var(--space-1)"><span class="label">Tab width</span><div class="body"><span class="value">4 spaces</span></div><button class="nu-icon-btn is-hover" aria-label="Show tab widths"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div></div>
+<div class="nu-field outlined floated is-disabled" style="width:280px;margin-top:var(--space-3)"><div class="box" style="padding-right:var(--space-1)"><span class="label">Line endings</span><div class="body"><span class="value">LF</span></div><span class="nu-icon-btn is-disabled" aria-hidden="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Dense: a value not in the list is kept</span>
+<div class="nu-a3-anchor" style="width:280px">
+<div class="nu-field outlined floated dense is-focus"><div class="box" style="padding-right:var(--space-1)"><span class="label">Zoom</span><div class="body"><span class="value">110%<span class="caret"></span></span></div><button class="nu-icon-btn sm" aria-label="Show zoom presets"><svg class="nu-icon nu-a3-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div></div>
+<div class="nu-menu nu-a3-pop dense"><div class="note" style="padding:var(--space-2) var(--space-3)">No preset. Enter keeps 110%</div></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Open from the chevron: the whole list, the current value checked</span>
+<div class="nu-a3-anchor" style="width:300px">
+<div class="nu-field outlined floated is-focus"><div class="box" style="padding-right:var(--space-1)"><span class="label">Zoom</span><div class="body"><span class="value">100%<span class="caret"></span></span></div><button class="nu-icon-btn" aria-label="Hide zoom presets" aria-expanded="true"><svg class="nu-icon nu-a3-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div></div>
+<div class="nu-menu nu-a3-pop" role="listbox" aria-label="Zoom presets">
+<div class="mi" role="option">50%</div>
+<div class="mi is-hover" role="option">75%</div>
+<div class="mi selected is-focus" role="option" aria-selected="true">100%<svg class="nu-icon chk" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+<div class="mi" role="option">150%</div>
+<div class="sep"></div>
+<div class="mi" role="option">Fit to width</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

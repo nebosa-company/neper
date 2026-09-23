@@ -1,0 +1,62 @@
+<!-- @dsCard group="Status" height=420 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Along a window's bottom edge: message and progress at the start, context at the end</span>
+<div class="nu-a4-win">
+<div class="nu-a4-body" style="height:64px"><div class="nu-a4-code"><b>fn</b> lower_call(ctx: *Lowering, call: *const Call) -&gt; err {
+    <b>let</b> target = resolve(ctx, call.callee)</div></div>
+<div class="nu-a4-statusbar" role="status">
+<span class="si act"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg>Build succeeded in 4.2 s</span>
+<span class="si act"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>0<svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true" style="margin-left:var(--space-1)"><path d="M12 4L3.5 19h17z"/><path d="M12 10v4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg>2</span>
+<span class="si">Indexing <span class="meter" style="--v:64%"></span> 64%</span>
+<span class="gap"></span>
+<span class="si act is-hover">Ln 42, Col 7</span>
+<span class="si act">Spaces: 4</span>
+<span class="si act">UTF-8</span>
+<span class="si act">LF</span>
+<span class="si act" aria-label="Notifications"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></svg></span>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Errors: an icon and a word, and the item opens the problems</span>
+<div class="nu-a4-win">
+<div class="nu-a4-statusbar">
+<span class="si act err is-focus"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Build failed: 3 errors</span>
+<span class="si act warn"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4L3.5 19h17z"/><path d="M12 10v4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg>2 warnings</span>
+<span class="gap"></span>
+<span class="si act">main</span>
+<span class="si act">Ln 118, Col 1</span>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Mode: primary-container while a session changes how the window behaves, named in words</span>
+<div class="nu-a4-win">
+<div class="nu-a4-statusbar accent">
+<span class="si act"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 10l2.5 2.5-2.5 2.5M12.5 15.5h4"/></svg>Debugging build-4128</span>
+<span class="si">Paused on breakpoint, lower.e:42</span>
+<span class="gap"></span>
+<span class="si act">Ln 42, Col 7</span>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Touch hosts: no status bar; transient news is a snackbar</span>
+<div class="nu-snackbar" style="width:340px"><span class="msg">Build succeeded in 4.2 s</span><button class="nu-btn text">View log</button></div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Busy item: live, polite</span>
+<div class="nu-a4-statusbar" style="border-radius:var(--radius-xs)"><span class="si">Syncing 12 of 40 files <span class="meter" style="--v:30%"></span></span></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

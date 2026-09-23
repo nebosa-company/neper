@@ -1,0 +1,63 @@
+<!-- @dsCard group="Inputs" height=1061 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Expanded, pointer host: two columns, labels above, dense fields, action bar</span>
+<div class="nu-a2-form">
+<div class="nu-row" style="justify-content:space-between"><span class="title-large">New project</span><span class="nu-muted" style="font:400 12px/16px var(--font-sans)"><span style="color:var(--error)">*</span> Required</span></div>
+<span class="section">General</span>
+<div class="nu-a2-grid two" style="gap:var(--space-5) var(--space-6)">
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Project name<span class="req" aria-hidden="true">*</span></span><div class="nu-field outlined dense is-focus"><div class="box"><div class="body"><span class="value">neper-docs<span class="caret"></span></span></div></div></div><span class="nu-a2-msg">Lowercase letters, digits and hyphens</span></div>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Visibility</span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value">Private to the team</span></div><span class="trail nu-a2-trail"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div></div>
+<div class="nu-a2-ff outside" style="grid-column:1 / -1"><span class="nu-a2-flabel">Description</span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value placeholder">What the project builds</span></div></div></div></div>
+</div>
+<span class="section">Build</span>
+<div class="nu-a2-grid two" style="gap:var(--space-5) var(--space-6)">
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Default branch</span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value">master</span></div></div></div></div>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Build timeout</span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value">30000</span></div><span class="nu-a2-affix" style="font:400 14px/20px var(--font-sans)">ms</span></div></div></div>
+</div>
+<label class="nu-select-row nu-a2-body-m" style="margin-left:calc(-1 * var(--space-2));min-height:var(--control-md)"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Run tests before merging</label>
+<div class="actions bar"><button class="nu-btn outlined sm">Cancel</button><button class="nu-btn sm">Create project</button></div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Compact, touch: one column, filled fields, full-screen</span>
+<div class="nu-a2-phone">
+<div class="nu-appbar"><button class="nu-icon-btn" aria-label="Close"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="title" style="font-size:20px">New project</span><button class="nu-btn text">Create</button></div>
+<div class="nu-col" style="gap:var(--space-4);padding:var(--space-2) var(--space-4) var(--space-6);align-items:stretch">
+<div class="nu-a2-ff"><div class="nu-field filled floated is-focus"><div class="box"><div class="body"><span class="label">Project name*</span><span class="value">neper-docs<span class="caret"></span></span></div></div></div><span class="nu-a2-msg">Lowercase letters, digits and hyphens</span></div>
+<div class="nu-a2-ff"><div class="nu-field filled floated"><div class="box"><div class="body"><span class="label">Visibility</span><span class="value">Private to the team</span></div><span class="trail nu-a2-trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div></div>
+<div class="nu-a2-ff"><div class="nu-field filled floated"><div class="box"><div class="body"><span class="label">Default branch</span><span class="value">master</span></div></div></div></div>
+<div class="nu-switch-row" style="font-size:16px"><span>Run tests before merging</span><span class="nu-switch on"></span></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);flex:1;min-width:0;align-items:stretch">
+<span class="nu-caption">macOS preferences: leading labels, instant apply</span>
+<div class="nu-a2-desk" style="padding:var(--space-5) var(--space-4)">
+<div style="display:grid;grid-template-columns:112px minmax(0,1fr);gap:var(--space-3) var(--space-3);align-items:center">
+<span class="nu-a2-flabel" style="justify-content:flex-end;font-weight:400">Default branch</span>
+<div class="nu-field outlined dense" style="width:100%"><div class="box"><div class="body"><span class="value">master</span></div></div></div>
+<span class="nu-a2-flabel" style="justify-content:flex-end;font-weight:400">Timeout</span>
+<div class="nu-field outlined dense" style="width:100%"><div class="box"><div class="body"><span class="value">30000</span></div><span class="nu-a2-affix" style="font:400 14px/20px var(--font-sans)">ms</span></div></div>
+<span class="nu-a2-flabel" style="justify-content:flex-end;font-weight:400">Checks</span>
+<label class="nu-select-row nu-a2-body-m" style="margin-left:calc(-1 * var(--space-2));min-height:var(--control-sm)"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Run tests</label>
+<span></span>
+<label class="nu-select-row nu-a2-body-m" style="margin-left:calc(-1 * var(--space-2));min-height:var(--control-sm);margin-top:calc(-1 * var(--space-3))"><span class="nu-hit"><span class="nu-checkbox"></span></span>Lint on save</label>
+</div>
+</div>
+<span class="nu-caption">Submitting: progress in the button at its own width</span>
+<div class="nu-a2-desk" style="padding:var(--space-3) var(--space-4)">
+<div class="nu-row" style="justify-content:flex-end"><button class="nu-btn outlined sm">Cancel</button><button class="nu-btn sm" aria-label="Create project, busy"><span style="visibility:hidden">Create project</span><svg class="nu-ring nu-a2-cur" viewBox="0 0 48 48" style="width:18px;height:18px;position:absolute;left:50%;top:50%;margin:-9px 0 0 -9px" aria-hidden="true"><circle class="fill" cx="24" cy="24" r="20" stroke-dasharray="40 200" style="stroke-width:6"/></svg></button></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

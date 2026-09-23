@@ -1,0 +1,39 @@
+<!-- @dsCard group="Pickers" height=460 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Desktop panel: searchable families, each named in its own face; style and size beside a live preview</span>
+<div class="nu-a3-font" role="group" aria-label="Editor font">
+<div class="families">
+<div class="nu-field outlined dense" style="width:100%"><div class="box"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg><div class="body"><span class="value placeholder">Search fonts</span></div></div></div>
+<div class="nu-list" role="listbox" aria-label="Family">
+<div class="nu-subheader" style="padding:var(--space-2) var(--space-4) var(--space-1);font-size:12px">Monospace</div>
+<div class="nu-li dense selected" role="option" aria-selected="true"><span class="fam" style="font-family:var(--font-mono)">Cascadia Code</span><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+<div class="nu-li dense is-hover" role="option"><span class="fam" style="font-family:ui-monospace, Menlo, monospace">JetBrains Mono</span></div>
+<div class="nu-subheader" style="padding:var(--space-2) var(--space-4) var(--space-1);font-size:12px">All fonts</div>
+<div class="nu-li dense" role="option"><span class="fam" style="font-family:Georgia, serif">Georgia</span></div>
+<div class="nu-li dense" role="option"><span class="fam" style="font-family:var(--font-sans)">Segoe UI Variable</span></div>
+</div>
+</div>
+<div class="side">
+<div class="nu-row" style="gap:var(--space-3);flex-wrap:nowrap">
+<button class="nu-field outlined floated dense" style="width:160px;text-align:left"><span class="box"><span class="label">Style</span><span class="body"><span class="value">Regular</span></span><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></button>
+<div class="nu-field outlined floated dense is-focus" style="width:104px"><div class="box"><span class="label">Size</span><div class="body"><span class="value">13<span class="caret"></span></span></div><span class="nu-a3-arrows"><span aria-hidden="true"><svg class="nu-icon" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></span><span aria-hidden="true"><svg class="nu-icon" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></span></div></div>
+</div>
+<div class="nu-row" style="gap:var(--space-2)"><span class="nu-chip selected has-lead"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Ligatures</span><span class="nu-tag">Variable font</span></div>
+<div class="preview" aria-label="Preview"><span class="cap">Preview, 13 pt</span><div style="font-family:var(--font-mono);font-size:13px;line-height:20px">fn main() -&gt; i32 {<br>&nbsp;&nbsp;return build(os.args()) != 0<br>}</div></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Compact: a field that shows the choice in its face; on touch it opens the panel as a full-height sheet</span>
+<button class="nu-field filled floated" style="width:320px;text-align:left"><span class="box"><span class="body"><span class="label">Editor font</span><span class="value" style="font-family:var(--font-mono)">Cascadia Code, 13 pt</span></span><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></button>
+</div>
+</div>
+</div>
+</body>
+</html>

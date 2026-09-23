@@ -1,0 +1,66 @@
+<!-- @dsCard group="Selection" height=520 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-a1-cols">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Assist: a contextual action (outlined, elevated on busy grounds)</span>
+<div class="nu-row" style="gap:var(--space-2)">
+<button class="nu-chip has-lead"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 10l2.5 2.5-2.5 2.5M12.5 15.5h4"/></svg>Open in terminal</button>
+<button class="nu-chip elevated has-lead"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><circle cx="17" cy="6" r="2.5"/><circle cx="7" cy="12" r="2.5"/><circle cx="17" cy="18" r="2.5"/><path d="M9.2 10.8l5.6-3.3M9.2 13.2l5.6 3.3"/></svg>Share build</button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Suggestion: an offered reply or next step</span>
+<div class="nu-row" style="gap:var(--space-2)">
+<button class="nu-chip">Retry failed tests</button>
+<button class="nu-chip">Open log</button>
+<button class="nu-chip">Assign to me</button>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Filter: toggles in a set; selected gains a check; a menu filter shows its value and a chevron</span>
+<div class="nu-row" style="gap:var(--space-2)">
+<button class="nu-chip selected has-lead" aria-pressed="true"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Failed</button>
+<button class="nu-chip" aria-pressed="false">Passed</button>
+<button class="nu-chip selected has-lead" aria-pressed="true"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Flaky</button>
+<button class="nu-chip has-trail">Branch: main<svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+<button class="nu-chip has-lead has-trail"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>More filters<svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Input: an entered value with a remove button; invalid stays visible with an icon</span>
+<div class="nu-row" style="gap:var(--space-2)">
+<span class="nu-chip nu-a1-chip has-lead has-trail"><span class="avatar">AL</span>Ada Lovelace<span class="nu-a1-remove" aria-label="Remove Ada Lovelace"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="nu-chip nu-a1-chip has-lead has-trail"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>lib/e/ui<span class="nu-a1-remove" aria-label="Remove lib/e/ui"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="nu-chip nu-a1-chip selected has-trail">windows-x64<span class="nu-a1-remove" aria-label="Remove windows-x64"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="nu-chip nu-a1-chip invalid has-lead has-trail"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>ada@neper<span class="nu-a1-remove" aria-label="Remove ada@neper"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">States: rest, hover, focus, pressed, dragged, disabled</span>
+<div class="nu-row" style="gap:var(--space-3)">
+<button class="nu-chip nu-a1-chip">Nightly</button>
+<button class="nu-chip nu-a1-chip is-hover">Nightly</button>
+<button class="nu-chip nu-a1-chip is-focus">Nightly</button>
+<button class="nu-chip nu-a1-chip is-pressed">Nightly</button>
+<button class="nu-chip nu-a1-chip is-dragged">Nightly</button>
+<button class="nu-chip nu-a1-chip is-disabled" disabled>Nightly</button>
+<button class="nu-chip nu-a1-chip selected has-lead is-focus"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Nightly</button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);width:100%">
+<span class="nu-caption">Chip set: one line that scrolls sideways on touch, wraps on desktop</span>
+<div class="nu-a1-chip-row">
+<button class="nu-chip selected has-lead"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>All targets</button>
+<button class="nu-chip">windows-x64</button><button class="nu-chip">linux-x64</button><button class="nu-chip">macos-arm64</button><button class="nu-chip">android-arm64</button><button class="nu-chip">ios-arm64</button><button class="nu-chip">wasm32</button>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!-- @dsCard group="Pickers" height=1046 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Pointer: docked below the field, picks on press</span>
+<div class="nu-col" style="gap:var(--space-1)">
+<div class="nu-field outlined floated dense is-focus" style="width:256px"><div class="box"><div class="body"><span class="label">Release date</span><span class="value">25 Sep 2026</span></div><span class="trail nu-icon-btn sm nu-a5-anchor-on" style="margin-right:calc(-1 * var(--space-2))"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg></span></div></div>
+<div class="nu-a5-picker docked" role="dialog" aria-label="Choose release date" style="width:256px;box-shadow:var(--elevation-2)">
+<div class="nu-a5-calhead dense" style="margin-bottom:var(--space-1)"><span class="m">September 2026</span><button class="nu-icon-btn sm" aria-label="Previous month"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><button class="nu-icon-btn sm" aria-label="Next month"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
+<div class="nu-a5-cal dense" role="grid">
+<span class="wd">Mo</span><span class="wd">Tu</span><span class="wd">We</span><span class="wd">Th</span><span class="wd">Fr</span><span class="wd">Sa</span><span class="wd">Su</span>
+<span></span><span class="d">1</span><span class="d">2</span><span class="d">3</span><span class="d">4</span><span class="d">5</span><span class="d">6</span>
+<span class="d">7</span><span class="d">8</span><span class="d">9</span><span class="d">10</span><span class="d">11</span><span class="d">12</span><span class="d">13</span>
+<span class="d">14</span><span class="d">15</span><span class="d">16</span><span class="d">17</span><span class="d">18</span><span class="d">19</span><span class="d">20</span>
+<span class="d">21</span><span class="d">22</span><span class="d today">23</span><span class="d">24</span><span class="d sel is-focus">25</span><span class="d">26</span><span class="d">27</span>
+<span class="d">28</span><span class="d is-hover">29</span><span class="d">30</span><span></span><span></span><span></span><span></span>
+</div>
+<div class="nu-row" style="justify-content:space-between;margin:var(--space-2) calc(-1 * var(--space-1)) 0"><button class="nu-btn text sm">Today</button><button class="nu-btn text sm">Clear</button></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Touch: modal, confirmed with OK</span>
+<div class="nu-a5-picker" role="dialog" aria-labelledby="dp-h" style="width:328px">
+<div class="nu-a5-dphead"><span class="sup">Select date</span><div class="row"><span class="big" id="dp-h">Fri, Sep 25</span><button class="nu-icon-btn" aria-label="Switch to text input"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L15.5 5.5l3 3L9 18z"/><path d="M13.5 7.5l3 3"/></svg></button></div></div>
+<div style="padding:var(--space-1) var(--space-3) 0 var(--space-3)">
+<div class="nu-a5-calhead"><button class="nu-btn text trailing-icon">September 2026<svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><span style="flex:1"></span><button class="nu-icon-btn" aria-label="Previous month"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><button class="nu-icon-btn" aria-label="Next month"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></div>
+<div class="nu-a5-cal" role="grid" style="margin:0 auto">
+<span class="wd">S</span><span class="wd">M</span><span class="wd">T</span><span class="wd">W</span><span class="wd">T</span><span class="wd">F</span><span class="wd">S</span>
+<span></span><span></span><span class="d">1</span><span class="d">2</span><span class="d">3</span><span class="d">4</span><span class="d">5</span>
+<span class="d">6</span><span class="d">7</span><span class="d">8</span><span class="d">9</span><span class="d">10</span><span class="d">11</span><span class="d">12</span>
+<span class="d">13</span><span class="d">14</span><span class="d">15</span><span class="d">16</span><span class="d">17</span><span class="d">18</span><span class="d">19</span>
+<span class="d">20</span><span class="d">21</span><span class="d">22</span><span class="d today">23</span><span class="d">24</span><span class="d sel">25</span><span class="d">26</span>
+<span class="d">27</span><span class="d">28</span><span class="d">29</span><span class="d">30</span><span></span><span></span><span></span>
+</div>
+</div>
+<div class="nu-a5-actions"><button class="nu-btn text">Cancel</button><button class="nu-btn text">OK</button></div>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Input mode: typed, the format as supporting text</span>
+<div class="nu-a5-picker" role="dialog" aria-labelledby="dp-h2" style="width:328px">
+<div class="nu-a5-dphead"><span class="sup">Select date</span><div class="row"><span class="big" id="dp-h2">Fri, Sep 25</span><button class="nu-icon-btn" aria-label="Switch to calendar"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg></button></div></div>
+<div class="nu-col" style="padding:var(--space-4) var(--space-6) 0;gap:var(--space-3)">
+<div class="nu-field outlined floated is-focus" style="width:100%"><div class="box"><div class="body"><span class="label" style="background:var(--surface-container-high)">Date</span><span class="value">09/25/2026<span class="caret"></span></span></div></div><div class="support"><span>mm/dd/yyyy</span></div></div>
+<div class="nu-field outlined floated invalid" style="width:100%"><div class="box"><div class="body"><span class="label" style="background:var(--surface-container-high)">Date</span><span class="value">09/02/2026</span></div><span class="trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg></span></div><div class="support"><span>Choose a date from Sep 8, 2026</span></div></div>
+</div>
+<div class="nu-a5-actions"><button class="nu-btn text">Cancel</button><button class="nu-btn text">OK</button></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Range on compact: full screen, months scroll</span>
+<div class="nu-a5-phone" style="width:312px;height:436px;background:var(--surface-container-high)">
+<div class="nu-a5-fsd" style="background:transparent">
+<div class="head"><button class="nu-icon-btn" aria-label="Close"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="t"></span><button class="nu-btn text">Save</button></div>
+<div style="padding:0 var(--space-4) var(--space-3) var(--space-12)"><span class="nu-a5-label-m">Select range</span><div style="font:400 24px/32px var(--font-display);margin-top:var(--space-2)">Sep 14 – Sep 18</div></div>
+<div class="nu-a5-cal" style="padding:0 var(--space-4);border-bottom:var(--divider) solid var(--outline-variant);grid-auto-rows:32px"><span class="wd">S</span><span class="wd">M</span><span class="wd">T</span><span class="wd">W</span><span class="wd">T</span><span class="wd">F</span><span class="wd">S</span></div>
+<div style="padding:var(--space-3) var(--space-4) 0"><span class="nu-a5-title-s" style="display:block;padding:0 0 var(--space-2) var(--space-3)">September 2026</span>
+<div class="nu-a5-cal" role="grid" aria-label="September 2026">
+<span></span><span></span><span class="d off">1</span><span class="d off">2</span><span class="d off">3</span><span class="d off">4</span><span class="d off">5</span>
+<span class="d off">6</span><span class="d off">7</span><span class="d">8</span><span class="d">9</span><span class="d">10</span><span class="d">11</span><span class="d">12</span>
+<span class="d">13</span><span class="d sel start">14</span><span class="d in">15</span><span class="d in">16</span><span class="d in">17</span><span class="d sel end">18</span><span class="d">19</span>
+<span class="d">20</span><span class="d">21</span><span class="d">22</span><span class="d today">23</span><span class="d">24</span><span class="d">25</span><span class="d">26</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

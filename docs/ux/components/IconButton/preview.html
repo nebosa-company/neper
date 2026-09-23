@@ -1,0 +1,76 @@
+<!-- @dsCard group="Actions" height=424 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Emphasis: standard, filled, tonal, outlined</span>
+<div class="nu-row" style="gap:var(--space-3)">
+<button class="nu-icon-btn" aria-label="Settings"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg></button>
+<button class="nu-icon-btn filled" aria-label="Run build"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+<button class="nu-icon-btn tonal" aria-label="Edit"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L15.5 5.5l3 3L9 18z"/><path d="M13.5 7.5l3 3"/></svg></button>
+<button class="nu-icon-btn outlined" aria-label="Share"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="17" cy="6" r="2.5"/><circle cx="7" cy="12" r="2.5"/><circle cx="17" cy="18" r="2.5"/><path d="M9.2 10.8l5.6-3.3M9.2 13.2l5.6 3.3"/></svg></button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Hover shows the name as a tooltip</span>
+<div class="nu-col" style="gap:var(--space-1);align-items:center">
+<button class="nu-icon-btn is-hover" aria-label="Refresh"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg></button>
+<span class="nu-tooltip">Refresh (F5)</span>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Toggle, off then on: standard, filled, tonal, outlined</span>
+<div class="nu-row" style="gap:var(--space-6)">
+<span class="nu-row" style="gap:var(--space-2)">
+<button class="nu-icon-btn" aria-label="Favourite" aria-pressed="false"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/></svg></button>
+<button class="nu-icon-btn selected" aria-label="Favourite" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/></svg></button>
+</span>
+<span class="nu-row" style="gap:var(--space-2)">
+<button class="nu-icon-btn filled unselected" aria-label="Watch" aria-pressed="false"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+<button class="nu-icon-btn filled" aria-label="Watch" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></button>
+</span>
+<span class="nu-row" style="gap:var(--space-2)">
+<button class="nu-icon-btn tonal nu-a1-ib-tonal-off" aria-label="Notify me" aria-pressed="false"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></svg></button>
+<button class="nu-icon-btn tonal" aria-label="Notify me" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></svg></button>
+</span>
+<span class="nu-row" style="gap:var(--space-2)">
+<button class="nu-icon-btn outlined" aria-label="Show sidebar" aria-pressed="false"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/></svg></button>
+<button class="nu-icon-btn outlined nu-a1-ib-outlined-on" aria-label="Show sidebar" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/></svg></button>
+</span>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">States: rest, hover, focus, pressed, disabled (standard, then filled)</span>
+<div class="nu-row" style="gap:var(--space-3)">
+<button class="nu-icon-btn nu-a1-ib" aria-label="Delete"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 4h4M7 7l1 13h8l1-13"/></svg></button>
+<button class="nu-icon-btn nu-a1-ib is-hover" aria-label="Delete"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 4h4M7 7l1 13h8l1-13"/></svg></button>
+<button class="nu-icon-btn nu-a1-ib is-focus" aria-label="Delete"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 4h4M7 7l1 13h8l1-13"/></svg></button>
+<button class="nu-icon-btn nu-a1-ib is-pressed" aria-label="Delete"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 4h4M7 7l1 13h8l1-13"/></svg></button>
+<button class="nu-icon-btn nu-a1-ib is-disabled" aria-label="Delete" disabled><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 4h4M7 7l1 13h8l1-13"/></svg></button>
+<span class="nu-divider vertical" style="height:24px;margin:0 var(--space-2)"></span>
+<button class="nu-icon-btn filled nu-a1-ib" aria-label="Upload"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 9.5l5-5 5 5M5 19.5h14"/></svg></button>
+<button class="nu-icon-btn filled nu-a1-ib is-hover" aria-label="Upload"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 9.5l5-5 5 5M5 19.5h14"/></svg></button>
+<button class="nu-icon-btn filled nu-a1-ib is-focus" aria-label="Upload"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 9.5l5-5 5 5M5 19.5h14"/></svg></button>
+<button class="nu-icon-btn filled nu-a1-ib is-pressed" aria-label="Upload"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 9.5l5-5 5 5M5 19.5h14"/></svg></button>
+<button class="nu-icon-btn filled nu-a1-ib is-disabled" aria-label="Upload" disabled><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 9.5l5-5 5 5M5 19.5h14"/></svg></button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Sizes: 24 (density -2, pads to 32), 32 (desktop), 40 (default), 56; with a badge</span>
+<div class="nu-row" style="gap:var(--space-4)">
+<button class="nu-icon-btn nu-a1-ib-xs" aria-label="Close tab"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="More"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.5" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="12" cy="18.5" r="1.25"/></svg></button>
+<button class="nu-icon-btn" aria-label="More"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.5" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="12" cy="18.5" r="1.25"/></svg></button>
+<button class="nu-icon-btn tonal nu-a1-ib-lg" aria-label="Search"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg></button>
+<button class="nu-icon-btn" aria-label="Notifications, 3 unread"><span class="nu-badge-anchor"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></svg><span class="nu-badge">3</span></span></button>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!-- @dsCard group="Navigation" height=480 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Primary tabs, fixed, with the selected page</span>
+<div>
+<div class="nu-tabs" role="tablist">
+<button class="tab active">Overview<span class="ind"></span></button>
+<button class="tab">Builds</button>
+<button class="tab">Settings</button>
+</div>
+<div class="nu-a3-tabpage">Last build 4128 passed on Windows, macOS and Linux 12 minutes ago.</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Primary with icons and a count badge</span>
+<div class="nu-tabs" role="tablist">
+<button class="tab with-icon"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>Files</button>
+<button class="tab with-icon active"><span class="nu-badge-anchor"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 10l2.5 2.5-2.5 2.5M12.5 15.5h4"/></svg><span class="nu-badge">3</span></span>Builds<span class="ind"></span></button>
+<button class="tab with-icon is-hover"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.2-3.3 3.8-5 7-5s5.8 1.7 7 5"/></svg>People</button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Secondary tabs, inside a pane</span>
+<div class="nu-tabs secondary" role="tablist">
+<button class="tab active">Output<span class="ind"></span></button>
+<button class="tab">Problems</button>
+<button class="tab is-focus">Terminal</button>
+<button class="tab">Debug console</button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Desktop: dense 40, start-aligned, scrollable, with a disabled tab and an overflow button</span>
+<div class="nu-a3-tabrow" style="border-bottom:var(--divider) solid var(--outline-variant)">
+<div class="nu-tabs scrollable nu-a3-dense nu-a3-start" role="tablist" style="flex:1;border-bottom:0;overflow:hidden">
+<button class="tab active">Summary<span class="ind"></span></button>
+<button class="tab"><span class="nu-a3-tabrow" style="gap:var(--space-1)">Pull requests<span class="nu-badge">12</span></span></button>
+<button class="tab is-hover">Issues</button>
+<button class="tab">Pipelines</button>
+<button class="tab nu-a3-off" aria-disabled="true">Releases</button>
+<button class="tab">Insights</button>
+</div>
+<button class="nu-icon-btn sm" aria-label="More tabs"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

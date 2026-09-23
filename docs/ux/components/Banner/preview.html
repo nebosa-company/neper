@@ -1,0 +1,48 @@
+<!-- @dsCard group="Status" height=756 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Standard: severity in the icon well, text on the neutral surface, actions at the end</span>
+<div class="nu-banner" role="status">
+<span class="well"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5"/><circle cx="12" cy="8" r=".9" fill="currentColor" stroke="none"/></svg></span>
+<span class="msg"><span class="nu-a3-t">A new runner image is available</span>Builds will move to Ubuntu 26.04 on 1 October. Test your pipeline on it before then.</span>
+<span class="actions"><button class="nu-btn text">Remind me later</button><button class="nu-btn text">Try it now</button></span>
+</div>
+<div class="nu-banner warning" role="status" style="margin-top:var(--space-3)">
+<span class="well"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4L3.5 19h17z"/><path d="M12 10v4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg></span>
+<span class="msg"><span class="nu-a3-t">Your licence expires in 5 days</span>Renew it to keep private builds running after 28 September.</span>
+<span class="actions"><button class="nu-btn text is-focus">Renew licence</button></span>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Inline, one line: error with an action, success that can be dismissed</span>
+<div class="nu-banner inline error" role="alert">
+<span class="well"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg></span>
+<span class="msg">Couldn't reach the build server. Changes are saved locally.</span>
+<span class="actions"><button class="nu-btn text">Retry</button></span>
+</div>
+<div class="nu-banner inline success" role="status">
+<span class="well"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg></span>
+<span class="msg">Two-step sign-in is on for this workspace.</span>
+<span class="actions"><button class="nu-icon-btn" aria-label="Dismiss"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Full-bleed at the top of the content, under the app bar; it pushes content down, never covers it</span>
+<div class="nu-a3-screen">
+<div class="nu-appbar" style="height:48px"><span class="title" style="font-size:16px;font-weight:600">Builds</span></div>
+<div class="nu-banner inline warning nu-a3-bleed" role="status">
+<span class="well"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4L3.5 19h17z"/><path d="M12 10v4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg></span>
+<span class="msg">You're offline. Builds will start when you reconnect.</span>
+</div>
+<div class="nu-list" style="padding:0"><div class="nu-li dense"><span class="text"><span class="headline">Build 4128</span></span><span class="trail">Queued</span></div></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

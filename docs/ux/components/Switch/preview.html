@@ -1,0 +1,42 @@
+<!-- @dsCard group="Selection" height=540 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Off, on, with icons, disabled</span>
+<div class="nu-row" style="gap:var(--space-6)">
+<span class="nu-switch" role="switch" aria-checked="false" aria-label="Off"></span>
+<span class="nu-switch on" role="switch" aria-checked="true" aria-label="On"></span>
+<span class="nu-switch nu-a2-sw-icons" role="switch" aria-checked="false" aria-label="Off with icon"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
+<span class="nu-switch on nu-a2-sw-icons" role="switch" aria-checked="true" aria-label="On with icon"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+<span class="nu-switch is-disabled" role="switch" aria-checked="false" aria-disabled="true" aria-label="Disabled off"></span>
+<span class="nu-switch on is-disabled" role="switch" aria-checked="true" aria-disabled="true" aria-label="Disabled on"></span>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Hover, focus, pressed (the thumb grows to 28), off and on</span>
+<div class="nu-row" style="gap:var(--space-4)">
+<span class="nu-a2-sw-hit is-hover"><span class="nu-switch"></span></span>
+<span class="nu-a2-sw-hit on is-hover"><span class="nu-switch on"></span></span>
+<span class="nu-a2-sw-hit"><span class="nu-switch is-focus"></span></span>
+<span class="nu-a2-sw-hit on"><span class="nu-switch on is-focus"></span></span>
+<span class="nu-a2-sw-hit is-pressed"><span class="nu-switch"></span></span>
+<span class="nu-a2-sw-hit on is-pressed"><span class="nu-switch on is-pressed"></span></span>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">In settings rows: the whole row is the target; focus goes inset on the row</span>
+<div class="nu-a2-settings">
+<div class="nu-li two" role="switch" aria-checked="true"><span class="lead"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg></span><span class="text"><span class="headline">Build on save</span><span class="supporting">Rebuilds the changed modules in the background</span></span><span class="nu-switch on nu-a2-sw-icons"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></div>
+<div class="nu-li two is-focus" role="switch" aria-checked="false"><span class="lead"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5h4"/></svg></span><span class="text"><span class="headline">Notify when a build fails</span><span class="supporting">Desktop notifications for your own builds</span></span><span class="nu-switch nu-a2-sw-icons"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+<div class="nu-li two is-hover" role="switch" aria-checked="true"><span class="lead"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/></svg></span><span class="text"><span class="headline">Download updates automatically</span><span class="supporting">Installs when you next restart</span></span><span class="nu-switch on nu-a2-sw-icons"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></div>
+<div class="nu-li two is-disabled" role="switch" aria-checked="false" aria-disabled="true" style="color:color-mix(in srgb, var(--on-surface) 38%, transparent)"><span class="lead" style="color:inherit"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16c1.3 0 1.8-.9 1.4-1.9-.5-1.1.2-2.1 1.4-2.1H17a3.5 3.5 0 0 0 3.5-3.5C20.5 7.5 16.7 4 12 4z"/><circle cx="7.8" cy="11" r="1"/><circle cx="10.5" cy="7.6" r="1"/><circle cx="14.6" cy="7.8" r="1"/></svg></span><span class="text"><span class="headline">Match the system theme</span><span class="supporting" style="color:var(--on-surface-variant)">Managed by your organization</span></span><span class="nu-switch is-disabled"></span></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

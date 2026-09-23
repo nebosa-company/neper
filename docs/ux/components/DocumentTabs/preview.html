@@ -1,0 +1,56 @@
+<!-- @dsCard group="Navigation" height=476 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Active group: pinned, current (primary line), unsaved (dot), hovered (close shows), preview (italic)</span>
+<div class="nu-a4-win">
+<div class="nu-a4-doctabs active" role="tablist" aria-label="Open files">
+<span class="dt pinned" role="tab" aria-label="neper.json, pinned"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></span>
+<span class="dt cur" role="tab" aria-selected="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">main.e</span><span class="x" aria-label="Close main.e"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="dt" role="tab"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">lower.e</span><span class="x" aria-label="lower.e has unsaved changes"><span class="dot"></span></span></span>
+<span class="dt is-hover" role="tab"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">nir.e</span><span class="x is-hover" aria-label="Close nir.e"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="dt preview" role="tab"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">codegen_x64.e</span><span class="x hidden"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="end"><button class="nu-icon-btn sm" aria-label="Show all open files"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></span>
+</div>
+<div class="nu-a4-body" style="height:56px"><div class="nu-a4-code"><b>fn</b> main() -&gt; err {
+    <b>let</b> project = load(<i>"neper.json"</i>)</div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Inactive group (no line), keyboard focus on a tab</span>
+<div class="nu-a4-win">
+<div class="nu-a4-doctabs" role="tablist" aria-label="Open files, right group">
+<span class="dt cur" role="tab" aria-selected="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">decisions.md</span><span class="x"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="dt is-focus" role="tab"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">work-queue.json</span><span class="x"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Reordering: the dragged tab lifts, a 2px primary line marks where it lands</span>
+<div class="nu-a4-win">
+<div class="nu-a4-doctabs active">
+<span class="dt cur"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">main.e</span><span class="x"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="dropline" style="left:139px"></span>
+<span class="dt" style="margin-left:4px"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">lower.e</span><span class="x hidden"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="dt dragged" style="margin-left:24px"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">nir.e</span><span class="x"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Touch (tablet): 48 tabs, close always shown, 40 close target</span>
+<div class="nu-a4-win">
+<div class="nu-a4-doctabs touch active">
+<span class="dt cur"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">Q3 roadmap</span><span class="x"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="dt"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">Release checklist</span><span class="x"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="end"><button class="nu-icon-btn" aria-label="New document"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

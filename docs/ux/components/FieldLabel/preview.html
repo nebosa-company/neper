@@ -1,0 +1,36 @@
+<!-- @dsCard group="Inputs" height=400 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Above the field: plain, required, optional</span>
+<div class="nu-a2-grid">
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Project name</span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value">neper-compiler</span></div></div></div></div>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Repository URL<span class="req" aria-hidden="true">*</span></span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value placeholder">https://</span></div></div></div></div>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Description<span class="opt">(optional)</span></span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value placeholder"></span></div></div></div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">With a help button (focused), invalid, disabled</span>
+<div class="nu-a2-grid">
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Arena size<span class="nu-a2-info nu-sl is-focus" role="button" aria-label="About arena size"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5"/><circle cx="12" cy="8" r=".9" fill="currentColor" stroke="none"/></svg></span></span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value">64 MB</span></div></div></div></div>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel invalid">Port<span class="req" aria-hidden="true">*</span></span><div class="nu-field outlined dense invalid"><div class="box"><div class="body"><span class="value">80800</span></div></div></div></div>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel is-disabled">Workspace ID</span><div class="nu-field outlined dense is-disabled nu-a2-odis"><div class="box"><div class="body"><span class="value">ws-4f2a91</span></div></div></div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Leading, end-aligned (macOS forms and wide dialogs)</span>
+<div style="display:grid;grid-template-columns:160px 320px;gap:var(--space-3) var(--space-4);align-items:center">
+<span class="nu-a2-flabel" style="justify-content:flex-end;font-weight:400">Default branch</span>
+<div class="nu-field outlined dense" style="width:100%"><div class="box"><div class="body"><span class="value">master</span></div></div></div>
+<span class="nu-a2-flabel" style="justify-content:flex-end;font-weight:400">Build command<span class="req" aria-hidden="true">*</span></span>
+<div class="nu-field outlined dense" style="width:100%"><div class="box"><div class="body"><span class="value" style="font-family:var(--font-mono)">neper build --release</span></div></div></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

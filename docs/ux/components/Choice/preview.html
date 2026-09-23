@@ -1,0 +1,63 @@
+<!-- @dsCard group="Selection" height=693 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Checkbox: unchecked, checked, indeterminate, error, disabled</span>
+<div class="nu-row" style="gap:var(--space-2) var(--space-4)">
+<label class="nu-select-row"><span class="nu-hit"><span class="nu-checkbox"></span></span>Lint on save</label>
+<label class="nu-select-row"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Run tests</label>
+<label class="nu-select-row"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></span></span>All hosts</label>
+<label class="nu-select-row"><span class="nu-hit invalid"><span class="nu-checkbox"></span></span>Accept the licence</label>
+<label class="nu-select-row is-disabled"><span class="nu-hit is-disabled"><span class="nu-checkbox"></span></span>Sign</label>
+<label class="nu-select-row is-disabled"><span class="nu-hit on is-disabled nu-a2-dison"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Cache</label>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Interaction: hover, focus, pressed (unchecked and checked)</span>
+<div class="nu-row" style="gap:var(--space-2) var(--space-4)">
+<label class="nu-select-row"><span class="nu-hit is-hover"><span class="nu-checkbox"></span></span>Hover</label>
+<label class="nu-select-row"><span class="nu-hit is-focus"><span class="nu-checkbox"></span></span>Focus</label>
+<label class="nu-select-row"><span class="nu-hit is-pressed"><span class="nu-checkbox"></span></span>Pressed</label>
+<label class="nu-select-row"><span class="nu-hit on is-hover"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Hover</label>
+<label class="nu-select-row"><span class="nu-hit on is-focus"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Focus</label>
+<label class="nu-select-row"><span class="nu-hit on is-pressed"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Pressed</label>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Radio: selected, unselected, hover, focus, disabled</span>
+<div class="nu-row" style="gap:var(--space-2) var(--space-4)" role="radiogroup" aria-label="Merge strategy">
+<label class="nu-select-row"><span class="nu-hit on"><span class="nu-radio"></span></span>Squash</label>
+<label class="nu-select-row"><span class="nu-hit"><span class="nu-radio"></span></span>Merge commit</label>
+<label class="nu-select-row"><span class="nu-hit is-hover"><span class="nu-radio"></span></span>Rebase</label>
+<label class="nu-select-row"><span class="nu-hit on is-focus"><span class="nu-radio"></span></span>Focus</label>
+<label class="nu-select-row is-disabled"><span class="nu-hit is-disabled"><span class="nu-radio"></span></span>Fast-forward</label>
+<label class="nu-select-row is-disabled"><span class="nu-hit on is-disabled nu-a2-dison"><span class="nu-radio"></span></span>Locked</label>
+</div>
+</div>
+<div class="nu-a2-grid two">
+<div class="nu-col" style="gap:var(--space-2);align-items:stretch">
+<span class="nu-caption">In list rows: a parent in part, its children</span>
+<div class="nu-a2-choicelist">
+<div class="nu-li" role="checkbox" aria-checked="mixed"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></span></span><span class="text"><span class="headline">All hosts</span></span><span class="trail">2 of 3</span></div>
+<div class="nu-li child" role="checkbox" aria-checked="true"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span><span class="text"><span class="headline">Windows x64</span></span></div>
+<div class="nu-li child is-hover" role="checkbox" aria-checked="true"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span><span class="text"><span class="headline">Linux x64</span></span></div>
+<div class="nu-li child is-focus" role="checkbox" aria-checked="false"><span class="nu-hit"><span class="nu-checkbox"></span></span><span class="text"><span class="headline">macOS arm64</span></span></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-2);align-items:stretch">
+<span class="nu-caption">In list rows: radios with supporting text</span>
+<div class="nu-a2-choicelist" role="radiogroup" aria-label="Merge strategy">
+<div class="nu-li two" role="radio" aria-checked="true"><span class="nu-hit on"><span class="nu-radio"></span></span><span class="text"><span class="headline">Squash and merge</span><span class="supporting">One commit on master</span></span></div>
+<div class="nu-li two is-pressed" role="radio" aria-checked="false"><span class="nu-hit"><span class="nu-radio"></span></span><span class="text"><span class="headline">Merge commit</span><span class="supporting">Keeps every commit and adds one</span></span></div>
+<div class="nu-li two is-disabled" role="radio" aria-checked="false" style="color:color-mix(in srgb, var(--on-surface) 38%, transparent)"><span class="nu-hit is-disabled"><span class="nu-radio"></span></span><span class="text"><span class="headline">Rebase and merge</span><span class="supporting" style="color:inherit">Turned off for this repository</span></span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

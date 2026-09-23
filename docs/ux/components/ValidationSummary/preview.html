@@ -1,0 +1,47 @@
+<!-- @dsCard group="Inputs" height=624 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">After a failed submit: focused, above the first section, each entry a link to its field</span>
+<div class="nu-a2-form" style="gap:var(--space-4)">
+<span class="title-large">New project</span>
+<div class="nu-a2-summary is-focus" role="alert" tabindex="-1">
+<svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>
+<div><div class="title">2 problems prevent creating the project</div>
+<ul><li><a href="#name">Project name: use lowercase letters, digits and hyphens</a></li><li><a href="#hosts">Run tests on: choose at least one host</a></li></ul></div>
+</div>
+<div class="nu-a2-grid two" style="gap:var(--space-5) var(--space-6)">
+<div class="nu-a2-ff outside" id="name"><span class="nu-a2-flabel invalid">Project name<span class="req" aria-hidden="true">*</span></span><div class="nu-field outlined dense invalid"><div class="box"><div class="body"><span class="value">Neper Docs</span></div><span class="trail nu-a2-trail"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg></span></div></div><span class="nu-a2-msg error"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Use lowercase letters, digits and hyphens</span></div>
+<div class="nu-a2-ff outside" id="hosts"><span class="nu-a2-flabel invalid">Run tests on<span class="req" aria-hidden="true">*</span></span>
+<div class="nu-row" style="gap:var(--space-4);margin-left:calc(-1 * var(--space-2))">
+<label class="nu-select-row nu-a2-body-m" style="min-height:var(--control-md)"><span class="nu-hit invalid"><span class="nu-checkbox"></span></span>Linux</label>
+<label class="nu-select-row nu-a2-body-m" style="min-height:var(--control-md)"><span class="nu-hit invalid"><span class="nu-checkbox"></span></span>Windows</label>
+</div>
+<span class="nu-a2-msg error"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Choose at least one host</span></div>
+</div>
+<div class="actions"><button class="nu-btn outlined sm">Cancel</button><button class="nu-btn sm">Create project</button></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">A link focused by keyboard; warnings that don't block saving</span>
+<div class="nu-a2-grid two">
+<div class="nu-a2-summary" role="alert">
+<svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>
+<div><div class="title">1 problem prevents saving</div>
+<ul><li><a href="#t" class="is-focus">Build timeout: enter a number of milliseconds</a></li></ul></div>
+</div>
+<div class="nu-a2-summary warning" role="status">
+<svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4L3.5 19h17z"/><path d="M12 10v4"/><circle cx="12" cy="16.6" r=".9" fill="currentColor" stroke="none"/></svg>
+<div><div class="title">2 settings need attention</div>
+<ul><li><a href="#a">Arena size: larger than free memory</a></li><li><a href="#b">Parallel jobs: more than this machine's cores</a></li></ul></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

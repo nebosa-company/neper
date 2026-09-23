@@ -1,0 +1,86 @@
+<!-- @dsCard group="Containers" height=644 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Left, centre, bottom and right slots; 1px sashes, the right one hovered (4px primary)</span>
+<div class="nu-a4-win" style="height:300px">
+<div style="display:flex;flex:1;min-height:0">
+<div class="nu-a4-strip">
+<button class="nu-icon-btn sm tonal" aria-label="Explorer" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Search"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Settings"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg></button>
+</div>
+<section class="nu-a4-panel" style="width:150px" aria-label="Explorer">
+<div class="ph"><span class="nm">Explorer</span></div>
+<div class="pb">
+<div class="nu-a4-row"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>src</div>
+<div class="nu-a4-row sel" style="padding-left:28px">lower.e</div>
+<div class="nu-a4-row" style="padding-left:28px">main.e</div>
+<div class="nu-a4-row" style="padding-left:28px">nir.e</div>
+</div>
+</section>
+<div class="nu-a4-sash v"></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<div class="nu-a4-doctabs active">
+<span class="dt cur"><span class="t">lower.e</span><span class="x"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="dt"><span class="t">main.e</span><span class="x hidden"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+</div>
+<div class="nu-a4-body" style="padding:var(--space-2) var(--space-3)"><div class="nu-a4-code"><b>fn</b> lower_call(ctx: *Lowering,
+      call: *const Call) -&gt; err {
+    <b>let</b> callee = resolve(ctx, call)
+    <b>if</b> callee == zero { <b>ret</b> Unknown }</div></div>
+<div class="nu-a4-sash h"></div>
+<section class="nu-a4-panel focused" style="height:96px" aria-label="Terminal">
+<div class="ph" style="padding-left:0"><div class="nu-a4-ptabs"><span class="pt">Problems</span><span class="pt cur">Terminal</span></div>
+<button class="nu-icon-btn sm" aria-label="Close panel"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+<div class="pb" style="padding:var(--space-1) var(--space-3)"><div class="nu-a4-code">$ neper test lib/e/ui
+58 passed in 3.1 s</div></div>
+</section>
+</div>
+<div class="nu-a4-sash v is-hover"></div>
+<section class="nu-a4-panel" style="width:130px" aria-label="Outline">
+<div class="ph"><span class="nm">Outline</span></div>
+<div class="pb">
+<div class="nu-a4-row">lower_call</div>
+<div class="nu-a4-row">lower_args</div>
+<div class="nu-a4-row">emit_ret</div>
+</div>
+</section>
+</div>
+<div class="nu-a4-statusbar"><span class="si">Ln 42, Col 7</span><span class="gap"></span><span class="si">UTF-8</span></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Moving a panel: the dock guide over the target, the drop preview, the dragged panel's ghost</span>
+<div class="nu-a4-win" style="height:220px">
+<div style="display:flex;flex:1;min-height:0;position:relative">
+<section class="nu-a4-panel" style="width:150px" aria-label="Explorer"><div class="ph"><span class="nm">Explorer</span></div></section>
+<div class="nu-a4-sash v"></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;position:relative">
+<div class="nu-a4-doctabs"><span class="dt cur"><span class="t">lower.e</span><span class="x hidden"></span></span></div>
+<div class="nu-a4-body"></div>
+<div class="nu-a4-droparea" style="top:44px;bottom:4px;left:50%;right:4px"></div>
+<div class="nu-a4-guide" style="left:calc(50% - 56px);top:52px" aria-hidden="true">
+<span class="g n"></span>
+<span class="g"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(90deg)"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/></svg></span>
+<span class="g n"></span>
+<span class="g"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/></svg></span>
+<span class="g"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 8.5h17"/></svg></span>
+<span class="g on"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true" style="transform:scaleX(-1)"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/></svg></span>
+<span class="g n"></span>
+<span class="g"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(-90deg)"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/></svg></span>
+<span class="g n"></span>
+</div>
+<div class="nu-a4-ghost" style="left:62%;top:150px"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 10l2.5 2.5-2.5 2.5M12.5 15.5h4"/></svg>Terminal</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

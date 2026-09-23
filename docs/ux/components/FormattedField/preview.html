@@ -1,0 +1,35 @@
+<!-- @dsCard group="Inputs" height=424 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-5) var(--space-6)">
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Empty: the pattern is the placeholder, not an error</span>
+<div class="nu-field outlined floated" style="width:300px"><div class="box"><span class="label">Release date</span><div class="body"><span class="value placeholder">YYYY-MM-DD</span></div><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg></div><div class="support"><span>Year, month and day</span></div></div>
+</div>
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Typing: separators insert themselves, the rest of the mask stays grey</span>
+<div class="nu-field outlined floated is-focus" style="width:300px"><div class="box"><span class="label">Release date</span><div class="body"><span class="value">2026-09-<span class="caret"></span><span class="nu-a3-ghost">DD</span></span></div><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg></div><div class="support"><span>Year, month and day</span></div></div>
+</div>
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Invalid after leaving the field: the message says the fix</span>
+<div class="nu-field outlined floated invalid" style="width:300px"><div class="box"><span class="label">Release date</span><div class="body"><span class="value">2026-13-01</span></div><span class="trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg></span></div><div class="support"><span>Month must be 01 to 12</span></div></div>
+</div>
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Grouped: pasted text is normalised on leave (mono for codes)</span>
+<div class="nu-field outlined floated" style="width:300px"><div class="box"><span class="label">Licence key</span><div class="body"><span class="value" style="font-family:var(--font-mono);font-size:15px">NEPR-4F2K-9QX7-11AB</span></div><span style="color:var(--success);display:flex"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg></span></div><div class="support"><span>Valid key</span><span>16 of 16</span></div></div>
+</div>
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Prefix and suffix are outside the value</span>
+<div class="nu-field outlined floated" style="width:300px"><div class="box"><span class="label">Minimum version</span><span class="nu-a3-affix" style="font-size:16px">v</span><div class="body" style="margin-left:calc(-1 * var(--space-2))"><span class="value">2.14.0</span></div></div><div class="support"><span>Major.minor.patch</span></div></div>
+</div>
+<div class="nu-col" style="gap:var(--space-2)">
+<span class="nu-caption">Dense (pointer hosts), disabled</span>
+<div class="nu-field outlined floated dense is-disabled" style="width:300px"><div class="box"><span class="label">Build number</span><div class="body"><span class="value">4128-rc2</span></div></div><div class="support"><span>Assigned by the pipeline</span></div></div>
+</div>
+</div>
+</div>
+</body>
+</html>

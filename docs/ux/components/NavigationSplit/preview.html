@@ -1,0 +1,63 @@
+<!-- @dsCard group="Navigation" height=724 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Expanded (840 and up), touch: list and detail as panes, a drag handle in the 24 gutter</span>
+<div class="nu-a4-win" style="height:300px;flex-direction:row;background:var(--surface-container);padding:var(--space-4) var(--space-4) var(--space-4) var(--space-4)">
+<section class="nu-a4-pane" style="width:260px;flex:none" aria-label="Builds">
+<div class="title-medium" style="padding:var(--space-4) var(--space-4) var(--space-2)">Builds</div>
+<div class="nu-li two" style="background:transparent"><span class="text"><span class="headline">Build 4128</span><span class="supporting">main, passed in 4.2 s</span></span><span class="trail">10:42</span></div>
+<div class="nu-li two selected" aria-current="true"><span class="text"><span class="headline">Build 4127</span><span class="supporting" style="color:inherit">fix-lowering, failed</span></span><span class="trail" style="color:inherit">10:05</span></div>
+<div class="nu-li two is-hover" style="background:transparent"><span class="text"><span class="headline">Build 4126</span><span class="supporting">main, passed in 4.4 s</span></span><span class="trail">Yesterday</span></div>
+</section>
+<div class="nu-a4-gutter" role="separator" aria-label="Resize list"><span class="hd"></span></div>
+<section class="nu-a4-pane detail" style="flex:1" aria-label="Build 4127">
+<div style="padding:var(--space-5) var(--space-6) 0;display:flex;flex-direction:column;gap:var(--space-3)">
+<div class="nu-row" style="justify-content:space-between;flex-wrap:nowrap"><span class="headline-small">Build 4127</span><button class="nu-btn tonal sm has-icon"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg>Rebuild</button></div>
+<div class="nu-row"><span class="nu-tag error"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Failed</span><span class="body-small nu-muted">fix-lowering, 3 errors, 12 s</span></div>
+<div class="nu-a4-code" style="background:var(--surface-container-low);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3)">lower.e:42:9  unknown local `target`
+lower.e:57:31 expected `)` after arguments</div>
+</div>
+</section>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-4);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Compact: the list alone</span>
+<div class="nu-a4-phone" style="width:188px;height:300px">
+<div class="nu-appbar" style="height:56px"><span class="title" style="font-size:18px">Builds</span></div>
+<div class="nu-li two"><span class="text"><span class="headline">Build 4128</span><span class="supporting">Passed</span></span></div>
+<div class="nu-li two is-pressed"><span class="text"><span class="headline">Build 4127</span><span class="supporting">Failed</span></span></div>
+<div class="nu-li two"><span class="text"><span class="headline">Build 4126</span><span class="supporting">Passed</span></span></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Compact: the detail pushed, Back</span>
+<div class="nu-a4-phone" style="width:188px;height:300px">
+<div class="nu-appbar" style="height:56px"><button class="nu-icon-btn" aria-label="Back to builds"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button><span class="title" style="font-size:18px;padding:0">Build 4127</span></div>
+<div class="nu-col" style="padding:var(--space-2) var(--space-4);gap:var(--space-3)">
+<span class="nu-tag error"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px"><circle cx="12" cy="12" r="8"/><path d="M12 7.5v5"/><circle cx="12" cy="15.8" r=".9" fill="currentColor" stroke="none"/></svg>Failed</span>
+<span class="body-small nu-muted">fix-lowering, 3 errors</span>
+<button class="nu-btn tonal sm">Rebuild</button>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);flex:1">
+<span class="nu-caption">Handle: rest, hover, dragged, focus</span>
+<div class="nu-row" style="gap:var(--space-2);flex-wrap:nowrap;background:var(--surface-container);border-radius:var(--radius-md);padding:var(--space-4) var(--space-2)">
+<div class="nu-a4-gutter" style="height:80px"><span class="hd"></span></div>
+<div class="nu-a4-gutter is-hover" style="height:80px"><span class="hd"></span></div>
+<div class="nu-a4-gutter is-dragged" style="height:80px"><span class="hd"></span></div>
+<div class="nu-a4-gutter is-focus" style="height:80px"><span class="hd"></span></div>
+</div>
+<span class="nu-a4-note">Medium (600-839): one pane at a time as on compact, or the list at 50% when the detail is a short preview. Pointer hosts: a 1px sash instead of the gutter.</span>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!-- @dsCard group="Selection" height=704 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Closed: filled with a value, outlined empty, keyboard focus</span>
+<div class="nu-a2-grid">
+<div class="nu-field filled floated"><div class="box"><div class="body"><span class="label">Visibility</span><span class="value">Private to the team</span></div><span class="trail nu-a2-trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div>
+<div class="nu-field outlined"><div class="box"><div class="body"><span class="label">Target platform</span></div><span class="trail nu-a2-trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div>
+<div class="nu-field outlined floated is-focus"><div class="box"><div class="body"><span class="label">Target platform</span><span class="value">Linux x64</span></div><span class="trail nu-a2-trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Error, disabled, dense 40 with the label above</span>
+<div class="nu-a2-grid">
+<div class="nu-field outlined invalid"><div class="box"><div class="body"><span class="label">Region</span></div><span class="trail nu-a2-trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="support"><span>Choose a region</span></div></div>
+<div class="nu-field outlined floated is-disabled nu-a2-odis"><div class="box"><div class="body"><span class="label">Signing certificate</span><span class="value">None</span></div><span class="trail nu-a2-trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div><div class="support"><span>Turn on release builds to sign</span></div></div>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Log level</span><div class="nu-field outlined dense"><div class="box"><div class="body"><span class="value">Warnings and errors</span></div><span class="trail nu-a2-trail"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div></div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3);flex:1;min-width:0;align-items:stretch">
+<span class="nu-caption">Open, pointer: a menu docked below, the field's width</span>
+<div class="nu-a2-ff outside"><span class="nu-a2-flabel">Visibility</span><div class="nu-field outlined dense is-focus"><div class="box"><div class="body"><span class="value">Private to the team</span></div><span class="trail nu-a2-trail" style="color:var(--primary)"><svg class="nu-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></span></div></div></div>
+<div class="nu-menu dense" role="listbox" style="max-width:none;width:100%;margin-top:calc(-1 * var(--space-2))">
+<div class="mi" role="option"><span style="width:24px"></span>Private to me</div>
+<div class="mi selected" role="option" aria-selected="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--on-secondary-container)"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Private to the team</div>
+<div class="mi is-hover" role="option"><span style="width:24px"></span>Everyone in the organization</div>
+<div class="sep"></div>
+<div class="mi is-disabled" role="option" aria-disabled="true"><span style="width:24px"></span>Public<span class="kbd">Needs an admin</span></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Open, touch: a bottom sheet of radio rows</span>
+<div class="nu-a2-phone" style="height:400px">
+<div class="nu-col" style="gap:var(--space-4);padding:var(--space-4);align-items:stretch">
+<div class="nu-field filled floated"><div class="box"><div class="body"><span class="label">Project name</span><span class="value">neper-docs</span></div></div></div>
+<div class="nu-field filled floated"><div class="box"><div class="body"><span class="label">Visibility</span><span class="value">Private to the team</span></div><span class="trail nu-a2-trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div>
+</div>
+<div class="nu-scrim"></div>
+<div class="nu-sheet" role="dialog" aria-label="Visibility">
+<span class="handle"></span>
+<div class="title-medium" style="padding:var(--space-2) var(--space-6) var(--space-2)">Visibility</div>
+<div class="nu-li nu-a2-row48" style="padding-left:var(--space-3);gap:var(--space-2);background:transparent"><span class="nu-hit"><span class="nu-radio"></span></span><span class="text"><span class="headline">Private to me</span></span></div>
+<div class="nu-li nu-a2-row48" style="padding-left:var(--space-3);gap:var(--space-2);background:transparent"><span class="nu-hit on"><span class="nu-radio"></span></span><span class="text"><span class="headline">Private to the team</span></span></div>
+<div class="nu-li nu-a2-row48 is-pressed" style="padding-left:var(--space-3);gap:var(--space-2);background:transparent"><span class="nu-hit"><span class="nu-radio"></span></span><span class="text"><span class="headline">Everyone in the organization</span></span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

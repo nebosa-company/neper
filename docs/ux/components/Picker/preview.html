@@ -1,0 +1,51 @@
+<!-- @dsCard group="Pickers" height=528 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Desktop: a docked menu below the field, current option checked</span>
+<div class="nu-a3-anchor" style="width:280px">
+<button class="nu-field outlined floated dense is-focus" aria-haspopup="listbox" aria-expanded="true" style="text-align:left"><span class="box"><span class="label">Build target</span><span class="body"><span class="value">Linux x86-64</span></span><svg class="nu-icon nu-a3-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></button>
+<div class="nu-menu nu-a3-pop dense" role="listbox" aria-label="Build target">
+<div class="mi" role="option">Windows x86-64</div>
+<div class="mi is-hover" role="option">macOS arm64</div>
+<div class="mi selected" role="option" aria-selected="true">Linux x86-64<svg class="nu-icon chk" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+<div class="mi" role="option">Linux arm64</div>
+<div class="mi is-disabled" role="option" aria-disabled="true">Web (needs wasm tools)</div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Closed: rest, hover, invalid</span>
+<div class="nu-col" style="gap:var(--space-3)">
+<button class="nu-field outlined floated dense" style="width:280px;text-align:left"><span class="box"><span class="label">Build target</span><span class="body"><span class="value">Linux x86-64</span></span><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></button>
+<button class="nu-field outlined floated dense is-hover" style="width:280px;text-align:left"><span class="box"><span class="label">Build target</span><span class="body"><span class="value">Linux x86-64</span></span><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></button>
+<div class="nu-field outlined floated dense invalid" style="width:280px"><div class="box"><span class="label">Build target</span><div class="body"><span class="value placeholder">Choose a target</span></div><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div><div class="support"><span>Choose a target to build</span></div></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Touch: a modal bottom sheet of radio rows over a scrim</span>
+<div class="nu-a3-phone" style="height:420px;width:300px">
+<div style="position:absolute;inset:0;padding:var(--space-4)"><div class="nu-field filled floated" style="width:100%"><div class="box"><div class="body"><span class="label">Build target</span><span class="value">Linux x86-64</span></div><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></div></div></div>
+<div class="nu-a3-layer"></div>
+<div class="nu-sheet nu-a3-above" role="dialog" aria-label="Build target">
+<div class="handle"></div>
+<div class="nu-a3-sheet-title">Build target</div>
+<div class="nu-list" style="background:transparent;padding:0">
+<div class="nu-li" role="radio"><span class="nu-hit"><span class="nu-radio"></span></span><span class="text"><span class="headline">Windows x86-64</span></span></div>
+<div class="nu-li" role="radio"><span class="nu-hit"><span class="nu-radio"></span></span><span class="text"><span class="headline">macOS arm64</span></span></div>
+<div class="nu-li" role="radio" aria-checked="true"><span class="nu-hit on"><span class="nu-radio"></span></span><span class="text"><span class="headline">Linux x86-64</span></span></div>
+<div class="nu-li" role="radio"><span class="nu-hit"><span class="nu-radio"></span></span><span class="text"><span class="headline">Linux arm64</span></span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

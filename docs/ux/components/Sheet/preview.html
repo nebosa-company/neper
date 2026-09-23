@@ -1,0 +1,77 @@
+<!-- @dsCard group="Overlays" height=764 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Bottom, modal: scrim, drag handle, half-height detent</span>
+<div class="nu-a5-phone" style="width:300px;height:340px">
+<div class="nu-a5-bar"><span class="t">Builds</span><button class="nu-icon-btn"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14M4 16l3 3 3-3M17 19V5M14 8l3-3 3 3"/></svg></button></div>
+<div class="nu-a5-ghosts"><span class="nu-a5-ghost" style="width:70%"></span><span class="nu-a5-ghost" style="width:50%"></span><span class="nu-a5-ghost" style="width:80%"></span></div>
+<div class="nu-scrim nu-a5-fill"></div>
+<div class="nu-sheet nu-a5-abs" role="dialog" aria-label="Sort builds" style="left:0;right:0;bottom:0;padding-bottom:var(--space-2);box-shadow:var(--elevation-3)">
+<span class="handle is-focus" style="outline:var(--focus-ring-width) solid var(--focus-ring);outline-offset:6px"></span>
+<div class="nu-a5-sheethead" style="padding-left:var(--space-4)"><span class="t">Sort builds</span></div>
+<div style="padding:0 var(--space-2)">
+<label class="nu-select-row" style="display:flex"><span class="nu-hit on"><span class="nu-radio"></span></span>Newest first</label>
+<label class="nu-select-row" style="display:flex"><span class="nu-hit"><span class="nu-radio"></span></span>Oldest first</label>
+<label class="nu-select-row" style="display:flex"><span class="nu-hit"><span class="nu-radio"></span></span>Longest duration</label>
+</div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Bottom, standard: no scrim, the page stays live; peek height</span>
+<div class="nu-a5-phone" style="width:300px;height:340px">
+<div class="nu-a5-bar"><span class="t">neper-compiler</span></div>
+<div class="nu-list" style="padding:0">
+<div class="nu-li dense"><span class="text"><span class="headline">src/lower.e</span></span><span class="trail">2 min</span></div>
+<div class="nu-li dense is-hover"><span class="text"><span class="headline">src/nir.e</span></span><span class="trail">5 min</span></div>
+<div class="nu-li dense"><span class="text"><span class="headline">src/main.e</span></span><span class="trail">1 h</span></div>
+</div>
+<div class="nu-sheet nu-a5-abs" role="region" aria-label="Build progress" style="left:0;right:0;bottom:0;padding-bottom:var(--space-4)">
+<span class="handle"></span>
+<div class="nu-col" style="padding:0 var(--space-4);gap:var(--space-3);align-items:stretch">
+<div class="nu-row" style="justify-content:space-between;flex-wrap:nowrap"><span class="nu-a5-title-s" style="font-size:16px;line-height:24px">Building neper-compiler</span><button class="nu-btn text sm" style="margin-right:calc(-1 * var(--space-2))">Cancel</button></div>
+<div class="nu-progress" style="width:100%;--v:38%"><span class="fill"></span><span class="rest"></span></div>
+<span class="nu-a5-body-m">Stage 3 of 8: lowering · 41 s</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Side, standard: docked beside the content, which narrows</span>
+<div class="nu-a5-screen" style="width:324px;height:300px;display:flex">
+<div style="flex:1;min-width:0"><div class="nu-a5-bar"><span class="t">Files</span></div><div class="nu-a5-ghosts"><span class="nu-a5-ghost" style="width:80%"></span><span class="nu-a5-ghost is-focus" style="width:60%;background:var(--secondary-container)"></span><span class="nu-a5-ghost" style="width:70%"></span><span class="nu-a5-ghost" style="width:50%"></span></div></div>
+<div role="complementary" aria-label="Details" style="width:196px;background:var(--surface-container-low);border-left:var(--divider) solid var(--outline-variant);display:flex;flex-direction:column">
+<div class="nu-a5-sheethead" style="padding-left:var(--space-4);min-height:48px"><span class="t" style="font-size:16px;line-height:24px;font-weight:600">Details</span><button class="nu-icon-btn sm" aria-label="Close details"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+<dl class="nu-a5-meta" style="margin:0;padding:0 var(--space-4);grid-template-columns:1fr;gap:0"><dt>Name</dt><dd style="margin-bottom:var(--space-2)">overlay.e</dd><dt>Size</dt><dd style="margin-bottom:var(--space-2)">44.8 KB</dd><dt>Modified</dt><dd style="margin-bottom:var(--space-2)">Today, 14:02</dd><dt>Owner</dt><dd>Ada Park</dd></dl>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Side, modal: scrim, rounded open edge</span>
+<div class="nu-a5-screen" style="width:324px;height:300px">
+<div class="nu-a5-bar"><span class="t">Settings</span></div>
+<div class="nu-a5-ghosts"><span class="nu-a5-ghost" style="width:70%"></span><span class="nu-a5-ghost" style="width:50%"></span><span class="nu-a5-ghost" style="width:80%"></span></div>
+<div class="nu-scrim nu-a5-fill"></div>
+<div class="nu-sheet side nu-a5-abs" role="dialog" aria-labelledby="ss-t" style="top:0;right:0;bottom:0;width:236px;padding:0 0 var(--space-3);box-shadow:var(--elevation-3)">
+<div class="nu-a5-sheethead" style="padding-left:var(--space-2)"><button class="nu-icon-btn" aria-label="Back"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button><span class="t" id="ss-t" style="font-size:18px;line-height:24px">Build target</span><button class="nu-icon-btn" aria-label="Close"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+<div class="nu-col" style="padding:var(--space-2) var(--space-4) 0;gap:var(--space-4);flex:1;align-items:stretch">
+<div class="nu-field outlined floated dense" style="width:100%"><div class="box"><div class="body"><span class="label" style="background:var(--surface-container-low)">Platform</span><span class="value">linux-x64</span></div><span class="trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></div></div>
+<div class="nu-switch-row" style="min-height:40px;font-size:14px;line-height:20px"><span>Optimise</span><span class="nu-switch on"></span></div>
+</div>
+<div class="nu-row" style="padding:var(--space-3) var(--space-4) 0;border-top:var(--divider) solid var(--outline-variant);flex-wrap:nowrap"><button class="nu-btn sm">Save</button><button class="nu-btn outlined sm">Cancel</button></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

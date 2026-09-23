@@ -1,0 +1,57 @@
+<!-- @dsCard group="Navigation" height=500 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">In the window (Windows, Linux, Web): Alt shows access keys, Edit open, Find's submenu open</span>
+<div class="nu-a4-win" style="height:344px">
+<div class="nu-a4-menubar" role="menubar">
+<span class="mt"><u>F</u>ile</span>
+<span class="mt open"><u>E</u>dit</span>
+<span class="mt is-hover"><u>V</u>iew</span>
+<span class="mt"><u>B</u>uild</span>
+<span class="mt"><u>W</u>indow</span>
+<span class="mt"><u>H</u>elp</span>
+</div>
+<div class="nu-a4-body"><div class="nu-a4-code"><b>fn</b> main() -&gt; err {
+    <b>let</b> project = load(<i>"neper.json"</i>)</div></div>
+<div class="nu-a4-menu nu-menu dense nu-a4-m32" role="menu" style="position:absolute;top:30px;left:40px;min-width:248px">
+<div class="mi"><span class="chk"></span><span><u>U</u>ndo</span><span class="kbd">Ctrl+Z</span></div>
+<div class="mi"><span class="chk"></span><span><u>R</u>edo</span><span class="kbd">Ctrl+Y</span></div>
+<div class="sep"></div>
+<div class="mi open"><span class="chk"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg></span><span><u>F</u>ind</span><span class="sub"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span></div>
+<div class="sep"></div>
+<div class="mi"><span class="chk"></span><span>Cu<u>t</u></span><span class="kbd">Ctrl+X</span></div>
+<div class="mi"><span class="chk"></span><span><u>C</u>opy</span><span class="kbd">Ctrl+C</span></div>
+<div class="mi is-disabled" aria-disabled="true"><span class="chk"></span><span><u>P</u>aste</span><span class="kbd">Ctrl+V</span></div>
+<div class="sep"></div>
+<div class="mi" role="menuitemcheckbox" aria-checked="true"><span class="chk"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><u>W</u>ord wrap</span><span class="kbd">Alt+Z</span></div>
+</div>
+<div class="nu-a4-menu nu-menu dense nu-a4-m32" role="menu" style="position:absolute;top:111px;left:284px;min-width:240px">
+<div class="mi is-focus"><span class="chk"></span><span><u>F</u>ind</span><span class="kbd">Ctrl+F</span></div>
+<div class="mi"><span class="chk"></span><span><u>R</u>eplace</span><span class="kbd">Ctrl+H</span></div>
+<div class="mi"><span class="chk"></span><span>Find in f<u>i</u>les</span><span class="kbd">Ctrl+Shift+F</span></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">macOS: the same menus in the system menu bar, app menu first, shortcuts as symbols</span>
+<div class="nu-a4-menubar" style="border-radius:var(--radius-sm);background:var(--surface-container)">
+<span class="mt" style="font-weight:600">Neper Studio</span>
+<span class="mt">File</span>
+<span class="mt">Edit</span>
+<span class="mt">View</span>
+<span class="mt">Build</span>
+<span class="mt">Window</span>
+<span class="mt">Help</span>
+<span class="nu-a4-grow"></span>
+<span class="nu-a4-note" style="padding-right:var(--space-2)">Undo ⌘Z · Redo ⇧⌘Z · Find ⌘F</span>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

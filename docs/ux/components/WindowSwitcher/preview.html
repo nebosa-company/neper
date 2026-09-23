@@ -1,0 +1,55 @@
+<!-- @dsCard group="Overlays" height=616 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Pointer: Ctrl held, Tab steps through recent windows; release switches. The previous window starts selected</span>
+<div class="nu-a4-stage" style="height:252px;display:flex;align-items:center;justify-content:center">
+<div class="nu-a4-under">
+<div class="nu-a4-menubar"><span class="mt">File</span><span class="mt">Edit</span><span class="mt">View</span></div>
+<div class="nu-a4-body"><div class="nu-a4-code"><b>fn</b> main() -&gt; err {</div></div>
+</div>
+<div class="nu-scrim nu-a4-fill"></div>
+<div class="nu-a4-switcher" role="dialog" aria-label="Switch window" style="position:relative">
+<div class="grid" role="listbox" aria-label="Open windows">
+<div class="wt" role="option"><div class="th"><span class="tb"></span><span class="tl" style="width:60%"></span><span class="tl"></span><span class="tl" style="width:40%"></span></div><div class="cap"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span>main.e</span></div></div>
+<div class="wt sel is-focus" role="option" aria-selected="true"><div class="th"><span class="tb"></span><span class="tl"></span><span class="tl" style="width:70%"></span><span class="tl" style="width:50%"></span></div><div class="cap"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span>lower.e</span></div></div>
+<div class="wt is-hover" role="option"><div class="th"><span class="tb"></span><span class="tl" style="width:80%"></span><span class="tl" style="width:30%"></span></div><div class="cap"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 10l2.5 2.5-2.5 2.5M12.5 15.5h4"/></svg><span>Build 4128 log</span></div><span class="x" aria-label="Close Build 4128 log"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+<div class="wt" role="option"><div class="th"><span class="tb"></span><span class="tl" style="width:50%"></span><span class="tl" style="width:65%"></span></div><div class="cap"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg><span>Settings</span></div></div>
+</div>
+<div class="nu-row" style="justify-content:space-between"><span class="title-small">lower.e</span><span class="nu-a4-note">neper/src, unsaved changes</span></div>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-5);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">List form: many documents, filter by typing</span>
+<div class="nu-a4-palette" style="width:100%" role="dialog" aria-label="Switch document">
+<div class="in" style="height:var(--control-lg)"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg><span class="v">lo<span class="caret"></span></span></div>
+<div class="nu-divider"></div>
+<div class="res" role="listbox">
+<div class="pr sel" role="option" aria-selected="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="l"><b>lo</b>wer.e <span class="ctx">src</span></span><span class="nu-a4-note" style="color:inherit">Unsaved</span></div>
+<div class="pr" role="option"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="l"><b>lo</b>ad_project.e <span class="ctx">src/driver</span></span></div>
+<div class="pr" role="option"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 10l2.5 2.5-2.5 2.5M12.5 15.5h4"/></svg><span class="l">Build 4128 <b>lo</b>g</span></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Compact: open documents as a grid</span>
+<div class="nu-a4-phone" style="width:200px;height:240px;background:var(--surface-container)">
+<div class="nu-appbar" style="height:56px;background:transparent"><button class="nu-icon-btn" aria-label="Close"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="title" style="font-size:18px;padding:0">3 open</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);padding:0 var(--space-3)">
+<div class="nu-card outlined" style="padding:var(--space-2);height:76px;box-shadow:inset 0 0 0 var(--outline-focused) var(--primary)"><span class="label-medium">lower.e</span></div>
+<div class="nu-card outlined" style="padding:var(--space-2);height:76px"><span class="label-medium">main.e</span></div>
+<div class="nu-card outlined" style="padding:var(--space-2);height:76px"><span class="label-medium">Build 4128 log</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

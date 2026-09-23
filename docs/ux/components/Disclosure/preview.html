@@ -1,0 +1,38 @@
+<!-- @dsCard group="Containers" height=472 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Closed and open</span>
+<div class="nu-col" style="gap:0;width:100%">
+<button class="nu-a3-disc nu-sl"><svg class="nu-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Advanced build options</button>
+<button class="nu-a3-disc nu-sl open"><svg class="nu-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Environment variables<span class="meta">3 set</span></button>
+<div class="nu-a3-disc-body">Values here override the project defaults for this build only.<div class="code" style="color:var(--on-surface);margin-top:var(--space-1)">NEPER_ARENA=512M &nbsp;TARGET=x86_64-linux &nbsp;LOG=warn</div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">States: rest, hover, focus, pressed, disabled</span>
+<div class="nu-row" style="gap:var(--space-3)">
+<button class="nu-a3-disc nu-sl"><svg class="nu-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Details</button>
+<button class="nu-a3-disc nu-sl is-hover"><svg class="nu-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Details</button>
+<button class="nu-a3-disc nu-sl is-focus"><svg class="nu-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Details</button>
+<button class="nu-a3-disc nu-sl is-pressed"><svg class="nu-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Details</button>
+<button class="nu-a3-disc nu-sl is-disabled" disabled><svg class="nu-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>Details</button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);width:100%">
+<span class="nu-caption">Expander: the same disclosure as its own outlined section</span>
+<div class="nu-a3-acc outlined">
+<div class="item open">
+<button class="hd nu-sl nu-a3-inset" style="width:100%;text-align:left"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg><span class="text"><span class="t">Compiler flags</span><span class="s">Optimisation, warnings and target</span></span><svg class="nu-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+<div class="bd indent">Release builds use <span class="code" style="color:var(--on-surface)">-O2</span> and treat warnings as errors. Change the target to cross-compile for another host.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

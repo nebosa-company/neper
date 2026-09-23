@@ -1,0 +1,68 @@
+<!-- @dsCard group="Navigation" height=480 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Default: earlier levels are links, the current place ends the trail</span>
+<nav class="nu-a4-crumbs" aria-label="Location">
+<span class="cr"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5L12 4l8 6.5V20h-5.5v-6h-5v6H4z"/></svg>Workspace</span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr">neper</span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr">lib</span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr cur" aria-current="page">navigation.e</span>
+</nav>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">States: hover, focus, pressed, drop target while dragging a file</span>
+<nav class="nu-a4-crumbs" aria-label="Location">
+<span class="cr is-hover">Workspace</span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr is-focus">neper</span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr is-pressed">lib</span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr drop"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>ui</span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr cur" aria-current="page">navigation.e</span>
+</nav>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Overflow: the middle collapses into a menu, first and last stay</span>
+<div>
+<nav class="nu-a4-crumbs" aria-label="Location">
+<span class="cr">Workspace</span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr is-pressed" aria-label="Show 3 hidden levels" aria-expanded="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="18.5" cy="12" r="1.25"/></svg></span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr">widgets</span>
+<span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+<span class="cr cur" aria-current="page">destination_bar_test.e</span>
+</nav>
+<div class="nu-a4-menu nu-menu dense nu-a4-m32" style="margin:var(--space-1) 0 0 96px;min-width:180px">
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>neper</div>
+<div class="mi is-hover"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>tests</div>
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>ui</div>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Edit path (desktop file browsers): press empty space</span>
+<div class="nu-field outlined dense is-focus" style="width:320px"><div class="box"><div class="body"><span class="value">neper/lib/ui/navigation.e<span class="caret"></span></span></div></div></div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Compact (touch): parent only, 48 target</span>
+<nav class="nu-a4-crumbs touch" aria-label="Location">
+<span class="cr"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>ui</span>
+</nav>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

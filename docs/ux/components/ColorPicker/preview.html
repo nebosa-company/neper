@@ -1,0 +1,68 @@
+<!-- @dsCard group="Pickers" height=650 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Pointer: a swatch field opens a popover with spectrum, channels and swatches</span>
+<div class="nu-col" style="gap:var(--space-1)">
+<div class="nu-field outlined floated dense is-focus" style="width:296px"><div class="box"><span class="nu-a5-sw" style="width:20px;height:20px;margin-top:8px;background:var(--primary)"></span><div class="body"><span class="label">Accent colour</span><span class="value code" style="font-family:var(--font-mono);font-size:14px">#145DB2</span></div><span class="trail"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></span></div></div>
+<div class="nu-a5-flyout" role="dialog" aria-label="Accent colour" style="width:296px;background:var(--surface-container-high);box-shadow:var(--elevation-3);gap:var(--space-4)">
+<div class="nu-a5-sv" role="slider" aria-label="Saturation and brightness"><span class="thumb is-focus" style="left:78%;top:30%"></span></div>
+<div class="nu-a5-strip hue" role="slider" aria-label="Hue"><span class="thumb" style="left:59%"></span></div>
+<div class="nu-a5-strip alpha" role="slider" aria-label="Opacity"><span class="thumb" style="left:100%;margin-left:-20px"></span></div>
+<div class="nu-row" style="gap:var(--space-2);flex-wrap:nowrap">
+<span class="nu-a5-cfield" style="font-family:var(--font-sans);width:72px">Hex<svg class="nu-icon sm nu-a5-end" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+<span class="nu-a5-cfield" style="flex:1">145DB2</span>
+<span class="nu-a5-cfield" style="width:72px">100<span class="u nu-a5-end">%</span></span>
+</div>
+<div class="nu-col" style="gap:var(--space-2);align-items:stretch">
+<span class="nu-a5-label-m">Theme</span>
+<div class="nu-a5-swrow" style="gap:var(--space-2)"><span class="nu-a5-sw sel" role="radio" aria-checked="true" aria-label="Primary" style="background:var(--primary)"></span><span class="nu-a5-sw" style="background:var(--secondary)"></span><span class="nu-a5-sw" style="background:var(--tertiary)"></span><span class="nu-a5-sw" style="background:var(--success)"></span><span class="nu-a5-sw" style="background:var(--warning)"></span><span class="nu-a5-sw" style="background:var(--error)"></span></div>
+<span class="nu-a5-label-m" style="margin-top:var(--space-1)">Recent</span>
+<div class="nu-a5-swrow" style="gap:var(--space-2)"><span class="nu-a5-sw checker" aria-label="Transparent"></span><span class="nu-a5-sw" style="background:var(--tertiary-container)"></span><span class="nu-a5-sw" style="background:var(--primary-container)"></span><span class="nu-a5-sw" style="background:var(--success-container)"></span><span class="nu-a5-sw is-focus" style="background:var(--inverse-surface)"></span></div>
+</div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Touch: swatches first in a sheet; spectrum one tab away</span>
+<div class="nu-a5-phone" style="width:304px;height:466px">
+<div class="nu-a5-ghosts"><span class="nu-a5-ghost" style="width:70%"></span><span class="nu-a5-ghost" style="width:50%"></span></div>
+<div class="nu-scrim nu-a5-fill"></div>
+<div class="nu-sheet nu-a5-abs" role="dialog" aria-label="Label colour" style="left:0;right:0;bottom:0;padding-bottom:var(--space-4);box-shadow:var(--elevation-3)">
+<span class="handle"></span>
+<div class="nu-a5-sheethead" style="padding-left:var(--space-4);min-height:48px"><span class="t">Label colour</span></div>
+<div class="nu-col" style="padding:0 var(--space-4);gap:var(--space-4);align-items:stretch">
+<div class="nu-segmented" style="width:100%"><button class="selected" style="flex:1"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Swatches</button><button style="flex:1">Spectrum</button></div>
+<div style="display:grid;grid-template-columns:repeat(5, 40px);justify-content:space-between;row-gap:var(--space-4)">
+<span class="nu-a5-sw lg" style="background:var(--primary)"></span><span class="nu-a5-sw lg" style="background:var(--secondary)"></span><span class="nu-a5-sw lg sel" role="radio" aria-checked="true" aria-label="Copper" style="background:var(--tertiary)"></span><span class="nu-a5-sw lg" style="background:var(--success)"></span><span class="nu-a5-sw lg" style="background:var(--warning)"></span>
+<span class="nu-a5-sw lg" style="background:var(--error)"></span><span class="nu-a5-sw lg" style="background:var(--primary-container)"></span><span class="nu-a5-sw lg" style="background:var(--tertiary-container)"></span><span class="nu-a5-sw lg" style="background:var(--success-container)"></span><span class="nu-a5-sw lg" style="background:var(--warning-container)"></span>
+<span class="nu-a5-sw lg" style="background:var(--error-container)"></span><span class="nu-a5-sw lg" style="background:var(--secondary-container)"></span><span class="nu-a5-sw lg" style="background:var(--inverse-surface)"></span><span class="nu-a5-sw lg checker" aria-label="No colour"></span>
+<span class="nu-a5-sw lg" role="button" aria-label="Custom colour" style="box-shadow:inset 0 0 0 var(--divider) var(--outline);display:flex;align-items:center;justify-content:center;color:var(--on-surface-variant)"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+</div>
+<div class="nu-row" style="justify-content:space-between"><span class="nu-a5-body-m">Copper</span><span class="nu-a5-body-m code" style="font-family:var(--font-mono)">#944A23</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Swatch states: rest, hover, focus, selected, transparent, disabled; the selection ring is a shape, not a hue</span>
+<div class="nu-row" style="gap:var(--space-6)">
+<span class="nu-a5-sw lg" style="background:var(--tertiary)"></span>
+<span class="nu-a5-sw lg" style="background:color-mix(in srgb, var(--tertiary), var(--on-surface) 8%)"></span>
+<span class="nu-a5-sw lg is-focus" style="background:var(--tertiary)"></span>
+<span class="nu-a5-sw lg sel" style="background:var(--tertiary)"></span>
+<span class="nu-a5-sw lg checker"></span>
+<span class="nu-a5-sw lg" style="background:color-mix(in srgb, var(--on-surface) 12%, transparent)"></span>
+<button class="nu-btn outlined has-icon sm" style="margin-left:var(--space-4)"><span class="nu-a5-sw" style="width:18px;height:18px;background:var(--tertiary)"></span>Label colour</button>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

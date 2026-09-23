@@ -1060,6 +1060,233 @@
           "evidence": "lib/e/os/shell.windows.e, lib/e/os/shell.linux.e and lib/e/ui/app.e (D902/D903): permission_status/permission_request read the user's consent from the registry's ConsentStore and open the capability's settings page on a denial; camera_access, microphone_access and location_access are that gate for their capability; pick_photos is the open dialog over the Pictures folder with image filters; biometric_verify is the honest Unsupported with biometrics_supported false on both hosts; credential_store/credential_read/credential_delete over the Credential Manager (Windows) and secret-tool (Linux); screen_capture over GDI into pixels; the predicates say what the host has and Linux answers Unavailable and Unsupported for the rest; tests/selfhost/fixtures/link/ui_permissions on both hosts"
         }
       ]
+    },
+    {
+      "id": "P5",
+      "name": "Neper UI v2 design language (docs/ux)",
+      "blocked_by": [
+        "P4"
+      ],
+      "items": [
+        {
+          "id": "P5-01",
+          "name": "Design tokens v2",
+          "module": "e.ui.style",
+          "components": [
+            "TonalColorRoles",
+            "FourPalettes",
+            "TypeScaleV2",
+            "ShapeScale",
+            "ElevationLevels",
+            "StateLayerOpacities",
+            "DensityMetrics",
+            "MotionTokens"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-02",
+          "name": "Interaction paint",
+          "module": "e.ui.widget",
+          "components": [
+            "FocusRing",
+            "StateLayer",
+            "PressRipple"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-03",
+          "name": "Actions to the v2 specification",
+          "module": "e.ui.control",
+          "components": [
+            "ActionRowSpec",
+            "ButtonSpec",
+            "FabSpec",
+            "IconButtonSpec",
+            "LinkSpec",
+            "SpeedDialSpec",
+            "SplitButtonSpec",
+            "ToggleButtonSpec",
+            "ToolbarSpec"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-04",
+          "name": "Inputs to the v2 specification",
+          "module": "e.ui.control",
+          "components": [
+            "AutocompleteSpec",
+            "DialSpec",
+            "FieldLabelSpec",
+            "FieldMessageSpec",
+            "FormSpec",
+            "FormFieldSpec",
+            "FormattedFieldSpec",
+            "RatingSpec",
+            "SearchBarSpec",
+            "ShortcutRecorderSpec",
+            "SpinBoxSpec",
+            "StepperSpec",
+            "TextFieldSpec",
+            "TokenFieldSpec",
+            "ValidationSummarySpec"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-05",
+          "name": "Selection to the v2 specification",
+          "module": "e.ui.control",
+          "components": [
+            "ChipSpec",
+            "ChoiceSpec",
+            "ComboBoxSpec",
+            "ListBoxSpec",
+            "MultiSelectListSpec",
+            "SegmentedControlSpec",
+            "SelectSpec",
+            "SliderSpec",
+            "SwitchSpec"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-06",
+          "name": "Pickers to the v2 specification",
+          "module": "e.ui.control",
+          "components": [
+            "CalendarSpec",
+            "ColorPickerSpec",
+            "DatePickerSpec",
+            "DurationPickerSpec",
+            "FontPickerSpec",
+            "PickerSpec",
+            "TimePickerSpec"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-07",
+          "name": "Content to the v2 specification",
+          "module": "e.ui.control",
+          "components": [
+            "AvatarSpec",
+            "CanvasSpec",
+            "IconSpec",
+            "ImageSpec",
+            "RichTextSpec",
+            "SelectableTextSpec",
+            "TextSpec"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-08",
+          "name": "Containers to the v2 specification",
+          "module": "e.ui.control",
+          "components": [
+            "AccordionSpec",
+            "CardSpec",
+            "DisclosureSpec",
+            "DividerSpec",
+            "DockLayoutSpec",
+            "DockPanelSpec",
+            "GroupBoxSpec",
+            "MultiDocumentWorkspaceSpec",
+            "ResizablePaneSpec",
+            "SplitViewSpec"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-09",
+          "name": "Status to the v2 specification",
+          "module": "e.ui.control",
+          "components": [
+            "BadgeSpec",
+            "BannerSpec",
+            "EmptyStateSpec",
+            "GaugeSpec",
+            "LevelSpec",
+            "NotificationListSpec",
+            "PlaceholderSpec",
+            "ProgressBarSpec",
+            "ProgressRingSpec",
+            "SkeletonSpec",
+            "SnackbarSpec",
+            "StatusBarSpec"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-10",
+          "name": "Navigation to the v2 specification",
+          "module": "e.ui.navigation",
+          "components": [
+            "AppBarSpec",
+            "BreadcrumbsSpec",
+            "DestinationBarSpec",
+            "DocumentTabsSpec",
+            "MenuBarSpec",
+            "NavigationDrawerSpec",
+            "NavigationSplitSpec",
+            "NavigationStackSpec",
+            "PageIndicatorSpec",
+            "PaginationSpec",
+            "TabsSpec",
+            "WizardSpec"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-11",
+          "name": "Overlays to the v2 specification",
+          "module": "e.ui.overlay",
+          "components": [
+            "ActionSheetSpec",
+            "CommandPaletteSpec",
+            "ContextMenuSpec",
+            "DialogSpec",
+            "FlyoutSpec",
+            "MenuSpec",
+            "PopoverSpec",
+            "PopupSpec",
+            "SheetSpec",
+            "TooltipSpec",
+            "WindowSwitcherSpec"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P5-12",
+          "name": "Collections to the v2 specification",
+          "module": "e.ui.collection",
+          "components": [
+            "CarouselSpec",
+            "DataGridSpec",
+            "GridViewSpec",
+            "HeaderRowSpec",
+            "KeyValueEditorSpec",
+            "ListSpec",
+            "OutlineSpec",
+            "PageViewSpec",
+            "PropertyGridSpec",
+            "PullToRefreshSpec",
+            "ReorderableListSpec",
+            "RowSpec",
+            "SwipeActionsSpec",
+            "TableSpec",
+            "TableRowSpec",
+            "TreeSpec",
+            "TreeTableSpec",
+            "VirtualGridSpec",
+            "VirtualListSpec"
+          ],
+          "delivered": []
+        }
+      ]
     }
   ]
 }

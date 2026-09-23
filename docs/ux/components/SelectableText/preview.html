@@ -1,0 +1,49 @@
+<!-- @dsCard group="Content" height=512 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">At rest: looks like text; an I-beam on hover is the only hint</span>
+<div class="nu-row" style="gap:var(--space-6)">
+<div class="nu-col" style="gap:0"><span class="label-medium nu-muted">Build ID</span><span class="code">b-4128-7f3a2c</span></div>
+<div class="nu-col" style="gap:0"><span class="label-medium nu-muted">Commit</span><span class="nu-row" style="gap:var(--space-1)"><span class="code">3a38472d</span><button class="nu-icon-btn sm" aria-label="Copy commit hash"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg></button></span></div>
+<div class="nu-col" style="gap:0"><span class="label-medium nu-muted">Output path</span><span class="code">build/neper-self.exe</span></div>
+</div>
+</div>
+<div class="nu-a1-cols">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Desktop: drag or Shift+arrows to select, context menu</span>
+<div style="position:relative;height:204px;width:100%">
+<p class="body-medium" style="margin:0">Linking failed: <span class="nu-a1-sel">undefined symbol <span class="code" style="padding:0">e_ui_control_card</span></span><span class="nu-a1-caret"></span> referenced from gallery.e line 88.</p>
+<div class="nu-menu dense" style="position:absolute;left:96px;top:48px;min-width:196px">
+<div class="mi is-hover"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg>Copy<span class="kbd">Ctrl+C</span></div>
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Select all<span class="kbd">Ctrl+A</span></div>
+<div class="sep"></div>
+<div class="mi"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>Search for selection</div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Touch: long press selects a word, handles, floating toolbar</span>
+<div style="position:relative;height:204px;width:100%">
+<div class="nu-row" style="position:absolute;left:40px;top:0;gap:0;padding:var(--space-1);border-radius:var(--radius-sm);background:var(--surface-container);box-shadow:var(--elevation-2)">
+<button class="nu-btn text sm" style="--on:var(--on-surface)">Copy</button><button class="nu-btn text sm" style="--on:var(--on-surface)">Select all</button><button class="nu-btn text sm" style="--on:var(--on-surface)">Share</button>
+</div>
+<p class="body-large" style="margin:0;padding-top:56px">Linking failed: undefined symbol <span style="white-space:nowrap"><span class="nu-a1-handle"></span><span class="nu-a1-sel code" style="padding:0">e_ui_control_card</span><span class="nu-a1-handle end"></span></span> referenced from gallery.e line 88.</p>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);width:100%">
+<span class="nu-caption">Log block, keyboard focus (focusable because it is the pane's content)</span>
+<div class="nu-a1-selectable is-focus code" style="display:block;width:100%;background:var(--surface-container-high);border-radius:var(--radius-sm);padding:var(--space-3) var(--space-4)">
+<div style="white-space:pre">[12:04:31] compile  lib/e/ui/control.e  ok  412 ms</div>
+<div style="white-space:pre">[12:04:32] link     build/gallery.exe   <span style="color:var(--error)">error</span>  undefined symbol</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

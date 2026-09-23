@@ -1,0 +1,76 @@
+<!-- @dsCard group="Actions" height=504 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Docked, pointer density (40): groups, a toggle on, a menu button, overflow</span>
+<div class="nu-a4-win">
+<div class="nu-a4-toolbar">
+<button class="nu-icon-btn sm" aria-label="New file"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Upload"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 9.5l5-5 5 5M5 19.5h14"/></svg></button>
+<button class="nu-icon-btn sm is-hover" aria-label="Download"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/></svg></button>
+<span class="nu-a4-vsep"></span>
+<button class="nu-icon-btn sm tonal" aria-label="Show sidebar" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Show terminal" aria-pressed="false"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 10l2.5 2.5-2.5 2.5M12.5 15.5h4"/></svg></button>
+<span class="nu-a4-vsep"></span>
+<button class="nu-btn text sm trailing-icon" style="color:var(--on-surface)">Release build<svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+<button class="nu-icon-btn sm is-focus" aria-label="Rebuild"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg></button>
+<button class="nu-icon-btn sm is-disabled" aria-label="Delete" aria-disabled="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 4h4M7 7l1 13h8l1-13"/></svg></button>
+<span class="nu-a4-grow"></span>
+<button class="nu-icon-btn sm" aria-label="Search files"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="More tools"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="18.5" cy="12" r="1.25"/></svg></button>
+</div>
+<div class="nu-a4-body" style="height:40px"><div class="nu-a4-code">src/lower.e    src/nir.e    src/main.e</div></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Docked with labels (touch, 48): the few actions a page needs, labelled</span>
+<div class="nu-a4-win">
+<div class="nu-a4-toolbar touch" style="gap:var(--space-2);padding:0 var(--space-2)">
+<button class="nu-btn text has-icon"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filter</button>
+<button class="nu-btn text has-icon"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14M4 16l3 3 3-3M17 19V5M14 8l3-3 3 3"/></svg>Sort by date</button>
+<span class="nu-a4-grow"></span>
+<button class="nu-btn tonal has-icon"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="17" cy="6" r="2.5"/><circle cx="7" cy="12" r="2.5"/><circle cx="17" cy="18" r="2.5"/><path d="M9.2 10.8l5.6-3.3M9.2 13.2l5.6 3.3"/></svg>Share</button>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Floating (56): over content, with a FAB beside it</span>
+<div class="nu-surface-demo nu-row" style="gap:var(--space-2);padding:var(--space-5) var(--space-4)">
+<div class="nu-a4-toolbar floating">
+<button class="nu-icon-btn" aria-label="Edit"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L15.5 5.5l3 3L9 18z"/><path d="M13.5 7.5l3 3"/></svg></button>
+<button class="nu-icon-btn tonal" aria-label="Insert image" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17l5-4.5 3.5 3 3-2.5L20 17"/></svg></button>
+<button class="nu-icon-btn" aria-label="Text style"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M12 6v13"/></svg></button>
+<button class="nu-icon-btn" aria-label="Colour"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16c1.3 0 1.8-.9 1.4-1.9-.5-1.1.2-2.1 1.4-2.1H17a3.5 3.5 0 0 0 3.5-3.5C20.5 7.5 16.7 4 12 4z"/><circle cx="7.8" cy="11" r="1"/><circle cx="10.5" cy="7.6" r="1"/><circle cx="14.6" cy="7.8" r="1"/></svg></button>
+</div>
+<button class="nu-fab" aria-label="New note"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Vertical (40): a tool palette</span>
+<div class="nu-surface-demo" style="padding:var(--space-3)">
+<div class="nu-a4-toolbar vertical">
+<button class="nu-icon-btn sm tonal" aria-label="Select" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L15.5 5.5l3 3L9 18z"/><path d="M13.5 7.5l3 3"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Text"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M12 6v13"/></svg></button>
+<button class="nu-icon-btn sm" aria-label="Image"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17l5-4.5 3.5 3 3-2.5L20 17"/></svg></button>
+<span class="nu-a4-vsep"></span>
+<button class="nu-icon-btn sm" aria-label="Colour"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16c1.3 0 1.8-.9 1.4-1.9-.5-1.1.2-2.1 1.4-2.1H17a3.5 3.5 0 0 0 3.5-3.5C20.5 7.5 16.7 4 12 4z"/><circle cx="7.8" cy="11" r="1"/><circle cx="10.5" cy="7.6" r="1"/><circle cx="14.6" cy="7.8" r="1"/></svg></button>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Tooltip on hover (pointer)</span>
+<div class="nu-col" style="gap:var(--space-1);align-items:center">
+<button class="nu-icon-btn sm is-hover" aria-label="Rebuild"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg></button>
+<span class="nu-tooltip">Rebuild (Ctrl+Shift+B)</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

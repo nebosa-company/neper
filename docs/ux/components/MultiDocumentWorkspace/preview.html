@@ -1,0 +1,70 @@
+<!-- @dsCard group="Containers" height=592 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3);align-items:stretch">
+<span class="nu-caption">Two editor groups: the active group's current tab carries the primary line</span>
+<div class="nu-a4-win" style="height:232px;flex-direction:row">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column" role="group" aria-label="Left editor group">
+<div class="nu-a4-doctabs active" role="tablist" aria-label="Open files, left group">
+<span class="dt cur" role="tab" aria-selected="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">lower.e</span><span class="x"><span class="dot"></span></span></span>
+<span class="dt" role="tab"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">nir.e</span><span class="x hidden"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+</div>
+<div class="nu-a4-crumbs" style="height:24px;padding:0 var(--space-2);font-size:12px"><span class="cr" style="height:24px;padding:0 4px">src</span><span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span><span class="cr" style="height:24px;padding:0 4px">lower.e</span><span class="sep"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span><span class="cr cur" style="height:24px;padding:0 4px">lower_call</span></div>
+<div class="nu-a4-body" style="padding:var(--space-1) var(--space-3)"><div class="nu-a4-code"><b>fn</b> lower_call(ctx: *Lowering, call: *const Call) -&gt; err {
+    <b>let</b> callee = resolve(ctx, call)
+    <b>if</b> callee == zero { <b>ret</b> Unknown }
+    emit(ctx, .Call, callee)
+}</div></div>
+</div>
+<div class="nu-a4-sash v"></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column" role="group" aria-label="Right editor group">
+<div class="nu-a4-doctabs" role="tablist" aria-label="Open files, right group">
+<span class="dt cur" role="tab" aria-selected="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></svg><span class="t">nir.e</span><span class="x"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></span>
+<span class="end"><button class="nu-icon-btn sm" aria-label="Group actions"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="18.5" cy="12" r="1.25"/></svg></button></span>
+</div>
+<div class="nu-a4-body" style="padding:var(--space-2) var(--space-3)"><div class="nu-a4-code"><b>type</b> Call = <b>struct</b> {
+    callee: Ref,
+    args: []const Ref,
+}</div></div>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-5);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3);flex:1;align-items:stretch">
+<span class="nu-caption">Empty: every document closed, the ways back in</span>
+<div class="nu-a4-win" style="height:236px">
+<div class="nu-a4-doctabs"></div>
+<div class="nu-col" style="flex:1;align-items:center;justify-content:center;gap:var(--space-3)">
+<span class="title-medium">No open files</span>
+<div class="nu-col" style="gap:var(--space-2);align-items:stretch;width:240px">
+<div class="nu-row" style="justify-content:space-between"><span class="body-medium nu-muted">Go to file</span><span class="nu-row" style="gap:var(--space-1)"><span class="nu-kbd">Ctrl</span><span class="nu-kbd">P</span></span></div>
+<div class="nu-row" style="justify-content:space-between"><span class="body-medium nu-muted">New file</span><span class="nu-row" style="gap:var(--space-1)"><span class="nu-kbd">Ctrl</span><span class="nu-kbd">N</span></span></div>
+<div class="nu-row" style="justify-content:space-between"><span class="body-medium nu-muted">Run a command</span><span class="nu-row" style="gap:var(--space-1)"><span class="nu-kbd">Ctrl</span><span class="nu-kbd">Shift</span><span class="nu-kbd">P</span></span></div>
+</div>
+<button class="nu-btn tonal sm has-icon"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6.5h6l2 2h9v10h-17z"/></svg>Open recent</button>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Compact: one document, a count</span>
+<div class="nu-a4-phone" style="height:236px">
+<div class="nu-appbar" style="height:56px">
+<button class="nu-icon-btn" aria-label="Back"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
+<span class="title" style="font-size:18px;padding:0">lower.e</span>
+<button class="nu-icon-btn outlined sm" aria-label="3 open documents" style="border-radius:var(--radius-sm);font:600 12px/16px var(--font-sans)">3</button>
+</div>
+<div class="nu-a4-body" style="padding:var(--space-2) var(--space-4)"><div class="nu-a4-code" style="font-size:11px"><b>fn</b> lower_call(
+  ctx: *Lowering,
+  call: *const Call
+) -&gt; err {</div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

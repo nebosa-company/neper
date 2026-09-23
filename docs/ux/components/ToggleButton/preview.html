@@ -1,0 +1,66 @@
+<!-- @dsCard group="Actions" height=432 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Off, then on: the container fills and the corners square up (full to radius-md)</span>
+<div class="nu-row" style="gap:var(--space-6)">
+<span class="nu-row" style="gap:var(--space-2)">
+<button class="nu-btn has-icon nu-a1-toggle" aria-pressed="false"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>Follow output</button>
+<button class="nu-btn has-icon nu-a1-toggle on" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>Follow output</button>
+</span>
+<span class="nu-row" style="gap:var(--space-2)">
+<button class="nu-btn nu-a1-toggle tonal" aria-pressed="false">Watch mode</button>
+<button class="nu-btn nu-a1-toggle tonal on" aria-pressed="true">Watch mode</button>
+</span>
+</div>
+<div class="nu-row" style="gap:var(--space-6)">
+<span class="nu-row" style="gap:var(--space-2)">
+<button class="nu-btn has-icon nu-a1-toggle outlined" aria-pressed="false"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/></svg>Pin</button>
+<button class="nu-btn has-icon nu-a1-toggle outlined on" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/></svg>Pinned</button>
+</span>
+<span class="nu-caption" style="max-width:260px">Filled (default), tonal, outlined. A changed label ("Pinned") is allowed only when the name stays the same for readers.</span>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">States, off: rest, hover, focus, pressed, disabled</span>
+<div class="nu-row" style="gap:var(--space-3)">
+<button class="nu-btn nu-a1-toggle">Word wrap</button>
+<button class="nu-btn nu-a1-toggle is-hover">Word wrap</button>
+<button class="nu-btn nu-a1-toggle is-focus">Word wrap</button>
+<button class="nu-btn nu-a1-toggle is-pressed">Word wrap</button>
+<button class="nu-btn nu-a1-toggle is-disabled" disabled>Word wrap</button>
+</div>
+<span class="nu-caption">States, on</span>
+<div class="nu-row" style="gap:var(--space-3)">
+<button class="nu-btn nu-a1-toggle on">Word wrap</button>
+<button class="nu-btn nu-a1-toggle on is-hover">Word wrap</button>
+<button class="nu-btn nu-a1-toggle on is-focus">Word wrap</button>
+<button class="nu-btn nu-a1-toggle on is-pressed">Word wrap</button>
+<button class="nu-btn nu-a1-toggle on is-disabled" disabled>Word wrap</button>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Connected group, independent toggles (small, desktop)</span>
+<div class="nu-a1-tgroup">
+<button class="nu-btn sm nu-a1-toggle on" aria-pressed="true">Whitespace</button>
+<button class="nu-btn sm nu-a1-toggle" aria-pressed="false">Minimap</button>
+<button class="nu-btn sm nu-a1-toggle on" aria-pressed="true">Line numbers</button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Sizes: small 32, default 40</span>
+<div class="nu-row" style="gap:var(--space-3)">
+<button class="nu-btn sm nu-a1-toggle on">Live</button>
+<button class="nu-btn nu-a1-toggle on">Live</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

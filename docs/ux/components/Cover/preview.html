@@ -1,0 +1,57 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Neper UI</title>
+<style>
+  html, body { margin:0; height:100%; }
+  body { background:var(--surface); color:var(--on-surface); font-family:var(--font-display); overflow:hidden; }
+  .cover { position:relative; width:960px; height:288px; overflow:hidden; }
+  .art { position:absolute; top:0; left:480px; width:480px; height:288px; overflow:hidden; }
+  .art svg { display:block; width:480px; height:288px; }
+  .p { fill:var(--primary); }
+  .pc { fill:var(--primary-container); }
+  .ink { fill:var(--brand-ink); }
+  .t { fill:var(--tertiary); }
+  .sc { fill:var(--secondary-container); }
+  .on-p { fill:var(--on-primary); }
+  .on-pc { fill:var(--on-primary-container); }
+  .xl { rx:var(--radius-xl); }
+  .words { position:absolute; left:var(--space-6); bottom:var(--space-6); max-width:440px; }
+  .name { margin:0; font-size:88px; line-height:.92; font-weight:600; letter-spacing:-.02em; color:var(--on-surface); }
+  .tag { margin:var(--space-2) 0 0 3px; font:400 14px/20px var(--font-sans); letter-spacing:.25px; color:var(--on-surface-variant); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 480 288" width="480" height="288">
+<!--
+  blocks      primary 168x232 slab bled off the top (the action colour) · primary-container 144x152 (the tonal tint) · brand-ink 160x200 bled off the right (the seed) · tertiary one 64x64 disc (the warm counter-accent, used once) · about 45% of the box
+  arrangement one tall slab with a tonal block and an ink block stepping right, bottoms on one line space-6 above the edge, space-3 gutters
+  pattern     "soft, friendly, large radii": the system's own pills (radius-full, 40 tall like a button, 32 like a nav indicator), cut into the slab in on-primary and laid on the tint in on-primary-container
+  scales      sides in space-2 multiples; gutters space-3; pill pitch space-12; slab corners radius-xl, pills radius-full
+-->
+<rect class="p xl" x="24" y="-28" width="168" height="292" rx="28"/>
+<rect class="pc xl" x="204" y="112" width="144" height="152" rx="28"/>
+<rect class="ink xl" x="360" y="64" width="160" height="200" rx="28"/>
+<circle class="t" cx="236" cy="72" r="32"/>
+<rect class="on-p" x="44" y="208" width="128" height="40" rx="20"/>
+<rect class="on-p" x="44" y="160" width="80" height="32" rx="16" opacity=".55"/>
+<rect class="on-p" x="132" y="160" width="40" height="32" rx="16" opacity=".3"/>
+<rect class="on-p" x="44" y="112" width="56" height="32" rx="16" opacity=".3"/>
+<rect class="on-pc" x="220" y="208" width="112" height="40" rx="20" opacity=".2"/>
+<rect class="on-pc" x="220" y="160" width="64" height="32" rx="16" opacity=".85"/>
+<rect class="on-pc" x="292" y="160" width="40" height="32" rx="16" opacity=".2"/>
+<rect class="sc" x="376" y="208" width="88" height="40" rx="20"/>
+<rect class="sc" x="376" y="160" width="40" height="32" rx="16" opacity=".5"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">Neper UI</h1>
+<p class="tag">One design language, six platforms.</p>
+</div>
+</div>
+</body>
+</html>

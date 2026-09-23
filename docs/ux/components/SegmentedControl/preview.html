@@ -1,0 +1,65 @@
+<!-- @dsCard group="Selection" height=440 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Single select: the chosen segment fills and gains a check</span>
+<div class="nu-segmented nu-a1-seg" role="radiogroup" aria-label="Range">
+<button class="selected" role="radio" aria-checked="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Day</button>
+<button role="radio" aria-checked="false">Week</button>
+<button role="radio" aria-checked="false">Month</button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Multi select (checks on each chosen)</span>
+<div class="nu-segmented nu-a1-seg" role="group" aria-label="Targets">
+<button class="selected" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Windows</button>
+<button class="selected" aria-pressed="true"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Linux</button>
+<button aria-pressed="false">macOS</button>
+</div>
+</div>
+</div>
+<div class="nu-row" style="gap:var(--space-8);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Icon and label (the icon gives way to the check)</span>
+<div class="nu-segmented nu-a1-seg">
+<button class="selected"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Code</button>
+<button><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>
+<button><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/></svg>Split</button>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Icons only (each needs a tooltip)</span>
+<div class="nu-segmented nu-a1-seg icons">
+<button class="selected" aria-label="List"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+<button aria-label="Thumbnails"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17l5-4.5 3.5 3 3-2.5L20 17"/></svg></button>
+<button aria-label="Details"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 8.5h17"/></svg></button>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">States: hover (Week), focus (Month, ring inset), pressed, disabled segment, whole control disabled</span>
+<div class="nu-row" style="gap:var(--space-4)">
+<div class="nu-segmented nu-a1-seg"><button class="selected"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Day</button><button class="is-hover">Week</button><button class="is-focus">Month</button></div>
+<div class="nu-segmented nu-a1-seg"><button class="is-pressed">Debug</button><button class="selected"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Release</button><button class="is-disabled" disabled>Profile</button></div>
+</div>
+<div class="nu-segmented nu-a1-seg is-disabled" aria-disabled="true"><button class="selected" disabled><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Day</button><button disabled>Week</button><button disabled>Month</button></div>
+</div>
+<div class="nu-a1-cols">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Windows, Linux, Android, Web: joined pill, small 32 on pointer hosts</span>
+<div class="nu-segmented nu-a1-seg sm"><button class="selected"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Day</button><button>Week</button><button>Month</button></div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">macOS, iOS: sliding thumb on a track, no check</span>
+<div class="nu-a1-thumbseg"><span class="selected">Day</span><span>Week</span><span>Month</span></div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

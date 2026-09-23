@@ -1,0 +1,65 @@
+<!-- @dsCard group="Overlays" height=688 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"></head>
+<body style="margin:0">
+<div class="nu-page">
+<div class="nu-stack" style="gap:var(--space-5)">
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start;flex-wrap:nowrap">
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Pointer: light-dismiss panel below-start of its anchor, no scrim</span>
+<div class="nu-a5-screen" style="width:384px;height:336px">
+<div class="nu-a5-bar"><span class="t">Builds</span><button class="nu-chip selected has-lead is-focus" aria-expanded="true"><svg class="nu-icon lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filter</button><button class="nu-icon-btn"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4.5V9h-4.5"/></svg></button></div>
+<div class="nu-a5-ghosts"><span class="nu-a5-ghost" style="width:70%"></span><span class="nu-a5-ghost" style="width:50%"></span><span class="nu-a5-ghost" style="width:85%"></span><span class="nu-a5-ghost" style="width:60%"></span><span class="nu-a5-ghost" style="width:75%"></span></div>
+<div class="nu-a5-flyout nu-a5-abs" role="dialog" aria-label="Filter builds" style="top:44px;left:86px;width:248px;gap:var(--space-1);padding:var(--space-3) var(--space-3) var(--space-2)">
+<span class="nu-a5-label-m" style="padding:0 var(--space-1) var(--space-1)">Status</span>
+<label class="nu-select-row" style="min-height:var(--target-pointer)"><span class="nu-hit sm on is-focus" style="width:32px;height:32px"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Passed</label>
+<label class="nu-select-row" style="min-height:var(--target-pointer)"><span class="nu-hit on" style="width:32px;height:32px"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Failed</label>
+<label class="nu-select-row" style="min-height:var(--target-pointer)"><span class="nu-hit" style="width:32px;height:32px"><span class="nu-checkbox"></span></span>Cancelled</label>
+<div class="nu-divider" style="margin:var(--space-2) calc(-1 * var(--space-3))"></div>
+<div class="nu-switch-row" style="min-height:var(--control-md);font-size:14px;line-height:20px;padding-left:var(--space-1)"><span>Only my builds</span><span class="nu-switch on"></span></div>
+<div class="nu-row" style="justify-content:flex-end;margin-right:calc(-1 * var(--space-1))"><button class="nu-btn text sm">Reset</button></div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Compact: as a bottom sheet</span>
+<div class="nu-a5-phone" style="width:262px;height:336px">
+<div class="nu-a5-bar"><span class="t">Builds</span><button class="nu-icon-btn"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></div>
+<div class="nu-a5-ghosts"><span class="nu-a5-ghost" style="width:70%"></span><span class="nu-a5-ghost" style="width:50%"></span></div>
+<div class="nu-scrim nu-a5-fill"></div>
+<div class="nu-sheet nu-a5-abs" style="left:0;right:0;bottom:0;padding-bottom:var(--space-3)">
+<span class="handle"></span>
+<div style="padding:0 var(--space-4)">
+<span class="nu-a5-label-m" style="display:block;padding:var(--space-1) 0 var(--space-1) var(--space-1)">Status</span>
+<label class="nu-select-row" style="display:flex"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Passed</label>
+<label class="nu-select-row" style="display:flex"><span class="nu-hit on"><span class="nu-checkbox"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></span>Failed</label>
+<label class="nu-select-row" style="display:flex"><span class="nu-hit"><span class="nu-checkbox"></span></span>Cancelled</label>
+<div class="nu-switch-row" style="padding-left:var(--space-2)"><span>Only my builds</span><span class="nu-switch on"></span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-3)">
+<span class="nu-caption">Quick settings from an icon button: changes apply live, so there is no Apply button</span>
+<div class="nu-row" style="gap:var(--space-6);align-items:flex-start">
+<div class="nu-col" style="gap:var(--space-1)">
+<button class="nu-icon-btn selected nu-a5-anchor-on"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M12 6v13"/></svg></button>
+<div class="nu-a5-flyout" role="dialog" aria-label="Editor text" style="width:296px">
+<div class="nu-row" style="justify-content:space-between"><span class="nu-a5-title-s">Font size</span><span class="nu-a5-body-m">14 px</span></div>
+<div class="nu-slider" style="--v:40%;width:264px"><span class="track active"></span><span class="track inactive"></span><span class="handle"></span></div>
+<span class="nu-a5-title-s">Line spacing</span>
+<div class="nu-segmented sm"><button class="selected"><svg class="nu-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Compact</button><button>Default</button><button>Relaxed</button></div>
+</div>
+</div>
+<div class="nu-col" style="gap:var(--space-2);max-width:300px">
+<span class="nu-caption">Dismissal</span>
+<span class="nu-a5-body-m">Escape, a press anywhere outside, or pressing the anchor again closes it. The outside press only closes; it does not reach what is under it. Focus returns to the anchor.</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>
