@@ -1191,7 +1191,13 @@
             "SliderSpec",
             "SwitchSpec"
           ],
-          "delivered": []
+          "delivered": [
+            "ChipSpec",
+            "ChoiceSpec",
+            "SegmentedControlSpec",
+            "SwitchSpec"
+          ],
+          "evidence": "lib/e/ui/control.e (D955): the checkbox's 18 box in a 2px on-surface-variant outline, filled primary with a drawn tick or dash in on-primary, the radio's 20 ring and 10 dot, both in a 40 state circle (32 dense) with rows 40/48 and the 38% disabled colours; the switch's 52 x 32 track, 16/24/28 thumbs and 40 state circle; the chip at 32 with radius-sm, a 1px outline, a selected filter chip on secondary-container with a leading check, the input chip's 24 remove circle; the segmented control's joined segments in one 1px outline with dividers, 32/40 tall, the selected one secondary-container with a check; tests/selfhost/fixtures/link/ui_selection_v2 and ui_selection on both hosts"
         },
         {
           "id": "P5-06",

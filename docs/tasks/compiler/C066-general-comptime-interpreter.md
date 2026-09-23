@@ -56,7 +56,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `.len`: `src/main.e`×539‡, `src/check.e`×332‡, `src/tool.e`×309‡, `src/em.e`×168‡, `lib/e/fmt/json.e`×154†, `lib/e/os.linux.e`×145‡, `lib/e/algo/sketch.e`×139†, `lib/e/net/tls.e`×116†
+- `.len`: `src/main.e`×542‡, `src/check.e`×333‡, `src/tool.e`×309‡, `src/em.e`×168‡, `lib/e/fmt/json.e`×154†, `lib/e/os.linux.e`×145‡, `lib/e/algo/sketch.e`×139†, `lib/e/net/tls.e`×116†
 - `fold_const`: `tests/conformance/tools/fold_const.expected.jsonl`×5
 - `meta.fields`: `src/check.e`×6‡, `lib/e/fmt/asn1.e`×4, `lib/e/fmt/bson.e`×4, `lib/e/fmt/csv.e`×4, `lib/e/fmt/msgpack.e`×4, `lib/e/fmt/ini.e`×3, `lib/e/fmt/json.e`×3†, `lib/e/text/template.e`×3
 - `meta.element_type`: `lib/e/simd.e`×34, `src/check.e`×5‡, `scripts/check_module_surfaces.py`×1, `src/parse.e`×1†

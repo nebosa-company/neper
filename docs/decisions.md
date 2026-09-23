@@ -19188,3 +19188,34 @@ one text run.
 track, arc and handle, and the recorder's size and both outlines; `ui_numeric`'s
 chord checks now look for the caps. All 67 `ui_*` fixtures pass on Windows and
 Linux. SpinBoxSpec stays open (D952).
+
+## D955 — The choice, the switch, the chip and the segmented control draw their v2 specifications
+
+P5-05's first four. A checkbox's mark is an 18 box (16 dense) in a 2px
+`on-surface-variant` outline with 2 corners, filled `primary` when checked or mixed
+with a drawn tick or dash in `on-primary`; a radio is a 20 ring (16 dense), `primary`
+round a 10 dot when selected. Either stands in a 40 circle (32 dense) that takes the
+state layer of `on-surface`, `primary` once chosen, its `body-medium` label
+(`body-large` on touch) in `on-surface` 4 after it, the row at least 40 tall (48 on
+touch); disabled is `on-surface` at 38%, a checked box keeping its fill in that with
+a `surface` tick, where D819 halved the opacity. A radio group's rows abut. The
+switch is a 52 x 32 track: off the highest container in a 2px `outline` edge with a
+16 `outline` thumb 8 in, on `primary` with a 24 `on-primary` thumb 4 in; hovered or
+pressed the thumb darkens, pressed it grows to 28, and the 40 circle round it takes
+the state layer. It stands in a 60 x 40 box so the circle has room. The chip is 32 tall
+with `radius-sm` corners in a 1px `outline`, its `label-large` in `on-surface` 16 from
+each side; a selected filter chip drops the edge for `secondary-container` with a
+check leading its label; an input chip ends in a 24 remove circle round an 18 cross.
+The segmented control is one 1px `outline` edge round joined segments with 1px
+dividers, 32 tall with `radius-sm` corners (40 and fully rounded on touch), each
+segment at least 72 wide (88) with its label centred, the selected one
+`secondary-container` with a check. The tick, dash and cross are one stroked glyph
+painter (`mark_glyph`) rather than icon textures, so a control needs no asset to
+show its state.
+
+`ui_selection_v2` holds the box's outline, the checked fill, the mixed dash, the
+radio's ring and dot, both switch tracks and thumbs, the chips' heights, fill,
+outline and remove circle, the segments' height, fill and divider, and the hover
+layer on a checkbox's circle; `ui_selection`'s switch sample moved to the v2 track.
+All 68 `ui_*` fixtures pass on Windows and Linux. Keyboard behaviour (a radio group's
+one tab stop and arrows) and the error look stay with the spec's behaviour sections.

@@ -223,12 +223,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !dark_2.checked { os.exit(34i32) }
     let (shot_on, shot_on_error) = testing.snapshot(&harness, a)
     if shot_on_error != ok { os.exit(35i32) }
-    // The track is 28 x 16 at the switch's left, the knob 12 px tall inside it: the
-    // track's top row above the knob is the highest container when off (D942) and
-    // the primary colour when on.
-    let track_x = usize(switch_bounds.x)
-    let track_y = usize(switch_bounds.y + (switch_bounds.height - 16.0) * 0.5)
-    let top_px = ((track_y + 1usize) * 140usize + track_x + 14usize) * 4usize
+    // The v2 track (D955) is 52 x 32, 4 in from the switch's 60 x 40 box: 12 into
+    // it and 4 down, inside the 2px edge and clear of the thumb and its circle, it is
+    // the highest container when off and the primary colour when on.
+    let track_x = usize(switch_bounds.x + 4.0)
+    let track_y = usize(switch_bounds.y + (switch_bounds.height - 40.0) * 0.5 + 4.0)
+    let top_px = ((track_y + 4usize) * 140usize + track_x + 12usize) * 4usize
     let primary = style.color(&tokens, .Primary)
     let on_blue = f32(shot_on.pixels[top_px + 2usize])
     let on_red = f32(shot_on.pixels[top_px])

@@ -42,7 +42,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `ErrorNode`: `src/main.e`×18‡, `src/parse.e`×6†, `tests/conformance/parse/two_errors.expected.jsonl`×2, `src/check.e`×1‡, `src/resolve.e`×1†, `src/syntax.e`×1, `src/tool.e`×1‡, `tests/conformance/parse/barrier.expected.jsonl`×1
+- `ErrorNode`: `src/main.e`×21‡, `src/parse.e`×7†, `tests/conformance/parse/two_errors.expected.jsonl`×2, `src/check.e`×1‡, `src/resolve.e`×1†, `src/syntax.e`×1, `src/tool.e`×1‡, `tests/conformance/parse/barrier.expected.jsonl`×1
 
 ## Verification
 

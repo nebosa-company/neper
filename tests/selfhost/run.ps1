@@ -3138,6 +3138,12 @@ $uiInputs3V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $uiInputs3V2Written -ne 'executable written') { throw 'ui_inputs3_v2 emission failed' }
 $uiInputs3V2Output = & $uiInputs3V2Path
 if ($LASTEXITCODE -ne 0 -or $uiInputs3V2Output -ne 'ui inputs3 v2 ok') { throw "ui_inputs3_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 choice, switch, chip and segmented control (widget plan P5-05).
+$uiSelectionV2Path = Join-Path $testBuild 'ui-selection-v2-selfhost.exe'
+$uiSelectionV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_selection_v2\src\main.e') $repo 'x64' 'windows' $uiSelectionV2Path
+if ($LASTEXITCODE -ne 0 -or $uiSelectionV2Written -ne 'executable written') { throw 'ui_selection_v2 emission failed' }
+$uiSelectionV2Output = & $uiSelectionV2Path
+if ($LASTEXITCODE -ne 0 -or $uiSelectionV2Output -ne 'ui selection v2 ok') { throw "ui_selection_v2 answered wrongly: exit $LASTEXITCODE" }
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 $uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'
