@@ -3725,6 +3725,34 @@ type Sink = struct {
     nest_sources: [8]str,
     nest_stale: [8]bool,
     nest_counts: [8]usize,
+    // The next diagnostic is a cascade of an earlier one (D950, H09): a `note` whose
+    // `parent` is that error's zero-based record index, with no exit effect of its own.
+    as_note: bool,
+    note_parent: usize,
+    // What `check-file --json` goes on past (D950): the Sink carries it, since every
+    // check path has the Sink at hand and `dispatch` is at the bootstrap's local limit.
+    cascade: Cascade,
+}
+
+// The failures `check-file --json` goes on past (D950, H09): each failing declaration
+// by module and name, whether its own interface failed, and the record of the error
+// it is accounted to -- its own, or the one it is a cascade of.
+type Cascade = struct {
+    on: bool,
+    modules: []usize,
+    names: []str,
+    interface: []bool,
+    records: []usize,
+    count: usize,
+}
+
+const CASCADE_LIMIT: usize = 256usize
+
+// The next record's severity and, for a note, its parent.
+fn write_parent(report: *Sink) -> err {
+    if !report.as_note { ret write_all(report, ",\"parent\":null") }
+    try write_all(report, ",\"parent\":")
+    ret write_usize(report, report.note_parent)
 }
 
 // How many nested levels the tables hold (D499, D564).
@@ -3765,7 +3793,11 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
     }
     // Inside a source map's range, the original span is primary (D264).
     let mapping = map_index(report, path, at, has_token)
-    try write_all(report, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":")
+    if report.as_note {
+        try write_all(report, "{\"record\":\"diagnostic\",\"severity\":\"note\",\"code\":")
+    } else {
+        try write_all(report, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":")
+    }
     try write_json_string(report, code)
     try write_all(report, ",\"message\":")
     try write_json_string(report, message)
@@ -3835,7 +3867,8 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             level += 1usize
         }
         try write_span(report, shown_path, shown, false)
-        try write_all(report, ",\"parent\":null,\"related\":[")
+        try write_parent(report)
+        try write_all(report, ",\"related\":[")
         var chain_at = chain_count
         while chain_at > 0usize {
             chain_at = chain_at - 1usize
@@ -3872,7 +3905,8 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
         // The other site the diagnostic is about (D364, H09), in the same module --
         // or in another (D466), the instance's request site.
         if report.has_related {
-            try write_all(report, ",\"parent\":null,\"related\":[{\"message\":")
+            try write_parent(report)
+            try write_all(report, ",\"related\":[{\"message\":")
             try write_json_string(report, report.related_note)
             try write_all(report, ",\"span\":")
             if report.related_foreign {
@@ -3896,7 +3930,8 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             }
             try write_all(report, "}],\"fixes\":")
         } else {
-            try write_all(report, ",\"parent\":null,\"related\":[],\"fixes\":")
+            try write_parent(report)
+            try write_all(report, ",\"related\":[],\"fixes\":")
         }
         // The fix (D381, H09): one insertion, `maybe` -- it changes what the program does.
         if report.fix_text.len != 0usize {
@@ -5915,6 +5950,11 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail)
         ret write_all(file, "` declares a `...` parameter: an argument pack belongs to the three intrinsics `printf`, `format` and `gpu.launch` alone, and a C variadic to an `extern fn`")
     }
+    if checker.failure_kind == .DeclarationFailed {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` failed in its declaration, reported above, so this use of it is not checked")
+    }
     if checker.failure_kind == .GpuAttribute {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)
@@ -7353,6 +7393,135 @@ fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker)
     ret ok
 }
 
+// The cascade's storage (D950), before the checker's mark: the poison list outlives
+// every rerun of the declarations.
+fn begin_cascade(a: *mem.Arena, resolver: *resolve.Resolver, report: *Sink) -> err {
+    let (kept, kept_error) = mem.alloc[resolve.KeptFailure](a, CASCADE_LIMIT)
+    if kept_error != ok { ret kept_error }
+    resolver.kept = kept
+    resolver.kept_count = 0usize
+    resolver.keep_going = true
+    let (modules, modules_error) = mem.alloc[usize](a, CASCADE_LIMIT)
+    if modules_error != ok { ret modules_error }
+    let (names, names_error) = mem.alloc[str](a, CASCADE_LIMIT)
+    if names_error != ok { ret names_error }
+    let (interface, interface_error) = mem.alloc[bool](a, CASCADE_LIMIT)
+    if interface_error != ok { ret interface_error }
+    let (records, records_error) = mem.alloc[usize](a, CASCADE_LIMIT)
+    if records_error != ok { ret records_error }
+    report.cascade.modules = modules
+    report.cascade.names = names
+    report.cascade.interface = interface
+    report.cascade.records = records
+    report.cascade.count = 0usize
+    report.cascade.on = true
+    ret ok
+}
+
+fn add_poison(report: *Sink, module_index: usize, name: str, interface: bool, record: usize) {
+    let at = report.cascade.count
+    if name.len == 0usize || at >= report.cascade.modules.len { ret }
+    report.cascade.modules[at] = module_index
+    report.cascade.names[at] = name
+    report.cascade.interface[at] = interface
+    report.cascade.records[at] = record
+    report.cascade.count = at + 1usize
+}
+
+// The poison list to the checker, which leaves out what it names.
+fn install_poison(checker: *check.Checker, report: *Sink) {
+    checker.poison_modules = report.cascade.modules
+    checker.poison_names = report.cascade.names
+    checker.poison_interface = report.cascade.interface
+    checker.poison_count = report.cascade.count
+}
+
+// Whether a failure is a cascade (D950): its token names a declaration whose own
+// interface failed -- as `name` in the same module, or as `q.name` through an import
+// -- and then the record of that declaration's error.
+fn cascade_parent(g: *graph.Graph, report: *Sink, module_index: usize, token: lex.Token) -> (usize, bool) {
+    if !report.cascade.on || module_index >= g.count { ret (0usize, false) }
+    let text = g.modules[module_index].text
+    if token.end > text.len || token.end <= token.start { ret (0usize, false) }
+    let name = text[token.start..token.end]
+    var owner = module_index
+    if token.start >= 2usize && text[token.start - 1usize] == 46u8 {
+        var qualifier_start = token.start - 1usize
+        while qualifier_start > 0usize && (lex.is_alnum(text[qualifier_start - 1usize]) || text[qualifier_start - 1usize] == 95u8) { qualifier_start = qualifier_start - 1usize }
+        let qualifier = text[qualifier_start..token.start - 1usize]
+        let import_end = g.modules[module_index].first_import + g.modules[module_index].import_count
+        var import_at = g.modules[module_index].first_import
+        while import_at < import_end {
+            if same(g.imports[import_at].qualifier, qualifier) { owner = g.imports[import_at].target }
+            import_at += 1usize
+        }
+    }
+    var at = 0usize
+    while at < report.cascade.count {
+        if report.cascade.interface[at] && report.cascade.modules[at] == owner && same(report.cascade.names[at], name) { ret (report.cascade.records[at], true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The resolver's kept failures, each as its diagnostic, and each declaration they
+// failed in on the poison list (D950).
+fn print_kept_resolve_failures(report: *Sink, g: *graph.Graph, resolver: *resolve.Resolver) -> err {
+    var at = 0usize
+    while at < resolver.kept_count {
+        let failure = resolve.select_kept(resolver, at)
+        let record = report.count
+        try print_resolve_diagnostic(report, g, resolver, failure)
+        add_poison(report, resolver.kept[at].module_index, resolver.kept[at].declaration, resolver.kept[at].interface, record)
+        at += 1usize
+    }
+    ret ok
+}
+
+// The checker's failure printed as its error, or as a note under the error it is a
+// cascade of (D950).
+fn print_check_failure_classified(report: *Sink, loaded: *graph.Graph, checker: *check.Checker, check_error: err) -> (usize, err) {
+    let (parent, cascaded) = cascade_parent(loaded, report, checker.failure_module, checker.failure_token)
+    let record = report.count
+    report.as_note = cascaded
+    report.note_parent = parent
+    let printed = print_queued_check_diagnostics(report, loaded, checker, check_error)
+    report.as_note = false
+    if cascaded { ret (parent, printed) }
+    ret (record, printed)
+}
+
+// The declarations, going on past each failing one (D950, H09): the failure printed --
+// as its error, or as a note under the error it is a cascade of -- the declaration left
+// out, and the declarations again from a fresh checker. Each pass is whole, and there
+// are at most as many as failing declarations; a failure no declaration accounts for
+// is returned, as before.
+fn check_file_declarations(a: *mem.Arena, report: *Sink, checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
+    let checker_mark = mem.mark(a)
+    try init_cli_checker(a, checker, loaded, report)
+    checker.arena = a
+    install_poison(checker, report)
+    var check_error = check.run_declarations(checker, resolver, loaded)
+    let cascade_limit = CASCADE_LIMIT
+    while check_error != ok && report.cascade.on && checker.failure_has_token && checker.has_declaration && checker.diagnostic_count <= 1usize && report.cascade.count < cascade_limit {
+        let (already_at, already) = check.poisoned(checker, checker.declaration_module, checker.declaration, true)
+        if already { ret check_error }
+        let failed_module = checker.declaration_module
+        let failed_name = checker.declaration
+        let (record, printed) = print_check_failure_classified(report, loaded, checker, check_error)
+        if printed != ok { ret printed }
+        add_poison(report, failed_module, failed_name, true, record)
+        mem.reset(a, checker_mark)
+        let fresh_checker: check.Checker = zero
+        *checker = fresh_checker
+        try init_cli_checker(a, checker, loaded, report)
+        checker.arena = a
+        install_poison(checker, report)
+        check_error = check.run_declarations(checker, resolver, loaded)
+    }
+    ret check_error
+}
+
 // The bodies checked one function at a time (D553, H09): where `check.run` stopped
 // at the program's first failing function, `check-file --json` prints that
 // function's diagnostic, clears it and goes on to the next, so a harness reads every
@@ -7361,7 +7530,7 @@ fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker)
 // parity fixtures hold. A failure with no token -- a limit, the deadline, an
 // internal one -- is answered as the error for the caller to print, as before.
 fn check_file_bodies(report: *Sink, checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
-    var failures = 0usize
+    var failures = report.cascade.count
     let body_failure = check_bodies_each(report, checker, resolver, loaded, &failures)
     if body_failure != ok { try print_check_diagnostic(report, loaded, checker, body_failure) }
     if body_failure != ok || failures != 0usize {
@@ -7399,11 +7568,22 @@ fn check_bodies_each(report: *Sink, checker: *check.Checker, resolver: *resolve.
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
-            if node.top_level && node.kind == .FnDecl {
+            // A function a failure already accounts for is not checked again (D950):
+            // its interface failed, or its body did while its names were resolved.
+            var accounted = false
+            if node.top_level && node.kind == .FnDecl && report.cascade.on {
+                let (function_name, function_name_error) = check.declaration_name(checker, loaded.modules[module_index].text, node)
+                if function_name_error == ok {
+                    let (poison_at, found) = check.poisoned(checker, module_index, function_name, false)
+                    accounted = found
+                }
+            }
+            if node.top_level && node.kind == .FnDecl && !accounted {
                 let body_error = check.check_function(checker, resolver, loaded, &tree, module_index, node, node_index)
                 if body_error != ok {
                     if !checker.failure_has_token { ret body_error }
-                    try print_queued_check_diagnostics(report, loaded, checker, body_error)
+                    let (body_record, body_printed) = print_check_failure_classified(report, loaded, checker, body_error)
+                    if body_printed != ok { ret body_printed }
                     *failures += 1usize
                     // The plain output keeps to the first (D553): neper-0's parity.
                     if !report.json { ret ok }
@@ -10008,17 +10188,22 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver, &loaded, &report)
+        // Going on past a failing declaration (D950, H09): a JSON check reports each
+        // declaration's first failure and checks the rest without it.
+        if report.json { try begin_cascade(a, &resolver, &report) }
         let resolve_error = resolve.collect(&resolver, &loaded)
-        if resolve_error != ok {
-            try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
-            try finish_report(&report)
-            os.exit(1i32)
-            ret ok
+        if resolve_error == resolve.KeptFailures {
+            try print_kept_resolve_failures(&report, &loaded, &resolver)
+        } else {
+            if resolve_error != ok {
+                try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
+                try finish_report(&report)
+                os.exit(1i32)
+                ret ok
+            }
         }
         var checker: check.Checker = zero
-        try init_cli_checker(a, &checker, &loaded, &report)
-        checker.arena = a
-        let check_error = check.run_declarations(&checker, &resolver, &loaded)
+        let check_error = check_file_declarations(a, &report, &checker, &resolver, &loaded)
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
                 try print_check_diagnostic(&report, &loaded, &checker, check_error)

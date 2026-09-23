@@ -147,7 +147,7 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 
 | file | title | status |
 |---|---|---|
-| [`compiler/C035-diagnosis-recovery-and-transactional-repair-v1-precursor-for.md`](compiler/C035-diagnosis-recovery-and-transactional-repair-v1-precursor-for.md) | Diagnosis, recovery and transactional repair (v1 precursor for T2 H09) | score 0.86, queue #1 |
+| [`compiler/C035-diagnosis-recovery-and-transactional-repair-v1-precursor-for.md`](compiler/C035-diagnosis-recovery-and-transactional-repair-v1-precursor-for.md) | Diagnosis, recovery and transactional repair (v1 precursor for T2 H09) | score 0.93, queue #1 |
 | [`compiler/C036-declaration-level-incremental-semantic-work-v1-precursor-for.md`](compiler/C036-declaration-level-incremental-semantic-work-v1-precursor-for.md) | Declaration-level incremental semantic work (v1 precursor for T2 H14) | score 0.87, queue #2 |
 | [`compiler/C042-hostile-inputs-artifact-integrity-and-aggregate-limits-v1-pr.md`](compiler/C042-hostile-inputs-artifact-integrity-and-aggregate-limits-v1-pr.md) | Hostile inputs, artifact integrity and aggregate limits (v1 precursor for T2 H24) | score 0.70, queue #3 |
 | [`compiler/C043-immutable-snapshots-and-correct-cache-identity-v1-precursor.md`](compiler/C043-immutable-snapshots-and-correct-cache-identity-v1-precursor.md) | Immutable snapshots and correct cache identity (v1 precursor for T2 H15) | score 0.63, queue #4 |

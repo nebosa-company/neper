@@ -74,6 +74,79 @@ type Resolver = struct {
     // The module whose tokens `tokens` holds (D304).
     tokens_module: usize,
     has_tokens_module: bool,
+    // Going on past a failing declaration (D950, H09): `check-file --json` keeps each
+    // top-level declaration's first failure here and validates the next, where the
+    // first failure ended the check; the build and the plain output keep to the first.
+    keep_going: bool,
+    kept: []KeptFailure,
+    kept_count: usize,
+}
+
+// One declaration's failure, as the resolver's failure fields held it, with the
+// declaration it failed in and whether the failure is outside the declaration's body --
+// its signature or its type -- where the declaration itself is what failed.
+type KeptFailure = struct {
+    failure: err,
+    module_index: usize,
+    token: lex.Token,
+    has_token: bool,
+    context_token: lex.Token,
+    has_context: bool,
+    name: str,
+    owner: str,
+    target: usize,
+    near: str,
+    declaration: str,
+    interface: bool,
+}
+
+// Validation went on past failures, which are in `kept` (D950).
+error KeptFailures
+
+// A kept failure put back in the failure fields, for the diagnostic to be printed.
+fn select_kept(r: *Resolver, at: usize) -> err {
+    let kept = r.kept[at]
+    r.failure_module = kept.module_index
+    r.failure_token = kept.token
+    r.failure_has_token = kept.has_token
+    r.failure_context_token = kept.context_token
+    r.failure_has_context = kept.has_context
+    r.failure_name = kept.name
+    r.failure_owner = kept.owner
+    r.failure_target = kept.target
+    r.failure_near = kept.near
+    ret kept.failure
+}
+
+fn keep_failure(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, failure: err) {
+    let (name, name_error) = declaration_name(r, g.modules[module_index].text, node)
+    // A failure inside the body leaves the declaration's interface whole: a caller of
+    // the function is not a cascade of it.
+    var interface = true
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            let child = tree.nodes[parse.child_index_at(tree, at)]
+            if child.kind == .Block && usize(child.token_start) < r.token_count && usize(child.token_end) > usize(child.token_start) && usize(child.token_end) <= r.token_count {
+                let block_start = r.tokens[usize(child.token_start)].start
+                let block_end = r.tokens[usize(child.token_end) - 1usize].end
+                if r.failure_token.start >= block_start && r.failure_token.start < block_end { interface = false }
+            }
+        }
+        at += 1usize
+    }
+    var declaration = ""
+    if name_error == ok { declaration = name }
+    r.kept[r.kept_count] = KeptFailure { failure: failure, module_index: r.failure_module, token: r.failure_token, has_token: r.failure_has_token, context_token: r.failure_context_token, has_context: r.failure_has_context, name: r.failure_name, owner: r.failure_owner, target: r.failure_target, near: r.failure_near, declaration: declaration, interface: interface }
+    r.kept_count += 1usize
+    r.failure_has_token = false
+    r.failure_has_context = false
+    r.failure_name = ""
+    r.failure_owner = ""
+    r.failure_near = ""
+    r.failure_target = 0usize
+    r.local_count = 0usize
 }
 
 fn same(a: str, b: str) -> bool {
@@ -1100,11 +1173,18 @@ fn validate_top_levels(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_
     while node_index < tree.count {
         let node = tree.nodes[node_index]
         if node.top_level {
+            var declaration_error = ok
             if node.kind == .FnDecl || node.kind == .ExternDecl || node.kind == .TypeDecl {
-                try validate_declaration_scope(r, g, tree, module_index, node)
+                declaration_error = validate_declaration_scope(r, g, tree, module_index, node)
             } else {
                 r.local_count = 0usize
-                try visit_scope_node(r, g, tree, module_index, node_index)
+                declaration_error = visit_scope_node(r, g, tree, module_index, node_index)
+            }
+            // Past a failure with a site, when going on (D950): kept, and the next
+            // declaration validated. A failure with no site -- a limit -- ends it.
+            if declaration_error != ok {
+                if !r.keep_going || !r.failure_has_token || r.kept_count >= r.kept.len { ret declaration_error }
+                keep_failure(r, g, tree, module_index, node, declaration_error)
             }
         }
         node_index += 1usize
@@ -1162,6 +1242,7 @@ fn collect(r: *Resolver, g: *graph.Graph) -> err {
         try validate_module(r, g, module_index)
         module_index += 1usize
     }
+    if r.kept_count != 0usize { ret KeptFailures }
     ret ok
 }
 

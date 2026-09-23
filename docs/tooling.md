@@ -124,8 +124,14 @@ of the failure, and goes on to the next function (D553, H09): `check --json` ove
 program whose bodies fail in several functions carries each function's first
 diagnostic, in source order, the instances the bodies made after them, and the
 result's `diagnostics` counts them; a failure with no site -- a limit, the
-deadline -- ends the stream as before, and a name or declaration failure still
-comes alone, the bodies not being checked past it. `applicability` is
+deadline -- ends the stream as before. A name or declaration failure no longer comes
+alone (D950): the check goes on past the declaration it is in, reporting each
+declaration's first failure, and checks the rest of the program without the
+declarations whose own signature or type failed. A later failure that is a use of
+one of those -- a call, a type, a value named at its token -- is a `note` whose
+`parent` is that declaration's error (``f` failed in its declaration, reported
+above, so this use of it is not checked``), and any other failure is an error of its
+own. The plain output still stops at the first. `applicability` is
 `machine` only when applying all edits cannot change a valid program's behavior;
 otherwise it is `maybe`. Edits within one fix are non-overlapping and sorted by
 source then descending `byte_start`, so they can be applied without offset repair.

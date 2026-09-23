@@ -152,6 +152,9 @@ type DiagnosticKind = enum u8 {
     // (D778): the detail is the function, the second detail says what was wrong.
     GpuAttribute,
     GpuLaunch,
+    // A use of a declaration whose own failure is reported already (D950): the detail
+    // is its name. The report puts it under that failure, as a note.
+    DeclarationFailed,
 }
 
 type Kind = enum u8 {
@@ -818,6 +821,19 @@ type Checker = struct {
     failure_fix_kind: u8,
     // Whether the body being checked returns a bare `err` (D382): what `ret e` needs.
     body_returns_err: bool,
+    // The declarations a failure already accounts for (D950, H09), by module and name:
+    // `check-file --json` goes on past a failing declaration and checks the rest of the
+    // program without them. `poison_interface` says the declaration itself failed -- its
+    // signature or its type -- so it is not collected, where a failure in a body only
+    // keeps the body from being checked again.
+    poison_modules: []usize,
+    poison_names: []str,
+    poison_interface: []bool,
+    poison_count: usize,
+    // The top-level declaration being collected, for a failure to name (D950).
+    declaration: str,
+    declaration_module: usize,
+    has_declaration: bool,
 }
 
 fn append_failure_token(c: *Checker, module_index: usize, token: lex.Token, kind: DiagnosticKind, detail: str, detail2: str) {
@@ -2122,6 +2138,20 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     }
     if has_qualifier && path_identifiers == 0usize { ret (invalid_type(), InvalidType) }
     if wants_tag && has_arguments { ret (invalid_type(), InvalidType) }
+    // A type left out because its declaration failed (D950): the use named at the
+    // type's own token -- `P`, or the `P` of `q.P` -- for the report to group.
+    let (poison_at, poisoned_type) = poisoned(c, target_module, name, true)
+    if poisoned_type {
+        var name_token = c.tokens[usize(node.token_start)]
+        var scan = usize(node.token_start)
+        while scan < usize(node.token_end) && scan < c.token_count {
+            let candidate = c.tokens[scan]
+            if candidate.kind == .Identifier && same(g.modules[module_index].text[candidate.start..candidate.end], name) { name_token = candidate }
+            scan += 1usize
+        }
+        record_failure_token(c, module_index, name_token, .DeclarationFailed, name, "")
+        ret (invalid_type(), InvalidType)
+    }
     // Section 4 reserves `Atomic`, and no module declares it: the bare name is the
     // section 8 builtin wherever it is written.
     var atomic_named = false
@@ -2246,7 +2276,7 @@ fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, allow_def
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
-            if node.top_level && node.kind == .TypeDecl { try collect_alias_declaration(c, r, g, &tree, module_index, node, allow_deferred) }
+            if node.top_level && node.kind == .TypeDecl && !skip_declaration(c, g, module_index, node) { try collect_alias_declaration(c, r, g, &tree, module_index, node, allow_deferred) }
             node_index += 1usize
         }
         module_index += 1usize
@@ -2255,6 +2285,7 @@ fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, allow_def
     if allow_deferred { ret ok }
     var alias_index = 0usize
     while alias_index < c.alias_count {
+        name_declaration(c, c.aliases[alias_index].module_index, c.aliases[alias_index].name)
         if !c.aliases[alias_index].generic {
             let (resolved, resolve_error) = canonical_type(c, c.aliases[alias_index].rhs)
             if resolve_error != ok { ret resolve_error }
@@ -2908,7 +2939,7 @@ fn collect_aggregate_pass(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, re
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
-            if node.top_level && node.kind == .TypeDecl {
+            if node.top_level && node.kind == .TypeDecl && !skip_declaration(c, g, module_index, node) {
                 if register {
                     try register_aggregate_declaration(c, r, g, &tree, module_index, node, node_index)
                 } else {
@@ -4695,7 +4726,7 @@ fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
-            if node.top_level && (node.kind == .FnDecl || node.kind == .ExternDecl) {
+            if node.top_level && (node.kind == .FnDecl || node.kind == .ExternDecl) && !skip_declaration(c, g, module_index, node) {
                 try collect_function(c, r, g, &tree, module_index, node, node_index)
             }
             node_index += 1usize
@@ -6532,8 +6563,8 @@ fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err 
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
-            if node.top_level && node.kind == .ConstDecl { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
-            if node.top_level && node.kind == .VarDecl { try collect_global_declaration(c, r, g, &tree, module_index, node) }
+            if node.top_level && node.kind == .ConstDecl && !skip_declaration(c, g, module_index, node) { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
+            if node.top_level && node.kind == .VarDecl && !skip_declaration(c, g, module_index, node) { try collect_global_declaration(c, r, g, &tree, module_index, node) }
             node_index += 1usize
         }
         module_index += 1usize
@@ -6542,6 +6573,7 @@ fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err 
     while constant_index < c.constant_count {
         // A constant that reaches a call, directly or through another constant, waits
         // for the signatures (D218, D222); the rest are settled now.
+        name_declaration(c, c.constants[constant_index].module_index, c.constants[constant_index].name)
         let early_error = evaluate_constant(c, constant_index)
         if early_error != ok && early_error != ComptimeDeferred { ret early_error }
         constant_index += 1usize
@@ -9527,7 +9559,13 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         info.is_cast = true
                     } else {
                         let (found_index, found) = find_function(c, module_index, name)
-                        if !found { ret (info, UnknownCallable) }
+                        if !found {
+                            // A callee left out because its declaration failed (D950): the
+                            // use named at its token, for the report to group.
+                            let (poison_at, poisoned_callee) = poisoned(c, module_index, name, true)
+                            if poisoned_callee { record_failure_token(c, module_index, token, .DeclarationFailed, name, "") }
+                            ret (info, UnknownCallable)
+                        }
                         if c.functions[found_index].generic {
                             let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, found_index)
                             if specialize_error != ok { ret (info, specialize_error) }
@@ -9728,6 +9766,16 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                                     info.function = c.functions[found_index]
                                 }
                             } else {
+                                // `q.f` left out because its declaration failed (D950): the
+                                // use named at the member's token, for the report to group.
+                                let (poison_module, poison_member, has_poison_member) = qualified_member(c, g, tree, module_index, receiver)
+                                if has_poison_member {
+                                    let (poison_at, poisoned_member) = poisoned(c, poison_module, poison_member, true)
+                                    if poisoned_member && usize(receiver.token_end) > usize(receiver.token_start) && usize(receiver.token_end) <= c.token_count {
+                                        record_failure_token(c, module_index, c.tokens[usize(receiver.token_end) - 1usize], .DeclarationFailed, poison_member, "")
+                                        ret (info, UnknownCallable)
+                                    }
+                                }
                                 let (field_type, field_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                                 if field_error != ok { ret (info, UnknownCallable) }
                                 if field_type.kind != .Function { ret (info, UnknownCallable) }
@@ -11088,6 +11136,7 @@ fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
         // field of one is assignable wherever the variable is visible.
         let (global_index, global_found) = find_global(c, module_index, name)
         if global_found { ret (true, ok) }
+        let _ = refuse_poisoned_name(c, module_index, token, name)
         ret (false, Unsupported)
     }
     if node.kind == .UnaryExpr && c.tokens[usize(node.token_start)].kind == .PunctStar {
@@ -11469,6 +11518,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             let (global_type, context_error) = apply_context(c, c.globals[global_index].ty, expected)
             ret (global_type, context_error)
         }
+        if !constant_found && usize(node.token_start) < c.token_count && refuse_poisoned_name(c, module_index, c.tokens[usize(node.token_start)], name) { ret (invalid_type(), Unsupported) }
         let (symbol_index, found_symbol) = resolve.find(c.resolver, module_index, name, .Value)
         let (intrinsic_function, has_intrinsic_function) = find_function(c, module_index, name)
         if found_symbol && (c.resolver.symbols[symbol_index].kind == .Error || (c.resolver.symbols[symbol_index].kind == .Intrinsic && !has_intrinsic_function)) {
@@ -13375,6 +13425,7 @@ fn assignment_place_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         // so there is no immutability to check here, only whether the name is one.
         let (global_index, global_found) = find_global(c, module_index, name)
         if global_found { ret (c.globals[global_index].ty, ok) }
+        let _ = refuse_poisoned_name(c, module_index, token, name)
         ret (invalid_type(), Unsupported)
     }
     if place.kind == .UnaryExpr && c.tokens[usize(place.token_start)].kind == .PunctStar {
@@ -14220,6 +14271,48 @@ fn retype_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, 
     ret ok
 }
 
+// Whether a failure already accounts for the declaration (D950): its index in the
+// poison list. `interface_only` asks only for one whose own interface failed.
+fn poisoned(c: *Checker, module_index: usize, name: str, interface_only: bool) -> (usize, bool) {
+    var at = 0usize
+    while at < c.poison_count && at < c.poison_names.len {
+        if c.poison_modules[at] == module_index && same(c.poison_names[at], name) && (!interface_only || c.poison_interface[at]) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// A value name left out because its declaration failed (D950) -- a constant, a global,
+// a function named as a value: the use named at its token for the report to group, and
+// true, so the caller fails there.
+fn refuse_poisoned_name(c: *Checker, module_index: usize, token: lex.Token, name: str) -> bool {
+    let (poison_at, poisoned_name) = poisoned(c, module_index, name, true)
+    if !poisoned_name { ret false }
+    record_failure_token(c, module_index, token, .DeclarationFailed, name, "")
+    ret true
+}
+
+fn name_declaration(c: *Checker, module_index: usize, name: str) {
+    c.declaration = name
+    c.declaration_module = module_index
+    c.has_declaration = true
+}
+
+// The top-level declaration about to be collected, named for a failure (D950); true
+// when its own interface failed before, and it is left out.
+fn skip_declaration(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node) -> bool {
+    let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
+    if name_error != ok {
+        c.has_declaration = false
+        ret false
+    }
+    c.declaration = name
+    c.declaration_module = module_index
+    c.has_declaration = true
+    let (index, found) = poisoned(c, module_index, name, true)
+    ret found
+}
+
 fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_index: usize) -> err {
     var tree: parse.Tree = zero
     try graph.parse_module(g, module_index, &tree)
@@ -14233,7 +14326,7 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .TypeDecl { try collect_alias_declaration(c, r, g, &tree, module_index, node, true) }
+        if node.top_level && node.kind == .TypeDecl && !skip_declaration(c, g, module_index, node) { try collect_alias_declaration(c, r, g, &tree, module_index, node, true) }
         node_index += 1usize
     }
     c.expand_aliases = true
@@ -14241,12 +14334,15 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .ConstDecl { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
-        if node.top_level && node.kind == .VarDecl { try collect_global_declaration(c, r, g, &tree, module_index, node) }
+        if node.top_level && node.kind == .ConstDecl && !skip_declaration(c, g, module_index, node) { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
+        if node.top_level && node.kind == .VarDecl && !skip_declaration(c, g, module_index, node) { try collect_global_declaration(c, r, g, &tree, module_index, node) }
         node_index += 1usize
     }
     var constant_index = constant_from
     while constant_index < c.constant_count {
+        c.declaration = c.constants[constant_index].name
+        c.declaration_module = module_index
+        c.has_declaration = true
         let early_error = evaluate_constant(c, constant_index)
         if early_error != ok && early_error != ComptimeDeferred { ret early_error }
         constant_index += 1usize
@@ -14256,13 +14352,13 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .TypeDecl { try register_aggregate_declaration(c, r, g, &tree, module_index, node, node_index) }
+        if node.top_level && node.kind == .TypeDecl && !skip_declaration(c, g, module_index, node) { try register_aggregate_declaration(c, r, g, &tree, module_index, node, node_index) }
         node_index += 1usize
     }
     node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .TypeDecl { try collect_aggregate_declaration(c, r, g, &tree, module_index, node) }
+        if node.top_level && node.kind == .TypeDecl && !skip_declaration(c, g, module_index, node) { try collect_aggregate_declaration(c, r, g, &tree, module_index, node) }
         node_index += 1usize
     }
     try refill_aggregate_instances(c)
@@ -14272,12 +14368,15 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .TypeDecl { try retype_alias_declaration(c, r, g, &tree, module_index, node) }
+        if node.top_level && node.kind == .TypeDecl && !skip_declaration(c, g, module_index, node) { try retype_alias_declaration(c, r, g, &tree, module_index, node) }
         node_index += 1usize
     }
     c.expand_aliases = true
     var alias_index = alias_from
     while alias_index < c.alias_count {
+        c.declaration = c.aliases[alias_index].name
+        c.declaration_module = module_index
+        c.has_declaration = true
         if !c.aliases[alias_index].generic {
             let (resolved, resolve_error) = canonical_type(c, c.aliases[alias_index].rhs)
             if resolve_error != ok { ret resolve_error }
@@ -14286,6 +14385,8 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
         }
         alias_index += 1usize
     }
+    // A field's owner is not at hand here: its failure names no declaration.
+    c.has_declaration = false
     var field_at = field_from
     while field_at < c.aggregate_field_count {
         let (resolved, resolve_error) = canonical_type(c, c.aggregate_fields[field_at].ty)
@@ -14298,11 +14399,12 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && (node.kind == .FnDecl || node.kind == .ExternDecl) {
+        if node.top_level && (node.kind == .FnDecl || node.kind == .ExternDecl) && !skip_declaration(c, g, module_index, node) {
             try collect_function(c, r, g, &tree, module_index, node, node_index)
         }
         node_index += 1usize
     }
+    c.has_declaration = false
     ret ok
 }
 
@@ -14407,14 +14509,19 @@ fn run_declarations(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     try validate_aggregate_value_cycles(c)
     try collect_signatures(c, r, g)
     c.signatures_ready = true
+    c.has_declaration = false
     try validate_resource_cleanups(c, g)
     // The constants that call are evaluated now (D218), so a failure is reported at
     // the declaration whether or not anything uses it.
     var constant_index = 0usize
     while constant_index < c.constant_count {
-        if c.constants[constant_index].state != 2u8 { try evaluate_constant(c, constant_index) }
+        if c.constants[constant_index].state != 2u8 {
+            name_declaration(c, c.constants[constant_index].module_index, c.constants[constant_index].name)
+            try evaluate_constant(c, constant_index)
+        }
         constant_index += 1usize
     }
+    c.has_declaration = false
     ret ok
 }
 
@@ -14533,6 +14640,7 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .NoEscapeContract { ret "@noescape must name borrowed pointer-bearing parameters and the body must not let them escape" }
     if kind == .ReorderBoundary { ret "@reorder is legal on a struct or a union that crosses no FFI boundary: its layout is neper's, not C's" }
     if kind == .LayoutAttribute { ret "@packed is legal on a struct holding no Atomic, and @align(N) once on a struct or a union with N a power of two; neither combines with @reorder" }
+    if kind == .DeclarationFailed { ret "a use of a declaration that failed" }
     ret "type checking failed"
 }
 

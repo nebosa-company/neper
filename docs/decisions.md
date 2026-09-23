@@ -19126,3 +19126,47 @@ buttons and pill, and the empty formatted field's outline; all 66 `ui_*` fixture
 pass on Windows and Linux. The spin box keeps its flanking buttons, which is its
 touch form; the pointer form's arrows inside the field's end wait on an up-chevron
 mark, so SpinBoxSpec stays open.
+
+## D950 — A check goes on past a failing declaration, and its cascade is a note under it
+
+`check-file --json` went on past a failing function body (D553), but a name or
+declaration failure still came alone: the check stopped at the first, and an
+independent failure elsewhere in the program went unreported. H09 asks for cascades
+grouped under their primary cause without hiding independent failures.
+
+The check now goes on past each failing declaration, in three places:
+
+- **Names.** The resolver keeps a top-level declaration's first failure and validates
+  the next declaration (`resolve.KeptFailure`, `keep_going`), where the first failure
+  ended the resolve. A kept failure is printed as the error it always was. If it lies
+  outside the declaration's body -- in its signature, its type, a constant's value --
+  the declaration itself failed and goes on a poison list. If it lies inside the body,
+  the declaration's interface is whole: its callers are not a cascade of it, and only
+  its body is left unchecked, since its failure is reported already.
+- **Declarations.** The checker leaves the poisoned declarations out of every
+  collection loop. When a declaration fails, `check_file_declarations` prints the
+  failure, poisons the declaration and runs the declarations again from a fresh
+  checker, its arena reset to the mark before it. Each pass is whole -- nothing is
+  rolled back mid-collection -- and there are at most as many passes as failing
+  declarations (the list holds 256).
+- **Bodies.** A function on the list is not checked again; every other body is, as
+  in D553.
+
+A use of a left-out declaration -- a call, `q.f`, a type (`P`, `q.P`), a constant, a
+global, a function named as a value -- fails at the use's own token with a new kind,
+`DeclarationFailed` (``f` failed in its declaration, reported above, so this use of it
+is not checked``). The report sees a failure at a token that names a poisoned
+declaration, in its own module or through the import its qualifier names, and prints
+it as `severity: note` with `parent` set to that declaration's error record, as
+tooling.md has always specified for a note. The cause is the root one: a signature
+that fails because it names a left-out type poisons its own declaration, accounted to
+the type's error. Any other failure is an error of its own. The plain output and the
+build still stop at their first failure.
+
+`reject/cascade.e` pins it: a struct with an unknown field type, a function with an
+unknown parameter type, an unknown value in a body and an independent return
+mismatch give four errors, and the struct in another signature, the call of the
+function and a local of the struct give three notes under their causes. Two fixtures
+changed as intended: `safety_foreign_callback` and `safety_union_representation` each
+failed at a declaration and now carry the use in `main` as a note under it, where the
+use went unreported. The other 166 fixtures of `accept/` and `reject/` are unchanged.

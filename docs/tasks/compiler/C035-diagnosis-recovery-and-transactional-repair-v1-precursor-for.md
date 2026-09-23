@@ -3,7 +3,7 @@
 | field | value |
 |---|---|
 | category | compiler / Front end and language |
-| score | 0.86 of 1 |
+| score | 0.93 of 1 |
 | queue position | 1 of 47 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
@@ -40,13 +40,13 @@ floods. Test the real command schema and ordering, not regexes over human messag
 
 Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.md`. This is the ground truth of what exists — do not re-implement any of it.
 
-> Every two-site E-SAFETY diagnostic carries its other site -- acquisition, move, deferred call, borrow, pointer, reset, mutation, thread start -- as a `related` span with a message saying which (D364), pinned by the reject corpus; stable codes throughout; the parser's nesting bound and error nodes are D341's; a forgotten cleanup carries its `defer <closer>(x)` and an untested acquisition its `if e != ok { ret e }` as `fixes` entries (D381, D382), and a rename is a plan with preconditions (D376); a type mismatch names both types in its message and carries them as `expected` and `actual` fields, pinned by `reject/type_mismatch` (D401). A diagnostic raised in a module that is not the operand names it under its own root (`toolchain-lib`, `project-src`, `project-lib`) by the manifest's rule (D427). a scalar mismatch at a name or a literal carries the conversion as a `maybe` fix over the expression's span (D444). an unknown value name within two edits of a name in scope names it and carries it as a `maybe` fix (D445), a member a module does not export names the module, the member and the nearest export at the member's token (D447), and a field an aggregate does not declare names the type, the field and the nearest field (D448); an unknown type name sits on its token and names the nearest type in scope -- a declared type or a builtin scalar -- as a `maybe` fix (D485; it was a location-free `name resolution failed`); the conversion fix reaches a whole value -- a call, a field read, an index, a group -- wrapped as one (D491; `reject/type_mismatch_call`), an arithmetic expression still offering none. An instance asked for by an instance relates the chain of requests, innermost first, up to three links (D543), where one site was named. `check-file --json` goes on past a failing function to the next and reports every function's first error in one run, the instances after them (D553), the plain output keeping to the first for neper-0 parity, where the first had ended the check; a cascade inside a body is still cut at its first failure
+> Every two-site E-SAFETY diagnostic carries its other site -- acquisition, move, deferred call, borrow, pointer, reset, mutation, thread start -- as a `related` span with a message saying which (D364), pinned by the reject corpus; stable codes throughout; the parser's nesting bound and error nodes are D341's; a forgotten cleanup carries its `defer <closer>(x)` and an untested acquisition its `if e != ok { ret e }` as `fixes` entries (D381, D382), and a rename is a plan with preconditions (D376); a type mismatch names both types in its message and carries them as `expected` and `actual` fields, pinned by `reject/type_mismatch` (D401). A diagnostic raised in a module that is not the operand names it under its own root (`toolchain-lib`, `project-src`, `project-lib`) by the manifest's rule (D427). a scalar mismatch at a name or a literal carries the conversion as a `maybe` fix over the expression's span (D444). an unknown value name within two edits of a name in scope names it and carries it as a `maybe` fix (D445), a member a module does not export names the module, the member and the nearest export at the member's token (D447), and a field an aggregate does not declare names the type, the field and the nearest field (D448); an unknown type name sits on its token and names the nearest type in scope -- a declared type or a builtin scalar -- as a `maybe` fix (D485; it was a location-free `name resolution failed`); the conversion fix reaches a whole value -- a call, a field read, an index, a group -- wrapped as one (D491; `reject/type_mismatch_call`), an arithmetic expression still offering none. An instance asked for by an instance relates the chain of requests, innermost first, up to three links (D543), where one site was named. `check-file --json` goes on past a failing function to the next and reports every function's first error in one run, the instances after them (D553), the plain output keeping to the first for neper-0 parity, where the first had ended the check; a cascade inside a body is still cut at its first failure. D950: the check goes on past a failing declaration too -- the resolver keeps each declaration's first name failure, the declarations rerun from a fresh checker without each declaration whose signature or type failed, and a use of one (a call, `q.f`, a type, a constant, a global) fails at its own token as `DeclarationFailed`, printed as a `note` whose `parent` is the root cause's error record, every other failure an error of its own (`reject/cascade.e`: four errors, three notes)
 
 ## Remaining work
 
 The queue's own gap clause, split into checklist lines. Each line is one session's target.
 
-- [ ] cascades across functions grouped under a primary cause, lossless recovery beyond D341
+- [ ] lossless recovery beyond D341
 
 ## Decisions to read first
 
@@ -67,6 +67,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 - `D491` — The conversion fix over a whole value (`docs/decisions.md:10551`)
 - `D543` — The instantiation chain (`docs/decisions.md:11294`)
 - `D553` — Every function's first error (`docs/decisions.md:11440`)
+- `D950` — A check goes on past a failing declaration, and its cascade is a note under it (`docs/decisions.md:19130`)
 
 ## Code anchors
 
@@ -75,6 +76,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `toolchain-lib`: `src/main.e`×2‡, `src/tool.e`×2‡, `tests/conformance/tools/explain.expected.jsonl`×2, `tests/conformance/reject/safety_copy_toolchain.e`×1, `tests/conformance/tools/manifest_unsafe.x64-linux.expected.jsonl`×1, `tests/conformance/tools/manifest_unsafe.x64-windows.expected.jsonl`×1
 - `project-src`: `tests/conformance/tools/plan_rename_type.x64-linux.expected.jsonl`×13, `tests/conformance/tools/plan_rename_type.x64-windows.expected.jsonl`×13, `tests/conformance/tools/nested_instance.x64-linux.expected.jsonl`×9, `tests/conformance/tools/nested_instance.x64-windows.expected.jsonl`×9, `tests/conformance/tools/uses_type.expected.jsonl`×9, `benchmarks/baseline/results/context-linux-d948.json`×8†, `benchmarks/baseline/results/context-windows-d948.json`×8†, `src/main.e`×8‡
 - `project-lib`: `src/main.e`×2‡, `src/tool.e`×2‡, `tests/conformance/reject/safety_pushed_twice.expected.jsonl`×2, `tests/conformance/reject/safety_codec_decode_resource.expected.jsonl`×1, `tests/conformance/reject/safety_codec_encode_resource.expected.jsonl`×1, `tests/conformance/reject/safety_copy_toolchain.e`×1, `tests/conformance/reject/safety_copy_toolchain.expected.jsonl`×1, `tests/conformance/tools/arena_layout.expected.jsonl`×1
+- `DeclarationFailed`: `src/check.e`×6‡, `src/main.e`×1‡
 
 ## Verification
 
