@@ -2610,9 +2610,10 @@ fn select_slice(builder: *nir.Builder, current: nir.Function, instruction: nir.I
 // the instructions, not their product.
 fn build_live_masks(builder: *nir.Builder, current: nir.Function, context: *FunctionContext, deltas: []usize, masks: []usize) -> err {
     let count = current.instruction_count
+    let delta_rows = deltas[0usize..count * 16usize]
     var at = 0usize
-    while at < count * 16usize {
-        deltas[at] = 0usize
+    while at < delta_rows.len {
+        delta_rows[at] = 0usize
         at += 1usize
     }
     var value = 0usize
@@ -2630,18 +2631,24 @@ fn build_live_masks(builder: *nir.Builder, current: nir.Function, context: *Func
         }
         value += 1usize
     }
+    // Each register's row and the masks as local views of one length (D932): the
+    // sweep's indexes are proven where each was checked, sixteen times an instruction.
+    let mask_row = masks[0usize..count]
     at = 0usize
-    while at < count {
-        masks[at] = 0usize
+    while at < mask_row.len {
+        mask_row[at] = 0usize
         at += 1usize
     }
     var register = 0usize
     while register < 16usize {
+        let row = deltas[register * count..register * count + count]
+        if row.len != mask_row.len { ret ok }
+        let bit = 1usize << register
         var live = 0usize
         at = 0usize
-        while at < count {
-            live = live +% deltas[register * count + at]
-            if live != 0usize { masks[at] = masks[at] | (1usize << register) }
+        while at < row.len {
+            live = live +% row[at]
+            if live != 0usize { mask_row[at] = mask_row[at] | bit }
             at += 1usize
         }
         register += 1usize
@@ -2679,8 +2686,10 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     var fill_at = current.first_instruction
     let fill_end = current.first_instruction + current.instruction_count
     while fill_at < fill_end {
-        let filled = builder.instructions[fill_at]
-        if filled.has_result && filled.result < definers.len { definers[filled.result] = fill_at + 1usize }
+        if builder.instructions[fill_at].has_result {
+            let filled_result = builder.instructions[fill_at].result
+            if filled_result < definers.len { definers[filled_result] = fill_at + 1usize }
+        }
         fill_at += 1usize
     }
     builder.definers = definers

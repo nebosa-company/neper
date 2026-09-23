@@ -18494,3 +18494,29 @@ sc500k's executable and every `.em` but the compiler's own hash and the CRC over
 are the same bytes, the compiler reproduces itself, and the 70 trap-fixture runs print
 what they did. Single-worker CPU time (`perf stat`, five runs each, same session):
 head 6,924 ms, this 6,680 (-3.5%), the M2 baseline 5,220 -- +28% where D930 left +32%.
+
+## D932 — Fields read where whole instructions were copied
+
+The next profile's costs were copies: a `let x = builder.instructions[i]` moves the
+whole instruction -- its type, site and path with it -- to read one or two fields,
+and the walks that do it visit every instruction of the program, some of them four
+times. The walks that ran over every instruction now read the fields they test:
+`promote_locals`' three use-list passes and its stack scan and redirect loop, the
+definer fill before selection, and the artifact writer's reference marking and string
+collection. `build_live_masks` sweeps each register's row and the masks as local views
+of one length, so the bounds proofs cover the sixteen passes per instruction.
+
+`protocol_declared` (D494) spells the protocol function's name and asks the checker's
+function index, where it walked every function of the program for each marked
+aggregate and each of the three protocols, twice per module: absent, the common
+answer, is the index's answer; a found one that is generic or an instance still takes
+the walk, so a duplicate name cannot change what it says.
+
+The same outputs as D931 (sc500k's image and every artifact but the compiler's hash
+and CRC, the compiler's own artifacts built from one source by both, 70 trap runs,
+the fixed point). What it saves is under this host's noise: seven runs each in one
+session put D931 at 6,745 ms (median, 6,540-6,944), this at 6,702 (6,501-6,908), the
+unchecked D931 at 6,264 and the M2 baseline at 5,344 (5,157-5,443) -- the baseline
+itself moving 5% run to run while other work shares the machine. The cuts that remain
+are of this size: each a function's share of a percent, found by the profile, too
+small for the wall or the task clock to confirm one at a time.

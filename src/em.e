@@ -1283,11 +1283,12 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
             if function_name_error != ok { ret function_name_error }
             var instruction_at = function.first_instruction
             while instruction_at < function.first_instruction + function.instruction_count {
-                let instruction = builder.instructions[instruction_at]
-                try collect_type_strings(c, g, table, instruction.ty)
-                if instruction.opcode == .Call || instruction.opcode == .FunctionAddress {
-                    if instruction.immediate >= builder.function_ref_count { ret InvalidArtifact }
-                    let reference = builder.function_refs[instruction.immediate]
+                try collect_type_strings(c, g, table, builder.instructions[instruction_at].ty)
+                let opcode = builder.instructions[instruction_at].opcode
+                let immediate = builder.instructions[instruction_at].immediate
+                if opcode == .Call || opcode == .FunctionAddress {
+                    if immediate >= builder.function_ref_count { ret InvalidArtifact }
+                    let reference = builder.function_refs[immediate]
                     if reference.module_index >= g.count { ret InvalidArtifact }
                     let (target_module, target_module_error) = intern(table, g.modules[reference.module_index].name)
                     if target_module_error != ok { ret target_module_error }
@@ -1299,9 +1300,9 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
                         if dependency_name_error != ok { ret dependency_name_error }
                     }
                 }
-                if instruction.opcode == .GlobalAddress {
-                    if instruction.immediate >= builder.global_count { ret InvalidArtifact }
-                    let global = builder.globals[instruction.immediate]
+                if opcode == .GlobalAddress {
+                    if immediate >= builder.global_count { ret InvalidArtifact }
+                    let global = builder.globals[immediate]
                     if global.module_index >= g.count { ret InvalidArtifact }
                     let (global_module, global_module_error) = intern(table, g.modules[global.module_index].name)
                     if global_module_error != ok { ret global_module_error }
@@ -1688,11 +1689,13 @@ fn mark_module_references(builder: *nir.Builder, c: *check.Checker, module_index
             let function = builder.functions[function_at]
             var instruction_at = function.first_instruction
             while instruction_at < function.first_instruction + function.instruction_count {
-                let instruction = builder.instructions[instruction_at]
-                if (instruction.opcode == .Call || instruction.opcode == .FunctionAddress) && instruction.immediate < builder.function_ref_count && builder.used_marks[instruction.immediate] == 0u8 {
-                    builder.used_marks[instruction.immediate] = 1u8
+                // The two fields read, not the instruction copied (D932).
+                let opcode = builder.instructions[instruction_at].opcode
+                let immediate = builder.instructions[instruction_at].immediate
+                if (opcode == .Call || opcode == .FunctionAddress) && immediate < builder.function_ref_count && builder.used_marks[immediate] == 0u8 {
+                    builder.used_marks[immediate] = 1u8
                     if builder.used_count < builder.used_list.len {
-                        builder.used_list[builder.used_count] = instruction.immediate
+                        builder.used_list[builder.used_count] = immediate
                         builder.used_count += 1usize
                     }
                 }
@@ -1946,6 +1949,16 @@ fn protocol_name_of(which: usize) -> str {
 // Whether the aggregate's module declares the protocol function.
 fn protocol_declared(c: *check.Checker, aggregate_index: usize, protocol: str) -> bool {
     let aggregate = c.aggregates[aggregate_index]
+    // The name spelled and asked of the index (D931): absent is the common answer, and
+    // was a walk of every function in the program per aggregate and protocol. A found
+    // one that is generic or an instance leaves it to the walk.
+    var spelled: [256]u8 = zero
+    let spelled_count = snake_protocol_name(aggregate.name, protocol, spelled[..])
+    if spelled_count != 0usize {
+        let (found_at, found) = check.find_function(c, aggregate.module_index, spelled[0usize..spelled_count])
+        if !found { ret false }
+        if found_at < c.signature_function_count && !c.functions[found_at].generic { ret true }
+    }
     var at = 0usize
     while at < c.signature_function_count {
         let function = c.functions[at]

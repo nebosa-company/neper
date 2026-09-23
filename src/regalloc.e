@@ -280,12 +280,14 @@ fn promote_locals(builder: *nir.Builder, function: nir.Function, scratch: []usiz
     }
     var total = 0usize
     var at = function.first_instruction
+    // The walks read an instruction's fields where they copied it whole (D932).
     while at < end {
-        let instruction = builder.instructions[at]
-        if instruction.first_operand + instruction.operand_count > builder.operand_count { ret InvalidIR }
+        let first_operand = builder.instructions[at].first_operand
+        let operand_count = builder.instructions[at].operand_count
+        if first_operand + operand_count > builder.operand_count { ret InvalidIR }
         var operand_at = 0usize
-        while operand_at < instruction.operand_count {
-            let value = builder.operands[instruction.first_operand + operand_at]
+        while operand_at < operand_count {
+            let value = builder.operands[first_operand + operand_at]
             if value >= values { ret InvalidIR }
             counts[value] += 1usize
             total += 1usize
@@ -308,10 +310,11 @@ fn promote_locals(builder: *nir.Builder, function: nir.Function, scratch: []usiz
     starts[values] = running
     at = function.first_instruction
     while at < end {
-        let instruction = builder.instructions[at]
+        let first_operand = builder.instructions[at].first_operand
+        let operand_count = builder.instructions[at].operand_count
         var operand_at = 0usize
-        while operand_at < instruction.operand_count {
-            let value = builder.operands[instruction.first_operand + operand_at]
+        while operand_at < operand_count {
+            let value = builder.operands[first_operand + operand_at]
             uses[counts[value]] = at
             counts[value] += 1usize
             operand_at += 1usize
@@ -320,6 +323,10 @@ fn promote_locals(builder: *nir.Builder, function: nir.Function, scratch: []usiz
     }
     at = function.first_instruction
     while at < end {
+        if builder.instructions[at].opcode != .Stack {
+            at += 1usize
+            continue
+        }
         let stack = builder.instructions[at]
         if stack.opcode == .Stack && stack.has_result && stack.immediate <= 1usize && register_kind(stack.ty) {
             var promotable = true
@@ -393,13 +400,14 @@ fn promote_locals(builder: *nir.Builder, function: nir.Function, scratch: []usiz
                         var redirect_at = scan + 1usize
                         var redefined = false
                         while redirect_at < block_end && !redefined {
-                            let user = builder.instructions[redirect_at]
+                            let user_first = builder.instructions[redirect_at].first_operand
+                            let user_count = builder.instructions[redirect_at].operand_count
                             var operand_index = 0usize
-                            while operand_index < user.operand_count {
-                                if builder.operands[user.first_operand + operand_index] == loaded.result { builder.operands[user.first_operand + operand_index] = stack.result }
+                            while operand_index < user_count {
+                                if builder.operands[user_first + operand_index] == loaded.result { builder.operands[user_first + operand_index] = stack.result }
                                 operand_index += 1usize
                             }
-                            if user.has_result && user.result == stack.result { redefined = true }
+                            if builder.instructions[redirect_at].has_result && builder.instructions[redirect_at].result == stack.result { redefined = true }
                             redirect_at += 1usize
                         }
                     }
