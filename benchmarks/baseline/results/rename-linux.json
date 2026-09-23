@@ -1,0 +1,24 @@
+{
+ "schema": "neper-rename-budget",
+ "version": 1,
+ "host": "linux",
+ "margin": 0.25,
+ "cells": [
+  {
+   "workload": "sc500k",
+   "symbol": "m0250.job17",
+   "query_budget_ms": 3446.9,
+   "plan_budget_ms": 3424.4,
+   "apply_budget_ms": 1.2,
+   "check_budget_ms": 2029.6
+  },
+  {
+   "workload": "sc1m",
+   "symbol": "m0500.job5",
+   "query_budget_ms": 11244.5,
+   "plan_budget_ms": 10787.9,
+   "apply_budget_ms": 2.0,
+   "check_budget_ms": 4453.0
+  }
+ ]
+}

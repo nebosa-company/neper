@@ -1,0 +1,295 @@
+{
+ "schema": "neper-rename",
+ "version": 1,
+ "host": "linux",
+ "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+ "runs": 7,
+ "compiler": "/home/gaddl/nf/neper-c934b-linux",
+ "root": "/mnt/d/repos/neper",
+ "cells": [
+  {
+   "workload": "sc500k",
+   "symbol": "m0250.job17",
+   "to": "renamed_job17",
+   "runs": [
+    {
+     "query": 2912.5592510000047,
+     "plan": 2722.4275909999988,
+     "apply": 0.9240189999957238,
+     "check": 1623.7094320000053,
+     "uses": 5,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 2755.2639529999965,
+     "plan": 2769.1053750000024,
+     "apply": 5.565218000000982,
+     "check": 1701.319663999996,
+     "uses": 5,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 2925.349976999996,
+     "plan": 2739.537989000013,
+     "apply": 1.1835009999998647,
+     "check": 1666.9566389999914,
+     "uses": 5,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 2727.8078859999937,
+     "plan": 2804.213906000001,
+     "apply": 4.97292600000776,
+     "check": 1725.2057620000016,
+     "uses": 5,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 2812.4209810000025,
+     "plan": 2843.090598999993,
+     "apply": 1.0060249999952475,
+     "check": 1623.2680509999966,
+     "uses": 5,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 2757.450841000008,
+     "plan": 2546.578576999991,
+     "apply": 0.9247380000090288,
+     "check": 1438.964220999992,
+     "uses": 5,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 2499.4770680000047,
+     "plan": 2663.8745999999996,
+     "apply": 0.8727069999991954,
+     "check": 1539.3649690000047,
+     "uses": 5,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    }
+   ],
+   "query_ms_p50": 2757.5,
+   "query_ms_p95": 2925.3,
+   "plan_ms_p50": 2739.5,
+   "plan_ms_p95": 2843.1,
+   "apply_ms_p50": 1.0,
+   "apply_ms_p95": 5.6,
+   "check_ms_p50": 1623.7,
+   "check_ms_p95": 1725.2
+  },
+  {
+   "workload": "sc1m",
+   "symbol": "m0500.job5",
+   "to": "renamed_job5",
+   "runs": [
+    {
+     "query": 8570.519485999996,
+     "plan": 8108.1780380000055,
+     "apply": 1.5992610000239438,
+     "check": 3702.9651210000056,
+     "uses": 9,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 8995.603420999998,
+     "plan": 8910.585169000002,
+     "apply": 1.4386869999896135,
+     "check": 3579.1157590000184,
+     "uses": 9,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 9160.888515999972,
+     "plan": 8753.316679000021,
+     "apply": 1.7765660000463868,
+     "check": 3524.7347179999906,
+     "uses": 9,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 8934.957910000037,
+     "plan": 8630.26883499998,
+     "apply": 1.7297009999879265,
+     "check": 3383.864674999984,
+     "uses": 9,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 8997.20138700002,
+     "plan": 8625.448176999953,
+     "apply": 1.375709999990704,
+     "check": 3562.391361999971,
+     "uses": 9,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 8412.76890300003,
+     "plan": 8468.998388999978,
+     "apply": 1.3384260000179893,
+     "check": 3516.4061869999728,
+     "uses": 9,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    },
+    {
+     "query": 18074.800858000002,
+     "plan": 16343.714364999982,
+     "apply": 1.8657470000107423,
+     "check": 5436.709364000024,
+     "uses": 9,
+     "files_changed": 3,
+     "guards": {
+      "query": true,
+      "plan": true,
+      "apply": true,
+      "check": true,
+      "complete": true,
+      "same_output": true,
+      "unrelated": true,
+      "only_planned": true
+     }
+    }
+   ],
+   "query_ms_p50": 8995.6,
+   "query_ms_p95": 18074.8,
+   "plan_ms_p50": 8630.3,
+   "plan_ms_p95": 16343.7,
+   "apply_ms_p50": 1.6,
+   "apply_ms_p95": 1.9,
+   "check_ms_p50": 3562.4,
+   "check_ms_p95": 5436.7
+  }
+ ],
+ "guard_failures": 0,
+ "breaches": 0
+}

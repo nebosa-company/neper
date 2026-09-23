@@ -18820,3 +18820,40 @@ sides at both densities; all 63 `ui_*` fixtures pass on Windows and Linux.
 Left for the rows that need them: a label centred when a parent stretches the
 button (a region lays its content out at the start, which every pressable shares),
 the ripple, and the ring taking the label's colour rather than the primary one.
+
+## D941 — H25's rename workflow, frozen with an absolute budget
+
+The second pending H25 workflow. M2 had no rename tool (`plan-rename-file` is D376), so
+H25 asks for the workload and an absolute budget to be frozen before any candidate is
+tuned against them, and `benchmarks/baseline/rename.py` does that. The workload: in
+sc500k and sc1m, the middle module's most used function (`m0250.job17`, 5 uses in 3
+files; `m0500.job5`, 9 uses in 3 files) renamed to `renamed_<name>` from inside the
+project, the way an agent would run it. Each run starts from a fresh copy of the
+sources and times the four steps: query (`uses-file`), plan (`plan-rename-file`),
+apply (`apply-plan`) and check (a build of the renamed copy). The guards run every
+time:
+
+- H17 completeness: the new name has exactly the old name's uses, the old name has
+  none left, and the renamed program prints the original's value.
+- Unrelated diff: only files the plan names changed, and putting the old name back
+  where the new one stands reproduces the original bytes.
+
+Seven runs after a discarded one, both hosts, the D934 compiler: every guard held in
+every run. Medians (`results/rename-{windows,linux}-d941.json`):
+
+| workload | host | query | plan | apply | check |
+|---|---|---|---|---|---|
+| sc500k | Windows | 2,780 ms | 2,766 | 11 | 1,576 |
+| sc500k | Linux | 2,758 | 2,740 | 1 | 1,624 |
+| sc1m | Windows | 8,919 | 8,632 | 12 | 2,995 |
+| sc1m | Linux | 8,996 | 8,630 | 2 | 3,562 |
+
+The budget pinned for each step is its median plus a quarter
+(`results/rename-<host>.json`). `--judge` holds a later revision's median to it. The
+p95 is reported but not pinned: seven runs make it one run's value, and the Linux sc1m
+query had an 18 s outlier.
+
+What the numbers say: query and plan each check the whole program, so they cost about
+a cold check of it: 5.6 µs a line at 500k lines, 8.9 µs at 1M. The rename itself,
+apply, is milliseconds. Move and delete have no planning tool yet; the H25
+report lists them as not implemented rather than measured.
