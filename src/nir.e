@@ -458,6 +458,7 @@ type Builder = struct {
     trap_data_count: usize,
     trap_data_strings: []usize,
     trap_data_refs: []usize,
+    trap_data_hashes: []usize,
     trap_stub_count: usize,
     trap_stub_paths: []usize,
     trap_stub_messages: []usize,
@@ -477,6 +478,8 @@ type Builder = struct {
     // and its edges were deduplicated by walking every reference of the program.
     used_list: []usize,
     used_count: usize,
+    // Whether `used_list` holds every used reference of `used_marks_module`, sorted (D930).
+    used_complete: bool,
     // The imports in name order (D319), built when the linker first asks.
     import_order: [1024]usize,
     import_order_count: usize,
@@ -771,6 +774,7 @@ fn compact_references(builder: *Builder) -> err {
     builder.function_ref_count = moved_to
     builder.imports_ordered = false
     builder.used_marks_valid = false
+    builder.used_complete = false
     // The references moved, so the name index over them is rebuilt from nothing the
     // next time one is asked for (D306).
     if lookup.attached(&builder.ref_names) { try lookup.attach(&builder.ref_names, builder.ref_names.entries) }
@@ -803,6 +807,23 @@ fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions:
     builder.next_value = 0usize
     builder.function_active = false
     builder.block_active = false
+    // What a builder holds past the pools (D927, D930) starts empty: a worker's builder
+    // lives in arena memory, which a debug build fills rather than zeroes.
+    builder.used_complete = false
+    builder.used_count = 0usize
+    builder.trap_text = builder.trap_text[0usize..0usize]
+    builder.trap_data_strings = builder.trap_data_strings[0usize..0usize]
+    builder.trap_data_refs = builder.trap_data_refs[0usize..0usize]
+    builder.trap_data_hashes = builder.trap_data_hashes[0usize..0usize]
+    builder.trap_stub_paths = builder.trap_stub_paths[0usize..0usize]
+    builder.trap_stub_messages = builder.trap_stub_messages[0usize..0usize]
+    builder.trap_stub_refs = builder.trap_stub_refs[0usize..0usize]
+    builder.trap_stub_moves = builder.trap_stub_moves[0usize..0usize]
+    builder.trap_text_count = 0usize
+    builder.trap_data_module = 0usize
+    builder.trap_data_count = 0usize
+    builder.trap_stub_count = 0usize
+    builder.trap_name_count = 0usize
     ret ok
 }
 

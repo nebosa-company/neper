@@ -18420,3 +18420,45 @@ mode byte 3 in the artifact header beside 0 debug, 1 release and 2 release unche
 checked debug build's artifacts for it; its artifacts live under `.neper/debug/`, and
 `manifest-em` reports it as mode `debug` with `checks: "off"`. `trap_arithmetic`
 built so runs the shift on and still traps `7 / 0`, on both hosts.
+
+## D930 — The timed gate is paired, and it found the M2.5 compiler slower
+
+C033's timed half judged one measurement against the baseline's recorded numbers,
+which a machine under other load moves by more than the budgets. `benchmarks/baseline/
+paired.py` builds a fixed workload with the baseline compiler and the candidate in
+alternation, cold then warm, run after run, and judges the median of the per-run ratio
+against the same budgets (cold +10%, warm +15%): whatever else the host is doing lands
+on both. Against the `m2-baseline` compiler, rebuilt from its tag to its recorded
+image byte for byte, the head compiler cold-built sc500k and sc1m 1.35-1.54 times as
+long (warm 1.10-1.30), on a host at 40% load -- `results/paired-windows-d930.json`.
+
+Where it came from, by a paired bisect of the 579 commits after the tag on sc500k's
+lower-and-codegen phase: no step to D354, D355 -- a release build keeps its checks, so
+the compiler itself runs checked -- about 1.15-1.25, and the rest spread over the
+analyses since. Single-worker CPU time under `perf stat -e task-clock` on Linux is
+stable to half a percent where the wall is not, and is the instrument: head 7,339 ms,
+the same compiler unchecked 6,640, the baseline 5,226.
+
+Profiles of the three found costs to cut without changing any output:
+
+- The artifact writer walked every aggregate of the program for each `q.x` a module
+  spells; the checker's index now says first whether the module declares an aggregate
+  of that name, and most `q.x` are calls and fields.
+- It walked every function reference a worker's builder held -- every module's, since
+  the builder keeps them -- to clear marks and to find one module's dependency edges,
+  three times per module: the module's used references are now a sorted list the
+  walks visit, in the same order, and only the last module's marks are cleared.
+- It stripped each module's comments twice for two digests of the same canonical text.
+- D927's trap records were written out and hashed at every check site to be found;
+  the pieces are hashed in place and compared, and a record is written only when new.
+- The lexer's space, comment and digit loops and the byte writers of `binary` and
+  `emit_x64` index a local view of their slice, so the existing bounds proofs cover
+  them where `s.source[s.off]` and `buffer.bytes[buffer.count]` through a pointer were
+  checked at every byte.
+
+The images and artifacts are the same bytes (sc500k's executable, and every `.em` but
+the compiler's own hash in it), the compiler reproduces itself, and the trap fixtures
+print what they did. The head compiler's CPU time falls 6.0% (7,339 -> 6,900 ms), and
+checked against unchecked is +9.7% (6,900 against 6,292), inside H03's +10%. Against
+the M2 baseline it is +32% where it was +40%: the analyses M2.5 added are real work,
+and the residue is a budget decision H25 requires before C033 closes.

@@ -1655,13 +1655,31 @@ fn mark_module_references(builder: *nir.Builder, c: *check.Checker, module_index
         ret ok
     }
     if builder.used_marks.len < builder.function_ref_count || builder.edge_marks.len < builder.function_ref_count || builder.inlined_marks.len < builder.inlined_count { ret InvalidArtifact }
+    // The last module's marks are the only ones set when its list was whole (D930): a
+    // worker's builder holds every reference of every module it lowered, and clearing
+    // all of them for each module was quadratic in its modules.
     var clear_at = 0usize
-    while clear_at < builder.function_ref_count {
-        builder.used_marks[clear_at] = 0u8
-        builder.edge_marks[clear_at] = 0u8
-        clear_at += 1usize
+    if builder.used_complete {
+        while clear_at < builder.used_count {
+            builder.used_marks[builder.used_list[clear_at]] = 0u8
+            builder.edge_marks[builder.used_list[clear_at]] = 0u8
+            clear_at += 1usize
+        }
+    } else {
+        // Every mark, past the count too: a compaction renumbers the references, and a
+        // mark left beyond the new count would belong to whichever reference lands there.
+        while clear_at < builder.used_marks.len {
+            builder.used_marks[clear_at] = 0u8
+            clear_at += 1usize
+        }
+        clear_at = 0usize
+        while clear_at < builder.edge_marks.len {
+            builder.edge_marks[clear_at] = 0u8
+            clear_at += 1usize
+        }
     }
     builder.used_count = 0usize
+    builder.used_complete = false
     let (nir_first, nir_end) = span_of(c, span_nir(), module_index)
     var function_at = nir_first
     while function_at < nir_end {
@@ -1682,9 +1700,15 @@ fn mark_module_references(builder: *nir.Builder, c: *check.Checker, module_index
         }
         function_at += 1usize
     }
+    // The used references in index order, the order every walk below made (D930).
+    if builder.used_count < builder.used_list.len {
+        sort_indexes(builder.used_list[0usize..builder.used_count])
+        builder.used_complete = true
+    }
     try lookup.attach(&builder.edge_index, builder.edge_index.entries)
-    var at = 0usize
-    while at < builder.function_ref_count {
+    var walk = 0usize
+    while walk < reference_walk_count(builder) {
+        let at = reference_walk_at(builder, walk)
         if builder.used_marks[at] == 1u8 && builder.function_refs[at].module_index != module_index {
             let reference = builder.function_refs[at]
             let (dependency_name, records_dependency) = dependency_reference_name(reference.name)
@@ -1696,10 +1720,10 @@ fn mark_module_references(builder: *nir.Builder, c: *check.Checker, module_index
                 }
             }
         }
-        at += 1usize
+        walk += 1usize
     }
     let (inlined_first, inlined_end) = span_of(c, span_inlined(), module_index)
-    at = inlined_first
+    var at = inlined_first
     while at < inlined_end {
         builder.inlined_marks[at] = 0u8
         let entry = builder.inlined[at]
@@ -1797,8 +1821,9 @@ fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     if module_index >= g.count { ret }
     var changed = false
     // The signatures the module references.
-    var at = 0usize
-    while at < builder.function_ref_count {
+    var walk = 0usize
+    while walk < reference_walk_count(builder) {
+        let at = reference_walk_at(builder, walk)
         let (dependency_name, records_dependency) = module_dependency_reference(builder, module_index, at)
         if records_dependency && builder.function_refs[at].module_index < g.count {
             let (checked_function, found_function) = find_checked_function(c, builder.function_refs[at].module_index, dependency_name)
@@ -1816,7 +1841,7 @@ fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
                 }
             }
         }
-        at += 1usize
+        walk += 1usize
     }
     // The aggregates the module spells as `q.Name`.
     let module = g.modules[module_index]
@@ -1829,7 +1854,11 @@ fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
             var import_at = module.first_import
             let import_end = module.first_import + module.import_count
             while import_at < import_end {
-                if same(g.imports[import_at].qualifier, qualifier) {
+                // The index says whether the module declares an aggregate of the name at
+                // all (D930): most `q.x` are calls and fields, and the walk of every
+                // aggregate below was a sixth of the artifact writer's time.
+                let (declared_at, declared) = check.find_aggregate(c, g.imports[import_at].target, name)
+                if declared && same(g.imports[import_at].qualifier, qualifier) {
                     let imported = g.imports[import_at].target
                     var aggregate_at = 0usize
                     while aggregate_at < c.aggregate_count && aggregate_at < marks.len {
@@ -1968,6 +1997,38 @@ fn foreign_constant_used_by_module(c: *check.Checker, module_index: usize, targe
     ret (false, ok)
 }
 
+// The references a module's walks visit (D930): its used ones in index order when the
+// list of them was whole, else every reference the builder holds.
+fn reference_walk_count(builder: *nir.Builder) -> usize {
+    if builder.used_complete { ret builder.used_count }
+    ret builder.function_ref_count
+}
+
+fn reference_walk_at(builder: *nir.Builder, walk: usize) -> usize {
+    if builder.used_complete { ret builder.used_list[walk] }
+    ret walk
+}
+
+// Indexes in ascending order, in place: a Shell sort, since a module uses a few
+// hundred references and the list arrives in the order its instructions name them.
+fn sort_indexes(values: []usize) {
+    var gap = values.len / 2usize
+    while gap > 0usize {
+        var at = gap
+        while at < values.len {
+            let held = values[at]
+            var slot = at
+            while slot >= gap && values[slot - gap] > held {
+                values[slot] = values[slot - gap]
+                slot = slot - gap
+            }
+            values[slot] = held
+            at += 1usize
+        }
+        gap = gap / 2usize
+    }
+}
+
 fn module_dependency_reference(builder: *nir.Builder, module_index: usize, at: usize) -> (str, bool) {
     if at >= builder.function_ref_count || !builder.used_marks_valid || builder.used_marks_module != module_index || builder.edge_marks[at] == 0u8 { ret ("", false) }
     let (dependency_name, records_dependency) = dependency_reference_name(builder.function_refs[at].name)
@@ -2009,11 +2070,11 @@ fn template_dependency_count(c: *check.Checker, module_index: usize) -> usize {
 
 fn dependency_count(builder: *nir.Builder, c: *check.Checker, module_index: usize) -> usize {
     var count = 0usize
-    var at = 0usize
-    while at < builder.function_ref_count {
-        let (dependency_name, records_dependency) = module_dependency_reference(builder, module_index, at)
+    var walk = 0usize
+    while walk < reference_walk_count(builder) {
+        let (dependency_name, records_dependency) = module_dependency_reference(builder, module_index, reference_walk_at(builder, walk))
         if records_dependency { count += 1usize }
-        at += 1usize
+        walk += 1usize
     }
     ret count + inlined_dependency_count(builder, c, module_index)
 }
@@ -2101,8 +2162,9 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     var aggregate_marks: [8192]u8 = zero
     mark_aggregate_uses(c, g, builder, module_index, aggregate_marks[..])
     try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks[..]) + lookup_dependency_count(c, aggregate_marks[..]))
-    var at = 0usize
-    while at < builder.function_ref_count {
+    var walk = 0usize
+    while walk < reference_walk_count(builder) {
+        let at = reference_walk_at(builder, walk)
         let reference = builder.function_refs[at]
         let (dependency_name, records_dependency) = module_dependency_reference(builder, module_index, at)
         if records_dependency {
@@ -2121,10 +2183,10 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
             try binary.little_u32(output, target_name)
             try binary.little_u64(output, hash)
         }
-        at += 1usize
+        walk += 1usize
     }
     let (inlined_first, inlined_end) = span_of(c, span_inlined(), module_index)
-    at = inlined_first
+    var at = inlined_first
     while at < inlined_end {
         if first_inlined(builder, module_index, at) {
             let entry = builder.inlined[at]
@@ -2643,6 +2705,27 @@ fn canonical_sha256_hex(a: *mem.Arena, text: str) -> (str, err) {
     ret (kept[0usize..64usize], ok)
 }
 
+// The canonical text's 64-bit key and its SHA-256 as hex, from one stripping of the
+// comments (D930): the writer asked for each apart, and stripped every module twice.
+fn canonical_digests(a: *mem.Arena, text: str) -> (usize, str, err) {
+    let checkpoint = mem.mark(a)
+    let (stripped, strip_error) = comment_blind_text(a, text)
+    if strip_error != ok { ret (0usize, "", strip_error) }
+    let (hash, hash_error) = artifact_hash.xxhash64(stripped)
+    if hash_error != ok { ret (0usize, "", hash_error) }
+    var hex: [64]u8 = zero
+    artifact_hash.sha256_hex_into(stripped, hex[..])
+    mem.reset(a, checkpoint)
+    let (kept, kept_error) = mem.alloc[u8](a, 64usize)
+    if kept_error != ok { ret (0usize, "", kept_error) }
+    var at = 0usize
+    while at < 64usize {
+        kept[at] = hex[at]
+        at += 1usize
+    }
+    ret (hash, kept[0usize..64usize], ok)
+}
+
 fn identifier_byte(byte_here: u8) -> bool {
     let named = (byte_here >= 97u8 && byte_here <= 122u8) || (byte_here >= 65u8 && byte_here <= 90u8) || (byte_here >= 48u8 && byte_here <= 57u8) || byte_here == 95u8
     ret named
@@ -2650,7 +2733,8 @@ fn identifier_byte(byte_here: u8) -> bool {
 
 fn write_debug(c: *check.Checker, g: *graph.Graph, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     if module_index >= g.count { ret InvalidArtifact }
-    let (source_hash, source_hash_error) = source_text_hash(c.arena, g.modules[module_index].text)
+    // Both digests of the canonical text from one stripping of it (D930).
+    let (source_hash, canonical, source_hash_error) = canonical_digests(c.arena, g.modules[module_index].text)
     if source_hash_error != ok { ret source_hash_error }
     let (path_index, path_error) = string_index(table, g.modules[module_index].spelling)
     if path_error != ok { ret path_error }
@@ -2680,8 +2764,6 @@ fn write_debug(c: *check.Checker, g: *graph.Graph, module_index: usize, table: *
     try binary.text(output, interface_sha)
     // The canonical text's digest (D507, H15), after them: a hit on the 64-bit key
     // whose bytes are not the artifact's is verified by it.
-    let (canonical, canonical_error) = canonical_sha256_hex(c.arena, g.modules[module_index].text)
-    if canonical_error != ok { ret canonical_error }
     ret binary.text(output, canonical)
 }
 

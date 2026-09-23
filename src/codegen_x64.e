@@ -2316,26 +2316,76 @@ fn trap_shared_stub(builder: *nir.Builder, current: nir.Function, path: []const 
     ret (stub_ref, true, ok)
 }
 
+
+// Whether a record -- a 16-bit length and the bytes -- holds exactly these pieces.
+fn record_holds(record: str, pieces: []const TrapPiece, length: usize) -> bool {
+    if record.len != 2usize + length || usize(record[0usize]) + usize(record[1usize]) * 256usize != length { ret false }
+    var cursor = 2usize
+    var at = 0usize
+    while at < pieces.len {
+        if pieces[at].is_single {
+            if usize(record[cursor]) != pieces[at].single { ret false }
+            cursor += 1usize
+        } else {
+            let text = pieces[at].text
+            var index = 0usize
+            while index < text.len {
+                if record[cursor] != text[index] { ret false }
+                cursor += 1usize
+                index += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret true
+}
+
 // The data function holding one record (D927), the module's own when it has it.
 fn trap_data_function(builder: *nir.Builder, current: nir.Function, pieces: []const TrapPiece) -> (usize, bool, err) {
     let length = trap_pieces_length(pieces)
     if length >= 65536usize { ret (0usize, false, ok) }
-    // The record, written where the next one would go; kept only when it is new.
+    // The record's hash over its pieces first (D930): every site of a module asks, and
+    // most ask for a record it already has, which is then compared piece by piece and
+    // not written again.
+    var hash = 14695981039346656037usize
+    hash = (hash ^ (length % 256usize)) *% 1099511628211usize
+    hash = (hash ^ (length / 256usize)) *% 1099511628211usize
+    var at = 0usize
+    while at < pieces.len {
+        if pieces[at].is_single {
+            hash = (hash ^ pieces[at].single) *% 1099511628211usize
+        } else {
+            let text = pieces[at].text
+            var index = 0usize
+            while index < text.len {
+                hash = (hash ^ usize(text[index])) *% 1099511628211usize
+                index += 1usize
+            }
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < builder.trap_data_count {
+        if builder.trap_data_hashes[at] == hash && record_holds(builder.strings[builder.trap_data_strings[at]].spelling, pieces, length) { ret (builder.trap_data_refs[at], true, ok) }
+        at += 1usize
+    }
+    // A new record, written after the last.
     let start = builder.trap_text_count
     if start + 2usize + length + 32usize > builder.trap_text.len { ret (0usize, false, ok) }
     var cursor = start
     builder.trap_text[cursor] = u8(length % 256usize)
     builder.trap_text[cursor + 1usize] = u8(length / 256usize)
     cursor += 2usize
-    var at = 0usize
+    at = 0usize
     while at < pieces.len {
         if pieces[at].is_single {
             builder.trap_text[cursor] = u8(pieces[at].single)
             cursor += 1usize
         } else {
+            let text = pieces[at].text
             var index = 0usize
-            while index < pieces[at].text.len {
-                builder.trap_text[cursor] = pieces[at].text[index]
+            while index < text.len {
+                builder.trap_text[cursor] = text[index]
                 cursor += 1usize
                 index += 1usize
             }
@@ -2343,11 +2393,6 @@ fn trap_data_function(builder: *nir.Builder, current: nir.Function, pieces: []co
         at += 1usize
     }
     let record = builder.trap_text[start..cursor]
-    at = 0usize
-    while at < builder.trap_data_count {
-        if check.same(builder.strings[builder.trap_data_strings[at]].spelling, record) { ret (builder.trap_data_refs[at], true, ok) }
-        at += 1usize
-    }
     if builder.trap_data_count == builder.trap_data_strings.len || builder.string_count == builder.strings.len { ret (0usize, false, ok) }
     builder.trap_text_count = cursor
     let (string_index, string_error) = nir.intern_string(builder, record)
@@ -2356,6 +2401,7 @@ fn trap_data_function(builder: *nir.Builder, current: nir.Function, pieces: []co
     if function_error != ok || !made { ret (0usize, false, function_error) }
     builder.trap_data_strings[builder.trap_data_count] = string_index
     builder.trap_data_refs[builder.trap_data_count] = reference
+    builder.trap_data_hashes[builder.trap_data_count] = hash
     builder.trap_data_count += 1usize
     ret (reference, true, ok)
 }

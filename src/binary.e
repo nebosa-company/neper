@@ -21,11 +21,16 @@ fn init(buffer: *Buffer, bytes: []u8) -> err {
     ret ok
 }
 
+// The writers index a local view of the buffer (D930): the capacity test on it is what
+// proves the store, where `buffer.bytes[buffer.count]` through the pointer was checked
+// at every byte the compiler writes.
 fn byte(buffer: *Buffer, value: usize) -> err {
     if value > 255usize { ret InvalidByte }
-    if buffer.count == buffer.bytes.len { ret Capacity }
-    buffer.bytes[buffer.count] = u8(value)
-    buffer.count += 1usize
+    let bytes = buffer.bytes
+    let at = buffer.count
+    if at >= bytes.len { ret Capacity }
+    bytes[at] = u8(value)
+    buffer.count = at + 1usize
     ret ok
 }
 
@@ -90,26 +95,29 @@ fn little_u16(buffer: *Buffer, value: usize) -> err {
 
 fn little_u32(buffer: *Buffer, value: usize) -> err {
     if value > 4294967295usize { ret InvalidEncoding }
-    if 4usize > buffer.bytes.len - buffer.count { ret Capacity }
+    let bytes = buffer.bytes
     let at = buffer.count
-    buffer.bytes[at] = u8(value & 255usize)
-    buffer.bytes[at + 1usize] = u8((value >> 8usize) & 255usize)
-    buffer.bytes[at + 2usize] = u8((value >> 16usize) & 255usize)
-    buffer.bytes[at + 3usize] = u8((value >> 24usize) & 255usize)
+    if at + 4usize > bytes.len { ret Capacity }
+    bytes[at] = u8(value & 255usize)
+    bytes[at + 1usize] = u8((value >> 8usize) & 255usize)
+    bytes[at + 2usize] = u8((value >> 16usize) & 255usize)
+    bytes[at + 3usize] = u8((value >> 24usize) & 255usize)
     buffer.count = at + 4usize
     ret ok
 }
 
 fn little_u64(buffer: *Buffer, value: usize) -> err {
-    if 8usize > buffer.bytes.len - buffer.count { ret Capacity }
+    let bytes = buffer.bytes
     let at = buffer.count
-    var remaining = value
-    var offset = 0usize
-    while offset < 8usize {
-        buffer.bytes[at + offset] = u8(remaining & 255usize)
-        remaining = remaining >> 8usize
-        offset += 1usize
-    }
+    if at + 8usize > bytes.len { ret Capacity }
+    bytes[at] = u8(value & 255usize)
+    bytes[at + 1usize] = u8((value >> 8usize) & 255usize)
+    bytes[at + 2usize] = u8((value >> 16usize) & 255usize)
+    bytes[at + 3usize] = u8((value >> 24usize) & 255usize)
+    bytes[at + 4usize] = u8((value >> 32usize) & 255usize)
+    bytes[at + 5usize] = u8((value >> 40usize) & 255usize)
+    bytes[at + 6usize] = u8((value >> 48usize) & 255usize)
+    bytes[at + 7usize] = u8((value >> 56usize) & 255usize)
     buffer.count = at + 8usize
     ret ok
 }

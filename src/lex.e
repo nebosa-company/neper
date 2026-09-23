@@ -630,6 +630,33 @@ fn has3(s: *Scanner, a: u8, b: u8, c: u8) -> bool {
     ret s.off + 2usize < s.source.len && s.source[s.off] == a && s.source[s.off + 1usize] == b && s.source[s.off + 2usize] == c
 }
 
+// The runs `next` skips (D930), over the source as a local slice: the loop's own test
+// of the length is what proves each index, where `s.source[s.off]` through the scanner
+// was checked at every byte.
+fn skip_spaces(source: str, from: usize) -> usize {
+    var off = from
+    while off < source.len && source[off] == 32u8 { off += 1usize }
+    ret off
+}
+
+fn skip_digits(source: str, from: usize) -> usize {
+    var off = from
+    while off < source.len && (is_digit(source[off]) || source[off] == 95u8) { off += 1usize }
+    ret off
+}
+
+fn skip_base_digits(source: str, from: usize, base: u8) -> usize {
+    var off = from
+    while off < source.len && (is_base_digit(source[off], base) || source[off] == 95u8) { off += 1usize }
+    ret off
+}
+
+fn skip_alnum(source: str, from: usize) -> usize {
+    var off = from
+    while off < source.len && (is_alnum(source[off]) || source[off] == 95u8) { off += 1usize }
+    ret off
+}
+
 fn take(s: *Scanner, n: usize) {
     s.off += n
 }
@@ -746,34 +773,39 @@ fn next(s: *Scanner) -> Token {
     }
     while s.off < s.source.len {
         if !s.in_comment {
-            let c = s.source[s.off]
-            if c == 32u8 {
-                take(s, 1usize)
-                continue
-            }
+            // Spaces over a local view of the source (D930), where the bounds proof sees
+            // the length the index is compared with.
+            s.off = skip_spaces(s.source, s.off)
+            if s.off == s.source.len { continue }
             if !has(s, 47u8, 47u8) { break }
             take(s, 2usize)
             s.in_comment = true
         }
-        while s.off < s.source.len && s.source[s.off] != 10u8 && s.source[s.off] != 13u8 {
-            let comment_byte = s.source[s.off]
+        let comment_source = s.source
+        var comment_off = s.off
+        while comment_off < comment_source.len {
+            let comment_byte = comment_source[comment_off]
+            if comment_byte == 10u8 || comment_byte == 13u8 { break }
             if comment_byte == 0u8 || (comment_byte < 32u8 && comment_byte != 9u8) {
+                s.off = comment_off
                 let invalid_start = s.off
                 take(s, 1usize)
                 ret token(s, .Invalid, invalid_start)
             }
             if comment_byte >= 128u8 {
-                let width = utf8_width(s.source, s.off)
+                let width = utf8_width(comment_source, comment_off)
                 if width == 0usize {
+                    s.off = comment_off
                     let invalid_start = s.off
-                        take_invalid_utf8(s)
+                    take_invalid_utf8(s)
                     ret token(s, .Invalid, invalid_start)
                 }
-                take_scalar(s, width)
+                comment_off += width
             } else {
-                take(s, 1usize)
+                comment_off += 1usize
             }
         }
+        s.off = comment_off
         if s.off < s.source.len {
             s.in_comment = false
         } else {
@@ -880,36 +912,28 @@ fn next(s: *Scanner) -> Token {
             var base = 2u8
             if prefix == 111u8 { base = 8u8 }
             if prefix == 120u8 { base = 16u8 }
-            while s.off < s.source.len && (is_base_digit(s.source[s.off], base) || s.source[s.off] == 95u8) {
-                take(s, 1usize)
-            }
+            s.off = skip_base_digits(s.source, s.off, base)
             let digits_end = s.off
-            while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) {
-                take(s, 1usize)
-            }
+            s.off = skip_alnum(s.source, s.off)
             if !digits_are_valid(s.source, digits_start, digits_end, base) || !integer_suffix_is_valid(s.source, digits_end, s.off) {
                 ret token(s, .Invalid, start)
             }
             ret token(s, kind, start)
         }
         let integer_start = start
-        while s.off < s.source.len && (is_digit(s.source[s.off]) || s.source[s.off] == 95u8) {
-            take(s, 1usize)
-        }
+        s.off = skip_digits(s.source, s.off)
         let integer_end = s.off
         if !digits_are_valid(s.source, integer_start, integer_end, 10u8) {
-            while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
+            s.off = skip_alnum(s.source, s.off)
             ret token(s, .Invalid, start)
         }
         if s.off + 1usize < s.source.len && s.source[s.off] == 46u8 && s.source[s.off + 1usize] != 46u8 && is_digit(s.source[s.off + 1usize]) {
             kind = .Float
             take(s, 1usize)
             let fraction_start = s.off
-            while s.off < s.source.len && (is_digit(s.source[s.off]) || s.source[s.off] == 95u8) {
-                take(s, 1usize)
-            }
+            s.off = skip_digits(s.source, s.off)
             if !digits_are_valid(s.source, fraction_start, s.off, 10u8) {
-                while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
+                s.off = skip_alnum(s.source, s.off)
                 ret token(s, .Invalid, start)
             }
         }
@@ -918,16 +942,14 @@ fn next(s: *Scanner) -> Token {
             take(s, 1usize)
             if s.off < s.source.len && (s.source[s.off] == 43u8 || s.source[s.off] == 45u8) { take(s, 1usize) }
             let exponent_start = s.off
-            while s.off < s.source.len && (is_digit(s.source[s.off]) || s.source[s.off] == 95u8) {
-                take(s, 1usize)
-            }
+            s.off = skip_digits(s.source, s.off)
             if !digits_are_valid(s.source, exponent_start, s.off, 10u8) {
-                while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
+                s.off = skip_alnum(s.source, s.off)
                 ret token(s, .Invalid, start)
             }
         }
         let suffix_start = s.off
-        while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
+        s.off = skip_alnum(s.source, s.off)
         if kind == .Float {
             if !float_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start) }
         } else {
