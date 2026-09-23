@@ -2224,6 +2224,11 @@ os_gaps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$os_gaps_written" = 'executable written' ]
 chmod +x "$test_build/os-gaps-selfhost"
 "$test_build/os-gaps-selfhost"
+# `e.fmt.opus`: SILK-only packets decoded bit-exactly against libopus across every bandwidth, frame size and channel count, hybrid and CELT-only within 1.53e-5 of it, the framing refusals, and the unsupported rates named (D928).
+fmt_opus_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_opus/src/main.e" "$repo" x64 linux "$test_build/fmt-opus-selfhost")
+[ "$fmt_opus_written" = 'executable written' ]
+chmod +x "$test_build/fmt-opus-selfhost"
+"$test_build/fmt-opus-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

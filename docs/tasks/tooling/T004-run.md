@@ -40,7 +40,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `chmod`: `benchmarks/scale/profile_own.sh`×2, `benchmarks/differential/bootstrap.py`×1, `benchmarks/differential/differential.py`×1, `benchmarks/metamorphic/metamorphic.py`×1, `benchmarks/scale/profile.sh`×1, `benchmarks/scale/profile_check.sh`×1, `benchmarks/scale/profile_edit.sh`×1, `benchmarks/scale/profile_warm.sh`×1
 - `os.set_mode`: `src/main.e`×2‡, `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×2, `lib/e/fs.e`×1
-- `e.os`: `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×150, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×133, `src/resolve.e`×36†, `lib/e/ui/app.e`×12†, `lib/e/os.linux.e`×9‡, `src/check.e`×8‡, `lib/e/fs.e`×7, `lib/e/os.windows.e`×7‡
+- `e.os`: `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×164, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×145, `src/resolve.e`×36†, `lib/e/ui/app.e`×12†, `lib/e/os.linux.e`×9‡, `src/check.e`×8‡, `lib/e/fs.e`×7, `lib/e/os.windows.e`×7‡
 
 ## Existing fixtures
 

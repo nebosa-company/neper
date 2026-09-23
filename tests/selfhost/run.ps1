@@ -2502,6 +2502,12 @@ $osGapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $osGapsWritten -ne 'executable written') { throw 'os_gaps emission failed' }
 & $osGapsPath
 if ($LASTEXITCODE -ne 0) { throw "a os_gaps check failed: exit $LASTEXITCODE" }
+# `e.fmt.opus`: SILK-only packets decoded bit-exactly against libopus across every bandwidth, frame size and channel count, hybrid and CELT-only within 1.53e-5 of it, the framing refusals, and the unsupported rates named (D928).
+$fmtOpusPath = Join-Path $testBuild 'fmt-opus-selfhost.exe'
+$fmtOpusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_opus\src\main.e') $repo 'x64' 'windows' $fmtOpusPath
+if ($LASTEXITCODE -ne 0 -or $fmtOpusWritten -ne 'executable written') { throw 'fmt_opus emission failed' }
+& $fmtOpusPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_opus check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

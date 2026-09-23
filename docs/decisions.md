@@ -18369,3 +18369,40 @@ against the unchecked 7,963,136: +4.6%, inside H03's +5% (D922 had it at +30.5%)
 Its cold wall, on a host near its memory limit, measured +9.9% against the D923
 pair's +10.6% in the same interleaved runs, and +5.5% on a quiet host (D922); it is
 inside +10% either way.
+## D928 — Opus decodes, and the algos plan is answered in full
+
+`e.fmt.opus` was the one planned function the stream had left unwritten,
+and it is the library's largest module at four thousand lines. It was
+built as three pieces against libopus as the oracle (PyAV's encoder makes
+packets of a chosen mode: `lowdelay` at 48 kHz is CELT-only, `voip` at
+16 kHz is SILK, `voip` at 48 kHz and 24 kbps is hybrid): the CELT layer
+with packet framing and the range decoder, the SILK layer written in
+parallel against a range-decoder API fixed in advance so the two merged
+mechanically, and then the resampler, the hybrid path and the dispatch.
+
+The SILK layer is **bit-exact** against libopus -- the reference decodes
+SILK in integers in both its float and fixed builds, so exactness is the
+honest standard there, and the fixture asserts equality, not a tolerance,
+across every bandwidth, frame size and channel count including LBRR and
+mid-only stereo packets. The decoder-side resampler is integer too, so
+SILK-only packets stay bit-exact through all fifteen rate pairs. CELT and
+hybrid land within 1.53e-5 of full scale, half a sixteen-bit step: the
+residual is float accumulation order, not a decode difference, as a
+float-domain comparison against the reference's own unquantised output
+confirmed.
+
+Three lessons. Hybrid is where a CELT decoder's bugs surface: three
+constructs that are no-ops when a frame starts at band 0 -- the
+`lowband_offset` update, the special hybrid folding of band 17 and the
+fold-range guard -- are load-bearing when it starts at band 17, and the
+CELT-only numbers did not move when they were fixed. The reference's
+resampler is not just a filter: `opus_decode` lags the raw SILK frames by
+the delay matrix's 4, 9 or 12 samples even when the rates are equal, and
+the hybrid sum is wrong without it. And a verification that removes a
+variable is worth arranging: decoding SILK at its own internal rate took
+the resampler out of the comparison entirely, which is how a bit-exact
+claim became provable rather than merely likely.
+
+With this row every one of `docs/algos.md`'s 1,217 selected algorithms
+names a library function that exists.
+

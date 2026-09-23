@@ -332,7 +332,8 @@
     "e.concurrent.reclaim",
     "e.text.segment",
     "e.thread.pool",
-    "e.net.http.auth"
+    "e.net.http.auth",
+    "e.fmt.opus"
    ]
   },
   {
@@ -4395,6 +4396,18 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.crypto.hash"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.opus",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.mem"
    ],
    "blocked_by": []
   },

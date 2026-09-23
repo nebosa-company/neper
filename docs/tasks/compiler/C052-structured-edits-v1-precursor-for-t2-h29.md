@@ -51,7 +51,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `plan-replace-expression-file`: `src/main.e`×4‡, `scripts/render_card.py`×1, `src/tool.e`×1‡
 - `change-signature`: `src/main.e`×5‡, `tests/conformance/tools/plan_signature.x64-linux.expected.jsonl`×4, `tests/conformance/tools/plan_signature.x64-windows.expected.jsonl`×4, `tests/conformance/tools/plan_signature_remove.x64-linux.expected.jsonl`×4, `tests/conformance/tools/plan_signature_remove.x64-windows.expected.jsonl`×4, `src/tool.e`×3‡, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/render_card.py`×1
 - `plan-change-signature-file`: `src/main.e`×4‡, `scripts/render_card.py`×1, `src/tool.e`×1‡
-- `.tmp`: `src/main.e`×6‡
+- `.tmp`: `lib/e/fmt/opus.e`×27‡, `src/main.e`×6‡
 
 ## Verification
 

@@ -1,0 +1,8 @@
+{
+ "decision": "D928",
+ "modules": [
+  {"name": "e.fmt.opus", "deps": ["e.math", "e.mem"], "fixture": "fmt_opus", "anchor": "### `e.fmt.png`\n",
+   "note": "An Opus decoder (RFC 6716): packet framing with the section 3.4 refusals, the range\ndecoder, the SILK layer in integer arithmetic (gains, NLSF codebooks, LTP, the shell\nexcitation coder, synthesis), the CELT layer (band energies, PVQ, spreading, stereo,\nanti-collapse, the inverse MDCT and the comb filter), the decoder-side resampler with\nthe reference's delay matrix, and `decode`, which dispatches on the packet's table of\ncontents and answers interleaved float samples. Loss concealment, redundancy frames and\ncross-faded mode transitions (section 4.5) answer `Unsupported`.",
+   "comment": "`e.fmt.opus`: SILK-only packets decoded bit-exactly against libopus across every bandwidth, frame size and channel count, hybrid and CELT-only within 1.53e-5 of it, the framing refusals, and the unsupported rates named"}
+ ]
+}

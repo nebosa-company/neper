@@ -11999,6 +11999,307 @@ HTML templates track text, attribute, URI, CSS and script contexts and apply the
 matching escaping rules. Ambiguous or unsafe context transitions fail at parse time;
 trusted raw insertion is intentionally absent from version 1.
 
+### `e.fmt.opus`
+
+```neper
+type Mode = enum u8 { Silk, Hybrid, Celt }
+type Bandwidth = enum u8 { Narrow, Medium, Wide, SuperWide, Full }
+type Frame = struct { data: []const u8 }
+type Range = struct { data: []const u8, pos: usize, value: u32, rng: u32, rem: i32, ext: u32, end_pos: usize, end_window: u32, end_bits: i32, total_bits: i32 }
+type Ctx = struct { r: *Range, seed: u32, remaining: i32, spread: u32, intensity: usize, y: []i32, u: []u32, tmp: []f32 }
+type Alloc = struct { coded_bands: usize, balance: i32, intensity: usize, dual_stereo: bool }
+type Decoder = struct { sdec: []Silk, rsmp: []Resamp, pcm16: []i16, ch16: []i16, rs16: []i16, silk_fs: i64, silk_ch: i64, silk_rate: i64, lp_mode: i64, channels: usize, band_start: usize, band_end: usize, rng: u32, pf_period: i32, pf_period_old: i32, pf_gain: f32, pf_gain_old: f32, pf_tapset: usize, pf_tapset_old: usize, dmem: []f32, old_band_e: []f32, old_log_e: []f32, old_log_e2: []f32, bg_log_e: []f32, preemph_mem: []f32, xs: []f32, freq: []f32, norm: []f32, lbscratch: []f32, xbuf: []f32, band_e: []f32, window: []f32, tw_cos: []f32, tw_sin: []f32, phi_cos: []f32, phi_sin: []f32, gi: []f32, f2: []f32, zr: []f32, zi: []f32, htmp: []f32, caps: []i32, offsets: []i32, tf_res: []i32, bits1: []i32, bits2: []i32, thresh: []i32, trim_off: []i32, alloc_b: []i32, fine: []i32, prio: []i32, iy: []i32, uu: []u32, masks: []u8 }
+type SilkChan = struct { out_buf: [480]i64, s_lpc_q14: [16]i64, prev_nlsf_q15: [16]i64, exc_q14: [320]i64, last_gain_index: i64, prev_gain_q16: i64, lag_prev: i64, ec_prev_type: i64, ec_prev_lag: i64, first_frame: i64, frames_decoded: i64, vad: [3]i64, lbrr_flag: i64, lbrr: [3]i64 }
+type SilkIdx = struct { signal_type: i64, quant_offset: i64, gains: [4]i64, nlsf: [17]i64, interp_q2: i64, lag_index: i64, contour_index: i64, per_index: i64, ltp_index: [4]i64, ltp_scale_index: i64, seed: i64 }
+type Silk = struct { fs_khz: i64, channels: i64, lpc_order: i64, subfr_length: i64, ltp_mem_length: i64, ch: [2]SilkChan, s_mid: [2]i64, s_side: [2]i64, pred_prev_q13: [2]i64, pred_q13: [2]i64, prev_only_mid: i64, idx: SilkIdx, pulses: [320]i64, sum_pulses: [20]i64, n_lshifts: [20]i64, gain_q16: [4]i64, a0_q12: [16]i64, a1_q12: [16]i64, pitch_l: [4]i64, ltp_q14: [20]i64, ltp_scale_q14: i64, interp: i64, nlsf_q15: [16]i64, nlsf0_q15: [16]i64, res_q10: [16]i64, ec_ix: [16]i64, pred_q8: [16]i64, s_ltp: [320]i64, s_ltp_q15: [640]i64, s_lpc: [96]i64, res: [80]i64, xq: [320]i64, tmp0: [326]i64, tmp1: [326]i64 }
+type Resamp = struct { kind: i64, in_khz: i64, out_khz: i64, batch: i64, inv_q16: i64, fir_order: i64, fir_fracs: i64, coefs: i64, in_delay: i64, s_iir: [6]i64, s_fir: [36]i64, dbuf: [48]i64 }
+error Invalid
+error Malformed
+error Unsupported
+error TooSmall
+const MAX_FRAME_BYTES: usize = 1275usize
+const MAX_FRAMES: usize = 48usize
+const EC_SYM_BITS: u32 = 8u32
+const EC_CODE_BITS: u32 = 32u32
+const EC_SYM_MAX: u32 = 255u32
+const EC_CODE_TOP: u32 = 2147483648u32
+const EC_CODE_BOT: u32 = 8388608u32
+const EC_CODE_EXTRA: u32 = 7u32
+const EC_UINT_BITS: u32 = 8u32
+const EC_WINDOW_SIZE: i32 = 32i32
+const BITRES: i32 = 3i32
+const NBANDS: usize = 21usize
+const OVERLAP: usize = 120usize
+const SHORT_SIZE: usize = 120usize
+const MAXLM: i32 = 3i32
+const DECODE_BUFFER: usize = 2048usize
+const MAX_PERIOD: usize = 1024usize
+const COMB_MIN_PERIOD: i32 = 15i32
+const MAX_FINE_BITS: i32 = 8i32
+const FINE_OFFSET: i32 = 21i32
+const QTHETA_OFFSET: i32 = 4i32
+const QTHETA_TWOPHASE: i32 = 16i32
+const SPREAD_NONE: u32 = 0u32
+const SPREAD_NORMAL: u32 = 2u32
+const SPREAD_AGGRESSIVE: u32 = 3u32
+const NBALLOC: usize = 11usize
+const RS_FIR0: usize = 18usize
+const RS_FIR1: usize = 24usize
+const RS_FIR12: usize = 8usize
+
+fn packet_mode(toc: u8) -> Mode
+fn packet_bandwidth(toc: u8) -> Bandwidth
+fn packet_frame_size_us(toc: u8) -> u32
+fn packet_channels(toc: u8) -> u32
+fn frame_length(packet: []const u8, from: usize) -> (usize, usize, err)
+fn packet_parse(packet: []const u8, frames: []Frame) -> (usize, err)
+fn packet_samples(packet: []const u8, rate: u32) -> (usize, err)
+fn ilog32(v: u32) -> i32
+fn read_byte(r: *Range) -> u32
+fn read_byte_from_end(r: *Range) -> u32
+fn normalize(r: *Range)
+fn range_init(data: []const u8) -> Range
+fn range_decode(r: *Range, ft: u32) -> u32
+fn range_decode_bin(r: *Range, bits: u32) -> u32
+fn range_update(r: *Range, fl: u32, fh: u32, ft: u32)
+fn range_decode_bit_logp(r: *Range, logp: u32) -> u32
+fn range_decode_icdf(r: *Range, icdf: []const u8, ftb: u32) -> u32
+fn range_decode_raw_bits(r: *Range, bits: u32) -> u32
+fn range_decode_uint(r: *Range, ft_in: u32) -> u32
+fn range_tell(r: *const Range) -> i32
+fn range_tell_frac(r: *const Range) -> i32
+fn t_ebands() -> str
+fn t_band_alloc() -> str
+fn t_logn() -> str
+fn t_cache_index() -> str
+fn t_cache_bits() -> str
+fn t_cache_caps() -> str
+fn t_e_prob() -> str
+fn t_emeans() -> str
+fn t_tf_select() -> str
+fn t_trim_icdf() -> str
+fn t_spread_icdf() -> str
+fn t_tapset_icdf() -> str
+fn t_small_icdf() -> str
+fn t_log2_frac() -> str
+fn t_ordery() -> str
+fn t_bit_interleave() -> str
+fn t_bit_deinterleave() -> str
+fn t_exp2_8() -> str
+fn t_q15() -> str
+fn eband(i: usize) -> usize
+fn logn(i: usize) -> i32
+fn cache_at(lm: usize, band: usize) -> usize
+fn cache_bits(i: usize) -> i32
+fn band_alloc(row: usize, j: usize) -> i32
+fn e_prob(lm: i32, intra: u32, i: usize) -> i32
+fn emeans(i: usize) -> f32
+fn tf_select_at(lm: i32, k: usize) -> i32
+fn log2_frac(i: usize) -> i32
+fn exp2_8(i: usize) -> i32
+fn q15(i: usize) -> f32
+fn pred_coef(lm: i32) -> f32
+fn beta_coef(lm: i32) -> f32
+fn beta_intra() -> f32
+fn comb_gain(tapset: usize, k: usize) -> f32
+fn imin(a: i32, b: i32) -> i32
+fn imax(a: i32, b: i32) -> i32
+fn cdiv(a: i32, b: i32) -> i32
+fn sign16(v: i32) -> i32
+fn frac_mul16(a: i32, b: i32) -> i32
+fn bitexact_cos(x: i32) -> i32
+fn bitexact_log2tan(isin: i32, icos: i32) -> i32
+fn isqrt32(v: u32) -> u32
+fn lcg_rand(seed: u32) -> u32
+fn get_pulses(i: i32) -> i32
+fn bits2pulses(band: usize, lm: i32, bits_in: i32) -> i32
+fn pulses2bits(band: usize, lm: i32, pulses: i32) -> i32
+fn laplace_decode(r: *Range, fs_in: i32, decay: i32) -> i32
+fn urow_next(u: []u32, ln: usize, first: u32)
+fn urow_prev(u: []u32, n: usize, first: u32)
+fn ncwrs_urow(n: usize, k: usize, u: []u32) -> u32
+fn cwrsi(n: usize, k_in: usize, index: u32, y: []i32, u: []u32)
+fn decode_pulses(y: []i32, n: usize, k: usize, r: *Range, u: []u32)
+fn exp_rotation1(x: []f32, length: usize, stride: usize, c: f32, s: f32)
+fn exp_rotation(x: []f32, length_in: usize, direction: i32, stride: usize, k: usize, spread: u32)
+fn extract_collapse_mask(y: []const i32, n: usize, blocks: usize) -> u32
+fn renormalise_vector(x: []f32, n: usize, gain: f32)
+fn alg_unquant(x: []f32, n: usize, k: usize, spread: u32, blocks: usize, r: *Range, gain: f32, y: []i32, u: []u32) -> u32
+fn haar1(x: []f32, n0_in: usize, stride: usize)
+fn deinterleave_hadamard(x: []f32, tmp: []f32, n0: usize, stride: usize, hadamard: bool)
+fn interleave_hadamard(x: []f32, tmp: []f32, n0: usize, stride: usize, hadamard: bool)
+fn compute_qn(n: i32, b: i32, offset: i32, pulse_cap: i32, stereo: bool) -> i32
+fn stereo_merge(x: []f32, y: []f32, mid: f32, n: usize)
+fn quant_band(ctx: *Ctx, band: usize, x: []f32, yv: []f32, n_in: usize, b_in: i32, blocks_in: i32, tf_change_in: i32, lowband_in: []f32, lowband_out: []f32, lm_in: i32, level: i32, gain: f32, lowband_scratch: []f32, fill_in: u32) -> u32
+fn init_caps(caps: []i32, lm: i32, c: usize)
+fn interp_bits2pulses(d: *Decoder, r: *Range, start: usize, bend: usize, skip_start_in: usize, total_in: i32, skip_rsv: i32, intensity_rsv_in: i32, dual_rsv_in: i32, c: usize, lm: i32) -> Alloc
+fn compute_allocation(d: *Decoder, r: *Range, start: usize, bend: usize, total_in: i32, alloc_trim: i32, c: usize, lm: i32) -> Alloc
+fn unquant_coarse_energy(d: *Decoder, r: *Range, start: usize, bend: usize, intra: u32, c: usize, lm: i32)
+fn unquant_fine_energy(d: *Decoder, r: *Range, start: usize, bend: usize, c: usize)
+fn unquant_energy_finalise(d: *Decoder, r: *Range, start: usize, bend: usize, bits_left_in: i32, c: usize)
+fn anti_collapse(d: *Decoder, xs: []f32, lm: i32, c: usize, size: usize, start: usize, bend: usize)
+fn imdct_backward(d: *Decoder, spec: []const f32, stride: usize, out: []f32, n_mdct: usize, overlap: usize)
+fn comb_filter(buf: []f32, at: usize, t0_in: i32, t1_in: i32, n: usize, g0: f32, g1: f32, tap0: usize, tap1: usize, window: []const f32, overlap: usize)
+fn quant_all_bands(d: *Decoder, r: *Range, start: usize, bend: usize, c: usize, short_blocks: i32, spread: u32, dual_stereo_in: bool, intensity: usize, total_bits: i32, balance_in: i32, lm: i32, coded_bands: usize)
+fn fslice(a: *mem.Arena, n: usize) -> ([]f32, err)
+fn islice(a: *mem.Arena, n: usize) -> ([]i32, err)
+fn decoder(a: *mem.Arena, channels: usize) -> (Decoder, err)
+fn band_end_for(bw: Bandwidth) -> usize
+fn decode_frame(d: *Decoder, data: []const u8, out: []f32, lm: i32, c: usize) -> err
+fn celt_decode_frame(d: *Decoder, r: *Range, out: []f32, lm: i32, c: usize) -> err
+fn decode(d: *Decoder, packet: []const u8, rate: u32, out: []f32) -> (usize, err)
+fn decode_lp(d: *Decoder, frames: []Frame, count: usize, toc: u8, rate: u32, out: []f32) -> (usize, err)
+fn silk_w32(x: i64) -> i64
+fn silk_w16(x: i64) -> i64
+fn silk_sat16(x: i64) -> i64
+fn silk_sat32(x: i64) -> i64
+fn silk_abs(x: i64) -> i64
+fn silk_min(a: i64, b: i64) -> i64
+fn silk_limit(a: i64, lo: i64, hi: i64) -> i64
+fn silk_rrsh(a: i64, s: u32) -> i64
+fn silk_smulwb(a: i64, b: i64) -> i64
+fn silk_smlawb(a: i64, b: i64, c: i64) -> i64
+fn silk_smulww(a: i64, b: i64) -> i64
+fn silk_smlaww(a: i64, b: i64, c: i64) -> i64
+fn silk_smmul(a: i64, b: i64) -> i64
+fn silk_clz32(x: i64) -> u32
+fn silk_lshift_sat32(a: i64, s: u32) -> i64
+fn silk_inv32_varq(b32: i64, qres: u32) -> i64
+fn silk_div32_varq(a32: i64, b32: i64, qres: u32) -> i64
+fn silk_log2lin(x: i64) -> i64
+fn silk_tb(t: str, i: usize) -> i64
+fn silk_t8(t: str, i: usize) -> i64
+fn silk_t16(t: str, i: usize) -> i64
+fn silk_cb1_q8(order: i64) -> str
+fn silk_cb1_wght(order: i64) -> str
+fn silk_cb1_icdf(order: i64) -> str
+fn silk_nlsf_pred(order: i64) -> str
+fn silk_nlsf_sel(order: i64) -> str
+fn silk_cb2_icdf(order: i64) -> str
+fn silk_nlsf_dmin(order: i64) -> str
+fn silk_nlsf_step(order: i64) -> i64
+fn silk_nlsf2a_perm(order: i64, i: usize) -> usize
+fn silk_lag_low_icdf(fs_khz: i64) -> str
+fn silk_contour_icdf(fs_khz: i64, nb_subfr: i64) -> str
+fn silk_lag_cb(fs_khz: i64, nb_subfr: i64) -> str
+fn silk_lag_cb_size(fs_khz: i64, nb_subfr: i64) -> usize
+fn silk_ltp_icdf(per: i64) -> str
+fn silk_ltp_vq(per: i64) -> str
+fn silk_shell_tbl(level: i64) -> str
+fn silk_qoffset(sig: i64, qo: i64) -> i64
+fn silk_reset_chan(d: *Silk, ci: usize)
+fn silk_init(d: *Silk, fs_khz: i64, channels: i64) -> err
+fn silk_samples(fs_khz: i64, payload_ms: i64) -> usize
+fn silk_nlsf_unpack(d: *Silk, cb1: i64, order: i64)
+fn silk_decode_indices(d: *Silk, r: *Range, ci: usize, nb_subfr: i64, fidx: usize, lbrr: i64, cond: i64)
+fn silk_shell_split(r: *Range, p: i64, level: i64) -> i64
+fn silk_shell_decode(d: *Silk, r: *Range, off: usize, total: i64)
+fn silk_decode_pulses(d: *Silk, r: *Range, nb_subfr: i64)
+fn silk_gains_dequant(d: *Silk, ci: usize, conditional: i64, nb_subfr: i64)
+fn silk_nlsf_residual_dequant(d: *Silk, order: i64, step: i64)
+fn silk_nlsf_stabilize(d: *Silk, order: i64)
+fn silk_nlsf_decode(d: *Silk, order: i64)
+fn silk_bwexpander32(ar: []i64, dd: usize, chirp0: i64)
+fn silk_inv_pred_gain(a12: []const i64, dd: usize) -> i64
+fn silk_lpc_fit(aout: []i64, ain: []i64, shift: u32, dd: usize)
+fn silk_find_poly(outp: []i64, cl: []const i64, start: usize, dd: usize)
+fn silk_nlsf2a(nlsf: []const i64, a12: []i64, order: i64)
+fn silk_decode_pitch(d: *Silk, nb_subfr: i64)
+fn silk_decode_parameters(d: *Silk, ci: usize, nb_subfr: i64, cond: i64)
+fn silk_lpc_analysis(d: *Silk, ci: usize, out_off: usize, in_shift: usize, length: usize, ou: usize, use_a1: i64)
+fn silk_decode_core(d: *Silk, ci: usize, nb_subfr: i64)
+fn silk_decode_frame(d: *Silk, r: *Range, ci: usize, nb_subfr: i64, fidx: usize, cond: i64)
+fn silk_stereo_level(a: i64, b: i64) -> i64
+fn silk_stereo_pred(d: *Silk, r: *Range)
+fn silk_stereo_ms_to_lr(d: *Silk, pred0: i64, pred1: i64, n: usize)
+fn silk_decode(d: *Silk, r: *Range, payload_ms: i64, out: []i16) -> (usize, err)
+fn rs_up2c(i: usize) -> i64
+fn rs_frac(row: usize, k: usize) -> i64
+fn rs_coef(r: *Resamp, i: usize) -> i64
+fn rs_rate_id(hz: i64) -> i64
+fn resamp_init(r: *Resamp, fs_in_hz: i64, fs_out_hz: i64) -> err
+fn rs_up2(r: *Resamp, src: []const i64, off: usize, n: usize, dst: []i64, dat: usize)
+fn rs_ar2(r: *Resamp, src: []const i64, off: usize, n: usize, dst: []i64, dat: usize)
+fn rs_iir_fir(r: *Resamp, src: []const i64, off_in: usize, n_in: usize, dst: []i64, dat: usize) -> usize
+fn rs_down_fir(r: *Resamp, src: []const i64, off_in: usize, n_in: usize, dst: []i64, dat: usize) -> usize
+fn resamp_process(r: *Resamp, src: []const i16, out: []i16) -> (usize, err)
+fn silk_tbl_nlsf_cb1_nb_q8() -> str
+fn silk_tbl_nlsf_cb1_wb_q8() -> str
+fn silk_tbl_nlsf_cb1_icdf_nb() -> str
+fn silk_tbl_nlsf_cb1_icdf_wb() -> str
+fn silk_tbl_nlsf_pred_nb_q8() -> str
+fn silk_tbl_nlsf_pred_wb_q8() -> str
+fn silk_tbl_nlsf_sel_nb() -> str
+fn silk_tbl_nlsf_sel_wb() -> str
+fn silk_tbl_nlsf_cb2_icdf_nb() -> str
+fn silk_tbl_nlsf_cb2_icdf_wb() -> str
+fn silk_tbl_nlsf_ext_icdf() -> str
+fn silk_tbl_nlsf_interp_icdf() -> str
+fn silk_tbl_ltp_per_icdf() -> str
+fn silk_tbl_ltp_icdf0() -> str
+fn silk_tbl_ltp_icdf1() -> str
+fn silk_tbl_ltp_icdf2() -> str
+fn silk_tbl_ltp_scale_icdf() -> str
+fn silk_tbl_pitch_lag_icdf() -> str
+fn silk_tbl_pitch_delta_icdf() -> str
+fn silk_tbl_contour_icdf_nb_4() -> str
+fn silk_tbl_contour_icdf_nb_2() -> str
+fn silk_tbl_contour_icdf_4() -> str
+fn silk_tbl_contour_icdf_2() -> str
+fn silk_tbl_gain_icdf() -> str
+fn silk_tbl_delta_gain_icdf() -> str
+fn silk_tbl_rate_level_icdf() -> str
+fn silk_tbl_pulses_icdf() -> str
+fn silk_tbl_shell0() -> str
+fn silk_tbl_shell1() -> str
+fn silk_tbl_shell2() -> str
+fn silk_tbl_shell3() -> str
+fn silk_tbl_shell_off() -> str
+fn silk_tbl_sign_icdf() -> str
+fn silk_tbl_lsb_icdf() -> str
+fn silk_tbl_type_offset_vad_icdf() -> str
+fn silk_tbl_type_offset_no_vad_icdf() -> str
+fn silk_tbl_uniform3_icdf() -> str
+fn silk_tbl_uniform4_icdf() -> str
+fn silk_tbl_uniform5_icdf() -> str
+fn silk_tbl_uniform6_icdf() -> str
+fn silk_tbl_uniform8_icdf() -> str
+fn silk_tbl_stereo_joint_icdf() -> str
+fn silk_tbl_stereo_mid_icdf() -> str
+fn silk_tbl_lbrr2_icdf() -> str
+fn silk_tbl_lbrr3_icdf() -> str
+fn silk_tbl_order10() -> str
+fn silk_tbl_order16() -> str
+fn silk_tbl_ltp_vq0() -> str
+fn silk_tbl_ltp_vq1() -> str
+fn silk_tbl_ltp_vq2() -> str
+fn silk_tbl_lag_cb_nb_4() -> str
+fn silk_tbl_lag_cb_nb_2() -> str
+fn silk_tbl_lag_cb_4() -> str
+fn silk_tbl_lag_cb_2() -> str
+fn silk_tbl_nlsf_wght_nb_q9() -> str
+fn silk_tbl_nlsf_wght_wb_q9() -> str
+fn silk_tbl_nlsf_dmin_nb_q15() -> str
+fn silk_tbl_nlsf_dmin_wb_q15() -> str
+fn silk_tbl_ltp_scale_q14() -> str
+fn silk_tbl_stereo_quant_q13() -> str
+fn silk_tbl_cos_q12() -> str
+fn silk_tbl_rs_up2() -> str
+fn silk_tbl_rs_frac12() -> str
+fn silk_tbl_rs_3_4() -> str
+fn silk_tbl_rs_2_3() -> str
+fn silk_tbl_rs_1_2() -> str
+fn silk_tbl_rs_delay() -> str
+```
+
+An Opus decoder (RFC 6716): packet framing with the section 3.4 refusals, the range
+decoder, the SILK layer in integer arithmetic (gains, NLSF codebooks, LTP, the shell
+excitation coder, synthesis), the CELT layer (band energies, PVQ, spreading, stereo,
+anti-collapse, the inverse MDCT and the comb filter), the decoder-side resampler with
+the reference's delay matrix, and `decode`, which dispatches on the packet's table of
+contents and answers interleaved float samples. Loss concealment, redundancy frames and
+cross-faded mode transitions (section 4.5) answer `Unsupported`.
+
 ### `e.fmt.png`
 
 ```neper
