@@ -18617,3 +18617,47 @@ are `results/paired-windows-d934.json` and `results/paired-linux-d934.json`.
 The paired cells are the build-time budgets. The rest of the table -- peak resident
 set, arena high-water, image, the compiler's own cell -- is what `measure.py` and
 `gate.py` (D366) judge, and is measured next.
+
+## D936 — The budget table after D935: what it names, and why none of it is a regression
+
+`measure.py` over all four workloads on both hosts with the D934 compiler, judged by
+`gate.py` (D366) against the stored baseline (`results/h25-windows-d936.json`,
+`results/h25-linux-d936.json`): 35 measures judged on Windows with 12 named, 40 on
+Linux with 11. Every one of them falls in two groups, and this row is the decision
+H25 asks for on each.
+
+**Every deterministic measure of the fixed workloads passes.** Over sc500k, sc1m and
+sc2m in both modes and on both hosts the peak resident set is -2.8% to +2.8%, the
+arena high-water mark 73-81% below the baseline and the image 28-45% smaller. The
+Windows sc2m release cell, the baseline's first recorded debt (it failed at eight
+workers, `e.mem.Exhausted`), builds: 9.4 s cold, 2.35 GB of arena.
+
+**The build times are judged paired (D930, D935), not against stored numbers.** The
+stored baseline's times were taken months ago on this same host, and the host drifted:
+the baseline compiler itself, run the same day beside the candidate, took 1,556 ms for
+sc500k debug cold on Windows where 1,366 is stored (+14%), and 1,784 ms for sc500k
+release on Linux where 1,639 is (+9%). Against the stored numbers the candidate's cold
+cells read +8% to +41% -- sc500k release +41% on Linux in a run where the paired
+measurement the same hour read +1.2%. The paired gate's ratios (cold 1.004-1.097, warm
+0.827-1.043) are the verdict; the stored times stay as the record of M2, not as the
+bar.
+
+**The `compiler` cell is a different workload.** It builds the measured revision's own
+source, which is 67,865 lines where the baseline's was 48,391 (+40.2%). Per line,
+against the same host's baseline cell:
+
+| measure | Windows debug | Windows release | Linux debug | Linux release |
+|---|---|---|---|---|
+| cold time per line | -12% | -14% | -12% | -1% |
+| peak RSS per line | -9% | 0% | -8% | +1% |
+| image per line | -26% | +2% | -26% | +2% |
+
+The release image per line is the one figure above zero: a release build keeps its
+checks (D355), and M2's release image had none, so the +2% is those checks at a smaller
+cost per line than the debug build's were. Named here, not hidden in a wider budget, as
+the budgets require of what the retained checks add.
+
+No budget is exceeded by a change in what the compiler costs, so none is raised and
+none is re-pinned. Two rules follow for later rows: a timed cell is decided by a paired
+run against the baseline compiler; the compiler cell is read per line of the source it
+builds, since that source grows with every row.
