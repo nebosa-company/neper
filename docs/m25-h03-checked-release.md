@@ -51,9 +51,9 @@ Two, both visible in source and both inventoried:
   caller's, stated in a comment at the block, and nothing about the rest of the
   function or its callees changes. A checked caller does not sanitize an unchecked
   callee: what a `@nocheck` block computes is as trusted as the block.
-- `--unchecked` on a release build leaves the same rows out of the whole image. It
-  is not a mode: the manifest records it as `options.checks: "off"`, and a program
-  built so is one unsafe boundary.
+- `--unchecked` leaves the same rows out of the whole image, in a debug build as in
+  a release one (D929). The manifest records it as `options.checks: "off"`, and a
+  program built so is one unsafe boundary.
 
 `@unsafe` (H01) is the other boundary -- a function that touches a resource's bits
 -- and is inventoried beside them. The three are the whole of what "unsafe" means

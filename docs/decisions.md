@@ -18406,3 +18406,17 @@ claim became provable rather than merely likely.
 With this row every one of `docs/algos.md`'s 1,217 selected algorithms
 names a library function that exists.
 
+
+## D929 — `--unchecked` is a debug build's too
+
+`--unchecked` took effect only beside `--release`: in a debug build it was accepted
+and ignored, so `emit-executable F ... --unchecked` still trapped on a shift past the
+width. It now leaves every row of section 11's table but the always-on ones out of
+the whole image in either mode -- the debug-only arithmetic rows and the memory rows
+alike -- and keeps `divide`, `enum` and `unreachable`, which trap in every mode and
+which no flag removes. A debug build under it is a mode of its own, `DebugUnchecked`,
+mode byte 3 in the artifact header beside 0 debug, 1 release and 2 release unchecked
+(D369: a policy that changes the code is a mode), so a warm build never takes the
+checked debug build's artifacts for it; its artifacts live under `.neper/debug/`, and
+`manifest-em` reports it as mode `debug` with `checks: "off"`. `trap_arithmetic`
+built so runs the shift on and still traps `7 / 0`, on both hosts.

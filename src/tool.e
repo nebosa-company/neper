@@ -5963,7 +5963,7 @@ fn artifact_manifest_json(a: *mem.Arena, paths: []str, artifacts: [][]const u8) 
     let (root_name, root_name_error) = artifact_text(artifacts[0usize], root_index)
     if root_name_error != ok { ret root_name_error }
     let (mode, mode_error) = em.artifact_mode(artifacts[0usize])
-    if mode_error != ok || mode > 2usize { ret em.InvalidArtifact }
+    if mode_error != ok || mode > 3usize { ret em.InvalidArtifact }
     var capacity = 65536usize + paths.len * 512usize
     var scan = 0usize
     while scan < artifacts.len {
@@ -5985,7 +5985,7 @@ fn artifact_manifest_json(a: *mem.Arena, paths: []str, artifacts: [][]const u8) 
     try text(&out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3,\"target\":")
     try quoted(&out, target_name)
     try text(&out, ",\"mode\":\"")
-    if mode == 0usize { try text(&out, "debug") } else { try text(&out, "release") }
+    if mode == 0usize || mode == 3usize { try text(&out, "debug") } else { try text(&out, "release") }
     try text(&out, "\",\"root_module\":")
     try quoted(&out, root_name)
     try text(&out, ",\"inputs\":[],\"dependencies\":[],\"libraries\":[],\"assets\":[],\"artifacts\":[")
@@ -6019,7 +6019,7 @@ fn artifact_manifest_json(a: *mem.Arena, paths: []str, artifacts: [][]const u8) 
         at += 1usize
     }
     try text(&out, "],\"incremental\":[],\"options\":{\"checks\":\"")
-    if mode == 2usize { try text(&out, "off") } else { try text(&out, "retained") }
+    if mode == 2usize || mode == 3usize { try text(&out, "off") } else { try text(&out, "retained") }
     // No build was run, so no level was given: the baseline (D765).
     try text(&out, "\",\"cpu\":\"x64-v1\"},\"work\":{\"bodies_checked\":0,\"modules_lowered\":0,\"functions_lowered\":0,\"declarations_checked\":0}}")
     ret flush(&out)

@@ -3605,9 +3605,9 @@ is a normal condition.
 `unreachable` — out of a block, in every build mode: the block is an explicit
 unsafe operation, the one way to an unchecked index, dereference or payload read,
 and it appears in the manifest's `unsafe` inventory with its function and line.
-`--unchecked` on a release build does the same for the whole image, which the
-manifest records as `options.checks: "off"`; it is not the default of any mode,
-and a program built so is one unsafe boundary.
+`--unchecked` does the same for the whole image, in a debug build as in a release
+one, which the manifest records as `options.checks: "off"`; it is not the default of
+any mode, and a program built so is one unsafe boundary.
 
 ### Trap protocol
 
@@ -4071,7 +4071,8 @@ both as a module and as the Windows variant of `thing`.
 The file is little-endian regardless of target. Its fixed 32-byte header is: bytes
 `0..3` magic `NEPM`; `u16` format version; `u16` header size; `u32` target-triple
 string-table index; `u32` flags; `u8` build mode (0 debug, 1 release, 2 release
-`--unchecked` -- a policy that changes the code is a mode of its own, D369); three
+`--unchecked`, 3 debug `--unchecked` -- a policy that changes the code is a mode of
+its own, D369, D929); three
 reserved zero bytes; `u32`
 section count; `u32` section-directory offset; and `u32` whole-file CRC32C with that
 field zeroed. The directory has one 24-byte entry per section: `u32` kind, `u32`
@@ -4195,7 +4196,7 @@ There is no separate build system and no package manager.
 
 ```
 neper build <file.e> [--target ARCH-OS|spv|ptx] [--gpu spv,ptx|none] [--cpu LEVEL]...
-                     [--release [--unchecked]] [--g] [--linker=own|system] [--arena SIZE]
+                     [--release] [--unchecked] [--g] [--linker=own|system] [--arena SIZE]
                      [--libpath DIR] [--link LIB] [-j N] [-o PATH]
 neper run <file.e> [the build options] [-- ARGS...]
 neper fmt [--check] [FILE.e|-]

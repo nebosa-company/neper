@@ -6538,7 +6538,8 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
     hot.directory = directory
     var mode_id = 0usize
     if hot.release { mode_id = 1usize }
-    if hot.unchecked { mode_id = 2usize }
+    if hot.unchecked && hot.release { mode_id = 2usize }
+    if hot.unchecked && !hot.release { mode_id = 3usize }
     let (list, list_error) = mem.alloc[usize](a, loaded.modules.len)
     if list_error != ok { ret list_error }
     // The previous build's manifest (D473): the content hash it recorded per module,
@@ -7929,7 +7930,8 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild, largest_bytes: usize) -> err {
 fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, hot: *HotBuild, held_all: [][]const u8) -> err {
     var mode: em.BuildMode = .Debug
     if hot.release { mode = .Release }
-    if hot.unchecked { mode = .Unchecked }
+    if hot.unchecked && hot.release { mode = .Unchecked }
+    if hot.unchecked && !hot.release { mode = .DebugUnchecked }
     hot.artifact.count = 0usize
     // The module's unsafe inventory (D457), rendered here on the worker so a warm
     // build copies it from the artifact instead of scanning every module's text.
@@ -10077,10 +10079,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // on (D211); `emit-em-all` takes it too, and `--incremental` with it in any order.
     let trailing_flags = args.len >= 8usize && (args.len <= 16usize || has_dashdash(args)) && flags_known(args)
     let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all") || same(args[1usize], "run") || same(args[1usize], "dis-file")) && has_flag(args, "--release")
-    // `--unchecked` (D355, H03): section 11's memory rows left out of the whole image,
-    // an unsafe boundary the manifest records as `checks: off`; not the default of
-    // any mode.
-    let unchecked_build = release_build && has_flag(args, "--unchecked")
+    // `--unchecked` (D355, H03): every row of section 11's table but the always-on ones
+    // left out of the whole image, an unsafe boundary the manifest records as
+    // `checks: off`; not the default of any mode, and a mode of its own in a debug
+    // build as in a release one (D929).
+    let unchecked_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all") || same(args[1usize], "run") || same(args[1usize], "dis-file")) && has_flag(args, "--unchecked")
     // `run PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D231): a build, then
     // the program's whole output as one `run` record before the result.
     let running = trailing_flags && same(args[1usize], "run") && has_flag(args, "--json")
@@ -10241,7 +10244,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             if settle_triple_error != ok { ret settle_triple_error }
             var settle_mode: em.BuildMode = .Debug
             if release_build { settle_mode = .Release }
-            if unchecked_build { settle_mode = .Unchecked }
+            if unchecked_build && release_build { settle_mode = .Unchecked }
+            if unchecked_build && !release_build { settle_mode = .DebugUnchecked }
             let settle_error = settle_early(a, &checker, &loaded, artifact_dir, settle_triple, settle_mode, &settle_table, &settle_scratch, keep, held, &hot_load)
             // A module the edge rule rebuilds is resolved late (D322), and a name it
             // lost -- a declaration deleted from a dependency -- surfaced as an internal
@@ -10473,7 +10477,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         var artifact_mode: em.BuildMode = .Debug
         if release_build { artifact_mode = .Release }
-        if unchecked_build { artifact_mode = .Unchecked }
+        if unchecked_build && release_build { artifact_mode = .Unchecked }
+        if unchecked_build && !release_build { artifact_mode = .DebugUnchecked }
         // The executable path lowers and selects a module at a time (D314); the rest
         // lower the program whole, since an artifact or an object keeps every function.
         let per_module = writes_executable

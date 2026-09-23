@@ -23,6 +23,9 @@ type BuildMode = enum u8 {
     // under the same directory; its own identity (D369, H15) or a warm build keeps
     // the other policy's artifacts.
     Unchecked,
+    // A debug build under `--unchecked` (D929): the debug code with every row but the
+    // always-on ones left out, a policy and so a mode of its own.
+    DebugUnchecked,
 }
 
 type Section = struct {
@@ -152,6 +155,7 @@ fn dependency_lookup_kind() -> usize { ret 4usize }
 fn mode_id(mode: BuildMode) -> usize {
     if mode == .Release { ret 1usize }
     if mode == .Unchecked { ret 2usize }
+    if mode == .DebugUnchecked { ret 3usize }
     ret 0usize
 }
 

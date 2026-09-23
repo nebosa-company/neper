@@ -84,7 +84,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `docs/schemas/neper-v1.schema.json`: `scripts/validate_stream.py`×2
 - `captured_complete`: `src/main.e`×2‡, `tests/conformance/tools/run.expected.jsonl`×1, `tests/conformance/tools/run_args.expected.jsonl`×1, `tests/conformance/tools/run_flood.expected.jsonl`×1, `tests/conformance/tools/run_trap.expected.jsonl`×1
 - `index-file`: `src/main.e`×9‡, `benchmarks/metamorphic/metamorphic.py`×2, `benchmarks/metamorphic/rename_locals.py`×1, `benchmarks/metamorphic/rename_symbols.py`×1, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/check_module_surfaces.py`×1, `src/check.e`×1‡, `src/tool.e`×1‡
-- `dis-file`: `src/main.e`×7‡, `tests/conformance/tools/dis_inlined.e`×1
+- `dis-file`: `src/main.e`×8‡, `tests/conformance/tools/dis_inlined.e`×1
 - `build-manifest-file`: `src/main.e`×2‡, `src/tool.e`×1‡
 - `query-batch`: `src/main.e`×6‡, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/render_card.py`×1, `tests/conformance/tools/batch_broken.expected.jsonl`×1
 
