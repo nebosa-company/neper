@@ -19003,3 +19003,43 @@ applicable: a session holds one snapshot and answers in order, so there is nothi
 evict and nothing in flight to cancel. The pinned budgets
 (`results/session-<host>.json`): each workload's per-query median plus a quarter, and
 a retention slope of zero.
+
+## D948 — H25's context/repair workflow: what an agent is handed, and repairs by the compiler's own fixes
+
+The last pending H25 workflow. Neither half was in M2 (`context-file` is D397, the fixes
+D432/D444), so `benchmarks/baseline/context.py` freezes the workload and budgets.
+
+**Context.** `context-file --json --symbol S --budget B` for three symbols of the
+compiler's own source and one of sc500k, at budgets of 16 and 64 records. Measured: the
+serialized bytes and the tokens of two model families' tokenizers, counted by tiktoken's
+`cl100k_base` and `o200k_base` and not estimated. The Linux run records its raw outputs
+and the host with the cached encodings counts them (`--retokenize`). Also the records,
+whether the answer is complete, and the latency:
+
+| symbol | budget | records | bytes | cl100k / o200k tokens | complete | Windows / Linux |
+|---|---|---|---|---|---|---|
+| check.check_expr | 16 | 16 | 3,836 | 1,176 / 1,191 | no | 397 / 543 ms |
+| check.check_expr | 64 | 22 | 5,626 | 1,684 / 1,711 | yes | 414 / 543 ms |
+| nir.emit | 16, 64 | 9 | 2,574 | 791 / 794 | yes | 410 / 583 ms |
+| em.write_module | 16 | 16 | 3,875 | 1,158 / 1,174 | no | 461 / 590 ms |
+| em.write_module | 64 | 64 | 16,639 | 5,007 / 5,107 | no | 453 / 662 ms |
+| sc500k m0250.job17 | 16, 64 | 6 | 1,783 | 582 / 588 | yes | 2,744 / 2,770 ms |
+
+(Windows figures; Linux's are the same within two bytes, its paths being two characters
+shorter.) The budget holds the answer to its size, and an incomplete answer says so,
+which a harness pages on with the cursor.
+
+**Repair.** Five defects are frozen into the CPU programs of `benchmarks/cpu`: a
+misspelt field, local and function, a literal of the wrong width, and two misspellings
+in one program. The loop is an agent's with no model in it: `check-file --json`; when a
+diagnostic offers a fix whose precondition (the file's SHA-256) holds, apply its edits;
+check again, up to five calls. Verified success: the repaired program builds and
+prints what the original prints. On both hosts every repair was verified. One defect
+takes 2 calls, 160-290 ms and about 1.2 KB, 360 tokens of diagnostics; the two-defect
+program takes 3 calls and 2.2 KB, 658 tokens. A name of fewer than three characters gets
+no suggestion (the edit-distance rule, D444), so the first choice of defect, `p.xx`,
+could not be repaired and was replaced. Recorded here, since an agent would meet it.
+
+The pinned budgets (`results/context-<host>.json`): a context answer's tokens not above
+what they are now, its latency and a repair's time within their median plus a quarter,
+a repair's calls not above.

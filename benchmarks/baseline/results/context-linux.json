@@ -1,0 +1,107 @@
+{
+ "schema": "neper-context-budget",
+ "version": 1,
+ "host": "linux",
+ "margin": 0.25,
+ "context": [
+  {
+   "symbol": "check.check_expr",
+   "budget": 16,
+   "tokens": {
+    "cl100k_base": 1170,
+    "o200k_base": 1184
+   },
+   "ms_budget": 679.4
+  },
+  {
+   "symbol": "check.check_expr",
+   "budget": 64,
+   "tokens": {
+    "cl100k_base": 1678,
+    "o200k_base": 1704
+   },
+   "ms_budget": 678.2
+  },
+  {
+   "symbol": "nir.emit",
+   "budget": 16,
+   "tokens": {
+    "cl100k_base": 788,
+    "o200k_base": 791
+   },
+   "ms_budget": 839.6
+  },
+  {
+   "symbol": "nir.emit",
+   "budget": 64,
+   "tokens": {
+    "cl100k_base": 788,
+    "o200k_base": 791
+   },
+   "ms_budget": 728.4
+  },
+  {
+   "symbol": "em.write_module",
+   "budget": 16,
+   "tokens": {
+    "cl100k_base": 1152,
+    "o200k_base": 1167
+   },
+   "ms_budget": 737.9
+  },
+  {
+   "symbol": "em.write_module",
+   "budget": 64,
+   "tokens": {
+    "cl100k_base": 5001,
+    "o200k_base": 5100
+   },
+   "ms_budget": 827.0
+  },
+  {
+   "symbol": "m0250.job17",
+   "budget": 16,
+   "tokens": {
+    "cl100k_base": 581,
+    "o200k_base": 586
+   },
+   "ms_budget": 3530.8
+  },
+  {
+   "symbol": "m0250.job17",
+   "budget": 64,
+   "tokens": {
+    "cl100k_base": 581,
+    "o200k_base": 586
+   },
+   "ms_budget": 3462.4
+  }
+ ],
+ "repair": [
+  {
+   "defect": "field",
+   "calls": 2,
+   "ms_budget": 287.1
+  },
+  {
+   "defect": "local",
+   "calls": 2,
+   "ms_budget": 355.9
+  },
+  {
+   "defect": "function",
+   "calls": 2,
+   "ms_budget": 271.0
+  },
+  {
+   "defect": "literal",
+   "calls": 2,
+   "ms_budget": 310.5
+  },
+  {
+   "defect": "two",
+   "calls": 3,
+   "ms_budget": 360.5
+  }
+ ]
+}
