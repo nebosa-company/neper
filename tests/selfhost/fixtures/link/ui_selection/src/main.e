@@ -224,15 +224,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (shot_on, shot_on_error) = testing.snapshot(&harness, a)
     if shot_on_error != ok { os.exit(35i32) }
     // The track is 28 x 16 at the switch's left, the knob 12 px tall inside it: the
-    // track's top row above the knob is the surface when off and the primary
-    // colour when on.
+    // track's top row above the knob is the highest container when off (D942) and
+    // the primary colour when on.
     let track_x = usize(switch_bounds.x)
     let track_y = usize(switch_bounds.y + (switch_bounds.height - 16.0) * 0.5)
     let top_px = ((track_y + 1usize) * 140usize + track_x + 14usize) * 4usize
     let primary = style.color(&tokens, .Primary)
     let on_blue = f32(shot_on.pixels[top_px + 2usize])
     let on_red = f32(shot_on.pixels[top_px])
-    if !(shot_off.pixels[top_px + 2usize] > 240u8) || !(on_blue < primary.blue * 255.0 + 3.0) || !(on_blue > primary.blue * 255.0 - 3.0) || !(on_red < primary.red * 255.0 + 3.0) { os.exit(36i32) }
+    let off_track = style.color(&tokens, .SurfaceContainerHighest)
+    let off_blue = f32(shot_off.pixels[top_px + 2usize])
+    if !(off_blue < off_track.blue * 255.0 + 3.0) || !(off_blue > off_track.blue * 255.0 - 3.0) || !(on_blue < primary.blue * 255.0 + 3.0) || !(on_blue > primary.blue * 255.0 - 3.0) || !(on_red < primary.red * 255.0 + 3.0) { os.exit(36i32) }
     // The segmented control: List is selected; a tap on Grid fires its action.
     let (list_state, has_list) = state_of(&harness, .Button, "List")
     let (grid_state, has_grid) = state_of(&harness, .Button, "Grid")

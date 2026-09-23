@@ -88,7 +88,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let filled = style.resolve(&light, .Filled, rest)
     if !same_color(filled.background, style.color(&light, .Primary)) || !same_color(filled.foreground, style.color(&light, .OnPrimary)) || !near(filled.border_width, 0.0) || !near(filled.opacity, 1.0) || !near(filled.focus_ring, 0.0) { os.exit(7i32) }
     let outlined = style.resolve(&light, .Outlined, rest)
-    if !same_color(outlined.background, style.color(&light, .Surface)) || !near(outlined.border_width, light.borders.regular) || !same_color(outlined.border, style.color(&light, .Border)) { os.exit(8i32) }
+    // v2 (D942): an outlined control is its outline over what it sits on.
+    if !near(outlined.background.alpha, 0.0) || !near(outlined.border_width, light.borders.regular) || !same_color(outlined.border, style.color(&light, .Border)) { os.exit(8i32) }
     let plain = style.resolve(&light, .Plain, rest)
     if !near(plain.background.alpha, 0.0) || !same_color(plain.foreground, style.color(&light, .Primary)) { os.exit(9i32) }
     var pressed: style.ControlState = zero

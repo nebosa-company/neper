@@ -18791,3 +18791,32 @@ reached `e.ui.widget`; it is `clip_rect`. `ui_focus_ring` holds the ring band,
 the gap, its move under Tab, its absence after a press, the inset ring in a
 clip and the hover layer's exact colour; all 62 `ui_*` fixtures pass on
 Windows and Linux. The press ripple waits on a touch host and a frame clock.
+
+## D942 — The button draws its v2 specification
+
+P5-03's first component, `docs/ux/components/Button`. `style.ControlVariant`
+gains `Tonal` (secondary container), `Elevated` (the low container in the primary
+colour, casting elevation 1, 2 when hovered) and `Danger` (error); `Plain` is the
+specification's text button. An `Outlined` control is now its outline over what it
+sits on, not a white fill: chips, segmented segments, choice marks and outlined
+fields move with it, and a switch's off track takes the highest container its
+specification gives it. `ResolvedControl` carries the shadow level and the
+horizontal padding a control sets, which `pressable_states` honours, so the
+button's geometry travels through the one pressable every control shares.
+
+`control.button` is fully rounded at the control height, with the
+specification's 16px sides at pointer density (32 tall), 24 at touch density (40
+tall) and 12 for a text button -- the fixed space steps, not the wider spacing a
+touch adaptation gives D805's scale. Disabled is `style.disabled_look`: the
+container `on-surface` at 12%, the label at 38%, no shadow, full opacity, where
+D805 halved the opacity (the other controls keep that until their own rows).
+`control.button_with_icon` puts an 18px icon 8px before the label with 16px on the
+icon side, and `ButtonOptions.loading` keeps the label's place unseen under an
+indeterminate ring and marks the button busy in the tree. `ui_button_v2` holds
+each variant's container role by pixel, the round corners, the shadow, the
+outline, the disabled colour, the icon variant's width, the busy state and the
+sides at both densities; all 63 `ui_*` fixtures pass on Windows and Linux.
+
+Left for the rows that need them: a label centred when a parent stretches the
+button (a region lays its content out at the start, which every pressable shares),
+the ripple, and the ring taking the label's colour rather than the primary one.

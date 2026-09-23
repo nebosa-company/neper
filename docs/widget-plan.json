@@ -1124,7 +1124,10 @@
             "ToggleButtonSpec",
             "ToolbarSpec"
           ],
-          "delivered": []
+          "delivered": [
+            "ButtonSpec"
+          ],
+          "evidence": "lib/e/ui/control.e, lib/e/ui/style.e (D942): control.button fully rounded at the control height with the specification's 16/24/12px sides by density and variant; Filled, Tonal, Elevated (elevation 1, 2 hovered), Outlined (the outline alone), Plain (text) and Danger variants; the v2 disabled colours (on-surface 12%/38%); button_with_icon with an 18px icon 8px before the label; ButtonOptions.loading keeps the label's place under a ring and marks the button busy; tests/selfhost/fixtures/link/ui_button_v2 on both hosts"
         },
         {
           "id": "P5-04",

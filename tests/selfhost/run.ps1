@@ -3106,6 +3106,13 @@ $uiFocusRingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $uiFocusRingWritten -ne 'executable written') { throw 'ui_focus_ring emission failed' }
 $uiFocusRingOutput = & $uiFocusRingPath
 if ($LASTEXITCODE -ne 0 -or $uiFocusRingOutput -ne 'ui focus ring ok') { throw "the focus ring answered wrongly: exit $LASTEXITCODE" }
+# The v2 button (D942, widget plan P5-03): each variant's container role, fully
+# rounded, the disabled colours, the icon variant and the sides by density.
+$uiButtonV2Path = Join-Path $testBuild 'ui-button-v2-selfhost.exe'
+$uiButtonV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_button_v2\src\main.e') $repo 'x64' 'windows' $uiButtonV2Path
+if ($LASTEXITCODE -ne 0 -or $uiButtonV2Written -ne 'executable written') { throw 'ui_button_v2 emission failed' }
+$uiButtonV2Output = & $uiButtonV2Path
+if ($LASTEXITCODE -ne 0 -or $uiButtonV2Output -ne 'ui button v2 ok') { throw "the v2 buttons answered wrongly: exit $LASTEXITCODE" }
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 $uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'

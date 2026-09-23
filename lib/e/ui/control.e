@@ -27,8 +27,9 @@ use e.ui.widget
 // pointer and the focus are doing to it (none: every control is at rest). The fonts
 // and the tokens outlive every frame.
 type Theme = struct { tokens: *const style.ThemeTokens, fonts: []const shape.Font, language: str, runtime: *widget.Runtime }
-// A button's look: its fill, and whether it takes presses.
-type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool }
+// A button's look: its fill, whether it takes presses, and whether it is busy with
+// what it started (the label hidden in place under a progress ring, D942).
+type ButtonOptions = struct { variant: style.ControlVariant, enabled: bool, loading: bool }
 type TextOptions = struct { role: style.TextRole, color: style.ColorRole, align: layout.Align, wrap: layout.Wrap, max_lines: u32, ellipsis: str }
 // A span of rich text; a linked span fires `link` when tapped, so the spans must
 // outlive the element the way an action's context does.
@@ -320,7 +321,7 @@ fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, heig
 // ------------------------------------------------------- the button family (D818, P1-06)
 
 fn button_options() -> ButtonOptions {
-    ret ButtonOptions { variant: .Filled, enabled: true }
+    ret ButtonOptions { variant: .Filled, enabled: true, loading: false }
 }
 
 // The control state of a keyed element under the page's runtime, with what the
@@ -370,9 +371,17 @@ fn pressable_states(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, l
     s.opacity = look.opacity
     s.min_height = style.Length { Px: t.tokens.metrics.control_height }
     s.min_width = style.Length { Px: t.tokens.metrics.hit_target }
-    let pad_x = style.Length { Px: t.tokens.spacing.md }
+    var end = t.tokens.spacing.md
+    if look.padding > 0.0 { end = look.padding }
+    var start = end
+    if look.padding_start > 0.0 { start = look.padding_start }
     let pad_y = style.Length { Px: t.tokens.spacing.xs }
-    s.padding = style.EdgeLengths { left: pad_x, top: pad_y, right: pad_x, bottom: pad_y }
+    s.padding = style.EdgeLengths { left: style.Length { Px: start }, top: pad_y, right: style.Length { Px: end }, bottom: pad_y }
+    if look.elevation != 0u8 {
+        var raised = usize(look.elevation)
+        if raised > 5usize { raised = 5usize }
+        s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(raised) }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[raised]) }
+    }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = content
@@ -390,15 +399,72 @@ fn pressable_states(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, l
     ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
 }
 
+// A button's v2 look (D942, docs/ux/components/Button): fully rounded, 16px sides at
+// pointer density (32 tall) and 24 at touch density, the disabled colours of v2.
+fn button_look(t: *const Theme, look: style.ResolvedControl, enabled: bool) -> style.ResolvedControl {
+    var out = look
+    if !enabled { out = style.disabled_look(t.tokens, look) }
+    // The sides are the specification's space-4 and space-6 (and space-3 for a
+    // text button), which a touch adaptation's wider spacing does not scale.
+    out.radius = t.tokens.metrics.control_height * 0.5
+    out.padding = 16.0
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { out.padding = 24.0 }
+    if options_text(look) { out.padding = 12.0 }
+    ret out
+}
+
+// A text (Plain) button is its label alone: 12px sides.
+fn options_text(look: style.ResolvedControl) -> bool {
+    ret !(look.background.alpha > 0.0) && !(look.border_width > 0.0)
+}
+
 // A button: its label in the resolved foreground; Enter and Space press it too.
 fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
-    let look = style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, false))
+    let look = button_look(t, style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, false)), options.enabled)
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    if options.loading {
+        // The label keeps its place, unseen, so the width does not change; the
+        // ring stands centred over it and the tree says busy.
+        var hidden = look.foreground
+        hidden.alpha = 0.0
+        let (kept, kept_error) = colored_text(a, 0u64, label, t, caption, hidden)
+        if kept_error != ok { ret (zero, kept_error) }
+        let (ring, ring_error) = progress_ring(a, 0u64, t, label, 0.0, true, t.tokens.sizes.icon_sm)
+        if ring_error != ok { ret (zero, ring_error) }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = ring
+        parts[1usize] = kept
+        parts[2usize] = widget.aligned(0u64, .Center, .Center, style.defaults(), parts[0usize..1usize])
+        let content = widget.stack(0u64, style.defaults(), parts[1usize..3usize])
+        let (busy, busy_error) = pressable_states(a, key, t, 3u8, label, look, options.enabled, false, accessibility.STATE_BUSY, 0u32, 0u64, action, content)
+        ret (busy, busy_error)
+    }
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, label_node)
+    ret (node, node_error)
+}
+
+// A button with a leading icon (D942): the icon at `sizes.icon_sm`, `spacing.sm` from
+// the label, 16px on the icon side.
+fn button_with_icon(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
+    var look = button_look(t, style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, false)), options.enabled)
+    look.padding_start = 16.0
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
     let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
     if label_error != ok { ret (zero, label_error) }
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, label_node)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let icon_size = t.tokens.sizes.icon_sm
+    parts[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: .Contain }, sized_style(icon_size, icon_size))
+    parts[1usize] = label_node
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize])
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, row)
     ret (node, node_error)
 }
 
@@ -559,6 +625,8 @@ fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, o
     let width = height * 1.75
     var track = sized_style(width, height)
     track.background = paint.Brush { Solid: look.background }
+    // v2 (D942): the off track is the highest container inside its outline.
+    if !on { track.background = paint.Brush { Solid: style.layer(style.color(t.tokens, .SurfaceContainerHighest), look.foreground, look.background.alpha) } }
     track.border = style.Border { width: t.tokens.borders.regular, color: look.border }
     track.radius = height * 0.5
     let knob = height - 4.0
