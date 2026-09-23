@@ -1615,17 +1615,19 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     }
     var clipped = node.style.overflow != .Visible
     let radius = node.style.radius
+    let corner = corners_of(&node.style)
+    let shaped = corner.top_left > 0.0 || corner.top_right > 0.0 || corner.bottom_right > 0.0 || corner.bottom_left > 0.0
     let outer_clip = s.clip_rect
     let outer_has_clip = s.has_clip
     // The shadow lies under everything, the background's shape at its offset.
     if node.style.shadow.color.alpha > 0.0 {
         let shifted = geometry.Rect { x: bounds.x + node.style.shadow.offset.x, y: bounds.y + node.style.shadow.offset.y, width: bounds.width, height: bounds.height }
-        try fill_shape(a, b, shifted, radius, paint.Brush { Solid: node.style.shadow.color })
+        try fill_corners(a, b, shifted, corner, paint.Brush { Solid: node.style.shadow.color })
     }
     if clipped {
         try scene.push(b, save)
-        if radius > 0.0 {
-            try scene.push(b, scene.Command { Clip: scene.Clip { Rounded: rounded(bounds, radius) } })
+        if shaped {
+            try scene.push(b, scene.Command { Clip: scene.Clip { Rounded: shape_of(bounds, corner, 0.0) } })
         } else {
             try scene.push(b, scene.Command { Clip: scene.Clip { Rect: bounds } })
         }
@@ -1643,12 +1645,12 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     case .Radial as radial:
         paint_background = true
     }
-    if paint_background { try fill_shape(a, b, bounds, radius, background) }
+    if paint_background { try fill_corners(a, b, bounds, corner, background) }
     // The border is stroked inside the bounds, on the rounded shape when there is one.
     if node.style.border.width > 0.0 && node.style.border.color.alpha > 0.0 {
         let half = node.style.border.width * 0.5
         let inset = geometry.Rect { x: bounds.x + half, y: bounds.y + half, width: max_f(bounds.width - node.style.border.width, 0.0), height: max_f(bounds.height - node.style.border.width, 0.0) }
-        let (outline, outline_error) = rounded_path(a, inset, max_f(radius - half, 0.0))
+        let (outline, outline_error) = shape_path(a, shape_of(inset, corner, 0.0 - half))
         if outline_error != ok { ret TooLarge }
         try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: outline, brush: paint.Brush { Solid: node.style.border.color }, stroke: paint.Stroke { width: node.style.border.width, cap: .Butt, join: .Miter, miter_limit: 4.0 } } })
     }
@@ -1729,7 +1731,7 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     try finish_place(b, clipped, layered)
     s.clip_rect = outer_clip
     s.has_clip = outer_has_clip
-    if ringed(s, element) { try place_ring(s, a, b, bounds, radius) }
+    if ringed(s, element) { try place_ring(s, a, b, bounds, corner) }
     let placed = &s.elements[element]
     if placed.static_subtree {
         placed.replay_from = u32(from)
@@ -2030,6 +2032,61 @@ fn rounded_path(a: *mem.Arena, r: geometry.Rect, radius: f32) -> (geometry.Path,
     ret (geometry.finish(&builder), ok)
 }
 
+// A style's corner radii: its own when it names any, else `radius` at every corner.
+fn corners_of(st: *const style.Style) -> style.Corners {
+    let c = st.corners
+    if c.top_left > 0.0 || c.top_right > 0.0 || c.bottom_right > 0.0 || c.bottom_left > 0.0 { ret c }
+    ret style.Corners { top_left: st.radius, top_right: st.radius, bottom_right: st.radius, bottom_left: st.radius }
+}
+
+// A rectangle's shape with each rounded corner grown by `grow` (a square corner
+// stays square), each clamped to half the rectangle's sides.
+fn shape_of(r: geometry.Rect, c: style.Corners, grow: f32) -> geometry.RRect {
+    let limit = min_f(r.width, r.height) * 0.5
+    ret geometry.RRect { rect: r, top_left: corner_at(c.top_left, grow, limit), top_right: corner_at(c.top_right, grow, limit), bottom_right: corner_at(c.bottom_right, grow, limit), bottom_left: corner_at(c.bottom_left, grow, limit) }
+}
+
+fn corner_at(radius: f32, grow: f32, limit: f32) -> geometry.Radius {
+    var v: f32 = 0.0
+    if radius > 0.0 { v = min_f(max_f(radius + grow, 0.0), max_f(limit, 0.0)) }
+    ret geometry.Radius { x: v, y: v }
+}
+
+// A shape as a closed path: lines and a quadratic per rounded corner.
+fn shape_path(a: *mem.Arena, rr: geometry.RRect) -> (geometry.Path, err) {
+    let (pb, pb_error) = geometry.path_builder(a, 10usize, 16usize)
+    if pb_error != ok { ret (zero, TooLarge) }
+    var builder = pb
+    let r = rr.rect
+    let x0 = r.x
+    let y0 = r.y
+    let x1 = r.x + r.width
+    let y1 = r.y + r.height
+    let tl = rr.top_left.x
+    let tr = rr.top_right.x
+    let br = rr.bottom_right.x
+    let bl = rr.bottom_left.x
+    if geometry.move_to(&builder, geometry.Point { x: x0 + tl, y: y0 }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: x1 - tr, y: y0 }) != ok { ret (zero, TooLarge) }
+    if tr > 0.0 && geometry.quad_to(&builder, geometry.Point { x: x1, y: y0 }, geometry.Point { x: x1, y: y0 + tr }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: x1, y: y1 - br }) != ok { ret (zero, TooLarge) }
+    if br > 0.0 && geometry.quad_to(&builder, geometry.Point { x: x1, y: y1 }, geometry.Point { x: x1 - br, y: y1 }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: x0 + bl, y: y1 }) != ok { ret (zero, TooLarge) }
+    if bl > 0.0 && geometry.quad_to(&builder, geometry.Point { x: x0, y: y1 }, geometry.Point { x: x0, y: y1 - bl }) != ok { ret (zero, TooLarge) }
+    if geometry.line_to(&builder, geometry.Point { x: x0, y: y0 + tl }) != ok { ret (zero, TooLarge) }
+    if tl > 0.0 && geometry.quad_to(&builder, geometry.Point { x: x0, y: y0 }, geometry.Point { x: x0 + tl, y: y0 }) != ok { ret (zero, TooLarge) }
+    if geometry.close_path(&builder) != ok { ret (zero, TooLarge) }
+    ret (geometry.finish(&builder), ok)
+}
+
+// A rectangle filled on its shape: a plain rectangle when no corner is rounded.
+fn fill_corners(a: *mem.Arena, b: *scene.Builder, r: geometry.Rect, c: style.Corners, brush: paint.Brush) -> err {
+    if !(c.top_left > 0.0) && !(c.top_right > 0.0) && !(c.bottom_right > 0.0) && !(c.bottom_left > 0.0) { ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: r, brush: brush } }) }
+    let (outline, outline_error) = shape_path(a, shape_of(r, c, 0.0))
+    if outline_error != ok { ret TooLarge }
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: outline, brush: brush } })
+}
+
 // A rectangle filled, rounded when it has a radius.
 fn fill_shape(a: *mem.Arena, b: *scene.Builder, r: geometry.Rect, radius: f32, brush: paint.Brush) -> err {
     if radius <= 0.0 { ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: r, brush: brush } }) }
@@ -2060,7 +2117,7 @@ fn intersect(a: geometry.Rect, b: geometry.Rect) -> geometry.Rect {
 // outside the bounds, on the element's shape grown by the same; where the clip in
 // force would cut that, the stroke lies just inside the bounds instead (a row in a
 // list, a tab in a bar).
-fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, bounds: geometry.Rect, radius: f32) -> err {
+fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, bounds: geometry.Rect, corner: style.Corners) -> err {
     let w = s.ring_width
     var grow = s.ring_offset + w * 0.5
     let reach = s.ring_offset + w
@@ -2070,9 +2127,7 @@ fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, bounds: geometry.Rect
         if outer.x < c.x || outer.y < c.y || outer.x + outer.width > c.x + c.width || outer.y + outer.height > c.y + c.height { grow = 0.0 - w * 0.5 }
     }
     let r = geometry.Rect { x: bounds.x - grow, y: bounds.y - grow, width: max_f(bounds.width + 2.0 * grow, 0.0), height: max_f(bounds.height + 2.0 * grow, 0.0) }
-    var rounded_by: f32 = 0.0
-    if radius > 0.0 { rounded_by = max_f(radius + grow, 0.0) }
-    let (outline, outline_error) = rounded_path(a, r, rounded_by)
+    let (outline, outline_error) = shape_path(a, shape_of(r, corner, grow))
     if outline_error != ok { ret TooLarge }
     ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: outline, brush: paint.Brush { Solid: s.ring_color }, stroke: paint.Stroke { width: w, cap: .Butt, join: .Miter, miter_limit: 4.0 } } })
 }

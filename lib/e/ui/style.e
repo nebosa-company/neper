@@ -18,7 +18,9 @@ type Overflow = enum u8 { Visible, Clip, Scroll }
 // offset, under everything (D814).
 type Border = struct { width: f32, color: paint.Color }
 type Shadow = struct { offset: geometry.Point, color: paint.Color }
-type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow, border: Border, radius: f32, shadow: Shadow }
+// Per-corner radii (D945): all four zero means every corner takes `radius`.
+type Corners = struct { top_left: f32, top_right: f32, bottom_right: f32, bottom_left: f32 }
+type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow, border: Border, radius: f32, shadow: Shadow, corners: Corners }
 error Invalid
 
 fn finite(v: f32) -> bool {
@@ -85,6 +87,7 @@ fn defaults() -> Style {
         border: Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) },
         radius: 0.0,
         shadow: Shadow { offset: geometry.Point { x: 0.0, y: 0.0 }, color: paint.rgba(0.0, 0.0, 0.0, 0.0) },
+        corners: Corners { top_left: 0.0, top_right: 0.0, bottom_right: 0.0, bottom_left: 0.0 },
     }
 }
 
@@ -103,6 +106,8 @@ fn validate(value: *const Style) -> err {
     if paint.validate(&value.background) != ok { ret Invalid }
     if !finite(value.border.width) || value.border.width < 0.0 || !finite(value.radius) || value.radius < 0.0 { ret Invalid }
     if !finite(value.shadow.offset.x) || !finite(value.shadow.offset.y) { ret Invalid }
+    let c = value.corners
+    if !finite(c.top_left) || !finite(c.top_right) || !finite(c.bottom_right) || !finite(c.bottom_left) || c.top_left < 0.0 || c.top_right < 0.0 || c.bottom_right < 0.0 || c.bottom_left < 0.0 { ret Invalid }
     ret ok
 }
 
@@ -522,7 +527,7 @@ type ControlVariant = enum u8 { Filled, Outlined, Plain, Tonal, Elevated, Danger
 // are its horizontal padding when the control sets them (zero: the pressable's own);
 // with `custom_padding` they and `padding_y` are taken exactly, zero included; a
 // nonzero `min_width` or `min_height` raises the pressable's own minimum (D944).
-type ResolvedControl = struct { background: paint.Color, foreground: paint.Color, border: paint.Color, border_width: f32, focus_ring: f32, opacity: f32, radius: f32, elevation: u8, padding: f32, padding_start: f32, padding_y: f32, custom_padding: bool, min_width: f32, min_height: f32 }
+type ResolvedControl = struct { background: paint.Color, foreground: paint.Color, border: paint.Color, border_width: f32, focus_ring: f32, opacity: f32, radius: f32, elevation: u8, padding: f32, padding_start: f32, padding_y: f32, custom_padding: bool, min_width: f32, min_height: f32, corners: Corners }
 type SizeClass = enum u8 { Compact, Medium, Expanded }
 type Capabilities = struct { hover: bool, fine_pointer: bool, keyboard: bool, touch: bool, pen: bool, resizable: bool, multi_window: bool, insets: geometry.Insets }
 type Adaptation = struct { size: SizeClass, capabilities: Capabilities, profile: Profile }
@@ -678,7 +683,7 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
     var opacity: f32 = 1.0
     if state.disabled { opacity = 0.5 }
     if state.hovered && elevation != 0u8 { elevation = elevation + 1u8 }
-    ret ResolvedControl { background: background, foreground: foreground, border: border, border_width: border_width, focus_ring: focus_ring, opacity: opacity, radius: t.radii.sm, elevation: elevation, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: false, min_width: 0.0, min_height: 0.0 }
+    ret ResolvedControl { background: background, foreground: foreground, border: border, border_width: border_width, focus_ring: focus_ring, opacity: opacity, radius: t.radii.sm, elevation: elevation, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: false, min_width: 0.0, min_height: 0.0, corners: zero }
 }
 
 // The v2 disabled look (D942): the container in the surface's content colour at

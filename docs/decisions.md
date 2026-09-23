@@ -18929,3 +18929,20 @@ on Windows and Linux. The split button waits on per-corner radii, which the
 style and renderer do not have (one radius per box). Icons are the caller's
 textures, drawn untinted, so an icon's colour is the image's until the renderer
 can tint a mask.
+
+## D945 — A box's corners are four radii, and the split button uses them
+
+P5-03's last component. `style.Style` gains `corners`, four radii; all four zero
+keeps the one `radius` at every corner, so no existing node changes. `widget.place`
+now builds every shape from the four: the shadow, the rounded clip (the renderer's
+`RRect` already had a radius per corner), the background, the border stroked on the
+shape inset by half its width, and the focus ring on the shape grown by its
+offset. A square corner stays square when grown. `ResolvedControl.corners` carries
+them from a control's look into its pressable.
+
+`control.split_button` draws its specification: two filled halves 2px apart, each
+fully round at its outer end and `radius-xs` at the inner one, the leading half
+with the button's sides, the trailing one 36 wide at pointer density (44 at touch)
+round an 18px chevron. `ui_actions_v2` holds the gap, the width and all four
+corners by pixel; all 64 `ui_*` fixtures pass on Windows and Linux. With it the
+nine action cards of P5-03 are delivered.

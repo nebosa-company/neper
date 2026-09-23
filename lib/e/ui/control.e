@@ -368,6 +368,7 @@ fn pressable_states(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, l
     s.background = paint.Brush { Solid: look.background }
     s.border = style.Border { width: look.border_width, color: look.border }
     s.radius = look.radius
+    s.corners = look.corners
     s.opacity = look.opacity
     s.min_height = style.Length { Px: max_of(t.tokens.metrics.control_height, look.min_height) }
     s.min_width = style.Length { Px: max_of(t.tokens.metrics.hit_target, look.min_width) }
@@ -1763,19 +1764,39 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
 // narrower filled button keyed `key + 1` firing `toggle` for the menu the caller
 // places (D827's `overlay.menu`, anchored to `key + 1` and keyed `key + 2`); the
 // second says expanded while `open`, offers the menu and controls it.
+// v2 (D945, docs/ux/components/SplitButton): two filled halves 2 apart, each round
+// at its outer end and `radius-xs` at the inner one; the trailing half is 36 wide at
+// pointer density (44 at touch) round an 18px chevron.
 fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let (head, head_error) = button(a, key, t, label, action, button_options())
+    let h = t.tokens.metrics.control_height
+    let outer = h * 0.5
+    let inner = t.tokens.radii.xs
+    var head_look = button_look(t, style.resolve(t.tokens, .Filled, control_state(t, key, true, false)), true)
+    head_look.corners = style.Corners { top_left: outer, top_right: inner, bottom_right: inner, bottom_left: outer }
+    var caption = text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, head_look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    let (head, head_error) = pressable(a, key, t, 3u8, label, head_look, true, false, action, label_node)
     if head_error != ok { ret (zero, head_error) }
     parts[0usize] = head
-    let look = style.resolve(t.tokens, .Filled, control_state(t, key + 1u64, true, false))
+    var look = button_look(t, style.resolve(t.tokens, .Filled, control_state(t, key + 1u64, true, false)), true)
+    look.corners = style.Corners { top_left: inner, top_right: outer, bottom_right: outer, bottom_left: inner }
+    let size = t.tokens.sizes.icon_sm
+    var width: f32 = 36.0
+    if h > t.tokens.sizes.control_sm { width = 44.0 }
+    look.custom_padding = true
+    look.padding = (width - size) * 0.5
+    look.padding_y = max_zero((h - size) * 0.5)
+    look.min_width = width
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
     let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
     if marks_error != ok { ret (zero, TooLarge) }
     marks[0usize] = Mark { color: look.foreground, expanded: true, arena: a }
-    let size = t.tokens.spacing.md
     var none: []const widget.Node = zero
     let chevron = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
     let (tail, tail_error) = pressable_states(a, key + 1u64, t, 3u8, "More", look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 2u64, toggle, chevron)
@@ -1783,7 +1804,7 @@ fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, act
     parts[1usize] = tail
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: t.tokens.borders.hairline }, style.defaults(), parts[0usize..2usize])
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 2.0 }, style.defaults(), parts[0usize..2usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label

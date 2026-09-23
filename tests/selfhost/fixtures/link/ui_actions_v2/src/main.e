@@ -25,6 +25,7 @@ use e.ui.widget
 
 type Store = struct { press: widget.Submit, items: [2]navigation.Action, dial: [2]widget.Submit, labels: [2]str, texture: scene.TextureId }
 
+
 fn on_press(ctx: *void) -> err {
     ret ok
 }
@@ -41,7 +42,7 @@ fn close_to(value: u8, expected: f32) -> bool {
 }
 
 fn build(a: *mem.Arena, t: *const control.Theme, s: *const Store, open: bool) -> (widget.Node, err) {
-    let (items, items_error) = mem.alloc[widget.Node](a, 8usize)
+    let (items, items_error) = mem.alloc[widget.Node](a, 9usize)
     if items_error != ok { ret (zero, items_error) }
     var plain = control.button_options()
     plain.variant = .Plain
@@ -63,13 +64,16 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *const Store, open: bool) ->
     items[5usize] = row
     items[6usize] = bar
     items[7usize] = dial
+    let (split, e9) = control.split_button(a, 40u64, t, "", &s.press, false, &s.press)
+    if e9 != ok { ret (zero, e9) }
+    items[8usize] = split
     var page = style.defaults()
     page.width = style.Length { Px: 240.0 }
-    page.height = style.Length { Px: 700.0 }
+    page.height = style.Length { Px: 760.0 }
     page.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     let pad = style.Length { Px: 12.0 }
     page.padding = style.EdgeLengths { left: pad, top: style.Length { Px: 140.0 }, right: pad, bottom: pad }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, page, items[0usize..8usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, page, items[0usize..9usize]), ok)
 }
 
 fn at(x: f32, y: f32) -> usize {
@@ -113,7 +117,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
-    let (h, harness_error) = testing.harness(a, &runtime, 240u32, 700u32, 1.0)
+    let (h, harness_error) = testing.harness(a, &runtime, 240u32, 760u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
     var pixels: [16]u8 = zero
@@ -169,6 +173,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // The speed dial closed: the FAB-shaped head on the primary container.
     let (head, has_head) = bounds(&harness, &runtime, 30u64)
     if !has_head || !near(head.height, tokens.sizes.control_xl) || !is_color(shot, at(head.x + head.width * 0.5, head.y + 6.0), style.color(&tokens, .PrimaryContainer)) { os.exit(21i32) }
+    // The split button: 2 between its halves, the trailing one 36 wide; each half
+    // round at its outer end (the corner pixel is the page) and nearly square at
+    // the inner one (the pixel 2 in from the corner is filled).
+    let (lead, has_lead) = bounds(&harness, &runtime, 40u64)
+    let (trail, has_trail) = bounds(&harness, &runtime, 41u64)
+    if !has_lead || !has_trail || !near(trail.x - (lead.x + lead.width), 2.0) || !near(trail.width, 36.0) { os.exit(29i32) }
+    let primary = style.color(&tokens, .Primary)
+    if !is_color(shot, at(lead.x + 1.0, lead.y + 1.0), page) || !is_color(shot, at(lead.x + lead.width - 2.0, lead.y + 2.0), primary) { os.exit(30i32) }
+    if !is_color(shot, at(trail.x + 2.0, trail.y + 2.0), primary) || !is_color(shot, at(trail.x + trail.width - 1.0, trail.y + 1.0), page) { os.exit(31i32) }
     // The link, hovered: the primary wash at the hover opacity behind it.
     let (link, has_link) = bounds(&harness, &runtime, 3u64)
     if !has_link { os.exit(22i32) }
