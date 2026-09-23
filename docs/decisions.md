@@ -18592,3 +18592,28 @@ count does not see:
 
 The compiler reproduces itself, the 70 trap runs print what they did, sc500k its
 expected value. sc500k single worker: 92.50 G -> 91.45 G instructions.
+
+## D935 — The paired gate passes on both hosts
+
+With D934 the timed gate (D930) ran again against the `m2-baseline` compiler, eight
+workers, seven pairs per cell after the discarded warm-up, on each host; the Linux run
+keeps the workloads on the VM's own file system, where the Windows drive's 9P mount
+takes 11 ms a rename and times the mount rather than the compiler.
+
+| cell | Windows cold | Windows warm | Linux cold | Linux warm |
+|---|---|---|---|---|
+| sc500k debug | 1.059 | 0.899 | 1.004 | 0.869 |
+| sc500k release | 1.097 | 1.037 | 1.012 | 0.827 |
+| sc1m debug | 1.062 | 0.922 | 1.022 | 0.935 |
+| sc1m release | 1.054 | 0.963 | 1.060 | 1.043 |
+
+Median per-run ratios, candidate over baseline, against budgets of 1.10 cold and 1.15
+warm: no breach, where D930 found seven (cold 1.35-1.54). What closed it, in order of
+size: the constant-size copies and clears (D933), the profile cuts with identical
+outputs (D930-D932), the warm build's hash of its own bytes (D934). The compiler still
+runs its safety checks (D355); nothing was bought by turning one off. The raw pairs
+are `results/paired-windows-d934.json` and `results/paired-linux-d934.json`.
+
+The paired cells are the build-time budgets. The rest of the table -- peak resident
+set, arena high-water, image, the compiler's own cell -- is what `measure.py` and
+`gate.py` (D366) judge, and is measured next.
