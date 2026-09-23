@@ -18462,3 +18462,35 @@ print what they did. The head compiler's CPU time falls 6.0% (7,339 -> 6,900 ms)
 checked against unchecked is +9.7% (6,900 against 6,292), inside H03's +10%. Against
 the M2 baseline it is +32% where it was +40%: the analyses M2.5 added are real work,
 and the residue is a budget decision H25 requires before C033 closes.
+
+## D931 — Eight more cuts from the profile, none of them to an output
+
+D930's profile against the M2 baseline, taken again on its result, ranked what the
+M2.5 compiler spends that the baseline did not. The cuts, each leaving every image and
+artifact byte where it was:
+
+- The NIR verifier (D923's dominators and every use) copied a whole instruction --
+  over a hundred bytes -- per step of its two per-instruction loops; it reads the
+  fields it needs from local views of the instruction and operand arrays. Dominance
+  itself was never the cost (0.05%).
+- A trap site's path record is almost always the one the site before it used; the
+  last path and its data function are kept, so the path is compared once instead of
+  hashed, searched for and compared at every site. The record and stub searches walk
+  local slices.
+- The canonical text (D504, D534) is one copy up to each comment, the trailing blanks
+  of a line taken back off the copy at its break, where the text was walked three
+  times line by line.
+- `lookup.slot` probes the live region field by field instead of copying each entry.
+- The artifact writer made a module's aggregate marks twice and its body constant
+  marks three times -- a token walk of the module each; `collect_module_strings`
+  makes them once and the dependency writer reads them.
+- Lowering's two token scans of a function (addressed locals, D452's held lengths)
+  are one.
+- `numeric_literal_type` takes the literal's spelling, not a 120-byte token by value.
+- The call cache tests its key's fields before copying the entry, whose `CallInfo`
+  is most of a kilobyte.
+
+sc500k's executable and every `.em` but the compiler's own hash and the CRC over it
+are the same bytes, the compiler reproduces itself, and the 70 trap-fixture runs print
+what they did. Single-worker CPU time (`perf stat`, five runs each, same session):
+head 6,924 ms, this 6,680 (-3.5%), the M2 baseline 5,220 -- +28% where D930 left +32%.

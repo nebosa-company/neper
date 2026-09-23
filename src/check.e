@@ -1561,7 +1561,7 @@ fn integer_literal_value(c: *Checker, text: str, node: syntax.Node) -> (usize, T
     if node.kind != .LiteralExpr { ret (0usize, invalid_type(), Unsupported) }
     let token = c.tokens[usize(node.token_start)]
     if token.kind != .Integer { ret (0usize, invalid_type(), TypeMismatch) }
-    let parsed_type = numeric_literal_type(text, token)
+    let parsed_type = numeric_literal_type(text[token.start..token.end], true)
     let spelling = text[token.start..token.end]
     var base = 10usize
     var at = 0usize
@@ -6572,9 +6572,10 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     ret ok
 }
 
-fn numeric_literal_type(text: str, token: lex.Token) -> Type {
-    let spelling = text[token.start..token.end]
-    if token.kind == .Integer {
+// Over the literal's spelling (D931): a token passed by value is 120 bytes copied at
+// every literal the checker and the lowering type.
+fn numeric_literal_type(spelling: str, integer: bool) -> Type {
+    if integer {
         if ends_with(spelling, "isize") { ret make_type(.Integer, "isize", 0usize) }
         if ends_with(spelling, "usize") { ret make_type(.Integer, "usize", 0usize) }
         if ends_with(spelling, "i64") { ret make_type(.Integer, "i64", 0usize) }
@@ -6595,12 +6596,13 @@ fn numeric_literal_type(text: str, token: lex.Token) -> Type {
 }
 
 fn literal_type(c: *Checker, text: str, node: syntax.Node) -> Type {
-    let token = c.tokens[usize(node.token_start)]
-    if token.kind == .Integer || token.kind == .Float { ret numeric_literal_type(text, token) }
-    if token.kind == .KwTrue || token.kind == .KwFalse { ret make_type(.Bool, "bool", 0usize) }
-    if token.kind == .String || token.kind == .RawString { ret make_type(.String, "str", 0usize) }
-    if token.kind == .Character { ret make_type(.Integer, "u8", 0usize) }
-    if token.kind == .KwOk { ret make_type(.Err, "err", 0usize) }
+    let token_at = usize(node.token_start)
+    let kind = c.tokens[token_at].kind
+    if kind == .Integer || kind == .Float { ret numeric_literal_type(text[c.tokens[token_at].start..c.tokens[token_at].end], kind == .Integer) }
+    if kind == .KwTrue || kind == .KwFalse { ret make_type(.Bool, "bool", 0usize) }
+    if kind == .String || kind == .RawString { ret make_type(.String, "str", 0usize) }
+    if kind == .Character { ret make_type(.Integer, "u8", 0usize) }
+    if kind == .KwOk { ret make_type(.Err, "err", 0usize) }
     ret make_type(.Other, "", 0usize)
 }
 
@@ -9375,8 +9377,9 @@ fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     var slot = 0usize
     if c.call_cache.len != 0usize && c.call_generation != 0usize {
         slot = (usize(node.token_start) * 31usize + usize(node.token_end)) % c.call_cache.len
-        let cached = c.call_cache[slot]
-        if cached.generation == c.call_generation && usize(cached.token_start) == usize(node.token_start) && usize(cached.token_end) == usize(node.token_end) { ret (cached.info, ok) }
+        // The key's fields first (D931): the entry copied whole to test them was the
+        // cache's own cost, hit or miss.
+        if c.call_cache[slot].generation == c.call_generation && usize(c.call_cache[slot].token_start) == usize(node.token_start) && usize(c.call_cache[slot].token_end) == usize(node.token_end) { ret (c.call_cache[slot].info, ok) }
     }
     let (fresh, fresh_error) = check_call_uncached(c, g, tree, module_index, node)
     if fresh_error == ok && c.call_cache.len != 0usize && c.call_generation != 0usize {

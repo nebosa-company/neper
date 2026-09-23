@@ -2295,14 +2295,25 @@ fn trap_shared_stub(builder: *nir.Builder, current: nir.Function, path: []const 
         builder.trap_data_count = 0usize
         builder.trap_stub_count = 0usize
         builder.trap_name_count = 0usize
+        builder.trap_path_known = false
     }
-    let (path_ref, path_made, path_error) = trap_data_function(builder, current, path)
-    if path_error != ok || !path_made { ret (0usize, false, path_error) }
+    var path_ref = builder.trap_path_ref
+    if !builder.trap_path_known || path.len != 1usize || path[0usize].is_single || !check.same(builder.trap_path, path[0usize].text) {
+        let (made_ref, path_made, path_error) = trap_data_function(builder, current, path)
+        if path_error != ok || !path_made { ret (0usize, false, path_error) }
+        path_ref = made_ref
+        if path.len == 1usize && !path[0usize].is_single {
+            builder.trap_path = path[0usize].text
+            builder.trap_path_ref = made_ref
+            builder.trap_path_known = true
+        }
+    }
     let (message_ref, message_made, message_error) = trap_data_function(builder, current, message)
     if message_error != ok || !message_made { ret (0usize, false, message_error) }
     var at = 0usize
-    while at < builder.trap_stub_count {
-        if builder.trap_stub_paths[at] == path_ref && builder.trap_stub_messages[at] == message_ref && builder.trap_stub_moves[at] == moves { ret (builder.trap_stub_refs[at], true, ok) }
+    let stub_messages = builder.trap_stub_messages[0usize..builder.trap_stub_count]
+    while at < stub_messages.len {
+        if stub_messages[at] == message_ref && builder.trap_stub_paths[at] == path_ref && builder.trap_stub_moves[at] == moves { ret (builder.trap_stub_refs[at], true, ok) }
         at += 1usize
     }
     if builder.trap_stub_count == builder.trap_stub_refs.len { ret (0usize, false, ok) }
@@ -2365,8 +2376,9 @@ fn trap_data_function(builder: *nir.Builder, current: nir.Function, pieces: []co
         at += 1usize
     }
     at = 0usize
-    while at < builder.trap_data_count {
-        if builder.trap_data_hashes[at] == hash && record_holds(builder.strings[builder.trap_data_strings[at]].spelling, pieces, length) { ret (builder.trap_data_refs[at], true, ok) }
+    let hashes = builder.trap_data_hashes[0usize..builder.trap_data_count]
+    while at < hashes.len {
+        if hashes[at] == hash && record_holds(builder.strings[builder.trap_data_strings[at]].spelling, pieces, length) { ret (builder.trap_data_refs[at], true, ok) }
         at += 1usize
     }
     // A new record, written after the last.

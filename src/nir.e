@@ -465,6 +465,11 @@ type Builder = struct {
     trap_stub_refs: []usize,
     trap_stub_moves: []usize,
     trap_name_count: usize,
+    // The last path record's text and function (D931): a module's sites name one path
+    // nearly always, which was hashed and compared again at every one.
+    trap_path: str,
+    trap_path_ref: usize,
+    trap_path_known: bool,
     // What the verifier refused, for the diagnostic: the instruction and the operand.
     verify_instruction: usize,
     verify_operand: usize,
@@ -824,6 +829,9 @@ fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions:
     builder.trap_data_count = 0usize
     builder.trap_stub_count = 0usize
     builder.trap_name_count = 0usize
+    builder.trap_path = ""
+    builder.trap_path_ref = 0usize
+    builder.trap_path_known = false
     ret ok
 }
 
@@ -1320,18 +1328,22 @@ fn verify_function(builder: *Builder, function: Function) -> err {
         order[block_at] = none
         block_at += 1usize
     }
-    // Definers, and the predecessor counts from the terminators.
+    // Definers, and the predecessor counts from the terminators. The per-instruction
+    // loops read fields of local views (D931): a whole instruction copied per step was
+    // most of the verifier's time.
+    let instructions = builder.instructions
+    let operands = builder.operands
     block_at = 0usize
     while block_at < block_count {
         let block = builder.blocks[function.first_block + block_at]
         var i = block.first_instruction
         let end = block.first_instruction + block.instruction_count
         while i < end {
-            let instruction = builder.instructions[i]
-            if instruction.has_result {
-                if instruction.result >= value_count || definer_block[instruction.result] != none { ret refuse(builder, i, 0usize) }
-                definer_block[instruction.result] = block_at
-                definer_index[instruction.result] = i
+            if instructions[i].has_result {
+                let result = instructions[i].result
+                if result >= value_count || definer_block[result] != none { ret refuse(builder, i, 0usize) }
+                definer_block[result] = block_at
+                definer_index[result] = i
             }
             i += 1usize
         }
@@ -1454,10 +1466,12 @@ fn verify_function(builder: *Builder, function: Function) -> err {
         var i = block.first_instruction
         let end = block.first_instruction + block.instruction_count
         while i < end {
-            let instruction = builder.instructions[i]
+            let opcode = instructions[i].opcode
+            let first_operand = instructions[i].first_operand
+            let operand_count = instructions[i].operand_count
             var o = 0usize
-            while o < instruction.operand_count {
-                let operand = builder.operands[instruction.first_operand + o]
+            while o < operand_count {
+                let operand = operands[first_operand + o]
                 if operand >= value_count || definer_block[operand] == none { ret refuse(builder, i, o) }
                 let d = definer_block[operand]
                 if d == block_at {
@@ -1469,14 +1483,14 @@ fn verify_function(builder: *Builder, function: Function) -> err {
                 }
                 o += 1usize
             }
-            if instruction.opcode == .BranchIf {
-                if instruction.operand_count != 1usize { ret refuse(builder, i, 0usize) }
-                let condition = builder.instructions[definer_index[builder.operands[instruction.first_operand]]]
+            if opcode == .BranchIf {
+                if operand_count != 1usize { ret refuse(builder, i, 0usize) }
+                let condition_kind = instructions[definer_index[operands[first_operand]]].ty.kind
                 // An address is a condition too: a null check branches on it (D923), and
                 // an inlined one on the caller's stack object.
-                if condition.ty.kind == .Float || condition.ty.kind == .Void { ret refuse(builder, i, 0usize) }
+                if condition_kind == .Float || condition_kind == .Void { ret refuse(builder, i, 0usize) }
             }
-            if is_binary(instruction.opcode) && instruction.operand_count != 2usize { ret refuse(builder, i, 0usize) }
+            if operand_count != 2usize && is_binary(opcode) { ret refuse(builder, i, 0usize) }
             i += 1usize
         }
         block_at += 1usize

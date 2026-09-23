@@ -227,7 +227,7 @@ fn float_literal_bits(c: *check.Checker, text: str, node: syntax.Node, expected:
     let token = c.tokens[usize(node.token_start)]
     var ty = expected
     if ty.kind != .Float {
-        let literal_type = check.numeric_literal_type(text, token)
+        let literal_type = check.numeric_literal_type(text[token.start..token.end], token.kind == .Integer)
         if literal_type.kind != .Float { ret (0usize, ty, check.MissingContext) }
         ty = literal_type
     }
@@ -6279,32 +6279,32 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     builder.proof_count = 0usize
     builder.proof_addressed_count = 0usize
     builder.proof_addressed_overflow = false
-    var addressed_scan = builder.proof_function_start
-    while addressed_scan + 1usize < builder.proof_function_end && addressed_scan + 1usize < c.token_count {
-        if c.tokens[addressed_scan].kind == .PunctAmp && c.tokens[addressed_scan + 1usize].kind == .Identifier {
+    // The addressed locals, and the lengths held in a local (D452): `let n = x.len`
+    // anywhere in the function; one walk of its tokens over a local view (D931).
+    builder.proof_alias_count = 0usize
+    let tokens = c.tokens[0usize..c.token_count]
+    var scan = builder.proof_function_start
+    while scan + 1usize < builder.proof_function_end && scan + 1usize < tokens.len {
+        let kind = tokens[scan].kind
+        if kind == .PunctAmp && tokens[scan + 1usize].kind == .Identifier {
             if builder.proof_addressed_count < builder.proof_addressed.len {
-                builder.proof_addressed[builder.proof_addressed_count] = addressed_scan + 1usize
+                builder.proof_addressed[builder.proof_addressed_count] = scan + 1usize
                 builder.proof_addressed_count += 1usize
             } else {
                 builder.proof_addressed_overflow = true
             }
         }
-        addressed_scan += 1usize
-    }
-    // The lengths held in a local (D452): `let n = x.len` anywhere in the function.
-    builder.proof_alias_count = 0usize
-    var alias_scan = builder.proof_function_start
-    while alias_scan + 5usize < builder.proof_function_end && alias_scan + 5usize < c.token_count {
-        if c.tokens[alias_scan].kind == .KwLet && c.tokens[alias_scan + 1usize].kind == .Identifier && c.tokens[alias_scan + 2usize].kind == .PunctAssign && c.tokens[alias_scan + 3usize].kind == .Identifier && c.tokens[alias_scan + 4usize].kind == .PunctDot && c.tokens[alias_scan + 5usize].kind == .Identifier {
-            let member = c.tokens[alias_scan + 5usize]
-            let ends = alias_scan + 6usize >= c.token_count || c.tokens[alias_scan + 6usize].kind == .Newline || c.tokens[alias_scan + 6usize].kind == .PunctRBrace
-            if ends && check.same(text[member.start..member.end], "len") && builder.proof_alias_count < builder.proof_alias_name.len {
-                builder.proof_alias_name[builder.proof_alias_count] = alias_scan + 1usize
-                builder.proof_alias_base[builder.proof_alias_count] = alias_scan + 3usize
+        if kind == .KwLet && scan + 5usize < builder.proof_function_end && scan + 5usize < tokens.len && tokens[scan + 1usize].kind == .Identifier && tokens[scan + 2usize].kind == .PunctAssign && tokens[scan + 3usize].kind == .Identifier && tokens[scan + 4usize].kind == .PunctDot && tokens[scan + 5usize].kind == .Identifier {
+            let member_start = tokens[scan + 5usize].start
+            let member_end = tokens[scan + 5usize].end
+            let ends = scan + 6usize >= tokens.len || tokens[scan + 6usize].kind == .Newline || tokens[scan + 6usize].kind == .PunctRBrace
+            if ends && check.same(text[member_start..member_end], "len") && builder.proof_alias_count < builder.proof_alias_name.len {
+                builder.proof_alias_name[builder.proof_alias_count] = scan + 1usize
+                builder.proof_alias_base[builder.proof_alias_count] = scan + 3usize
                 builder.proof_alias_count += 1usize
             }
         }
-        alias_scan += 1usize
+        scan += 1usize
     }
     c.failure_name = name
     c.failure_token = c.tokens[usize(node.token_start)]

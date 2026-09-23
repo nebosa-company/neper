@@ -91,11 +91,13 @@ fn same_name(a: str, b: str) -> bool {
 // The slot holding this key, or the empty slot it would go in.
 fn slot(x: *Index, h: usize, module_index: usize, table: usize, name: str) -> usize {
     let mask = x.size - 1usize
+    // The live region as a local view, read field by field (D931): each probe copied a
+    // whole entry through the index.
+    let entries = x.entries[x.start..x.start + x.size]
     var at = h & mask
     while true {
-        let e = x.entries[x.start + at]
-        if !e.used { ret x.start + at }
-        if e.hash == h && e.module_index == module_index && e.table == table && same_name(e.name, name) { ret x.start + at }
+        if !entries[at].used { ret x.start + at }
+        if entries[at].hash == h && entries[at].module_index == module_index && entries[at].table == table && same_name(entries[at].name, name) { ret x.start + at }
         at = (at + 1usize) & mask
     }
     ret 0usize

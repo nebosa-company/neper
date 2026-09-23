@@ -1092,7 +1092,10 @@ fn intern_aggregate_strings(c: *check.Checker, g: *graph.Graph, table: *StringTa
     ret ok
 }
 
-fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable) -> err {
+// The marks it leaves in `aggregate_marks` and `string_marks` are the module's
+// aggregate and body constant uses, which the dependency writer reads (D931): each was
+// made again there, three token walks of the module where one serves.
+fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, aggregate_marks: []u8, string_marks: []u8) -> err {
     if module_index >= g.count { ret InvalidArtifact }
     try update_spans(c, builder)
     try mark_module_references(builder, c, module_index)
@@ -1206,11 +1209,9 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
         }
         constant_at += 1usize
     }
-    var aggregate_marks: [8192]u8 = zero
-    mark_aggregate_uses(c, g, builder, module_index, aggregate_marks[..])
-    try intern_aggregate_strings(c, g, table, aggregate_marks[..])
-    var string_marks: [8192]u8 = zero
-    mark_body_constant_uses(c, g, module_index, string_marks[..])
+    mark_aggregate_uses(c, g, builder, module_index, aggregate_marks)
+    try intern_aggregate_strings(c, g, table, aggregate_marks)
+    mark_body_constant_uses(c, g, module_index, string_marks)
     constant_at = 0usize
     while constant_at < c.constant_count {
         let constant = c.constants[constant_at]
@@ -2099,9 +2100,7 @@ fn first_inlined(builder: *nir.Builder, module_index: usize, index: usize) -> bo
     ret builder.used_marks_valid && builder.used_marks_module == module_index && index < builder.inlined_marks.len && builder.inlined_marks[index] == 1u8
 }
 
-fn value_dependency_count(c: *check.Checker, g: *graph.Graph, module_index: usize) -> (usize, err) {
-    var marks: [8192]u8 = zero
-    mark_body_constant_uses(c, g, module_index, marks[..])
+fn value_dependency_count(c: *check.Checker, module_index: usize, marks: []u8) -> (usize, err) {
     var count = 0usize
     var at = 0usize
     while at < c.constant_count {
@@ -2155,13 +2154,11 @@ fn write_aggregate_dependencies(c: *check.Checker, g: *graph.Graph, table: *Stri
     ret ok
 }
 
-fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer, aggregate_marks: []u8, body_marks: []u8) -> err {
     try mark_module_references(builder, c, module_index)
-    let (value_count, value_count_error) = value_dependency_count(c, g, module_index)
+    let (value_count, value_count_error) = value_dependency_count(c, module_index, body_marks)
     if value_count_error != ok { ret value_count_error }
-    var aggregate_marks: [8192]u8 = zero
-    mark_aggregate_uses(c, g, builder, module_index, aggregate_marks[..])
-    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks[..]) + lookup_dependency_count(c, aggregate_marks[..]))
+    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks) + lookup_dependency_count(c, aggregate_marks))
     var walk = 0usize
     while walk < reference_walk_count(builder) {
         let at = reference_walk_at(builder, walk)
@@ -2237,9 +2234,7 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
         }
         at += 1usize
     }
-    try write_aggregate_dependencies(c, g, table, scratch, output, aggregate_marks[..])
-    var body_marks: [8192]u8 = zero
-    mark_body_constant_uses(c, g, module_index, body_marks[..])
+    try write_aggregate_dependencies(c, g, table, scratch, output, aggregate_marks)
     at = 0usize
     while at < c.constant_count {
         let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, at)
@@ -2654,37 +2649,28 @@ fn next_comment(text: str, from: usize) -> (usize, usize) {
 fn comment_blind_text(a: *mem.Arena, text: str) -> (str, err) {
     let (storage, storage_error) = mem.alloc[u8](a, text.len)
     if storage_error != ok { ret ("", storage_error) }
+    // One copy up to each comment (D931): a line's trailing spaces, tabs and carriage
+    // return (D534) are taken back off the copy at its break, where the text was found
+    // line by line and walked three times.
     var count = 0usize
-    var line_start = 0usize
-    var next_comment_at = 0usize
-    var next_comment_end = 0usize
-    var comment_known = false
-    while line_start < text.len {
-        var line_end = line_start
-        while line_end < text.len && text[line_end] != 10u8 { line_end += 1usize }
-        // The line's text ends at its comment, when one starts inside it.
-        if !comment_known || next_comment_at < line_start {
-            let (found_at, found_end) = next_comment(text, line_start)
-            next_comment_at = found_at
-            next_comment_end = found_end
-            comment_known = true
-        }
-        var content_end = line_end
-        if next_comment_at < line_end { content_end = next_comment_at }
-        // Trailing spaces, tabs and a carriage return go with it (D534): they move no token.
-        while content_end > line_start && (text[content_end - 1usize] == 32u8 || text[content_end - 1usize] == 9u8 || text[content_end - 1usize] == 13u8) { content_end = content_end - 1usize }
-        var copy_at = line_start
-        while copy_at < content_end {
-            storage[count] = text[copy_at]
+    var line_mark = 0usize
+    var at = 0usize
+    while at < text.len {
+        let (comment_at, comment_end) = next_comment(text, at)
+        while at < comment_at {
+            let byte_here = text[at]
+            if byte_here == 10u8 {
+                while count > line_mark && (storage[count - 1usize] == 32u8 || storage[count - 1usize] == 9u8 || storage[count - 1usize] == 13u8) { count = count - 1usize }
+                line_mark = count + 1usize
+            }
+            storage[count] = byte_here
             count += 1usize
-            copy_at += 1usize
+            at += 1usize
         }
-        if line_end < text.len {
-            storage[count] = 10u8
-            count += 1usize
-        }
-        line_start = line_end + 1usize
+        // The comment's body goes; its line break, if any, is the next copy's first byte.
+        at = comment_end
     }
+    while count > line_mark && (storage[count - 1usize] == 32u8 || storage[count - 1usize] == 9u8 || storage[count - 1usize] == 13u8) { count = count - 1usize }
     ret (storage[0usize..count], ok)
 }
 
@@ -2799,7 +2785,9 @@ fn write_interface_artifact(c: *check.Checker, g: *graph.Graph, module_index: us
     try reset_strings(strings)
     let (target_index, target_error) = intern(strings, target_triple)
     if target_error != ok { ret target_error }
-    try collect_module_strings(c, g, &no_builder, module_index, strings)
+    var aggregate_marks: [8192]u8 = zero
+    var constant_marks: [8192]u8 = zero
+    try collect_module_strings(c, g, &no_builder, module_index, strings, aggregate_marks[..], constant_marks[..])
     var writer: Writer = zero
     try begin(&writer, output, section_values, target_index, 0usize, mode)
     try begin_section(&writer, strings_kind(), required_flag())
@@ -2818,7 +2806,9 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     try reset_strings(strings)
     let (target_index, target_error) = intern(strings, target_triple)
     if target_error != ok { ret target_error }
-    try collect_module_strings(c, g, builder, module_index, strings)
+    var aggregate_marks: [8192]u8 = zero
+    var constant_marks: [8192]u8 = zero
+    try collect_module_strings(c, g, builder, module_index, strings, aggregate_marks[..], constant_marks[..])
     try collect_line_paths(builder, c, module_index, machine, function_offsets, lines, line_count, strings)
     var writer: Writer = zero
     try begin(&writer, output, section_values, target_index, 0usize, mode)
@@ -2830,7 +2820,7 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     if interface_error != ok { ret interface_error }
     try end_section(&writer)
     try begin_section(&writer, deps_kind(), required_flag())
-    try write_dependencies(c, g, builder, module_index, strings, scratch, output)
+    try write_dependencies(c, g, builder, module_index, strings, scratch, output, aggregate_marks[..], constant_marks[..])
     try end_section(&writer)
     try begin_section(&writer, code_kind(), required_flag())
     let code_error = write_code(c, g, builder, module_index, strings, machine, function_offsets, relocations, relocation_count, scratch, output)
