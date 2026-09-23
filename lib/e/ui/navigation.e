@@ -939,7 +939,7 @@ fn centred_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     var options = control.surface_options(t)
     options.bordered = true
     options.elevation = 3u8
-    options.radius = t.tokens.radii.md
+    options.radius = t.tokens.radii.sm
     options.padding = t.tokens.spacing.sm
     var panel = control.surface_style(t, options)
     panel.width = style.Length { Px: width }

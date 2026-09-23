@@ -18685,3 +18685,35 @@ A component is delivered when its function draws what its card specifies and
 a fixture holds it on both hosts. The UI meter falls from 100% to 64% on this
 row, which is the honest reading: every earlier capability exists, and none
 yet has the look it is meant to have.
+
+## D938 — The v2 tokens are `e.ui.style`'s values, generated from `docs/ux/tokens.json`
+
+P5-01. `scripts/render_ux_theme.py` writes one block of `style.e` from the
+tokens D937 made the specification: the `ColorRole` and `TextRole` enums, the
+`ThemeTokens` type sized by them, the index of each role, a fill function per
+palette and the type scale. The tokens stay the one source; `--check` says when
+the block is stale. What is not a colour or a type style is plain code beside
+it: `Radii` gains `xs` and `xl` (4, 8, 12, 16, 28, full), elevation has six
+levels, and three new groups carry the rest of the language -- `States` (the
+state-layer, disabled and scrim opacities), `Sizes` (control heights 24 to 56
+by density step, 48 and 32 targets, icons 16 to 36, the divider and a focused
+outline) and `Durations` (the motion scale). The focus ring is 3px, 2px out; a
+touch-first host's controls are 40 tall with 48 targets, not 44 and 44.
+
+The fourteen colour roles and seven text roles of D805 stay, as aliases: every
+control still names `.Surface`, `.Text` or `.Label`, and each of those now reads
+the v2 role nearest what it meant (`Text` is `on-surface`, `Border` `outline`,
+`Label` `label-large`, `Heading` `headline-small`). Where a v2 name is an alias's
+own, the alias spells it: v2 `surface`, the window ground, is `.Background`,
+and `.Surface` stays the lowest container until the controls move off it. The
+radii the controls used kept their pixels -- `radii.sm` (4) is now `radii.xs`,
+`radii.md` (8) `radii.sm` -- so no control changed shape before its own row.
+
+Two refusals with no location cost the first builds, both an enum declaring a
+member twice (`BodySmall` from the alias list and the v2 scale, `Surface` from
+both): E-TYPE-9999 at 1:1 of the operand. The generator now drops a v2 name an
+alias already has. `ui_theme` holds the four palettes' contrast pairs with the
+WCAG formula (content 4.5:1, 7:1 in both high-contrast palettes, the outline and
+focus ring 3:1 on every surface), the aliases, the scales and a refusal of an
+out-of-order motion scale; all 61 `ui_*` fixtures pass on Windows and Linux.
+The v2 shadows' blur is not drawn: the renderer still fills D814's hard offset.

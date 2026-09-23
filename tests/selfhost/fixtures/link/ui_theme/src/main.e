@@ -6,6 +6,7 @@
 // desktop and a compact width. A broken theme is refused.
 
 use e.io
+use e.math
 use e.mem
 use e.os
 use e.gfx.geometry
@@ -19,6 +20,51 @@ fn near(a: f32, b: f32) -> bool {
 
 fn same_color(a: paint.Color, b: paint.Color) -> bool {
     ret near(a.red, b.red) && near(a.green, b.green) && near(a.blue, b.blue) && near(a.alpha, b.alpha)
+}
+
+// WCAG 2 relative luminance and contrast ratio.
+fn channel(c: f32) -> f32 {
+    if c <= 0.04045 { ret c / 12.92 }
+    ret math.pow[f32]((c + 0.055) / 1.055, 2.4)
+}
+
+fn luminance(c: paint.Color) -> f32 {
+    ret 0.2126 * channel(c.red) + 0.7152 * channel(c.green) + 0.0722 * channel(c.blue)
+}
+
+fn ratio(a: paint.Color, b: paint.Color) -> f32 {
+    let x = luminance(a) + 0.05
+    let y = luminance(b) + 0.05
+    if x > y { ret x / y }
+    ret y / x
+}
+
+// The v2 pairs (D937): content on its container holds `need` in a palette; the
+// outline and the focus ring hold 3:1 on the grounds they are drawn on.
+fn pairs_hold(t: *const style.ThemeTokens, need: f32) -> bool {
+    var grounds: [6]style.ColorRole = zero
+    grounds[0] = .Background
+    grounds[1] = .SurfaceContainerLowest
+    grounds[2] = .SurfaceContainerLow
+    grounds[3] = .SurfaceContainer
+    grounds[4] = .SurfaceContainerHigh
+    grounds[5] = .SurfaceContainerHighest
+    var i = 0usize
+    while i < grounds.len {
+        if ratio(style.color(t, .OnSurface), style.color(t, grounds[i])) < need { ret false }
+        if ratio(style.color(t, .Outline), style.color(t, grounds[i])) < 3.0 { ret false }
+        i += 1usize
+    }
+    if ratio(style.color(t, .OnSurfaceVariant), style.color(t, .SurfaceContainerHighest)) < need { ret false }
+    if ratio(style.color(t, .OnPrimary), style.color(t, .Primary)) < need { ret false }
+    if ratio(style.color(t, .OnPrimaryContainer), style.color(t, .PrimaryContainer)) < need { ret false }
+    if ratio(style.color(t, .OnSecondaryContainer), style.color(t, .SecondaryContainer)) < need { ret false }
+    if ratio(style.color(t, .OnError), style.color(t, .Error)) < need { ret false }
+    if ratio(style.color(t, .OnErrorContainer), style.color(t, .ErrorContainer)) < need { ret false }
+    if ratio(style.color(t, .InverseOnSurface), style.color(t, .InverseSurface)) < need { ret false }
+    if ratio(style.color(t, .FocusRing), style.color(t, .Background)) < 3.0 { ret false }
+    if ratio(style.color(t, .FocusRing), style.color(t, .PrimaryContainer)) < 3.0 { ret false }
+    ret true
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -74,7 +120,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Adaptation: a touch host grows the targets; a dense desktop shrinks them; a
     // compact width tightens the spacing; the profile is recorded.
     let touch = style.adapt(&light, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: geometry.Insets { left: 0.0, top: 24.0, right: 0.0, bottom: 34.0 } }, profile: .Neper })
-    if !near(touch.metrics.hit_target, 44.0) || !(touch.spacing.md > light.spacing.md) || touch.profile != .Neper { os.exit(18i32) }
+    if !near(touch.metrics.hit_target, light.sizes.target_touch) || !near(touch.metrics.hit_target, 48.0) || !near(touch.metrics.control_height, light.sizes.control_md) || !(touch.spacing.md > light.spacing.md) || touch.profile != .Neper { os.exit(18i32) }
     let dense = style.adapt(&light, style.Adaptation { size: .Expanded, capabilities: style.Capabilities { hover: true, fine_pointer: true, keyboard: true, touch: false, pen: false, resizable: true, multi_window: true, insets: zero }, profile: .DesktopDense })
     if !near(dense.metrics.control_height, 24.0) || !(dense.spacing.lg < light.spacing.lg) || dense.profile != .DesktopDense { os.exit(19i32) }
     let compact = style.adapt(&light, style.Adaptation { size: .Compact, capabilities: style.Capabilities { hover: true, fine_pointer: true, keyboard: true, touch: false, pen: false, resizable: true, multi_window: false, insets: zero }, profile: .Neper })

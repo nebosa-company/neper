@@ -168,7 +168,7 @@ fn canvas(a: *mem.Arena, key: widget.Key, custom: widget.Custom, label: str) -> 
 // ------------------------------------------------------- surfaces (D814, P1-02)
 
 // A surface's look: its background role, whether it is bordered, its corner radius,
-// its elevation level (0 for none, up to 3, the theme's shadow strengths), padding.
+// its elevation level (0 for none, up to 5, the theme's shadow strengths), padding.
 type SurfaceOptions = struct { background: style.ColorRole, bordered: bool, radius: f32, elevation: u8, padding: f32 }
 
 fn surface_options(t: *const Theme) -> SurfaceOptions {
@@ -182,7 +182,7 @@ fn surface_style(t: *const Theme, options: SurfaceOptions) -> style.Style {
     s.radius = options.radius
     if options.elevation != 0u8 {
         var raised = usize(options.elevation)
-        if raised > 3usize { raised = 3usize }
+        if raised > 5usize { raised = 5usize }
         // The elevation level is the shadow's strength; it falls two pixels a level.
         s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(raised) * 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[raised]) }
     }
@@ -208,7 +208,7 @@ fn panel(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widg
 // A card: the surface raised one level, rounded, with a hairline border.
 fn card(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widget.Node) -> (widget.Node, err) {
     var options = surface_options(t)
-    options.radius = t.tokens.radii.md
+    options.radius = t.tokens.radii.sm
     options.elevation = 1u8
     let (made, made_error) = surface(a, key, t, options, children)
     if made_error != ok { ret (zero, made_error) }
@@ -228,7 +228,7 @@ fn group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, childr
     parts[0usize] = heading
     var options = surface_options(t)
     options.bordered = true
-    options.radius = t.tokens.radii.sm
+    options.radius = t.tokens.radii.xs
     parts[1usize] = widget.box(0u64, surface_style(t, options), children)
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
@@ -308,7 +308,7 @@ fn avatar(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Textur
 fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32) -> (widget.Node, err) {
     var block = sized_style(width, height)
     block.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
-    block.radius = t.tokens.radii.sm
+    block.radius = t.tokens.radii.xs
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = widget.box(0u64, block, zero)
@@ -452,7 +452,7 @@ fn choosable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: s
     var mark_style = sized_style(size, size)
     mark_style.background = paint.Brush { Solid: look.background }
     mark_style.border = style.Border { width: t.tokens.borders.regular, color: look.border }
-    mark_style.radius = t.tokens.radii.sm
+    mark_style.radius = t.tokens.radii.xs
     if round { mark_style.radius = size * 0.5 }
     let pad = style.Length { Px: size * 0.25 }
     mark_style.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
@@ -863,7 +863,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     frame_style.background = paint.Brush { Solid: look.background }
     frame_style.border = style.Border { width: look.border_width, color: look.border }
     if look.focus_ring > 0.0 { frame_style.border = style.Border { width: look.focus_ring, color: style.color(t.tokens, .Focus) } }
-    frame_style.radius = t.tokens.radii.sm
+    frame_style.radius = t.tokens.radii.xs
     frame_style.opacity = look.opacity
     let pad_x = style.Length { Px: t.tokens.spacing.sm }
     let pad_y = style.Length { Px: t.tokens.spacing.xs }
@@ -987,7 +987,7 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var sheet = surface_options(t)
         sheet.bordered = true
         sheet.elevation = 2u8
-        sheet.radius = t.tokens.radii.sm
+        sheet.radius = t.tokens.radii.xs
         sheet.padding = t.tokens.spacing.xs
         let (menu, menu_error) = mem.alloc[widget.Node](a, 1usize)
         if menu_error != ok { ret (zero, TooLarge) }
@@ -1067,7 +1067,7 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     view_style.width = style.Length { Px: width }
     view_style.height = style.Length { Px: f32(rows) * row_height }
     view_style.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Border) }
-    view_style.radius = t.tokens.radii.sm
+    view_style.radius = t.tokens.radii.xs
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
     if view_error != ok { ret (zero, TooLarge) }
@@ -1229,7 +1229,7 @@ fn validation_summary(a: *mem.Arena, key: widget.Key, t: *const Theme, messages:
     }
     var options = surface_options(t)
     options.bordered = true
-    options.radius = t.tokens.radii.sm
+    options.radius = t.tokens.radii.xs
     options.padding = t.tokens.spacing.sm
     var sheet = surface_style(t, options)
     sheet.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Error) }
@@ -1336,7 +1336,7 @@ fn expander(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expande
     sheet[0usize] = opened
     var options = surface_options(t)
     options.bordered = true
-    options.radius = t.tokens.radii.sm
+    options.radius = t.tokens.radii.xs
     options.padding = t.tokens.spacing.sm
     ret (widget.box(0u64, surface_style(t, options), sheet[0usize..1usize]), ok)
 }
@@ -2280,7 +2280,7 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         var sheet = surface_options(t)
         sheet.bordered = true
         sheet.elevation = 2u8
-        sheet.radius = t.tokens.radii.sm
+        sheet.radius = t.tokens.radii.xs
         sheet.padding = t.tokens.spacing.xs
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
@@ -2443,7 +2443,7 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         var sheet = surface_options(t)
         sheet.bordered = true
         sheet.elevation = 3u8
-        sheet.radius = t.tokens.radii.md
+        sheet.radius = t.tokens.radii.sm
         sheet.padding = t.tokens.spacing.md
         var sheet_style = surface_style(t, sheet)
         sheet_style.min_width = style.Length { Px: 8.0 * t.tokens.spacing.lg }
@@ -2595,7 +2595,7 @@ fn noticed(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Not
     parts[at] = close
     var sheet = style.defaults()
     sheet.background = paint.Brush { Solid: style.color(t.tokens, .Text) }
-    sheet.radius = t.tokens.radii.sm
+    sheet.radius = t.tokens.radii.xs
     sheet.width = style.Length { Px: width }
     let pad = style.Length { Px: t.tokens.spacing.sm }
     sheet.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
@@ -2713,7 +2713,7 @@ fn noted(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity, me
 fn skeleton(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, phase: f32) -> (widget.Node, err) {
     var block = sized_style(width, height)
     block.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
-    block.radius = t.tokens.radii.sm
+    block.radius = t.tokens.radii.xs
     block.opacity = 1.0
     if !t.tokens.motion.reduced { block.opacity = 0.7 + 0.3 * math.sin[f32](phase) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
@@ -2937,7 +2937,7 @@ fn notification_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     view_style.width = style.Length { Px: width }
     view_style.height = style.Length { Px: height }
     view_style.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Border) }
-    view_style.radius = t.tokens.radii.sm
+    view_style.radius = t.tokens.radii.xs
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, rows[0usize..notices.len])
     if view_error != ok { ret (zero, TooLarge) }

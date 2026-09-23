@@ -41,7 +41,7 @@ fn tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
     raised.background = .SurfaceVariant
     raised.bordered = true
     raised.elevation = 1u8
-    raised.radius = t.tokens.radii.sm
+    raised.radius = t.tokens.radii.xs
     raised.padding = t.tokens.spacing.xs
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
@@ -85,7 +85,7 @@ fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.
     var raised = control.surface_options(t)
     raised.bordered = true
     raised.elevation = 2u8
-    raised.radius = t.tokens.radii.sm
+    raised.radius = t.tokens.radii.xs
     raised.padding = t.tokens.spacing.xs
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
@@ -197,7 +197,7 @@ fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, c
     var raised = control.surface_options(t)
     raised.bordered = true
     raised.elevation = 3u8
-    raised.radius = t.tokens.radii.md
+    raised.radius = t.tokens.radii.sm
     raised.padding = t.tokens.spacing.lg
     var card_style = control.surface_style(t, raised)
     card_style.min_width = style.Length { Px: 8.0 * t.tokens.spacing.lg }
@@ -230,7 +230,7 @@ fn popup_surface(a: *mem.Arena, t: *const control.Theme, content: widget.Node) -
     var raised = control.surface_options(t)
     raised.bordered = true
     raised.elevation = 2u8
-    raised.radius = t.tokens.radii.sm
+    raised.radius = t.tokens.radii.xs
     raised.padding = t.tokens.spacing.sm
     ret (widget.box(0u64, control.surface_style(t, raised), body[0usize..1usize]), ok)
 }
@@ -783,7 +783,7 @@ fn color_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     if parts_error != ok { ret (zero, TooLarge) }
     var swatch = control.sized_style(t.tokens.metrics.hit_target, t.tokens.metrics.hit_target)
     swatch.background = paint.Brush { Solid: value }
-    swatch.radius = t.tokens.radii.sm
+    swatch.radius = t.tokens.radii.xs
     swatch.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Border) }
     parts[0usize] = widget.box(key + 5u64, swatch, zero)
     parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), bars[0usize..count])
