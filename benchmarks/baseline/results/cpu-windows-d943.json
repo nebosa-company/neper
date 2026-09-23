@@ -1,0 +1,243 @@
+{
+ "schema": "neper-cpu",
+ "version": 1,
+ "host": "windows",
+ "platform": "Windows-11-10.0.26200-SP0",
+ "runs": 7,
+ "budget": 0.1,
+ "builds": {
+  "baseline": {
+   "compiler": "D:\\repos\\neper\\build\\examples\\neper-m2big.exe",
+   "root": "D:\\repos\\neper-m2",
+   "flags": [
+    "--release"
+   ]
+  },
+  "unchecked": {
+   "compiler": "D:\\repos\\neper\\build\\examples\\neper-h934.exe",
+   "root": "D:\\repos\\neper",
+   "flags": [
+    "--release",
+    "--unchecked"
+   ]
+  },
+  "checked": {
+   "compiler": "D:\\repos\\neper\\build\\examples\\neper-h934.exe",
+   "root": "D:\\repos\\neper",
+   "flags": [
+    "--release"
+   ]
+  }
+ },
+ "cells": [
+  {
+   "program": "sieve",
+   "output": "1857859 26942805919966",
+   "same_output": true,
+   "image_bytes": {
+    "baseline": 19968,
+    "unchecked": 34816,
+    "checked": 36352
+   },
+   "ms": {
+    "baseline": [
+     247.1,
+     251.6,
+     227.0,
+     218.0,
+     222.0,
+     212.0,
+     222.1
+    ],
+    "unchecked": [
+     247.2,
+     228.9,
+     236.3,
+     219.6,
+     222.6,
+     224.2,
+     221.8
+    ],
+    "checked": [
+     369.6,
+     368.8,
+     371.7,
+     309.4,
+     305.3,
+     278.9,
+     287.7
+    ]
+   },
+   "unchecked_ratio_p50": 1.003,
+   "unchecked_ratio_range": [
+    0.91,
+    1.057
+   ],
+   "checked_ratio_p50": 1.419,
+   "checked_ratio_range": [
+    1.295,
+    1.638
+   ],
+   "baseline_ms_p50": 222.1,
+   "unchecked_ms_p50": 224.2,
+   "checked_ms_p50": 309.4
+  },
+  {
+   "program": "sort",
+   "output": "4293238848840675",
+   "same_output": true,
+   "image_bytes": {
+    "baseline": 24064,
+    "unchecked": 38400,
+    "checked": 40448
+   },
+   "ms": {
+    "baseline": [
+     503.9,
+     498.5,
+     498.7,
+     497.2,
+     494.4,
+     496.2,
+     497.2
+    ],
+    "unchecked": [
+     508.1,
+     501.9,
+     517.3,
+     501.0,
+     501.9,
+     500.0,
+     497.0
+    ],
+    "checked": [
+     556.8,
+     574.1,
+     553.6,
+     550.6,
+     558.5,
+     558.1,
+     555.7
+    ]
+   },
+   "unchecked_ratio_p50": 1.008,
+   "unchecked_ratio_range": [
+    1.0,
+    1.037
+   ],
+   "checked_ratio_p50": 1.118,
+   "checked_ratio_range": [
+    1.105,
+    1.151
+   ],
+   "baseline_ms_p50": 497.2,
+   "unchecked_ms_p50": 501.9,
+   "checked_ms_p50": 556.8
+  },
+  {
+   "program": "hash",
+   "output": "3044736453",
+   "same_output": true,
+   "image_bytes": {
+    "baseline": 19456,
+    "unchecked": 34304,
+    "checked": 35328
+   },
+   "ms": {
+    "baseline": [
+     556.0,
+     573.3,
+     577.6,
+     574.7,
+     576.3,
+     579.0,
+     556.5
+    ],
+    "unchecked": [
+     558.7,
+     572.7,
+     577.6,
+     574.0,
+     575.2,
+     569.6,
+     559.9
+    ],
+    "checked": [
+     574.7,
+     573.9,
+     581.3,
+     573.4,
+     578.2,
+     563.5,
+     573.4
+    ]
+   },
+   "unchecked_ratio_p50": 0.999,
+   "unchecked_ratio_range": [
+    0.984,
+    1.006
+   ],
+   "checked_ratio_p50": 1.003,
+   "checked_ratio_range": [
+    0.973,
+    1.034
+   ],
+   "baseline_ms_p50": 574.7,
+   "unchecked_ms_p50": 572.7,
+   "checked_ms_p50": 573.9
+  },
+  {
+   "program": "records",
+   "output": "95920268789368949",
+   "same_output": true,
+   "image_bytes": {
+    "baseline": 22528,
+    "unchecked": 36864,
+    "checked": 37888
+   },
+   "ms": {
+    "baseline": [
+     797.6,
+     792.7,
+     793.5,
+     779.4,
+     804.7,
+     797.1,
+     787.0
+    ],
+    "unchecked": [
+     572.5,
+     565.3,
+     586.2,
+     567.2,
+     565.2,
+     558.1,
+     544.5
+    ],
+    "checked": [
+     564.5,
+     543.1,
+     557.1,
+     572.4,
+     565.6,
+     582.0,
+     550.1
+    ]
+   },
+   "unchecked_ratio_p50": 0.713,
+   "unchecked_ratio_range": [
+    0.692,
+    0.739
+   ],
+   "checked_ratio_p50": 0.703,
+   "checked_ratio_range": [
+    0.685,
+    0.734
+   ],
+   "baseline_ms_p50": 793.5,
+   "unchecked_ms_p50": 565.3,
+   "checked_ms_p50": 564.5
+  }
+ ],
+ "failures": 0
+}

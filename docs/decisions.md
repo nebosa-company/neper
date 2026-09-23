@@ -18857,3 +18857,42 @@ What the numbers say: query and plan each check the whole program, so they cost 
 a cold check of it: 5.6 µs a line at 500k lines, 8.9 µs at 1M. The rename itself,
 apply, is milliseconds. Move and delete have no planning tool yet; the H25
 report lists them as not implemented rather than measured.
+
+## D943 — H25's CPU program workflow: the same contract runs as fast, and the images carry every global
+
+The third pending H25 workflow: the run time of programs the compiler builds. The four
+programs in `benchmarks/cpu` use only the core language and arena allocation, so
+neither compiler's library code decides the comparison: `sieve` (the primes below 30
+million), `sort` (4 million integers, iterative quicksort), `hash` (32-bit FNV-1a over
+64 MB, four passes) and `records` (a million five-field particles, each read whole,
+moved and written back, for sixty steps). `benchmarks/baseline/cpu.py` builds each
+three ways: the baseline's release, which in M2 carried no checks; the candidate's
+release with `--unchecked`, the same contract; and the candidate's release as shipped,
+which keeps its checks (D355). The three run in alternation, seven pairs after a
+discarded warm-up. H25 compares run time only under equivalent contracts, so the budget
+(+10%, frozen here) judges the unchecked build and the checked build is reported as the
+intentional difference. Every run's output must be the baseline's.
+
+Results (`results/cpu-{windows,linux}-d943.json`): the same output everywhere, no
+breach. Median ratios over the baseline:
+
+| program | Windows unchecked | Windows checked | Linux unchecked | Linux checked |
+|---|---|---|---|---|
+| sieve | 1.003 | 1.419 | 0.980 | 1.291 |
+| sort | 1.008 | 1.118 | 0.991 | 1.097 |
+| hash | 0.999 | 1.003 | 1.014 | 1.035 |
+| records | 0.713 | 0.703 | 0.632 | 0.618 |
+
+Under the same contract the candidate runs as fast as M2, and 29-37% faster where
+aggregates are copied (D933's block moves). The checks cost what their loops expose:
+`sieve`'s inner loop indexes by a stride no proof covers (+29-42%), `sort`'s partition
++10-12%, `hash`'s loop is proven and costs nothing. The first version of `sort` pushed
+an empty range whose `high - low` wrapped; the checked build trapped on it, and M2's
+build ran on and printed nothing.
+
+The images are larger, and not because of the code: the four programs' code is the same
+size as the baseline's (about 11 KB), but the writable data segment is 832 bytes in the
+baseline's image and 37,940 in the candidate's on Linux (14.8 KB more on Windows).
+Dead-function elimination (D128) removes unreached functions, not globals, and
+`e.os`/`e.io` have grown globals that every program now carries. Named here, measured
+next.
