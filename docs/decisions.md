@@ -18520,3 +18520,40 @@ unchecked D931 at 6,264 and the M2 baseline at 5,344 (5,157-5,443) -- the baseli
 itself moving 5% run to run while other work shares the machine. The cuts that remain
 are of this size: each a function's share of a percent, found by the profile, too
 small for the wall or the task clock to confirm one at a time.
+
+## D933 — A copy's size is known where it is emitted
+
+Timing could no longer tell one cut from the next (D932), so the instrument became
+exact: `valgrind --tool=cachegrind` counts the instructions of a single-worker sc500k
+build, the same count run to run to 0.06%, and callgrind's per-instruction counts are
+attributed to functions through the compiler's own symbol table. Two findings:
+
+- Under valgrind the runtime's `cpuid` reports no SHA extensions, so SHA-256 runs in
+  software there (16 G of 110 G instructions) where the hardware does it natively in a
+  fraction of a percent. The comparison leaves it out on both sides.
+- 15.7% of everything the compiler executed was inside the one loop `copy_memory`
+  emitted for every aggregate copy, and 1.4% inside `zero_memory`'s: eight bytes a
+  turn in seven instructions, then a byte loop for the tail, for a size the emitter
+  already knew. An `Instruction` is 184 bytes; `let x = builder.instructions[i]` was
+  165 instructions.
+
+Both emitters now lay a copy or a clear of up to 32 bytes out move by move, widest
+first, and past 32 run a loop of 16 bytes a turn -- the pointers set past the blocks,
+the index counting up from minus their size to zero -- with the rest laid out after
+it. The registers are the ones the loops used or fewer (`zero_memory` still only
+r10 and r11, so the sites that do not preserve around it stay right), sizes of a
+gigabyte and more keep the old loops, and `emit_x64.self_test` pins the new bytes. The
+code is smaller as well as faster: the compiler's image 8,439,296 -> 7,864,832 bytes,
+the trap fixtures up to 5% smaller, sc500k's debug image 4.6%.
+
+With it, from the same count: the canonical text skips ordinary bytes by table and
+copies a line at a time; a site on an ASCII line takes its column as the offset past
+the line's start (the line checked once, where every site counted its scalars); the
+module's trap records and stubs are found through a hash index instead of a walk;
+and `binary.text`, `nir.emit` and `build_ranges` index local views their guards prove.
+
+The compiler reproduces itself (stage 2 = stage 3, and the bootstrap-built path agrees),
+the 70 trap runs print what they did, sc500k prints its expected value. sc500k,
+single worker: 109.90 G -> 92.50 G instructions (-15.8%); CPU time, seven runs each in
+one session, D932 6,667 ms, this 5,626 (-15.6%), the M2 baseline 5,118 -- +9.9%, inside
+H25's cold budget on this instrument, where D930 found +40%.

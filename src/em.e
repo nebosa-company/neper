@@ -3,6 +3,7 @@
 use artifact_hash
 use binary
 use e.mem
+use e.os
 use check
 use codegen_x64
 use emit_x64
@@ -2596,8 +2597,13 @@ fn source_text_hash(a: *mem.Arena, text: str) -> (usize, err) {
 // The next comment at or after `from`: where it starts and where its body ends --
 // the line break, or the text's end -- or the text's end twice when there is none.
 fn next_comment(text: str, from: usize) -> (usize, usize) {
+    let classes = comment_scan_bytes()
     var at = from
     while at < text.len {
+        // The bytes that open nothing, in one tight loop by table (D933): a quote, an
+        // apostrophe, a slash and an `r` are the only ones the scan below looks at.
+        while at < text.len && classes[usize(text[at])] == 0u8 { at += 1usize }
+        if at >= text.len { break }
         let byte_here = text[at]
         if byte_here == 34u8 {
             at += 1usize
@@ -2656,6 +2662,11 @@ fn next_comment(text: str, from: usize) -> (usize, usize) {
     ret (text.len, text.len)
 }
 
+// The bytes `next_comment` stops at, as a table: `"`, `'`, `/` and `r`.
+fn comment_scan_bytes() -> str {
+    ret "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+}
+
 // The canonical text (D507, H15): the bytes the key is over, every comment's body
 // left out, and its SHA-256 as hex -- what an artifact carries and a key hit is
 // verified by when the bytes changed.
@@ -2670,15 +2681,21 @@ fn comment_blind_text(a: *mem.Arena, text: str) -> (str, err) {
     var at = 0usize
     while at < text.len {
         let (comment_at, comment_end) = next_comment(text, at)
-        while at < comment_at {
-            let byte_here = text[at]
-            if byte_here == 10u8 {
-                while count > line_mark && (storage[count - 1usize] == 32u8 || storage[count - 1usize] == 9u8 || storage[count - 1usize] == 13u8) { count = count - 1usize }
-                line_mark = count + 1usize
-            }
-            storage[count] = byte_here
+        // Line by line up to the comment, each line's bytes copied whole (D933).
+        let run = text[at..comment_at]
+        var piece_start = 0usize
+        while piece_start <= run.len {
+            var piece_end = piece_start
+            while piece_end < run.len && run[piece_end] != 10u8 { piece_end += 1usize }
+            let piece = run[piece_start..piece_end]
+            os.copy_bytes(storage[count..count + piece.len], piece)
+            count += piece.len
+            if piece_end == run.len { break }
+            while count > line_mark && (storage[count - 1usize] == 32u8 || storage[count - 1usize] == 9u8 || storage[count - 1usize] == 13u8) { count = count - 1usize }
+            storage[count] = 10u8
             count += 1usize
-            at += 1usize
+            line_mark = count
+            piece_start = piece_end + 1usize
         }
         // The comment's body goes; its line break, if any, is the next copy's first byte.
         at = comment_end

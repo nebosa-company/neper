@@ -231,6 +231,21 @@ fn column_from(source: str, line_start: usize, offset: usize) -> usize {
     ret column
 }
 
+// Whether `source[from..end]` is ASCII (D933), `end` clamped to the source: on such a
+// line a column is the offset past the line's start, with no scalars to count.
+fn ascii_between(source: str, from: usize, end: usize) -> bool {
+    var stop = end
+    if stop > source.len { stop = source.len }
+    if from >= stop { ret true }
+    let run = source[from..stop]
+    var at = 0usize
+    while at < run.len {
+        if run[at] >= 128u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 // Whether `offset` begins a line: the parser's column-0 test for a declaration keyword.
 fn at_line_start(source: str, offset: usize) -> bool {
     if offset == 0usize { ret true }

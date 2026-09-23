@@ -66,9 +66,13 @@ fn copy_bytes(buffer: *Buffer, bytes: []const u8) -> err {
 fn text(buffer: *Buffer, value: str) -> err {
     if value.len > buffer.bytes.len - buffer.count { ret Capacity }
     let start = buffer.count
+    // Into a local view as long as the text (D932), so the loop's test proves both
+    // indexes where the store through the buffer was checked at every byte.
+    let into = buffer.bytes[start..start + value.len]
+    if into.len != value.len { ret Capacity }
     var at = 0usize
     while at < value.len {
-        buffer.bytes[start + at] = value[at]
+        into[at] = value[at]
         at += 1usize
     }
     buffer.count = start + value.len

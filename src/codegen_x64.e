@@ -2296,6 +2296,8 @@ fn trap_shared_stub(builder: *nir.Builder, current: nir.Function, path: []const 
         builder.trap_stub_count = 0usize
         builder.trap_name_count = 0usize
         builder.trap_path_known = false
+        clear_slots(builder.trap_data_slots)
+        clear_slots(builder.trap_stub_slots)
     }
     var path_ref = builder.trap_path_ref
     if !builder.trap_path_known || path.len != 1usize || path[0usize].is_single || !check.same(builder.trap_path, path[0usize].text) {
@@ -2310,11 +2312,14 @@ fn trap_shared_stub(builder: *nir.Builder, current: nir.Function, path: []const 
     }
     let (message_ref, message_made, message_error) = trap_data_function(builder, current, message)
     if message_error != ok || !message_made { ret (0usize, false, message_error) }
-    var at = 0usize
-    let stub_messages = builder.trap_stub_messages[0usize..builder.trap_stub_count]
-    while at < stub_messages.len {
-        if stub_messages[at] == message_ref && builder.trap_stub_paths[at] == path_ref && builder.trap_stub_moves[at] == moves { ret (builder.trap_stub_refs[at], true, ok) }
-        at += 1usize
+    let stub_slots = builder.trap_stub_slots
+    if stub_slots.len == 0usize { ret (0usize, false, ok) }
+    let stub_mask = stub_slots.len - 1usize
+    var stub_slot = ((path_ref *% 1099511628211usize) ^ (message_ref *% 14695981039346656037usize) ^ moves) & stub_mask
+    while stub_slots[stub_slot] != 0usize {
+        let at = stub_slots[stub_slot] - 1usize
+        if builder.trap_stub_messages[at] == message_ref && builder.trap_stub_paths[at] == path_ref && builder.trap_stub_moves[at] == moves { ret (builder.trap_stub_refs[at], true, ok) }
+        stub_slot = (stub_slot + 1usize) & stub_mask
     }
     if builder.trap_stub_count == builder.trap_stub_refs.len { ret (0usize, false, ok) }
     let (stub_ref, stub_made, stub_error) = trap_function(builder, current, .TrapStub, moves, path_ref, message_ref)
@@ -2324,9 +2329,18 @@ fn trap_shared_stub(builder: *nir.Builder, current: nir.Function, path: []const 
     builder.trap_stub_moves[builder.trap_stub_count] = moves
     builder.trap_stub_refs[builder.trap_stub_count] = stub_ref
     builder.trap_stub_count += 1usize
+    stub_slots[stub_slot] = builder.trap_stub_count
     ret (stub_ref, true, ok)
 }
 
+
+fn clear_slots(slots: []usize) {
+    var at = 0usize
+    while at < slots.len {
+        slots[at] = 0usize
+        at += 1usize
+    }
+}
 
 // Whether a record -- a 16-bit length and the bytes -- holds exactly these pieces.
 fn record_holds(record: str, pieces: []const TrapPiece, length: usize) -> bool {
@@ -2375,11 +2389,14 @@ fn trap_data_function(builder: *nir.Builder, current: nir.Function, pieces: []co
         }
         at += 1usize
     }
-    at = 0usize
-    let hashes = builder.trap_data_hashes[0usize..builder.trap_data_count]
-    while at < hashes.len {
-        if hashes[at] == hash && record_holds(builder.strings[builder.trap_data_strings[at]].spelling, pieces, length) { ret (builder.trap_data_refs[at], true, ok) }
-        at += 1usize
+    let data_slots = builder.trap_data_slots
+    if data_slots.len == 0usize { ret (0usize, false, ok) }
+    let data_mask = data_slots.len - 1usize
+    var data_slot = hash & data_mask
+    while data_slots[data_slot] != 0usize {
+        let found = data_slots[data_slot] - 1usize
+        if builder.trap_data_hashes[found] == hash && record_holds(builder.strings[builder.trap_data_strings[found]].spelling, pieces, length) { ret (builder.trap_data_refs[found], true, ok) }
+        data_slot = (data_slot + 1usize) & data_mask
     }
     // A new record, written after the last.
     let start = builder.trap_text_count
@@ -2415,6 +2432,7 @@ fn trap_data_function(builder: *nir.Builder, current: nir.Function, pieces: []co
     builder.trap_data_refs[builder.trap_data_count] = reference
     builder.trap_data_hashes[builder.trap_data_count] = hash
     builder.trap_data_count += 1usize
+    data_slots[data_slot] = builder.trap_data_count
     ret (reference, true, ok)
 }
 

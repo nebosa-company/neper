@@ -546,28 +546,34 @@ fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRan
         ranges[value_at] = empty_range
         value_at += 1usize
     }
+    // Views as long as the counts the guards test (D932), so each guard proves the
+    // index after it; the instruction's fields are read, not the instruction copied.
+    let live = ranges[0usize..function.value_count]
+    let instructions = builder.instructions[0usize..builder.instruction_count]
+    let operands = builder.operands[0usize..builder.operand_count]
     let instruction_end = function.first_instruction + function.instruction_count
     var instruction_at = function.first_instruction
     while instruction_at < instruction_end {
-        if instruction_at >= builder.instruction_count { ret InvalidIR }
-        let instruction = builder.instructions[instruction_at]
-        if instruction.has_result {
-            if instruction.result >= function.value_count { ret InvalidIR }
+        if instruction_at >= instructions.len { ret InvalidIR }
+        if instructions[instruction_at].has_result {
+            let result = instructions[instruction_at].result
+            if result >= live.len { ret InvalidIR }
             // A promoted local is defined at every store to it (D236): one range.
-            if ranges[instruction.result].defined {
-                ranges[instruction.result].last = instruction_at
+            if live[result].defined {
+                live[result].last = instruction_at
             } else {
-                ranges[instruction.result] = LiveRange { first: instruction_at, last: instruction_at, defined: true, used: false }
+                live[result] = LiveRange { first: instruction_at, last: instruction_at, defined: true, used: false }
             }
         }
-        let operand_end = instruction.first_operand + instruction.operand_count
-        var operand_at = instruction.first_operand
+        let operand_end = instructions[instruction_at].first_operand + instructions[instruction_at].operand_count
+        var operand_at = instructions[instruction_at].first_operand
         while operand_at < operand_end {
-            if operand_at >= builder.operand_count { ret InvalidIR }
-            let value = builder.operands[operand_at]
-            if value >= function.value_count || !ranges[value].defined { ret InvalidIR }
-            ranges[value].last = instruction_at
-            ranges[value].used = true
+            if operand_at >= operands.len { ret InvalidIR }
+            let value = operands[operand_at]
+            if value >= live.len { ret InvalidIR }
+            if !live[value].defined { ret InvalidIR }
+            live[value].last = instruction_at
+            live[value].used = true
             operand_at += 1usize
         }
         instruction_at += 1usize

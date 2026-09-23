@@ -695,9 +695,39 @@ fn emit_bytes(buffer: *Buffer, bytes: []const usize) -> err {
     ret ok
 }
 
+// The size is known where a copy or a clear is emitted (D933): up to 32 bytes the
+// moves are laid out one by one, and past it a loop moves 16 bytes a turn indexed up
+// to zero from below the blocks' end, then the rest one by one -- where one loop moved
+// 8 bytes in seven instructions and a second moved the tail a byte at a time, and the
+// copies were a sixth of what the compiler itself executed. The registers are the
+// ones the loops used, or fewer.
+const BLOCK_MOVE_LIMIT: usize = 1073741824usize
+
 fn zero_memory(buffer: *Buffer, address: usize, size: usize) -> err {
     if size == 0usize { ret ok }
     if address != 10usize { try mov_register(buffer, 10usize, address) }
+    let block_move_limit = BLOCK_MOVE_LIMIT
+    if size < block_move_limit {
+        let body = size / 16usize * 16usize
+        if size > 32usize {
+            // lea r10, [r10 + body]; mov r11, -body
+            let lea_end = [_]usize{ 77usize, 141usize, 146usize }
+            try emit_bytes(buffer, lea_end[..])
+            try little_u32(buffer, body)
+            let counter = [_]usize{ 73usize, 199usize, 195usize }
+            try emit_bytes(buffer, counter[..])
+            try little_u32(buffer, 4294967296usize - body)
+            // loop: mov qword [r10 + r11], 0; mov qword [r10 + r11 + 8], 0; add r11, 16; jnz loop
+            let clear_loop = [_]usize{ 75usize, 199usize, 4usize, 26usize, 0usize, 0usize, 0usize, 0usize, 75usize, 199usize, 68usize, 26usize, 8usize, 0usize, 0usize, 0usize, 0usize, 73usize, 131usize, 195usize, 16usize, 117usize, 233usize }
+            try emit_bytes(buffer, clear_loop[..])
+            // r11 is zero once the loop ends: the rest stores it.
+            ret zero_tail(buffer, size - body)
+        }
+        // xor r11d, r11d
+        let clear = [_]usize{ 69usize, 49usize, 219usize }
+        try emit_bytes(buffer, clear[..])
+        ret zero_tail(buffer, size)
+    }
     try mov_immediate(buffer, 11usize, size)
     // cmp r11, 8; jb tail
     let seq1 = [_]usize{ 73usize, 131usize, 251usize, 8usize, 114usize, 21usize }
@@ -723,10 +753,109 @@ fn zero_memory(buffer: *Buffer, address: usize, size: usize) -> err {
     ret byte(buffer, 244usize)
 }
 
+// Stores of r11, zero, at [r10 + 0 .. count), count below 128: the widest first.
+fn zero_tail(buffer: *Buffer, count: usize) -> err {
+    var at = 0usize
+    while count - at >= 8usize {
+        // mov [r10 + at], r11
+        try byte(buffer, 77usize)
+        try byte(buffer, 137usize)
+        try byte(buffer, 90usize)
+        try byte(buffer, at)
+        at += 8usize
+    }
+    if count - at >= 4usize {
+        // mov [r10 + at], r11d
+        try byte(buffer, 69usize)
+        try byte(buffer, 137usize)
+        try byte(buffer, 90usize)
+        try byte(buffer, at)
+        at += 4usize
+    }
+    if count - at >= 2usize {
+        // mov [r10 + at], r11w
+        try byte(buffer, 102usize)
+        try byte(buffer, 69usize)
+        try byte(buffer, 137usize)
+        try byte(buffer, 90usize)
+        try byte(buffer, at)
+        at += 2usize
+    }
+    if count - at >= 1usize {
+        // mov [r10 + at], r11b
+        try byte(buffer, 69usize)
+        try byte(buffer, 136usize)
+        try byte(buffer, 90usize)
+        try byte(buffer, at)
+    }
+    ret ok
+}
+
+// Moves through r9 from [r11 + 0 .. count) to [r10 + 0 .. count), count below 128.
+fn copy_tail(buffer: *Buffer, count: usize) -> err {
+    var at = 0usize
+    while count - at >= 8usize {
+        // mov r9, [r11 + at]; mov [r10 + at], r9
+        try tail_move(buffer, 0usize, 77usize, 139usize, at)
+        try tail_move(buffer, 0usize, 77usize, 137usize, at)
+        at += 8usize
+    }
+    if count - at >= 4usize {
+        // mov r9d, [r11 + at]; mov [r10 + at], r9d
+        try tail_move(buffer, 0usize, 69usize, 139usize, at)
+        try tail_move(buffer, 0usize, 69usize, 137usize, at)
+        at += 4usize
+    }
+    if count - at >= 2usize {
+        // mov r9w, [r11 + at]; mov [r10 + at], r9w
+        try tail_move(buffer, 102usize, 69usize, 139usize, at)
+        try tail_move(buffer, 102usize, 69usize, 137usize, at)
+        at += 2usize
+    }
+    if count - at >= 1usize {
+        // mov r9b, [r11 + at]; mov [r10 + at], r9b
+        try tail_move(buffer, 0usize, 69usize, 138usize, at)
+        try tail_move(buffer, 0usize, 69usize, 136usize, at)
+    }
+    ret ok
+}
+
+// One move of the tail: an operand-size prefix when not zero, the REX byte, the opcode,
+// and r9 against [r11 + at] for a load (8A, 8B) or [r10 + at] for a store (88, 89).
+fn tail_move(buffer: *Buffer, prefix: usize, rex_byte: usize, opcode: usize, at: usize) -> err {
+    if prefix != 0usize { try byte(buffer, prefix) }
+    try byte(buffer, rex_byte)
+    try byte(buffer, opcode)
+    if opcode == 138usize || opcode == 139usize { try byte(buffer, 75usize) } else { try byte(buffer, 74usize) }
+    ret byte(buffer, at)
+}
+
 fn copy_memory(buffer: *Buffer, destination: usize, source: usize, size: usize) -> err {
     if size == 0usize { ret ok }
     if destination != 10usize { try mov_register(buffer, 10usize, destination) }
     if source != 11usize { try mov_register(buffer, 11usize, source) }
+    let block_move_limit = BLOCK_MOVE_LIMIT
+    if size < block_move_limit {
+        let body = size / 16usize * 16usize
+        if size > 32usize {
+            // lea r11, [r11 + body]; lea r10, [r10 + body]; mov rax, -body
+            let source_end = [_]usize{ 77usize, 141usize, 155usize }
+            try emit_bytes(buffer, source_end[..])
+            try little_u32(buffer, body)
+            let destination_end = [_]usize{ 77usize, 141usize, 146usize }
+            try emit_bytes(buffer, destination_end[..])
+            try little_u32(buffer, body)
+            let counter = [_]usize{ 72usize, 199usize, 192usize }
+            try emit_bytes(buffer, counter[..])
+            try little_u32(buffer, 4294967296usize - body)
+            // loop: mov r9, [r11 + rax]; mov [r10 + rax], r9; mov r9, [r11 + rax + 8];
+            // mov [r10 + rax + 8], r9; add rax, 16; jnz loop
+            let move_loop = [_]usize{ 77usize, 139usize, 12usize, 3usize, 77usize, 137usize, 12usize, 2usize, 77usize, 139usize, 76usize, 3usize, 8usize, 77usize, 137usize, 76usize, 2usize, 8usize, 72usize, 131usize, 192usize, 16usize, 117usize, 232usize }
+            try emit_bytes(buffer, move_loop[..])
+            ret copy_tail(buffer, size - body)
+        }
+        ret copy_tail(buffer, size)
+    }
     try mov_immediate(buffer, 0usize, size)
     // cmp rax, 8; jb tail
     let seq4 = [_]usize{ 72usize, 131usize, 248usize, 8usize, 114usize, 24usize }
@@ -946,10 +1075,10 @@ fn self_test() -> err {
     try zero_memory(&memory, 9usize, 24usize)
     try multiply_immediate(&memory, 10usize, 11usize, 24usize)
     try bounds_check(&memory, 10usize, 11usize)
-    if memory.count != 108usize { ret InvalidRegister }
+    if memory.count != 73usize { ret InvalidRegister }
     if memory.bytes[0usize] != 76u8 || memory.bytes[1usize] != 141u8 || memory.bytes[7usize] != 73u8 || memory.bytes[14usize] != 77u8 || memory.bytes[16usize] != 182u8 || memory.bytes[31usize] != 102u8 || memory.bytes[40usize] != 26u8 { ret InvalidRegister }
-    if memory.bytes[41usize] != 77u8 || memory.bytes[44usize] != 65u8 || memory.bytes[45usize] != 187u8 || memory.bytes[50usize] != 73u8 || memory.bytes[56usize] != 73u8 || memory.bytes[57usize] != 199u8 || memory.bytes[82usize] != 65u8 || memory.bytes[93usize] != 244u8 { ret InvalidRegister }
-    if memory.bytes[94usize] != 77u8 || memory.bytes[95usize] != 105u8 || memory.bytes[101usize] != 77u8 || memory.bytes[104usize] != 114u8 || memory.bytes[107usize] != 11u8 { ret InvalidRegister }
+    if memory.bytes[41usize] != 77u8 || memory.bytes[44usize] != 69u8 || memory.bytes[45usize] != 49u8 || memory.bytes[46usize] != 219u8 || memory.bytes[47usize] != 77u8 || memory.bytes[49usize] != 90u8 || memory.bytes[50usize] != 0u8 || memory.bytes[58usize] != 16u8 { ret InvalidRegister }
+    if memory.bytes[59usize] != 77u8 || memory.bytes[60usize] != 105u8 || memory.bytes[66usize] != 77u8 || memory.bytes[69usize] != 114u8 || memory.bytes[72usize] != 11u8 { ret InvalidRegister }
     ret ok
 }
 

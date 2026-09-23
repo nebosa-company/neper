@@ -418,6 +418,9 @@ type Builder = struct {
     site_line: usize,
     site_line_start: usize,
     site_line_end: usize,
+    // Whether that line is ASCII (D933): a column on it is the offset past its start,
+    // where each site counted the line's scalars from its start.
+    site_line_ascii: bool,
     // The inlining oracle (D207): small functions lowered ahead of the program into
     // their own builder, and the sites that took a body from it.
     oracle: *Builder,
@@ -459,6 +462,10 @@ type Builder = struct {
     trap_data_strings: []usize,
     trap_data_refs: []usize,
     trap_data_hashes: []usize,
+    // Open-addressed indexes over the two tables (D933), twice their size, one-based
+    // entries: a site found its record and its stub by walking the module's so far.
+    trap_data_slots: []usize,
+    trap_stub_slots: []usize,
     trap_stub_count: usize,
     trap_stub_paths: []usize,
     trap_stub_messages: []usize,
@@ -820,6 +827,8 @@ fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions:
     builder.trap_data_strings = builder.trap_data_strings[0usize..0usize]
     builder.trap_data_refs = builder.trap_data_refs[0usize..0usize]
     builder.trap_data_hashes = builder.trap_data_hashes[0usize..0usize]
+    builder.trap_data_slots = builder.trap_data_slots[0usize..0usize]
+    builder.trap_stub_slots = builder.trap_stub_slots[0usize..0usize]
     builder.trap_stub_paths = builder.trap_stub_paths[0usize..0usize]
     builder.trap_stub_messages = builder.trap_stub_messages[0usize..0usize]
     builder.trap_stub_refs = builder.trap_stub_refs[0usize..0usize]
@@ -832,6 +841,7 @@ fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions:
     builder.trap_path = ""
     builder.trap_path_ref = 0usize
     builder.trap_path_known = false
+    builder.site_line_ascii = false
     ret ok
 }
 
@@ -1179,7 +1189,13 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         result = builder.next_value
         builder.next_value += 1usize
     }
-    builder.instructions[instruction_index] = Instruction {
+    // The stores through local views (D932), the guards before them what proves them.
+    let instructions = builder.instructions
+    if instruction_index >= instructions.len { ret (0usize, 0usize, Capacity) }
+    let blocks = builder.blocks
+    let block_at = builder.current_block
+    if block_at >= blocks.len { ret (0usize, 0usize, InvalidControlFlow) }
+    instructions[instruction_index] = Instruction {
         opcode: opcode,
         result: result,
         has_result: has_result,
@@ -1189,15 +1205,15 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         immediate: immediate,
         target: 0usize,
         target2: 0usize,
-        site: site_of(builder, token),
+        site: site_at(builder, token.start, token.end),
         nocheck: builder.nocheck,
         inline_origin: 0u32,
         path: builder.current_path,
     }
     builder.instruction_count += 1usize
-    builder.blocks[builder.current_block].instruction_count += 1usize
+    blocks[block_at].instruction_count += 1usize
     builder.functions[builder.current_function].instruction_count += 1usize
-    if is_terminator(opcode) { builder.blocks[builder.current_block].terminated = true }
+    if is_terminator(opcode) { blocks[block_at].terminated = true }
     ret (instruction_index, result, ok)
 }
 
@@ -1638,22 +1654,34 @@ fn discard_bodies(builder: *Builder, at: Mark) {
 // name it. A copied instruction keeps its own site (`emit_at`): it came from another
 // module's text.
 fn site_of(builder: *Builder, token: lex.Token) -> Site {
+    ret site_at(builder, token.start, token.end)
+}
+
+// The site of a token's byte range (D933): what `emit` passes, where the token itself
+// was copied again to reach here.
+fn site_at(builder: *Builder, token_start: usize, token_end: usize) -> Site {
     var site: Site = zero
-    site.start = token.start
-    site.end = token.end
+    site.start = token_start
+    site.end = token_end
     // A zero token is no token: the synthesized functions emit with one, and their
     // instructions have no line -- a real token ends past byte 0.
-    if token.end != 0usize && token.start <= builder.current_text.len {
-        if builder.site_line == 0usize || token.start < builder.site_line_start || token.start >= builder.site_line_end {
-            let line = lex.line_of(builder.current_text, builder.current_lines, token.start)
+    if token_end != 0usize && token_start <= builder.current_text.len {
+        if builder.site_line == 0usize || token_start < builder.site_line_start || token_start >= builder.site_line_end {
+            let line = lex.line_of(builder.current_text, builder.current_lines, token_start)
             builder.site_line = line
             builder.site_line_start = 0usize
             builder.site_line_end = builder.current_text.len + 1usize
             if line - 1usize < builder.current_lines.len { builder.site_line_start = builder.current_lines[line - 1usize] }
             if line < builder.current_lines.len { builder.site_line_end = builder.current_lines[line] }
+            // A byte-order mark is not ASCII, so the first line of a file with one counts.
+            builder.site_line_ascii = lex.ascii_between(builder.current_text, builder.site_line_start, builder.site_line_end)
         }
         site.line = builder.site_line
-        site.column = lex.column_from(builder.current_text, builder.site_line_start, token.start)
+        if builder.site_line_ascii && token_start >= builder.site_line_start {
+            site.column = token_start - builder.site_line_start + 1usize
+        } else {
+            site.column = lex.column_from(builder.current_text, builder.site_line_start, token_start)
+        }
     }
     ret site
 }

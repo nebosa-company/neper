@@ -3557,7 +3557,7 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     let (trap_text, trap_text_error) = mem.alloc[u8](a, 4194304usize / scale)
     if trap_text_error != ok { ret trap_text_error }
     builder.trap_text = trap_text
-    let (trap_tables, trap_tables_error) = mem.alloc[usize](a, nir.TRAP_DATA * 7usize)
+    let (trap_tables, trap_tables_error) = mem.alloc[usize](a, nir.TRAP_DATA * 11usize)
     if trap_tables_error != ok { ret trap_tables_error }
     builder.trap_data_strings = trap_tables[0usize..nir.TRAP_DATA]
     builder.trap_data_refs = trap_tables[nir.TRAP_DATA..nir.TRAP_DATA * 2usize]
@@ -3566,6 +3566,8 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     builder.trap_stub_refs = trap_tables[nir.TRAP_DATA * 4usize..nir.TRAP_DATA * 5usize]
     builder.trap_stub_moves = trap_tables[nir.TRAP_DATA * 5usize..nir.TRAP_DATA * 6usize]
     builder.trap_data_hashes = trap_tables[nir.TRAP_DATA * 6usize..nir.TRAP_DATA * 7usize]
+    builder.trap_data_slots = trap_tables[nir.TRAP_DATA * 7usize..nir.TRAP_DATA * 9usize]
+    builder.trap_stub_slots = trap_tables[nir.TRAP_DATA * 9usize..nir.TRAP_DATA * 11usize]
     let (used_marks, used_marks_error) = mem.alloc[u8](a, function_refs.len)
     if used_marks_error != ok { ret used_marks_error }
     builder.used_marks = used_marks
