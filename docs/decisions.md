@@ -18971,3 +18971,35 @@ The CPU programs' images, Windows / Linux, against the baseline's: `sieve` 20,99
 where they were up to three times it. sc500k's debug image is 1,628,672 bytes (was
 1,644,032) and the compiler's own 7,827,968 (was 7,840,768). The compiler reproduces
 itself, the 70 trap runs and every program print what they did.
+
+## D947 — H25's persistent-session workflow: a query in tens of milliseconds, nothing retained
+
+The fourth pending H25 workflow. The persistent session is `query-batch` (D409, H16),
+which loads, resolves and checks the program once and answers a stream of queries from
+that snapshot. M2 had no session, so `benchmarks/baseline/session.py` freezes the
+workload and budget. The workload: fifty symbols spread over the modules
+(`mNNNN.job0`), each asked `context SYMBOL 64` and `uses SYMBOL`, with a `memory`
+query after every ten -- 100 queries and 11 memory samples. It alternates with a
+session that only asks `memory`, which costs the load alone, five runs after a
+discarded one.
+
+Measured on both hosts with the D946 compiler (`results/session-{windows,linux}-d947.json`):
+
+| workload | host | load | per query | retained per query | request peak | arena |
+|---|---|---|---|---|---|---|
+| sc500k | Windows | 3,248 ms | 47.3 ms | 0 B | 105 MB | 484 MB |
+| sc500k | Linux | 2,714 ms | 48.7 ms | 0 B | 105 MB | 484 MB |
+| sc1m | Windows | 9,368 ms | 96.4 ms | 0 B | 209 MB | 722 MB |
+| sc1m | Linux | 9,057 ms | 96.1 ms | 0 B | 209 MB | 722 MB |
+
+A query costs about 1.5% of asking a fresh process, which checks the whole program
+first (D941's query step: 2.8 s and 8.9 s). The warm memory slope H25 asks for is
+zero: the arena's use is the same after a hundred requests as after none, and each
+request's storage, up to its peak, is released before the next one. Five of the
+answers, spread over the session, match what `context-file` and `uses-file` print for
+the same query in a fresh process, byte for byte, so the session serves no stale
+answer from its snapshot. Cache eviction and cancellation are reported as not
+applicable: a session holds one snapshot and answers in order, so there is nothing to
+evict and nothing in flight to cancel. The pinned budgets
+(`results/session-<host>.json`): each workload's per-query median plus a quarter, and
+a retention slope of zero.

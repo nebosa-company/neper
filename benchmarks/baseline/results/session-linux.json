@@ -1,0 +1,18 @@
+{
+ "schema": "neper-session-budget",
+ "version": 1,
+ "host": "linux",
+ "margin": 0.25,
+ "cells": [
+  {
+   "workload": "sc500k",
+   "per_query_budget_ms": 60.91,
+   "memory_slope_budget": 0.0
+  },
+  {
+   "workload": "sc1m",
+   "per_query_budget_ms": 120.09,
+   "memory_slope_budget": 0.0
+  }
+ ]
+}

@@ -1,0 +1,55 @@
+{
+ "schema": "neper-session",
+ "version": 1,
+ "host": "linux",
+ "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+ "runs": 5,
+ "compiler": "/home/gaddl/nf/neper-g2-linux",
+ "root": "/mnt/d/repos/neper",
+ "cells": [
+  {
+   "workload": "sc500k",
+   "queries": 100,
+   "memory_samples": 11,
+   "load_ms_p50": 2714.5,
+   "session_ms_p50": 7559.1,
+   "per_query_ms_p50": 48.73,
+   "per_query_ms": [
+    48.73,
+    49.09,
+    47.23,
+    51.28,
+    47.42
+   ],
+   "memory_slope_bytes_per_query": 0.0,
+   "arena_used": 508176007,
+   "request_peak": 110392952,
+   "stale": [],
+   "eviction": "not applicable: one snapshot per session",
+   "cancellation": "not applicable: answered in order"
+  },
+  {
+   "workload": "sc1m",
+   "queries": 100,
+   "memory_samples": 11,
+   "load_ms_p50": 9056.7,
+   "session_ms_p50": 19050.4,
+   "per_query_ms_p50": 96.07,
+   "per_query_ms": [
+    95.08,
+    99.91,
+    96.07,
+    94.7,
+    101.02
+   ],
+   "memory_slope_bytes_per_query": 0.0,
+   "arena_used": 757587575,
+   "request_peak": 219689456,
+   "stale": [],
+   "eviction": "not applicable: one snapshot per session",
+   "cancellation": "not applicable: answered in order"
+  }
+ ],
+ "failures": 0,
+ "breaches": 0
+}

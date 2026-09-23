@@ -1,0 +1,55 @@
+{
+ "schema": "neper-session",
+ "version": 1,
+ "host": "windows",
+ "platform": "Windows-11-10.0.26200-SP0",
+ "runs": 5,
+ "compiler": "D:\\repos\\neper\\build\\examples\\neper-g2.exe",
+ "root": "D:\\repos\\neper",
+ "cells": [
+  {
+   "workload": "sc500k",
+   "queries": 100,
+   "memory_samples": 11,
+   "load_ms_p50": 3247.8,
+   "session_ms_p50": 7979.4,
+   "per_query_ms_p50": 47.32,
+   "per_query_ms": [
+    57.36,
+    52.07,
+    47.32,
+    40.08,
+    46.66
+   ],
+   "memory_slope_bytes_per_query": 0.0,
+   "arena_used": 508509239,
+   "request_peak": 110442584,
+   "stale": [],
+   "eviction": "not applicable: one snapshot per session",
+   "cancellation": "not applicable: answered in order"
+  },
+  {
+   "workload": "sc1m",
+   "queries": 100,
+   "memory_samples": 11,
+   "load_ms_p50": 9368.2,
+   "session_ms_p50": 18970.1,
+   "per_query_ms_p50": 96.4,
+   "per_query_ms": [
+    88.33,
+    96.02,
+    98.46,
+    99.41,
+    96.4
+   ],
+   "memory_slope_bytes_per_query": 0.0,
+   "arena_used": 757910439,
+   "request_peak": 219739088,
+   "stale": [],
+   "eviction": "not applicable: one snapshot per session",
+   "cancellation": "not applicable: answered in order"
+  }
+ ],
+ "failures": 0,
+ "breaches": 0
+}
