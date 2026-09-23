@@ -19043,3 +19043,22 @@ could not be repaired and was replaced. Recorded here, since an agent would meet
 The pinned budgets (`results/context-<host>.json`): a context answer's tokens not above
 what they are now, its latency and a repair's time within their median plus a quarter,
 a repair's calls not above.
+
+## D949 — The H25 report, and C033 closed
+
+`docs/h25-report.md` gathers H25's measurements: the frozen host, workloads, options,
+cache states and repetitions; the instruments (paired runs, exact instruction counts,
+the deterministic measures, the profilers); each workflow's result with the command
+that reproduces it -- cold and warm builds (D935, D936), edit/revert (D939), rename
+(D941; move and delete have no planning tool yet), context and repair (D948), the
+persistent session (D947), CPU programs (D943, D946); the budgets in force and how
+each is judged; noise and exclusions. GPU is marked pending with its M3 owners (C090-
+C096), with no emulator figure standing in for a device's. H12's model-family
+evaluation stays E2's claim gate, which this report hands the context and repair
+measurements to.
+
+No budget is exceeded by a change in what the compiler costs, on either host, so no
+regression is left without its decision. C033 closes. Its budgets hold later rows: a
+timed cell is decided paired against the baseline compiler, the compiler cell per line
+of its source (D936), and the workflows new since M2 against the pins in
+`benchmarks/baseline/results/` (`rename-`, `session-`, `context-<host>.json`).

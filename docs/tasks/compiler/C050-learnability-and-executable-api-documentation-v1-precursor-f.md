@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.76 of 1 |
-| queue position | 10 of 48 (only position 1 is eligible for the next session; see README) |
+| queue position | 9 of 47 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -87,7 +87,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `context-file`: `src/tool.e`×6‡, `src/main.e`×5‡, `src/check.e`×3‡, `benchmarks/llm_edit/README.md`×1, `benchmarks/llm_edit/semantic.py`×1, `scripts/render_card.py`×1, `tests/conformance/tools/context_moves.e`×1, `tests/conformance/tools/contract.e`×1
+- `context-file`: `src/tool.e`×6‡, `src/main.e`×5‡, `benchmarks/baseline/context.py`×4, `src/check.e`×3‡, `benchmarks/baseline/session.py`×2, `benchmarks/llm_edit/README.md`×1, `benchmarks/llm_edit/semantic.py`×1, `scripts/render_card.py`×1
 - `supported-on-target`: `tests/conformance/tools/catalog.x64-linux.expected.jsonl`×3, `tests/conformance/tools/catalog.x64-windows.expected.jsonl`×3, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×2, `tests/conformance/tools/batch.x64-windows.expected.jsonl`×2, `tests/conformance/tools/catalog_verified.x64-linux.expected.jsonl`×2, `tests/conformance/tools/catalog_verified.x64-windows.expected.jsonl`×2, `src/tool.e`×1‡
 - `unavailable`: `src/tool.e`×2‡, `tests/conformance/reject/safety_thread_dynamic_array_element_context.e`×1, `tests/conformance/tools/batch.x64-linux.expected.jsonl`×1, `tests/conformance/tools/batch.x64-windows.expected.jsonl`×1, `tests/conformance/tools/catalog_unavailable.expected.jsonl`×1
 - `e.atomic`: `src/resolve.e`×14†, `src/check.e`×9‡, `scripts/algos/batch38.json`×4, `src/main.e`×2‡, `benchmarks/metamorphic/rename_symbols.py`×1, `lib/e/cancel.e`×1, `lib/e/concurrent/deque.e`×1, `lib/e/concurrent/reclaim.e`×1

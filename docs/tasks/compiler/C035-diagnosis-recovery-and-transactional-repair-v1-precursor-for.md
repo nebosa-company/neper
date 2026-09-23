@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.86 of 1 |
-| queue position | 2 of 48 (only position 1 is eligible for the next session; see README) |
+| queue position | 1 of 47 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -73,7 +73,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
 - `toolchain-lib`: `src/main.e`×2‡, `src/tool.e`×2‡, `tests/conformance/tools/explain.expected.jsonl`×2, `tests/conformance/reject/safety_copy_toolchain.e`×1, `tests/conformance/tools/manifest_unsafe.x64-linux.expected.jsonl`×1, `tests/conformance/tools/manifest_unsafe.x64-windows.expected.jsonl`×1
-- `project-src`: `tests/conformance/tools/plan_rename_type.x64-linux.expected.jsonl`×13, `tests/conformance/tools/plan_rename_type.x64-windows.expected.jsonl`×13, `tests/conformance/tools/nested_instance.x64-linux.expected.jsonl`×9, `tests/conformance/tools/nested_instance.x64-windows.expected.jsonl`×9, `tests/conformance/tools/uses_type.expected.jsonl`×9, `src/main.e`×8‡, `tests/conformance/tools/plan_rename_error.x64-linux.expected.jsonl`×6, `tests/conformance/tools/plan_rename_error.x64-windows.expected.jsonl`×6
+- `project-src`: `tests/conformance/tools/plan_rename_type.x64-linux.expected.jsonl`×13, `tests/conformance/tools/plan_rename_type.x64-windows.expected.jsonl`×13, `tests/conformance/tools/nested_instance.x64-linux.expected.jsonl`×9, `tests/conformance/tools/nested_instance.x64-windows.expected.jsonl`×9, `tests/conformance/tools/uses_type.expected.jsonl`×9, `benchmarks/baseline/results/context-linux-d948.json`×8†, `benchmarks/baseline/results/context-windows-d948.json`×8†, `src/main.e`×8‡
 - `project-lib`: `src/main.e`×2‡, `src/tool.e`×2‡, `tests/conformance/reject/safety_pushed_twice.expected.jsonl`×2, `tests/conformance/reject/safety_codec_decode_resource.expected.jsonl`×1, `tests/conformance/reject/safety_codec_encode_resource.expected.jsonl`×1, `tests/conformance/reject/safety_copy_toolchain.e`×1, `tests/conformance/reject/safety_copy_toolchain.expected.jsonl`×1, `tests/conformance/tools/arena_layout.expected.jsonl`×1
 
 ## Verification

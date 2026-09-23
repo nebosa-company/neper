@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.97 of 1 |
-| queue position | 30 of 48 (only position 1 is eligible for the next session; see README) |
+| queue position | 29 of 47 (only position 1 is eligible for the next session; see README) |
 | difficulty | low — rated for a small model; a whole checklist line per session is realistic |
 
 ## Definition of done
@@ -55,7 +55,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `check-file`: `src/main.e`×10‡, `src/tool.e`×6‡, `benchmarks/fuzz/fuzz.py`×3, `benchmarks/scale/profile_check.sh`×3, `scripts/algos/agent_brief.md`×2, `scripts/card_examples.py`×2, `scripts/algos/decisions-pending.md`×1†, `scripts/render_card.py`×1
+- `check-file`: `src/main.e`×10‡, `src/tool.e`×6‡, `benchmarks/fuzz/fuzz.py`×3, `benchmarks/scale/profile_check.sh`×3, `benchmarks/baseline/context.py`×2, `scripts/algos/agent_brief.md`×2, `scripts/card_examples.py`×2, `scripts/algos/decisions-pending.md`×1†
 - `emit-executable`: `src/main.e`×9‡, `benchmarks/baseline/results/baseline-linux.json`×8, `benchmarks/baseline/results/baseline-windows.json`×8, `benchmarks/baseline/results/h25-linux-d936.json`×8, `benchmarks/baseline/results/h25-windows-d936.json`×8, `benchmarks/baseline/h01-windows-d351.json`×6, `benchmarks/baseline/h29-windows-d382.json`×6, `benchmarks/baseline/h29-windows-d384.json`×4
 - `os.stdin`: `benchmarks/metamorphic/rename_symbols.py`×1, `src/source.e`×1, `tests/conformance/accept/safety_seeded_handle.e`×1, `tests/conformance/reject/safety_seeded_opaque.e`×1, `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×1, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×1
 - `os.mkdir`: `lib/e/fs.e`×4, `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×4, `src/tool.e`×2‡, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×2, `src/main.e`×1‡

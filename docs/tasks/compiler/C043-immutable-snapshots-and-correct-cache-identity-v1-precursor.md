@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.63 of 1 |
-| queue position | 5 of 48 (only position 1 is eligible for the next session; see README) |
+| queue position | 4 of 47 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -84,8 +84,8 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `inline-cap`: `src/main.e`×6‡, `src/lower.e`×2‡, `src/nir.e`×1†
 - `options-changed`: `src/main.e`×1‡, `src/tool.e`×1‡
 - `fault-collision`: `src/main.e`×3‡
-- `check-file`: `src/main.e`×10‡, `src/tool.e`×6‡, `benchmarks/fuzz/fuzz.py`×3, `benchmarks/scale/profile_check.sh`×3, `scripts/algos/agent_brief.md`×2, `scripts/card_examples.py`×2, `scripts/algos/decisions-pending.md`×1†, `scripts/render_card.py`×1
-- `uses-file`: `src/tool.e`×7‡, `src/check.e`×3‡, `src/main.e`×3‡, `benchmarks/baseline/rename.py`×2, `scripts/render_card.py`×1, `tests/conformance/tools/plan_generated.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_generated.x64-windows.expected.jsonl`×1, `tests/conformance/tools/plan_parameter.x64-linux.expected.jsonl`×1
+- `check-file`: `src/main.e`×10‡, `src/tool.e`×6‡, `benchmarks/fuzz/fuzz.py`×3, `benchmarks/scale/profile_check.sh`×3, `benchmarks/baseline/context.py`×2, `scripts/algos/agent_brief.md`×2, `scripts/card_examples.py`×2, `scripts/algos/decisions-pending.md`×1†
+- `uses-file`: `src/tool.e`×7‡, `src/check.e`×3‡, `src/main.e`×3‡, `benchmarks/baseline/rename.py`×2, `benchmarks/baseline/session.py`×2, `scripts/render_card.py`×1, `tests/conformance/tools/plan_generated.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_generated.x64-windows.expected.jsonl`×1
 
 ## Verification
 

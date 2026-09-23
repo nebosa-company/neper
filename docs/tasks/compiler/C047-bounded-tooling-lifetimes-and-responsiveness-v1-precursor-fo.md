@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.80 of 1 |
-| queue position | 8 of 48 (only position 1 is eligible for the next session; see README) |
+| queue position | 7 of 47 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -87,7 +87,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `query-batch`: `src/main.e`×6‡, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/render_card.py`×1, `tests/conformance/tools/batch_broken.expected.jsonl`×1
+- `query-batch`: `src/main.e`×6‡, `benchmarks/baseline/session.py`×3, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/render_card.py`×1, `tests/conformance/tools/batch_broken.expected.jsonl`×1
 
 ## Verification
 

@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.72 of 1 |
-| queue position | 44 of 48 (only position 1 is eligible for the next session; see README) |
+| queue position | 43 of 47 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -40,8 +40,8 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `neper-source-map`: `src/main.e`×3‡, `tests/conformance/tools/combined_inputs.e.map.json`×1, `tests/conformance/tools/combined_stale.e.map.json`×1, `tests/conformance/tools/generated_map.e.map.json`×1, `tests/conformance/tools/hand_edited.e.map.json`×1, `tests/conformance/tools/nested_deep.e.map.json`×1, `tests/conformance/tools/nested_deep.mid1.map.json`×1, `tests/conformance/tools/nested_deep.mid2.map.json`×1
 - `emit-executable`: `src/main.e`×9‡, `benchmarks/baseline/results/baseline-linux.json`×8, `benchmarks/baseline/results/baseline-windows.json`×8, `benchmarks/baseline/results/h25-linux-d936.json`×8, `benchmarks/baseline/results/h25-windows-d936.json`×8, `benchmarks/baseline/h01-windows-d351.json`×6, `benchmarks/baseline/h29-windows-d382.json`×6, `benchmarks/baseline/h29-windows-d384.json`×4
-- `check-file`: `src/main.e`×10‡, `src/tool.e`×6‡, `benchmarks/fuzz/fuzz.py`×3, `benchmarks/scale/profile_check.sh`×3, `scripts/algos/agent_brief.md`×2, `scripts/card_examples.py`×2, `scripts/algos/decisions-pending.md`×1†, `scripts/render_card.py`×1
-- `project-src`: `tests/conformance/tools/plan_rename_type.x64-linux.expected.jsonl`×13, `tests/conformance/tools/plan_rename_type.x64-windows.expected.jsonl`×13, `tests/conformance/tools/nested_instance.x64-linux.expected.jsonl`×9, `tests/conformance/tools/nested_instance.x64-windows.expected.jsonl`×9, `tests/conformance/tools/uses_type.expected.jsonl`×9, `src/main.e`×8‡, `tests/conformance/tools/plan_rename_error.x64-linux.expected.jsonl`×6, `tests/conformance/tools/plan_rename_error.x64-windows.expected.jsonl`×6
+- `check-file`: `src/main.e`×10‡, `src/tool.e`×6‡, `benchmarks/fuzz/fuzz.py`×3, `benchmarks/scale/profile_check.sh`×3, `benchmarks/baseline/context.py`×2, `scripts/algos/agent_brief.md`×2, `scripts/card_examples.py`×2, `scripts/algos/decisions-pending.md`×1†
+- `project-src`: `tests/conformance/tools/plan_rename_type.x64-linux.expected.jsonl`×13, `tests/conformance/tools/plan_rename_type.x64-windows.expected.jsonl`×13, `tests/conformance/tools/nested_instance.x64-linux.expected.jsonl`×9, `tests/conformance/tools/nested_instance.x64-windows.expected.jsonl`×9, `tests/conformance/tools/uses_type.expected.jsonl`×9, `benchmarks/baseline/results/context-linux-d948.json`×8†, `benchmarks/baseline/results/context-windows-d948.json`×8†, `src/main.e`×8‡
 
 ## Existing fixtures
 

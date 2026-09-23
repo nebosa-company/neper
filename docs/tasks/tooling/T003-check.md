@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.87 of 1 |
-| queue position | 32 of 48 (only position 1 is eligible for the next session; see README) |
+| queue position | 31 of 47 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -42,7 +42,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `nested/deep.e`: `src/main.e`×1‡, `tests/conformance/tools/check_project.expected.jsonl`×1, `tests/conformance/tools/check_project/src/nested/deep.e`×1, `tests/conformance/tools/impact.expected.jsonl`×1, `tests/conformance/tools/impact_local.expected.jsonl`×1, `tests/conformance/tools/test_project.expected.jsonl`×1, `tests/conformance/tools/test_project/src/nested/deep.e`×1
 - `check-project`: `src/main.e`×7‡, `tests/conformance/tools/check_project/src/main.e`×1
 - `test-project`: `src/main.e`×9‡, `tests/conformance/tools/test_project/src/main.e`×1
-- `project-src`: `tests/conformance/tools/plan_rename_type.x64-linux.expected.jsonl`×13, `tests/conformance/tools/plan_rename_type.x64-windows.expected.jsonl`×13, `tests/conformance/tools/nested_instance.x64-linux.expected.jsonl`×9, `tests/conformance/tools/nested_instance.x64-windows.expected.jsonl`×9, `tests/conformance/tools/uses_type.expected.jsonl`×9, `src/main.e`×8‡, `tests/conformance/tools/plan_rename_error.x64-linux.expected.jsonl`×6, `tests/conformance/tools/plan_rename_error.x64-windows.expected.jsonl`×6
+- `project-src`: `tests/conformance/tools/plan_rename_type.x64-linux.expected.jsonl`×13, `tests/conformance/tools/plan_rename_type.x64-windows.expected.jsonl`×13, `tests/conformance/tools/nested_instance.x64-linux.expected.jsonl`×9, `tests/conformance/tools/nested_instance.x64-windows.expected.jsonl`×9, `tests/conformance/tools/uses_type.expected.jsonl`×9, `benchmarks/baseline/results/context-linux-d948.json`×8†, `benchmarks/baseline/results/context-windows-d948.json`×8†, `src/main.e`×8‡
 
 ## Existing fixtures
 

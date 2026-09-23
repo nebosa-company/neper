@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.68 of 1 |
-| queue position | 7 of 48 (only position 1 is eligible for the next session; see README) |
+| queue position | 6 of 47 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -86,7 +86,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `index-file`: `src/main.e`×9‡, `benchmarks/metamorphic/metamorphic.py`×2, `benchmarks/metamorphic/rename_locals.py`×1, `benchmarks/metamorphic/rename_symbols.py`×1, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/check_module_surfaces.py`×1, `src/check.e`×1‡, `src/tool.e`×1‡
 - `dis-file`: `src/main.e`×8‡, `tests/conformance/tools/dis_inlined.e`×1
 - `build-manifest-file`: `src/main.e`×2‡, `src/tool.e`×1‡
-- `query-batch`: `src/main.e`×6‡, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/render_card.py`×1, `tests/conformance/tools/batch_broken.expected.jsonl`×1
+- `query-batch`: `src/main.e`×6‡, `benchmarks/baseline/session.py`×3, `benchmarks/metamorphic/reorder_parameters.py`×1, `scripts/render_card.py`×1, `tests/conformance/tools/batch_broken.expected.jsonl`×1
 
 ## Verification
 
