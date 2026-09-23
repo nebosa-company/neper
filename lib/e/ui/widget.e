@@ -2178,38 +2178,56 @@ fn slider_share(e: *const Element, value: f32) -> f32 {
 }
 
 // The track along the middle of the box, filled between the low end (or the first
-// thumb of a range) and the value, a round thumb at each value.
+// thumb of a range) and the value, a handle at each value.
+// v2 (D956, docs/ux/components/Slider): the track is 4 thick, `fill` up to the value
+// (between the values of a range) and `track` beyond, each part stopping 6 short of
+// a handle; a handle is a 4-wide bar in `thumb` across the track, as long as the box
+// is deep, 44 at most. The ends stay 8 in (half of D820's thumb), where
+// `slider_at` measures from.
 fn place_slider(s: *State, a: *mem.Arena, element: usize, sl: Slider, inner: geometry.Rect, b: *scene.Builder) -> err {
     let e = &s.elements[element]
+    var inset = inner.height
+    var along = inner.width
+    if sl.vertical {
+        inset = inner.width
+        along = inner.height
+    }
+    if inset > 16.0 { inset = 16.0 }
+    let start = inset * 0.5
+    let length = max_f(along - inset, 0.0)
+    let first = slider_share(e, e.slider_value) * length
+    let clear: f32 = 8.0
+    if sl.range {
+        let other = slider_share(e, e.slider_second) * length
+        let near_end = min_f(first, other)
+        let far_end = max_f(first, other)
+        try slider_run(a, b, sl.vertical, inner, start, 0.0, near_end - clear, sl.track)
+        try slider_run(a, b, sl.vertical, inner, start, near_end + clear, far_end - clear, sl.fill)
+        try slider_run(a, b, sl.vertical, inner, start, far_end + clear, length, sl.track)
+        try slider_handle(a, b, sl.vertical, inner, start, near_end, sl.thumb)
+        ret slider_handle(a, b, sl.vertical, inner, start, far_end, sl.thumb)
+    }
+    try slider_run(a, b, sl.vertical, inner, start, 0.0, first - clear, sl.fill)
+    try slider_run(a, b, sl.vertical, inner, start, first + clear, length, sl.track)
+    ret slider_handle(a, b, sl.vertical, inner, start, first, sl.thumb)
+}
+
+// A part of the track from `from` to `to` along it (from the bottom when vertical).
+fn slider_run(a: *mem.Arena, b: *scene.Builder, vertical: bool, inner: geometry.Rect, start: f32, from: f32, to: f32, color: paint.Color) -> err {
+    if !(to > from) { ret ok }
     let thickness: f32 = 4.0
-    var thumb = inner.height
-    if sl.vertical { thumb = inner.width }
-    if thumb > 16.0 { thumb = 16.0 }
-    let half = thumb * 0.5
-    var track = geometry.Rect { x: inner.x + half, y: inner.y + inner.height * 0.5 - thickness * 0.5, width: max_f(inner.width - thumb, 0.0), height: thickness }
-    if sl.vertical { track = geometry.Rect { x: inner.x + inner.width * 0.5 - thickness * 0.5, y: inner.y + half, width: thickness, height: max_f(inner.height - thumb, 0.0) } }
-    try fill_shape(a, b, track, thickness * 0.5, paint.Brush { Solid: sl.track })
-    let first = slider_share(e, e.slider_value)
-    var from: f32 = 0.0
-    var to = first
-    if sl.range {
-        let other = slider_share(e, e.slider_second)
-        from = min_f(first, other)
-        to = max_f(first, other)
-    }
-    var filled = geometry.Rect { x: track.x + track.width * from, y: track.y, width: track.width * (to - from), height: thickness }
-    if sl.vertical { filled = geometry.Rect { x: track.x, y: track.y + track.height * (1.0 - to), width: thickness, height: track.height * (to - from) } }
-    try fill_shape(a, b, filled, thickness * 0.5, paint.Brush { Solid: sl.fill })
-    var knob = geometry.Rect { x: track.x + track.width * first - half, y: inner.y + inner.height * 0.5 - half, width: thumb, height: thumb }
-    if sl.vertical { knob = geometry.Rect { x: inner.x + inner.width * 0.5 - half, y: track.y + track.height * (1.0 - first) - half, width: thumb, height: thumb } }
-    try fill_shape(a, b, knob, half, paint.Brush { Solid: sl.thumb })
-    if sl.range {
-        let other = slider_share(e, e.slider_second)
-        var knob_2 = geometry.Rect { x: track.x + track.width * other - half, y: knob.y, width: thumb, height: thumb }
-        if sl.vertical { knob_2 = geometry.Rect { x: knob.x, y: track.y + track.height * (1.0 - other) - half, width: thumb, height: thumb } }
-        try fill_shape(a, b, knob_2, half, paint.Brush { Solid: sl.thumb })
-    }
-    ret ok
+    var r = geometry.Rect { x: inner.x + start + from, y: inner.y + inner.height * 0.5 - thickness * 0.5, width: to - from, height: thickness }
+    if vertical { r = geometry.Rect { x: inner.x + inner.width * 0.5 - thickness * 0.5, y: inner.y + inner.height - start - to, width: thickness, height: to - from } }
+    ret fill_shape(a, b, r, thickness * 0.5, paint.Brush { Solid: color })
+}
+
+fn slider_handle(a: *mem.Arena, b: *scene.Builder, vertical: bool, inner: geometry.Rect, start: f32, spot: f32, color: paint.Color) -> err {
+    var depth = inner.height
+    if vertical { depth = inner.width }
+    if depth > 44.0 { depth = 44.0 }
+    var r = geometry.Rect { x: inner.x + start + spot - 2.0, y: inner.y + inner.height * 0.5 - depth * 0.5, width: 4.0, height: depth }
+    if vertical { r = geometry.Rect { x: inner.x + inner.width * 0.5 - depth * 0.5, y: inner.y + inner.height - start - spot - 2.0, width: depth, height: 4.0 } }
+    ret fill_shape(a, b, r, 2.0, paint.Brush { Solid: color })
 }
 
 // A value snapped to the step and kept in the range, set on the thumb held and

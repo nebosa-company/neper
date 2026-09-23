@@ -19219,3 +19219,42 @@ outline and remove circle, the segments' height, fill and divider, and the hover
 layer on a checkbox's circle; `ui_selection`'s switch sample moved to the v2 track.
 All 68 `ui_*` fixtures pass on Windows and Linux. Keyboard behaviour (a radio group's
 one tab stop and arrows) and the error look stay with the spec's behaviour sections.
+
+## D956 — The select, the list box, the combo box and the spin box draw their v2 specifications
+
+P5-05's next three and P5-04's last. The select is no longer an outlined button:
+it is the outlined text field's box, read-only, 48 tall with a pointer (56 on
+touch, 40 dense), 16 sides, `radius-xs`, its 1px `outline` `on-surface` when
+hovered and 2px `primary` while open. The value is `body-large` in `on-surface`,
+with the label in the field's notch (`notched`, now shared with the text field),
+or the label resting in `on-surface-variant` before a choice. A trailing 24
+chevron turns up in `primary` while open. Its menu is `surface-container` with 8
+corners and elevation 2, 8 above and below its rows, 4 below the field, at least
+112 wide. A `menu_row` is 36 tall (48 on touch) with 12 sides; the chosen one is
+`secondary-container` after a 24 check, and the others are indented to align.
+The list box's viewport is `surface-container-lowest` in a 1px `outline-variant`
+edge with 8 corners and 4 above and below. Its rows are 40 tall (48 on touch, 32
+dense) with 16 sides and `body-large` labels under their state layer; a selected
+row is `secondary-container` with a trailing check, where D824 used the selection
+tint. A multi-select list's rows lead with a checkbox in its 40 circle
+(`choice_mark`, shared with the choice row), in a 12-cornered viewport. The combo
+box's chevron is a 32 round icon button (40 on touch) inside the field's end, 4
+from it, instead of a button beside the field. The spin box's pointer form is a
+stacked pair of 24 x 18 chevron arrows inside the field's end, 8 from it; its
+touch form keeps D952's flanking buttons. `FieldOptions.end_space` keeps a
+field's value clear of a control standing inside it. The chevrons are two more
+`mark_glyph` strokes. The slider (in `widget.place_slider`) is a 4px track,
+`primary` up to the value and `secondary-container` beyond, each part stopping 6
+short of a 4 x 44 `primary` handle; its ends stay 8 in, where `slider_at`
+measures from.
+
+`ui_selection2_v2` holds the list box's rows, edge and selected fill, the
+multi-select rows' checkboxes and fill, the combo chevron's size and place, the
+slider's track, gap and handle, the spin box's arrows and the value's clearance,
+and the open select's outline, menu offset and rows. `ui_choice`, `ui_entry`,
+`ui_slider` and `ui_numeric` pass unchanged. All 69 `ui_*` fixtures pass on
+Windows and Linux. MultiSelectListSpec stays open for its count bar (Select all
+or Clear needs actions the call does not take). SliderSpec stays open for the
+value label, hover halo, pressed handle and ticks, which need the runtime to
+paint by the handle's own state. The select's menu is at least 112 wide rather
+than the field's own width.

@@ -1169,12 +1169,13 @@
             "RatingSpec",
             "SearchBarSpec",
             "ShortcutRecorderSpec",
+            "SpinBoxSpec",
             "StepperSpec",
             "TextFieldSpec",
             "TokenFieldSpec",
             "ValidationSummarySpec"
           ],
-          "evidence": "lib/e/ui/control.e (D951): control.field outlined or filled, 16 taller than the control height (48/56/40) with 16px sides, the floating label in a notch or at the top of the filled box, body-large on-surface values, placeholder only when focused (or unlabelled), the 2px primary / error edge, the hover, disabled (4%/38%) and read-only looks, prefix and suffix; field_label title-small, field_message body-small by validity, form_field's 6/4, form's 20/16 and 24 gutter, the validation summary on the error container; tests/selfhost/fixtures/link/ui_inputs_v2 on both hosts; (D952) the search bar pill on surface-container-high at 40/56, the shared suggestion list (surface-container, 8 corners, elevation 2, 36/48 rows with the focus layer on the active one), the token field's one outlined box, the stepper's pill with round 28/32 buttons, a formatted field not invalid while empty; tests/selfhost/fixtures/link/ui_inputs2_v2 on both hosts; (D953) the rating's stars in control-height cells with the hover layer and a 60% preview, the dial's 270-degree track in secondary-container with its active arc and handle in primary, the shortcut recorder's 220 x 40 outlined box with key caps and a 2px primary outline while recording; tests/selfhost/fixtures/link/ui_inputs3_v2 on both hosts"
+          "evidence": "lib/e/ui/control.e (D951): control.field outlined or filled, 16 taller than the control height (48/56/40) with 16px sides, the floating label in a notch or at the top of the filled box, body-large on-surface values, placeholder only when focused (or unlabelled), the 2px primary / error edge, the hover, disabled (4%/38%) and read-only looks, prefix and suffix; field_label title-small, field_message body-small by validity, form_field's 6/4, form's 20/16 and 24 gutter, the validation summary on the error container; tests/selfhost/fixtures/link/ui_inputs_v2 on both hosts; (D952) the search bar pill on surface-container-high at 40/56, the shared suggestion list (surface-container, 8 corners, elevation 2, 36/48 rows with the focus layer on the active one), the token field's one outlined box, the stepper's pill with round 28/32 buttons, a formatted field not invalid while empty; tests/selfhost/fixtures/link/ui_inputs2_v2 on both hosts; (D953) the rating's stars in control-height cells with the hover layer and a 60% preview, the dial's 270-degree track in secondary-container with its active arc and handle in primary, the shortcut recorder's 220 x 40 outlined box with key caps and a 2px primary outline while recording; tests/selfhost/fixtures/link/ui_inputs3_v2 on both hosts; (D956) the spin box's pointer form, a stacked pair of 24 x 18 chevron arrows inside the field's end with the value kept clear of them (FieldOptions.end_space), the touch form's flanking buttons as D952; tests/selfhost/fixtures/link/ui_selection2_v2 and ui_numeric on both hosts"
         },
         {
           "id": "P5-05",
@@ -1194,10 +1195,13 @@
           "delivered": [
             "ChipSpec",
             "ChoiceSpec",
+            "ComboBoxSpec",
+            "ListBoxSpec",
             "SegmentedControlSpec",
+            "SelectSpec",
             "SwitchSpec"
           ],
-          "evidence": "lib/e/ui/control.e (D955): the checkbox's 18 box in a 2px on-surface-variant outline, filled primary with a drawn tick or dash in on-primary, the radio's 20 ring and 10 dot, both in a 40 state circle (32 dense) with rows 40/48 and the 38% disabled colours; the switch's 52 x 32 track, 16/24/28 thumbs and 40 state circle; the chip at 32 with radius-sm, a 1px outline, a selected filter chip on secondary-container with a leading check, the input chip's 24 remove circle; the segmented control's joined segments in one 1px outline with dividers, 32/40 tall, the selected one secondary-container with a check; tests/selfhost/fixtures/link/ui_selection_v2 and ui_selection on both hosts"
+          "evidence": "lib/e/ui/control.e (D955): the checkbox's 18 box in a 2px on-surface-variant outline, filled primary with a drawn tick or dash in on-primary, the radio's 20 ring and 10 dot, both in a 40 state circle (32 dense) with rows 40/48 and the 38% disabled colours; the switch's 52 x 32 track, 16/24/28 thumbs and 40 state circle; the chip at 32 with radius-sm, a 1px outline, a selected filter chip on secondary-container with a leading check, the input chip's 24 remove circle; the segmented control's joined segments in one 1px outline with dividers, 32/40 tall, the selected one secondary-container with a check; tests/selfhost/fixtures/link/ui_selection_v2 and ui_selection on both hosts; (D956) the select as the outlined field (48/56/40, the label notched over a value, a stroked chevron that turns up in primary while open) over a surface-container menu of 36/48 rows with the chosen one secondary-container after a check; the list box on surface-container-lowest in a 1px outline-variant edge with 40/48/32 rows, the selected row secondary-container with a trailing check; the combo box's 32/40 chevron button inside the field's end; tests/selfhost/fixtures/link/ui_selection2_v2 and ui_choice, ui_entry on both hosts. Open: MultiSelectListSpec has its rows (leading checkbox, secondary-container when chosen, radius-md container) but not the count bar with Select all / Clear; SliderSpec has its 4px tracks, 6px handle gaps and 4 x 44 handle but not the value label, hover halo, pressed 2px handle or ticks"
         },
         {
           "id": "P5-06",

@@ -6,7 +6,7 @@
 | module | `e.ui.control` |
 | module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.math`, `e.mem`, `e.text.layout`, `e.text.shape`, `e.ui.accessibility`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.widget` |
 | blocked by | `P4` |
-| delivered | 4 of 9 |
+| delivered | 7 of 9 |
 
 ## Eligibility
 
@@ -20,11 +20,11 @@ Every component below is implemented in `e.ui.control`, exercised by a determini
 
 - [x] `ChipSpec`
 - [x] `ChoiceSpec`
-- [ ] `ComboBoxSpec`
-- [ ] `ListBoxSpec`
+- [x] `ComboBoxSpec`
+- [x] `ListBoxSpec`
 - [ ] `MultiSelectListSpec`
 - [x] `SegmentedControlSpec`
-- [ ] `SelectSpec`
+- [x] `SelectSpec`
 - [ ] `SliderSpec`
 - [x] `SwitchSpec`
 
