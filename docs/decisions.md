@@ -19298,3 +19298,27 @@ it), a body cut off mid-expression whose caller is checked without a cascade, an
 independent return mismatch give three errors and three notes, `unchecked: 3`.
 Fifteen reject goldens gain `unchecked` and nothing else; the other 158 cases of
 `accept/` and `reject/` are unchanged.
+
+## D957 — A selector takes its instruction by value, measured
+
+C033's profile left one struct copy standing: each `select_*` function in
+`codegen_x64.e` takes a `nir.Instruction` (184 bytes) by value, and the selection
+loop copies the instruction out of the builder before dispatching. That is about
+0.17% of a cold build, and it was set aside as too small to matter. This row tried
+it anyway and measured it: cachegrind instruction counts for a cold sc500k build
+(`-j 1`, Linux), each compiler built by the same stage-3 compiler, whose output is
+byte-identical either way.
+
+| variant | instructions | vs. by value |
+|---|---|---|
+| by value (HEAD) | 91,595,452,406 | -- |
+| same-path control, by value | 91,595,452,412 | +6 |
+| every selector by `*nir.Instruction`, the loop reading in place | 91,782,017,769 | +186.6M (+0.20%) |
+| only the two scan loops (`value_type`, `parameter_float_width`) in place | 91,657,222,348 | +61.8M (+0.07%) |
+
+Both variants cost more than the copy they remove. Since D933 a constant-size copy
+is a short run of block moves, and a field read through a pointer is an extra load
+at every use. A selector reads its instruction's fields many times, so the pointer
+loses. The copy stays: selectors take the instruction by value, and loops copy it
+out. To make this cheaper, change how a read through a pointer is generated -- keep
+the pointer in a register across the reads -- not the selectors' signatures.
