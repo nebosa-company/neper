@@ -210,7 +210,7 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 | file | title | status |
 |---|---|---|
 | [`ui/P5-02-interaction-paint.md`](ui/P5-02-interaction-paint.md) | P5 — Interaction paint | 2/3 delivered; blocked by P4 |
-| [`ui/P5-04-inputs-to-the-v2-specification.md`](ui/P5-04-inputs-to-the-v2-specification.md) | P5 — Inputs to the v2 specification | 0/15 delivered; blocked by P4 |
+| [`ui/P5-04-inputs-to-the-v2-specification.md`](ui/P5-04-inputs-to-the-v2-specification.md) | P5 — Inputs to the v2 specification | 6/15 delivered; blocked by P4 |
 | [`ui/P5-05-selection-to-the-v2-specification.md`](ui/P5-05-selection-to-the-v2-specification.md) | P5 — Selection to the v2 specification | 0/9 delivered; blocked by P4 |
 | [`ui/P5-06-pickers-to-the-v2-specification.md`](ui/P5-06-pickers-to-the-v2-specification.md) | P5 — Pickers to the v2 specification | 0/7 delivered; blocked by P4 |
 | [`ui/P5-07-content-to-the-v2-specification.md`](ui/P5-07-content-to-the-v2-specification.md) | P5 — Content to the v2 specification | 0/7 delivered; blocked by P4 |

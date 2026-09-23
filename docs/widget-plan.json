@@ -1158,7 +1158,15 @@
             "TokenFieldSpec",
             "ValidationSummarySpec"
           ],
-          "delivered": []
+          "delivered": [
+            "FieldLabelSpec",
+            "FieldMessageSpec",
+            "FormSpec",
+            "FormFieldSpec",
+            "TextFieldSpec",
+            "ValidationSummarySpec"
+          ],
+          "evidence": "lib/e/ui/control.e (D951): control.field outlined or filled, 16 taller than the control height (48/56/40) with 16px sides, the floating label in a notch or at the top of the filled box, body-large on-surface values, placeholder only when focused (or unlabelled), the 2px primary / error edge, the hover, disabled (4%/38%) and read-only looks, prefix and suffix; field_label title-small, field_message body-small by validity, form_field's 6/4, form's 20/16 and 24 gutter, the validation summary on the error container; tests/selfhost/fixtures/link/ui_inputs_v2 on both hosts"
         },
         {
           "id": "P5-05",

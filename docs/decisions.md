@@ -19062,3 +19062,37 @@ regression is left without its decision. C033 closes. Its budgets hold later row
 timed cell is decided paired against the baseline compiler, the compiler cell per line
 of its source (D936), and the workflows new since M2 against the pins in
 `benchmarks/baseline/results/` (`rename-`, `session-`, `context-<host>.json`).
+
+## D951 — The text field and the form parts draw their v2 specifications
+
+P5-04's first six. `control.field`, which every text field, password field,
+search field and text area is, draws `docs/ux/components/TextField`: outlined
+(the pointer hosts' default) or filled (`FieldOptions.filled`, the touch hosts'),
+16 taller than the control height -- 48 at pointer density, 56 at touch, 40 at
+dense density -- with 16px sides (12 dense). The label rests inside the box in
+`body-large` and floats in `body-small` while the field is focused or holds a
+value, into a notch cut from the outline or to the top of the filled box; at
+dense density it stands above as a field label. The value is `body-large` in
+`on-surface` where D805 drew it in `primary`. A placeholder shows only while an
+empty labelled field is focused, and at rest on a field with no label, so
+`ui_field`'s rest check now looks for the label. Focus is the 2px `primary`
+outline or indicator (no ring, as the editor is not ringed), invalid the 2px
+`error` one, hover the `on-surface` outline or layer; disabled fills with
+`on-surface` at 4% and dims the rest to 38%; read-only has no fill and the
+`outline-variant` edge. `FieldOptions` gains `prefix` and `suffix`, shown once
+the label has floated. The filled field's top corners alone are rounded, D945's
+per-corner radii.
+
+The field label is `title-small` in `on-surface` with the required `*` in
+`error`; the field message is `body-small`, `error` when invalid and
+`on-surface-variant` for help and warnings (D805 painted a warning in the text
+colour against its own comment); the form field puts 6 between label and control
+and 4 before the message; the form 20 between fields with a pointer and 16 on
+touch, two columns with a 24 gutter from the expanded width; the validation
+summary is the error container with 12 corners and 16 in, its entries underlined
+in `on-error-container` rather than `primary` links. `ui_inputs_v2` holds the
+field's heights, outline, focus, invalid, filled, disabled and read-only looks,
+the form's spacing and the summary's container by pixel; all 65 `ui_*` fixtures
+pass on Windows and Linux. Not yet drawn: leading and trailing icons in the field
+(the caller's textures cannot be tinted), the character counter and the message's
+state icons.

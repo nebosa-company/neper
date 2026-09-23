@@ -143,7 +143,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Four text fields, labelled; the placeholders show while the fields are empty.
     if testing.by_role(&harness, .TextField).count != 4usize { os.exit(13i32) }
     if testing.by_label(&harness, "Name").count == 0usize || testing.by_label(&harness, "Password").count == 0usize || testing.by_label(&harness, "Note").count == 0usize { os.exit(14i32) }
-    if testing.by_text(&harness, "Your name").count != 1usize || testing.by_text(&harness, "Search").count != 1usize { os.exit(15i32) }
+    // v2 (D951): a labelled field rests with its label, its placeholder waiting for
+    // the focus; a field with no label shows its placeholder at rest.
+    if testing.by_text(&harness, "Your name").count != 0usize || testing.by_text(&harness, "Name").count == 0usize || testing.by_text(&harness, "Search").count != 1usize { os.exit(15i32) }
     // Typed into the name field: the buffer takes it, the change reports it, and the
     // placeholder goes on the next frame.
     let name = testing.by_key(&harness, 1u64).element

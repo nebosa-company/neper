@@ -1005,84 +1005,220 @@ fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, va
 // A field's look and behaviour: the placeholder shown while the value is empty,
 // whether it takes input, whether the caller's validation found it invalid, its
 // width, and for a text area the rows it shows.
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32 }
+// v2 (D951): filled or outlined, and the fixed text before and after the value.
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32 }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "" }
 }
 
-// The field every text field is: an outlined surface in the resolved look -- the
-// border in the error colour when invalid, the focus ring when focused -- holding
-// the editor (keyed `key`) over its placeholder, the label above; the editor says
-// text field in the tree, the label names it. The caller owns the buffer and
-// keeps the length (D807).
+// The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
+// (the pointer hosts' default) or filled (`FieldOptions.filled`, the touch hosts'),
+// 16 taller than the control height -- 48 at pointer density, 56 at touch -- with
+// 16px sides. The label rests inside the box in `body-large` and floats, in
+// `body-small`, while the field is focused or holds a value: into a notch of the
+// outline, or to the top of a filled box. At dense density (24-tall controls) the
+// box is 40 and the label stands above it. The value is `body-large` in
+// `on-surface`; a placeholder shows only while the empty field is focused, or at
+// rest when there is no label. Focus is the 2px `primary` outline or indicator,
+// invalid the 2px `error` one, hover the `on-surface` outline or layer; disabled
+// dims to 4% / 38%; read-only has no fill and an `outline-variant` edge. The editor
+// (keyed `key`) says text field in the tree and the label names the group. The
+// caller owns the buffer and keeps the length (D807).
 fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, options: FieldOptions, secret: bool) -> (widget.Node, err) {
-    var state = control_state(t, key, options.enabled, false)
-    state.invalid = options.invalid
-    state.read_only = options.read_only
-    let look = style.resolve(t.tokens, .Outlined, state)
-    let (text_look, style_error) = text_style(a, t, .Body)
+    let state = control_state(t, key, options.enabled, false)
+    let focused = state.focused && options.enabled
+    let hovered = state.hovered && options.enabled
+    let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
+    let h = t.tokens.metrics.control_height + 16.0
+    let pad_x: f32 = if_else(dense, 12.0, 16.0)
+    let ink = style.color(t.tokens, .OnSurface)
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    // The edge (outline or indicator) and the label's colour by state.
+    var edge = style.color(t.tokens, .Outline)
+    var edge_width = t.tokens.sizes.divider
+    var label_color = muted
+    if options.filled { edge = muted }
+    if hovered { edge = ink }
+    if focused {
+        edge = style.color(t.tokens, .Primary)
+        edge_width = t.tokens.sizes.outline_focused
+        label_color = edge
+    }
+    if options.invalid {
+        edge = style.color(t.tokens, .Error)
+        edge_width = t.tokens.sizes.outline_focused
+        label_color = edge
+    }
+    if options.read_only && !options.invalid {
+        edge = style.color(t.tokens, .OutlineVariant)
+        edge_width = t.tokens.sizes.divider
+    }
+    var value_color = ink
+    if !options.enabled {
+        edge = with_alpha(ink, t.tokens.states.disabled_content)
+        edge_width = t.tokens.sizes.divider
+        label_color = edge
+        value_color = edge
+    }
+    var value_role: style.TextRole = .BodyLarge
+    if dense { value_role = .BodyMedium }
+    let line = style.text_style(t.tokens, value_role).line_height
+    let (text_look, style_error) = text_style(a, t, value_role)
     if style_error != ok { ret (zero, style_error) }
-    var multiline = options.rows > 1u32
+    let multiline = options.rows > 1u32
+    let floated = label.len != 0usize && !dense && (focused || len != 0usize)
+    let resting = label.len != 0usize && !dense && !floated
     // The editor stands its rows tall even before it holds anything (and with no
     // fonts, when it measures as nothing), so a press reaches it.
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
-    editor_style.min_height = style.Length { Px: f32(options.rows) * t.tokens.text[0usize].line_height }
+    editor_style.min_height = style.Length { Px: f32(options.rows) * line }
     let (editor, editor_error) = mem.alloc[widget.Node](a, 2usize)
     if editor_error != ok { ret (zero, TooLarge) }
-    var placeholder_count = 0usize
-    if len == 0usize && options.placeholder.len != 0usize { placeholder_count = 1usize }
-    var hint = text_options()
-    hint.color = .TextMuted
-    hint.wrap = .None
-    let (hint_node, hint_error) = text_node(a, 0u64, options.placeholder, t, hint)
-    if hint_error != ok { ret (zero, hint_error) }
     var at = 0usize
-    if placeholder_count != 0usize {
+    let show_hint = len == 0usize && options.placeholder.len != 0usize && (focused || label.len == 0usize)
+    if show_hint || resting {
+        var hint = text_options()
+        hint.role = value_role
+        hint.wrap = .None
+        var hint_text = options.placeholder
+        if resting { hint_text = label }
+        let (hint_node, hint_error) = colored_text(a, 0u64, hint_text, t, hint, with_alpha(muted, value_color.alpha))
+        if hint_error != ok { ret (zero, hint_error) }
         editor[at] = hint_node
         at += 1usize
     }
-    editor[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: look.foreground, selection: style.color(t.tokens, .Selection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret }, editor_style)
+    editor[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret }, editor_style)
     at += 1usize
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 4usize)
+    if lines_error != ok { ret (zero, TooLarge) }
+    var parts_at = 0usize
+    // The floated label on a filled box rides at the top, inside.
+    if floated && options.filled {
+        var small = text_options()
+        small.role = .BodySmall
+        small.wrap = .None
+        let (small_node, small_error) = colored_text(a, 0u64, label, t, small, label_color)
+        if small_error != ok { ret (zero, small_error) }
+        lines[parts_at] = small_node
+        parts_at += 1usize
+    }
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    let value_stack = widget.stack(0u64, grow, editor[0usize..at])
+    // The prefix and suffix around the value, in `on-surface-variant`.
+    let (row_parts, row_error) = mem.alloc[widget.Node](a, 3usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    var row_at = 0usize
+    var affix = text_options()
+    affix.role = value_role
+    affix.wrap = .None
+    if options.prefix.len != 0usize && (floated || label.len == 0usize) {
+        let (pre, pre_error) = colored_text(a, 0u64, options.prefix, t, affix, with_alpha(muted, value_color.alpha))
+        if pre_error != ok { ret (zero, pre_error) }
+        row_parts[row_at] = pre
+        row_at += 1usize
+    }
+    row_parts[row_at] = value_stack
+    row_at += 1usize
+    if options.suffix.len != 0usize && (floated || label.len == 0usize) {
+        let (post, post_error) = colored_text(a, 0u64, options.suffix, t, affix, with_alpha(muted, value_color.alpha))
+        if post_error != ok { ret (zero, post_error) }
+        row_parts[row_at] = post
+        row_at += 1usize
+    }
+    var row_style = style.defaults()
+    row_style.width = style.Length { Percent: 100.0 }
+    lines[parts_at] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, row_style, row_parts[0usize..row_at])
+    parts_at += 1usize
+    // The frame: its height, sides, fill and edge.
     var frame_style = style.defaults()
     frame_style.width = style.Length { Px: options.width }
-    var height = t.tokens.metrics.control_height
-    if multiline { height = f32(options.rows) * t.tokens.text[0usize].line_height + t.tokens.spacing.sm }
+    var body_height = line
+    if floated && options.filled { body_height = line + style.text_style(t.tokens, .BodySmall).line_height }
+    var pad_top = max_zero((h - body_height) * 0.5)
+    var height = h
+    if multiline {
+        pad_top = 12.0
+        height = max_of(h, f32(options.rows) * line + 24.0)
+    }
     frame_style.min_height = style.Length { Px: height }
-    frame_style.background = paint.Brush { Solid: look.background }
-    frame_style.border = style.Border { width: look.border_width, color: look.border }
-    if look.focus_ring > 0.0 { frame_style.border = style.Border { width: look.focus_ring, color: style.color(t.tokens, .Focus) } }
-    frame_style.radius = t.tokens.radii.xs
-    frame_style.opacity = look.opacity
-    let pad_x = style.Length { Px: t.tokens.spacing.sm }
-    let pad_y = style.Length { Px: t.tokens.spacing.xs }
-    frame_style.padding = style.EdgeLengths { left: pad_x, top: pad_y, right: pad_x, bottom: pad_y }
-    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
-    if framed_error != ok { ret (zero, TooLarge) }
-    framed[0usize] = widget.stack(0u64, frame_style, editor[0usize..at])
-    var parts_count = 1usize
-    if label.len != 0usize { parts_count = 2usize }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, parts_count)
+    let side = style.Length { Px: pad_x }
+    frame_style.padding = style.EdgeLengths { left: side, top: style.Length { Px: pad_top }, right: side, bottom: style.Length { Px: pad_top } }
+    if options.filled {
+        var fill = style.color(t.tokens, .SurfaceContainerHighest)
+        if hovered { fill = style.layer(fill, ink, t.tokens.states.hover) }
+        if !options.enabled { fill = with_alpha(ink, 0.04) }
+        if options.read_only { fill = paint.rgba(0.0, 0.0, 0.0, 0.0) }
+        frame_style.background = paint.Brush { Solid: fill }
+        frame_style.corners = style.Corners { top_left: t.tokens.radii.xs, top_right: t.tokens.radii.xs, bottom_right: 0.0, bottom_left: 0.0 }
+        // The indicator along the bottom edge, as wide as the box.
+        frame_style.padding.bottom = style.Length { Px: 0.0 }
+        var indicator = style.defaults()
+        indicator.width = style.Length { Percent: 100.0 }
+        indicator.height = style.Length { Px: edge_width }
+        indicator.background = paint.Brush { Solid: edge }
+        indicator.margin = style.EdgeLengths { left: style.Length { Px: 0.0 - pad_x }, top: style.Length { Px: max_zero(pad_top - edge_width) }, right: style.Length { Px: 0.0 - pad_x }, bottom: style.Length { Px: 0.0 } }
+        lines[parts_at] = widget.box(0u64, indicator, zero)
+        parts_at += 1usize
+    } else {
+        if !options.enabled { frame_style.background = paint.Brush { Solid: with_alpha(ink, 0.04) } }
+        frame_style.border = style.Border { width: edge_width, color: edge }
+        frame_style.radius = t.tokens.radii.xs
+    }
+    let frame = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame_style, lines[0usize..parts_at])
+    // The outlined field's floated label sits in a notch over its top edge.
+    var boxed = frame
+    if floated && !options.filled {
+        var notch = text_options()
+        notch.role = .BodySmall
+        notch.wrap = .None
+        let (notch_node, notch_error) = colored_text(a, 0u64, label, t, notch, label_color)
+        if notch_error != ok { ret (zero, notch_error) }
+        let (notch_parts, notch_parts_error) = mem.alloc[widget.Node](a, 3usize)
+        if notch_parts_error != ok { ret (zero, TooLarge) }
+        notch_parts[0usize] = notch_node
+        var cut = style.defaults()
+        cut.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        let four = style.Length { Px: 4.0 }
+        let none = style.Length { Px: 0.0 }
+        cut.padding = style.EdgeLengths { left: four, top: none, right: four, bottom: none }
+        notch_parts[1usize] = frame
+        notch_parts[2usize] = widget.positioned(0u64, pad_x - 4.0, 0.0 - style.text_style(t.tokens, .BodySmall).line_height * 0.5, cut, notch_parts[0usize..1usize])
+        boxed = widget.stack(0u64, style.defaults(), notch_parts[1usize..3usize])
+    }
+    // Dense: the label above the box, as a field label.
+    var column_count = 1usize
+    if dense && label.len != 0usize { column_count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, column_count)
     if parts_error != ok { ret (zero, TooLarge) }
-    if label.len != 0usize {
+    if column_count == 2usize {
         var caption = text_options()
-        caption.role = .Label
+        caption.role = .TitleSmall
         caption.wrap = .None
-        if options.invalid { caption.color = .Error }
-        let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
+        let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, label_color)
         if label_error != ok { ret (zero, label_error) }
         parts[0usize] = label_node
     }
-    parts[parts_count - 1usize] = framed[0usize]
+    parts[column_count - 1usize] = boxed
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..parts_count])
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..column_count])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
     if options.invalid { sem.states = accessibility.STATE_INVALID }
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+fn with_alpha(c: paint.Color, alpha: f32) -> paint.Color {
+    ret paint.Color { red: c.red, green: c.green, blue: c.blue, alpha: alpha }
+}
+
+fn if_else(choice: bool, yes: f32, no: f32) -> f32 {
+    if choice { ret yes }
+    ret no
 }
 
 // A single-line text field.
@@ -1279,11 +1415,13 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
 type Validity = enum u8 { Valid, Warning, Invalid }
 type Message = struct { validity: Validity, text: str }
 
-// A field's label: the label role, an asterisk after a required one, controlling
-// the field it is for (by key).
+// A field's label: v2 (D951, docs/ux/components/FieldLabel) `title-small` in
+// `on-surface`, a required one's `*` in `error` 4 after it; controlling the field it
+// is for (by key).
 fn field_label(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, for_key: widget.Key, required: bool) -> (widget.Node, err) {
     var caption = text_options()
-    caption.role = .Label
+    caption.role = .TitleSmall
+    caption.color = .OnSurface
     caption.wrap = .None
     var parts_count = 1usize
     if required { parts_count = 2usize }
@@ -1311,12 +1449,13 @@ fn field_label(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, for_
 // A field's message: the caption in the error colour when invalid, muted when
 // valid or a warning; a status in the tree, controlling the field, live so a
 // reader hears it change. Nothing at all for an empty text.
+// v2 (D951, docs/ux/components/FieldMessage): `body-small`; help and warnings in
+// `on-surface-variant`, an error in `error`.
 fn field_message(a: *mem.Arena, key: widget.Key, t: *const Theme, message: Message, for_key: widget.Key) -> (widget.Node, err) {
     var caption = text_options()
-    caption.role = .Caption
-    caption.color = .TextMuted
+    caption.role = .BodySmall
+    caption.color = .OnSurfaceVariant
     if message.validity == .Invalid { caption.color = .Error }
-    if message.validity == .Warning { caption.color = .Text }
     let (text_item, text_error) = text_node(a, 0u64, message.text, t, caption)
     if text_error != ok { ret (zero, text_error) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
@@ -1345,7 +1484,12 @@ fn form_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, contr
     let (label_node, label_error) = field_label(a, key + 1u64, t, label, control_key, required)
     if label_error != ok { ret (zero, label_error) }
     parts[0usize] = label_node
-    parts[1usize] = control_node
+    // v2 (D951, docs/ux/components/FormField): 6 from the label to the control, 4
+    // from the control to its message.
+    var placed = control_node
+    placed.style.margin.top = style.Length { Px: 6.0 }
+    placed.style.margin.bottom = style.Length { Px: 4.0 }
+    parts[1usize] = placed
     var shown = message
     if shown.text.len == 0usize { shown = Message { validity: .Valid, text: help } }
     let (message_node, message_error) = field_message(a, key + 2u64, t, shown, control_key)
@@ -1353,7 +1497,7 @@ fn form_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, contr
     parts[2usize] = message_node
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..3usize])
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..3usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
@@ -1373,10 +1517,14 @@ fn form(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, width: f32,
     if body_error != ok { ret (zero, TooLarge) }
     var layout_style = style.defaults()
     layout_style.width = style.Length { Px: width }
+    // v2 (D951, docs/ux/components/Form): 20 between fields with a pointer, 16 on
+    // touch; two columns from the expanded width with a 24 gutter.
+    var between: f32 = 20.0
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { between = 16.0 }
     if style.size_class(width) == .Expanded {
-        body[0usize] = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: t.tokens.spacing.lg, cross_gap: t.tokens.spacing.md }, layout_style, fields)
+        body[0usize] = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 24.0, cross_gap: between }, layout_style, fields)
     } else {
-        body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.md }, layout_style, fields)
+        body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: between }, layout_style, fields)
     }
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
@@ -1386,6 +1534,40 @@ fn form(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, width: f32,
     sem.role = 2u8
     sem.label = label
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// An entry of a validation summary: its text in `on-error-container`, underlined,
+// a tap region with the link role firing `action`.
+fn summary_link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.color = .OnErrorContainer
+    caption.wrap = .None
+    let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
+    if label_error != ok { ret (zero, label_error) }
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 2usize)
+    if lines_error != ok { ret (zero, TooLarge) }
+    lines[0usize] = label_node
+    var under = style.defaults()
+    under.width = style.Length { Percent: 100.0 }
+    under.height = style.Length { Px: t.tokens.sizes.divider }
+    under.background = paint.Brush { Solid: style.color(t.tokens, .OnErrorContainer) }
+    under.margin.top = style.Length { Px: 2.0 }
+    lines[1usize] = widget.box(0u64, under, zero)
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), lines[0usize..2usize])
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    var target_style = style.defaults()
+    target_style.radius = t.tokens.radii.xs
+    inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, target_style, body[0usize..1usize])
+    focus_look(t)
+    var sem: widget.Semantics = zero
+    sem.role = ROLE_LINK
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
 }
 
 // A validation summary: the invalid messages as links, each firing the caller's
@@ -1405,7 +1587,7 @@ fn validation_summary(a: *mem.Arena, key: widget.Key, t: *const Theme, messages:
     i = 0usize
     while i < messages.len {
         if messages[i].validity == .Invalid && messages[i].text.len != 0usize {
-            let (item, item_error) = link(a, key + 1u64 + u64(i), t, messages[i].text, &jumps[i])
+            let (item, item_error) = summary_link(a, key + 1u64 + u64(i), t, messages[i].text, &jumps[i])
             if item_error != ok { ret (zero, item_error) }
             var entry: widget.Semantics = zero
             entry.controls = field_keys[i]
@@ -1417,12 +1599,13 @@ fn validation_summary(a: *mem.Arena, key: widget.Key, t: *const Theme, messages:
         }
         i += 1usize
     }
+    // v2 (D951, docs/ux/components/ValidationSummary): the error container, 12
+    // corners, 16 in, entries 4 apart.
     var options = surface_options(t)
-    options.bordered = true
-    options.radius = t.tokens.radii.xs
-    options.padding = t.tokens.spacing.sm
+    options.background = .ErrorContainer
+    options.radius = t.tokens.radii.md
+    options.padding = t.tokens.spacing.lg
     var sheet = surface_style(t, options)
-    sheet.border = style.Border { width: t.tokens.borders.regular, color: style.color(t.tokens, .Error) }
     if count == 0usize { sheet = style.defaults() }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }

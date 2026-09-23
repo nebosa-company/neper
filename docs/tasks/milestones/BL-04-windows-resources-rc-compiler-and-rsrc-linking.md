@@ -16,7 +16,7 @@
 
 ## Code anchors
 
-- `.text`: `src/check.e`×122‡, `src/tool.e`×51‡, `src/main.e`×41‡, `src/lower.e`×39‡, `lib/e/text/io.e`×28, `lib/e/ui/style.e`×25, `scripts/algos/batch44.json`×25, `lib/e/ui/control.e`×24‡
+- `.text`: `src/check.e`×124‡, `src/tool.e`×51‡, `src/main.e`×43‡, `src/lower.e`×39‡, `lib/e/text/io.e`×28, `lib/e/ui/control.e`×25‡, `lib/e/ui/style.e`×25, `scripts/algos/batch44.json`×25
 - `.idata`: `src/link_pe.e`×2
 - `project.yaml`: `src/main.e`×5‡, `src/assets.e`×4, `lib/e/asset.e`×1
 - `ICON`: `lib/e/os/shell.windows.e`×10‡
