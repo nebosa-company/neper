@@ -5369,9 +5369,25 @@ cmp "$generic_instances_artifact_executable" "$generic_instances_executable_path
 # Walk a compiled module's code section. The section directory is fixed, so the
 # code section offset is at byte 112 (D320: no NIR section); each record is a 24-byte header followed by
 # its machine code and its relocations.
+# A module's code records, less the trap data and stub functions (D927), `trap.N`,
+# which every module with a check carries beside its own functions.
 em_code_count() {
-    em_code=$(od -An -tu8 -j112 -N8 "$1" | tr -d ' ')
-    od -An -tu4 -j"$em_code" -N4 "$1" | tr -d ' '
+    python3 -c 'import struct, sys
+b = open(sys.argv[1], "rb").read()
+strings = struct.unpack_from("<Q", b, 40)[0]
+code = struct.unpack_from("<Q", b, 112)[0]
+count = struct.unpack_from("<I", b, code)[0]
+cursor = code + 4
+own = 0
+for _ in range(count):
+    name_index = struct.unpack_from("<I", b, cursor)[0]
+    length, relocations = struct.unpack_from("<II", b, cursor + 16)
+    name_at = strings + struct.unpack_from("<I", b, strings + 4 + name_index * 4)[0]
+    name_length = struct.unpack_from("<I", b, name_at)[0]
+    if not b[name_at + 4:name_at + 4 + name_length].startswith(b"trap."):
+        own += 1
+    cursor += 24 + length + relocations * 28
+print(own)' "$1"
 }
 em_code_field() {
     em_code=$(od -An -tu8 -j112 -N8 "$1" | tr -d ' ')
