@@ -2809,6 +2809,12 @@ ui_button_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/ui-button-selfhost"
 ui_button_output=$("$test_build/ui-button-selfhost")
 [ "$ui_button_output" = 'ui button ok' ]
+# The focus ring and state layers (D940, widget plan P5-02).
+ui_focus_ring_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_focus_ring/src/main.e" "$repo" x64 linux "$test_build/ui-focus-ring-selfhost")
+[ "$ui_focus_ring_written" = 'executable written' ]
+chmod +x "$test_build/ui-focus-ring-selfhost"
+ui_focus_ring_output=$("$test_build/ui-focus-ring-selfhost")
+[ "$ui_focus_ring_output" = 'ui focus ring ok' ]
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 ui_selection_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_selection/src/main.e" "$repo" x64 linux "$test_build/ui-selection-selfhost")

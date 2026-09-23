@@ -167,14 +167,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_focus || focus_now.slot != testing.by_key(&harness, 1u64).element.slot { os.exit(21i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].presses != 2usize { os.exit(22i32) }
     if testing.press_key(&harness, 32u32, zero) != ok || logs[0usize].presses != 3usize { os.exit(23i32) }
-    // Hovered, the next frame paints the hovered look: darker than at rest.
+    // Hovered, the next frame paints the hovered look: the white label over the
+    // primary fill at the hover opacity, lighter than at rest (D940).
     if testing.hover(&harness, f32(sx), f32(sy)) != ok { os.exit(24i32) }
     let (root_2, build_2_error) = build(&frame, &theme, &actions[0usize], logs[0usize].selected, texture)
     if build_2_error != ok { os.exit(25i32) }
     if testing.pump(&harness, root_2, now) != ok { os.exit(26i32) }
     let (hovered_shot, hovered_error) = testing.snapshot(&harness, a)
     if hovered_error != ok { os.exit(27i32) }
-    if !(hovered_shot.pixels[(sy * 120usize + sx) * 4usize + 2usize] < shot.pixels[(sy * 120usize + sx) * 4usize + 2usize]) { os.exit(28i32) }
+    if !(hovered_shot.pixels[(sy * 120usize + sx) * 4usize + 2usize] > shot.pixels[(sy * 120usize + sx) * 4usize + 2usize]) { os.exit(28i32) }
     // The disabled button neither fires nor takes the focus.
     let (never_bounds, has_never) = widget.bounds_of(&runtime, testing.by_key(&harness, 2u64).element)
     if !has_never { os.exit(29i32) }

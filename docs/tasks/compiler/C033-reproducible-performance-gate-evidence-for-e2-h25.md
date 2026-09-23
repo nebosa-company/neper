@@ -104,14 +104,15 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `m2-baseline.md`: `benchmarks/baseline/render.py`×2, `benchmarks/baseline/gate.py`×1, `benchmarks/baseline/measure.py`×1, `benchmarks/baseline/paired.py`×1
+- `m2-baseline.md`: `benchmarks/baseline/edit.py`×2, `benchmarks/baseline/render.py`×2, `benchmarks/baseline/gate.py`×1, `benchmarks/baseline/measure.py`×1, `benchmarks/baseline/paired.py`×1
 - `benchmarks/baseline/gate.py`: `benchmarks/baseline/gate.py`×1, `scripts/algos/make_refresh_runners.py`×1
 - `os.touch`: `lib/e/os/shell.windows.e`×14‡, `src/runtime_pe_x64.asm`×2†, `src/check.e`×1‡
 - `e.os`: `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×164, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×145, `src/resolve.e`×36†, `lib/e/ui/app.e`×12†, `lib/e/os.linux.e`×9‡, `src/check.e`×8‡, `lib/e/fs.e`×7, `lib/e/os.windows.e`×7‡
 - `benchmarks/baseline/static.py`: `benchmarks/baseline/static.py`×1
 - `gate.py`: `benchmarks/baseline/gate.py`×1, `benchmarks/baseline/static.py`×1, `scripts/algos/make_refresh_runners.py`×1
 - `benchmarks/baseline/paired.py`: `benchmarks/baseline/paired.py`×1
-- `m2-baseline`: `benchmarks/baseline/render.py`×2, `benchmarks/baseline/gate.py`×1, `benchmarks/baseline/measure.py`×1, `benchmarks/baseline/paired.py`×1
+- `m2-baseline`: `benchmarks/baseline/edit.py`×2, `benchmarks/baseline/render.py`×2, `benchmarks/baseline/gate.py`×1, `benchmarks/baseline/measure.py`×1, `benchmarks/baseline/paired.py`×1
+- `benchmarks/baseline/edit.py`: `benchmarks/baseline/edit.py`×1
 
 ## Verification
 

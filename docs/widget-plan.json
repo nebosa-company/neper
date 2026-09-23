@@ -1103,7 +1103,11 @@
             "StateLayer",
             "PressRipple"
           ],
-          "delivered": []
+          "delivered": [
+            "FocusRing",
+            "StateLayer"
+          ],
+          "evidence": "lib/e/ui/widget.e, lib/e/ui/style.e, lib/e/ui/control.e (D940): widget.place strokes a 3px FocusRing ring 2px outside every focusable non-editor element focused by Tab or the program (inset where the clip in force would cut it), never after a pointer press, folded into the subtree hash so replay never keeps a stale one; control.focus_look hands the theme's look from control_state and every focusable collection row; style.resolve lays the content colour over the container at the hover, keyboard-focus and pressed opacities; tests/selfhost/fixtures/link/ui_focus_ring on both hosts. PressRipple waits on a touch host and a frame clock"
         },
         {
           "id": "P5-03",

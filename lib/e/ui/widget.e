@@ -320,6 +320,15 @@ type State = struct {
     has_root: bool,
     focus: u32,
     has_focus: bool,
+    // The focus ring (D940): shown only when the focus came by the keyboard or the
+    // program, never by a pointer press; its colour, width and gap outside the
+    // element, set from the theme; the clip the element being placed lies within.
+    focus_visible: bool,
+    ring_color: paint.Color,
+    ring_width: f32,
+    ring_offset: f32,
+    clip_rect: geometry.Rect,
+    has_clip: bool,
     frame: u64,
     scene_id: scene.SceneId,
     has_scene: bool,
@@ -742,6 +751,16 @@ fn invalidate(widget_runtime: *Runtime, element: ElementId) {
     if found { s.elements[index].invalid = true }
 }
 
+// The focus ring's look (D940): `width` wide in `color`, `offset` outside the focused
+// element's bounds, or inset where a clip would cut it; a zero width draws none.
+fn set_focus_ring(widget_runtime: *Runtime, color: paint.Color, width: f32, offset: f32) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret }
+    s.ring_color = color
+    s.ring_width = max_f(width, 0.0)
+    s.ring_offset = max_f(offset, 0.0)
+}
+
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err {
     let (s, state_error) = state_of(widget_runtime)
     if state_error != ok { ret state_error }
@@ -749,6 +768,7 @@ fn focus(widget_runtime: *Runtime, element: ElementId) -> err {
     if !found { ret InvalidTree }
     s.focus = u32(index)
     s.has_focus = true
+    s.focus_visible = true
     ret ok
 }
 
@@ -1208,6 +1228,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     e.has_child = false
     let (own_hash, own_static) = hash_node(FNV_OFFSET, node)
     var subtree_hash = own_hash
+    if ringed(s, index) { subtree_hash = hash_u64(hash_bytes(subtree_hash, bytes_of[paint.Color](&s.ring_color)), u64(u32(s.ring_width * 64.0))) }
     var static_subtree = own_static
     i = 0usize
     while i < node.children.len {
@@ -1594,6 +1615,8 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     }
     var clipped = node.style.overflow != .Visible
     let radius = node.style.radius
+    let outer_clip = s.clip_rect
+    let outer_has_clip = s.has_clip
     // The shadow lies under everything, the background's shape at its offset.
     if node.style.shadow.color.alpha > 0.0 {
         let shifted = geometry.Rect { x: bounds.x + node.style.shadow.offset.x, y: bounds.y + node.style.shadow.offset.y, width: bounds.width, height: bounds.height }
@@ -1606,6 +1629,9 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         } else {
             try scene.push(b, scene.Command { Clip: scene.Clip { Rect: bounds } })
         }
+        s.clip_rect = bounds
+        if outer_has_clip { s.clip_rect = intersect(outer_clip, bounds) }
+        s.has_clip = true
     }
     let background = node.style.background
     var paint_background = true
@@ -1628,7 +1654,11 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     }
     switch node.kind {
     case .Text as t:
-        if t.style.fonts.len == 0usize { ret finish_place(b, clipped, layered) }
+        if t.style.fonts.len == 0usize {
+            s.clip_rect = outer_clip
+            s.has_clip = outer_has_clip
+            ret finish_place(b, clipped, layered)
+        }
         // The measure's layout serves the paint when it was made under this width,
         // or is one start-aligned line that fits it (D914).
         var laid: layout.Layout = zero
@@ -1697,6 +1727,9 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
         try place_scroll(s, a, node, element, sc, inner, inner_limits, b, depth)
     }
     try finish_place(b, clipped, layered)
+    s.clip_rect = outer_clip
+    s.has_clip = outer_has_clip
+    if ringed(s, element) { try place_ring(s, a, b, bounds, radius) }
     let placed = &s.elements[element]
     if placed.static_subtree {
         placed.replay_from = u32(from)
@@ -2006,6 +2039,44 @@ fn fill_shape(a: *mem.Arena, b: *scene.Builder, r: geometry.Rect, radius: f32, b
 }
 
 // The Restores that close what `place` opened.
+// Whether the element shows the focus ring: focused by the keyboard or the program,
+// focusable, not an editor (a field shows its focus by its own outline), and a
+// ring to draw.
+fn ringed(s: *const State, element: usize) -> bool {
+    if !s.has_focus || !s.focus_visible || usize(s.focus) != element || !(s.ring_width > 0.0) { ret false }
+    let e = &s.elements[element]
+    ret e.focusable && e.kind != EDIT_TAG
+}
+
+fn intersect(a: geometry.Rect, b: geometry.Rect) -> geometry.Rect {
+    let x0 = max_f(a.x, b.x)
+    let y0 = max_f(a.y, b.y)
+    let x1 = min_f(a.x + a.width, b.x + b.width)
+    let y1 = min_f(a.y + a.height, b.y + b.height)
+    ret geometry.Rect { x: x0, y: y0, width: max_f(x1 - x0, 0.0), height: max_f(y1 - y0, 0.0) }
+}
+
+// The ring: a stroke `ring_width` wide whose outer edge is `ring_offset + ring_width`
+// outside the bounds, on the element's shape grown by the same; where the clip in
+// force would cut that, the stroke lies just inside the bounds instead (a row in a
+// list, a tab in a bar).
+fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, bounds: geometry.Rect, radius: f32) -> err {
+    let w = s.ring_width
+    var grow = s.ring_offset + w * 0.5
+    let reach = s.ring_offset + w
+    let outer = geometry.Rect { x: bounds.x - reach, y: bounds.y - reach, width: bounds.width + 2.0 * reach, height: bounds.height + 2.0 * reach }
+    if s.has_clip {
+        let c = s.clip_rect
+        if outer.x < c.x || outer.y < c.y || outer.x + outer.width > c.x + c.width || outer.y + outer.height > c.y + c.height { grow = 0.0 - w * 0.5 }
+    }
+    let r = geometry.Rect { x: bounds.x - grow, y: bounds.y - grow, width: max_f(bounds.width + 2.0 * grow, 0.0), height: max_f(bounds.height + 2.0 * grow, 0.0) }
+    var rounded_by: f32 = 0.0
+    if radius > 0.0 { rounded_by = max_f(radius + grow, 0.0) }
+    let (outline, outline_error) = rounded_path(a, r, rounded_by)
+    if outline_error != ok { ret TooLarge }
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: outline, brush: paint.Brush { Solid: s.ring_color }, stroke: paint.Stroke { width: w, cap: .Butt, join: .Miter, miter_limit: 4.0 } } })
+}
+
 fn finish_place(b: *scene.Builder, clipped: bool, layered: bool) -> err {
     var restore: scene.Command = .Restore
     if clipped { try scene.push(b, restore) }
@@ -2640,6 +2711,7 @@ fn move_focus(s: *State, backward: bool) {
     }
     s.focus = order[next]
     s.has_focus = true
+    s.focus_visible = true
 }
 
 // ---------------------------------------------------------------------- editing
@@ -3084,6 +3156,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             if s.elements[region_index].focusable {
                 s.focus = u32(region_index)
                 s.has_focus = true
+                s.focus_visible = false
             }
             if s.elements[region_index].kind == EDIT_TAG {
                 s.compose_len = 0usize
@@ -3097,6 +3170,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if has_found {
             s.focus = u32(found)
             s.has_focus = true
+            s.focus_visible = false
             let action = s.elements[found].action
             ret action.invoke(action.ctx, event)
         }
@@ -3547,7 +3621,7 @@ fn overlay_bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geo
 // What the pointer and the focus are doing to an element, for the look a control
 // resolves from its state (D818): hovered, pressed (the arena's candidate while the
 // pointer is down) and focused; nothing for an element that is not there.
-type Interaction = struct { hovered: bool, pressed: bool, focused: bool }
+type Interaction = struct { hovered: bool, pressed: bool, focused: bool, focus_visible: bool }
 
 fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction {
     let s = mem.cast[*State](widget_runtime.state)
@@ -3555,7 +3629,7 @@ fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction {
     let (found, count) = find_by_key(s, key)
     if count == 0usize { ret zero }
     let index = usize(found.slot)
-    ret Interaction { hovered: s.arena_state.has_hovered && usize(s.arena_state.hovered) == index, pressed: s.arena_state.pressed && usize(s.arena_state.candidate) == index, focused: s.has_focus && usize(s.focus) == index }
+    ret Interaction { hovered: s.arena_state.has_hovered && usize(s.arena_state.hovered) == index, pressed: s.arena_state.pressed && usize(s.arena_state.candidate) == index, focused: s.has_focus && usize(s.focus) == index, focus_visible: s.has_focus && s.focus_visible && usize(s.focus) == index }
 }
 
 // A slider's values, for a harness.

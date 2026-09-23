@@ -324,6 +324,7 @@ fn page_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []c
     view_style.overflow = .Clip
     let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
     if hit_error != ok { ret (zero, TooLarge) }
+    control.focus_look(t)
     hit[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&pagings[0usize]), invoke: page_drag }, gestures: 2u8, enabled: true, focusable: true }, view_style, body[0usize..1usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
@@ -365,6 +366,7 @@ fn page_indicator(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count
         centred[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(t.tokens.spacing.lg, t.tokens.spacing.lg), mark[0usize..1usize])
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
+        control.focus_look(t)
         region[0usize] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&actions[i]), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, style.defaults(), centred[0usize..1usize])
         var sem: widget.Semantics = zero
         sem.role = 19u8
@@ -592,6 +594,7 @@ fn reorderable_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         row_style.height = style.Length { Px: extent }
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
+        control.focus_look(t)
         region[0usize] = widget.region(keys[i], widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[i]), invoke: reorder_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: true }, row_style, body[0usize..1usize])
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
         if scoped_error != ok { ret (zero, TooLarge) }
@@ -867,6 +870,7 @@ fn header_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: 
         head_style.overflow = .Clip
         let (tapped, tapped_error) = mem.alloc[widget.Node](a, 1usize)
         if tapped_error != ok { ret (zero, TooLarge) }
+        control.focus_look(t)
         tapped[0usize] = widget.region(header_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drags[i]), invoke: header_gesture }, gestures: 1u8 | 2u8 | 8u8, enabled: true, focusable: true }, head_style, body[0usize..1usize])
         var sem: widget.Semantics = zero
         sem.role = 32u8
@@ -934,6 +938,7 @@ fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, ce
     lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), boxed[0usize..columns.len])
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
+    control.focus_look(t)
     region[0usize] = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[0usize]), invoke: row_pick_gesture }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, lined[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = role

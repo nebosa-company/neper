@@ -514,7 +514,7 @@ fn fill_type_scale(t: *ThemeTokens) {
 }
 
 // ---- END GENERATED ----
-type ControlState = struct { hovered: bool, pressed: bool, focused: bool, selected: bool, disabled: bool, read_only: bool, invalid: bool }
+type ControlState = struct { hovered: bool, pressed: bool, focused: bool, focus_visible: bool, selected: bool, disabled: bool, read_only: bool, invalid: bool }
 type ControlVariant = enum u8 { Filled, Outlined, Plain }
 type ResolvedControl = struct { background: paint.Color, foreground: paint.Color, border: paint.Color, border_width: f32, focus_ring: f32, opacity: f32, radius: f32 }
 type SizeClass = enum u8 { Compact, Medium, Expanded }
@@ -597,6 +597,13 @@ fn validate_theme(t: *const ThemeTokens) -> err {
     ret ok
 }
 
+// A state layer (D940): `content` over `container` at `opacity`; over a transparent
+// container the layer is the content colour itself at that opacity.
+fn layer(container: paint.Color, content: paint.Color, opacity: f32) -> paint.Color {
+    if !(container.alpha > 0.0) { ret paint.Color { red: content.red, green: content.green, blue: content.blue, alpha: opacity } }
+    ret paint.Color { red: container.red + (content.red - container.red) * opacity, green: container.green + (content.green - container.green) * opacity, blue: container.blue + (content.blue - container.blue) * opacity, alpha: container.alpha }
+}
+
 fn mix(a: paint.Color, b: paint.Color, share: f32) -> paint.Color {
     ret paint.Color { red: a.red + (b.red - a.red) * share, green: a.green + (b.green - a.green) * share, blue: a.blue + (b.blue - a.blue) * share, alpha: a.alpha + (b.alpha - a.alpha) * share }
 }
@@ -627,8 +634,11 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
         foreground = color(t, .TextMuted)
     }
     if state.selected { background = mix(background, color(t, .Selection), 0.5) }
-    if state.hovered && !state.pressed { background = mix(background, color(t, .Text), 0.08) }
-    if state.pressed { background = mix(background, color(t, .Background), 0.2) }
+    // The state layers: the content colour over the container at the theme's
+    // opacities -- hovered, focused, pressed, the strongest one standing.
+    if state.hovered && !state.pressed { background = layer(background, foreground, t.states.hover) }
+    if state.focus_visible && !state.hovered && !state.pressed { background = layer(background, foreground, t.states.focus) }
+    if state.pressed { background = layer(background, foreground, t.states.pressed) }
     if state.invalid {
         border = color(t, .Error)
         if border_width < t.borders.regular { border_width = t.borders.regular }

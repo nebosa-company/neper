@@ -330,12 +330,21 @@ fn control_state(t: *const Theme, key: widget.Key, enabled: bool, selected: bool
     state.disabled = !enabled
     state.selected = selected
     if mem.address_of(t.runtime) != 0usize {
+        focus_look(t)
         let now = widget.interaction(t.runtime, key)
         state.hovered = now.hovered
         state.pressed = now.pressed
         state.focused = now.focused
+        state.focus_visible = now.focus_visible
     }
     ret state
+}
+
+// The theme's focus ring on the page's runtime (D940): the runtime paints it round
+// whichever element the keyboard focuses, so a control need only hand it the look.
+fn focus_look(t: *const Theme) {
+    if mem.address_of(t.runtime) == 0usize { ret }
+    widget.set_focus_ring(t.runtime, style.color(t.tokens, .FocusRing), t.tokens.metrics.focus_ring, t.tokens.metrics.focus_offset)
 }
 
 fn press_tap(ctx: *void, g: widget.Gesture) -> err {

@@ -6,11 +6,11 @@
 | module | `e.ui.widget` |
 | module surface | `partial`, layer 6, deps `e.data.slot_map`, `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.gpu`, `e.mem`, `e.text.layout`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.window` |
 | blocked by | `P4` |
-| delivered | 0 of 3 |
+| delivered | 2 of 3 |
 
 ## Eligibility
 
-`python scripts/check_widget_plan.py --next` names the single eligible component; it currently reports: `NEXT: P5 P5-02 FocusRing (e.ui.widget)`. An item is eligible only when its phase and item blockers are complete and every earlier item in the phase is delivered or independently blocked. The UI family is blocked as a whole on reviewed embedded-asset linking, native-window, GPU-presentation and accessibility primitives (`docs/roadmap.md`, 'Experimental declarative GPU UI'); the `e.ui.*`, `e.gfx.*` and `e.text.*` modules under `docs/tasks/modules/` come first.
+`python scripts/check_widget_plan.py --next` names the single eligible component; it currently reports: `NEXT: P5 P5-02 PressRipple (e.ui.widget)`. An item is eligible only when its phase and item blockers are complete and every earlier item in the phase is delivered or independently blocked. The UI family is blocked as a whole on reviewed embedded-asset linking, native-window, GPU-presentation and accessibility primitives (`docs/roadmap.md`, 'Experimental declarative GPU UI'); the `e.ui.*`, `e.gfx.*` and `e.text.*` modules under `docs/tasks/modules/` come first.
 
 ## Definition of done
 
@@ -18,8 +18,8 @@ Every component below is implemented in `e.ui.widget`, exercised by a determinis
 
 ## Components
 
-- [ ] `FocusRing`
-- [ ] `StateLayer`
+- [x] `FocusRing`
+- [x] `StateLayer`
 - [ ] `PressRipple`
 
 ## Verification

@@ -18755,3 +18755,39 @@ rewrites nothing, where the baseline rebuilt the module. The baseline's builds o
 Windows can find the commit charge full (its arenas commit up front,
 `m2-baseline.md`); the harness retries such a build as `measure.py` does, and none of
 the timed ones needed it.
+
+## D940 — The runtime paints the focus ring; a control's state is a layer of its own content colour
+
+P5-02. `widget.place` draws the focus ring for every focusable element that is
+not an editor: a stroke `metrics.focus_ring` (3) wide in `FocusRing`, its outer
+edge `focus_offset + focus_ring` (5) outside the bounds, on the element's shape
+grown by the same. Where the clip in force would cut that -- a row in a scroll
+view, a button its clipping box fills -- the stroke lies just inside the bounds
+instead; the runtime tracks the clip rectangle it is placing within for this.
+The ring shows only when the focus came by Tab or by the program
+(`widget.focus`, a modal overlay's first focus): a pointer press focuses without
+it, as `:focus-visible` does, and `Interaction.focus_visible` tells a control
+which it is. An editor is left out because a field shows its focus by its own
+outline, as the TextField specification says. `widget.set_focus_ring` takes the
+look; `control.focus_look` hands it the theme's, from `control_state` and from
+every collection builder that makes a focusable row, so a page configures
+nothing. A ringed element folds the ring into its subtree hash, so D916's replay
+of an unchanged subtree never shows a ring that has moved on.
+
+`style.resolve`'s hover and press are now v2 state layers: the control's content
+colour laid over its container at `states.hover` (0.08), `states.focus` (0.10,
+keyboard focus only) and `states.pressed` (0.10), and over a transparent
+container the content colour itself at that opacity. D805 mixed toward the text
+colour on hover and toward the background on press, so a hovered primary button
+now lightens where it darkened; `ui_theme` and `ui_button` say so. The first
+`ui_selection` run caught the focus layer on a switch the pointer had just
+toggled, which is why it waits for keyboard focus. Disabled keeps its 0.5
+opacity until each component's row gives it the 12%/38% colours, since some
+controls show disabled only through the opacity.
+
+One more location-less refusal: a second `State` field named `clip` beside the
+clipboard's `clip` buffer answered E-TYPE-9999 at 1:1 of every operand that
+reached `e.ui.widget`; it is `clip_rect`. `ui_focus_ring` holds the ring band,
+the gap, its move under Tab, its absence after a press, the inset ring in a
+clip and the hover layer's exact colour; all 62 `ui_*` fixtures pass on
+Windows and Linux. The press ripple waits on a touch host and a frame clock.

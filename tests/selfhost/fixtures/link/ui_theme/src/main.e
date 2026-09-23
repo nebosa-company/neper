@@ -98,7 +98,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var hovered: style.ControlState = zero
     hovered.hovered = true
     let hovered_look = style.resolve(&light, .Filled, hovered)
-    if !(hovered_look.background.blue < filled.background.blue) || same_color(hovered_look.background, pressed_look.background) { os.exit(11i32) }
+    // v2 state layers (D940): the label colour over the fill, pressed stronger than hovered.
+    if !(hovered_look.background.red > filled.background.red) || !(pressed_look.background.red > hovered_look.background.red) || same_color(hovered_look.background, pressed_look.background) { os.exit(11i32) }
     var focused: style.ControlState = zero
     focused.focused = true
     if !near(style.resolve(&light, .Filled, focused).focus_ring, light.metrics.focus_ring) { os.exit(12i32) }

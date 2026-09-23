@@ -3099,6 +3099,13 @@ $uiButtonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $uiButtonWritten -ne 'executable written') { throw 'ui_button emission failed' }
 $uiButtonOutput = & $uiButtonPath
 if ($LASTEXITCODE -ne 0 -or $uiButtonOutput -ne 'ui button ok') { throw "the buttons answered wrongly: exit $LASTEXITCODE" }
+# The focus ring and state layers (D940, widget plan P5-02): Tab rings the focused
+# button outside its bounds, a pointer press does not, a clipped one rings inside.
+$uiFocusRingPath = Join-Path $testBuild 'ui-focus-ring-selfhost.exe'
+$uiFocusRingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_focus_ring\src\main.e') $repo 'x64' 'windows' $uiFocusRingPath
+if ($LASTEXITCODE -ne 0 -or $uiFocusRingWritten -ne 'executable written') { throw 'ui_focus_ring emission failed' }
+$uiFocusRingOutput = & $uiFocusRingPath
+if ($LASTEXITCODE -ne 0 -or $uiFocusRingOutput -ne 'ui focus ring ok') { throw "the focus ring answered wrongly: exit $LASTEXITCODE" }
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 $uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'
