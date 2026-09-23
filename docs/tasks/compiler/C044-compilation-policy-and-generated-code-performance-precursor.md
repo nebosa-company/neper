@@ -80,7 +80,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `unchecked`: `src/em.e`×37‡, `src/main.e`×31‡, `src/check.e`×23‡, `src/tool.e`×11‡, `src/codegen_x64.e`×1‡, `src/lower.e`×1‡, `tests/conformance/reject/safety_unchecked.expected.jsonl`×1
+- `unchecked`: `src/em.e`×37‡, `src/main.e`×31‡, `src/check.e`×23‡, `benchmarks/baseline/results/cpu-linux-d943.json`×22, `benchmarks/baseline/results/cpu-windows-d943.json`×22, `src/tool.e`×11‡, `benchmarks/baseline/cpu.py`×8, `src/codegen_x64.e`×1‡
 - `inline-cap`: `src/main.e`×6‡, `src/lower.e`×2‡, `src/nir.e`×1†
 - `Mask`: `lib/e/simd.e`×22, `src/check.e`×15‡, `lib/e/crypto/sign.e`×2†, `src/layout.e`×2, `src/main.e`×2‡, `benchmarks/metamorphic/rename_symbols.py`×1, `lib/e/algo/combin.e`×1, `scripts/check_module_plan.py`×1
 

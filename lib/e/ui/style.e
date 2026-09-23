@@ -516,10 +516,13 @@ fn fill_type_scale(t: *ThemeTokens) {
 // ---- END GENERATED ----
 type ControlState = struct { hovered: bool, pressed: bool, focused: bool, focus_visible: bool, selected: bool, disabled: bool, read_only: bool, invalid: bool }
 // Plain is the v2 text button; Tonal, Elevated and Danger are the v2 additions (D942).
-type ControlVariant = enum u8 { Filled, Outlined, Plain, Tonal, Elevated, Danger }
+// `Container` is the FAB's primary container (D944).
+type ControlVariant = enum u8 { Filled, Outlined, Plain, Tonal, Elevated, Danger, Container }
 // `elevation` is the shadow level the control casts; `padding` and `padding_start`
-// are its horizontal padding when the control sets them (zero: the pressable's own).
-type ResolvedControl = struct { background: paint.Color, foreground: paint.Color, border: paint.Color, border_width: f32, focus_ring: f32, opacity: f32, radius: f32, elevation: u8, padding: f32, padding_start: f32 }
+// are its horizontal padding when the control sets them (zero: the pressable's own);
+// with `custom_padding` they and `padding_y` are taken exactly, zero included; a
+// nonzero `min_width` or `min_height` raises the pressable's own minimum (D944).
+type ResolvedControl = struct { background: paint.Color, foreground: paint.Color, border: paint.Color, border_width: f32, focus_ring: f32, opacity: f32, radius: f32, elevation: u8, padding: f32, padding_start: f32, padding_y: f32, custom_padding: bool, min_width: f32, min_height: f32 }
 type SizeClass = enum u8 { Compact, Medium, Expanded }
 type Capabilities = struct { hover: bool, fine_pointer: bool, keyboard: bool, touch: bool, pen: bool, resizable: bool, multi_window: bool, insets: geometry.Insets }
 type Adaptation = struct { size: SizeClass, capabilities: Capabilities, profile: Profile }
@@ -645,6 +648,12 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
         foreground = color(t, .OnError)
         border = background
     }
+    if variant == .Container {
+        background = color(t, .PrimaryContainer)
+        foreground = color(t, .OnPrimaryContainer)
+        border = background
+        elevation = 3u8
+    }
     if variant == .Plain {
         background = paint.rgba(0.0, 0.0, 0.0, 0.0)
         foreground = color(t, .Primary)
@@ -669,7 +678,7 @@ fn resolve(t: *const ThemeTokens, variant: ControlVariant, state: ControlState) 
     var opacity: f32 = 1.0
     if state.disabled { opacity = 0.5 }
     if state.hovered && elevation != 0u8 { elevation = elevation + 1u8 }
-    ret ResolvedControl { background: background, foreground: foreground, border: border, border_width: border_width, focus_ring: focus_ring, opacity: opacity, radius: t.radii.sm, elevation: elevation, padding: 0.0, padding_start: 0.0 }
+    ret ResolvedControl { background: background, foreground: foreground, border: border, border_width: border_width, focus_ring: focus_ring, opacity: opacity, radius: t.radii.sm, elevation: elevation, padding: 0.0, padding_start: 0.0, padding_y: 0.0, custom_padding: false, min_width: 0.0, min_height: 0.0 }
 }
 
 // The v2 disabled look (D942): the container in the surface's content colour at

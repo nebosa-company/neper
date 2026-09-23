@@ -6,7 +6,7 @@
 | module | `e.ui.control` |
 | module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.math`, `e.mem`, `e.text.layout`, `e.text.shape`, `e.ui.accessibility`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.widget` |
 | blocked by | `P4` |
-| delivered | 1 of 9 |
+| delivered | 8 of 9 |
 
 ## Eligibility
 
@@ -18,15 +18,15 @@ Every component below is implemented in `e.ui.control`, exercised by a determini
 
 ## Components
 
-- [ ] `ActionRowSpec`
+- [x] `ActionRowSpec`
 - [x] `ButtonSpec`
-- [ ] `FabSpec`
-- [ ] `IconButtonSpec`
-- [ ] `LinkSpec`
-- [ ] `SpeedDialSpec`
+- [x] `FabSpec`
+- [x] `IconButtonSpec`
+- [x] `LinkSpec`
+- [x] `SpeedDialSpec`
 - [ ] `SplitButtonSpec`
-- [ ] `ToggleButtonSpec`
-- [ ] `ToolbarSpec`
+- [x] `ToggleButtonSpec`
+- [x] `ToolbarSpec`
 
 ## Verification
 

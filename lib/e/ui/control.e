@@ -369,13 +369,15 @@ fn pressable_states(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, l
     s.border = style.Border { width: look.border_width, color: look.border }
     s.radius = look.radius
     s.opacity = look.opacity
-    s.min_height = style.Length { Px: t.tokens.metrics.control_height }
-    s.min_width = style.Length { Px: t.tokens.metrics.hit_target }
+    s.min_height = style.Length { Px: max_of(t.tokens.metrics.control_height, look.min_height) }
+    s.min_width = style.Length { Px: max_of(t.tokens.metrics.hit_target, look.min_width) }
     var end = t.tokens.spacing.md
-    if look.padding > 0.0 { end = look.padding }
+    if look.padding > 0.0 || look.custom_padding { end = look.padding }
     var start = end
     if look.padding_start > 0.0 { start = look.padding_start }
-    let pad_y = style.Length { Px: t.tokens.spacing.xs }
+    var vertical = t.tokens.spacing.xs
+    if look.custom_padding { vertical = look.padding_y }
+    let pad_y = style.Length { Px: vertical }
     s.padding = style.EdgeLengths { left: style.Length { Px: start }, top: pad_y, right: style.Length { Px: end }, bottom: pad_y }
     if look.elevation != 0u8 {
         var raised = usize(look.elevation)
@@ -410,7 +412,20 @@ fn button_look(t: *const Theme, look: style.ResolvedControl, enabled: bool) -> s
     out.padding = 16.0
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { out.padding = 24.0 }
     if options_text(look) { out.padding = 12.0 }
+    // The label line centred in the control height (D944).
+    out.custom_padding = true
+    out.padding_y = max_zero((t.tokens.metrics.control_height - style.text_style(t.tokens, .Label).line_height) * 0.5)
     ret out
+}
+
+fn max_of(a: f32, b: f32) -> f32 {
+    if a > b { ret a }
+    ret b
+}
+
+fn max_zero(v: f32) -> f32 {
+    if v < 0.0 { ret 0.0 }
+    ret v
 }
 
 // A text (Plain) button is its label alone: 12px sides.
@@ -448,6 +463,53 @@ fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *
     ret (node, node_error)
 }
 
+// The four FAB sizes of the specification (D944, docs/ux/components/Fab).
+type FabSize = enum u8 { Small, Default, Large, Extended }
+
+// A floating action button: `primary-container`, casting elevation 3 (4 hovered);
+// small 40 with `radius-md`, default 56 with `radius-lg`, large 96 with `radius-xl`
+// and a 36 icon, extended 56 tall with the label after the icon, 16 before it and
+// 20 after, 12 between; the label names it in the tree.
+fn fab(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, label: str, action: *const widget.Submit, size: FabSize) -> (widget.Node, err) {
+    var look = style.resolve(t.tokens, .Container, control_state(t, key, true, false))
+    var side = t.tokens.sizes.control_xl
+    var icon_size = t.tokens.sizes.icon_md
+    look.radius = t.tokens.radii.lg
+    if size == .Small {
+        side = t.tokens.sizes.control_md
+        look.radius = t.tokens.radii.md
+    }
+    if size == .Large {
+        side = 96.0
+        icon_size = t.tokens.sizes.icon_lg
+        look.radius = t.tokens.radii.xl
+    }
+    look.custom_padding = true
+    look.padding = (side - icon_size) * 0.5
+    look.padding_y = look.padding
+    let picture = widget.image(0u64, widget.Image { texture: texture, fit: .Contain }, sized_style(icon_size, icon_size))
+    var content = picture
+    if size == .Extended {
+        look.padding_start = 16.0
+        look.padding = 20.0
+        var caption = text_options()
+        caption.role = .Label
+        caption.wrap = .None
+        let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+        if label_error != ok { ret (zero, label_error) }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = picture
+        parts[1usize] = label_node
+        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), parts[0usize..2usize])
+    }
+    look.min_width = side
+    look.min_height = side
+    if size == .Extended { look.min_width = 80.0 }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, false, action, content)
+    ret (node, node_error)
+}
+
 // A button with a leading icon (D942): the icon at `sizes.icon_sm`, `spacing.sm` from
 // the label, 16px on the icon side.
 fn button_with_icon(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
@@ -469,9 +531,26 @@ fn button_with_icon(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: sc
 }
 
 // An icon button: the icon in place of the label, the label for the tree alone.
+// v2 (D944, docs/ux/components/IconButton): a circle the control height across,
+// the icon 18 at pointer density and 24 at touch density centred in it; the
+// standard (Plain) one's layer is the icon colour, `on-surface-variant`.
+fn icon_look(t: *const Theme, look: style.ResolvedControl, variant: style.ControlVariant, enabled: bool) -> (style.ResolvedControl, f32) {
+    var out = look
+    if variant == .Plain { out.foreground = style.color(t.tokens, .OnSurfaceVariant) }
+    if !enabled { out = style.disabled_look(t.tokens, out) }
+    let h = t.tokens.metrics.control_height
+    var size = t.tokens.sizes.icon_sm
+    if h > t.tokens.sizes.control_sm { size = t.tokens.sizes.icon_md }
+    out.radius = h * 0.5
+    out.custom_padding = true
+    out.padding = max_zero((h - size) * 0.5)
+    out.padding_y = out.padding
+    ret (out, size)
+}
+
 fn icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, label: str, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
-    let look = style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, false))
-    let size = t.tokens.metrics.control_height - 2.0 * t.tokens.spacing.xs
+    var state = control_state(t, key, options.enabled, false)
+    let (look, size) = icon_look(t, style.resolve(t.tokens, options.variant, state), options.variant, options.enabled)
     let picture = widget.image(0u64, widget.Image { texture: texture, fit: .Contain }, sized_style(size, size))
     let (node, node_error) = pressable(a, key, t, 3u8, label, look, options.enabled, false, action, picture)
     ret (node, node_error)
@@ -479,8 +558,18 @@ fn icon_button(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.T
 
 // A toggle button: pressed to switch `selected`, which the caller keeps and the look
 // and the tree show.
+// v2 (D944, docs/ux/components/ToggleButton): off is the variant's look, fully
+// rounded; on is the filled look with `radius-sm` corners (`radius-md` at touch
+// density), keeping that shape when disabled so the state still reads.
 fn toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, selected: bool, action: *const widget.Submit, options: ButtonOptions) -> (widget.Node, err) {
-    let look = style.resolve(t.tokens, options.variant, control_state(t, key, options.enabled, selected))
+    var shown: style.ControlVariant = options.variant
+    if selected { shown = .Filled }
+    var state = control_state(t, key, options.enabled, false)
+    var look = button_look(t, style.resolve(t.tokens, shown, state), options.enabled)
+    if selected {
+        look.radius = t.tokens.radii.sm
+        if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { look.radius = t.tokens.radii.md }
+    }
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
@@ -491,22 +580,45 @@ fn toggle_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, se
 }
 
 // A link: its text in the primary colour, a tap region with the link role.
+// v2 (D944, docs/ux/components/Link, standalone): `label-large` in `primary`; hovered
+// or pressed, a `primary` wash at the state's opacity behind it and a 1px underline;
+// `radius-xs` corners for the wash and the ring.
 fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
     var caption = text_options()
-    caption.role = .Body
+    caption.role = .Label
     caption.color = .Primary
     caption.wrap = .None
     let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
     if label_error != ok { ret (zero, label_error) }
+    let active = state.hovered || state.pressed
+    var count = 1usize
+    if active { count = 2usize }
+    let (lines, lines_error) = mem.alloc[widget.Node](a, count)
+    if lines_error != ok { ret (zero, TooLarge) }
+    lines[0usize] = label_node
+    if active {
+        var under = style.defaults()
+        under.width = style.Length { Percent: 100.0 }
+        under.height = style.Length { Px: t.tokens.sizes.divider }
+        under.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        lines[1usize] = widget.box(0u64, under, zero)
+    }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = label_node
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, style.defaults(), lines[0usize..count])
     let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
     if inner_error != ok { ret (zero, TooLarge) }
     // A link is at least the hit target, so a short one is still reachable.
     var target_style = style.defaults()
     target_style.min_width = style.Length { Px: t.tokens.metrics.hit_target }
     target_style.min_height = style.Length { Px: t.tokens.metrics.hit_target }
+    target_style.radius = t.tokens.radii.xs
+    if active {
+        var opacity = t.tokens.states.hover
+        if state.pressed { opacity = t.tokens.states.pressed }
+        target_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .Primary), opacity) }
+    }
     inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, target_style, body[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = ROLE_LINK
@@ -1684,8 +1796,22 @@ fn split_button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, act
 // button says expanded in the tree and controls the list.
 fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, actions: []const widget.Submit, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
     if actions.len != labels.len { ret (zero, TooLarge) }
-    var look = style.resolve(t.tokens, .Filled, control_state(t, key, true, false))
-    look.radius = t.tokens.metrics.hit_target * 0.5
+    // v2 (D944, docs/ux/components/SpeedDial): the head is the FAB -- 56 tall,
+    // `radius-lg`, `primary-container`, elevation 3 -- and, open, the `primary`
+    // close circle; the items are 56-tall `primary-container` pills at elevation 2,
+    // 16 before the label and 24 after, 4 apart and 8 above the head.
+    var head_variant: style.ControlVariant = .Container
+    if open { head_variant = .Filled }
+    var look = style.resolve(t.tokens, head_variant, control_state(t, key, true, false))
+    let side = t.tokens.sizes.control_xl
+    look.radius = t.tokens.radii.lg
+    if open {
+        look.radius = side * 0.5
+        look.elevation = 3u8
+    }
+    look.custom_padding = true
+    look.padding = 16.0
+    look.padding_y = max_zero((side - style.text_style(t.tokens, .Label).line_height) * 0.5)
     var caption = text_options()
     caption.role = .Label
     caption.wrap = .None
@@ -1693,6 +1819,8 @@ fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, label
     if label_error != ok { ret (zero, label_error) }
     var states = 0u32
     if open { states = accessibility.STATE_EXPANDED }
+    look.min_width = side
+    look.min_height = side
     let (head, head_error) = pressable_states(a, key, t, 3u8, label, look, true, false, states, accessibility.ACTION_EXPAND, key + 1u64, toggle, label_node)
     if head_error != ok { ret (zero, head_error) }
     var count = 1usize
@@ -1705,21 +1833,35 @@ fn speed_dial(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, label
         if items_error != ok { ret (zero, TooLarge) }
         var i = 0usize
         while i < labels.len {
-            let (item, item_error) = button(a, key + 2u64 + u64(i), t, labels[i], &actions[i], button_options())
+            let item_key = key + 2u64 + u64(i)
+            var pill = style.resolve(t.tokens, .Container, control_state(t, item_key, true, false))
+            pill.elevation = 2u8
+            pill.radius = side * 0.5
+            pill.custom_padding = true
+            pill.padding_start = 16.0
+            pill.padding = 24.0
+            pill.padding_y = max_zero((side - style.text_style(t.tokens, .TitleMedium).line_height) * 0.5)
+            var words = text_options()
+            words.role = .TitleMedium
+            words.wrap = .None
+            let (word, word_error) = colored_text(a, 0u64, labels[i], t, words, pill.foreground)
+            if word_error != ok { ret (zero, word_error) }
+            pill.min_height = side
+            let (item, item_error) = pressable(a, item_key, t, 3u8, labels[i], pill, true, false, &actions[i], word)
             if item_error != ok { ret (zero, item_error) }
             items[i] = item
             i += 1usize
         }
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
-        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .End, cross: .End, gap: t.tokens.spacing.xs }, style.defaults(), items[0usize..labels.len])
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .End, cross: .End, gap: 4.0 }, style.defaults(), items[0usize..labels.len])
         var sem: widget.Semantics = zero
         sem.role = 2u8
         sem.label = label
         let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
         if lifted_error != ok { ret (zero, TooLarge) }
         lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize])
-        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 0.0, y: 0.0 - t.tokens.spacing.xs }, modal: true, dismiss: *toggle }, style.defaults(), lifted[0usize..1usize])
+        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 0.0, y: 0.0 - 8.0 }, modal: true, dismiss: *toggle }, style.defaults(), lifted[0usize..1usize])
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
 }

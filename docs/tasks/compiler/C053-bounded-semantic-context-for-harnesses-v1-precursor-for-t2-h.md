@@ -82,7 +82,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
 - `context-file`: `src/tool.e`×6‡, `src/main.e`×5‡, `src/check.e`×3‡, `benchmarks/llm_edit/README.md`×1, `benchmarks/llm_edit/semantic.py`×1, `scripts/render_card.py`×1, `tests/conformance/tools/context_moves.e`×1, `tests/conformance/tools/contract.e`×1
-- `uses-file`: `src/tool.e`×7‡, `src/check.e`×3‡, `src/main.e`×3‡, `scripts/render_card.py`×1, `tests/conformance/tools/plan_generated.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_generated.x64-windows.expected.jsonl`×1, `tests/conformance/tools/plan_parameter.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_parameter.x64-windows.expected.jsonl`×1
+- `uses-file`: `src/tool.e`×7‡, `src/check.e`×3‡, `src/main.e`×3‡, `benchmarks/baseline/rename.py`×2, `scripts/render_card.py`×1, `tests/conformance/tools/plan_generated.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_generated.x64-windows.expected.jsonl`×1, `tests/conformance/tools/plan_parameter.x64-linux.expected.jsonl`×1
 - `query_broken`: `tests/conformance/tools/batch_broken.txt`×2, `tests/conformance/tools/batch_broken.expected.jsonl`×1, `tests/conformance/tools/context_broken.expected.jsonl`×1, `tests/conformance/tools/plan_rename_broken.expected.jsonl`×1, `tests/conformance/tools/uses_broken.expected.jsonl`×1
 
 ## Verification

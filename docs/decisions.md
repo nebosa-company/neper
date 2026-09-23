@@ -18896,3 +18896,36 @@ baseline's image and 37,940 in the candidate's on Linux (14.8 KB more on Windows
 Dead-function elimination (D128) removes unreached functions, not globals, and
 `e.os`/`e.io` have grown globals that every program now carries. Named here, measured
 next.
+
+## D944 — The action controls draw their v2 specifications
+
+The rest of P5-03 but one. `ResolvedControl` can now carry a control's whole box:
+`custom_padding` takes `padding`, `padding_start` and a new `padding_y` exactly
+(zero included), and `min_width` / `min_height` raise the pressable's own minimum,
+because a size set on the semantics wrapper a pressable returns never reaches the
+keyed region that is measured and pressed -- the extended FAB's 80 stayed 72
+until the minimum moved into the look. With the vertical pad a button's label now
+sits centred in the control height instead of 4px from its top.
+
+- Icon button: a circle the control height across (32 at pointer density, 40 at
+  touch), the icon 18 or 24 centred; the standard one's layer is
+  `on-surface-variant`; the v2 disabled colours.
+- Toggle button: off is the variant's look, fully rounded; on is the filled look
+  with `radius-sm` corners (`radius-md` at touch density), kept when disabled.
+- Link: `label-large` in `primary`; hovered or pressed, a `primary` wash at the
+  state's opacity and a 1px underline; `radius-xs` for the wash and the ring.
+- FAB: `control.fab` in four sizes on the new `Container` variant (primary
+  container, elevation 3, 4 hovered): small 40 with `radius-md`, default 56 with
+  `radius-lg`, large 96 with `radius-xl` and a 36 icon, extended 56 tall and at
+  least 80 wide with 16 / 12 / 20 around the icon and label.
+- Speed dial: the FAB-shaped head, the `primary` close circle when open, the
+  items 56-tall primary-container pills at elevation 2 in `title-medium`, 4 apart
+  and 8 above the head.
+- Action row: 8 between its buttons. Toolbar: square on `surface-container`, 4
+  apart and 4 in at pointer density, 8 at touch density.
+
+`ui_actions_v2` holds each by geometry and pixel; all 64 `ui_*` fixtures pass
+on Windows and Linux. The split button waits on per-corner radii, which the
+style and renderer do not have (one radius per box). Icons are the caller's
+textures, drawn untinted, so an icon's colour is the image's until the renderer
+can tint a mask.

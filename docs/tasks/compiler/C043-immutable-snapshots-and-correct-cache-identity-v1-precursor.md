@@ -78,14 +78,14 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `unchecked`: `src/em.e`×37‡, `src/main.e`×31‡, `src/check.e`×23‡, `src/tool.e`×11‡, `src/codegen_x64.e`×1‡, `src/lower.e`×1‡, `tests/conformance/reject/safety_unchecked.expected.jsonl`×1
+- `unchecked`: `src/em.e`×37‡, `src/main.e`×31‡, `src/check.e`×23‡, `benchmarks/baseline/results/cpu-linux-d943.json`×22, `benchmarks/baseline/results/cpu-windows-d943.json`×22, `src/tool.e`×11‡, `benchmarks/baseline/cpu.py`×8, `src/codegen_x64.e`×1‡
 - `mode-changed`: `src/tool.e`×1‡
 - `compiler-changed`: `src/tool.e`×1‡
 - `inline-cap`: `src/main.e`×6‡, `src/lower.e`×2‡, `src/nir.e`×1†
 - `options-changed`: `src/main.e`×1‡, `src/tool.e`×1‡
 - `fault-collision`: `src/main.e`×3‡
 - `check-file`: `src/main.e`×10‡, `src/tool.e`×6‡, `benchmarks/fuzz/fuzz.py`×3, `benchmarks/scale/profile_check.sh`×3, `scripts/algos/agent_brief.md`×2, `scripts/card_examples.py`×2, `scripts/algos/decisions-pending.md`×1†, `scripts/render_card.py`×1
-- `uses-file`: `src/tool.e`×7‡, `src/check.e`×3‡, `src/main.e`×3‡, `scripts/render_card.py`×1, `tests/conformance/tools/plan_generated.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_generated.x64-windows.expected.jsonl`×1, `tests/conformance/tools/plan_parameter.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_parameter.x64-windows.expected.jsonl`×1
+- `uses-file`: `src/tool.e`×7‡, `src/check.e`×3‡, `src/main.e`×3‡, `benchmarks/baseline/rename.py`×2, `scripts/render_card.py`×1, `tests/conformance/tools/plan_generated.x64-linux.expected.jsonl`×1, `tests/conformance/tools/plan_generated.x64-windows.expected.jsonl`×1, `tests/conformance/tools/plan_parameter.x64-linux.expected.jsonl`×1
 
 ## Verification
 

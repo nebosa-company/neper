@@ -1125,9 +1125,16 @@
             "ToolbarSpec"
           ],
           "delivered": [
-            "ButtonSpec"
+            "ActionRowSpec",
+            "ButtonSpec",
+            "FabSpec",
+            "IconButtonSpec",
+            "LinkSpec",
+            "SpeedDialSpec",
+            "ToggleButtonSpec",
+            "ToolbarSpec"
           ],
-          "evidence": "lib/e/ui/control.e, lib/e/ui/style.e (D942): control.button fully rounded at the control height with the specification's 16/24/12px sides by density and variant; Filled, Tonal, Elevated (elevation 1, 2 hovered), Outlined (the outline alone), Plain (text) and Danger variants; the v2 disabled colours (on-surface 12%/38%); button_with_icon with an 18px icon 8px before the label; ButtonOptions.loading keeps the label's place under a ring and marks the button busy; tests/selfhost/fixtures/link/ui_button_v2 on both hosts"
+          "evidence": "lib/e/ui/control.e, lib/e/ui/style.e, lib/e/ui/navigation.e (D942, D944): the button in six variants, fully rounded, sides by density, v2 disabled, icon and loading forms (ui_button_v2); the icon button a centred circle, the toggle's on shape, the link's wash and underline, control.fab in four sizes on the Container variant, the speed dial's FAB head and pill items, the action row's 8 and the toolbar's container and 4/8 spacing (ui_actions_v2); both on Windows and Linux. The split button waits on per-corner radii"
         },
         {
           "id": "P5-04",

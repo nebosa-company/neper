@@ -37,8 +37,14 @@ fn action_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: 
     ret (worded, worded_error)
 }
 
-// The actions as plain buttons in a row, keyed `key + index`.
+// The actions as plain buttons in a row, keyed `key + index`, `space-2` apart
+// (D944, docs/ux/components/ActionRow).
 fn action_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Action, variant: style.ControlVariant) -> (widget.Node, err) {
+    let (row, row_error) = spaced_row(a, key, t, items, variant, 8.0)
+    ret (row, row_error)
+}
+
+fn spaced_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const Action, variant: style.ControlVariant, gap: f32) -> (widget.Node, err) {
     let (buttons, buttons_error) = mem.alloc[widget.Node](a, items.len)
     if buttons_error != ok { ret (zero, TooLarge) }
     var i = 0usize
@@ -48,7 +54,7 @@ fn action_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []
         buttons[i] = made
         i += 1usize
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), buttons[0usize..items.len]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, style.defaults(), buttons[0usize..items.len]), ok)
 }
 
 // An app bar: the leading actions (keyed `key + 1 + index`, at most 8), the title
@@ -97,14 +103,17 @@ fn app_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, 
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }
 
-// A toolbar: the actions as plain buttons in a row keyed `key + 1 + index` on the
-// surface variant; a group named `label`.
+// A toolbar: the actions as plain buttons in a row keyed `key + 1 + index`; a
+// group named `label`. v2 (D944, docs/ux/components/Toolbar, docked): square on
+// `surface-container`, 4 apart and 4 in at pointer density, 8 at touch density.
 fn toolbar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const Action) -> (widget.Node, err) {
-    let (row, row_error) = action_row(a, key + 1u64, t, items, .Plain)
+    var gap: f32 = 4.0
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { gap = 8.0 }
+    let (row, row_error) = spaced_row(a, key + 1u64, t, items, .Plain, gap)
     if row_error != ok { ret (zero, row_error) }
     var options = control.surface_options(t)
-    options.background = .SurfaceVariant
-    options.padding = t.tokens.spacing.xs
+    options.background = .SurfaceContainer
+    options.padding = gap
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = row

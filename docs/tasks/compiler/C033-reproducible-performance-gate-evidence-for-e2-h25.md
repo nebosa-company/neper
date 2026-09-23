@@ -117,7 +117,9 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `m2-baseline`: `benchmarks/baseline/edit.py`×2, `benchmarks/baseline/render.py`×2, `benchmarks/baseline/gate.py`×1, `benchmarks/baseline/measure.py`×1, `benchmarks/baseline/paired.py`×1
 - `benchmarks/baseline/edit.py`: `benchmarks/baseline/edit.py`×1
 - `benchmarks/baseline/rename.py`: `benchmarks/baseline/rename.py`×1
-- `unchecked`: `src/em.e`×37‡, `src/main.e`×31‡, `src/check.e`×23‡, `src/tool.e`×11‡, `src/codegen_x64.e`×1‡, `src/lower.e`×1‡, `tests/conformance/reject/safety_unchecked.expected.jsonl`×1
+- `benchmarks/cpu`: `benchmarks/baseline/cpu.py`×1
+- `benchmarks/baseline/cpu.py`: `benchmarks/baseline/cpu.py`×1
+- `unchecked`: `src/em.e`×37‡, `src/main.e`×31‡, `src/check.e`×23‡, `benchmarks/baseline/results/cpu-linux-d943.json`×22, `benchmarks/baseline/results/cpu-windows-d943.json`×22, `src/tool.e`×11‡, `benchmarks/baseline/cpu.py`×8, `src/codegen_x64.e`×1‡
 
 ## Verification
 

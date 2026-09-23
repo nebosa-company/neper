@@ -3113,6 +3113,13 @@ $uiButtonV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiButtonV2Written -ne 'executable written') { throw 'ui_button_v2 emission failed' }
 $uiButtonV2Output = & $uiButtonV2Path
 if ($LASTEXITCODE -ne 0 -or $uiButtonV2Output -ne 'ui button v2 ok') { throw "the v2 buttons answered wrongly: exit $LASTEXITCODE" }
+# The v2 action controls (D944, widget plan P5-03): icon button, toggle, link,
+# FAB, action row, toolbar and speed dial to their specifications.
+$uiActionsV2Path = Join-Path $testBuild 'ui-actions-v2-selfhost.exe'
+$uiActionsV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_actions_v2\src\main.e') $repo 'x64' 'windows' $uiActionsV2Path
+if ($LASTEXITCODE -ne 0 -or $uiActionsV2Written -ne 'executable written') { throw 'ui_actions_v2 emission failed' }
+$uiActionsV2Output = & $uiActionsV2Path
+if ($LASTEXITCODE -ne 0 -or $uiActionsV2Output -ne 'ui actions v2 ok') { throw "the v2 action controls answered wrongly: exit $LASTEXITCODE" }
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 $uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'
