@@ -18717,3 +18717,41 @@ WCAG formula (content 4.5:1, 7:1 in both high-contrast palettes, the outline and
 focus ring 3:1 on every surface), the aliases, the scales and a refusal of an
 out-of-order motion scale; all 61 `ui_*` fixtures pass on Windows and Linux.
 The v2 shadows' blur is not drawn: the renderer still fills D814's hard offset.
+
+## D939 — H25's edit/revert workflow, frozen and paired
+
+The first of the H25 workflows `m2-baseline.md` left pending. `benchmarks/baseline/
+edit.py` freezes three edits to the middle module of the scale workloads before any
+candidate is tuned against them: a function body's value (`body`), the header comment
+(`comment`, which the canonical text does not see, D504), and a function added at the
+module's end (`interface`). The baseline and the candidate take them in alternation,
+as the timed gate does (D930): a warm build, the edit and the build after it, the
+revert and the build after that, seven cycles after a discarded one. Measured per
+build: the wall time, the artifacts rewritten and their bytes (read from the artifact
+directory, the same way for both), and the candidate's own `work` and `incremental`
+manifest sections -- bodies checked, functions lowered, each module's decision; the
+baseline records neither. The H14 reuse oracle is checked every cycle: after the edit
+the image is byte for byte a cold build's of the edited source, after the revert a
+cold build's of the original. The budget is the warm build's, the median per-cycle
+ratio within +15%. Timing does not use `--stats`, which computes source statistics
+over every module and would be timed with the build.
+
+Results (`results/edit-{windows,linux}-d939.json`, eight workers): no breach and the
+oracle held in every cycle on both hosts. Median ratios, candidate over baseline:
+
+| workload | edit | Windows edit / revert | Linux edit / revert |
+|---|---|---|---|
+| sc500k | body | 0.978 / 0.943 | 0.927 / 0.823 |
+| sc500k | comment | 0.779 / 0.789 | 0.558 / 0.650 |
+| sc500k | interface | 0.994 / 0.970 | 0.892 / 0.936 |
+| sc1m | body | 0.940 / 0.963 | 0.857 / 0.867 |
+| sc1m | comment | 0.813 / 0.834 | 0.608 / 0.648 |
+| sc1m | interface | 0.983 / 0.980 | 0.930 / 0.823 |
+
+A body or interface edit rebuilds the one module, checks one body and lowers its
+18-29 functions; the modules that import it are kept by their edges (`edges-hold`).
+The artifact it rewrites is 22-34 KB where the baseline's was 38-60 KB. A comment edit
+rewrites nothing, where the baseline rebuilt the module. The baseline's builds on
+Windows can find the commit charge full (its arenas commit up front,
+`m2-baseline.md`); the harness retries such a build as `measure.py` does, and none of
+the timed ones needed it.
