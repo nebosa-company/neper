@@ -2833,6 +2833,12 @@ ui_inputs_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/ui-inputs-v2-selfhost"
 ui_inputs_v2_output=$("$test_build/ui-inputs-v2-selfhost")
 [ "$ui_inputs_v2_output" = 'ui inputs v2 ok' ]
+# The v2 compound inputs (widget plan P5-04): search bar, suggestions, token field, stepper, formatted field.
+ui_inputs2_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_inputs2_v2/src/main.e" "$repo" x64 linux "$test_build/ui-inputs2-v2-selfhost")
+[ "$ui_inputs2_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-inputs2-v2-selfhost"
+ui_inputs2_v2_output=$("$test_build/ui-inputs2-v2-selfhost")
+[ "$ui_inputs2_v2_output" = 'ui inputs2 v2 ok' ]
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 ui_selection_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_selection/src/main.e" "$repo" x64 linux "$test_build/ui-selection-selfhost")

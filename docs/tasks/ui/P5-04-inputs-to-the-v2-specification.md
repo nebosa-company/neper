@@ -6,7 +6,7 @@
 | module | `e.ui.control` |
 | module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.math`, `e.mem`, `e.text.layout`, `e.text.shape`, `e.ui.accessibility`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.widget` |
 | blocked by | `P4` |
-| delivered | 6 of 15 |
+| delivered | 11 of 15 |
 
 ## Eligibility
 
@@ -18,20 +18,20 @@ Every component below is implemented in `e.ui.control`, exercised by a determini
 
 ## Components
 
-- [ ] `AutocompleteSpec`
+- [x] `AutocompleteSpec`
 - [ ] `DialSpec`
 - [x] `FieldLabelSpec`
 - [x] `FieldMessageSpec`
 - [x] `FormSpec`
 - [x] `FormFieldSpec`
-- [ ] `FormattedFieldSpec`
+- [x] `FormattedFieldSpec`
 - [ ] `RatingSpec`
-- [ ] `SearchBarSpec`
+- [x] `SearchBarSpec`
 - [ ] `ShortcutRecorderSpec`
 - [ ] `SpinBoxSpec`
-- [ ] `StepperSpec`
+- [x] `StepperSpec`
 - [x] `TextFieldSpec`
-- [ ] `TokenFieldSpec`
+- [x] `TokenFieldSpec`
 - [x] `ValidationSummarySpec`
 
 ## Verification

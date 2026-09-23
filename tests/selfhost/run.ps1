@@ -3126,6 +3126,12 @@ $uiInputsV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiInputsV2Written -ne 'executable written') { throw 'ui_inputs_v2 emission failed' }
 $uiInputsV2Output = & $uiInputsV2Path
 if ($LASTEXITCODE -ne 0 -or $uiInputsV2Output -ne 'ui inputs v2 ok') { throw "ui_inputs_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 compound inputs (widget plan P5-04): search bar, suggestions, token field, stepper, formatted field.
+$uiInputs2V2Path = Join-Path $testBuild 'ui-inputs2-v2-selfhost.exe'
+$uiInputs2V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_inputs2_v2\src\main.e') $repo 'x64' 'windows' $uiInputs2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiInputs2V2Written -ne 'executable written') { throw 'ui_inputs2_v2 emission failed' }
+$uiInputs2V2Output = & $uiInputs2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiInputs2V2Output -ne 'ui inputs2 v2 ok') { throw "ui_inputs2_v2 answered wrongly: exit $LASTEXITCODE" }
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 $uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'

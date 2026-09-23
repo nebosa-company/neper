@@ -372,6 +372,9 @@ fn pressable_states(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, l
     s.opacity = look.opacity
     s.min_height = style.Length { Px: max_of(t.tokens.metrics.control_height, look.min_height) }
     s.min_width = style.Length { Px: max_of(t.tokens.metrics.hit_target, look.min_width) }
+    // A look with its own box states its own minimum, smaller ones included (D952).
+    if look.custom_padding && look.min_height > 0.0 { s.min_height = style.Length { Px: look.min_height } }
+    if look.custom_padding && look.min_width > 0.0 { s.min_width = style.Length { Px: look.min_width } }
     var end = t.tokens.spacing.md
     if look.padding > 0.0 || look.custom_padding { end = look.padding }
     var start = end
@@ -1241,16 +1244,53 @@ fn password_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, b
 // button (keyed `key + 1`, the caller's `clear` action) beside it while it holds
 // anything, and "Search" for a placeholder when none is given.
 fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, len: usize, change: widget.Change[str], submit: widget.Submit, clear: *const widget.Submit, options: FieldOptions) -> (widget.Node, err) {
-    var single = options
-    single.rows = 1u32
-    if single.placeholder.len == 0usize { single.placeholder = "Search" }
-    let (box_node, box_error) = field(a, key, t, "", buffer, len, change, submit, single, false)
-    if box_error != ok { ret (zero, box_error) }
+    // v2 (D952, docs/ux/components/SearchBar): a pill on `surface-container-high`
+    // (the hover layer of `on-surface` over it), 40 tall with a pointer and 56 on
+    // touch, 12 before the query and 4 after it (16 and 8 on touch); the query in
+    // `body-medium` (`body-large` on touch) and `on-surface`, the placeholder in
+    // `on-surface-variant`; a clear button at the end while it holds text.
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let state = control_state(t, key, options.enabled, false)
+    var h = t.tokens.sizes.control_md
+    var lead: f32 = 12.0
+    var trail: f32 = 4.0
+    var role: style.TextRole = .BodyMedium
+    if touch {
+        h = t.tokens.sizes.control_xl
+        lead = 16.0
+        trail = 8.0
+        role = .BodyLarge
+    }
+    var prompt = options.placeholder
+    if prompt.len == 0usize { prompt = "Search" }
+    let (text_look, style_error) = text_style(a, t, role)
+    if style_error != ok { ret (zero, style_error) }
+    let line = style.text_style(t.tokens, role).line_height
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    if len == 0usize {
+        var hint = text_options()
+        hint.role = role
+        hint.color = .OnSurfaceVariant
+        hint.wrap = .None
+        let (hint_node, hint_error) = text_node(a, 0u64, prompt, t, hint)
+        if hint_error != ok { ret (zero, hint_error) }
+        layers[at] = hint_node
+        at += 1usize
+    }
+    var editor_style = style.defaults()
+    editor_style.width = style.Length { Percent: 100.0 }
+    editor_style.min_height = style.Length { Px: line }
+    layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false }, editor_style)
+    at += 1usize
     var count = 1usize
     if len != 0usize { count = 2usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = box_node
+    var grow = style.defaults()
+    grow.width = style.Length { Flex: 1.0 }
+    parts[0usize] = widget.stack(0u64, grow, layers[0usize..at])
     if len != 0usize {
         var plain = button_options()
         plain.variant = .Plain
@@ -1258,7 +1298,16 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
         if clear_error != ok { ret (zero, clear_error) }
         parts[1usize] = clear_button
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..count]), ok)
+    var bar = style.defaults()
+    bar.width = style.Length { Px: options.width }
+    bar.min_height = style.Length { Px: h }
+    var fill = style.color(t.tokens, .SurfaceContainerHigh)
+    if state.hovered { fill = style.layer(fill, style.color(t.tokens, .OnSurface), t.tokens.states.hover) }
+    bar.background = paint.Brush { Solid: fill }
+    bar.radius = h * 0.5
+    let pad_y = style.Length { Px: max_zero((h - line) * 0.5) }
+    bar.padding = style.EdgeLengths { left: style.Length { Px: lead }, top: pad_y, right: style.Length { Px: trail }, bottom: pad_y }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, bar, parts[0usize..count]), ok)
 }
 
 // A text area: a multiline editor `rows` lines tall (two at least).
@@ -2293,6 +2342,38 @@ fn step_fire(ctx: *void) -> err {
 
 // The two step buttons (keyed `less` and `more`) and the Up/Down shortcuts of a
 // stepper or a spin box, the steps allocated for the frame.
+// The inner padding of a stepper's pill: 2 with a pointer, 4 on touch.
+fn step_inset(t: *const Theme) -> f32 {
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { ret 4.0 }
+    ret 2.0
+}
+
+// A stepper's button: a circle the control height less twice the inset across,
+// its glyph centred in `on-surface`, the v2 disabled colours at its bound.
+fn step_button(a: *mem.Arena, key: widget.Key, t: *const Theme, glyph: str, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    var look = style.resolve(t.tokens, .Plain, control_state(t, key, enabled, false))
+    look.foreground = style.color(t.tokens, .OnSurface)
+    if !enabled { look = style.disabled_look(t.tokens, look) }
+    let side = t.tokens.metrics.control_height - 2.0 * step_inset(t)
+    let line = style.text_style(t.tokens, .LabelLarge).line_height
+    look.radius = side * 0.5
+    look.custom_padding = true
+    look.padding = 0.0
+    look.padding_y = max_zero((side - line) * 0.5)
+    look.min_width = side
+    look.min_height = side
+    var caption = text_options()
+    caption.role = .LabelLarge
+    caption.wrap = .None
+    caption.align = .Center
+    let (glyph_node, glyph_error) = colored_text(a, 0u64, glyph, t, caption, look.foreground)
+    if glyph_error != ok { ret (zero, glyph_error) }
+    var centred = glyph_node
+    centred.style.width = style.Length { Px: side }
+    let (node, node_error) = pressable(a, key, t, 3u8, glyph, look, enabled, false, action, centred)
+    ret (node, node_error)
+}
+
 fn step_pair(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.Key, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64]) -> ([]widget.Node, []widget.Shortcut, err) {
     let (steps, steps_error) = mem.alloc[Step](a, 2usize)
     if steps_error != ok { ret (zero, zero, TooLarge) }
@@ -2304,16 +2385,12 @@ fn step_pair(a: *mem.Arena, t: *const Theme, less: widget.Key, more: widget.Key,
     actions[1usize] = widget.Submit { ctx: mem.cast[*void](&steps[1usize]), invoke: step_fire }
     let (buttons, buttons_error) = mem.alloc[widget.Node](a, 2usize)
     if buttons_error != ok { ret (zero, zero, TooLarge) }
-    var down = button_options()
-    down.variant = .Outlined
-    down.enabled = value > low
-    let (minus, minus_error) = button(a, less, t, "-", &actions[0usize], down)
+    // v2 (D952, docs/ux/components/Stepper): round buttons in `on-surface`, the
+    // control height less the pill's inner padding across.
+    let (minus, minus_error) = step_button(a, less, t, "-", &actions[0usize], value > low)
     if minus_error != ok { ret (zero, zero, minus_error) }
     buttons[0usize] = minus
-    var up = button_options()
-    up.variant = .Outlined
-    up.enabled = value < high
-    let (plus, plus_error) = button(a, more, t, "+", &actions[1usize], up)
+    let (plus, plus_error) = step_button(a, more, t, "+", &actions[1usize], value < high)
     if plus_error != ok { ret (zero, zero, plus_error) }
     buttons[1usize] = plus
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
@@ -2332,7 +2409,16 @@ fn stepped(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i
     parts[2usize] = buttons[1usize]
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..3usize])
+    // v2 (D952): a pill the control height tall, 1px `outline`, the buttons 4 from
+    // the value and `step_inset` from the edge.
+    var pill = style.defaults()
+    pill.min_height = style.Length { Px: t.tokens.metrics.control_height }
+    pill.radius = t.tokens.metrics.control_height * 0.5
+    pill.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .Outline) }
+    let inset = style.Length { Px: step_inset(t) }
+    pill.padding = style.EdgeLengths { left: inset, top: inset, right: inset, bottom: inset }
+    if role == 2u8 { pill = style.defaults() }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, pill, parts[0usize..3usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), row[0usize..1usize])
@@ -2358,13 +2444,14 @@ fn stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i
     if digits_error != ok { ret (zero, TooLarge) }
     let digit_count = write_i64(digits, value)
     var caption = text_options()
-    caption.role = .Body
+    caption.role = .LabelLarge
+    caption.color = .OnSurface
     caption.wrap = .None
     caption.align = .Center
     let (shown, shown_error) = text_node(a, 0u64, digits[0usize..digit_count], t, caption)
     if shown_error != ok { ret (zero, shown_error) }
     var fixed = shown
-    fixed.style.min_width = style.Length { Px: t.tokens.metrics.hit_target }
+    fixed.style.min_width = style.Length { Px: 40.0 }
     let (made, made_error) = stepped(a, key, t, label, value, fixed, buttons, shortcuts, 15u8)
     ret (made, made_error)
 }
@@ -2645,7 +2732,8 @@ fn formatted_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     if formats_error != ok { ret (zero, TooLarge) }
     formats[0usize] = Formatting { runtime: t.runtime, key: key, buffer: buffer, adapter: adapter, change: change, arena: a }
     var shown = options
-    shown.invalid = options.invalid || !adapter.accept(adapter.ctx, buffer[0usize..len])
+    // An untouched, empty field is not wrong yet (D952).
+    shown.invalid = options.invalid || (len != 0usize && !adapter.accept(adapter.ctx, buffer[0usize..len]))
     let (made, made_error) = text_field(a, key, t, label, buffer, len, typed, widget.Submit { ctx: mem.cast[*void](&formats[0usize]), invoke: format_submit }, shown)
     ret (made, made_error)
 }
@@ -2656,6 +2744,34 @@ type Move = struct { index: usize, activate: widget.Change[usize] }
 fn move_fire(ctx: *void) -> err {
     let m = mem.cast[*Move](ctx)
     ret widget.fire_change[usize](m.activate, m.index)
+}
+
+// A row of a list of suggestions or choices (D952): `body-medium` in `on-surface`,
+// 12 each side, 36 tall with a pointer and 48 on touch, transparent; the active
+// row carries the `state-focus` layer of `on-surface`, a hovered one the hover layer.
+fn list_row(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, active: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    let ink = style.color(t.tokens, .OnSurface)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.foreground = ink
+    look.background = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if active { look.background = style.layer(look.background, ink, t.tokens.states.focus) }
+    if state.hovered && !active { look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), ink, t.tokens.states.hover) }
+    look.radius = 0.0
+    var h: f32 = 36.0
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { h = t.tokens.sizes.control_lg }
+    let line = style.text_style(t.tokens, .BodyMedium).line_height
+    look.custom_padding = true
+    look.padding = 12.0
+    look.padding_y = max_zero((h - line) * 0.5)
+    look.min_height = h
+    var caption = text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, ink)
+    if label_error != ok { ret (zero, label_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, false, action, label_node)
+    ret (node, node_error)
 }
 
 // A field with suggestions: the field (keyed `key`) and, while `open`, a
@@ -2683,10 +2799,7 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         if items_error != ok { ret (zero, TooLarge) }
         i = 0usize
         while i < suggestions.len {
-            var plain = button_options()
-            plain.variant = .Plain
-            if i == active { plain.variant = .Filled }
-            let (item, item_error) = button(a, first + u64(i), t, suggestions[i], &picks[i], plain)
+            let (item, item_error) = list_row(a, first + u64(i), t, suggestions[i], i == active, &picks[i])
             if item_error != ok { ret (zero, item_error) }
             var entry: widget.Semantics = zero
             entry.role = 11u8
@@ -2700,14 +2813,19 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
             items[i] = widget.semantics(0u64, entry, stretched, wrapped[0usize..1usize])
             i += 1usize
         }
+        // v2 (D952, docs/ux/components/Autocomplete): `surface-container`, 8
+        // corners, elevation 2, 8 above and below the rows, 4 below the field.
         var sheet = surface_options(t)
-        sheet.bordered = true
+        sheet.background = .SurfaceContainer
         sheet.elevation = 2u8
-        sheet.radius = t.tokens.radii.xs
-        sheet.padding = t.tokens.spacing.xs
+        sheet.radius = t.tokens.radii.sm
+        sheet.padding = 0.0
+        var sheet_style = surface_style(t, sheet)
+        sheet_style.padding.top = style.Length { Px: 8.0 }
+        sheet_style.padding.bottom = style.Length { Px: 8.0 }
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
-        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, surface_style(t, sheet), items[0usize..suggestions.len])
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
         var list_sem: widget.Semantics = zero
         list_sem.role = 10u8
         list_sem.label = label
@@ -2715,7 +2833,7 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         let (popup, popup_error) = mem.alloc[widget.Node](a, 1usize)
         if popup_error != ok { ret (zero, TooLarge) }
         popup[0usize] = widget.semantics(0u64, list_sem, style.defaults(), column[0usize..1usize])
-        parts[count - 1usize] = widget.overlay(list_key, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: 0.0, y: t.tokens.spacing.xs }, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
+        parts[count - 1usize] = widget.overlay(list_key, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
         if active < picks.len { default_action = picks[active] }
     }
     let (moves, moves_error) = mem.alloc[Move](a, 2usize)
@@ -2801,14 +2919,58 @@ fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, toke
         items[i] = token
         i += 1usize
     }
-    var options = field_options()
-    options.width = 4.0 * t.tokens.spacing.lg
-    let (field_node, field_error) = text_field(a, key, t, label, buffer, len, typed, add, options)
-    if field_error != ok { ret (zero, field_error) }
-    items[tokens.len] = field_node
+    // v2 (D952, docs/ux/components/TokenField): the chips and the input flow inside
+    // one outlined box -- 1px `outline`, 2px `primary` while the input is focused --
+    // at least 56 tall on touch and 40 with a pointer, 12 in (4 above and below
+    // with a pointer), 8 between (4 with a pointer); the input at least 96 wide.
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let state = control_state(t, key, true, false)
+    var role: style.TextRole = .BodyMedium
+    if touch { role = .BodyLarge }
+    let (text_look, style_error) = text_style(a, t, role)
+    if style_error != ok { ret (zero, style_error) }
+    let line = style.text_style(t.tokens, role).line_height
+    var editor_style = style.defaults()
+    editor_style.min_width = style.Length { Px: 96.0 }
+    editor_style.min_height = style.Length { Px: line }
+    let bare = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: typed, submit: add, enabled: true, read_only: false, multiline: false, secret: false }, editor_style)
+    var input_count = 1usize
+    if len == 0usize && tokens.len == 0usize && label.len != 0usize { input_count = 2usize }
+    let (input_parts, input_parts_error) = mem.alloc[widget.Node](a, input_count)
+    if input_parts_error != ok { ret (zero, TooLarge) }
+    input_parts[input_count - 1usize] = bare
+    if input_count == 2usize {
+        var hint = text_options()
+        hint.role = role
+        hint.color = .OnSurfaceVariant
+        hint.wrap = .None
+        let (hint_node, hint_error) = text_node(a, 0u64, label, t, hint)
+        if hint_error != ok { ret (zero, hint_error) }
+        input_parts[0usize] = hint_node
+    }
+    items[tokens.len] = widget.stack(0u64, style.defaults(), input_parts[0usize..input_count])
+    var gap: f32 = 4.0
+    var box_h: f32 = 40.0
+    var pad_y: f32 = 4.0
+    if touch {
+        gap = 8.0
+        box_h = t.tokens.sizes.control_xl
+        pad_y = 12.0
+    }
     var wrapped = style.defaults()
     wrapped.width = style.Length { Px: width }
-    let flow = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: t.tokens.spacing.xs, cross_gap: t.tokens.spacing.xs }, wrapped, items[0usize..tokens.len + 1usize])
+    wrapped.min_height = style.Length { Px: box_h }
+    wrapped.radius = t.tokens.radii.xs
+    var edge = style.color(t.tokens, .Outline)
+    var edge_width = t.tokens.sizes.divider
+    if state.hovered { edge = style.color(t.tokens, .OnSurface) }
+    if state.focused {
+        edge = style.color(t.tokens, .Primary)
+        edge_width = t.tokens.sizes.outline_focused
+    }
+    wrapped.border = style.Border { width: edge_width, color: edge }
+    wrapped.padding = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: pad_y }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: pad_y } }
+    let flow = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: gap, cross_gap: gap }, wrapped, items[0usize..tokens.len + 1usize])
     var none: []const widget.Node = zero
     let (made, made_error) = suggesting(a, key, t, label, flow, none, key + 62u64, key + 63u64, suggestions, active, open, picks, activate, dismiss)
     ret (made, made_error)

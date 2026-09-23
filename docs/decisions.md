@@ -19096,3 +19096,33 @@ the form's spacing and the summary's container by pixel; all 65 `ui_*` fixtures
 pass on Windows and Linux. Not yet drawn: leading and trailing icons in the field
 (the caller's textures cannot be tinted), the character counter and the message's
 state icons.
+
+## D952 — The compound inputs draw their v2 specifications
+
+P5-04's next five, on D951's field. The search field is `docs/ux`'s search bar,
+no longer a boxed field: a pill on `surface-container-high` (the hover layer of
+`on-surface` over it), 40 tall with a pointer and 56 on touch, 12 before the query
+and 4 after (16 and 8 on touch), the query in `body-medium` (`body-large` on touch)
+in `on-surface` over its placeholder, the clear button at the end once it holds
+text. The suggestion list every autocomplete, combo box and token field opens is
+now the specification's: `surface-container` with 8 corners and elevation 2, 8
+above and below its rows, 4 below the field; each row a transparent `list_row` in
+`body-medium` `on-surface`, 12 each side, 36 tall with a pointer and 48 on touch,
+the active one under the `state-focus` layer of `on-surface` where D805 filled it
+as a primary button. The token field is one outlined box -- 1px `outline`, 2px
+`primary` while its input is focused -- at least 40 tall with a pointer and 56 on
+touch, its chips and a bare input (at least 96 wide, the label its placeholder
+while empty) wrapping 4 apart (8 on touch) inside it, instead of a boxed field
+after loose chips. The stepper is a pill the control height tall in the outline,
+2 in (4 on touch), its round buttons the height less that across with the glyph in
+`on-surface` and the v2 disabled colours at a bound, the value `label-large`,
+at least 40 wide. A formatted field is no longer invalid before it holds anything
+(the old card's defect). A look with its own box now states its own minimum,
+smaller than the control height included, which the stepper's 28px buttons need.
+
+`ui_inputs2_v2` holds the bar's height, fill and round ends, the list's row height,
+container and active layer, the token box's outline and input width, the stepper's
+buttons and pill, and the empty formatted field's outline; all 66 `ui_*` fixtures
+pass on Windows and Linux. The spin box keeps its flanking buttons, which is its
+touch form; the pointer form's arrows inside the field's end wait on an up-chevron
+mark, so SpinBoxSpec stays open.
