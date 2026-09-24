@@ -1555,7 +1555,10 @@ fn popover_adaptive(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anc
 // `dismiss`. A modal dialog in the tree named by the title.
 fn sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (made, made_error) = edged(a, key, t, title, content, dismiss, *dismiss, .Right, width, 0.0)
+    var clamped = width
+    if clamped < 256.0 { clamped = 256.0 }
+    if clamped > 400.0 { clamped = 400.0 }
+    let (made, made_error) = edged(a, key, t, title, content, dismiss, *dismiss, .Right, clamped, 0.0)
     ret (made, made_error)
 }
 
@@ -1637,8 +1640,7 @@ fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, co
 // labelled by the element keyed `key + 1`; Escape fires `dismiss` and a press
 // outside fires `outside` (normally the same action).
 // ponytail: modal only -- no standard (docked or peeking) sheets, detents,
-// drag-to-dismiss, Back button, actions footer or unsaved-input guard; a side
-// sheet keeps the caller's width rather than 256 to 400.
+// drag-to-dismiss, Back button, actions footer or unsaved-input guard.
 fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)

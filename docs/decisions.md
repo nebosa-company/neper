@@ -21995,3 +21995,13 @@ as a text button; the body is inset 16px at the sides.
 The same Cancel and default actions own Escape, Enter and the visible controls.
 `ui_overlays3_v2` holds geometry, colour and both actions on Windows and Linux.
 `dialog-full-screen.png` is the Segoe UI visual check.
+
+## D1040 — Modal side-sheet width is bounded
+
+`overlay.sheet` clamps a caller's requested width to the specified 256-400px
+range before the existing end-edge layout runs. It adds no policy object or new
+variant: in-range widths are unchanged, while narrow and wide requests settle at
+the nearest bound.
+
+`ui_overlays3_v2` holds both bounds and the fixed right edge on Windows and
+Linux. `sheet-width-clamp.png` is the Segoe UI visual check.

@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, Bottom, Actions }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, Bottom, Actions }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -88,7 +88,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
         alert = made_dialog
         e2 = made_dialog_error
     }
-    let (side, e3) = overlay.sheet(a, 200u64, t, "Details", inside, which == .Side, &s.subs[3usize], 300.0)
+    var side_width: f32 = 300.0
+    if which == .SideNarrow { side_width = 100.0 }
+    if which == .SideWide { side_width = 500.0 }
+    let side_open = which == .Side || which == .SideNarrow || which == .SideWide
+    let (side, e3) = overlay.sheet(a, 200u64, t, "Details", inside, side_open, &s.subs[3usize], side_width)
     let (bottom, e4) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
     let (actions, e5) = overlay.action_sheet(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], which == .Actions, &s.subs[3usize])
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (zero, e1) }
@@ -279,6 +283,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (close_node, has_close_node) = find(tree_2, .Button, "Close")
     if !has_details || details.relations.labelled_by.generation == 0u32 || !has_close_node { os.exit(27i32) }
     if !tap_key(&harness, &runtime, 202u64) || s.counters[3usize].count != 1usize { os.exit(28i32) }
+    // Side-sheet requests stay within the specified 256-400 width range.
+    let (root_narrow, build_narrow_error) = build(&f, &theme, s, .SideNarrow)
+    if build_narrow_error != ok || testing.pump(&harness, root_narrow, time.Instant { nanos: 1150000000i64 }) != ok { os.exit(64i32) }
+    let (narrow, has_narrow) = lifted(&harness, 200u64)
+    if !has_narrow || !near(narrow.width, 256.0) || !near(narrow.x + narrow.width, 640.0) { os.exit(65i32) }
+    let (root_wide, build_wide_error) = build(&f, &theme, s, .SideWide)
+    if build_wide_error != ok || testing.pump(&harness, root_wide, time.Instant { nanos: 1175000000i64 }) != ok { os.exit(66i32) }
+    let (wide, has_wide) = lifted(&harness, 200u64)
+    if !has_wide || !near(wide.width, 400.0) || !near(wide.x + wide.width, 640.0) { os.exit(67i32) }
     // The bottom sheet: 200 tall along the bottom, its top corners rounded, the
     // handle 16 down in `on-surface-variant` at 40%; no Close.
     let (root_3, build_3_error) = build(&f, &theme, s, .Bottom)
