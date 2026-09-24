@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, action_icons: [3]control.GlyphKind, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, DialogDefaultFirst, DialogDefaultLast, DialogScrolled, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu, ActionsIos }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, DialogDefaultFirst, DialogDefaultLast, DialogScrolled, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, SideStandard, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu, ActionsIos }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -103,10 +103,14 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     var side_width: f32 = 300.0
     if which == .SideNarrow { side_width = 100.0 }
     if which == .SideWide { side_width = 500.0 }
-    let side_open = which == .Side || which == .SideNarrow || which == .SideWide || which == .SideBack || which == .SideDirty || which == .SideActions
+    let side_open = which == .Side || which == .SideNarrow || which == .SideWide || which == .SideBack || which == .SideDirty || which == .SideActions || which == .SideStandard
     var side: widget.Node = zero
     var e3: err = ok
-    if which == .SideActions {
+    if which == .SideStandard {
+        let (made_side, made_side_error) = overlay.standard_sheet(a, 200u64, t, "Details", inside, true, &s.subs[3usize], side_width)
+        side = made_side
+        e3 = made_side_error
+    } else if which == .SideActions {
         let (made_side, made_side_error) = overlay.sheet_with_actions(a, 200u64, t, "Details", inside, s.sheet_actions[0usize..2usize], true, &s.subs[3usize], side_width)
         side = made_side
         e3 = made_side_error
@@ -166,6 +170,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     page_style.width = style.Length { Px: 640.0 }
     page_style.height = style.Length { Px: 480.0 }
     page_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    if which == .SideStandard {
+        let (docked, docked_error) = mem.alloc[widget.Node](a, 2usize)
+        if docked_error != ok { ret (zero, docked_error) }
+        var page = style.defaults()
+        page.width = style.Length { Flex: 1.0 }
+        page.height = style.Length { Percent: 100.0 }
+        page.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        docked[0usize] = widget.box(0u64, page, zero)
+        docked[1usize] = side
+        ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, page_style, docked[0usize..2usize]), ok)
+    }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, page_style, items[0usize..5usize]), ok)
 }
 
@@ -376,6 +391,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (close_node, has_close_node) = find(tree_2, .Button, "Close")
     if !has_details || details.relations.labelled_by.generation == 0u32 || !has_close_node { os.exit(27i32) }
     if !tap_key(&harness, &runtime, 202u64) || s.counters[3usize].count != 1usize { os.exit(28i32) }
+    // A standard side sheet is ordinary layout: square, non-modal and separated
+    // from the narrowed page by one inner-edge divider.
+    let standard_dismiss_before = s.counters[3usize].count
+    let (root_standard, build_standard_error) = build(&f, &theme, s, .SideStandard)
+    if build_standard_error != ok || testing.pump(&harness, root_standard, time.Instant { nanos: 1125000000i64 }) != ok { os.exit(112i32) }
+    let (standard_shot, standard_shot_error) = testing.snapshot(&harness, a)
+    if standard_shot_error != ok { os.exit(113i32) }
+    let (standard_sheet, has_standard_sheet) = bounds(&harness, &runtime, 200u64)
+    if !has_standard_sheet || !near(standard_sheet.x, 340.0) || !near(standard_sheet.width, 300.0) || !near(standard_sheet.height, 480.0) { os.exit(114i32) }
+    if !is_color(standard_shot, at(5.0, 5.0), page) || !is_color(standard_shot, at(340.0, 200.0), style.color(&tokens, .OutlineVariant)) || !is_color(standard_shot, at(341.0, 200.0), style.color(&tokens, .SurfaceContainerLow)) { os.exit(115i32) }
+    let (standard_tree, standard_tree_error) = testing.semantics(&harness)
+    if standard_tree_error != ok { os.exit(116i32) }
+    let (_, has_standard_region) = find(standard_tree, .Region, "Details")
+    if !has_standard_region || !tap_key(&harness, &runtime, 202u64) || s.counters[3usize].count != standard_dismiss_before + 1usize { os.exit(117i32) }
     // Side-sheet requests stay within the specified 256-400 width range.
     let (root_narrow, build_narrow_error) = build(&f, &theme, s, .SideNarrow)
     if build_narrow_error != ok || testing.pump(&harness, root_narrow, time.Instant { nanos: 1150000000i64 }) != ok { os.exit(64i32) }

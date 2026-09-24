@@ -1633,6 +1633,15 @@ fn sheet_with_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, t
     ret (made, made_error)
 }
 
+fn standard_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, close: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var clamped = width
+    if clamped < 256.0 { clamped = 256.0 }
+    if clamped > 400.0 { clamped = 400.0 }
+    let (made, made_error) = edged_standard(a, key, t, title, content, close, .Right, clamped, 0.0)
+    ret (made, made_error)
+}
+
 // A bottom sheet: the same along the bottom edge, the window's width and
 // `height` tall; v2 (D977), a drag handle rather than the close button.
 fn bottom_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, height: f32) -> (widget.Node, err) {
@@ -1690,22 +1699,28 @@ fn sheet_handle(t: *const control.Theme, grips: []widget.Node) -> widget.Node {
 // the content 16 in at the sides; a bottom sheet's drag handle above the header.
 fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     var no_actions: []const DialogButton = zero
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions)
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions, false)
     ret (made, made_error)
 }
 
 fn edged_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit) -> (widget.Node, err) {
     var no_actions: []const DialogButton = zero
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, back, no_actions)
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, back, no_actions, false)
     ret (made, made_error)
 }
 
 fn edged_with_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, actions: []const DialogButton) -> (widget.Node, err) {
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, actions)
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, actions, false)
     ret (made, made_error)
 }
 
-fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit, actions: []const DialogButton) -> (widget.Node, err) {
+fn edged_standard(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
+    var no_actions: []const DialogButton = zero
+    let (made, made_error) = edged_full(a, key, t, title, content, close, *close, placement, width, height, zero, no_actions, true)
+    ret (made, made_error)
+}
+
+fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit, actions: []const DialogButton, standard: bool) -> (widget.Node, err) {
     if actions.len > 2usize { ret (zero, TooLarge) }
     let bottom = placement == .Below
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -1790,6 +1805,10 @@ fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         part_count += 2usize
     }
     let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
+    if standard {
+        let (made, made_error) = standard_sheet_frame(a, key, t, title, column, placement, width, height)
+        ret (made, made_error)
+    }
     let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, outside, placement, width, height)
     ret (made, made_error)
 }
@@ -1801,8 +1820,7 @@ fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
 // open edge's corners `radius-lg`. A modal dialog in the tree named `label`,
 // labelled by the element keyed `key + 1`; Escape fires `dismiss` and a press
 // outside fires `outside` (normally the same action).
-// ponytail: modal only -- no standard (docked or peeking) sheets, detents,
-// drag-to-dismiss.
+// ponytail: no peeking bottom sheet, detents or drag-to-dismiss.
 fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
@@ -1851,6 +1869,45 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
     let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]))
     ret (made, made_error)
+}
+
+fn standard_sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
+    let (panel_body, panel_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if panel_body_error != ok { ret (zero, TooLarge) }
+    panel_body[0usize] = column
+    var surface = control.surface_options(t)
+    surface.background = .SurfaceContainerLow
+    surface.elevation = 0u8
+    surface.radius = 0.0
+    surface.padding = 0.0
+    var panel = control.surface_style(t, surface)
+    panel.width = style.Length { Flex: 1.0 }
+    panel.height = style.Length { Percent: 100.0 }
+    panel.overflow = .Clip
+    let panel_node = widget.box(0u64, panel, panel_body[0usize..1usize])
+    let (edge, edge_error) = control.divider(a, 0u64, t, .Vertical, 0.0)
+    if edge_error != ok { ret (zero, edge_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = edge
+    parts[1usize] = panel_node
+    if placement == .Left {
+        parts[0usize] = panel_node
+        parts[1usize] = edge
+    }
+    var frame = style.defaults()
+    frame.width = style.Length { Px: width }
+    frame.height = style.Length { Percent: 100.0 }
+    if height > 0.0 { frame.height = style.Length { Px: height } }
+    let sheet_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, frame, parts[0usize..2usize])
+    let (semantic_body, semantic_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if semantic_body_error != ok { ret (zero, TooLarge) }
+    semantic_body[0usize] = sheet_node
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_REGION
+    sem.label = label
+    sem.labelled_by = key + 1u64
+    ret (widget.semantics(key, sem, style.defaults(), semantic_body[0usize..1usize]), ok)
 }
 
 // v2 (D977): an action sheet's row, full width, 48 tall, 16 at the sides, the
