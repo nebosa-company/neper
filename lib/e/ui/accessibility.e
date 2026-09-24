@@ -18,9 +18,9 @@ use e.ui.widget
 use e.ui.window
 
 type Id = widget.ElementId
-type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader }
+type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader, Separator, AlertDialog, Listbox, Option, MenuItemCheckbox, Combobox }
 type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool, mixed: bool, busy: bool, invalid: bool, required: bool, read_only: bool, modal: bool, current: bool }
-type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll, Dismiss, Expand, Collapse, Select, ShowMenu, SetSelection }
+type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll, Dismiss, Expand, Collapse, Select, ShowMenu, SetSelection, Copy }
 // Relationships to other nodes; an `Id` of generation 0 is none.
 type Relations = struct { labelled_by: Id, described_by: Id, error_by: Id, controls: Id, active: Id }
 type Live = enum u8 { Off, Polite, Assertive }
@@ -57,6 +57,14 @@ const ACTION_COLLAPSE: u32 = 256u32
 const ACTION_SELECT: u32 = 512u32
 const ACTION_SHOW_MENU: u32 = 1024u32
 const ACTION_SET_SELECTION: u32 = 2048u32
+const ACTION_COPY: u32 = 4096u32
+
+const ROLE_SEPARATOR: u8 = 33u8
+const ROLE_ALERT_DIALOG: u8 = 34u8
+const ROLE_LISTBOX: u8 = 35u8
+const ROLE_OPTION: u8 = 36u8
+const ROLE_MENU_ITEM_CHECKBOX: u8 = 37u8
+const ROLE_COMBOBOX: u8 = 38u8
 
 // The widget kinds by tag, as `e.ui.widget` numbers them.
 const KIND_TEXT: u8 = 4u8
@@ -77,7 +85,7 @@ fn role_of(kind: u8) -> Role {
 // The role a semantics code names: the inverse of `role_code`.
 fn role_of_code(code: u8) -> Role {
     var i = 1u8
-    while i < 33u8 {
+    while i < 39u8 {
         let candidate = role_at(i)
         if role_code(candidate) == code { ret candidate }
         i += 1u8
@@ -118,6 +126,12 @@ fn role_at(i: u8) -> Role {
     if i == 30u8 { ret .Grid }
     if i == 31u8 { ret .RowHeader }
     if i == 32u8 { ret .ColumnHeader }
+    if i == ROLE_SEPARATOR { ret .Separator }
+    if i == ROLE_ALERT_DIALOG { ret .AlertDialog }
+    if i == ROLE_LISTBOX { ret .Listbox }
+    if i == ROLE_OPTION { ret .Option }
+    if i == ROLE_MENU_ITEM_CHECKBOX { ret .MenuItemCheckbox }
+    if i == ROLE_COMBOBOX { ret .Combobox }
     ret .Application
 }
 
@@ -137,6 +151,7 @@ fn action_bit(action: Action) -> u32 {
     if action == .Select { ret ACTION_SELECT }
     if action == .ShowMenu { ret ACTION_SHOW_MENU }
     if action == .SetSelection { ret ACTION_SET_SELECTION }
+    if action == .Copy { ret ACTION_COPY }
     ret ACTION_FOCUS
 }
 
@@ -152,6 +167,7 @@ fn action_at(i: usize) -> Action {
     if i == 9usize { ret .Select }
     if i == 10usize { ret .ShowMenu }
     if i == 11usize { ret .SetSelection }
+    if i == 12usize { ret .Copy }
     ret .Focus
 }
 
@@ -159,7 +175,7 @@ fn action_at(i: usize) -> Action {
 fn actions_of_bits(a: *mem.Arena, bits: u32) -> ([]const Action, err) {
     var count = 0usize
     var i = 0usize
-    while i < 12usize {
+    while i < 13usize {
         if (bits & action_bit(action_at(i))) != 0u32 { count += 1usize }
         i += 1usize
     }
@@ -167,7 +183,7 @@ fn actions_of_bits(a: *mem.Arena, bits: u32) -> ([]const Action, err) {
     if actions_error != ok { ret (zero, actions_error) }
     var n = 0usize
     i = 0usize
-    while i < 12usize {
+    while i < 13usize {
         if (bits & action_bit(action_at(i))) != 0u32 {
             actions[n] = action_at(i)
             n += 1usize
@@ -346,6 +362,12 @@ fn role_code(role: Role) -> u8 {
     if role == .Grid { ret 30u8 }
     if role == .RowHeader { ret 31u8 }
     if role == .ColumnHeader { ret 32u8 }
+    if role == .Separator { ret ROLE_SEPARATOR }
+    if role == .AlertDialog { ret ROLE_ALERT_DIALOG }
+    if role == .Listbox { ret ROLE_LISTBOX }
+    if role == .Option { ret ROLE_OPTION }
+    if role == .MenuItemCheckbox { ret ROLE_MENU_ITEM_CHECKBOX }
+    if role == .Combobox { ret ROLE_COMBOBOX }
     ret 0u8
 }
 
@@ -360,18 +382,11 @@ fn flags_of(state: State) -> u8 {
     ret bits
 }
 
-fn action_bits(actions: []const Action) -> u8 {
-    var bits = 0u8
+fn action_bits(actions: []const Action) -> u32 {
+    var bits = 0u32
     var i = 0usize
     while i < actions.len {
-        let action = actions[i]
-        var bit = 1u8
-        if action == .Press { bit = 2u8 }
-        if action == .Increment { bit = 4u8 }
-        if action == .Decrement { bit = 8u8 }
-        if action == .SetValue { bit = 16u8 }
-        if action == .Scroll { bit = 32u8 }
-        bits = bits | bit
+        bits = bits | action_bit(actions[i])
         i += 1usize
     }
     ret bits
@@ -449,6 +464,7 @@ fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err 
         if start_error != ok || end_error != ok { ret Invalid }
         if widget.edit_select(runtime, id, usize(start), usize(end)) == ok { ret ok }
     }
+    if action == .Copy && widget.edit_copy_child(runtime, id) == ok { ret ok }
     if widget.semantic_action(runtime, id, action_bit(action)) == ok { ret ok }
     ret Unsupported
 }

@@ -21270,3 +21270,21 @@ All 102 ui_* fixtures pass on Windows and Linux.
 - Row editing and touch sheet editing.
 - The caller keeps the active row in view; the ring is held inside the
   viewport.
+
+## D985 — Interactive controls report their specific accessibility roles
+
+The accessibility role vocabulary appends Separator, AlertDialog, Listbox,
+Option, MenuItemCheckbox and Combobox without renumbering existing roles.
+Selection controls, command palettes and window switchers expose their list
+and option structure; palettes and switchers also expose their active
+descendant. Checkable menu commands and menu separators expose their distinct
+roles; alert dialogs no longer report as a
+generic dialog. Selectable text reports Text with a Copy action, routed to the
+existing editor copy path. Native accessibility action storage is widened to
+`u32` so the appended Copy bit survives host publication.
+
+`ui_content`, `ui_entry`, `ui_overlays_v2`, `ui_overlays3_v2` and
+`ui_overlays4_v2` hold the roles and Copy action on Windows and Linux.
+
+Host bridges still publish these trees as unsupported; implementing the
+platform APIs is a separate batch.

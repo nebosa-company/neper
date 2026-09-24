@@ -121,6 +121,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, root, time.Instant { nanos: 1000000000i64 }) != ok { os.exit(10i32) }
     let (shot, shot_error) = testing.snapshot(&harness, a)
     if shot_error != ok { os.exit(11i32) }
+    if testing.by_role(&harness, .Combobox).count < 2usize {
+        try io.print("combobox role count\n")
+        os.exit(25i32)
+    }
+    if testing.by_role(&harness, .Listbox).count < 3usize {
+        try io.print("listbox role count\n")
+        os.exit(26i32)
+    }
+    if testing.by_role(&harness, .Option).count < 5usize {
+        try io.print("option role count\n")
+        os.exit(27i32)
+    }
     let page = style.color(&tokens, .Background)
     let primary = style.color(&tokens, .Primary)
     let secondary = style.color(&tokens, .SecondaryContainer)

@@ -171,10 +171,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_cancel || !has_delete || !has_keep || !near(keep.x + keep.width, card.x + card.width - 24.0) || !near(keep.x, delete.x + delete.width + 8.0) || !near(keep.y + keep.height, card.y + card.height - 24.0) { os.exit(13i32) }
     if !is_color(shot, at(delete.x + delete.width * 0.5, delete.y + delete.height * 0.5), style.color(&tokens, .Error)) || !is_color(shot, at(keep.x + keep.width * 0.5, keep.y + keep.height * 0.5), style.color(&tokens, .Primary)) { os.exit(14i32) }
     if !is_color(shot, at(cancel.x + cancel.width * 0.5, cancel.y + cancel.height * 0.5), style.color(&tokens, .SurfaceContainerHigh)) { os.exit(15i32) }
-    // The tree: a modal dialog labelled by its level-2 title.
+    // The tree: a modal alert dialog labelled by its level-2 title.
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(16i32) }
-    let (dialog, has_dialog) = find(tree, .Dialog, "Delete build?")
+    let (dialog, has_dialog) = find(tree, .AlertDialog, "Delete build?")
     let (heading, has_heading) = find(tree, .Heading, "Delete build?")
     if !has_dialog || !dialog.state.modal || dialog.relations.labelled_by.generation == 0u32 || !has_heading || heading.level != 2u8 { os.exit(17i32) }
     // Escape cancels, a press on the scrim cancels, Delete deletes.

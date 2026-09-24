@@ -178,12 +178,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_build_row || !has_test_row || !near(build_row.y, panel.y + 61.0) || !near(build_row.x, panel.x + 8.0) || !near(build_row.height, 40.0) || !near(test_row.y, build_row.y + 40.0) { os.exit(16i32) }
     if !is_color(shot, at(test_row.x + 20.0, test_row.y + 20.0), style.color(&tokens, .SecondaryContainer)) || !is_color(shot, at(build_row.x + 20.0, build_row.y + 20.0), high) { os.exit(17i32) }
     if !is_color(shot, at(panel.x + 280.0, panel.y + 189.5), style.color(&tokens, .OutlineVariant)) || !near(panel.height, 222.0) { os.exit(18i32) }
-    // The tree: a modal dialog, a text field, three list items with Test selected.
+    // The tree: a modal dialog, a combobox and listbox, and three options with
+    // Test selected.
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(19i32) }
     let (dialog, has_dialog) = find(tree, .Dialog, "Commands")
-    let (test_node, has_test_node) = find(tree, .ListItem, "Test")
-    if !has_dialog || !dialog.state.modal || testing.by_role(&harness, .TextField).count != 1usize || !has_test_node || !test_node.state.selected || testing.by_text(&harness, "Type a command").count != 1usize { os.exit(20i32) }
+    let (combo, has_combo) = find(tree, .Combobox, "Commands")
+    let (results, has_results) = find(tree, .Listbox, "Commands")
+    let (test_node, has_test_node) = find(tree, .Option, "Test")
+    if !has_dialog || !dialog.state.modal || !has_combo || !combo.state.expanded || !has_results || !has_test_node || !test_node.state.selected || testing.by_text(&harness, "Type a command").count != 1usize { os.exit(20i32) }
     // Typing reaches the caller; Down activates Deploy; Enter runs Test.
     if testing.type_text(&harness, "de") != ok || logs[0usize].typed != 2usize { os.exit(21i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].active != 2usize { os.exit(22i32) }
@@ -208,6 +211,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (first_row, has_first_row) = bounds(&harness, &runtime, 202u64)
     if !has_list || !has_first_row || !near(list.x, 80.0) || !near(list.y, 64.0) || !near(list.height, 128.0) || !near(first_row.y, list.y + 4.0) || !near(first_row.x, list.x + 8.0) { os.exit(31i32) }
     if !is_color(shot_4, at(5.0, 5.0), page) || !is_color(shot_4, at(first_row.x + 20.0, first_row.y + 20.0), style.color(&tokens, .SecondaryContainer)) || !is_color(shot_4, at(list.x + 240.0, list.y + 2.0), high) { os.exit(32i32) }
+    let (tree_4, tree_4_error) = testing.semantics(&harness)
+    if tree_4_error != ok { os.exit(32i32) }
+    let (windows, has_windows) = find(tree_4, .Listbox, "Windows")
+    let (main_window, has_main_window) = find(tree_4, .Option, "Build")
+    if !has_windows || !has_main_window || !main_window.state.selected { os.exit(32i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].active != 1usize { os.exit(33i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].active != 2usize { os.exit(34i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].dismisses != 2usize { os.exit(35i32) }

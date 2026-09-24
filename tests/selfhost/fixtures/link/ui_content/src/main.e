@@ -252,7 +252,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (long_bounds, has_long) = widget.bounds_of(&runtime, testing.by_key(&harness, 3u64).element)
     if !has_long || !near(long_bounds.height, tokens.text[0usize].line_height) || !(long_bounds.width <= 64.0) { os.exit(18i32) }
     // The selectable text: a tap focuses it, Shift+End selects to the end, typing
-    // changes nothing, and the tree says it is a read-only text field.
+    // changes nothing, and its Text node offers Copy.
     let selectable = testing.by_key(&harness, 4u64)
     let (selectable_bounds, has_selectable) = widget.bounds_of(&runtime, selectable.element)
     if !has_selectable { os.exit(19i32) }
@@ -267,13 +267,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_kept || !same(kept, "aaa") { os.exit(24i32) }
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(25i32) }
-    var read_only_field = false
+    var copied_text: accessibility.Node = zero
+    var has_copied_text = false
     i = 0usize
     while i < tree.nodes.len {
-        if tree.nodes[i].role == .TextField && tree.nodes[i].state.read_only { read_only_field = true }
+        if tree.nodes[i].role == .Text && same(tree.nodes[i].label, "aaa") {
+            copied_text = tree.nodes[i]
+            has_copied_text = true
+        }
         i += 1usize
     }
-    if !read_only_field { os.exit(26i32) }
+    if !has_copied_text || accessibility.perform(&runtime, copied_text.id, .Copy, "") != ok { os.exit(26i32) }
+    let (copied, copied_error) = widget.clipboard_get(&runtime, a)
+    if copied_error != ok || !same(copied, "aaa") { os.exit(26i32) }
     // Rich text: the three spans side by side; the linked one is a link in the tree
     // and fires on a tap.
     let rich = testing.by_key(&harness, 5u64)

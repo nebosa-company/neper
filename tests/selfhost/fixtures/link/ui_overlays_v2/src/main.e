@@ -164,6 +164,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.commands[0usize] = overlay.menu_command("New", s.subs[0usize])
     s.commands[0usize].shortcut = "Ctrl+N"
     s.commands[1usize] = overlay.menu_command("Word wrap", s.subs[1usize])
+    s.commands[1usize].checkable = true
     s.commands[1usize].checked = true
     s.commands[2usize] = overlay.menu_command("Minimap", s.subs[1usize])
     s.commands[2usize].head = "View"
@@ -202,12 +203,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_wrap || !has_mini || !has_quit || !has_delete || !near(wrap_row.y, new_row.y + 32.0) || !near(mini_row.y, wrap_row.y + 44.0) || !near(delete_row.y, quit_row.y + 41.0) { os.exit(16i32) }
     if !is_color(shot, at(menu.x + 100.0, quit_row.y + 36.0), style.color(&tokens, .OutlineVariant)) || !is_color(shot, at(menu.x + 100.0, quit_row.y + 34.0), style.color(&tokens, .SurfaceContainer)) { os.exit(17i32) }
     if !near(menu.height, 4.0 + 32.0 * 5.0 + 12.0 + 9.0 + 4.0) { os.exit(18i32) }
-    // The tree: a menu named File, its commands MenuItems, Word wrap checked and
-    // Quit disabled.
+    // The tree: a menu named File, its checked command a MenuItemCheckbox, its
+    // group break a Separator, and Quit disabled.
     let (menu_node, has_menu_node) = find(tree, .Menu, "File")
-    let (wrap_node, has_wrap_node) = find(tree, .MenuItem, "Word wrap")
+    let (wrap_node, has_wrap_node) = find(tree, .MenuItemCheckbox, "Word wrap")
     let (quit_node, has_quit_node) = find(tree, .MenuItem, "Quit")
-    if !has_menu_node || !has_wrap_node || !wrap_node.state.checked || !has_quit_node || !quit_node.state.disabled || testing.by_role(&harness, .MenuItem).count != 5usize { os.exit(19i32) }
+    if !has_menu_node { os.exit(19i32) }
+    if !has_wrap_node || !wrap_node.state.checked { os.exit(54i32) }
+    if !has_quit_node || !quit_node.state.disabled { os.exit(55i32) }
+    if testing.by_role(&harness, .MenuItem).count != 4usize { os.exit(52i32) }
+    if testing.by_role(&harness, .Separator).count != 1usize { os.exit(53i32) }
     // The keys: the focus starts on New; Down walks, skipping Quit, and wraps; Up
     // wraps back; End and Home jump; Enter runs New; Escape dismisses.
     if !focus_is(&harness, 101u64) { os.exit(20i32) }

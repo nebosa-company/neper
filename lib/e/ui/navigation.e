@@ -3732,7 +3732,7 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         var stretched = made
         stretched.style.width = style.Length { Percent: 100.0 }
         var entry: widget.Semantics = zero
-        entry.role = 11u8
+        entry.role = accessibility.ROLE_OPTION
         entry.label = names[i]
         entry.row = u32(i + 1usize)
         entry.row_count = u32(names.len)
@@ -3822,7 +3822,16 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     var inset = style.defaults()
     inset.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 4.0 } }
     let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, inset, rows)
-    let (scoped, scoped_error) = choice_scope(a, key + 1u64, names.len, active, activate, pick, dismiss, column)
+    let (list_body, list_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if list_body_error != ok { ret (zero, TooLarge) }
+    list_body[0usize] = column
+    var list_sem: widget.Semantics = zero
+    list_sem.role = accessibility.ROLE_LISTBOX
+    list_sem.label = label
+    list_sem.row_count = u32(names.len)
+    if active < names.len { list_sem.active = key + 2u64 + u64(active) }
+    let list = widget.semantics(0u64, list_sem, style.defaults(), list_body[0usize..1usize])
+    let (scoped, scoped_error) = choice_scope(a, key + 1u64, names.len, active, activate, pick, dismiss, list)
     if scoped_error != ok { ret (zero, scoped_error) }
     let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width, false)
     ret (made, made_error)
@@ -3897,7 +3906,15 @@ fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     if field_error != ok { ret (zero, field_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = field
+    let (field_body, field_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if field_body_error != ok { ret (zero, TooLarge) }
+    field_body[0usize] = field
+    var combo_sem: widget.Semantics = zero
+    combo_sem.role = accessibility.ROLE_COMBOBOX
+    combo_sem.label = label
+    combo_sem.states = accessibility.STATE_EXPANDED
+    if active < commands.len { combo_sem.active = key + 3u64 + u64(active) }
+    parts[0usize] = widget.semantics(0u64, combo_sem, style.defaults(), field_body[0usize..1usize])
     let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
     if rule_error != ok { ret (zero, rule_error) }
     parts[1usize] = rule
@@ -3922,6 +3939,15 @@ fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         empty.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 24.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 24.0 } }
         parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 4.0 }, empty, parts[5usize..7usize])
     }
+    let (result_body, result_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if result_body_error != ok { ret (zero, TooLarge) }
+    result_body[0usize] = parts[2usize]
+    var result_sem: widget.Semantics = zero
+    result_sem.role = accessibility.ROLE_LISTBOX
+    result_sem.label = label
+    result_sem.row_count = u32(commands.len)
+    if active < commands.len { result_sem.active = key + 3u64 + u64(active) }
+    parts[2usize] = widget.semantics(0u64, result_sem, style.defaults(), result_body[0usize..1usize])
     var foot = style.defaults()
     foot.width = style.Length { Percent: 100.0 }
     foot.height = style.Length { Px: 32.0 }

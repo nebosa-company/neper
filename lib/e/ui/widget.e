@@ -2906,17 +2906,18 @@ fn focus_root(s: *State) -> usize {
     ret root
 }
 
-// A menu's arrow keys (D975): with a menu item (role 22) focused, Down and Up move
+// A menu's arrow keys (D975): with a menu item (role 22 or checkbox role 37)
+// focused, Down and Up move
 // the focus as Tab and Shift+Tab do (wrapping, disabled items skipped), Home and
 // End to the first and last; whether the key was taken.
 fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     if !s.has_focus || k.modifiers.shift || k.modifiers.control || k.modifiers.alt || k.modifiers.meta { ret false }
     if code != 40u32 && code != 38u32 && code != 36u32 && code != 35u32 { ret false }
     let e = &s.elements[usize(s.focus)]
-    var item = e.has_semantics && e.sem.role == 22u8
+    var item = e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8)
     if !item && e.has_parent {
         let up = &s.elements[usize(e.parent)]
-        item = up.has_semantics && up.sem.role == 22u8
+        item = up.has_semantics && (up.sem.role == 22u8 || up.sem.role == 37u8)
     }
     if !item { ret false }
     if code == 40u32 || code == 38u32 {
@@ -3857,6 +3858,22 @@ fn edit_select(widget_runtime: *Runtime, element: ElementId, start: usize, end: 
     e.anchor = start
     e.caret = end
     e.invalid = true
+    ret ok
+}
+
+// Copy an editor, or the direct editor child of a semantic wrapper.
+fn edit_copy_child(widget_runtime: *Runtime, element: ElementId) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (index, found) = element_of(s, element)
+    if !found { ret InvalidTree }
+    var at = index
+    if s.elements[at].kind != EDIT_TAG {
+        if !s.elements[at].has_child { ret InvalidTree }
+        at = usize(s.elements[at].first_child)
+    }
+    if s.elements[at].kind != EDIT_TAG { ret InvalidTree }
+    edit_copy(s, &s.elements[at])
     ret ok
 }
 

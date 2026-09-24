@@ -275,12 +275,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (code_at, has_code_at) = centre_of(&harness, &runtime, 1u64)
     if !has_code_at || testing.tap(&harness, code_at.x, code_at.y) != ok || testing.press_key(&harness, 13u32, zero) != ok { os.exit(22i32) }
     if logs[0usize].changes != 1usize || logs[0usize].changed_len != 4usize || !same(buffers[0usize].code[0usize..4usize], "0042") { os.exit(23i32) }
-    // The autocomplete, open with two suggestions and the first active: the group
-    // is expanded, the list holds two items; Down from the field activates the
+    // The autocomplete, open with two suggestions and the first active: the combo
+    // is expanded, the listbox holds two options; Down from the field activates the
     // second; Enter picks the (still) first; a tap on the second picks it; Escape
     // dismisses.
-    let (fruit_group, has_fruit) = find(tree_2, .Group, "Fruit")
-    if !has_fruit || !fruit_group.state.expanded || testing.by_role(&harness, .ListItem).count < 2usize { os.exit(24i32) }
+    let (fruit_group, has_fruit) = find(tree_2, .Combobox, "Fruit")
+    let (fruit_list, has_fruit_list) = find(tree_2, .Listbox, "Fruit")
+    if !has_fruit || !fruit_group.state.expanded || !has_fruit_list || testing.by_role(&harness, .Option).count < 2usize { os.exit(24i32) }
     let (fruit_at, has_fruit_at) = centre_of(&harness, &runtime, 10u64)
     if !has_fruit_at || testing.tap(&harness, fruit_at.x, fruit_at.y) != ok { os.exit(25i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].activations != 1usize || logs[0usize].active != 1usize { os.exit(26i32) }
@@ -336,10 +337,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var selected_rows = 0usize
     i = 0usize
     while i < tree_5.nodes.len {
-        if tree_5.nodes[i].role == .ListItem && tree_5.nodes[i].state.selected { selected_rows += 1usize }
+        if tree_5.nodes[i].role == .Option && tree_5.nodes[i].state.selected { selected_rows += 1usize }
         i += 1usize
     }
-    if selected_rows != 2usize { os.exit(50i32) }
+    let (kinds_list, has_kinds_list) = find(tree_5, .Listbox, "Kinds")
+    if selected_rows != 2usize || !has_kinds_list { os.exit(50i32) }
     let (middle_at, has_middle) = centre_of(&harness, &runtime, 52u64)
     if !has_middle || testing.tap(&harness, middle_at.x, middle_at.y) != ok || logs[0usize].row_toggles != 1usize || logs[0usize].last_row != 1usize { os.exit(51i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(52i32) }

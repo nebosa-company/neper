@@ -118,8 +118,7 @@ fn selectable_block(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t:
 }
 
 // ponytail: the unfocused-window colour, the context menu, touch handles and
-// toolbar, word selection, a Text role with Copy, and `align`/`max_lines` are
-// not yet the editor's.
+// toolbar, word selection, and `align`/`max_lines` are not yet the editor's.
 fn selectable(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *const Theme, options: TextOptions, block: bool) -> (widget.Node, err) {
     let (text_look, style_error) = text_style(a, t, options.role)
     if style_error != ok { ret (zero, style_error) }
@@ -132,7 +131,14 @@ fn selectable(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *cons
         let top = style.Length { Px: 12.0 }
         look.padding = style.EdgeLengths { left: side, top: top, right: side, bottom: top }
     }
-    ret (widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, options.color), selection: style.color(t.tokens, .PrimaryContainer), change: zero, submit: zero, enabled: true, read_only: true, multiline: options.wrap != .None || block, secret: false, marked: style.color(t.tokens, .OnPrimaryContainer), caret: style.color(t.tokens, .Primary), untabbed: !block, ringed: block }, look), ok)
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, options.color), selection: style.color(t.tokens, .PrimaryContainer), change: zero, submit: zero, enabled: true, read_only: true, multiline: options.wrap != .None || block, secret: false, marked: style.color(t.tokens, .OnPrimaryContainer), caret: style.color(t.tokens, .Primary), untabbed: !block, ringed: block }, look)
+    var sem: widget.Semantics = zero
+    sem.role = ROLE_TEXT
+    sem.label = buffer[0usize..len]
+    sem.actions = accessibility.ACTION_COPY
+    ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
 }
 
 fn link_tap(ctx: *void, g: widget.Gesture) -> err {
@@ -1181,8 +1187,6 @@ fn divider_options() -> DividerOptions {
 // `on-surface-variant` 12 from each line, and the line again (a 16 lead line
 // for a start label). Decorative, it is left out of the tree; labelled, it is a
 // Group named by its label.
-// ponytail: no Separator role in accessibility.Role yet, so a menu or toolbar
-// divider is hidden too; add the role when a host bridge maps it.
 fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerOptions) -> (widget.Node, err) {
     var ink = style.color(t.tokens, .OutlineVariant)
     if options.strong { ink = style.color(t.tokens, .Outline) }
@@ -3436,7 +3440,7 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
             let (item, item_error) = menu_row(a, key + 2u64 + u64(i), t, options[i], i == selected, &picks[i])
             if item_error != ok { ret (zero, item_error) }
             var entry: widget.Semantics = zero
-            entry.role = 22u8
+            entry.role = accessibility.ROLE_OPTION
             entry.label = options[i]
             if i == selected { entry.states = accessibility.STATE_SELECTED }
             let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
@@ -3460,7 +3464,7 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         if menu_error != ok { ret (zero, TooLarge) }
         menu[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..options.len])
         var menu_sem: widget.Semantics = zero
-        menu_sem.role = 21u8
+        menu_sem.role = accessibility.ROLE_LISTBOX
         menu_sem.label = label
         let (popup, popup_error) = mem.alloc[widget.Node](a, 1usize)
         if popup_error != ok { ret (zero, TooLarge) }
@@ -3471,8 +3475,9 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count])
     var sem: widget.Semantics = zero
-    sem.role = 2u8
+    sem.role = accessibility.ROLE_COMBOBOX
     sem.label = label
+    sem.value = shown
     if open { sem.states = accessibility.STATE_EXPANDED }
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
 }
@@ -3628,7 +3633,7 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         if region_error != ok { ret (zero, TooLarge) }
         region[0usize] = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, row_style, body[0usize..1usize])
         var entry: widget.Semantics = zero
-        entry.role = 11u8
+        entry.role = accessibility.ROLE_OPTION
         entry.label = options[i]
         entry.row = u32(i + 1usize)
         entry.row_count = u32(options.len)
@@ -3662,7 +3667,7 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     body[0usize] = view
     // The viewport is the list in the tree; the group above it carries the label.
     var sem: widget.Semantics = zero
-    sem.role = 2u8
+    sem.role = accessibility.ROLE_LISTBOX
     sem.label = label
     sem.row_count = u32(options.len)
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
@@ -5667,7 +5672,7 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
             let (item, item_error) = list_row(a, first + u64(i), t, suggestions[i], i == active, &picks[i])
             if item_error != ok { ret (zero, item_error) }
             var entry: widget.Semantics = zero
-            entry.role = 11u8
+            entry.role = accessibility.ROLE_OPTION
             entry.label = suggestions[i]
             if i == active { entry.states = accessibility.STATE_SELECTED }
             let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
@@ -5692,7 +5697,7 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         if column_error != ok { ret (zero, TooLarge) }
         column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, items[0usize..suggestions.len])
         var list_sem: widget.Semantics = zero
-        list_sem.role = 10u8
+        list_sem.role = accessibility.ROLE_LISTBOX
         list_sem.label = label
         list_sem.row_count = u32(suggestions.len)
         let (popup, popup_error) = mem.alloc[widget.Node](a, 1usize)
@@ -5722,7 +5727,7 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: default_action, cancel_action: *dismiss, keys: zero }, style.defaults(), row[0usize..1usize])
     var sem: widget.Semantics = zero
-    sem.role = 2u8
+    sem.role = accessibility.ROLE_COMBOBOX
     sem.label = label
     if listing {
         sem.states = accessibility.STATE_EXPANDED

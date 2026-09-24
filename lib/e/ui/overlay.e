@@ -165,10 +165,10 @@ type MenuItem = struct { label: str, action: widget.Submit, enabled: bool }
 
 // A command in a v2 menu (D975): its label, what it does, whether it may be
 // chosen, its shortcut's words ("Ctrl+S"; empty for none, never shown on touch),
-// whether it is checked (a check in the leading slot), whether a separator stands
-// before it, whether it destroys (in `error`), and the head of the group it
-// starts (empty for none).
-type MenuCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checked: bool, separated: bool, destructive: bool, head: str }
+// whether it is checkable and checked (a check in the leading slot), whether a
+// separator stands before it, whether it destroys (in `error`), and the head of
+// the group it starts (empty for none).
+type MenuCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, separated: bool, destructive: bool, head: str }
 
 // A plain enabled command.
 fn menu_command(label: str, action: widget.Submit) -> MenuCommand {
@@ -303,7 +303,9 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, line_style, parts[0usize..p])
     var sem_states = 0u32
     if c.checked { sem_states = accessibility.STATE_CHECKED }
-    let (made, made_error) = control.pressable_states(a, item_key, t, 22u8, c.label, look, c.enabled, false, sem_states, 0u32, 0u64, &c.action, content)
+    var semantic_role = 22u8
+    if c.checkable || c.checked { semantic_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
+    let (made, made_error) = control.pressable_states(a, item_key, t, semantic_role, c.label, look, c.enabled, false, sem_states, 0u32, 0u64, &c.action, content)
     ret (made, made_error)
 }
 
@@ -346,7 +348,12 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             rule.height = style.Length { Px: t.tokens.sizes.divider }
             rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
             lines[0usize] = widget.box(0u64, rule, zero)
-            rows[n] = widget.padded(0u64, 0.0, around, 0.0, around, style.defaults(), lines[0usize..1usize])
+            let (rule_body, rule_body_error) = mem.alloc[widget.Node](a, 1usize)
+            if rule_body_error != ok { ret (zero, TooLarge) }
+            rule_body[0usize] = widget.padded(0u64, 0.0, around, 0.0, around, style.defaults(), lines[0usize..1usize])
+            var rule_sem: widget.Semantics = zero
+            rule_sem.role = accessibility.ROLE_SEPARATOR
+            rows[n] = widget.semantics(0u64, rule_sem, style.defaults(), rule_body[0usize..1usize])
             n += 1usize
         }
         if c.head.len > 0usize {
@@ -429,7 +436,7 @@ fn alert_dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     words.role = .BodyMedium
     let (message_node, message_error) = control.colored_text(a, key + 2u64, message, t, words, style.color(t.tokens, .OnSurfaceVariant))
     if message_error != ok { ret (zero, message_error) }
-    let (made, made_error) = dialog(a, key, t, title, message_node, buttons, open, true)
+    let (made, made_error) = dialog_as(a, key, t, title, message_node, buttons, open, true, accessibility.ROLE_ALERT_DIALOG)
     ret (made, made_error)
 }
 
@@ -462,10 +469,14 @@ fn with_scrim(a: *mem.Arena, t: *const control.Theme, top: widget.Node) -> (widg
 // heading), 16 above the content, 8 above the actions at the end 8 apart -- the
 // default a filled button, a destructive one filled in `error`, the others text
 // buttons, all at the control height.
-// ponytail: no AlertDialog role (the Role enum has none), icon well, scroll
-// dividers, busy state, full-screen form or host button order; Escape and the
-// scrim close only through a Cancel button.
+// ponytail: no icon well, scroll dividers, busy state, full-screen form or host
+// button order; Escape and the scrim close only through a Cancel button.
 fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool) -> (widget.Node, err) {
+    let (made, made_error) = dialog_as(a, key, t, title, content, buttons, open, described, 23u8)
+    ret (made, made_error)
+}
+
+fn dialog_as(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var submit: widget.Submit = zero
     var cancel: widget.Submit = zero
@@ -529,7 +540,7 @@ fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, c
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), card[0usize..1usize])
     var sem: widget.Semantics = zero
-    sem.role = 23u8
+    sem.role = semantic_role
     sem.label = title
     sem.states = accessibility.STATE_MODAL
     sem.labelled_by = key + 1u64
