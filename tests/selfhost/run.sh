@@ -2905,6 +2905,12 @@ ui_containers_v2_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/ui-containers-v2-selfhost"
 ui_containers_v2_output=$("$test_build/ui-containers-v2-selfhost")
 [ "$ui_containers_v2_output" = 'ui containers v2 ok' ]
+# v2 resizable pane, split view, dock panel, dock layout and workspace (D966, P5-08)
+ui_containers2_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_containers2_v2/src/main.e" "$repo" x64 linux "$test_build/ui-containers2-v2-selfhost")
+[ "$ui_containers2_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-containers2-v2-selfhost"
+ui_containers2_v2_output=$("$test_build/ui-containers2-v2-selfhost")
+[ "$ui_containers2_v2_output" = 'ui containers2 v2 ok' ]
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 ui_selection_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_selection/src/main.e" "$repo" x64 linux "$test_build/ui-selection-selfhost")

@@ -92,13 +92,13 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, documents: []const 
         if right_error != ok { ret (zero, right_error) }
         let (bottom, bottom_error) = control.text(a, 0u64, "Output", t, control.text_options())
         if bottom_error != ok { ret (zero, bottom_error) }
-        let (made, made_error) = navigation.dock_layout(a, 20u64, t, left_panel, centre, right, bottom, sizes, widget.Change[navigation.DockSizes] { ctx: ctx, invoke: on_sizes }, 400.0, 300.0)
+        let (made, made_error) = navigation.dock_layout(a, 20u64, t, left_panel, centre, right, bottom, sizes, widget.Change[navigation.DockSizes] { ctx: ctx, invoke: on_sizes }, 800.0, 400.0)
         if made_error != ok { ret (zero, made_error) }
         parts[0usize] = made
     }
     var column = style.defaults()
-    column.width = style.Length { Px: 400.0 }
-    column.height = style.Length { Px: 300.0 }
+    column.width = style.Length { Px: 800.0 }
+    column.height = style.Length { Px: 400.0 }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column, parts[0usize..1usize]), ok)
 }
 
@@ -143,7 +143,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
-    let (h, harness_error) = testing.harness(a, &runtime, 400u32, 300u32, 1.0)
+    let (h, harness_error) = testing.harness(a, &runtime, 800u32, 400u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
     let (logs, logs_error) = mem.alloc[Log](a, 1usize)
@@ -163,7 +163,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if storage_error != ok { os.exit(10i32) }
     var frame = mem.arena_from(frame_storage)
     let now = time.Instant { nanos: 1000000000i64 }
-    let sizes = navigation.DockSizes { left: 100.0, right: 80.0, bottom: 60.0 }
+    let sizes = navigation.DockSizes { left: 200.0, right: 200.0, bottom: 100.0 }
     let (root, build_error) = build(&frame, &theme, ctx, documents[0usize..3usize], 1usize, &closers[0usize], sizes, 0usize)
     if build_error != ok || testing.pump(&harness, root, now) != ok { os.exit(11i32) }
     // The tabs: three tabs under a tab list named Documents, the second selected
@@ -198,29 +198,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 87u32, held) != ok || logs[0usize].closes != 2usize || logs[0usize].closed != 1usize { os.exit(23i32) }
     if testing.press_key(&harness, 34u32, held) != ok || logs[0usize].picked != 2usize { os.exit(24i32) }
     if testing.press_key(&harness, 33u32, held) != ok || logs[0usize].picked != 0usize { os.exit(25i32) }
-    // The dock layout: the left panel a hundred wide with a titled dock panel
-    // whose close fires; the bottom sixty tall; the left handle dragged twenty
-    // right reports left 120 with the rest kept; the middle's handle dragged
-    // twenty left reports right 100; the bottom's handle dragged twenty up (a
-    // drag reports from the move after the one that crosses the slop) reports
-    // bottom 80.
+    // The dock layout, 800 by 400 so v2's minimums hold (D966): the left panel
+    // 200 wide with a titled dock panel whose close fires; the bottom a hundred
+    // tall; the left sash dragged twenty right reports left 220 with the rest
+    // kept; the middle's sash dragged twenty left reports right 220; the bottom's
+    // sash dragged twenty up (a drag reports from the move after the one that
+    // crosses the slop) reports bottom 120.
     let (root_2, build_2_error) = build(&frame, &theme, ctx, documents[0usize..3usize], 1usize, &closers[0usize], sizes, 1usize)
     if build_2_error != ok || testing.pump(&harness, root_2, now) != ok { os.exit(26i32) }
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if tree_2_error != ok { os.exit(27i32) }
     let (explorer, has_explorer) = find(tree_2, .Group, "Explorer")
-    if !has_explorer || !near(explorer.bounds.width, 100.0, 0.5) { os.exit(28i32) }
+    if !has_explorer || !near(explorer.bounds.width, 200.0, 0.5) { os.exit(28i32) }
     let (panel_close_at, has_panel_close) = centre_of(&harness, &runtime, 51u64)
     if !has_panel_close || testing.tap(&harness, panel_close_at.x, panel_close_at.y) != ok || logs[0usize].panel_closes != 1usize { os.exit(29i32) }
     let (left_grip, has_left_grip) = centre_of(&harness, &runtime, 23u64)
     if !has_left_grip || testing.drag(&harness, left_grip, geometry.Point { x: left_grip.x + 20.0, y: left_grip.y }, 4usize) != ok { os.exit(30i32) }
-    if logs[0usize].sizes == 0usize || !near(logs[0usize].size.left, 120.0, 0.5) || !near(logs[0usize].size.right, 80.0, 0.5) || !near(logs[0usize].size.bottom, 60.0, 0.5) { os.exit(31i32) }
+    if logs[0usize].sizes == 0usize || !near(logs[0usize].size.left, 220.0, 0.5) || !near(logs[0usize].size.right, 200.0, 0.5) || !near(logs[0usize].size.bottom, 100.0, 0.5) { os.exit(31i32) }
     let (middle_grip, has_middle_grip) = centre_of(&harness, &runtime, 26u64)
     if !has_middle_grip || testing.drag(&harness, middle_grip, geometry.Point { x: middle_grip.x - 20.0, y: middle_grip.y }, 4usize) != ok { os.exit(32i32) }
-    if !near(logs[0usize].size.right, 100.0, 0.5) || !near(logs[0usize].size.left, 100.0, 0.5) { os.exit(33i32) }
+    if !near(logs[0usize].size.right, 220.0, 0.5) || !near(logs[0usize].size.left, 200.0, 0.5) { os.exit(33i32) }
     let (bottom_grip, has_bottom_grip) = centre_of(&harness, &runtime, 29u64)
     if !has_bottom_grip || testing.drag(&harness, bottom_grip, geometry.Point { x: bottom_grip.x, y: bottom_grip.y - 20.0 }, 4usize) != ok { os.exit(34i32) }
-    if !near(logs[0usize].size.bottom, 80.0, 0.5) { os.exit(35i32) }
+    if !near(logs[0usize].size.bottom, 120.0, 0.5) { os.exit(35i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(36i32) }
     try io.print("ui workspace ok\n")
     ret ok

@@ -6,7 +6,7 @@
 | module | `e.ui.control` |
 | module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.math`, `e.mem`, `e.text.layout`, `e.text.shape`, `e.ui.accessibility`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.widget` |
 | blocked by | `P4` |
-| delivered | 5 of 10 |
+| delivered | 7 of 10 |
 
 ## Eligibility
 
@@ -26,8 +26,8 @@ Every component below is implemented in `e.ui.control`, exercised by a determini
 - [ ] `DockPanelSpec`
 - [x] `GroupBoxSpec`
 - [ ] `MultiDocumentWorkspaceSpec`
-- [ ] `ResizablePaneSpec`
-- [ ] `SplitViewSpec`
+- [x] `ResizablePaneSpec`
+- [x] `SplitViewSpec`
 
 ## Verification
 

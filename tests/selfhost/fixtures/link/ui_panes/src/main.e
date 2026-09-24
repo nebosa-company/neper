@@ -211,7 +211,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, root_3, now) != ok { os.exit(35i32) }
     if testing.by_text(&harness, "Page one").count != 0usize || testing.by_text(&harness, "Page two").count != 1usize { os.exit(36i32) }
     // The split: the first pane is 100 wide; a drag of the handle 50 to the right
-    // reports 150; Right on the focused handle reports a medium space more; a drag
+    // reports 150; Right on the focused handle reports 8 more (v2, D966); a drag
     // far left stops at the minimum, far right at the extent less the second's.
     let pane = testing.by_key(&harness, 22u64)
     let (pane_bounds, has_pane) = widget.bounds_of(&runtime, pane.element)
@@ -220,7 +220,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_grip { os.exit(38i32) }
     if testing.drag(&harness, grip_at, geometry.Point { x: grip_at.x + 50.0, y: grip_at.y }, 5usize) != ok { os.exit(39i32) }
     if logs[0usize].sizes == 0usize || !near(logs[0usize].last_size, 150.0) { os.exit(40i32) }
-    if testing.press_key(&harness, 39u32, zero) != ok || !near(logs[0usize].last_size, 100.0 + tokens.spacing.md) { os.exit(41i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !near(logs[0usize].last_size, 108.0) { os.exit(41i32) }
     if testing.drag(&harness, grip_at, geometry.Point { x: grip_at.x - 200.0, y: grip_at.y }, 2usize) != ok || !near(logs[0usize].last_size, 40.0) { os.exit(42i32) }
     if testing.drag(&harness, grip_at, geometry.Point { x: grip_at.x + 400.0, y: grip_at.y }, 2usize) != ok || !near(logs[0usize].last_size, 260.0) { os.exit(43i32) }
     let (root_4, build_4_error) = build(&frame, &theme, ctx, &toggles[0usize], picks[0usize..3usize], true, 1usize, 150.0)

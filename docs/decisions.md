@@ -19761,3 +19761,68 @@ Still open:
 - The collapsible group box.
 - Card media, header and actions slots, the dragged card and loading skeletons.
 - A Separator role, which accessibility.Role does not have.
+
+## D966 — Sashes, split views, dock panels and the document workspace draw their v2 specifications
+
+The rest of P5-08 moves to docs/ux/components. Only ResizablePane and SplitView
+are complete. DockLayout, DockPanel and MultiDocumentWorkspace change but stay
+open.
+
+- One sash for every pane: `control.pane_with_reserve` now draws it.
+  `resizable_pane`, `split_view` and the dock layout all use it.
+  - Shape: an 8 hit strip (24 on touch) that paints nothing itself. A Custom
+    node (`Sash`, `sash_paint`) draws a centred 1px `outline-variant` line on
+    whole pixels, plus a 4 x 48 fully rounded grip.
+  - Grip: at rest with a pointer there is none. On hover or keyboard focus it is
+    `outline`; on touch it is always shown in `on-surface-variant`. While dragged,
+    the line is 2px `primary` and the grip `primary`.
+  - Keys: arrows move 8 (was `space-md` 12), Shift+arrows move 48, and Home and End
+    go to the limits.
+  - Tree: the slider is named "Resize " + label. `split_view_named` passes the
+    caller's name and `split_view` keeps "Divider". The value is the size
+    ("100 px"), which was empty before.
+  - Before, this was a 4px bar filled in `border` with no hover, focus or drag
+    look. The split view's second pane now stands on `surface`.
+- `navigation.dock_layout`: the sashes run in bar mode, a 4px `primary` bar on
+  hover and drag with no grip, named Resize left, right and bottom panel. Its
+  arithmetic uses the 8 hit width. The minimums are 160 for a side, 96 for the
+  bottom (a 32 header and 64) and 320 x 160 for the centre, which stands on
+  `surface`. `DockMove` carries an `extent`, and `dock_move_fire` handles the
+  bottom sash too, through the formerly unused `moves[2]`. `dock_bottom_fire` and
+  the height passed as a width are gone.
+- `navigation.dock_panel_of`: the docked panel is `surface-container-low`, square,
+  with no border and no padding.
+  - The header is 32 tall, 12 in at the start and 4 at the end, with the title in
+    `label-medium` `on-surface-variant`. When focused, the title is `on-surface`
+    and a 2px `primary` line lies inside the header's top edge.
+  - Close is a 32 round `control.glyph_button` with a drawn 18 cross, named
+    "Close <title> panel". It replaces the Plain "x" button.
+- `navigation.multi_document_workspace`: the view stands on `surface`, and
+  Ctrl+PageDown and Ctrl+PageUp wrap at the ends. With no documents the tab strip
+  is replaced by the centred empty state: "No open files" in `title-medium` over
+  240-wide `body-medium` `on-surface-variant` shortcut rows, 8 apart, with 12
+  between the blocks.
+
+Fixtures:
+- ui_containers2_v2 holds the sash's line and hovered grip, the name and value,
+  the Shift/Home/End keys, the focused dock panel's line, ground and named Close,
+  the dock sash's hovered bar over the `surface` centre, the empty workspace, and
+  the Ctrl+PageDown wrap.
+- ui_panes expects the 8 step.
+- ui_workspace's dock layout is now 800 x 400 with 200/200/100 sizes, so the
+  minimums hold.
+
+All 78 ui_* fixtures pass on Windows and Linux.
+
+Still open:
+- ResizablePane and SplitView: double-click reset, Escape cancel, snap-to-close,
+  the size readout, the resize cursor, a Separator role, stacking below the
+  breakpoint, snap points, keeping the ratio across resizes, and F6.
+- DockLayout has no panel-to-slot model, so there is no activity strip, panel
+  moving (ghost, dock guide, drop preview, tear-off), collapse, maximise, reset or
+  persistence.
+- DockPanel has only the single docked form: no tab group, stacked or floating
+  variant, Maximise, busy bar, empty slot or Region landmark.
+- MultiDocumentWorkspace has one editor group: no split groups, active-group line,
+  location bar, compact count button, MRU Ctrl+Tab, Alt+1..9 or Ctrl+Shift+T, no
+  `nu-kbd` keys or Open recent in the empty state, and no restore hooks.

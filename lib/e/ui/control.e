@@ -3670,24 +3670,75 @@ fn handle_nudge(ctx: *void) -> err {
 }
 
 // A resizable pane: the content sized `size` along `axis` (the caller keeps the
-// size and hears each change), a handle after it in the border colour, focusable,
-// dragged or moved by the arrow keys a medium space at a time, between `low` and
-// `high` (0: no limit). The handle is a slider in the
-// tree named `label`. The pane is keyed `key + 1`, the handle `key + 2`.
+// size and hears each change), the sash of D966 after it, between `low` and
+// `high` (0: no limit). The pane is keyed `key + 1`, the sash `key + 2`, a slider
+// in the tree named "Resize " and `label`, its value the size in px.
 fn resizable_pane(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node) -> (widget.Node, err) {
-    let (made, made_error) = pane_with_reserve(a, key, t, label, axis, size, low, high, 0u64, 0.0, change, content)
+    let (named, named_error) = mem.alloc[u8](a, label.len + 7usize)
+    if named_error != ok { ret (zero, TooLarge) }
+    var n = copy_text(named, "Resize ")
+    n += copy_text(named[n..named.len], label)
+    let (made, made_error) = pane_with_reserve(a, key, t, named[0usize..n], axis, size, low, high, 0u64, 0.0, change, content, false)
     ret (made, made_error)
 }
 
-fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node) -> (widget.Node, err) {
+// A sash's paint (D966): the line across the sash's middle (on whole pixels),
+// `line_width` thick, and a 4 x 48 fully rounded grip on it (none while `grip`
+// is clear), or, as a dock layout's, a 4px bar in place of the line.
+type Sash = struct { line: paint.Color, line_width: f32, grip: paint.Color, across: bool, arena: *mem.Arena }
+
+fn sash_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let s = mem.cast[*Sash](ctx)
+    // `across`: the sash lies along x (a bottom panel's), else along y.
+    if s.across {
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x, area.y + f32(i64((area.height - s.line_width) * 0.5)), area.width, s.line_width), brush: paint.Brush { Solid: s.line } } })
+    } else {
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(area.x + f32(i64((area.width - s.line_width) * 0.5)), area.y, s.line_width, area.height), brush: paint.Brush { Solid: s.line } } })
+    }
+    if !(s.grip.alpha > 0.0) { ret ok }
+    let cx = area.x + area.width * 0.5
+    let cy = area.y + area.height * 0.5
+    let (pb, pb_error) = geometry.path_builder(s.arena, 32usize, 64usize)
+    if pb_error != ok { ret TooLarge }
+    var builder = pb
+    if s.across {
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(cx - 22.0, cy - 2.0, 44.0, 4.0), brush: paint.Brush { Solid: s.grip } } })
+        try oval(&builder, cx - 22.0, cy, 2.0, 2.0)
+        try oval(&builder, cx + 22.0, cy, 2.0, 2.0)
+    } else {
+        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(cx - 2.0, cy - 22.0, 4.0, 44.0), brush: paint.Brush { Solid: s.grip } } })
+        try oval(&builder, cx, cy - 22.0, 2.0, 2.0)
+        try oval(&builder, cx, cy + 22.0, 2.0, 2.0)
+    }
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: s.grip } } })
+}
+
+// v2 (D966, docs/ux/components/ResizablePane): the sash is an 8 hit strip (24 on
+// touch) on the pane's inner edge, transparent, with a centred 1px
+// `outline-variant` line; a 4 x 48 fully rounded grip on it shows `outline` on
+// hover and keyboard focus (always, `on-surface-variant`, on touch) and, dragged,
+// the line is 2px `primary` and the grip `primary`. As a dock layout's (`bar`),
+// hover and drag draw a 4px `primary` bar and no grip. Arrows move it 8, 48 with
+// Shift; Home and End go to the limits. A slider in the tree named `label`, its
+// value the size ("240 px"), controlling the pane.
+// ponytail: no double-click reset, Escape cancel, snap-to-close, size readout or
+// resize cursor, and the role is Slider (no Separator role yet).
+fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node, bar: bool) -> (widget.Node, err) {
     let vertical = axis == .Vertical
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var hit: f32 = 8.0
+    if touch { hit = 24.0 }
     let (handles, handles_error) = mem.alloc[Handle](a, 1usize)
     if handles_error != ok { ret (zero, TooLarge) }
-    handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: t.tokens.spacing.xs, low: low, high: high, reserve: reserve, change: change }
-    let (nudges, nudges_error) = mem.alloc[Nudge](a, 2usize)
+    handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: hit, low: low, high: high, reserve: reserve, change: change }
+    let (nudges, nudges_error) = mem.alloc[Nudge](a, 6usize)
     if nudges_error != ok { ret (zero, TooLarge) }
-    nudges[0usize] = Nudge { handle: &handles[0usize], amount: 0.0 - t.tokens.spacing.md }
-    nudges[1usize] = Nudge { handle: &handles[0usize], amount: t.tokens.spacing.md }
+    nudges[0usize] = Nudge { handle: &handles[0usize], amount: -8.0 }
+    nudges[1usize] = Nudge { handle: &handles[0usize], amount: 8.0 }
+    nudges[2usize] = Nudge { handle: &handles[0usize], amount: -48.0 }
+    nudges[3usize] = Nudge { handle: &handles[0usize], amount: 48.0 }
+    nudges[4usize] = Nudge { handle: &handles[0usize], amount: -1.0e9 }
+    nudges[5usize] = Nudge { handle: &handles[0usize], amount: 1.0e9 }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
@@ -3696,22 +3747,49 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var pane_style = style.defaults()
     pane_style.overflow = .Clip
     var grip = style.defaults()
-    grip.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
-    let thick = style.Length { Px: t.tokens.spacing.xs }
     let full = style.Length { Percent: 100.0 }
     if vertical {
         pane_style.height = style.Length { Px: size }
         pane_style.width = full
-        grip.height = thick
+        grip.height = style.Length { Px: hit }
         grip.width = full
     } else {
         pane_style.width = style.Length { Px: size }
         pane_style.height = full
-        grip.width = thick
+        grip.width = style.Length { Px: hit }
         grip.height = full
     }
     parts[0usize] = widget.box(key + 1u64, pane_style, body[0usize..1usize])
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    // The sash's look in its state.
+    let state = control_state(t, key + 2u64, true, false)
+    var sashes_line = style.color(t.tokens, .OutlineVariant)
+    var line_width: f32 = 1.0
+    var grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if touch { grip_color = style.color(t.tokens, .OnSurfaceVariant) }
+    if state.hovered || state.focus_visible { grip_color = style.color(t.tokens, .Outline) }
+    if state.pressed {
+        sashes_line = style.color(t.tokens, .Primary)
+        line_width = 2.0
+        grip_color = sashes_line
+    }
+    if bar {
+        grip_color = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        if state.hovered || state.pressed {
+            sashes_line = style.color(t.tokens, .Primary)
+            line_width = 4.0
+        }
+    }
+    let (sashes, sashes_error) = mem.alloc[Sash](a, 1usize)
+    if sashes_error != ok { ret (zero, TooLarge) }
+    sashes[0usize] = Sash { line: sashes_line, line_width: line_width, grip: grip_color, across: vertical, arena: a }
+    var paint_style = style.defaults()
+    paint_style.width = full
+    paint_style.height = full
+    var none: []const widget.Node = zero
+    let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)
+    if drawn_error != ok { ret (zero, TooLarge) }
+    drawn[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&sashes[0usize]), measure: mark_measure, paint: sash_paint, state: widget.bytes_of[Sash](&sashes[0usize]) } }, style: paint_style, children: none }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     var less = 37u32
     var more = 39u32
@@ -3719,31 +3797,59 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
         less = 38u32
         more = 40u32
     }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
     shortcuts[0usize] = widget.Shortcut { key: less, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&nudges[0usize]), invoke: handle_nudge } }
     shortcuts[1usize] = widget.Shortcut { key: more, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&nudges[1usize]), invoke: handle_nudge } }
+    shortcuts[2usize] = widget.Shortcut { key: less, modifiers: shifted, action: widget.Submit { ctx: mem.cast[*void](&nudges[2usize]), invoke: handle_nudge } }
+    shortcuts[3usize] = widget.Shortcut { key: more, modifiers: shifted, action: widget.Submit { ctx: mem.cast[*void](&nudges[3usize]), invoke: handle_nudge } }
+    shortcuts[4usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&nudges[4usize]), invoke: handle_nudge } }
+    var bound_keys = 5usize
+    // End only where the pane has an upper limit.
+    if high > 0.0 || bound != 0u64 {
+        shortcuts[5usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&nudges[5usize]), invoke: handle_nudge } }
+        bound_keys = 6usize
+    }
     let (grip_node, grip_error) = mem.alloc[widget.Node](a, 1usize)
     if grip_error != ok { ret (zero, TooLarge) }
-    grip_node[0usize] = widget.region(key + 2u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&handles[0usize]), invoke: handle_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: true }, grip, zero)
+    grip_node[0usize] = widget.region(key + 2u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&handles[0usize]), invoke: handle_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: true }, grip, drawn[0usize..1usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), grip_node[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound_keys], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), grip_node[0usize..1usize])
+    let (said, said_error) = mem.alloc[u8](a, 24usize)
+    if said_error != ok { ret (zero, TooLarge) }
+    var said_len = write_i64(said, i64(size))
+    said_len += copy_text(said[said_len..24usize], " px")
     var sem: widget.Semantics = zero
     sem.role = 15u8
     sem.label = label
+    sem.value = said[0usize..said_len]
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
     sem.controls = key + 1u64
     parts[1usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
     ret (widget.flex(key, ui_layout.Flex { axis: axis, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
 }
 
-// A split view: `first` in a resizable pane sized `position` along `axis`, then
-// `second` filling the rest; the handle between them keeps `min_first` and
-// `min_second` of each. The pane is keyed `key + 1` (its content `key + 2`, its
-// handle `key + 3`); a group in the tree.
+// A split view: the named split of D966 below with its sash named "Divider".
 fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err) {
+    let (made, made_error) = split_view_named(a, key, t, "Divider", axis, first, second, position, min_first, min_second, change, width, height)
+    ret (made, made_error)
+}
+
+// v2 (D966, docs/ux/components/SplitView): `first` in a resizable pane sized
+// `position` along `axis`, D966's sash after it (8 hit, the 1px `outline-variant`
+// line, the 4 x 48 grip on hover, focus and drag, 2px `primary` dragged), and
+// `second` filling the rest on `surface`; the sash keeps `min_first` and
+// `min_second` of each and is a slider named `label` with the first pane's size
+// as its value. The pane is keyed `key + 1` (its content `key + 2`, its sash
+// `key + 3`); a group in the tree.
+// ponytail: no stacking below the breakpoint, snap points, ratio across window
+// resizes, double-click reset, F6 cycling or empty-detail slot; add them with a
+// window-size input.
+fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, first: widget.Node, second: widget.Node, position: f32, min_first: f32, min_second: f32, change: widget.Change[f32], width: f32, height: f32) -> (widget.Node, err) {
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    let (pane, pane_error) = pane_with_reserve(a, key + 1u64, t, "Divider", axis, position, min_first, 0.0, key, min_second, change, first)
+    let (pane, pane_error) = pane_with_reserve(a, key + 1u64, t, label, axis, position, min_first, 0.0, key, min_second, change, first, false)
     if pane_error != ok { ret (zero, pane_error) }
     parts[0usize] = pane
     let (rest, rest_error) = mem.alloc[widget.Node](a, 1usize)
@@ -3751,6 +3857,7 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
     rest[0usize] = second
     var rest_style = style.defaults()
     rest_style.overflow = .Clip
+    rest_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
     if axis == .Vertical {
         rest_style.height = style.Length { Flex: 1.0 }
         rest_style.width = style.Length { Percent: 100.0 }
@@ -3765,6 +3872,29 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
     var sem: widget.Semantics = zero
     sem.role = 2u8
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// A round icon button (D966, docs/ux/components/DockPanel's header actions):
+// `side` across (32), the drawn glyph `glyph_size` (18) in `on-surface-variant` under
+// its state layer, named `label`.
+fn glyph_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32) -> (widget.Node, err) {
+    let state = control_state(t, key, true, false)
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = with_alpha(muted, state_opacity(t, state))
+    look.foreground = muted
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = side * 0.5
+    look.custom_padding = true
+    look.padding = (side - glyph_size) * 0.5
+    look.padding_y = (side - glyph_size) * 0.5
+    look.min_width = side
+    look.min_height = side
+    let (mark, mark_error) = icon_square(a, muted, kind, glyph_size)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, false, action, mark)
+    ret (node, node_error)
 }
 
 // ------------------------------------------------- advanced actions (D829, P2-01)
