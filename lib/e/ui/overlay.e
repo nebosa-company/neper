@@ -558,8 +558,6 @@ fn dialog_as(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
 // v2 (D976, docs/ux/components/Popup): `surface-container`, `radius-sm`, elevation
 // 2, no border, 4 above and below the content and none at the sides (its rows
 // run edge to edge), 200 to 480 wide.
-// ponytail: at least 200 wide rather than the anchor's own width; an overlay that
-// learns its anchor's width can match them.
 fn popup_surface(a: *mem.Arena, t: *const control.Theme, content: widget.Node) -> (widget.Node, err) {
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }

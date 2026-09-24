@@ -155,6 +155,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (frame_storage, storage_error) = mem.alloc[u8](a, 1048576usize)
     if storage_error != ok { os.exit(8i32) }
     var f = mem.arena_from(frame_storage)
+    if testing.begin(&harness, time.Instant { nanos: 1000000000i64 }) != ok { os.exit(29i32) }
     let (root, build_error) = build(&f, &theme, &stores[0usize])
     if build_error != ok { os.exit(9i32) }
     if testing.pump(&harness, root, time.Instant { nanos: 1000000000i64 }) != ok { os.exit(10i32) }
@@ -174,9 +175,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // header, Dock and Restore before Close, the busy bar and the empty sentence.
     let (floated, has_floated) = bounds(&harness, &runtime, 30u64)
     let (closer, has_closer) = bounds(&harness, &runtime, 31u64)
-    if !has_floated || !has_closer || !near(closer.y - floated.y, 4.0) || !near(floated.width, 300.0) { os.exit(17i32) }
+    let (busy, has_busy) = bounds(&harness, &runtime, 94u64)
+    if !has_floated || !has_closer || !has_busy || !near(closer.y - floated.y, 4.0) || !near(floated.width, 300.0) { os.exit(17i32) }
     if !is_color(shot, at(floated.x + 150.0, floated.y + 100.0), style.color(&tokens, .SurfaceContainer)) || !is_color(shot, at(floated.x + 0.5, floated.y + 0.5), style.color(&tokens, .Background)) { os.exit(18i32) }
-    if !is_color(shot, at(floated.x + 20.0, floated.y + 41.0), primary) || !is_color(shot, at(floated.x + 200.0, floated.y + 41.0), style.color(&tokens, .SurfaceContainer)) { os.exit(19i32) }
+    if !is_color(shot, at(floated.x + 120.0, floated.y + 41.0), primary) || !is_color(shot, at(floated.x + 20.0, floated.y + 41.0), style.color(&tokens, .SurfaceContainer)) { os.exit(19i32) }
+    if testing.begin(&harness, time.Instant { nanos: 1500000000i64 }) != ok { os.exit(30i32) }
+    let (later_root, later_error) = build(&f, &theme, &stores[0usize])
+    if later_error != ok || testing.pump(&harness, later_root, time.Instant { nanos: 1500000000i64 }) != ok { os.exit(26i32) }
+    let (later_floated, has_later_floated) = bounds(&harness, &runtime, 30u64)
+    let (later_busy, has_later_busy) = bounds(&harness, &runtime, 94u64)
+    if !has_later_floated || !has_later_busy || !(later_busy.x > busy.x) || !near(later_busy.width, busy.width) { os.exit(28i32) }
     if testing.by_label(&harness, "Dock panel").count != 1usize || testing.by_label(&harness, "Restore panel").count != 1usize || testing.by_text(&harness, "Nothing here").count != 1usize { os.exit(20i32) }
     // The stacked slot: 32 headers, the two open bodies sharing what is left.
     let (top, has_top) = bounds(&harness, &runtime, 51u64)

@@ -6,10 +6,12 @@
 // (§3.7 of the proposal).
 
 use e.mem
+use e.time
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.ui.accessibility
+use e.ui.animation
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
@@ -2012,11 +2014,11 @@ fn panel_tab(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 // `surface-container`, `radius-md`, `elevation-3`, at least 240 x 160, its
 // header 40 with a drag handle leading and a Dock button (`key + 3`, `dock-left`)
 // before Maximise, the title `on-surface` and no focus line. Busy, a 2px
-// `primary` bar runs under the header; with an empty sentence the body is that
-// sentence in `body-small` `on-surface-variant`, 12 in and 8 down. A group in
-// the tree named by the title, busy while busy.
-// ponytail: the busy bar stands still (no indeterminate sweep); moving a floating
-// panel is the caller's (its header is no drag region yet).
+// `primary` bar sweeps under the header (centred and pulsing with reduced motion);
+// with an empty sentence the body is that sentence in `body-small`
+// `on-surface-variant`, 12 in and 8 down. A group in the tree named by the title,
+// busy while busy.
+// ponytail: moving a floating panel is the caller's (its header is no drag region yet).
 fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit, options: DockPanelOptions) -> (widget.Node, err) {
     let floating = options.floating
     var h = t.tokens.sizes.control_sm
@@ -2128,18 +2130,30 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
     }
     var count = 1usize
     if options.busy {
-        // A 40% `primary` segment on a clear track.
-        let (segments, segments_error) = mem.alloc[widget.Node](a, 2usize)
+        // A 40% `primary` segment sweeps across the clear track; reduced motion
+        // keeps it centred and pulses its opacity.
+        let (segments, segments_error) = mem.alloc[widget.Node](a, 3usize)
         if segments_error != ok { ret (zero, TooLarge) }
+        let turn = animation.cycle(t.runtime, time.seconds(2i64))
+        var before = 3.0 * turn
+        var after = 3.0 * (1.0 - turn)
+        var alpha: f32 = 1.0
+        if t.tokens.motion.reduced {
+            before = 1.5
+            after = 1.5
+            alpha = 0.38 + 0.62 * animation.triangle(turn)
+        }
         var busy_bar = style.defaults()
         busy_bar.width = style.Length { Flex: 2.0 }
         busy_bar.height = style.Length { Px: 2.0 }
         busy_bar.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
-        segments[0usize] = widget.box(0u64, busy_bar, zero)
-        segments[1usize] = widget.spacer(0u64, 3.0)
+        busy_bar.opacity = alpha
+        segments[0usize] = widget.spacer(0u64, before)
+        segments[1usize] = widget.box(key + 64u64, busy_bar, zero)
+        segments[2usize] = widget.spacer(0u64, after)
         var track = style.defaults()
         track.height = style.Length { Px: 2.0 }
-        parts[count] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, track, segments[0usize..2usize])
+        parts[count] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, track, segments[0usize..3usize])
         count += 1usize
     }
     parts[count] = content

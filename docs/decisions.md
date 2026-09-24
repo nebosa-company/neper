@@ -21347,3 +21347,14 @@ while existing buttons keep intrinsic width.
 on Windows and Linux.
 
 Dock focus cycling, busy motion and panel dragging remain open.
+
+## D990 — Dock busy indicators use the shared motion clock
+
+A busy dock panel keeps its two-pixel track and moves a 40-percent primary
+segment across it on the shared two-second clock. Reduced motion fixes the
+segment at the centre and pulses its opacity. The segment has a stable internal
+key so its measured movement is testable.
+
+`ui_containers3_v2` holds two distinct clock positions on Windows and Linux.
+
+Dock focus cycling and panel dragging remain open.
