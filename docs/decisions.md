@@ -19528,3 +19528,74 @@ the font panel: subheaders and grouping, recent families, feature chips, rows in
 each family's own face, and the trigger with its popover and sheet. The style
 picker stands at its least 112 wide rather than 160, and the missing-font
 warning is not drawn.
+
+## D962 — Icons, avatars, images, canvases and headings draw their v2 specifications
+
+Five of the seven content specifications in docs/ux/components are now drawn.
+`control.icon_of` draws a glyph from the shared set (`GlyphKind`, which gains
+`person`, `picture` and `alert`) as vector strokes tinted by a colour role,
+`on-surface-variant` by default. The size snaps to `icon-sm` 18, `icon-md` 24 or
+`icon-lg` 36. The glyph sits in the 20/24 live area, stroked 1.75 at 24 and in
+proportion at other sizes, with round caps and joins. Disabled, it is `on-surface`
+at 38%. Named, it is an Image; unnamed, it is left out of the tree. The texture
+`control.icon` now also hides itself when its label is empty.
+
+`control.avatar_of` draws a 24, 32, 40, 56 or 72 disc, or an 8-cornered square for
+a team. A picture is cover-fitted over `surface-container-highest`. Without one,
+the initials stand centred on `primary-`, `secondary-` or `tertiary-container`,
+picked by an FNV-1a hash of the account id (`account_hash`), in the matching
+`on-*-container` role: label-small, label-large, title-medium, title-large and
+headline-medium by size. With neither, the `person` mark (16, 18, 24, 36, 36) is
+drawn in `on-surface-variant` on `surface-container-highest`. Presence is an 8 to
+16 mark at the bottom end, ringed 2 in the ground role: online is a `success`
+disc, away a hollow `warning` ring 2.5 wide, busy an `error` disc with an
+`on-error` bar, offline a hollow `outline` ring 2 wide. The name carries the
+presence word ("Ada Lovelace, online"), and an unnamed avatar is decorative.
+
+`control.framed_image` takes a width and an aspect ratio, so the frame holds its
+space before the texture exists. The frame has `radius-md` 12 corners (8 under 48
+wide, none full-bleed) and clips the picture over `surface-container-highest`.
+Loading shows the ground and reports busy. An error shows the `alert` mark,
+"Couldn't load" in `body-small` and a small Retry text button. Empty shows the
+`picture` mark and "No preview". The mark is 24 (36 from 120 wide) in
+`on-surface-variant`, the message 4 below it and exposed as the node's value. A
+`body-small` caption stands 8 below the frame.
+
+`control.framed_canvas` puts the caller's paint in a `surface-container-lowest`
+frame with a 1px `outline-variant` edge and 12 corners, clipping the paint. The
+frame is sized by the options, at least 48 each way, and inset by their padding.
+Bare, it is the paint alone. Disabled, the paint is at 38% opacity. `control.text`
+now reports headline and title roles as a Heading at levels 1 to 5, named by the
+full value. The old `avatar`, `image`, `canvas` and `icon` keep their forms, and
+ui_content and ui_surface hold them unchanged.
+
+tests/selfhost/fixtures/link/ui_content_v2 checks these on pixels, bounds and the
+tree:
+- Icons: the 24, 18 and 36 squares, the alert ring in `error` and at 38%
+  `on-surface`, and the hollow inside.
+- Avatars: the 40 disc on the hashed `secondary-container` with its `success`
+  mark ringed in the page and named with "online"; the 56 square's corner on
+  `surface-container-highest` and its busy disc and bar; the 32 picture with its
+  `warning` ring.
+- Images: the 160 x 90 frame clipping the picture to 12 corners with the caption
+  8 below; the failed square's ground, its message and a Retry that fires; the
+  8-cornered 40 square; the busy loading frame.
+- Canvases: the 200 x 100 frame's edge, padding and paint, and the bare disabled
+  one at 48 and 38%.
+- The tree: the unnamed icon and avatar are left out, and the one title-medium
+  text is a level 4 Heading.
+
+All 74 ui_* fixtures pass on Windows and Linux, and the Windows example builds.
+
+RichText and SelectableText stay open. RichText still lays spans on one line: it
+has no word wrap across spans, baseline alignment, span kinds (code, key,
+mention), link underline or link states. SelectableText still paints the editor's
+single selection colour and stays a tab stop. Still open for the five delivered:
+- Icon: the filled forms, RTL mirroring and the rest of the 49-icon set.
+- Avatar: the pressable form, groups and the photo cross-fade; 32's initials use
+  label-large 14, because the ramp has no 13.
+- Image: the pressable form and the fade-in.
+- Canvas: the interactive form, the loading, empty and error content, the chart
+  overlays and series tokens.
+- Text: middle truncation, host text scaling, the system-font fallback and the
+  loading skeleton.

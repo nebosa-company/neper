@@ -70,9 +70,30 @@ fn colored_text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, opt
 }
 
 // A text: shaped, wrapped and aligned by its options, in the role's style.
+// v2 (D962, docs/ux/components/Text): a headline or title role also reports a
+// Heading with its level (headline-large 1, headline-medium and -small 2,
+// title-large 3, title-medium 4, title-small 5), named by the full value.
 fn text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: TextOptions) -> (widget.Node, err) {
-    let (node, node_error) = text_node(a, key, value, t, options)
-    ret (node, node_error)
+    var depth = 0u8
+    if options.role == .HeadlineLarge { depth = 1u8 }
+    if options.role == .HeadlineMedium || options.role == .HeadlineSmall { depth = 2u8 }
+    if options.role == .TitleLarge { depth = 3u8 }
+    if options.role == .TitleMedium { depth = 4u8 }
+    if options.role == .TitleSmall { depth = 5u8 }
+    if depth == 0u8 {
+        let (node, node_error) = text_node(a, key, value, t, options)
+        ret (node, node_error)
+    }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    let (words, words_error) = text_node(a, 0u64, value, t, options)
+    if words_error != ok { ret (zero, words_error) }
+    body[0usize] = words
+    var sem: widget.Semantics = zero
+    sem.role = 25u8
+    sem.label = value
+    sem.level = depth
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
 }
 
 // A selectable text: a read-only editor over the caller's buffer, so the caret,
@@ -139,10 +160,12 @@ fn sized_style(width: f32, height: f32) -> style.Style {
     ret s
 }
 
-// An icon: a square image of `size`, contained, with a semantic label.
+// An icon: a square image of `size`, contained, with a semantic label; an empty
+// label leaves it out of the tree as a decoration (D962). `icon_of` draws the
+// v2 icon, tinted, from the shared set.
 // ponytail: an icon is not tinted; a tint waits on the renderer's image brush.
 fn icon(a: *mem.Arena, key: widget.Key, texture: scene.TextureId, size: f32, label: str) -> (widget.Node, err) {
-    let (node, node_error) = labelled(a, key, ROLE_IMAGE, label, widget.image(0u64, widget.Image { texture: texture, fit: .Contain }, sized_style(size, size)))
+    let (node, node_error) = image(a, key, texture, size, size, .Contain, label)
     ret (node, node_error)
 }
 
@@ -164,6 +187,357 @@ fn canvas(a: *mem.Arena, key: widget.Key, custom: widget.Custom, label: str) -> 
     var none: []const widget.Node = zero
     let (node, node_error) = labelled(a, key, ROLE_IMAGE, label, widget.Node { key: 0u64, kind: widget.Kind { Custom: custom }, style: style.defaults(), children: none })
     ret (node, node_error)
+}
+
+// ------------------------------------------------ content, v2 (D962, P5-07)
+
+// An icon's look: its size (snapped to `icon-sm` 18, `icon-md` 24 or `icon-lg`
+// 36), its colour role, whether it is enabled, and its name (empty: decorative).
+type IconOptions = struct { size: f32, color: style.ColorRole, enabled: bool, label: str }
+
+fn icon_options() -> IconOptions {
+    ret IconOptions { size: 24.0, color: .OnSurfaceVariant, enabled: true, label: "" }
+}
+
+// The token size nearest a requested icon size.
+fn icon_token_size(t: *const Theme, size: f32) -> f32 {
+    if size < 21.0 { ret t.tokens.sizes.icon_sm }
+    if size < 30.0 { ret t.tokens.sizes.icon_md }
+    ret t.tokens.sizes.icon_lg
+}
+
+// A drawn glyph in its square: the live area 2/24 in on every side, stroked 1.75
+// at 24 and in proportion at other sizes, round caps and joins.
+fn icon_square(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32) -> (widget.Node, err) {
+    let inset = size * 2.0 / 24.0
+    let (marks, marks_error) = mem.alloc[widget.Node](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    let (mark, mark_error) = stroked_glyph(a, color, kind, size - 2.0 * inset, size * 1.75 / 24.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    marks[0usize] = mark
+    ret (widget.padded(0u64, inset, inset, inset, inset, sized_style(size, size), marks[0usize..1usize]), ok)
+}
+
+// v2 (D962, docs/ux/components/Icon): a glyph of the shared set as vector strokes
+// tinted by a colour role (`on-surface-variant` by default), at a token size;
+// disabled it is `on-surface` at 38%. Named, it is an Image; unnamed, it is left
+// out of the tree as a decoration.
+// ponytail: outline forms only; the filled "on" forms and RTL mirroring wait on
+// the full 49-icon set.
+fn icon_of(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, options: IconOptions) -> (widget.Node, err) {
+    var tint = style.color(t.tokens, options.color)
+    if !options.enabled { tint = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    let (square, square_error) = icon_square(a, tint, kind, icon_token_size(t, options.size))
+    if square_error != ok { ret (zero, square_error) }
+    body[0usize] = square
+    var sem: widget.Semantics = zero
+    sem.role = ROLE_IMAGE
+    sem.label = options.label
+    sem.hidden = options.label.len == 0usize
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// What an image frame shows: the picture, its loading ground, or the error or
+// empty message.
+type ImageStatus = enum u8 { Loaded, Loading, Failed, Empty }
+// An image's frame: its width and aspect ratio (width over height), the fit of
+// the picture, whether it meets its container's edge square, its status, its alt
+// text (empty: decorative), a caption, and the Retry action an error offers (none
+// when unset).
+type ImageOptions = struct { width: f32, aspect: f32, fit: widget.Fit, full_bleed: bool, status: ImageStatus, label: str, caption: str, retry: *const widget.Submit }
+
+fn image_options() -> ImageOptions {
+    var out: ImageOptions = zero
+    out.width = 160.0
+    out.aspect = 16.0 / 9.0
+    out.fit = .Cover
+    out.status = .Loaded
+    ret out
+}
+
+// v2 (D962, docs/ux/components/Image): a frame `width` wide and `width / aspect`
+// tall, `radius-md` 12 (`radius-sm` 8 under 48 wide, none full-bleed), clipping
+// the picture over the `surface-container-highest` ground, so the space is held
+// before the texture exists. Loading shows the ground; an error shows the `alert`
+// mark, "Couldn't load" in `body-small` and a small Retry text button; empty
+// shows the `picture` mark and "No preview" -- the mark `icon-md` 24 (`icon-lg` 36
+// from 120 wide) in `on-surface-variant`, the message 4 below it. A caption in
+// `body-small` `on-surface-variant` stands 8 below the frame.
+// ponytail: no pressable form (state layers, focus ring, Button role) and no fade.
+fn framed_image(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, options: ImageOptions) -> (widget.Node, err) {
+    var ratio = options.aspect
+    if !(ratio > 0.0) { ratio = 1.0 }
+    let width = options.width
+    let height = width / ratio
+    var frame = sized_style(width, height)
+    frame.radius = t.tokens.radii.md
+    if width < 48.0 { frame.radius = t.tokens.radii.sm }
+    if options.full_bleed { frame.radius = 0.0 }
+    frame.overflow = .Clip
+    frame.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHighest) }
+    let (inside, inside_error) = mem.alloc[widget.Node](a, 3usize)
+    if inside_error != ok { ret (zero, TooLarge) }
+    var inside_count = 0usize
+    var message: str = ""
+    if options.status == .Loaded {
+        inside[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: options.fit }, sized_style(width, height))
+        inside_count = 1usize
+    }
+    if options.status == .Failed || options.status == .Empty {
+        var kind: GlyphKind = .Picture
+        message = "No preview"
+        if options.status == .Failed {
+            kind = .Alert
+            message = "Couldn't load"
+        }
+        var mark: f32 = t.tokens.sizes.icon_md
+        if width >= 120.0 { mark = t.tokens.sizes.icon_lg }
+        let muted = style.color(t.tokens, .OnSurfaceVariant)
+        let (square, square_error) = icon_square(a, muted, kind, mark)
+        if square_error != ok { ret (zero, square_error) }
+        inside[0usize] = square
+        var said = text_options()
+        said.role = .BodySmall
+        said.align = .Center
+        said.max_lines = 2u32
+        let (words, words_error) = colored_text(a, 0u64, message, t, said, muted)
+        if words_error != ok { ret (zero, words_error) }
+        inside[1usize] = words
+        inside_count = 2usize
+        if options.status == .Failed && mem.address_of(options.retry) != 0usize {
+            var plain = button_options()
+            plain.variant = .Plain
+            let (again, again_error) = button(a, 0u64, t, "Retry", options.retry, plain)
+            if again_error != ok { ret (zero, again_error) }
+            inside[2usize] = again
+            inside_count = 3usize
+        }
+    }
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 3usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    if options.status == .Loaded {
+        framed[1usize] = widget.box(0u64, frame, inside[0usize..inside_count])
+    } else {
+        framed[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: t.tokens.spacing.xs }, frame, inside[0usize..inside_count])
+    }
+    framed[0usize] = framed[1usize]
+    if options.caption.len != 0usize {
+        var caption_look = text_options()
+        caption_look.role = .BodySmall
+        let (under, under_error) = colored_text(a, 0u64, options.caption, t, caption_look, style.color(t.tokens, .OnSurfaceVariant))
+        if under_error != ok { ret (zero, under_error) }
+        framed[2usize] = under
+        framed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.sm }, style.defaults(), framed[1usize..3usize])
+    }
+    var sem: widget.Semantics = zero
+    sem.role = ROLE_IMAGE
+    sem.label = options.label
+    sem.value = message
+    sem.hidden = options.label.len == 0usize && message.len == 0usize
+    if options.status == .Loading { sem.states = accessibility.STATE_BUSY }
+    ret (widget.semantics(key, sem, style.defaults(), framed[0usize..1usize]), ok)
+}
+
+// A canvas's frame: its size (at least 48 each way), whether it is bare (no frame,
+// no radius: a card's media), the padding the paint is inset by, whether it is
+// enabled, and the takeaway it is named by.
+type CanvasOptions = struct { width: f32, height: f32, bare: bool, padding: f32, enabled: bool, label: str }
+
+fn canvas_options() -> CanvasOptions {
+    ret CanvasOptions { width: 240.0, height: 120.0, bare: false, padding: 0.0, enabled: true, label: "" }
+}
+
+// v2 (D962, docs/ux/components/Canvas): the caller's paint in a frame of
+// `surface-container-lowest` with a 1px `outline-variant` edge and `radius-md` 12,
+// clipping the paint, sized by the options (48 x 48 at least) and inset by their
+// padding (`space-4` 16 for a chart); bare, the paint alone. Disabled, the paint
+// is at 38% opacity. It is an Image named by its takeaway.
+// ponytail: static only; the interactive form (focus, keyboard, point children),
+// the loading, empty and error content and the chart overlays and series tokens
+// are not drawn.
+fn framed_canvas(a: *mem.Arena, key: widget.Key, t: *const Theme, custom: widget.Custom, options: CanvasOptions) -> (widget.Node, err) {
+    var frame = sized_style(max_of(options.width, 48.0), max_of(options.height, 48.0))
+    if !options.bare {
+        frame.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+        frame.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+        frame.radius = t.tokens.radii.md
+    }
+    frame.overflow = .Clip
+    let pad = style.Length { Px: options.padding }
+    frame.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    var paint_style = style.defaults()
+    paint_style.width = style.Length { Percent: 100.0 }
+    paint_style.height = style.Length { Percent: 100.0 }
+    if !options.enabled { paint_style.opacity = t.tokens.states.disabled_content }
+    var none: []const widget.Node = zero
+    let (inside, inside_error) = mem.alloc[widget.Node](a, 2usize)
+    if inside_error != ok { ret (zero, TooLarge) }
+    inside[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: custom }, style: paint_style, children: none }
+    inside[1usize] = widget.box(0u64, frame, inside[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = ROLE_IMAGE
+    sem.label = options.label
+    if !options.enabled { sem.states = accessibility.STATE_DISABLED }
+    ret (widget.semantics(key, sem, style.defaults(), inside[1usize..2usize]), ok)
+}
+
+// An avatar's presence mark.
+type Presence = enum u8 { None, Online, Away, Busy, Offline }
+// An avatar: its picture (a zero texture for none), the initials shown without
+// one, the account id whose stable hash picks the initials' container, its size
+// (snapped to 24, 32, 40, 56 or 72), whether it is the square team form, its
+// presence, the colour it sits on (for the presence ring), and the person's name
+// (empty: decorative, beside the name).
+type AvatarOptions = struct { initials: str, account: str, size: f32, square: bool, presence: Presence, ground: style.ColorRole, label: str }
+
+fn avatar_options() -> AvatarOptions {
+    ret AvatarOptions { initials: "", account: "", size: 40.0, square: false, presence: .None, ground: .Background, label: "" }
+}
+
+// The avatar size nearest a requested one.
+fn avatar_size(size: f32) -> f32 {
+    if size < 28.0 { ret 24.0 }
+    if size < 36.0 { ret 32.0 }
+    if size < 48.0 { ret 40.0 }
+    if size < 64.0 { ret 56.0 }
+    ret 72.0
+}
+
+// A stable hash of an account id (FNV-1a), so its colour never changes per render.
+fn account_hash(id: str) -> u32 {
+    var h = 2166136261u32
+    var i = 0usize
+    while i < id.len {
+        h = (h ^ u32(id[i])) *% 16777619u32
+        i += 1usize
+    }
+    ret h
+}
+
+// v2 (D962, docs/ux/components/Avatar): a disc (`radius-full`, or `radius-sm` 8
+// square for a team) of 24, 32, 40, 56 or 72. With a picture it is cover-fitted
+// over `surface-container-highest`; without one the initials stand centred on
+// `primary-`, `secondary-` or `tertiary-container` by the account's stable hash in
+// the matching `on-*-container`, in `label-small` at 24, `label-large` at 32,
+// `title-medium` at 40, `title-large` at 56 and `headline-medium` at 72; with
+// neither, the `person` mark (16, 18, 24, 36, 36) in `on-surface-variant` on
+// `surface-container-highest`. Presence is a 8, 10, 12, 14 or 16 mark at the
+// bottom end, ringed 2 in the ground: online a `success` disc, away a hollow
+// `warning` ring 2.5 wide, busy an `error` disc with an `on-error` bar, offline a
+// hollow `outline` ring 2 wide. The name carries the presence ("Ada, online").
+// ponytail: 32's initials are label-large 14 (the ramp has no 13); no pressable
+// form, no group, no cross-fade from initials to the photo.
+fn avatar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.TextureId, options: AvatarOptions) -> (widget.Node, err) {
+    let size = avatar_size(options.size)
+    let pictured = texture.slot != 0u32 || texture.generation != 0u32
+    var disc = sized_style(size, size)
+    disc.radius = size * 0.5
+    if options.square { disc.radius = t.tokens.radii.sm }
+    disc.overflow = .Clip
+    var ground: style.ColorRole = .SurfaceContainerHighest
+    var ink: style.ColorRole = .OnSurfaceVariant
+    let (content, content_error) = mem.alloc[widget.Node](a, 2usize)
+    if content_error != ok { ret (zero, TooLarge) }
+    if pictured {
+        content[0usize] = widget.image(0u64, widget.Image { texture: texture, fit: .Cover }, sized_style(size, size))
+    } else {
+        if options.initials.len != 0usize {
+            let pick = account_hash(options.account) % 3u32
+            ground = .PrimaryContainer
+            ink = .OnPrimaryContainer
+            if pick == 1u32 {
+                ground = .SecondaryContainer
+                ink = .OnSecondaryContainer
+            }
+            if pick == 2u32 {
+                ground = .TertiaryContainer
+                ink = .OnTertiaryContainer
+            }
+            var said = text_options()
+            said.wrap = .None
+            said.role = .LabelSmall
+            if size > 24.0 { said.role = .LabelLarge }
+            if size > 32.0 { said.role = .TitleMedium }
+            if size > 40.0 { said.role = .TitleLarge }
+            if size > 56.0 { said.role = .HeadlineMedium }
+            let (words, words_error) = colored_text(a, 0u64, options.initials, t, said, style.color(t.tokens, ink))
+            if words_error != ok { ret (zero, words_error) }
+            content[1usize] = words
+        } else {
+            var mark: f32 = 16.0
+            if size > 24.0 { mark = 18.0 }
+            if size > 32.0 { mark = 24.0 }
+            if size > 40.0 { mark = 36.0 }
+            let (square, square_error) = icon_square(a, style.color(t.tokens, ink), .Person, mark)
+            if square_error != ok { ret (zero, square_error) }
+            content[1usize] = square
+        }
+        content[0usize] = widget.aligned(0u64, .Center, .Center, sized_style(size, size), content[1usize..2usize])
+    }
+    disc.background = paint.Brush { Solid: style.color(t.tokens, ground) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.box(0u64, disc, content[0usize..1usize])
+    var count = 1usize
+    var word: str = ""
+    if options.presence != .None {
+        var mark: f32 = 8.0
+        if size > 24.0 { mark = 10.0 }
+        if size > 32.0 { mark = 12.0 }
+        if size > 40.0 { mark = 14.0 }
+        if size > 56.0 { mark = 16.0 }
+        let ring_color = style.color(t.tokens, options.ground)
+        var dot = sized_style(mark, mark)
+        dot.radius = mark * 0.5
+        dot.background = paint.Brush { Solid: ring_color }
+        var bars: []const widget.Node = zero
+        if options.presence == .Online {
+            word = "online"
+            dot.background = paint.Brush { Solid: style.color(t.tokens, .Success) }
+        }
+        if options.presence == .Away {
+            word = "away"
+            dot.border = style.Border { width: 2.5, color: style.color(t.tokens, .Warning) }
+        }
+        if options.presence == .Offline {
+            word = "offline"
+            dot.border = style.Border { width: 2.0, color: style.color(t.tokens, .Outline) }
+        }
+        if options.presence == .Busy {
+            word = "do not disturb"
+            dot.background = paint.Brush { Solid: style.color(t.tokens, .Error) }
+            var bar = sized_style(mark * 0.5, max_of(2.0, mark * 0.2))
+            bar.background = paint.Brush { Solid: style.color(t.tokens, .OnError) }
+            layers[3usize] = widget.box(0u64, bar, zero)
+            bars = layers[3usize..4usize]
+        }
+        let (marks, marks_error) = mem.alloc[widget.Node](a, 2usize)
+        if marks_error != ok { ret (zero, TooLarge) }
+        marks[0usize] = widget.aligned(0u64, .Center, .Center, dot, bars)
+        var ring = sized_style(mark + 4.0, mark + 4.0)
+        ring.radius = (mark + 4.0) * 0.5
+        ring.background = paint.Brush { Solid: ring_color }
+        marks[1usize] = widget.padded(0u64, 2.0, 2.0, 2.0, 2.0, ring, marks[0usize..1usize])
+        layers[1usize] = widget.positioned(0u64, size - mark - 4.0, size - mark - 4.0, style.defaults(), marks[1usize..2usize])
+        count = 2usize
+    }
+    layers[2usize] = widget.stack(0u64, sized_style(size, size), layers[0usize..count])
+    var name = options.label
+    if word.len != 0usize && name.len != 0usize {
+        let (named, named_error) = mem.alloc[u8](a, name.len + 2usize + word.len)
+        if named_error != ok { ret (zero, TooLarge) }
+        var at = copy_text(named, name)
+        at += copy_text(named[at..named.len], ", ")
+        at += copy_text(named[at..named.len], word)
+        name = named[0usize..at]
+    }
+    var sem: widget.Semantics = zero
+    sem.role = ROLE_IMAGE
+    sem.label = name
+    sem.hidden = options.label.len == 0usize
+    ret (widget.semantics(key, sem, style.defaults(), layers[2usize..3usize]), ok)
 }
 
 // ------------------------------------------------------- surfaces (D814, P1-02)
@@ -648,8 +1022,22 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // and (D956) the chevrons a menu's opener points with; (D959) the chevrons a
 // calendar turns its months with and the calendar a date field ends in; (D960)
 // the clock a time or duration field ends in.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search }
-type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena }
+// (D962) The person, picture and alert marks an avatar, an image and a status
+// fall back to, and a stroke width per glyph so an icon strokes 1.75 at 24.
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert }
+type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32 }
+
+// An ellipse of four quarter arcs about a centre.
+fn oval(b: *geometry.PathBuilder, cx: f32, cy: f32, rx: f32, ry: f32) -> err {
+    let kx = rx * 0.5523
+    let ky = ry * 0.5523
+    try geometry.move_to(b, geometry.Point { x: cx, y: cy - ry })
+    try geometry.cubic_to(b, geometry.Point { x: cx + kx, y: cy - ry }, geometry.Point { x: cx + rx, y: cy - ky }, geometry.Point { x: cx + rx, y: cy })
+    try geometry.cubic_to(b, geometry.Point { x: cx + rx, y: cy + ky }, geometry.Point { x: cx + kx, y: cy + ry }, geometry.Point { x: cx, y: cy + ry })
+    try geometry.cubic_to(b, geometry.Point { x: cx - kx, y: cy + ry }, geometry.Point { x: cx - rx, y: cy + ky }, geometry.Point { x: cx - rx, y: cy })
+    try geometry.cubic_to(b, geometry.Point { x: cx - rx, y: cy - ky }, geometry.Point { x: cx - kx, y: cy - ry }, geometry.Point { x: cx, y: cy - ry })
+    ret geometry.close_path(b)
+}
 
 fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*Glyph](ctx)
@@ -738,19 +1126,51 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.move_to(&builder, geometry.Point { x: cx + rx * 0.72, y: cy + ry * 0.72 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.84, y: y + h * 0.84 })
     }
+    if g.kind == .Person {
+        // A head over the curve of the shoulders.
+        try oval(&builder, x + w * 0.5, y + h * 0.33, w * 0.17, h * 0.17)
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.18, y: y + h * 0.86 })
+        try geometry.cubic_to(&builder, geometry.Point { x: x + w * 0.18, y: y + h * 0.58 }, geometry.Point { x: x + w * 0.82, y: y + h * 0.58 }, geometry.Point { x: x + w * 0.82, y: y + h * 0.86 })
+    }
+    if g.kind == .Picture {
+        // A frame with a range of hills across its foot.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.2 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.2 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.8 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.8 })
+        try geometry.close_path(&builder)
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.15, y: y + h * 0.7 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.4, y: y + h * 0.46 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.6, y: y + h * 0.64 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.7, y: y + h * 0.56 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.85, y: y + h * 0.68 })
+    }
+    if g.kind == .Alert {
+        // A ring round an exclamation mark.
+        try oval(&builder, x + w * 0.5, y + h * 0.5, w * 0.4, h * 0.4)
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.5, y: y + h * 0.3 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.5, y: y + h * 0.54 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.5, y: y + h * 0.69 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.5, y: y + h * 0.70 })
+    }
     if g.kind == .Cross {
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.28, y: y + h * 0.28 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.72, y: y + h * 0.72 })
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.72, y: y + h * 0.28 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.28, y: y + h * 0.72 })
     }
-    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&builder), brush: paint.Brush { Solid: g.color }, stroke: paint.Stroke { width: 2.0, cap: .Round, join: .Round, miter_limit: 4.0 } } })
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&builder), brush: paint.Brush { Solid: g.color }, stroke: paint.Stroke { width: g.stroke, cap: .Round, join: .Round, miter_limit: 4.0 } } })
 }
 
 fn mark_glyph(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32) -> (widget.Node, err) {
+    let (node, node_error) = stroked_glyph(a, color, kind, size, 2.0)
+    ret (node, node_error)
+}
+
+fn stroked_glyph(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32, stroke: f32) -> (widget.Node, err) {
     let (glyphs, glyphs_error) = mem.alloc[Glyph](a, 1usize)
     if glyphs_error != ok { ret (zero, TooLarge) }
-    glyphs[0usize] = Glyph { color: color, kind: kind, arena: a }
+    glyphs[0usize] = Glyph { color: color, kind: kind, arena: a, stroke: stroke }
     var none: []const widget.Node = zero
     ret (widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&glyphs[0usize]), measure: mark_measure, paint: glyph_paint, state: widget.bytes_of[Glyph](&glyphs[0usize]) } }, style: sized_style(size, size), children: none }, ok)
 }

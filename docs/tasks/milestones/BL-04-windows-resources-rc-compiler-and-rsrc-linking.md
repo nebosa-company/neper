@@ -24,7 +24,7 @@
 - `BITMAP`: `lib/e/os.windows.e`×1‡
 - `RCDATA`: `lib/e/fmt/html.e`×3†
 - `LANGUAGE`: `benchmarks/llm_edit/hard_context.py`×5
-- `.ico`: `lib/e/ui/control.e`×22‡, `lib/e/ui/overlay.e`×4†, `lib/e/fmt/brotli.e`×2‡, `lib/e/ui/navigation.e`×2†, `lib/e/os/shell.windows.e`×1‡, `lib/e/ui/style.e`×1
+- `.ico`: `lib/e/ui/control.e`×27‡, `lib/e/ui/overlay.e`×4†, `lib/e/fmt/brotli.e`×2‡, `lib/e/ui/navigation.e`×2†, `lib/e/os/shell.windows.e`×1‡, `lib/e/ui/style.e`×1
 - `.cur`: `src/parse.e`×201†, `src/tool.e`×43‡, `lib/e/ui/undo.e`×32, `src/lower.e`×30‡, `src/nir.e`×25†, `lib/e/gfx/scene.e`×18‡, `src/main.e`×10‡, `lib/e/fmt/lzw.e`×6
 - nearest existing implementation: `src/link_pe.e`, `src/object_coff.e`, `src/main.e`‡ († over 40 KB, ‡ over 120 KB — read by region)
 
