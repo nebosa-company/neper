@@ -21608,3 +21608,17 @@ without a menu-specific control API.
 UI visual check.
 
 Compact touch submenu replacement remains open.
+
+## D1009 — Hostile format edges fail at their shared parsers
+
+TAR applies one portable path rule to entry names and link targets: slash and
+backslash roots, parent segments and drive-qualified segments are invalid.
+CBOR's public `skip` shares the tree decoder's 128-container ceiling instead of
+recursing until the process stack fails. JWT security-member lookup refuses
+escaped member names and duplicate requested claims, leaving one spelling and
+one value for algorithm and claims policy. Model API endpoints require HTTPS,
+with plain HTTP reserved for exact loopback hosts.
+
+The `fmt_tar`, `fmt_cbor` and `fmt_jwt` fixtures hold the parser boundaries on
+Windows and Linux. `test_llm_edit_benchmark` holds the endpoint policy for the
+Jev benchmark and Bonsai driver.

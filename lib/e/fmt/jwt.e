@@ -128,28 +128,38 @@ fn skip_value(s: str, from: usize, depth: usize) -> (usize, err) {
 }
 
 // The raw text of the top-level member `name` of the object `object` (a string
-// keeps its quotes), and whether it was present.
-// ponytail: keys and string values are compared as written, escapes unresolved;
-// unescape both sides if a claim ever carries `\uXXXX` or `\"`.
+// keeps its quotes), and whether it was present. Escaped member names are refused
+// rather than given a second spelling, and a requested member must occur once.
 fn member(object: str, name: str) -> (str, bool, err) {
     var i = skip_space(object, 0usize)
     if i >= object.len || object[i] != 123u8 { ret ("", false, Malformed) }
     i = skip_space(object, i + 1usize)
     if i < object.len && object[i] == 125u8 { ret ("", false, ok) }
+    var found = false
+    var found_value: str = ""
     while true {
         if i >= object.len || object[i] != 34u8 { ret ("", false, Malformed) }
         let (key_end, key_error) = skip_string(object, i)
         if key_error != ok { ret ("", false, key_error) }
         let key = object[i + 1usize..key_end - 1usize]
+        var key_at = 0usize
+        while key_at < key.len {
+            if key[key_at] == 92u8 { ret ("", false, Malformed) }
+            key_at += 1usize
+        }
         i = skip_space(object, key_end)
         if i >= object.len || object[i] != 58u8 { ret ("", false, Malformed) }
         i = skip_space(object, i + 1usize)
         let (value_end, value_error) = skip_value(object, i, 0usize)
         if value_error != ok { ret ("", false, value_error) }
-        if str.eq(key, name) { ret (object[i..value_end], true, ok) }
+        if str.eq(key, name) {
+            if found { ret ("", false, Malformed) }
+            found = true
+            found_value = object[i..value_end]
+        }
         i = skip_space(object, value_end)
         if i >= object.len { ret ("", false, Malformed) }
-        if object[i] == 125u8 { ret ("", false, ok) }
+        if object[i] == 125u8 { ret (found_value, found, ok) }
         if object[i] != 44u8 { ret ("", false, Malformed) }
         i = skip_space(object, i + 1usize)
     }

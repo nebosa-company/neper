@@ -1,6 +1,6 @@
 // `e.fmt.tar`: a ustar archive with a file, a directory, a large file read in part and
 // skipped, and a symlink; a PAX archive with a path past the ustar field; the entry and
-// byte limits; and a `..` name rejected. The archives are what Python's tarfile writes,
+// byte limits; and unsafe POSIX/Windows entry and link names rejected. The archives are what Python's tarfile writes,
 // trimmed to two end blocks (generate.py beside this file). Every check has its own exit
 // code.
 use e.os
@@ -97,6 +97,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var k = k0
     let (_, _, invalid) = tar.next(&k)
     if invalid != tar.Invalid { os.exit(16) }
+    if tar.name_allowed("../escape") || tar.name_allowed("..\\escape") { os.exit(17) }
+    if tar.name_allowed("/absolute") || tar.name_allowed("\\absolute") { os.exit(18) }
+    if tar.name_allowed("C:\\escape") || tar.name_allowed("dir/C:\\escape") { os.exit(19) }
+    if !tar.name_allowed("dir/file") || !tar.name_allowed("dir\\file") { os.exit(20) }
     os.exit(0)
     ret ok
 }

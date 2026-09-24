@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import time
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 
@@ -16,6 +17,20 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TASKS = Path(__file__).with_name("tasks.json")
 DEFAULT_API_URL = "https://openrouter.ai/api/alpha/decisions"
 DEFAULT_MODEL = "~typesafe/jev-latest"
+
+
+def api_url_allowed(url: str) -> bool:
+    """Credentials go over HTTPS, or plain HTTP only to an exact loopback host."""
+    try:
+        parsed = urlsplit(url)
+        parsed.port
+    except ValueError:
+        return False
+    if (not parsed.hostname or parsed.username is not None or parsed.password is not None
+            or parsed.query or parsed.fragment):
+        return False
+    return parsed.scheme == "https" or (
+        parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"})
 
 _runner_spec = importlib.util.spec_from_file_location(
     "llm_edit_run", Path(__file__).with_name("run.py"))
@@ -284,6 +299,8 @@ def main() -> int:
             parser.error(str(error))
         router = None
     else:
+        if not api_url_allowed(args.jev_api_url):
+            parser.error("--jev-api-url must use HTTPS, or HTTP on localhost/loopback")
         api_key = openrouter_api_key()
         if not api_key:
             parser.error("set OPENROUTER_API_KEY or pass --replay-report")

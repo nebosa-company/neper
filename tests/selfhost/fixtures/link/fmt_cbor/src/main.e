@@ -297,6 +297,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if cbor.skip(&s) != ok || s.at != 7usize { os.exit(49i32) }
     if cbor.skip(&s) != ok || cbor.remaining(&s) != 0usize { os.exit(50i32) }
 
+    // The public skip path accepts 128 nested containers and refuses the next one.
+    var deep: [130]u8 = zero
+    var depth = 0usize
+    while depth < 128usize {
+        deep[depth] = 129u8
+        depth += 1usize
+    }
+    var depth_ok = cbor.decoder(deep[..129usize])
+    if cbor.skip(&depth_ok) != ok || cbor.remaining(&depth_ok) != 0usize { os.exit(55i32) }
+    deep[128] = 129u8
+    var depth_bad = cbor.decoder(deep[0..])
+    if cbor.skip(&depth_bad) != cbor.Invalid { os.exit(56i32) }
+
     // 5: refusals.
     let short_len = unhex("1a0001", raw[..])
     var short = cbor.decoder(raw[..short_len])

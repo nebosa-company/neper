@@ -123,6 +123,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if jwt.claims_check(claims2, 1700000300i64, "", "svc-b", 0i64) != jwt.WrongAudience { os.exit(5i32) }
     if jwt.claims_check("{\"exp\":\"soon\"}", 0i64, "", "", 0i64) != jwt.Malformed { os.exit(5i32) }
     if jwt.claims_check("{\"sub\":1", 0i64, "", "", 0i64) != jwt.Malformed { os.exit(5i32) }
+    if jwt.claims_check("{\"\\u0065xp\":0}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(5i32) }
+    if jwt.claims_check("{\"exp\":1700000600,\"exp\":0}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(5i32) }
+    let (_, duplicate_alg) = jwt.algorithm("{\"alg\":\"HS256\",\"alg\":\"none\"}")
+    if duplicate_alg != jwt.Malformed { os.exit(5i32) }
 
     // 6: signing reproduces PyJWT byte for byte.
     let (n256, sign_error) = jwt.sign_hs256(hs_header(.HS256), payload_text(), hs_key(), buffer[0..])

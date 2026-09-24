@@ -1,8 +1,9 @@
 // A tar reader: POSIX ustar headers, with the PAX extended records `path`, `linkpath`
 // and `size` applied to the entry that follows them. Each entry's content is an
 // `io.Reader` limited to its size; the reader must be drained or `skip`ped before
-// `next`, which also steps over the padding to the next 512-byte block. Absolute names
-// and `..` segments are `Invalid`; every entry type but a file, a directory and the
+// `next`, which also steps over the padding to the next 512-byte block. Absolute names,
+// Windows paths and `..` segments are `Invalid` for entries and links; every entry type
+// but a file, a directory and the
 // two links is `Unsupported`; `entry_limit` and `byte_limit` bound what a hostile
 // archive can make the reader do.
 
@@ -111,11 +112,12 @@ fn drain(s: *State, count: u64) -> err {
 
 fn name_allowed(name: str) -> bool {
     if name.len == 0usize { ret true }
-    if name[0] == 47u8 { ret false }
+    if name[0] == 47u8 || name[0] == 92u8 { ret false }
     var at = 0usize
     while at <= name.len {
         var end = at
-        while end < name.len && name[end] != 47u8 { end += 1usize }
+        while end < name.len && name[end] != 47u8 && name[end] != 92u8 { end += 1usize }
+        if end - at > 1usize && name[at + 1usize] == 58u8 { ret false }
         if end - at == 2usize && name[at] == 46u8 && name[at + 1usize] == 46u8 { ret false }
         at = end + 1usize
     }
@@ -283,6 +285,7 @@ fn next(r: *Reader) -> (Entry, bool, err) {
             link = copied_link
             if s.pax_link.len > 0usize { link = s.pax_link }
             if !name_allowed(name) { ret (zero, false, Invalid) }
+            if (e.kind == 49u8 || e.kind == 50u8) && !name_allowed(link) { ret (zero, false, Invalid) }
             e.name = name
             e.link = link
             e.size = size

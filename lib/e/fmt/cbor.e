@@ -361,10 +361,9 @@ fn decode_f64(d: *Decoder) -> (f64, err) {
     ret (0.0f64, Mismatch)
 }
 
-// Past one whole item, nested or indefinite, without interpreting it.
-// ponytail: recursive on nesting depth with no cap; a hostile input nested a few thousand deep
-// overflows the stack. Count depth and refuse past a limit when untrusted input reaches this.
-fn skip(d: *Decoder) -> err {
+// Past one whole item, nested or indefinite, without interpreting it. The same 128-level
+// ceiling as the tree decoder keeps hostile nesting off the process stack.
+fn skip_depth(d: *Decoder, depth: u16) -> err {
     let (item, head_error) = decode_head(d)
     if head_error != ok { ret head_error }
     if item.major == MAJOR_BYTES || item.major == MAJOR_TEXT {
@@ -384,8 +383,9 @@ fn skip(d: *Decoder) -> err {
         ret ok
     }
     if item.major == MAJOR_ARRAY || item.major == MAJOR_MAP {
+        if depth == 0u16 { ret Invalid }
         if item.indefinite {
-            while !at_break(d) { try skip(d) }
+            while !at_break(d) { try skip_depth(d, depth - 1u16) }
             d.at += 1usize
             ret ok
         }
@@ -393,14 +393,19 @@ fn skip(d: *Decoder) -> err {
         if item.major == MAJOR_MAP { count = count * 2u64 }
         var at = 0u64
         while at < count {
-            try skip(d)
+            try skip_depth(d, depth - 1u16)
             at += 1u64
         }
         ret ok
     }
-    if item.major == MAJOR_TAG { ret skip(d) }
+    if item.major == MAJOR_TAG {
+        if depth == 0u16 { ret Invalid }
+        ret skip_depth(d, depth - 1u16)
+    }
     ret ok
 }
+
+fn skip(d: *Decoder) -> err { ret skip_depth(d, 128u16) }
 
 // --- A value model, canonically encoded and decoded whole.
 //

@@ -90,6 +90,24 @@ class BenchmarkScoringTests(unittest.TestCase):
         self.assertNotIn(source.read_text(encoding="utf-8"), serialized)
         self.assertEqual(state["source"]["file_count"], 1)
 
+    def test_model_endpoint_policy(self):
+        jev_path = Path(__file__).parents[1] / "benchmarks" / "llm_edit" / "jev_router.py"
+        jev_spec = importlib.util.spec_from_file_location("jev_router_urls", jev_path)
+        jev = importlib.util.module_from_spec(jev_spec)
+        jev_spec.loader.exec_module(jev)
+        bonsai_path = Path(__file__).parents[1] / "scripts" / "bonsai_driver.py"
+        bonsai_spec = importlib.util.spec_from_file_location("bonsai_driver_urls", bonsai_path)
+        bonsai = importlib.util.module_from_spec(bonsai_spec)
+        bonsai_spec.loader.exec_module(bonsai)
+        for allowed in ("https://api.example/v1", "http://localhost:8080/v1",
+                        "http://127.0.0.1:8080/v1", "http://[::1]:8080/v1"):
+            self.assertTrue(jev.api_url_allowed(allowed))
+            self.assertTrue(bonsai.endpoint_allowed(allowed))
+        for refused in ("http://api.example/v1", "file:///tmp/key", "https://user@api.example/v1",
+                        "https://api.example/v1?redirect=elsewhere", "not-a-url"):
+            self.assertFalse(jev.api_url_allowed(refused))
+            self.assertFalse(bonsai.endpoint_allowed(refused))
+
     def test_audits_observable_agent_activity(self):
         semantic_path = Path(__file__).parents[1] / "benchmarks" / "llm_edit" / "semantic.py"
         spec = importlib.util.spec_from_file_location("semantic_audit", semantic_path)

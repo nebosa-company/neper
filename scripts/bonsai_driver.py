@@ -14,6 +14,7 @@ or to LM Studio through `pip install lmstudio` and `lms server start`.
 """
 import argparse, datetime, json, re, subprocess, sys, time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 try:
     import lmstudio as lms
@@ -26,6 +27,20 @@ STATE = ROOT / "build" / "bonsai" / "state.json"
 LOGS = ROOT / "build" / "bonsai"
 PROTECTED = ("docs/tasks/", "docs/progress.html", "docs/work-done.jsonl", "scripts/bonsai_driver.py", ".git/")
 FORBIDDEN_CMD = re.compile(r"git\s+(add\s+(-A|\.)|commit|push|reset|checkout|clean|stash|rebase)|rm\s+-rf?\s+/|Remove-Item.*-Recurse")
+
+
+def endpoint_allowed(url):
+    """Remote model endpoints require HTTPS; plain HTTP is loopback-only."""
+    try:
+        parsed = urlsplit(url)
+        parsed.port
+    except ValueError:
+        return False
+    if (not parsed.hostname or parsed.username is not None or parsed.password is not None
+            or parsed.query or parsed.fragment):
+        return False
+    return parsed.scheme == "https" or (
+        parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"})
 
 
 def sh(cmd, timeout=600, cwd=ROOT, shell=False):
@@ -363,6 +378,8 @@ def main():
     ap.add_argument("--skip-linux", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="print the next task and exit")
     args = ap.parse_args()
+    if args.endpoint and not endpoint_allowed(args.endpoint):
+        ap.error("--endpoint must use HTTPS, or HTTP on localhost/loopback")
 
     LOGS.mkdir(parents=True, exist_ok=True)
     state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {"failures": {}, "done": []}
