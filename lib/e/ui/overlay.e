@@ -733,6 +733,31 @@ fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, c
     ret (made, made_error)
 }
 
+fn dialog_host_order(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, default_first: bool, open: bool, described: bool) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (ordered, ordered_error) = mem.alloc[DialogButton](a, buttons.len)
+    if ordered_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var group = 0usize
+    while group < 3usize {
+        var i = 0usize
+        while i < buttons.len {
+            let primary = buttons[i].kind == .Default
+            let cancel = buttons[i].kind == .Cancel
+            var wanted = (!primary && !cancel && group == 0usize) || (cancel && group == 1usize) || (primary && group == 2usize)
+            if default_first { wanted = (primary && group == 0usize) || (!primary && !cancel && group == 1usize) || (cancel && group == 2usize) }
+            if wanted {
+                ordered[n] = buttons[i]
+                n += 1usize
+            }
+            i += 1usize
+        }
+        group += 1usize
+    }
+    let (made, made_error) = dialog(a, key, t, title, content, ordered[0usize..n], true, described)
+    ret (made, made_error)
+}
+
 fn dialog_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, busy: bool) -> (widget.Node, err) {
     let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy, zero, false, .Info, false)
     ret (made, made_error)

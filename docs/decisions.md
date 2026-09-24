@@ -22089,3 +22089,13 @@ offered width, so the visible grouped rows and Android rows are full hit targets
 `ui_overlays3_v2` holds the card insets, row and Cancel geometry, Dialog/Button
 semantics and both callbacks on Windows and Linux. `action-sheet-ios.png` is the
 Segoe UI visual check.
+
+## D1049 — Dialog button order is selected by the host
+
+`overlay.dialog_host_order` stably groups the existing action records before the
+shared dialog renderer runs. Windows callers select default-first, then other
+answers, then Cancel; default-last hosts get other answers, Cancel and the
+affirmative action, without changing action identity or keyboard semantics.
+
+`ui_overlays3_v2` holds both visual orders and their reordered callbacks on
+Windows and Linux. `dialog-host-order.png` is the Segoe UI visual check.
