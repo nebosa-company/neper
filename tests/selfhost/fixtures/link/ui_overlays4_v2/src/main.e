@@ -28,7 +28,7 @@ use e.ui.widget
 
 type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, typed: usize, dismisses: usize }
 
-type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, Empty, Switcher }
+type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, Empty, Switcher }
 
 fn on_activate(ctx: *void, index: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -91,7 +91,21 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
     var mode: navigation.PaletteMode = .Commands
     if which == .PaletteFiles { mode = .Files }
     if which == .PaletteSymbols { mode = .Symbols }
-    let (palette, e1) = navigation.command_palette_mode(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, shown, active, which != .Switcher, activate, run, dismiss, 560.0)
+    var palette: widget.Node = zero
+    var e1: err = ok
+    if which == .PaletteGrouped {
+        var grouped: [3]navigation.PaletteCommand = zero
+        grouped[0usize] = navigation.PaletteCommand { name: names[0usize], group: "Recent" }
+        grouped[1usize] = navigation.PaletteCommand { name: names[1usize], group: "Recent" }
+        grouped[2usize] = navigation.PaletteCommand { name: names[2usize], group: "Commands" }
+        let (made_palette, made_palette_error) = navigation.command_palette_grouped(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, grouped[..], active, true, activate, run, dismiss, 560.0)
+        palette = made_palette
+        e1 = made_palette_error
+    } else {
+        let (made_palette, made_palette_error) = navigation.command_palette_mode(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, shown, active, which != .Switcher, activate, run, dismiss, 560.0)
+        palette = made_palette
+        e1 = made_palette_error
+    }
     let (switcher, e2) = navigation.window_switcher(a, 200u64, t, "Windows", names[..], active, which == .Switcher, activate, run, dismiss, 480.0)
     if e1 != ok || e2 != ok { ret (zero, e1) }
     items[0usize] = palette
@@ -204,6 +218,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_files_error != ok || testing.pump(&harness, root_files, time.Instant { nanos: 1120000000i64 }) != ok || testing.by_text(&harness, "Search files by name").count != 1usize || testing.by_text(&harness, ">").count != 0usize { os.exit(37i32) }
     let (root_symbols, build_symbols_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .PaletteSymbols, 0usize)
     if build_symbols_error != ok || testing.pump(&harness, root_symbols, time.Instant { nanos: 1140000000i64 }) != ok || testing.by_text(&harness, "@").count != 1usize || testing.by_text(&harness, "Go to symbol").count != 1usize { os.exit(38i32) }
+    // Caller-ordered groups add one specified heading before each run without
+    // changing the option keys or active descendant.
+    let (root_grouped, build_grouped_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .PaletteGrouped, 2usize)
+    if build_grouped_error != ok || testing.pump(&harness, root_grouped, time.Instant { nanos: 1160000000i64 }) != ok { os.exit(39i32) }
+    let (grouped_panel, has_grouped_panel) = lifted(&harness, 100u64)
+    let (grouped_first, has_grouped_first) = bounds(&harness, &runtime, 103u64)
+    let (grouped_last, has_grouped_last) = bounds(&harness, &runtime, 105u64)
+    let (grouped_tree, grouped_tree_error) = testing.semantics(&harness)
+    if grouped_tree_error != ok { os.exit(40i32) }
+    let (_, has_recent_group) = find(grouped_tree, .Group, "Recent")
+    let (_, has_commands_group) = find(grouped_tree, .Group, "Commands")
+    if !has_grouped_panel || !has_grouped_first || !has_grouped_last { os.exit(41i32) }
+    if !has_recent_group || !has_commands_group { os.exit(42i32) }
+    if !near(grouped_panel.height, 246.0) { os.exit(43i32) }
+    if !near(grouped_first.y, grouped_panel.y + 73.0) || !near(grouped_last.y, grouped_first.y + 92.0) { os.exit(44i32) }
     // With no match: the empty state, 24 above and below (142 in all).
     let (root_3, build_3_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Empty, 0usize)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(26i32) }

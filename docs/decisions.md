@@ -22166,3 +22166,15 @@ specific placeholder without splitting the palette into separate components.
 
 `ui_overlays4_v2` holds command, file and symbol labels on Windows and Linux.
 `palette-symbol-mode.png` is the Segoe UI visual check.
+
+## D1056 — Command palette groups preserve option identity
+
+`PaletteCommand` adds a caller-ordered group name beside each command.
+`command_palette_grouped` inserts a `label-medium` muted heading only when that
+name changes, with the specified 12px sides and 8/4px vertical padding, while
+the existing option keys, active descendant and activation indices stay tied
+to command order. Each heading is also a named Group.
+
+`ui_overlays4_v2` holds two visual and semantic groups without changing option
+geometry or identity on Windows and Linux. `palette-grouped.png` is the Segoe UI
+visual check.
