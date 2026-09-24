@@ -351,6 +351,8 @@ type State = struct {
     menu_hover_at: i64,
     menu_safe_from: geometry.Point,
     has_menu_safe_from: bool,
+    menu_focus_key: Key,
+    has_menu_focus_key: bool,
     menu_typeahead: [16]u32,
     menu_typeahead_len: usize,
     menu_typeahead_at: i64,
@@ -2750,6 +2752,15 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
         }
         o += 1usize
     }
+    if s.has_menu_focus_key {
+        let (wanted, count) = find_by_key(s, s.menu_focus_key)
+        if count == 1usize {
+            s.focus = wanted.slot
+            s.has_focus = true
+            s.focus_visible = true
+        }
+        s.has_menu_focus_key = false
+    }
     let (compiled, compile_error) = scene.compile(s.renderer, scene.finish(&builder))
     if compile_error != ok { ret (zero, TooLarge) }
     // The previous frame's scene goes with the new one committed.
@@ -3086,7 +3097,23 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
         if has_item && code == 39u32 && (s.elements[item_owner].sem.actions & 1024u32) != 0u32 {
             let item = &s.elements[usize(s.focus)]
             let fired = fire_gesture(item.gesture, Gesture { Tap: geometry.Point { x: item.bounds.x + item.bounds.width * 0.5, y: item.bounds.y + item.bounds.height * 0.5 } })
+            if fired == ok {
+                s.menu_focus_key = s.elements[item_owner].sem.controls + 1u64
+                s.has_menu_focus_key = true
+            }
             ret (true, fired)
+        }
+        if has_item && (code == 37u32 || code == 27u32) {
+            let (back_owner, back_region, has_back) = menu_back_region(s, usize(s.focus))
+            if has_back {
+                let back = &s.elements[back_region]
+                let fired = fire_gesture(back.gesture, Gesture { Tap: geometry.Point { x: back.bounds.x + back.bounds.width * 0.5, y: back.bounds.y + back.bounds.height * 0.5 } })
+                if fired == ok {
+                    s.menu_focus_key = s.elements[back_owner].sem.controls
+                    s.has_menu_focus_key = true
+                }
+                ret (true, fired)
+            }
         }
         if has_item && code == 37u32 {
             var modal_count = 0usize
@@ -3204,6 +3231,23 @@ fn menu_item_region(s: *State, owner: usize) -> (usize, bool) {
     var one: [1]u32 = zero
     if collect_focusable(s, owner, one[..], 0usize) == 0usize { ret (0usize, false) }
     ret (usize(one[0usize]), true)
+}
+
+// The Back/Collapse row in the same modal menu as `index`, if a compact touch
+// submenu page is showing.
+fn menu_back_region(s: *State, index: usize) -> (usize, usize, bool) {
+    let (surface, has_surface) = overlay_of(s, index)
+    if !has_surface { ret (0usize, 0usize, false) }
+    var i = 0usize
+    while i < s.elements.len {
+        let e = &s.elements[i]
+        if e.live && e.has_semantics && (e.sem.actions & 256u32) != 0u32 && descends_from(s, i, surface) {
+            let (region_at, has_region) = menu_item_region(s, i)
+            if has_region { ret (i, region_at, true) }
+        }
+        i += 1usize
+    }
+    ret (0usize, 0usize, false)
 }
 
 // Hover may move between the two modal overlays in a cascading menu. Other
@@ -3418,7 +3462,18 @@ fn menu_tap(s: *State, index: usize, point: geometry.Point) -> err {
     if fired != ok { ret fired }
     let (owner_at, item) = menu_item_owner(s, index)
     if !item { ret ok }
+    if (s.elements[owner_at].sem.actions & 256u32) != 0u32 {
+        s.menu_focus_key = s.elements[owner_at].sem.controls
+        s.has_menu_focus_key = true
+        ret ok
+    }
     if (s.elements[owner_at].sem.actions & 1024u32) != 0u32 { ret ok }
+    let (_, back_region, has_back) = menu_back_region(s, index)
+    if has_back {
+        let back = &s.elements[back_region]
+        let closed = fire_gesture(back.gesture, Gesture { Tap: geometry.Point { x: back.bounds.x + back.bounds.width * 0.5, y: back.bounds.y + back.bounds.height * 0.5 } })
+        if closed != ok { ret closed }
+    }
     s.menu_typeahead_len = 0usize
     var i = s.overlay_count
     while i > 0usize {

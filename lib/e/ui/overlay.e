@@ -220,7 +220,7 @@ fn menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 
 fn menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus)
+    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus, "", 0u64, dismiss)
     if panel_error != ok { ret (zero, panel_error) }
     let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
     if lifted_error != ok { ret (zero, TooLarge) }
@@ -367,6 +367,40 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
     ret (made, made_error)
 }
 
+// A compact touch submenu's first row: back to its parent page, with the
+// submenu title in `title-small` after a 24px back arrow.
+fn menu_back_row(a: *mem.Arena, key: widget.Key, return_key: widget.Key, t: *const control.Theme, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let ink = style.color(t.tokens, .OnSurface)
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    let state = control.control_state(t, key, true, false)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = control.with_alpha(ink, control.state_opacity(t, state))
+    look.foreground = ink
+    look.border_width = 0.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 12.0
+    look.padding_y = 12.0
+    look.min_height = 48.0
+    look.min_width = 24.0
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (arrow, arrow_error) = control.icon_square(a, muted, .ChevronLeft, 24.0)
+    if arrow_error != ok { ret (zero, arrow_error) }
+    parts[0usize] = arrow
+    var caption = control.text_options()
+    caption.role = .TitleSmall
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, label, t, caption, ink)
+    if said_error != ok { ret (zero, said_error) }
+    parts[1usize] = said
+    var line_style = style.defaults()
+    line_style.width = style.Length { Percent: 100.0 }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, line_style, parts[..])
+    let (made, made_error) = control.pressable_states(a, key, t, 22u8, "Back", look, true, false, 0u32, accessibility.ACTION_COLLAPSE, return_key, action, content)
+    ret (made, made_error)
+}
+
 // v2 (D975, docs/ux/components/Menu): `surface-container`, `radius-sm`, elevation
 // 2, no border, `rim` above and below its commands; 200 to 320 wide with a pointer
 // (112 to 280 on touch). A command is a full-width row 32 tall (48 touch), or
@@ -384,20 +418,59 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
 // moves the focus through them with Down and Up, wrapping, and Home and End. A
 // command may open one submenu to its right, overlapping by 4 with its first row
 // aligned to the parent row; Right opens, Left closes, and hover uses D1004's
-// delay and safe triangle.
-// ponytail: touch submenus cascade rather than replacing the parent;
-fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool) -> (widget.Node, err) {
+// delay and safe triangle. At touch density the child replaces the parent page,
+// led by a Back row and separator.
+fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool, back_label: str, back_target: widget.Key, back: *const widget.Submit) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     let around = control.if_else(touch, 8.0, 4.0)
+    if touch && allow_submenus {
+        var opened = commands.len
+        var o = 0usize
+        while o < commands.len {
+            if commands[o].submenu_open {
+                if opened != commands.len { ret (zero, TooLarge) }
+                opened = o
+            }
+            o += 1usize
+        }
+        if opened != commands.len {
+            let c = &commands[opened]
+            if c.submenu.len == 0usize || c.submenu.len > 8usize { ret (zero, TooLarge) }
+            let item_key = key + 1u64 + u64(opened)
+            let submenu_key = key + 1024u64 + 16u64 * u64(opened)
+            let (page, page_error) = menu_panel(a, submenu_key, t, c.label, c.submenu, &c.submenu_toggle, rim, false, c.label, item_key, &c.submenu_toggle)
+            ret (page, page_error)
+        }
+    }
     var slotted = false
     var k = 0usize
     while k < commands.len {
         if commands[k].checkable || commands[k].checked || commands[k].radio || commands[k].pictured { slotted = true }
         k += 1usize
     }
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize * commands.len)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize * commands.len + 2usize)
     if rows_error != ok { ret (zero, TooLarge) }
     var n = 0usize
+    if back_label.len > 0usize {
+        let (back_row, back_error) = menu_back_row(a, key, back_target, t, back_label, back)
+        if back_error != ok { ret (zero, back_error) }
+        rows[n] = back_row
+        n += 1usize
+        let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
+        if lines_error != ok { ret (zero, TooLarge) }
+        var rule = style.defaults()
+        rule.width = style.Length { Percent: 100.0 }
+        rule.height = style.Length { Px: t.tokens.sizes.divider }
+        rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+        lines[0usize] = widget.box(0u64, rule, zero)
+        let (rule_body, rule_body_error) = mem.alloc[widget.Node](a, 1usize)
+        if rule_body_error != ok { ret (zero, TooLarge) }
+        rule_body[0usize] = widget.padded(0u64, 0.0, 0.0, 0.0, around, style.defaults(), lines[..])
+        var rule_sem: widget.Semantics = zero
+        rule_sem.role = accessibility.ROLE_SEPARATOR
+        rows[n] = widget.semantics(0u64, rule_sem, style.defaults(), rule_body[..])
+        n += 1usize
+    }
     var i = 0usize
     while i < commands.len {
         let c = &commands[i]

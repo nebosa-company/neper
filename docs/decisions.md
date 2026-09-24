@@ -21622,3 +21622,23 @@ with plain HTTP reserved for exact loopback hosts.
 The `fmt_tar`, `fmt_cbor` and `fmt_jwt` fixtures hold the parser boundaries on
 Windows and Linux. `test_llm_edit_benchmark` holds the endpoint policy for the
 Jev benchmark and Bonsai driver.
+
+## D1010 — Touch submenus replace their parent page
+
+At touch density an open `MenuCommand.submenu` is drawn inside the original
+menu overlay instead of beside it. The replacement starts with a 48px Back row:
+a 24px chevron-left and the submenu title in `title-small`, followed immediately
+by a divider and the child commands. Pointer menus retain the two-surface
+cascade.
+
+The Back row publishes Collapse and carries its parent command key for runtime
+focus return. The runtime uses those semantics to keep the root overlay open,
+focus the first child after Right, close one level through Back, Left or Escape,
+and return focus to the parent command after the caller rebuilds. Activating a
+leaf also collapses the touch page before dismissing the root menu, so reopening
+starts at the root.
+
+`ui_overlays_v2` holds replacement geometry, semantics, Back/Escape toggles,
+leaf-chain closure and focus restoration on Windows and Linux;
+`ui_navigation2_v2` guards the pointer cascade, and `menu-touch-submenu.png` is
+the Segoe UI visual check.

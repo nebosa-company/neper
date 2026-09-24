@@ -3,7 +3,8 @@
 // button on `surface-container`, 4 above and below its 32 rows, a group head and
 // a separator between them, a checked and a disabled command, and a 48-tall
 // radio command with a supporting line; a context command opens one cascading
-// submenu by Right and closes it by Left; Down, Up, Home and End move the focus
+// submenu by Right and closes it by Left, while touch replaces the parent with
+// a titled Back row; Down, Up, Home and End move the focus
 // (skipping the disabled one, wrapping), Enter runs, Escape dismisses, a focused
 // row has its ring inset 3 and a hovered row takes the `on-surface` layer; touch
 // supporting rows are 56 tall under an
@@ -35,7 +36,7 @@ type Counter = struct { count: usize }
 
 // The counters: 0 New, 1 the other commands, 2 dismiss, 3 Learn more, 4 anchors,
 // 5 submenu toggle, 6 submenu leaf.
-type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, commands: [5]overlay.MenuCommand, pops: [2]overlay.MenuCommand, pop_subs: [2]overlay.MenuCommand, tips: [1]overlay.MenuItem }
+type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, commands: [5]overlay.MenuCommand, touch_subs: [2]overlay.MenuCommand, pops: [2]overlay.MenuCommand, pop_subs: [2]overlay.MenuCommand, tips: [1]overlay.MenuItem }
 
 type Which = enum u8 { Menu, Touch, Pointed, Keyboard }
 
@@ -72,6 +73,13 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (file, e1) = control.button(a, 1u64, t, "File", &s.subs[4usize], control.button_options())
     let (save, e2) = control.button(a, 2u64, t, "Save", &s.subs[4usize], control.button_options())
     let (info, e3) = control.button(a, 3u64, t, "Info", &s.subs[4usize], control.button_options())
+    s.commands[0usize].submenu = s.touch_subs[0usize..0usize]
+    s.commands[0usize].submenu_open = false
+    if which == .Touch {
+        s.commands[0usize].submenu = s.touch_subs[..]
+        s.commands[0usize].submenu_open = s.counters[7usize].count % 2usize == 1usize
+        s.commands[0usize].submenu_toggle = s.subs[7usize]
+    }
     let (menu, e4) = overlay.menu_of(a, 100u64, t, 1u64, "File", s.commands[0usize..5usize], which == .Menu || which == .Touch, &s.subs[2usize])
     let (tip, e5) = overlay.tooltip_of(a, 200u64, t, 2u64, "Save file", "Ctrl+S", true)
     let (high, e6) = overlay.tooltip(a, 210u64, t, 1u64, "File menu", true)
@@ -196,6 +204,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.commands[4usize] = overlay.menu_command("Delete", s.subs[1usize])
     s.commands[4usize].separated = true
     s.commands[4usize].destructive = true
+    s.touch_subs[0usize] = overlay.menu_command("From template", s.subs[6usize])
+    s.touch_subs[1usize] = overlay.menu_command("Blank file", s.subs[6usize])
     s.pop_subs[0usize] = overlay.menu_command("Code", s.subs[6usize])
     s.pop_subs[1usize] = overlay.menu_command("Text", s.subs[6usize])
     s.pops[0usize] = overlay.menu_command("Open with", s.subs[1usize])
@@ -286,13 +296,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if shot_2_error != ok { os.exit(39i32) }
     let hovered = style.layer(style.color(&tokens, .SurfaceContainer), style.color(&tokens, .OnSurface), tokens.states.hover)
     if !is_color(shot_2, at(wrap_row.x + 150.0, wrap_row.y + 16.0), hovered) || !is_color(shot_2, at(mini_row.x + 150.0, mini_row.y + 16.0), style.color(&tokens, .SurfaceContainer)) { os.exit(40i32) }
-    // Touch density: 48 rows under an 8 rim, 112 wide at least.
+    // Touch density: 48 rows under an 8 rim, 112 wide at least. Right replaces
+    // the parent page with Back, a separator and the child rows; tapping Back or
+    // pressing Escape restores the parent row and its focus.
     let (root_3, build_3_error) = build(&f, &touch_theme, s, .Touch)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(41i32) }
     let (touch_menu, has_touch_menu) = lifted(&harness, 100u64)
     let (touch_row, has_touch_row) = bounds(&harness, &runtime, 101u64)
     let (touch_support, has_touch_support) = bounds(&harness, &runtime, 103u64)
     if !has_touch_menu || !has_touch_row || !has_touch_support || !near(touch_row.height, 48.0) || !near(touch_support.height, 56.0) || !near(touch_row.y, touch_menu.y + 8.0) || touch_menu.width < 112.0 { os.exit(42i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || s.counters[7usize].count != 1usize { os.exit(87i32) }
+    let (root_touch_sub, root_touch_sub_error) = build(&f, &touch_theme, s, .Touch)
+    if root_touch_sub_error != ok || testing.pump(&harness, root_touch_sub, time.Instant { nanos: 1210000000i64 }) != ok { os.exit(88i32) }
+    let (touch_replaced, has_touch_replaced) = lifted(&harness, 100u64)
+    let (touch_back, has_touch_back) = bounds(&harness, &runtime, 1124u64)
+    let (touch_child, has_touch_child) = bounds(&harness, &runtime, 1125u64)
+    if !has_touch_replaced || !has_touch_back || !has_touch_child || testing.by_key(&harness, 101u64).count != 0usize { os.exit(89i32) }
+    if !near(touch_back.y, touch_replaced.y + 8.0) || !near(touch_child.y, touch_back.y + 57.0) || !near(touch_replaced.height, 169.0) || !focus_is(&harness, 1125u64) { os.exit(90i32) }
+    let (tree_touch, tree_touch_error) = testing.semantics(&harness)
+    if tree_touch_error != ok { os.exit(91i32) }
+    let (back_node, has_back_node) = find(tree_touch, .MenuItem, "Back")
+    let (child_menu, has_child_menu) = find(tree_touch, .Menu, "New")
+    if !has_back_node || !has_action(back_node, .Collapse) || !has_child_menu { os.exit(92i32) }
+    if testing.tap(&harness, touch_back.x + 20.0, touch_back.y + 24.0) != ok || s.counters[7usize].count != 2usize { os.exit(93i32) }
+    let (root_touch_back, root_touch_back_error) = build(&f, &touch_theme, s, .Touch)
+    if root_touch_back_error != ok || testing.pump(&harness, root_touch_back, time.Instant { nanos: 1220000000i64 }) != ok || !focus_is(&harness, 101u64) { os.exit(94i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || s.counters[7usize].count != 3usize { os.exit(95i32) }
+    let (root_touch_again, root_touch_again_error) = build(&f, &touch_theme, s, .Touch)
+    if root_touch_again_error != ok || testing.pump(&harness, root_touch_again, time.Instant { nanos: 1230000000i64 }) != ok || !focus_is(&harness, 1125u64) { os.exit(96i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || s.counters[7usize].count != 4usize { os.exit(97i32) }
+    let (root_touch_escape, root_touch_escape_error) = build(&f, &touch_theme, s, .Touch)
+    if root_touch_escape_error != ok || testing.pump(&harness, root_touch_escape, time.Instant { nanos: 1240000000i64 }) != ok || !focus_is(&harness, 101u64) { os.exit(98i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || s.counters[7usize].count != 5usize { os.exit(99i32) }
+    let (root_touch_leaf, root_touch_leaf_error) = build(&f, &touch_theme, s, .Touch)
+    if root_touch_leaf_error != ok || testing.pump(&harness, root_touch_leaf, time.Instant { nanos: 1250000000i64 }) != ok || !focus_is(&harness, 1125u64) { os.exit(100i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok || s.counters[6usize].count != 1usize || s.counters[7usize].count != 6usize || s.counters[2usize].count != 2usize { os.exit(101i32) }
+    s.counters[6usize].count = 0usize
+    s.counters[2usize].count = 1usize
     // The context menu at the pointer (600, 460): no room at the end or below, so
     // it stands to the pointer's start and above it; 8 above its first row.
     let (root_4, build_4_error) = build(&f, &theme, s, .Pointed)
