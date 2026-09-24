@@ -948,9 +948,10 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // `body-medium` label in `on-surface` (`error` when destructive) and the
 // shortcut in `on-surface-variant` at the end, at least 32 after the label. A
 // separator is a 1px `outline-variant` line with 8 above and below. A disabled
-// command is `on-surface` at 38% under no layer.
-// ponytail: no submenus, radio or icon items, menu mode (Alt, F10, Left/Right,
-// hovering across titles), access keys, typeahead or collapsed form.
+// command is `on-surface` at 38% under no layer. A MenuBar in the tree named
+// by `label`.
+// ponytail: no submenus, radio or icon items, Alt entry, hover-switching across
+// open titles, access keys, typeahead or collapsed form.
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
     let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len)
@@ -1004,7 +1005,7 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     if row_error != ok { ret (zero, TooLarge) }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, heads[0usize..2usize * menus.len])
     var sem: widget.Semantics = zero
-    sem.role = 2u8
+    sem.role = accessibility.ROLE_MENU_BAR
     sem.label = label
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }

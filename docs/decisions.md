@@ -21401,3 +21401,19 @@ and Linux.
 
 Double-click restore, keyboard panel moving and pointer-driven moving remain
 open.
+
+## D994 — MenuBar semantics drive F10 title mode
+
+`MenuBar` is appended to the accessibility role surface, and
+`navigation.menu_bar_of` publishes it by the caller's label. The runtime finds
+that semantic landmark for F10, saves the prior focus, moves to the first title,
+walks titles with Left and Right, opens with Down, follows an open menu to its
+neighbour, and restores the saved focus when Escape leaves title mode.
+
+The behaviour uses each title's existing ShowMenu semantics and press action;
+there is no second menu index in the runtime. `ui_navigation2_v2` holds the role,
+entry, traversal, opening, open-menu following and focus return on Windows and
+Linux.
+
+Alt entry, hover-switching, access keys, typeahead, submenus and command focus
+return remain open.

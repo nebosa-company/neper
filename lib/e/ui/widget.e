@@ -338,6 +338,9 @@ type State = struct {
     has_root: bool,
     focus: u32,
     has_focus: bool,
+    menu_saved_focus: u32,
+    has_menu_saved_focus: bool,
+    menu_mode: bool,
     // The focus ring (D940): shown only when the focus came by the keyboard or the
     // program, never by a pointer press; its colour, width and gap outside the
     // element, set from the theme; the clip the element being placed lies within.
@@ -2956,6 +2959,112 @@ fn focus_root(s: *State) -> usize {
     ret root
 }
 
+fn semantic_role_under(s: *State, index: usize, role: u8) -> (usize, bool) {
+    let e = &s.elements[index]
+    if !e.live { ret (0usize, false) }
+    if e.has_semantics && e.sem.role == role { ret (index, true) }
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        let (found, has_found) = semantic_role_under(s, usize(at), role)
+        if has_found { ret (found, true) }
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    ret (0usize, false)
+}
+
+fn collect_menu_titles(s: *State, index: usize, targets: []u32, owners: []u32, count: usize) -> usize {
+    var n = count
+    let e = &s.elements[index]
+    if !e.live || e.kind == OVERLAY_TAG { ret n }
+    if e.has_semantics && (e.sem.actions & 1024u32) != 0u32 {
+        var one: [1]u32 = zero
+        if collect_focusable(s, index, one[..], 0usize) != 0usize && n < targets.len {
+            targets[n] = one[0usize]
+            owners[n] = u32(index)
+            n += 1usize
+        }
+        ret n
+    }
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        n = collect_menu_titles(s, usize(at), targets, owners, n)
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    ret n
+}
+
+// F10 enters the first MenuBar title. Left and Right walk titles, following an
+// open menu; Down opens the focused title; Escape leaves title mode.
+fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
+    if code != 65479u32 && code != 37u32 && code != 39u32 && code != 40u32 && code != 27u32 { ret (false, ok) }
+    let (bar, has_bar) = semantic_role_under(s, usize(s.root), 41u8)
+    if !has_bar { ret (false, ok) }
+    var targets: [32]u32 = zero
+    var owners: [32]u32 = zero
+    let count = collect_menu_titles(s, bar, targets[..], owners[..], 0usize)
+    if count == 0usize { ret (false, ok) }
+    let plain = !k.modifiers.shift && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta
+    if code == 65479u32 && plain {
+        if !s.menu_mode {
+            s.menu_saved_focus = s.focus
+            s.has_menu_saved_focus = s.has_focus
+        }
+        s.focus = targets[0usize]
+        s.has_focus = true
+        s.focus_visible = true
+        s.menu_mode = true
+        ret (true, ok)
+    }
+    if !s.has_focus || !plain || !descends_from(s, usize(s.focus), bar) { ret (false, ok) }
+    var current = count
+    var opened = count
+    var i = 0usize
+    while i < count {
+        let owner = usize(owners[i])
+        if usize(s.focus) == usize(targets[i]) || descends_from(s, usize(s.focus), owner) { current = i }
+        if (s.elements[owner].sem.states & 16u32) != 0u32 { opened = i }
+        i += 1usize
+    }
+    if current == count && opened < count { current = opened }
+    if current == count { ret (false, ok) }
+    if code == 37u32 || code == 39u32 {
+        var next = (current + 1usize) % count
+        if code == 37u32 { next = (current + count - 1usize) % count }
+        s.focus = targets[next]
+        s.focus_visible = true
+        if opened < count {
+            let title = &s.elements[usize(targets[next])]
+            let fired = fire_gesture(title.gesture, Gesture { Tap: geometry.Point { x: title.bounds.x + title.bounds.width * 0.5, y: title.bounds.y + title.bounds.height * 0.5 } })
+            ret (true, fired)
+        }
+        ret (true, ok)
+    }
+    if code == 40u32 && usize(s.focus) == usize(targets[current]) {
+        let title = &s.elements[usize(targets[current])]
+        let fired = fire_gesture(title.gesture, Gesture { Tap: geometry.Point { x: title.bounds.x + title.bounds.width * 0.5, y: title.bounds.y + title.bounds.height * 0.5 } })
+        ret (true, fired)
+    }
+    if code == 27u32 && s.menu_mode && usize(s.focus) == usize(targets[current]) {
+        if s.has_menu_saved_focus && s.elements[usize(s.menu_saved_focus)].live {
+            s.focus = s.menu_saved_focus
+            s.has_focus = true
+            s.focus_visible = true
+        } else {
+            s.has_focus = false
+        }
+        s.menu_mode = false
+        s.has_menu_saved_focus = false
+        ret (true, ok)
+    }
+    ret (false, ok)
+}
+
 // A menu's arrow keys (D975): with a menu item (role 22 or checkbox role 37)
 // focused, Down and Up move
 // the focus as Tab and Shift+Tab do (wrapping, disabled items skipped), Home and
@@ -3442,6 +3551,8 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
         move_focus(s, k.modifiers.shift)
         ret (true, ok)
     }
+    let (barred, bar_error) = menu_bar_key(s, code, k)
+    if barred || bar_error != ok { ret (true, bar_error) }
     let (editor, has_editor) = focused_edit(s)
     if has_editor {
         let (edited, edit_error) = edit_key(s, editor, k)

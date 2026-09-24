@@ -62,6 +62,10 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
+fn same_element(a: widget.ElementId, b: widget.ElementId) -> bool {
+    ret a.slot == b.slot && a.generation == b.generation
+}
+
 fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, open_trail: bool, open_menu: usize) -> (widget.Node, err) {
     var names: [5]str = zero
     names[0usize] = "Workspace"
@@ -250,6 +254,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (menus, has_menus) = bounds(&harness, &runtime, 2400u64)
     let (file, has_file) = bounds(&harness, &runtime, 2401u64)
     if !has_menus || !has_file || !near(menus.height, 32.0) || !near(file.height, 24.0) || !near(file.x, menus.x + 4.0) || !is_color(shot, at(menus.x + 300.0, menus.y + 16.0), style.color(&tokens, .Background)) { os.exit(25i32) }
+    if testing.by_role(&harness, .MenuBar).count != 1usize { os.exit(36i32) }
+    let original = testing.by_key(&harness, 2301u64).element
+    if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok { os.exit(37i32) }
+    let (on_file, has_on_file) = testing.focused(&harness)
+    if !has_on_file || !same_element(on_file, testing.by_key(&harness, 2401u64).element) { os.exit(38i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok { os.exit(39i32) }
+    let (on_edit, has_on_edit) = testing.focused(&harness)
+    if !has_on_edit || !same_element(on_edit, testing.by_key(&harness, 2417u64).element) { os.exit(40i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || s.counters[9usize].count != 1usize { os.exit(41i32) }
+    s.counters[9usize].count = 0usize
+    if testing.press_key(&harness, 27u32, zero) != ok { os.exit(42i32) }
+    let (restored, has_restored) = testing.focused(&harness)
+    if !has_restored || !same_element(restored, original) { os.exit(43i32) }
     let (root_3, build_3_error) = build(&f, &theme, s, false, 0usize)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1050000000i64 }) != ok { os.exit(26i32) }
     let (shot_3, shot_3_error) = testing.snapshot(&harness, a)
@@ -258,6 +275,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (file_node, has_file_node) = find(tree_3, .Button, "File")
     let (edit_node, has_edit_node) = find(tree_3, .Button, "Edit")
     if !has_file_node || !file_node.state.expanded || !has_edit_node || edit_node.state.expanded { os.exit(27i32) }
+    // Right follows an open menu to its neighbour and fires that title.
+    if testing.press_key(&harness, 39u32, zero) != ok || s.counters[9usize].count != 1usize { os.exit(44i32) }
+    let (followed, has_followed) = testing.focused(&harness)
+    if !has_followed || !same_element(followed, testing.by_key(&harness, 2417u64).element) { os.exit(44i32) }
+    s.counters[9usize].count = 0usize
     // Its menu 2 below on `surface-container`, at least 200 wide; four commands
     // 32 tall, a separator line before Autosave, Autosave checked, Delete
     // disabled.
