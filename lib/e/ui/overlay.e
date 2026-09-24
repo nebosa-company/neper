@@ -1840,11 +1840,8 @@ fn sheet_row_with_icon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         parts[1usize] = said
         content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, style.defaults(), parts[0usize..2usize])
     }
-    let (made, made_error) = control.pressable(a, key, t, 3u8, label, look, true, false, action, content)
-    if made_error != ok { ret (zero, made_error) }
-    var stretched = made
-    stretched.style.width = style.Length { Percent: 100.0 }
-    ret (stretched, ok)
+    let (made, made_error) = control.pressable_states_fill(a, key, t, 3u8, label, look, true, false, 0u32, 0u32, 0u64, action, true, content)
+    ret (made, made_error)
 }
 
 // An action sheet: a bottom sheet of the actions keyed `key + 3 + index` (the
@@ -1892,6 +1889,126 @@ fn action_sheet_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, an
         i += 1usize
     }
     let (made, made_error) = menu_of(a, key, t, anchor, title, commands[0usize..buttons.len], open, dismiss)
+    ret (made, made_error)
+}
+
+fn ios_action_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, ink: paint.Color, strong: bool, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, false)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
+    look.foreground = ink
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 16.0
+    look.padding_y = 16.0
+    look.min_height = 56.0
+    look.min_width = 24.0
+    var caption = control.text_options()
+    caption.role = .BodyLarge
+    if strong { caption.role = .TitleMedium }
+    caption.align = .Center
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, label, t, caption, ink)
+    if said_error != ok { ret (zero, said_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = said
+    var centred = style.defaults()
+    centred.width = style.Length { Percent: 100.0 }
+    let content = widget.aligned(0u64, .Center, .Center, centred, held[0usize..1usize])
+    let (made, made_error) = control.pressable_states_fill(a, key, t, 3u8, label, look, true, false, 0u32, 0u32, 0u64, action, true, content)
+    ret (made, made_error)
+}
+
+fn action_sheet_ios(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, cancel_label: str, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    if buttons.len > 6usize { ret (zero, TooLarge) }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * buttons.len + 1usize)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if title.len > 0usize {
+        var heading = control.text_options()
+        heading.role = .BodySmall
+        let (said, said_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, .OnSurfaceVariant))
+        if said_error != ok { ret (zero, said_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = said
+        var centred = style.defaults()
+        centred.width = style.Length { Percent: 100.0 }
+        held[1usize] = widget.aligned(0u64, .Center, .Center, centred, held[0usize..1usize])
+        rows[n] = widget.padded(0u64, 16.0, 12.0, 16.0, 12.0, style.defaults(), held[1usize..2usize])
+        n += 1usize
+    }
+    var i = 0usize
+    while i < buttons.len {
+        if i > 0usize {
+            let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+            if rule_error != ok { ret (zero, rule_error) }
+            rows[n] = rule
+            n += 1usize
+        }
+        var ink = style.color(t.tokens, .Primary)
+        if buttons[i].kind == .Destructive { ink = style.color(t.tokens, .Error) }
+        let (row, row_error) = ios_action_row(a, key + 3u64 + u64(i), t, buttons[i].label, ink, false, &buttons[i].action)
+        if row_error != ok { ret (zero, row_error) }
+        rows[n] = row
+        n += 1usize
+        i += 1usize
+    }
+    var card_options = control.surface_options(t)
+    card_options.background = .SurfaceContainerHigh
+    card_options.elevation = 3u8
+    card_options.radius = t.tokens.radii.md
+    card_options.padding = 0.0
+    var card_style = control.surface_style(t, card_options)
+    card_style.width = style.Length { Percent: 100.0 }
+    card_style.overflow = .Clip
+    let action_column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..n])
+    let (groups, groups_error) = mem.alloc[widget.Node](a, 2usize)
+    if groups_error != ok { ret (zero, TooLarge) }
+    let (action_body, action_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if action_body_error != ok { ret (zero, TooLarge) }
+    action_body[0usize] = action_column
+    groups[0usize] = widget.box(0u64, card_style, action_body[0usize..1usize])
+    let (cancel, cancel_error) = ios_action_row(a, key + 3u64 + u64(buttons.len), t, cancel_label, style.color(t.tokens, .Primary), true, dismiss)
+    if cancel_error != ok { ret (zero, cancel_error) }
+    let (cancel_body, cancel_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if cancel_body_error != ok { ret (zero, TooLarge) }
+    cancel_body[0usize] = cancel
+    groups[1usize] = widget.box(0u64, card_style, cancel_body[0usize..1usize])
+    var group_style = style.defaults()
+    group_style.width = style.Length { Percent: 100.0 }
+    let grouped = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 8.0 }, group_style, groups[0usize..2usize])
+    let (inset_body, inset_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if inset_body_error != ok { ret (zero, TooLarge) }
+    inset_body[0usize] = grouped
+    let inset = widget.padded(0u64, 8.0, 0.0, 8.0, 8.0, group_style, inset_body[0usize..1usize])
+    let (placed_body, placed_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if placed_body_error != ok { ret (zero, TooLarge) }
+    placed_body[0usize] = inset
+    let placed = widget.aligned(0u64, .Center, .End, group_style, placed_body[0usize..1usize])
+    let (scoped_body, scoped_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_body_error != ok { ret (zero, TooLarge) }
+    scoped_body[0usize] = placed
+    var none: []const widget.Shortcut = zero
+    let scoped = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), scoped_body[0usize..1usize])
+    let (semantic_body, semantic_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if semantic_body_error != ok { ret (zero, TooLarge) }
+    semantic_body[0usize] = scoped
+    var sem: widget.Semantics = zero
+    sem.role = 23u8
+    sem.label = title
+    sem.states = accessibility.STATE_MODAL
+    if title.len > 0usize { sem.labelled_by = key + 1u64 }
+    let framed = widget.semantics(0u64, sem, style.defaults(), semantic_body[0usize..1usize])
+    let (framed_body, framed_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_body_error != ok { ret (zero, TooLarge) }
+    framed_body[0usize] = framed
+    let top = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Below, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), framed_body[0usize..1usize])
+    let (made, made_error) = with_scrim(a, t, top)
     ret (made, made_error)
 }
 

@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, action_icons: [3]control.GlyphKind, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu, ActionsIos }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -114,7 +114,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (bottom, e4) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
     var actions: widget.Node = zero
     var e5: err = ok
-    if which == .ActionsMenu {
+    if which == .ActionsIos {
+        let (made_actions, made_actions_error) = overlay.action_sheet_ios(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], "Cancel", true, &s.subs[3usize])
+        actions = made_actions
+        e5 = made_actions_error
+    } else if which == .ActionsMenu {
         let (made_actions, made_actions_error) = overlay.action_sheet_menu(a, 400u64, t, 450u64, "build-4128.zip", s.actions[0usize..3usize], true, &s.subs[3usize])
         actions = made_actions
         e5 = made_actions_error
@@ -443,6 +447,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_action_menu || !has_action_menu_share || !has_action_menu_delete || testing.by_key(&harness, 404u64).count != 0usize { os.exit(92i32) }
     if !tap_key(&harness, &runtime, 401u64) || s.counters[4usize].count != menu_share_before + 1usize { os.exit(93i32) }
     if s.counters[3usize].count != menu_dismiss_before + 1usize { os.exit(94i32) }
+    // iOS uses two inset surface-high cards: centred 56px action rows and a
+    // separate strong Cancel group, with 8px between and around them.
+    let ios_share_before = s.counters[4usize].count
+    let ios_dismiss_before = s.counters[3usize].count
+    let (root_ios, build_ios_error) = build(&f, &theme, s, .ActionsIos)
+    if build_ios_error != ok || testing.pump(&harness, root_ios, time.Instant { nanos: 1440000000i64 }) != ok { os.exit(95i32) }
+    let (ios_shot, ios_shot_error) = testing.snapshot(&harness, a)
+    if ios_shot_error != ok { os.exit(96i32) }
+    let (ios_share, has_ios_share) = bounds(&harness, &runtime, 403u64)
+    let (ios_cancel, has_ios_cancel) = bounds(&harness, &runtime, 406u64)
+    if !has_ios_share || !has_ios_cancel { os.exit(97i32) }
+    if !near(ios_share.x, 8.0) { os.exit(100i32) }
+    if !near(ios_share.width, 624.0) { os.exit(101i32) }
+    if !near(ios_share.height, 56.0) { os.exit(102i32) }
+    if !near(ios_cancel.y, 416.0) || !near(ios_cancel.height, 56.0) { os.exit(103i32) }
+    let (ios_tree, ios_tree_error) = testing.semantics(&harness)
+    if ios_tree_error != ok { os.exit(98i32) }
+    let (_, has_ios_dialog) = find(ios_tree, .Dialog, "build-4128.zip")
+    let (_, has_ios_cancel_semantics) = find(ios_tree, .Button, "Cancel")
+    if !has_ios_dialog || !has_ios_cancel_semantics || !tap_key(&harness, &runtime, 403u64) || !tap_key(&harness, &runtime, 406u64) || s.counters[4usize].count != ios_share_before + 1usize || s.counters[3usize].count != ios_dismiss_before + 1usize { os.exit(99i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(42i32) }
     try io.print("ui overlays3 v2 ok\n")
     ret ok

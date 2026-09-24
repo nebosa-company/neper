@@ -22077,3 +22077,15 @@ chain closes it after a selection.
 `ui_overlays3_v2` holds Menu/MenuItem semantics plus one command and dismissal
 callback on Windows and Linux. `action-sheet-menu.png` is the Segoe UI visual
 check.
+
+## D1048 — iOS action sheets use grouped cards
+
+`overlay.action_sheet_ios` draws an inset `surface-container-high` action card
+with a centred header, 56px primary rows and hairline separators, plus a separate
+strong Cancel card 8px below. Destructive copy uses `error`; both cards keep the
+shared scrim, focus trap and dismissal action. The row helpers now fill their
+offered width, so the visible grouped rows and Android rows are full hit targets.
+
+`ui_overlays3_v2` holds the card insets, row and Cancel geometry, Dialog/Button
+semantics and both callbacks on Windows and Linux. `action-sheet-ios.png` is the
+Segoe UI visual check.
