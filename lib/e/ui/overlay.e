@@ -1189,11 +1189,24 @@ fn flyout_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // elevation 2, no border; 16 all round on touch, 12 at the sides and top and 8
 // below with a pointer; 240 to 360 wide on touch, 200 to 320 with a pointer; 4
 // off its anchor, flipping when that side overflows.
-// ponytail: no compact bottom-sheet presentation.
 fn flyout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (made, made_error) = light_dismissed(a, key, t, anchor, placement, label, content, dismiss)
     ret (made, made_error)
+}
+
+// The same flyout adapted to the caller's size class: compact touch screens use
+// the existing modal bottom sheet at its medium (half-window) detent.
+fn flyout_adaptive(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, size: style.SizeClass) -> (widget.Node, err) {
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    if size != .Compact || !touch {
+        let (floating, floating_error) = flyout(a, key, t, anchor, placement, label, content, open, dismiss)
+        ret (floating, floating_error)
+    }
+    var height: f32 = 320.0
+    if mem.address_of(t.runtime) != 0usize { height = widget.surface_size(t.runtime).height * 0.5 }
+    let (sheet_node, sheet_error) = bottom_sheet(a, key, t, label, content, open, dismiss, height)
+    ret (sheet_node, sheet_error)
 }
 
 // A popover: a flyout with a title (a heading keyed `key + 1`) and a close

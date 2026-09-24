@@ -21895,3 +21895,16 @@ ranges safely fall back to `popup_row`.
 `ui_overlays2_v2` holds the split runs and unchanged row behavior on Windows
 and Linux. `popup-match.png` is the Segoe UI visual check. The popup portion of
 D976 now has no open visual or semantic item.
+
+## D1031 — Compact touch flyouts become bottom sheets
+
+`overlay.flyout_adaptive` keeps the ordinary anchored flyout except when the
+caller reports Compact size under a touch theme. That combination reuses
+`bottom_sheet` at half the current surface height, bringing its scrim, drag
+handle, title, focus trap, Escape and outside dismissal without a parallel sheet
+implementation.
+
+`ui_overlays2_v2` holds the 640 by 240 bottom sheet at the 480px surface edge,
+its modal Dialog semantics, and the unchanged floating touch form on Windows
+and Linux. `flyout-compact-sheet.png` is the Segoe UI visual check. D976 now has
+only popover work open.

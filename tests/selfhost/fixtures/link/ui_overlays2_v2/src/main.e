@@ -31,7 +31,7 @@ type Counter = struct { count: usize }
 // The counters: 0 rows, 1 anchors, 2 dismiss, 3 main action, 4 other action.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, actions: [2]overlay.MenuItem }
 
-type Which = enum u8 { Popup, PopupEmpty, PopupError, PopupFooter, PopupLoading, Flyout, Popover, Below }
+type Which = enum u8 { Popup, PopupEmpty, PopupError, PopupFooter, PopupLoading, Flyout, FlyoutCompact, Popover, Below }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -64,7 +64,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (items, items_error) = mem.alloc[widget.Node](a, 4usize)
     if items_error != ok { ret (zero, items_error) }
     let (search_button, e1) = control.button(a, 1u64, t, "Search", &s.subs[1usize], control.button_options())
-    let flyout_open = which == .Flyout
+    let flyout_open = which == .Flyout || which == .FlyoutCompact
     let (filter, e2) = overlay.flyout_button(a, 2u64, t, "Filter", 20u64, flyout_open, &s.subs[1usize])
     let (build_button, e3) = control.button(a, 3u64, t, "Build", &s.subs[1usize], control.button_options())
     let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize)
@@ -105,7 +105,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     if which == .Popup || which == .PopupFooter { active_key = 11u64 }
     let (search, e10) = overlay.popup_combobox(a, "Search files", 10u64, active_key, popup_open, search_button)
     let (inside, e7) = control.text(a, 0u64, "Only my builds", t, control.text_options())
-    let (flyout, e8) = overlay.flyout(a, 20u64, t, 2u64, .Below, "Filters", inside, flyout_open, &s.subs[2usize])
+    var flyout: widget.Node = zero
+    var e8: err = ok
+    if which == .FlyoutCompact {
+        let (made_flyout, made_flyout_error) = overlay.flyout_adaptive(a, 20u64, t, 2u64, .Below, "Filters", inside, flyout_open, &s.subs[2usize], .Compact)
+        flyout = made_flyout
+        e8 = made_flyout_error
+    } else {
+        let (made_flyout, made_flyout_error) = overlay.flyout(a, 20u64, t, 2u64, .Below, "Filters", inside, flyout_open, &s.subs[2usize])
+        flyout = made_flyout
+        e8 = made_flyout_error
+    }
     var side: widget.Placement = .Right
     var owner = 3u64
     if which == .Below {
@@ -318,6 +328,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(25i32) }
     let (touch_fly, has_touch_fly) = lifted(&harness, 20u64)
     if !has_touch_fly || !near(touch_fly.height, 32.0) || touch_fly.width < 240.0 { os.exit(26i32) }
+    // A compact touch flyout becomes the existing half-height modal bottom sheet.
+    let (root_compact, compact_error) = build(&f, &touch_theme, s, .FlyoutCompact)
+    if compact_error != ok || testing.pump(&harness, root_compact, time.Instant { nanos: 1250000000i64 }) != ok { os.exit(64i32) }
+    let (compact_sheet, has_compact_sheet) = lifted(&harness, 20u64)
+    let (compact_tree, compact_tree_error) = testing.semantics(&harness)
+    if compact_tree_error != ok { os.exit(65i32) }
+    let (compact_dialog, has_compact_dialog) = find(compact_tree, .Dialog, "Filters")
+    if !has_compact_sheet || !near(compact_sheet.x, 0.0) || !near(compact_sheet.y, 240.0) || !near(compact_sheet.width, 640.0) || !near(compact_sheet.height, 240.0) || !has_compact_dialog || !compact_dialog.state.modal { os.exit(66i32) }
     // The popover to Build's right: the beak's tip 4 off it, the 320 card 10 off
     // it on `surface-container-high`, the beak in the card's colour 16 down.
     let (root_4, build_4_error) = build(&f, &theme, s, .Popover)
