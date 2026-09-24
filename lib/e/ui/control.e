@@ -2597,7 +2597,6 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     // dragged or keyboard-focused, a single slider's value stands in an
     // `inverse-surface` pill 8 above the handle, `label-large` in
     // `inverse-on-surface`, at least 48 wide with 16 sides and 12 above and below.
-    // ponytail: the pill centres on the handle only while its value is no wider than 16; placing by the pill's measured width would centre any value.
     var track_style = style.defaults()
     track_style.width = style.Length { Px: 120.0 }
     track_style.height = style.Length { Px: 44.0 }
@@ -2635,7 +2634,7 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
         if high > low { share = (first - low) / (high - low) }
         if share < 0.0 { share = 0.0 }
         if share > 1.0 { share = 1.0 }
-        parts[2usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 8.0 + share * 104.0 - 24.0, y: 0.0 - 8.0 }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
+        parts[2usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .AbovePoint, offset: geometry.Point { x: 8.0 + share * 104.0, y: 0.0 - 8.0 }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
     }
     var caption = text_options()
     caption.role = .BodyMedium

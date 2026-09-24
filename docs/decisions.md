@@ -21323,3 +21323,16 @@ Windows and Linux.
 
 Popup active-descendant, loading, empty, error, match-highlighting and footer
 states remain open, along with flyout and popover follow-up work.
+
+## D988 — Point-centred overlays use measured content width
+
+`AbovePoint` centres measured overlay content on an x position relative to its
+anchor. The slider value label now places its centre on the handle instead of
+subtracting half of the 48-pixel minimum, so wider values stay aligned without
+estimating text width in the control.
+
+`ui_selection3_v2` uses a six-digit value and a real host font to hold the wide
+pill's centre over the handle on Windows and Linux.
+
+Other measured-text work, including segment and breadcrumb placement, remains
+open.

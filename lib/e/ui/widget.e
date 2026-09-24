@@ -106,8 +106,9 @@ type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u
 // offset mirrored, when that side fits. (D978) TopCenter centres the content
 // across the anchor with its top on the anchor's top (a palette 64 down the window).
 // BelowMatch and AboveMatch also constrain the content to the anchor's width,
-// clamped by pixel min/max widths on the overlay node's style.
-type Placement = enum u8 { Below, Above, Right, Left, Center, BelowCenter, AboveCenter, BelowEnd, At, TopCenter, BelowMatch, AboveMatch }
+// clamped by pixel min/max widths on the overlay node's style. AbovePoint centres
+// content on the point `offset.x` from the anchor's start.
+type Placement = enum u8 { Below, Above, Right, Left, Center, BelowCenter, AboveCenter, BelowEnd, At, TopCenter, BelowMatch, AboveMatch, AbovePoint }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
 // The layout adapters that need a kind (D816): an aspect box is as wide as it may
 // be and as tall as the ratio says; a fitted box scales its content down to fit,
@@ -2014,9 +2015,10 @@ fn overlay_rect(anchor: geometry.Rect, size: geometry.Size, ov: Overlay, window_
     var y = anchor.y
     let p = ov.placement
     let below = p == .Below || p == .BelowCenter || p == .BelowEnd || p == .BelowMatch
-    let above = p == .Above || p == .AboveCenter || p == .AboveMatch
+    let above = p == .Above || p == .AboveCenter || p == .AboveMatch || p == .AbovePoint
     if p == .BelowCenter || p == .AboveCenter || p == .TopCenter { x = anchor.x + (anchor.width - size.width) * 0.5 }
     if p == .BelowEnd { x = anchor.x + anchor.width - size.width }
+    if p == .AbovePoint { x = anchor.x - size.width * 0.5 }
     if below { y = anchor.y + anchor.height }
     if above { y = anchor.y - size.height }
     if p == .Right { x = anchor.x + anchor.width }

@@ -8,6 +8,7 @@
 // the bar's button "Select all" until every row is chosen, then "Clear".
 
 use e.gpu
+use e.fs
 use e.io
 use e.mem
 use e.os
@@ -43,7 +44,7 @@ fn close_to(value: u8, expected: f32) -> bool {
 fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err) {
     let (items, items_error) = mem.alloc[widget.Node](a, 2usize)
     if items_error != ok { ret (zero, items_error) }
-    let (level, e1) = control.slider(a, 80u64, t, "Level", 50.0, 0.0, 100.0, 25.0, zero, true)
+    let (level, e1) = control.slider(a, 80u64, t, "Level", 100000.0, 0.0, 200000.0, 50000.0, zero, true)
     let (many, e2) = control.multi_select_list_counted(a, 20u64, t, "Hosts", s.words[0usize..3usize], s.flags[0usize..3usize], s.picks[0usize..3usize], 3u32, 220.0, &s.press, &s.press)
     if e1 != ok || e2 != ok { ret (zero, e1) }
     items[0usize] = level
@@ -84,6 +85,10 @@ fn frame(h: *testing.Harness, a: *mem.Arena, f: *mem.Arena, t: *const control.Th
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    var font_path: str = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    if os.NATIVE_SEPARATOR == 92u8 { font_path = "C:/Windows/Fonts/segoeui.ttf" }
+    let (font_bytes, font_error) = fs.read_file(a, font_path, 16777216usize)
+    if font_error != ok { os.exit(30i32) }
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
     let (q, queue_error) = gpu.queue(device)
@@ -92,12 +97,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if renderer_error != ok { os.exit(3i32) }
     var renderer = r
     let tokens = style.reference(.Light)
-    let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
+    let (fonts, fonts_error) = mem.alloc[shape.Font](a, 1usize)
     if fonts_error != ok { os.exit(4i32) }
+    fonts[0usize] = shape.Font { id: 7u32, data: font_bytes, face_index: 0u32 }
+    if scene.register_font(&renderer, fonts[0usize]) != ok { os.exit(31i32) }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 200usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 20u16, max_commands: 1024usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
-    let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
+    let theme = control.Theme { tokens: &tokens, fonts: fonts[0usize..1usize], language: "", runtime: &runtime }
     let (h, harness_error) = testing.harness(a, &runtime, 260u32, 360u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
@@ -159,8 +166,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (focused, focused_error) = frame(&harness, a, &f, &theme, &stores[0usize])
     if focused_error != ok { os.exit(22i32) }
     let (pill, has_pill) = bounds(&harness, &runtime, 81u64)
-    if !has_pill || !near(pill.width, 48.0) || !near(level.y - pill.y - pill.height, 8.0) { os.exit(23i32) }
-    if !is_color(focused, at(pill.x + 24.0, pill.y + pill.height * 0.5), style.color(&tokens, .InverseSurface)) { os.exit(24i32) }
+    if !has_pill { os.exit(26i32) }
+    if !(pill.width > 48.0) { os.exit(27i32) }
+    if !near(pill.x + pill.width * 0.5, level.x + 60.0) { os.exit(28i32) }
+    if !near(level.y - pill.y - pill.height, 8.0) { os.exit(29i32) }
+    if !is_color(focused, at(pill.x + 4.0, pill.y + pill.height * 0.5), style.color(&tokens, .InverseSurface)) { os.exit(24i32) }
     try io.print("ui selection3 v2 ok\n")
     ret ok
 }
