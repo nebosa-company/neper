@@ -22099,3 +22099,13 @@ affirmative action, without changing action identity or keyboard semantics.
 
 `ui_overlays3_v2` holds both visual orders and their reordered callbacks on
 Windows and Linux. `dialog-host-order.png` is the Segoe UI visual check.
+
+## D1050 — Dialog scroll edges opt into dividers
+
+`overlay.dialog_scrolled` wraps caller-owned scrolling content with only the top
+and bottom `outline-variant` dividers whose edges are currently obscured. The
+existing dialog still owns title, actions, focus and dismissal; no second scroll
+state or viewport abstraction is introduced.
+
+`ui_overlays3_v2` holds both divider pixels around separated content on Windows
+and Linux. `dialog-scroll-dividers.png` is the Segoe UI visual check.

@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, action_icons: [3]control.GlyphKind, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, DialogDefaultFirst, DialogDefaultLast, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu, ActionsIos }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, DialogDefaultFirst, DialogDefaultLast, DialogScrolled, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu, ActionsIos }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -67,7 +67,15 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (inside, e1) = control.text(a, 0u64, "Inside", t, control.text_options())
     var alert: widget.Node = zero
     var e2: err = ok
-    if which == .DialogDefaultFirst || which == .DialogDefaultLast {
+    if which == .DialogScrolled {
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, held_error) }
+        held[0usize] = inside
+        let scroll_content = widget.padded(0u64, 0.0, 20.0, 0.0, 20.0, style.defaults(), held[0usize..1usize])
+        let (made_dialog, made_dialog_error) = overlay.dialog_scrolled(a, 100u64, t, "Delete build?", scroll_content, s.buttons[0usize..3usize], true, true, true, false)
+        alert = made_dialog
+        e2 = made_dialog_error
+    } else if which == .DialogDefaultFirst || which == .DialogDefaultLast {
         let (made_dialog, made_dialog_error) = overlay.dialog_host_order(a, 100u64, t, "Delete build?", inside, s.buttons[0usize..3usize], which == .DialogDefaultFirst, true, false)
         alert = made_dialog
         e2 = made_dialog_error
@@ -340,6 +348,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (last_cancel, has_last_cancel) = bounds(&harness, &runtime, 104u64)
     let (last_default, has_last_default) = bounds(&harness, &runtime, 105u64)
     if !has_last_other || !has_last_cancel || !has_last_default || last_other.x >= last_cancel.x || last_cancel.x >= last_default.x || !tap_key(&harness, &runtime, 103u64) || s.counters[1usize].count != ordered_delete_before + 1usize { os.exit(107i32) }
+    // Scroll ownership stays with the content; the wrapper exposes only the
+    // dividers for edges currently hidden by that scroll position.
+    let (root_scrolled, build_scrolled_error) = build(&f, &theme, s, .DialogScrolled)
+    if build_scrolled_error != ok || testing.pump(&harness, root_scrolled, time.Instant { nanos: 1099000000i64 }) != ok { os.exit(108i32) }
+    let (scrolled_card, has_scrolled_card) = lifted(&harness, 100u64)
+    let (scrolled_shot, scrolled_shot_error) = testing.snapshot(&harness, a)
+    if scrolled_shot_error != ok { os.exit(109i32) }
+    if !has_scrolled_card || !near(scrolled_card.height, 146.0) { os.exit(110i32) }
+    let divider_ink = style.color(&tokens, .OutlineVariant)
+    if !is_color(scrolled_shot, at(scrolled_card.x + 30.0, scrolled_card.y + 40.5), divider_ink) || !is_color(scrolled_shot, at(scrolled_card.x + 30.0, scrolled_card.y + 81.5), divider_ink) { os.exit(111i32) }
     // The side sheet: 300 wide along the right edge, the window's height,
     // `surface-container-low`, its open edge's corners rounded; a 48 header
     // with a 32 Close 8 from the end that dismisses.

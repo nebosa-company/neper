@@ -758,6 +758,32 @@ fn dialog_host_order(a: *mem.Arena, key: widget.Key, t: *const control.Theme, ti
     ret (made, made_error)
 }
 
+fn dialog_scrolled(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, scrolled_above: bool, scrolled_below: bool, open: bool, described: bool) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if scrolled_above {
+        let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+        if rule_error != ok { ret (zero, rule_error) }
+        parts[n] = rule
+        n += 1usize
+    }
+    parts[n] = content
+    n += 1usize
+    if scrolled_below {
+        let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+        if rule_error != ok { ret (zero, rule_error) }
+        parts[n] = rule
+        n += 1usize
+    }
+    var full = style.defaults()
+    full.width = style.Length { Percent: 100.0 }
+    let divided = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, full, parts[0usize..n])
+    let (made, made_error) = dialog(a, key, t, title, divided, buttons, true, described)
+    ret (made, made_error)
+}
+
 fn dialog_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, busy: bool) -> (widget.Node, err) {
     let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy, zero, false, .Info, false)
     ret (made, made_error)
