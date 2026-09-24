@@ -128,9 +128,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if shown_error != ok { os.exit(11i32) }
     var pixels: [8192]u32 = zero
     if gpu.read_image(q, shown, pixels[0..]) != ok { os.exit(12i32) }
-    // The thumb: 40 of 100 px of content is 16 px of a 40 px track, at the top.
-    if pixels[8usize * 64usize + 62usize] != 4278190335u32 { os.exit(13i32) }
-    if pixels[30usize * 64usize + 62usize] != 0u32 { os.exit(14i32) }
+    // The thumb: 40 of 100 px of content is 16 px of a 40 px track, at the top,
+    // held to the v2 minimum of 32 (D979), 4 wide and 2 from the edge.
+    if pixels[8usize * 64usize + 60usize] != 4278190335u32 || pixels[8usize * 64usize + 63usize] != 0u32 { os.exit(13i32) }
+    if pixels[36usize * 64usize + 60usize] != 0u32 { os.exit(14i32) }
     let state = mem.cast[*widget.State](runtime.state)
     let (va, va_count) = widget.find_by_key(state, 1u64)
     let (vb, vb_count) = widget.find_by_key(state, 2u64)

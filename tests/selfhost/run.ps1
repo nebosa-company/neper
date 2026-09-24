@@ -3234,6 +3234,120 @@ $uiStatus2V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $uiStatus2V2Written -ne 'executable written') { throw 'ui_status2_v2 emission failed' }
 $uiStatus2V2Output = & $uiStatus2V2Path
 if ($LASTEXITCODE -ne 0 -or $uiStatus2V2Output -ne 'ui status2 v2 ok') { throw "ui_status2_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 badges, empty states and banners (DNEW, widget plan P5-09)
+$uiStatus3V2Path = Join-Path $testBuild 'ui-status3-v2-selfhost.exe'
+$uiStatus3V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_status3_v2\src\main.e') $repo 'x64' 'windows' $uiStatus3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatus3V2Written -ne 'executable written') { throw 'ui_status3_v2 emission failed' }
+$uiStatus3V2Output = & $uiStatus3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatus3V2Output -ne 'ui status3 v2 ok') { throw "ui_status3_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 snackbar and toast (DNEW, widget plan P5-09)
+$uiStatus4V2Path = Join-Path $testBuild 'ui-status4-v2-selfhost.exe'
+$uiStatus4V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_status4_v2\src\main.e') $repo 'x64' 'windows' $uiStatus4V2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatus4V2Written -ne 'executable written') { throw 'ui_status4_v2 emission failed' }
+$uiStatus4V2Output = & $uiStatus4V2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatus4V2Output -ne 'ui status4 v2 ok') { throw "ui_status4_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 notification list and status bar (DNEW, widget plan P5-09)
+$uiStatus5V2Path = Join-Path $testBuild 'ui-status5-v2-selfhost.exe'
+$uiStatus5V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_status5_v2\src\main.e') $repo 'x64' 'windows' $uiStatus5V2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatus5V2Written -ne 'executable written') { throw 'ui_status5_v2 emission failed' }
+$uiStatus5V2Output = & $uiStatus5V2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatus5V2Output -ne 'ui status5 v2 ok') { throw "ui_status5_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 app bars and navigation stack (D972)
+$uiNavigationV2Path = Join-Path $testBuild 'ui-navigation-v2-selfhost.exe'
+$uiNavigationV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_navigation_v2\src\main.e') $repo 'x64' 'windows' $uiNavigationV2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigationV2Written -ne 'executable written') { throw 'ui_navigation_v2 emission failed' }
+$uiNavigationV2Output = & $uiNavigationV2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigationV2Output -ne 'ui navigation v2 ok') { throw "ui_navigation_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 breadcrumbs, tabs and menu bar (D972)
+$uiNavigation2V2Path = Join-Path $testBuild 'ui-navigation2-v2-selfhost.exe'
+$uiNavigation2V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_navigation2_v2\src\main.e') $repo 'x64' 'windows' $uiNavigation2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigation2V2Written -ne 'executable written') { throw 'ui_navigation2_v2 emission failed' }
+$uiNavigation2V2Output = & $uiNavigation2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigation2V2Output -ne 'ui navigation2 v2 ok') { throw "ui_navigation2_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 destination bar and navigation drawers (D973)
+$uiNavigation3V2Path = Join-Path $testBuild 'ui-navigation3-v2-selfhost.exe'
+$uiNavigation3V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_navigation3_v2\src\main.e') $repo 'x64' 'windows' $uiNavigation3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigation3V2Written -ne 'executable written') { throw 'ui_navigation3_v2 emission failed' }
+$uiNavigation3V2Output = & $uiNavigation3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigation3V2Output -ne 'ui navigation3 v2 ok') { throw "ui_navigation3_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 navigation split, page indicator and pagination (D973)
+$uiNavigation4V2Path = Join-Path $testBuild 'ui-navigation4-v2-selfhost.exe'
+$uiNavigation4V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_navigation4_v2\src\main.e') $repo 'x64' 'windows' $uiNavigation4V2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigation4V2Written -ne 'executable written') { throw 'ui_navigation4_v2 emission failed' }
+$uiNavigation4V2Output = & $uiNavigation4V2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigation4V2Output -ne 'ui navigation4 v2 ok') { throw "ui_navigation4_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 document tabs and wizards (D974)
+$uiNavigation5V2Path = Join-Path $testBuild 'ui-navigation5-v2-selfhost.exe'
+$uiNavigation5V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_navigation5_v2\src\main.e') $repo 'x64' 'windows' $uiNavigation5V2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigation5V2Written -ne 'executable written') { throw 'ui_navigation5_v2 emission failed' }
+$uiNavigation5V2Output = & $uiNavigation5V2Path
+if ($LASTEXITCODE -ne 0 -or $uiNavigation5V2Output -ne 'ui navigation5 v2 ok') { throw "ui_navigation5_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 menus, context menus and tooltips (D975)
+$uiOverlaysV2Path = Join-Path $testBuild 'ui-overlays-v2-selfhost.exe'
+$uiOverlaysV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_overlays_v2\src\main.e') $repo 'x64' 'windows' $uiOverlaysV2Path
+if ($LASTEXITCODE -ne 0 -or $uiOverlaysV2Written -ne 'executable written') { throw 'ui_overlays_v2 emission failed' }
+$uiOverlaysV2Output = & $uiOverlaysV2Path
+if ($LASTEXITCODE -ne 0 -or $uiOverlaysV2Output -ne 'ui overlays v2 ok') { throw "ui_overlays_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 popups, flyouts and popovers (D976)
+$uiOverlays2V2Path = Join-Path $testBuild 'ui-overlays2-v2-selfhost.exe'
+$uiOverlays2V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_overlays2_v2\src\main.e') $repo 'x64' 'windows' $uiOverlays2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiOverlays2V2Written -ne 'executable written') { throw 'ui_overlays2_v2 emission failed' }
+$uiOverlays2V2Output = & $uiOverlays2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiOverlays2V2Output -ne 'ui overlays2 v2 ok') { throw "ui_overlays2_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 dialogs, sheets and action sheets (D977)
+$uiOverlays3V2Path = Join-Path $testBuild 'ui-overlays3-v2-selfhost.exe'
+$uiOverlays3V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_overlays3_v2\src\main.e') $repo 'x64' 'windows' $uiOverlays3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiOverlays3V2Written -ne 'executable written') { throw 'ui_overlays3_v2 emission failed' }
+$uiOverlays3V2Output = & $uiOverlays3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiOverlays3V2Output -ne 'ui overlays3 v2 ok') { throw "ui_overlays3_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 command palette and window switcher (D978)
+$uiOverlays4V2Path = Join-Path $testBuild 'ui-overlays4-v2-selfhost.exe'
+$uiOverlays4V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_overlays4_v2\src\main.e') $repo 'x64' 'windows' $uiOverlays4V2Path
+if ($LASTEXITCODE -ne 0 -or $uiOverlays4V2Written -ne 'executable written') { throw 'ui_overlays4_v2 emission failed' }
+$uiOverlays4V2Output = & $uiOverlays4V2Path
+if ($LASTEXITCODE -ne 0 -or $uiOverlays4V2Output -ne 'ui overlays4 v2 ok') { throw "ui_overlays4_v2 answered wrongly: exit $LASTEXITCODE" }
+# v2 rows, lists, virtual list, grid view and virtual grid (D979)
+$uiCollectionsV2Path = Join-Path $testBuild 'ui-collections-v2-selfhost.exe'
+$uiCollectionsV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_collections_v2\src\main.e') $repo 'x64' 'windows' $uiCollectionsV2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollectionsV2Written -ne 'executable written') { throw 'ui_collections_v2 emission failed' }
+$uiCollectionsV2Output = & $uiCollectionsV2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollectionsV2Output -ne 'ui collections v2 ok') { throw "ui_collections_v2 answered wrongly: exit $LASTEXITCODE" }
+# v2 header row, table rows, table and data grid (D980)
+$uiCollections2V2Path = Join-Path $testBuild 'ui-collections2-v2-selfhost.exe'
+$uiCollections2V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_collections2_v2\src\main.e') $repo 'x64' 'windows' $uiCollections2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections2V2Written -ne 'executable written') { throw 'ui_collections2_v2 emission failed' }
+$uiCollections2V2Output = & $uiCollections2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections2V2Output -ne 'ui collections2 v2 ok') { throw "ui_collections2_v2 answered wrongly: exit $LASTEXITCODE" }
+# v2 tree, outline and tree table (D981)
+$uiCollections3V2Path = Join-Path $testBuild 'ui-collections3-v2-selfhost.exe'
+$uiCollections3V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_collections3_v2\src\main.e') $repo 'x64' 'windows' $uiCollections3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections3V2Written -ne 'executable written') { throw 'ui_collections3_v2 emission failed' }
+$uiCollections3V2Output = & $uiCollections3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections3V2Output -ne 'ui collections3 v2 ok') { throw "ui_collections3_v2 answered wrongly: exit $LASTEXITCODE" }
+# v2 page view, carousel, pull to refresh, swipe actions and reorderable list (D982)
+$uiCollections4V2Path = Join-Path $testBuild 'ui-collections4-v2-selfhost.exe'
+$uiCollections4V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_collections4_v2\src\main.e') $repo 'x64' 'windows' $uiCollections4V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections4V2Written -ne 'executable written') { throw 'ui_collections4_v2 emission failed' }
+$uiCollections4V2Output = & $uiCollections4V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections4V2Output -ne 'ui collections4 v2 ok') { throw "ui_collections4_v2 answered wrongly: exit $LASTEXITCODE" }
+# v2 press ripple (D983)
+$uiRippleV2Path = Join-Path $testBuild 'ui-ripple-v2-selfhost.exe'
+$uiRippleV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_ripple_v2\src\main.e') $repo 'x64' 'windows' $uiRippleV2Path
+if ($LASTEXITCODE -ne 0 -or $uiRippleV2Written -ne 'executable written') { throw 'ui_ripple_v2 emission failed' }
+$uiRippleV2Output = & $uiRippleV2Path
+if ($LASTEXITCODE -ne 0 -or $uiRippleV2Output -ne 'ui ripple v2 ok') { throw "ui_ripple_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 data grid core: active cell, edit mode, invalid, range, dirty and status bar (D984, widget plan P5-12)
+$uiCollections6V2Path = Join-Path $testBuild 'ui-collections6-v2-selfhost.exe'
+$uiCollections6V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_collections6_v2\src\main.e') $repo 'x64' 'windows' $uiCollections6V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections6V2Written -ne 'executable written') { throw 'ui_collections6_v2 emission failed' }
+$uiCollections6V2Output = & $uiCollections6V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections6V2Output -ne 'ui collections6 v2 ok') { throw "ui_collections6_v2 answered wrongly: exit $LASTEXITCODE" }
+# v2 property grid and key-value editor (D983)
+$uiCollections5V2Path = Join-Path $testBuild 'ui-collections5-v2-selfhost.exe'
+$uiCollections5V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_collections5_v2\src\main.e') $repo 'x64' 'windows' $uiCollections5V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections5V2Written -ne 'executable written') { throw 'ui_collections5_v2 emission failed' }
+$uiCollections5V2Output = & $uiCollections5V2Path
+if ($LASTEXITCODE -ne 0 -or $uiCollections5V2Output -ne 'ui collections5 v2 ok') { throw "ui_collections5_v2 answered wrongly: exit $LASTEXITCODE" }
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 $uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'

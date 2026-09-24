@@ -203,7 +203,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // seven are built (five in view and one beyond each end), keyed by the source;
     // the selected key's row is marked; the group is named. The virtual grid below
     // built its four rows of three at the same time.
-    let (numbers, has_numbers) = find(tree, .Group, "Numbers")
+    let (numbers, has_numbers) = find(tree, .List, "Numbers")
     if !has_numbers || numbers.position.row_count != 1000u32 { os.exit(16i32) }
     let builds_first = logs[0usize].builds
     if builds_first != 19usize { os.exit(17i32) }

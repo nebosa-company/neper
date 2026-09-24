@@ -18,79 +18,368 @@ use e.ui.widget
 
 error TooLarge
 
-// Whether a tooltip for `anchor` is wanted now: the anchor hovered, focused or held.
+// Whether a tooltip for `anchor` is wanted now: the anchor hovered and not held,
+// or focused from the keyboard.
+// v2 (D975, docs/ux/components/Tooltip): a press hides a plain tooltip, so it no
+// longer flashes on every click; keyboard focus shows it at once.
+// ponytail: no 500 ms hover delay, 1500 ms sweep window or touch long press; the
+// runtime reports no hover start time yet.
 fn tooltip_wanted(t: *const control.Theme, anchor: widget.Key) -> bool {
     if mem.address_of(t.runtime) == 0usize { ret false }
     let now = widget.interaction(t.runtime, anchor)
-    ret now.hovered || now.focused || now.pressed
+    ret (now.hovered && !now.pressed) || now.focus_visible
 }
 
-// A tooltip: `text` as a caption on a small raised surface below `anchor`, keyed
-// `key`, placed only while `shown` (an empty box otherwise); a tooltip in the tree
-// that describes nothing by itself -- the anchor's `described_by` is the caller's.
+// A tooltip: `text` beside `anchor`, keyed `key`, placed only while `shown` (an
+// empty box otherwise); a tooltip in the tree that describes nothing by itself --
+// the anchor's `described_by` is the caller's. The plain tooltip of D975 below.
 fn tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, text: str, shown: bool) -> (widget.Node, err) {
+    let (made, made_error) = tooltip_of(a, key, t, anchor, text, "", shown)
+    ret (made, made_error)
+}
+
+// v2 (D975, docs/ux/components/Tooltip, plain): `inverse-surface`, `radius-xs`, no
+// border or shadow, at least 24 tall and at most 200 wide, 4 above and below and
+// 8 at the sides; the text in `body-small` `inverse-on-surface`, wrapping to two
+// lines, then the `shortcut` (empty for none) in the same 8 after it. Centred
+// above the anchor, 4 from it, flipping below when there is no room above; a
+// non-modal overlay that presses pass through.
+fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, text: str, shortcut: str, shown: bool) -> (widget.Node, err) {
     if !shown { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let ink = style.color(t.tokens, .InverseOnSurface)
     var caption = control.text_options()
-    caption.role = .Caption
-    caption.wrap = .None
-    let (label_node, label_error) = control.text(a, 0u64, text, t, caption)
+    caption.role = .BodySmall
+    caption.wrap = .Word
+    caption.max_lines = 2u32
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (label_node, label_error) = control.colored_text(a, 0u64, text, t, caption, ink)
     if label_error != ok { ret (zero, label_error) }
-    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
-    if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = label_node
-    var raised = control.surface_options(t)
-    raised.background = .SurfaceVariant
-    raised.bordered = true
-    raised.elevation = 1u8
-    raised.radius = t.tokens.radii.xs
-    raised.padding = t.tokens.spacing.xs
+    parts[0usize] = label_node
+    var n = 1usize
+    if shortcut.len > 0usize {
+        caption.wrap = .None
+        let (keys_node, keys_error) = control.colored_text(a, 0u64, shortcut, t, caption, ink)
+        if keys_error != ok { ret (zero, keys_error) }
+        parts[1usize] = keys_node
+        n = 2usize
+    }
+    var plate = style.defaults()
+    plate.background = paint.Brush { Solid: style.color(t.tokens, .InverseSurface) }
+    plate.radius = t.tokens.radii.xs
+    plate.min_height = style.Length { Px: 24.0 }
+    plate.max_width = style.Length { Px: 200.0 }
+    let sides = style.Length { Px: 8.0 }
+    let ends = style.Length { Px: 4.0 }
+    plate.padding = style.EdgeLengths { left: sides, top: ends, right: sides, bottom: ends }
     let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
     if surface_error != ok { ret (zero, TooLarge) }
-    surface[0usize] = widget.box(0u64, control.surface_style(t, raised), body[0usize..1usize])
+    surface[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, plate, parts[0usize..n])
     var sem: widget.Semantics = zero
     sem.role = 27u8
     sem.label = text
     let (tip, tip_error) = mem.alloc[widget.Node](a, 1usize)
     if tip_error != ok { ret (zero, TooLarge) }
     tip[0usize] = widget.semantics(0u64, sem, style.defaults(), surface[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .Below, offset: geometry.Point { x: 0.0, y: t.tokens.spacing.xs }, modal: false, dismiss: zero }, style.defaults(), tip[0usize..1usize]), ok)
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .AboveCenter, offset: geometry.Point { x: 0.0, y: -4.0 }, modal: false, dismiss: zero }, style.defaults(), tip[0usize..1usize]), ok)
+}
+
+// v2 (D975, docs/ux/components/Tooltip, rich): `surface-container`, `radius-md`,
+// elevation 2, at least 48 tall and at most 312 wide, 12 above, 16 at the sides
+// and 8 below; the `subhead` (empty for none) in `title-small` `on-surface` 4
+// above the `body-medium` `on-surface-variant` text (up to four lines), then up to
+// two text buttons (keyed `key + 1 + index`) 8 below it and 8 apart. Below the
+// anchor, its end aligned with the anchor's, 4 from it, flipping above; a
+// non-modal overlay, a tooltip in the tree named by the subhead (or the text).
+// ponytail: the caller keeps it up while the pointer is over it (no 300 ms
+// grace), and the actions are 32 tall at pointer density rather than 40.
+fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, subhead: str, text: str, actions: []const MenuItem, shown: bool) -> (widget.Node, err) {
+    if !shown { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    if actions.len > 2usize { ret (zero, TooLarge) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var words = control.text_options()
+    if subhead.len > 0usize {
+        words.role = .TitleSmall
+        words.wrap = .Word
+        let (head, head_error) = control.colored_text(a, 0u64, subhead, t, words, style.color(t.tokens, .OnSurface))
+        if head_error != ok { ret (zero, head_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = head
+        parts[n] = widget.padded(0u64, 0.0, 0.0, 0.0, 4.0, style.defaults(), held[0usize..1usize])
+        n += 1usize
+    }
+    words.role = .BodyMedium
+    words.wrap = .Word
+    words.max_lines = 4u32
+    let (body, body_error) = control.colored_text(a, 0u64, text, t, words, style.color(t.tokens, .OnSurfaceVariant))
+    if body_error != ok { ret (zero, body_error) }
+    parts[n] = body
+    n += 1usize
+    if actions.len > 0usize {
+        let (buttons, buttons_error) = mem.alloc[widget.Node](a, actions.len)
+        if buttons_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < actions.len {
+            var plain = control.button_options()
+            plain.variant = .Plain
+            plain.enabled = actions[i].enabled
+            let (pressed, pressed_error) = control.button(a, key + 1u64 + u64(i), t, actions[i].label, &actions[i].action, plain)
+            if pressed_error != ok { ret (zero, pressed_error) }
+            buttons[i] = pressed
+            i += 1usize
+        }
+        let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+        if row_error != ok { ret (zero, TooLarge) }
+        row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), buttons[0usize..actions.len])
+        parts[n] = widget.padded(0u64, 0.0, 8.0, 0.0, 0.0, style.defaults(), row[0usize..1usize])
+        n += 1usize
+    }
+    var raised = control.surface_options(t)
+    raised.background = .SurfaceContainer
+    raised.elevation = 2u8
+    raised.radius = t.tokens.radii.md
+    raised.padding = 16.0
+    var plate = control.surface_style(t, raised)
+    plate.padding.top = style.Length { Px: 12.0 }
+    plate.padding.bottom = style.Length { Px: 8.0 }
+    plate.min_height = style.Length { Px: 48.0 }
+    plate.max_width = style.Length { Px: 312.0 }
+    let (surface, surface_error) = mem.alloc[widget.Node](a, 1usize)
+    if surface_error != ok { ret (zero, TooLarge) }
+    surface[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, plate, parts[0usize..n])
+    var sem: widget.Semantics = zero
+    sem.role = 27u8
+    sem.label = subhead
+    if subhead.len == 0usize { sem.label = text }
+    let (tip, tip_error) = mem.alloc[widget.Node](a, 1usize)
+    if tip_error != ok { ret (zero, TooLarge) }
+    tip[0usize] = widget.semantics(0u64, sem, style.defaults(), surface[0usize..1usize])
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .BelowEnd, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero }, style.defaults(), tip[0usize..1usize]), ok)
 }
 
 // A command in a menu: its label, what it does, and whether it may be chosen.
 type MenuItem = struct { label: str, action: widget.Submit, enabled: bool }
 
-// A menu: a modal overlay below `anchor` of the items as plain buttons keyed
-// `key + 1 + index` (menu items in the tree), placed only while `open`; a press
-// outside it or Escape fires `dismiss`. The items outlive the frame.
+// A command in a v2 menu (D975): its label, what it does, whether it may be
+// chosen, its shortcut's words ("Ctrl+S"; empty for none, never shown on touch),
+// whether it is checked (a check in the leading slot), whether a separator stands
+// before it, whether it destroys (in `error`), and the head of the group it
+// starts (empty for none).
+type MenuCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checked: bool, separated: bool, destructive: bool, head: str }
+
+// A plain enabled command.
+fn menu_command(label: str, action: widget.Submit) -> MenuCommand {
+    var c: MenuCommand = zero
+    c.label = label
+    c.action = action
+    c.enabled = true
+    ret c
+}
+
+// A menu: a modal overlay below `anchor` of the items keyed `key + 1 + index`,
+// placed only while `open`; a press outside it or Escape fires `dismiss`. The
+// items outlive the frame. The v2 menu of D975 below over plain commands.
 fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, items: []const MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (rows, rows_error) = mem.alloc[widget.Node](a, items.len)
-    if rows_error != ok { ret (zero, TooLarge) }
+    let (commands, commands_error) = mem.alloc[MenuCommand](a, items.len)
+    if commands_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < items.len {
-        var plain = control.button_options()
-        plain.variant = .Plain
-        plain.enabled = items[i].enabled
-        let (item, item_error) = control.button(a, key + 1u64 + u64(i), t, items[i].label, &items[i].action, plain)
-        if item_error != ok { ret (zero, item_error) }
-        var entry: widget.Semantics = zero
-        entry.role = 22u8
-        entry.label = items[i].label
-        if !items[i].enabled { entry.states = accessibility.STATE_DISABLED }
-        let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
-        if wrapped_error != ok { ret (zero, TooLarge) }
-        wrapped[0usize] = item
-        rows[i] = widget.semantics(0u64, entry, style.defaults(), wrapped[0usize..1usize])
+        commands[i] = menu_command(items[i].label, items[i].action)
+        commands[i].enabled = items[i].enabled
+        i += 1usize
+    }
+    let (made, made_error) = menu_of(a, key, t, anchor, label, commands[0usize..items.len], open, dismiss)
+    ret (made, made_error)
+}
+
+// v2 (D975, docs/ux/components/Menu): the menu 4 below its anchor (flipping
+// above), its commands keyed `key + 1 + index`.
+fn menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, control.if_else(touch, 8.0, 4.0))
+    if panel_error != ok { ret (zero, panel_error) }
+    let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+    if lifted_error != ok { ret (zero, TooLarge) }
+    lifted[0usize] = panel
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .Below, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
+}
+
+// v2 (D975, docs/ux/components/ContextMenu): the menu for `owner` with its
+// top-start corner at the pointer `at` (+2, +2 in the window), flipping to the
+// pointer's start or above it where it would overflow; or, opened from the
+// keyboard (`pointed` false), below `owner` at its start edge. 8 above and below
+// its commands at either density; the commands keyed `key + 1 + index`.
+// ponytail: no touch lift, scrim or long press; the target's selected look and
+// Show menu action stay the caller's.
+fn context_menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owner: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, at: geometry.Point, pointed: bool) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, 8.0)
+    if panel_error != ok { ret (zero, panel_error) }
+    let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+    if lifted_error != ok { ret (zero, TooLarge) }
+    lifted[0usize] = panel
+    var spec = widget.Overlay { anchor: owner, placement: .Below, offset: zero, modal: true, dismiss: *dismiss }
+    if pointed {
+        spec.anchor = 0u64
+        spec.placement = .At
+        spec.offset = geometry.Point { x: at.x + 2.0, y: at.y + 2.0 }
+    }
+    ret (widget.overlay(key, spec, style.defaults(), lifted[0usize..1usize]), ok)
+}
+
+// One command of a v2 menu (D975), keyed `item_key`, as `menu_panel` draws it.
+fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let row_height = control.if_else(touch, 48.0, 32.0)
+    let slot = control.if_else(touch, 24.0, 18.0)
+    let gap = control.if_else(touch, 12.0, 8.0)
+    var role: style.TextRole = .BodyMedium
+    if touch { role = .BodyLarge }
+    let line = style.text_style(t.tokens, role).line_height
+    let surface_ink = style.color(t.tokens, .OnSurface)
+    let state = control.control_state(t, item_key, c.enabled, false)
+    var ink = surface_ink
+    if c.destructive { ink = style.color(t.tokens, .Error) }
+    var muted = style.color(t.tokens, .OnSurfaceVariant)
+    var tick = surface_ink
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = control.with_alpha(surface_ink, control.state_opacity(t, state))
+    if !c.enabled {
+        ink = control.with_alpha(surface_ink, t.tokens.states.disabled_content)
+        muted = ink
+        tick = ink
+        look.background = control.with_alpha(ink, 0.0)
+    }
+    look.foreground = ink
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 12.0
+    var tallest = line
+    if slotted && slot > tallest { tallest = slot }
+    look.padding_y = control.max_zero((row_height - tallest) * 0.5)
+    look.min_height = row_height
+    look.min_width = 24.0
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var p = 0usize
+    if slotted {
+        if c.checked {
+            let (mark, mark_error) = control.icon_square(a, tick, .Check, slot)
+            if mark_error != ok { ret (zero, mark_error) }
+            parts[p] = mark
+        } else {
+            parts[p] = widget.box(0u64, control.sized_style(slot, slot), zero)
+        }
+        p += 1usize
+    }
+    var caption = control.text_options()
+    caption.role = role
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, c.label, t, caption, ink)
+    if said_error != ok { ret (zero, said_error) }
+    parts[p] = said
+    p += 1usize
+    parts[p] = widget.spacer(0u64, 1.0)
+    p += 1usize
+    if c.shortcut.len > 0usize && !touch {
+        caption.role = .BodyMedium
+        let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, t, caption, muted)
+        if keys_error != ok { ret (zero, keys_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = keys_node
+        parts[p] = widget.padded(0u64, 24.0 - gap, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
+        p += 1usize
+    }
+    var line_style = style.defaults()
+    line_style.width = style.Length { Percent: 100.0 }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, line_style, parts[0usize..p])
+    var sem_states = 0u32
+    if c.checked { sem_states = accessibility.STATE_CHECKED }
+    let (made, made_error) = control.pressable_states(a, item_key, t, 22u8, c.label, look, c.enabled, false, sem_states, 0u32, 0u64, &c.action, content)
+    ret (made, made_error)
+}
+
+// v2 (D975, docs/ux/components/Menu): `surface-container`, `radius-sm`, elevation
+// 2, no border, `rim` above and below its commands; 200 to 320 wide with a pointer
+// (112 to 280 on touch). A command is a full-width row 32 tall (48 touch), 12 at
+// its sides, 8 between its parts (12 touch): the 18 leading slot (24 touch; a
+// check in `on-surface`, reserved in every command once any is checked), the
+// `body-medium` label (`body-large` touch) in `on-surface` (`error` when
+// destructive) and, with a pointer, the shortcut in `body-medium`
+// `on-surface-variant` at the end, at least 24 after the label; the `state-hover`
+// layer of `on-surface` on every row. A disabled command is `on-surface` at 38%
+// under no layer, and skipped by the arrows. A separator is a 1px
+// `outline-variant` line with 4 above and below (8 touch); a group head is
+// `label-medium` `on-surface-variant`, 12 in, 8 above and 4 below. A menu in the
+// tree named `label`, its commands MenuItems (Checked when checked); the runtime
+// moves the focus through them with Down and Up, wrapping, and Home and End.
+// ponytail: no icons, supporting lines, submenus, radio groups or typeahead;
+// the focus ring is the runtime's outside ring rather than inset 3.
+fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32) -> (widget.Node, err) {
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let around = control.if_else(touch, 8.0, 4.0)
+    var slotted = false
+    var k = 0usize
+    while k < commands.len {
+        if commands[k].checked { slotted = true }
+        k += 1usize
+    }
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize * commands.len)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var i = 0usize
+    while i < commands.len {
+        let c = &commands[i]
+        if c.separated && i > 0usize {
+            let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
+            if lines_error != ok { ret (zero, TooLarge) }
+            var rule = style.defaults()
+            rule.width = style.Length { Percent: 100.0 }
+            rule.height = style.Length { Px: t.tokens.sizes.divider }
+            rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            lines[0usize] = widget.box(0u64, rule, zero)
+            rows[n] = widget.padded(0u64, 0.0, around, 0.0, around, style.defaults(), lines[0usize..1usize])
+            n += 1usize
+        }
+        if c.head.len > 0usize {
+            var heading = control.text_options()
+            heading.role = .LabelMedium
+            heading.wrap = .None
+            let (head_node, head_error) = control.colored_text(a, 0u64, c.head, t, heading, style.color(t.tokens, .OnSurfaceVariant))
+            if head_error != ok { ret (zero, head_error) }
+            let (heads, heads_error) = mem.alloc[widget.Node](a, 1usize)
+            if heads_error != ok { ret (zero, TooLarge) }
+            heads[0usize] = head_node
+            rows[n] = widget.padded(0u64, 12.0, 8.0, 12.0, 4.0, style.defaults(), heads[0usize..1usize])
+            n += 1usize
+        }
+        let (made, made_error) = menu_row_of(a, key + 1u64 + u64(i), t, c, slotted)
+        if made_error != ok { ret (zero, made_error) }
+        rows[n] = made
+        n += 1usize
         i += 1usize
     }
     var raised = control.surface_options(t)
-    raised.bordered = true
+    raised.background = .SurfaceContainer
     raised.elevation = 2u8
-    raised.radius = t.tokens.radii.xs
-    raised.padding = t.tokens.spacing.xs
+    raised.radius = t.tokens.radii.sm
+    raised.padding = 0.0
+    var sheet_style = control.surface_style(t, raised)
+    sheet_style.padding.top = style.Length { Px: rim }
+    sheet_style.padding.bottom = style.Length { Px: rim }
+    sheet_style.min_width = style.Length { Px: control.if_else(touch, 112.0, 200.0) }
+    sheet_style.max_width = style.Length { Px: control.if_else(touch, 280.0, 320.0) }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, control.surface_style(t, raised), rows[0usize..items.len])
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..n])
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
@@ -98,10 +387,7 @@ fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.
     var sem: widget.Semantics = zero
     sem.role = 21u8
     sem.label = label
-    let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
-    if lifted_error != ok { ret (zero, TooLarge) }
-    lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .Below, offset: geometry.Point { x: 0.0, y: t.tokens.spacing.xs }, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
 
 // A menu button: an outlined button keyed `key` firing `toggle`, with the menu
@@ -135,12 +421,34 @@ type DialogButton = struct { label: str, action: widget.Submit, kind: DialogActi
 
 // An alert dialog: a dialog whose content is a message (keyed `key + 2`), the
 // dialog described by it.
+// v2 (D977, docs/ux/components/Dialog): the message in `body-medium`
+// `on-surface-variant`.
 fn alert_dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, message: str, buttons: []const DialogButton, open: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (message_node, message_error) = control.text(a, key + 2u64, message, t, control.text_options())
+    var words = control.text_options()
+    words.role = .BodyMedium
+    let (message_node, message_error) = control.colored_text(a, key + 2u64, message, t, words, style.color(t.tokens, .OnSurfaceVariant))
     if message_error != ok { ret (zero, message_error) }
     let (made, made_error) = dialog(a, key, t, title, message_node, buttons, open, true)
     ret (made, made_error)
+}
+
+// The scrim under a modal overlay (D977): `scrim` at the scrim opacity across the
+// window, an overlay of its own under `top`; a press on it misses the modal
+// overlay, which dismisses it.
+fn with_scrim(a: *mem.Arena, t: *const control.Theme, top: widget.Node) -> (widget.Node, err) {
+    var dim = style.defaults()
+    dim.width = style.Length { Percent: 100.0 }
+    dim.height = style.Length { Percent: 100.0 }
+    dim.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Scrim), t.tokens.states.scrim) }
+    let (dims, dims_error) = mem.alloc[widget.Node](a, 1usize)
+    if dims_error != ok { ret (zero, TooLarge) }
+    dims[0usize] = widget.box(0u64, dim, zero)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.overlay(0u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: false, dismiss: zero }, style.defaults(), dims[0usize..1usize])
+    layers[1usize] = top
+    ret (widget.box(0u64, style.defaults(), layers[0usize..2usize]), ok)
 }
 
 // A dialog: a modal overlay in the middle of the window, a card of the title (a
@@ -148,6 +456,15 @@ fn alert_dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
 // `key + 3 + index`, placed only while `open`; a modal dialog in the tree labelled
 // by the title and, when `described`, described by the content's key `key + 2`.
 // The buttons outlive the frame.
+// v2 (D977, docs/ux/components/Dialog): over a `scrim` at 32% across the window,
+// the card is `surface-container-high`, `radius-xl`, elevation 3, no border, 24
+// all round, 280 to 560 wide; the `headline-small` `on-surface` title (a level-2
+// heading), 16 above the content, 8 above the actions at the end 8 apart -- the
+// default a filled button, a destructive one filled in `error`, the others text
+// buttons, all at the control height.
+// ponytail: no AlertDialog role (the Role enum has none), icon well, scroll
+// dividers, busy state, full-screen form or host button order; Escape and the
+// scrim close only through a Cancel button.
 fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var submit: widget.Submit = zero
@@ -157,18 +474,14 @@ fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, c
     var i = 0usize
     while i < buttons.len {
         let button_key = key + 3u64 + u64(i)
-        var variant: style.ControlVariant = .Outlined
+        var variant: style.ControlVariant = .Plain
         if buttons[i].kind == .Default {
             variant = .Filled
             submit = buttons[i].action
         }
+        if buttons[i].kind == .Destructive { variant = .Danger }
         if buttons[i].kind == .Cancel { cancel = buttons[i].action }
-        var look = style.resolve(t.tokens, variant, control.control_state(t, button_key, true, false))
-        if buttons[i].kind == .Destructive {
-            look.background = style.color(t.tokens, .Error)
-            look.foreground = style.color(t.tokens, .OnError)
-            look.border = look.background
-        }
+        let look = control.button_look(t, style.resolve(t.tokens, variant, control.control_state(t, button_key, true, false)), true)
         var caption = control.text_options()
         caption.role = .Label
         caption.wrap = .None
@@ -182,8 +495,8 @@ fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, c
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var heading = control.text_options()
-    heading.role = .Title
-    let (title_node, title_error) = control.text(a, key + 1u64, title, t, heading)
+    heading.role = .HeadlineSmall
+    let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, .OnSurface))
     if title_error != ok { ret (zero, title_error) }
     let (titled, titled_error) = mem.alloc[widget.Node](a, 1usize)
     if titled_error != ok { ret (zero, TooLarge) }
@@ -191,20 +504,26 @@ fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, c
     var title_sem: widget.Semantics = zero
     title_sem.role = 25u8
     title_sem.label = title
-    title_sem.level = 1u8
+    title_sem.level = 2u8
     parts[0usize] = widget.semantics(0u64, title_sem, style.defaults(), titled[0usize..1usize])
-    parts[1usize] = content
-    parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), row[0usize..buttons.len])
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = content
+    parts[1usize] = widget.padded(0u64, 0.0, 16.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
+    var actions_style = style.defaults()
+    actions_style.padding.top = style.Length { Px: 8.0 }
+    parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, actions_style, row[0usize..buttons.len])
     var raised = control.surface_options(t)
-    raised.bordered = true
+    raised.background = .SurfaceContainerHigh
     raised.elevation = 3u8
-    raised.radius = t.tokens.radii.sm
-    raised.padding = t.tokens.spacing.lg
+    raised.radius = t.tokens.radii.xl
+    raised.padding = 24.0
     var card_style = control.surface_style(t, raised)
-    card_style.min_width = style.Length { Px: 8.0 * t.tokens.spacing.lg }
+    card_style.min_width = style.Length { Px: 280.0 }
+    card_style.max_width = style.Length { Px: 560.0 }
     let (card, card_error) = mem.alloc[widget.Node](a, 1usize)
     if card_error != ok { ret (zero, TooLarge) }
-    card[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: t.tokens.spacing.md }, card_style, parts[0usize..3usize])
+    card[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, card_style, parts[0usize..3usize])
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
@@ -218,28 +537,60 @@ fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, c
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: cancel }, style.defaults(), framed[0usize..1usize]), ok)
+    let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: cancel }, style.defaults(), framed[0usize..1usize]))
+    ret (made, made_error)
 }
 
 // -------------------------------------------- transient presentation (D841, P2-09)
 
-// The raised surface every popup stands on.
+// The surface a popup stands on.
+// v2 (D976, docs/ux/components/Popup): `surface-container`, `radius-sm`, elevation
+// 2, no border, 4 above and below the content and none at the sides (its rows
+// run edge to edge), 200 to 480 wide.
+// ponytail: at least 200 wide rather than the anchor's own width; an overlay that
+// learns its anchor's width can match them.
 fn popup_surface(a: *mem.Arena, t: *const control.Theme, content: widget.Node) -> (widget.Node, err) {
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = content
     var raised = control.surface_options(t)
-    raised.bordered = true
+    raised.background = .SurfaceContainer
     raised.elevation = 2u8
-    raised.radius = t.tokens.radii.xs
-    raised.padding = t.tokens.spacing.sm
-    ret (widget.box(0u64, control.surface_style(t, raised), body[0usize..1usize]), ok)
+    raised.radius = t.tokens.radii.sm
+    raised.padding = 0.0
+    var plate = control.surface_style(t, raised)
+    plate.padding.top = style.Length { Px: 4.0 }
+    plate.padding.bottom = style.Length { Px: 4.0 }
+    plate.min_width = style.Length { Px: 200.0 }
+    plate.max_width = style.Length { Px: 480.0 }
+    ret (widget.box(0u64, plate, body[0usize..1usize]), ok)
+}
+
+// The offset that stands an overlay `gap` off its anchor on the side `placement`
+// names (D976).
+fn gap_offset(placement: widget.Placement, gap: f32) -> geometry.Point {
+    if placement == .Above || placement == .AboveCenter { ret geometry.Point { x: 0.0, y: 0.0 - gap } }
+    if placement == .Right { ret geometry.Point { x: gap, y: 0.0 } }
+    if placement == .Left { ret geometry.Point { x: 0.0 - gap, y: 0.0 } }
+    if placement == .Center || placement == .At { ret geometry.Point { x: 0.0, y: 0.0 } }
+    ret geometry.Point { x: 0.0, y: gap }
 }
 
 // A popup: the content on a raised surface placed against `anchor` (keyed
 // `key`), non-modal -- presses elsewhere pass through and nothing closes it but
-// the caller -- placed only while `open`. A group in the tree.
+// the caller -- placed only while `open`. A group in the tree. The v2 popup of
+// D976 below, unnamed.
 fn popup(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, content: widget.Node, open: bool) -> (widget.Node, err) {
+    let (made, made_error) = popup_of(a, key, t, anchor, placement, "", content, open)
+    ret (made, made_error)
+}
+
+// v2 (D976, docs/ux/components/Popup): the popup surface 4 off its anchor on the
+// `placement` side (flipping when that side overflows), a group in the tree named
+// `label`.
+// ponytail: no active descendant, loading bar, or empty and error rows; the
+// anchor keeps the focus because the popup takes none.
+fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (surface, surface_error) = popup_surface(a, t, content)
     if surface_error != ok { ret (zero, surface_error) }
@@ -248,24 +599,92 @@ fn popup(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget
     body[0usize] = surface
     var sem: widget.Semantics = zero
     sem.role = 2u8
+    sem.label = label
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: geometry.Point { x: 0.0, y: t.tokens.spacing.xs }, modal: false, dismiss: zero }, style.defaults(), framed[0usize..1usize]), ok)
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: gap_offset(placement, 4.0), modal: false, dismiss: zero }, style.defaults(), framed[0usize..1usize]), ok)
+}
+
+// v2 (D976, docs/ux/components/Popup): a suggestion row, full width, 40 tall (48
+// on touch), 16 at the sides, the `body-medium` label (`body-large` on touch) in
+// `on-surface` and the `meta` (empty for none) in `label-small`
+// `on-surface-variant` at the end, under the `on-surface` state layer; a list item
+// in the tree firing `action`.
+// ponytail: the matched characters are not set in weight 600, and the footer row
+// is the caller's.
+fn popup_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, meta: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let row_height = control.if_else(touch, 48.0, 40.0)
+    var role: style.TextRole = .BodyMedium
+    if touch { role = .BodyLarge }
+    let ink = style.color(t.tokens, .OnSurface)
+    let state = control.control_state(t, key, true, false)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = control.with_alpha(ink, control.state_opacity(t, state))
+    look.foreground = ink
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 16.0
+    look.padding_y = control.max_zero((row_height - style.text_style(t.tokens, role).line_height) * 0.5)
+    look.min_height = row_height
+    look.min_width = 24.0
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var caption = control.text_options()
+    caption.role = role
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, label, t, caption, ink)
+    if said_error != ok { ret (zero, said_error) }
+    parts[0usize] = said
+    parts[1usize] = widget.spacer(0u64, 1.0)
+    var n = 2usize
+    if meta.len > 0usize {
+        caption.role = .LabelSmall
+        let (noted, noted_error) = control.colored_text(a, 0u64, meta, t, caption, style.color(t.tokens, .OnSurfaceVariant))
+        if noted_error != ok { ret (zero, noted_error) }
+        parts[2usize] = noted
+        n = 3usize
+    }
+    var line_style = style.defaults()
+    line_style.width = style.Length { Percent: 100.0 }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, line_style, parts[0usize..n])
+    let (made, made_error) = control.pressable(a, key, t, 11u8, label, look, true, false, action, content)
+    ret (made, made_error)
 }
 
 // A modal popup against an anchor: the content on the surface, taking the focus,
 // Escape and a press outside firing `dismiss` (which also gives the focus back,
-// D810); a dialog in the tree named `label`.
+// D810); a dialog in the tree named `label`. The v2 flyout surface of D976.
 fn light_dismissed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    let (surface, surface_error) = popup_surface(a, t, content)
-    if surface_error != ok { ret (zero, surface_error) }
-    let (made, made_error) = dismissable(a, key, anchor, placement, label, surface, dismiss, t.tokens.spacing.xs)
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    var raised = control.surface_options(t)
+    raised.background = .SurfaceContainer
+    raised.elevation = 2u8
+    raised.radius = t.tokens.radii.md
+    raised.padding = control.if_else(touch, 16.0, 12.0)
+    var plate = control.surface_style(t, raised)
+    if !touch { plate.padding.bottom = style.Length { Px: 8.0 } }
+    plate.min_width = style.Length { Px: control.if_else(touch, 240.0, 200.0) }
+    plate.max_width = style.Length { Px: control.if_else(touch, 360.0, 320.0) }
+    let (made, made_error) = dismissable(a, key, anchor, placement, label, widget.box(0u64, plate, body[0usize..1usize]), dismiss, 4.0)
     ret (made, made_error)
 }
 
-// The same over a surface the caller drew, `gap` from the anchor (D959).
+// The same over a surface the caller drew, `gap` from the anchor (D959) on the
+// `placement` side (D976).
 fn dismissable(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement: widget.Placement, label: str, surface: widget.Node, dismiss: *const widget.Submit, gap: f32) -> (widget.Node, err) {
+    let (made, made_error) = dismissable_by(a, key, anchor, placement, label, surface, dismiss, gap, 0u64)
+    ret (made, made_error)
+}
+
+// The same labelled by the element keyed `by` (0 for none, D976).
+fn dismissable_by(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement: widget.Placement, label: str, surface: widget.Node, dismiss: *const widget.Submit, gap: f32, by: widget.Key) -> (widget.Node, err) {
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = surface
@@ -277,13 +696,20 @@ fn dismissable(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement: wi
     sem.role = 23u8
     sem.label = label
     sem.states = accessibility.STATE_MODAL
+    sem.labelled_by = by
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: geometry.Point { x: 0.0, y: gap }, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: gap_offset(placement, gap), modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
 }
 
 // A flyout: a light-dismissed popup against its anchor, placed while `open`.
+// v2 (D976, docs/ux/components/Flyout): `surface-container`, `radius-md`,
+// elevation 2, no border; 16 all round on touch, 12 at the sides and top and 8
+// below with a pointer; 240 to 360 wide on touch, 200 to 320 with a pointer; 4
+// off its anchor, flipping when that side overflows.
+// ponytail: the anchor's selected look, Expanded and Controls are the caller's;
+// no compact bottom-sheet presentation.
 fn flyout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (made, made_error) = light_dismissed(a, key, t, anchor, placement, label, content, dismiss)
@@ -291,22 +717,35 @@ fn flyout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widge
 }
 
 // A popover: a flyout with a title (a heading keyed `key + 1`) and a close
-// button (keyed `key + 2`) above the content.
+// button (keyed `key + 2`) above the content. The v2 popover of D976 below,
+// without actions.
 fn popover(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (titled, titled_error) = titled_content(a, key, t, title, content, dismiss)
-    if titled_error != ok { ret (zero, titled_error) }
-    let (made, made_error) = light_dismissed(a, key, t, anchor, placement, title, titled, dismiss)
+    var none: []const MenuItem = zero
+    let (made, made_error) = popover_of(a, key, t, anchor, placement, title, content, none, open, dismiss)
     ret (made, made_error)
 }
 
-// A title row -- the heading (keyed `key + 1`) and a close button (`key + 2`)
-// firing `dismiss` -- above the content.
-fn titled_content(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit) -> (widget.Node, err) {
+// v2 (D976, docs/ux/components/Popover): `surface-container-high`, `radius-md`,
+// elevation 3, no border, 320 wide, 16 at the sides and top and 12 below, 12
+// between its blocks: the header -- the `title-medium` `on-surface` title (a
+// level-2 heading keyed `key + 1` that names the dialog) and a round Close button
+// at the end (keyed `key + 2`, 40 across with a 24 `close`, 32 and 18 with a
+// pointer, in `on-surface-variant`) -- then the content, then up to two actions
+// at the end 8 apart (keyed `key + 3 + index`): the first, the main one, tonal
+// and last, the other a text button before it. A 12 wide, 6 deep beak in the
+// container's colour stands on the near edge, 16 in from the corner, its tip 4
+// from the anchor (the container 10); a modal dialog in the tree.
+// ponytail: the beak sits 16 from the near corner, on the anchor's centre only
+// for an anchor about 44 across; no busy state, dirty-task guard or compact sheet.
+fn popover_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    if actions.len > 2usize { ret (zero, TooLarge) }
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var heading = control.text_options()
-    heading.role = .Title
-    heading.wrap = .None
-    let (title_node, title_error) = control.text(a, key + 1u64, title, t, heading)
+    heading.role = .TitleMedium
+    heading.wrap = .Word
+    heading.max_lines = 2u32
+    let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, .OnSurface))
     if title_error != ok { ret (zero, title_error) }
     let (titled, titled_error) = mem.alloc[widget.Node](a, 1usize)
     if titled_error != ok { ret (zero, TooLarge) }
@@ -314,22 +753,75 @@ fn titled_content(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title
     var title_sem: widget.Semantics = zero
     title_sem.role = 25u8
     title_sem.label = title
-    title_sem.level = 1u8
-    let (head, head_error) = mem.alloc[widget.Node](a, 2usize)
+    title_sem.level = 2u8
+    let (head, head_error) = mem.alloc[widget.Node](a, 3usize)
     if head_error != ok { ret (zero, TooLarge) }
     head[0usize] = widget.semantics(0u64, title_sem, style.defaults(), titled[0usize..1usize])
-    var plain = control.button_options()
-    plain.variant = .Plain
-    let (close, close_error) = control.button(a, key + 2u64, t, "x", dismiss, plain)
+    head[1usize] = widget.spacer(0u64, 1.0)
+    let (close, close_error) = control.glyph_button(a, key + 2u64, t, .Cross, "Close", dismiss, control.if_else(touch, 40.0, 32.0), control.if_else(touch, 24.0, 18.0))
     if close_error != ok { ret (zero, close_error) }
-    head[1usize] = close
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    head[2usize] = close
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    // The row spreads the title and the close apart without a flex share, which
-    // an overlay's loose measure would grow to the window.
-    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), head[0usize..2usize])
+    var full = style.defaults()
+    full.width = style.Length { Percent: 100.0 }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, full, head[0usize..3usize])
     parts[1usize] = content
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize]), ok)
+    var n = 2usize
+    if actions.len > 0usize {
+        let (row, row_error) = mem.alloc[widget.Node](a, actions.len)
+        if row_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < actions.len {
+            var options = control.button_options()
+            options.variant = .Plain
+            if i == 0usize { options.variant = .Tonal }
+            options.enabled = actions[i].enabled
+            let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, actions[i].label, &actions[i].action, options)
+            if pressed_error != ok { ret (zero, pressed_error) }
+            row[actions.len - 1usize - i] = pressed
+            i += 1usize
+        }
+        parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, full, row[0usize..actions.len])
+        n = 3usize
+    }
+    var raised = control.surface_options(t)
+    raised.background = .SurfaceContainerHigh
+    raised.elevation = 3u8
+    raised.radius = t.tokens.radii.md
+    raised.padding = 16.0
+    var plate = control.surface_style(t, raised)
+    plate.padding.bottom = style.Length { Px: 12.0 }
+    plate.width = style.Length { Px: 320.0 }
+    let (card, card_error) = mem.alloc[widget.Node](a, 2usize)
+    if card_error != ok { ret (zero, TooLarge) }
+    let fill = style.color(t.tokens, .SurfaceContainerHigh)
+    let across = placement == .Right || placement == .Left
+    var pointing: control.GlyphKind = .ChevronUp
+    if placement == .Right { pointing = .ChevronLeft }
+    if placement == .Left { pointing = .ChevronRight }
+    if placement == .Above || placement == .AboveCenter { pointing = .ChevronDown }
+    let (tip, tip_error) = control.beak(a, fill, pointing, control.if_else(across, 6.0, 12.0), control.if_else(across, 12.0, 6.0))
+    if tip_error != ok { ret (zero, tip_error) }
+    let (tips, tips_error) = mem.alloc[widget.Node](a, 1usize)
+    if tips_error != ok { ret (zero, TooLarge) }
+    tips[0usize] = tip
+    var tip_node = widget.padded(0u64, 16.0, 0.0, 0.0, 0.0, style.defaults(), tips[0usize..1usize])
+    if across { tip_node = widget.padded(0u64, 0.0, 16.0, 0.0, 0.0, style.defaults(), tips[0usize..1usize]) }
+    let box_node = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 12.0 }, plate, parts[0usize..n])
+    // The beak comes first on the anchor's side: before the card below or to the
+    // right of the anchor, after it above or to the left.
+    var axis: ui_layout.Axis = .Vertical
+    if across { axis = .Horizontal }
+    card[0usize] = tip_node
+    card[1usize] = box_node
+    if pointing == .ChevronDown || pointing == .ChevronRight {
+        card[0usize] = box_node
+        card[1usize] = tip_node
+    }
+    let joined = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), card[0usize..2usize])
+    let (made, made_error) = dismissable_by(a, key, anchor, placement, title, joined, dismiss, 4.0, key + 1u64)
+    ret (made, made_error)
 }
 
 // A sheet: a modal panel `width` wide along the right edge of the window, the
@@ -343,83 +835,228 @@ fn sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, co
 }
 
 // A bottom sheet: the same along the bottom edge, the window's width and
-// `height` tall.
+// `height` tall; v2 (D977), a drag handle rather than the close button.
 fn bottom_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, height: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (made, made_error) = edged(a, key, t, title, content, dismiss, .Below, 0.0, height)
     ret (made, made_error)
 }
 
+// A bottom sheet's drag handle (D977): 32 by 4, `radius-full`, `on-surface-variant`
+// at 40%, centred 16 from the sheet's top.
+fn sheet_handle(t: *const control.Theme, grips: []widget.Node) -> widget.Node {
+    var grip = control.sized_style(32.0, 4.0)
+    grip.radius = 2.0
+    grip.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.4) }
+    grips[0usize] = widget.box(0u64, grip, zero)
+    var row = style.defaults()
+    row.width = style.Length { Percent: 100.0 }
+    row.padding.top = style.Length { Px: 16.0 }
+    ret widget.aligned(0u64, .Center, .Start, row, grips[0usize..1usize])
+}
+
+// v2 (D977, docs/ux/components/Sheet): the header -- the `title-large` `on-surface`
+// title (a heading keyed `key + 1`), 16 in, 56 tall (48 for a side sheet with a
+// pointer), and on a side sheet a round Close button at the end (keyed `key + 2`,
+// 40 across with a 24 `close`, 32 and 18 with a pointer, named "Close") -- over
+// the content 16 in at the sides; a bottom sheet's drag handle above the header.
 fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
-    let (titled, titled_error) = titled_content(a, key, t, title, content, dismiss)
-    if titled_error != ok { ret (zero, titled_error) }
-    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    let bottom = placement == .Below
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var heading = control.text_options()
+    heading.role = .TitleLarge
+    heading.wrap = .None
+    let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, .OnSurface))
+    if title_error != ok { ret (zero, title_error) }
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 7usize)
+    if bits_error != ok { ret (zero, TooLarge) }
+    bits[0usize] = title_node
+    var title_sem: widget.Semantics = zero
+    title_sem.role = 25u8
+    title_sem.label = title
+    title_sem.level = 1u8
+    bits[1usize] = widget.semantics(0u64, title_sem, style.defaults(), bits[0usize..1usize])
+    bits[2usize] = widget.spacer(0u64, 1.0)
+    var n = 2usize
+    if !bottom {
+        let (close, close_error) = control.glyph_button(a, key + 2u64, t, .Cross, "Close", dismiss, control.if_else(touch, 40.0, 32.0), control.if_else(touch, 24.0, 18.0))
+        if close_error != ok { ret (zero, close_error) }
+        bits[3usize] = close
+        n = 3usize
+    }
+    var bar = style.defaults()
+    bar.width = style.Length { Percent: 100.0 }
+    bar.height = style.Length { Px: control.if_else(!bottom && !touch, 48.0, 56.0) }
+    bar.padding.left = style.Length { Px: 16.0 }
+    bar.padding.right = style.Length { Px: control.if_else(bottom, 16.0, 8.0) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var p = 0usize
+    if bottom {
+        parts[0usize] = sheet_handle(t, bits[4usize..5usize])
+        p = 1usize
+    }
+    parts[p] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, bar, bits[1usize..1usize + n])
+    bits[5usize] = content
+    parts[p + 1usize] = widget.padded(0u64, 16.0, 0.0, 16.0, 0.0, style.defaults(), bits[5usize..6usize])
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..p + 2usize])
+    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, placement, width, height)
+    ret (made, made_error)
+}
+
+// v2 (D977, docs/ux/components/Sheet, modal): over a `scrim` at 32% across the
+// window, `surface-container-low` with elevation 3; along the bottom the window's
+// width up to 640, centred, `height` tall (0: as tall as its content), its top
+// corners `radius-xl`; along a side `width` wide and the window's height, its
+// open edge's corners `radius-lg`. A modal dialog in the tree named `label`,
+// labelled by the element keyed `key + 1`; Escape and a press outside fire
+// `dismiss`.
+// ponytail: modal only -- no standard (docked or peeking) sheets, detents,
+// drag-to-dismiss, Back button, actions footer or unsaved-input guard; a side
+// sheet keeps the caller's width rather than 256 to 400.
+fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
+    let bottom = placement == .Below
+    let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = titled
-    var options = control.surface_options(t)
-    options.elevation = 3u8
-    options.padding = t.tokens.spacing.md
-    var panel = control.surface_style(t, options)
+    body[0usize] = column
+    var raised = control.surface_options(t)
+    raised.background = .SurfaceContainerLow
+    raised.elevation = 3u8
+    raised.padding = 0.0
+    var panel = control.surface_style(t, raised)
+    panel.overflow = .Clip
     panel.width = style.Length { Percent: 100.0 }
     panel.height = style.Length { Percent: 100.0 }
     if width > 0.0 { panel.width = style.Length { Px: width } }
-    if height > 0.0 { panel.height = style.Length { Px: height } }
-    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
-    if boxed_error != ok { ret (zero, TooLarge) }
-    boxed[0usize] = widget.box(0u64, panel, body[0usize..1usize])
+    if bottom {
+        let content_high: style.Length = .Auto
+        panel.height = content_high
+        if height > 0.0 { panel.height = style.Length { Px: height } }
+        panel.max_width = style.Length { Px: 640.0 }
+        let xl = t.tokens.radii.xl
+        panel.corners = style.Corners { top_left: xl, top_right: xl, bottom_right: 0.0, bottom_left: 0.0 }
+    } else {
+        let lg = t.tokens.radii.lg
+        panel.corners = style.Corners { top_left: lg, top_right: 0.0, bottom_right: 0.0, bottom_left: lg }
+        if placement == .Left { panel.corners = style.Corners { top_left: 0.0, top_right: lg, bottom_right: lg, bottom_left: 0.0 } }
+    }
+    body[1usize] = widget.box(0u64, panel, body[0usize..1usize])
+    var placed = body[1usize]
+    if bottom {
+        var centre = style.defaults()
+        centre.width = style.Length { Percent: 100.0 }
+        placed = widget.aligned(0u64, .Center, .End, centre, body[1usize..2usize])
+    }
+    body[2usize] = placed
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), boxed[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), body[2usize..3usize])
     var sem: widget.Semantics = zero
     sem.role = 23u8
-    sem.label = title
+    sem.label = label
     sem.states = accessibility.STATE_MODAL
     sem.labelled_by = key + 1u64
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
+    let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]))
+    ret (made, made_error)
 }
 
-// An action sheet: a bottom sheet of the actions as full-width buttons keyed
-// `key + 3 + index` (the destructive ones in the error colour) with a Cancel
-// button (keyed `key + 3 + count`) last that fires `dismiss`.
+// v2 (D977): an action sheet's row, full width, 48 tall, 16 at the sides, the
+// `body-large` label in `ink` under the `on-surface` state layer; a button in the
+// tree.
+fn sheet_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, ink: paint.Color, action: *const widget.Submit) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, false)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
+    look.foreground = ink
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 16.0
+    look.padding_y = control.max_zero((48.0 - style.text_style(t.tokens, .BodyLarge).line_height) * 0.5)
+    look.min_height = 48.0
+    look.min_width = 24.0
+    var caption = control.text_options()
+    caption.role = .BodyLarge
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, label, t, caption, ink)
+    if said_error != ok { ret (zero, said_error) }
+    let (made, made_error) = control.pressable(a, key, t, 3u8, label, look, true, false, action, said)
+    if made_error != ok { ret (zero, made_error) }
+    var stretched = made
+    stretched.style.width = style.Length { Percent: 100.0 }
+    ret (stretched, ok)
+}
+
+// An action sheet: a bottom sheet of the actions keyed `key + 3 + index` (the
+// destructive ones in the error colour) with a Cancel (keyed `key + 3 + count`)
+// last that fires `dismiss`.
+// v2 (D977, docs/ux/components/ActionSheet, sheet of rows): the modal bottom
+// sheet (`surface-container-low`, `radius-xl` top corners, elevation 3, the drag
+// handle, over the scrim), as tall as its content; the `title` (empty for none)
+// a header in `body-small` `on-surface-variant` keyed `key + 1`, 16 in, 4 above
+// and 8 below; the actions `sheet_row`s in `on-surface`, a destructive one in
+// `error` after a 1px `outline-variant` divider with 8 around; Cancel last after
+// another divider. Escape, the scrim and Cancel fire `dismiss`.
+// ponytail: Cancel stays a row (the grouped form's) where the Android form has
+// none; no leading icons, grouped iOS cards or pointer-host menu form, and
+// "Cancel" is not localised.
 fn action_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (rows, rows_error) = mem.alloc[widget.Node](a, buttons.len + 1usize)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * buttons.len + 5usize)
     if rows_error != ok { ret (zero, TooLarge) }
+    let (grips, grips_error) = mem.alloc[widget.Node](a, 2usize)
+    if grips_error != ok { ret (zero, TooLarge) }
+    rows[0usize] = sheet_handle(t, grips[0usize..1usize])
+    var n = 1usize
+    if title.len > 0usize {
+        var small = control.text_options()
+        small.role = .BodySmall
+        let (said, said_error) = control.colored_text(a, key + 1u64, title, t, small, style.color(t.tokens, .OnSurfaceVariant))
+        if said_error != ok { ret (zero, said_error) }
+        grips[1usize] = said
+        rows[n] = widget.padded(0u64, 16.0, 20.0, 16.0, 8.0, style.defaults(), grips[1usize..2usize])
+        n += 1usize
+    } else {
+        rows[n] = widget.box(0u64, control.sized_style(1.0, 16.0), zero)
+        n += 1usize
+    }
     var i = 0usize
-    while i < buttons.len {
-        let button_key = key + 3u64 + u64(i)
-        var look = style.resolve(t.tokens, .Outlined, control.control_state(t, button_key, true, false))
-        if buttons[i].kind == .Destructive {
-            look.background = style.color(t.tokens, .Error)
-            look.foreground = style.color(t.tokens, .OnError)
-            look.border = look.background
+    while i <= buttons.len {
+        let cancelling = i == buttons.len
+        var ink = style.color(t.tokens, .OnSurface)
+        if !cancelling && buttons[i].kind == .Destructive { ink = style.color(t.tokens, .Error) }
+        if cancelling || buttons[i].kind == .Destructive {
+            let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+            if rule_error != ok { ret (zero, rule_error) }
+            let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
+            if lines_error != ok { ret (zero, TooLarge) }
+            lines[0usize] = rule
+            rows[n] = widget.padded(0u64, 0.0, 8.0, 0.0, 8.0, style.defaults(), lines[0usize..1usize])
+            n += 1usize
         }
-        var caption = control.text_options()
-        caption.role = .Label
-        caption.wrap = .None
-        let (label_node, label_error) = control.colored_text(a, 0u64, buttons[i].label, t, caption, look.foreground)
-        if label_error != ok { ret (zero, label_error) }
-        let (pressed, pressed_error) = control.pressable_states(a, button_key, t, 3u8, buttons[i].label, look, true, false, 0u32, 0u32, 0u64, &buttons[i].action, label_node)
-        if pressed_error != ok { ret (zero, pressed_error) }
-        var stretched = pressed
-        stretched.style.width = style.Length { Percent: 100.0 }
-        rows[i] = stretched
+        var made: widget.Node = zero
+        if cancelling {
+            let (row, row_error) = sheet_row(a, key + 3u64 + u64(i), t, "Cancel", ink, dismiss)
+            if row_error != ok { ret (zero, row_error) }
+            made = row
+        } else {
+            let (row, row_error) = sheet_row(a, key + 3u64 + u64(i), t, buttons[i].label, ink, &buttons[i].action)
+            if row_error != ok { ret (zero, row_error) }
+            made = row
+        }
+        rows[n] = made
+        n += 1usize
         i += 1usize
     }
-    var outlined = control.button_options()
-    outlined.variant = .Outlined
-    let (cancel, cancel_error) = control.button(a, key + 3u64 + u64(buttons.len), t, "Cancel", dismiss, outlined)
-    if cancel_error != ok { ret (zero, cancel_error) }
-    var stretched_cancel = cancel
-    stretched_cancel.style.width = style.Length { Percent: 100.0 }
-    rows[buttons.len] = stretched_cancel
-    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: t.tokens.spacing.xs }, style.defaults(), rows[0usize..buttons.len + 1usize])
-    let height = f32(buttons.len + 2usize) * (t.tokens.metrics.control_height + t.tokens.spacing.xs) + 3.0 * t.tokens.spacing.md + t.tokens.text[0usize].line_height
-    let (made, made_error) = edged(a, key, t, title, column, dismiss, .Below, 0.0, height)
+    rows[n] = widget.box(0u64, control.sized_style(1.0, 8.0), zero)
+    n += 1usize
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..n])
+    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, .Below, 0.0, 0.0)
     ret (made, made_error)
 }
 

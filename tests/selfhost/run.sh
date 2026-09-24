@@ -2941,6 +2941,120 @@ ui_status2_v2_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/ui-status2-v2-selfhost"
 ui_status2_v2_output=$("$test_build/ui-status2-v2-selfhost")
 [ "$ui_status2_v2_output" = 'ui status2 v2 ok' ]
+# The v2 badges, empty states and banners (DNEW, widget plan P5-09)
+ui_status3_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_status3_v2/src/main.e" "$repo" x64 linux "$test_build/ui-status3-v2-selfhost")
+[ "$ui_status3_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-status3-v2-selfhost"
+ui_status3_v2_output=$("$test_build/ui-status3-v2-selfhost")
+[ "$ui_status3_v2_output" = 'ui status3 v2 ok' ]
+# The v2 snackbar and toast (DNEW, widget plan P5-09)
+ui_status4_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_status4_v2/src/main.e" "$repo" x64 linux "$test_build/ui-status4-v2-selfhost")
+[ "$ui_status4_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-status4-v2-selfhost"
+ui_status4_v2_output=$("$test_build/ui-status4-v2-selfhost")
+[ "$ui_status4_v2_output" = 'ui status4 v2 ok' ]
+# The v2 notification list and status bar (DNEW, widget plan P5-09)
+ui_status5_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_status5_v2/src/main.e" "$repo" x64 linux "$test_build/ui-status5-v2-selfhost")
+[ "$ui_status5_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-status5-v2-selfhost"
+ui_status5_v2_output=$("$test_build/ui-status5-v2-selfhost")
+[ "$ui_status5_v2_output" = 'ui status5 v2 ok' ]
+# The v2 app bars and navigation stack (D972)
+ui_navigation_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_navigation_v2/src/main.e" "$repo" x64 linux "$test_build/ui-navigation-v2-selfhost")
+[ "$ui_navigation_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-navigation-v2-selfhost"
+ui_navigation_v2_output=$("$test_build/ui-navigation-v2-selfhost")
+[ "$ui_navigation_v2_output" = 'ui navigation v2 ok' ]
+# The v2 breadcrumbs, tabs and menu bar (D972)
+ui_navigation2_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_navigation2_v2/src/main.e" "$repo" x64 linux "$test_build/ui-navigation2-v2-selfhost")
+[ "$ui_navigation2_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-navigation2-v2-selfhost"
+ui_navigation2_v2_output=$("$test_build/ui-navigation2-v2-selfhost")
+[ "$ui_navigation2_v2_output" = 'ui navigation2 v2 ok' ]
+# The v2 destination bar and navigation drawers (D973)
+ui_navigation3_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_navigation3_v2/src/main.e" "$repo" x64 linux "$test_build/ui-navigation3-v2-selfhost")
+[ "$ui_navigation3_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-navigation3-v2-selfhost"
+ui_navigation3_v2_output=$("$test_build/ui-navigation3-v2-selfhost")
+[ "$ui_navigation3_v2_output" = 'ui navigation3 v2 ok' ]
+# The v2 navigation split, page indicator and pagination (D973)
+ui_navigation4_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_navigation4_v2/src/main.e" "$repo" x64 linux "$test_build/ui-navigation4-v2-selfhost")
+[ "$ui_navigation4_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-navigation4-v2-selfhost"
+ui_navigation4_v2_output=$("$test_build/ui-navigation4-v2-selfhost")
+[ "$ui_navigation4_v2_output" = 'ui navigation4 v2 ok' ]
+# The v2 document tabs and wizards (D974)
+ui_navigation5_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_navigation5_v2/src/main.e" "$repo" x64 linux "$test_build/ui-navigation5-v2-selfhost")
+[ "$ui_navigation5_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-navigation5-v2-selfhost"
+ui_navigation5_v2_output=$("$test_build/ui-navigation5-v2-selfhost")
+[ "$ui_navigation5_v2_output" = 'ui navigation5 v2 ok' ]
+# The v2 menus, context menus and tooltips (D975)
+ui_overlays_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_overlays_v2/src/main.e" "$repo" x64 linux "$test_build/ui-overlays-v2-selfhost")
+[ "$ui_overlays_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-overlays-v2-selfhost"
+ui_overlays_v2_output=$("$test_build/ui-overlays-v2-selfhost")
+[ "$ui_overlays_v2_output" = 'ui overlays v2 ok' ]
+# The v2 popups, flyouts and popovers (D976)
+ui_overlays2_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_overlays2_v2/src/main.e" "$repo" x64 linux "$test_build/ui-overlays2-v2-selfhost")
+[ "$ui_overlays2_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-overlays2-v2-selfhost"
+ui_overlays2_v2_output=$("$test_build/ui-overlays2-v2-selfhost")
+[ "$ui_overlays2_v2_output" = 'ui overlays2 v2 ok' ]
+# The v2 dialogs, sheets and action sheets (D977)
+ui_overlays3_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_overlays3_v2/src/main.e" "$repo" x64 linux "$test_build/ui-overlays3-v2-selfhost")
+[ "$ui_overlays3_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-overlays3-v2-selfhost"
+ui_overlays3_v2_output=$("$test_build/ui-overlays3-v2-selfhost")
+[ "$ui_overlays3_v2_output" = 'ui overlays3 v2 ok' ]
+# The v2 command palette and window switcher (D978)
+ui_overlays4_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_overlays4_v2/src/main.e" "$repo" x64 linux "$test_build/ui-overlays4-v2-selfhost")
+[ "$ui_overlays4_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-overlays4-v2-selfhost"
+ui_overlays4_v2_output=$("$test_build/ui-overlays4-v2-selfhost")
+[ "$ui_overlays4_v2_output" = 'ui overlays4 v2 ok' ]
+# v2 rows, lists, virtual list, grid view and virtual grid (D979)
+ui_collections_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_collections_v2/src/main.e" "$repo" x64 linux "$test_build/ui-collections-v2-selfhost")
+[ "$ui_collections_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-collections-v2-selfhost"
+ui_collections_v2_output=$("$test_build/ui-collections-v2-selfhost")
+[ "$ui_collections_v2_output" = 'ui collections v2 ok' ]
+# v2 header row, table rows, table and data grid (D980)
+ui_collections2_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_collections2_v2/src/main.e" "$repo" x64 linux "$test_build/ui-collections2-v2-selfhost")
+[ "$ui_collections2_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-collections2-v2-selfhost"
+ui_collections2_v2_output=$("$test_build/ui-collections2-v2-selfhost")
+[ "$ui_collections2_v2_output" = 'ui collections2 v2 ok' ]
+# v2 tree, outline and tree table (D981)
+ui_collections3_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_collections3_v2/src/main.e" "$repo" x64 linux "$test_build/ui-collections3-v2-selfhost")
+[ "$ui_collections3_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-collections3-v2-selfhost"
+ui_collections3_v2_output=$("$test_build/ui-collections3-v2-selfhost")
+[ "$ui_collections3_v2_output" = 'ui collections3 v2 ok' ]
+# v2 page view, carousel, pull to refresh, swipe actions and reorderable list (D982)
+ui_collections4_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_collections4_v2/src/main.e" "$repo" x64 linux "$test_build/ui-collections4-v2-selfhost")
+[ "$ui_collections4_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-collections4-v2-selfhost"
+ui_collections4_v2_output=$("$test_build/ui-collections4-v2-selfhost")
+[ "$ui_collections4_v2_output" = 'ui collections4 v2 ok' ]
+# v2 press ripple (D983)
+ui_ripple_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_ripple_v2/src/main.e" "$repo" x64 linux "$test_build/ui-ripple-v2-selfhost")
+[ "$ui_ripple_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-ripple-v2-selfhost"
+ui_ripple_v2_output=$("$test_build/ui-ripple-v2-selfhost")
+[ "$ui_ripple_v2_output" = 'ui ripple v2 ok' ]
+# The v2 data grid core: active cell, edit mode, invalid, range, dirty and status bar (D984, widget plan P5-12)
+ui_collections6_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_collections6_v2/src/main.e" "$repo" x64 linux "$test_build/ui-collections6-v2-selfhost")
+[ "$ui_collections6_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-collections6-v2-selfhost"
+ui_collections6_v2_output=$("$test_build/ui-collections6-v2-selfhost")
+[ "$ui_collections6_v2_output" = 'ui collections6 v2 ok' ]
+# v2 property grid and key-value editor (D983)
+ui_collections5_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_collections5_v2/src/main.e" "$repo" x64 linux "$test_build/ui-collections5-v2-selfhost")
+[ "$ui_collections5_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-collections5-v2-selfhost"
+ui_collections5_v2_output=$("$test_build/ui-collections5-v2-selfhost")
+[ "$ui_collections5_v2_output" = 'ui collections5 v2 ok' ]
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 ui_selection_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_selection/src/main.e" "$repo" x64 linux "$test_build/ui-selection-selfhost")

@@ -248,7 +248,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tree_error != ok { os.exit(13i32) }
     let (files, has_files) = find(tree, .Table, "Files")
     if !has_files || files.position.row_count != 200u32 || files.position.column_count != 3u32 { os.exit(14i32) }
-    if count_role(tree, .ColumnHeader) != 3usize || testing.by_text(&harness, "Name ^").count == 0usize { os.exit(15i32) }
+    if count_role(tree, .ColumnHeader) != 3usize || testing.by_text(&harness, "Name").count == 0usize { os.exit(15i32) }
     // The header is a row too; every built row cost three cells; not every row was.
     let built_rows = count_role(tree, .Row) - 1usize
     if built_rows < 4usize || built_rows > 8usize || logs[0usize].cells != 3usize * built_rows { os.exit(16i32) }
@@ -279,7 +279,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if tree_2_error != ok { os.exit(25i32) }
     let (sheet, has_sheet) = find(tree_2, .Grid, "Sheet")
-    if !has_sheet || testing.by_text(&harness, "Name v").count == 0usize { os.exit(26i32) }
+    if !has_sheet || testing.by_text(&harness, "Name").count == 0usize { os.exit(26i32) }
     // The tree with A expanded: five tree items (A, its two, B, C), A at level 1
     // expanded, its children at level 2, C selected; B's children are never
     // asked for. A tap on A's mark toggles A; a tap on A1's row picks it; Right
@@ -326,7 +326,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tree_5_error != ok { os.exit(38i32) }
     let (sizes, has_sizes) = find(tree_5, .Tree, "Sizes")
     if !has_sizes || count_role(tree_5, .ColumnHeader) != 2usize || count_role(tree_5, .TreeItem) != 5usize || count_role(tree_5, .Cell) != 10usize { os.exit(39i32) }
-    if testing.by_text(&harness, "Size ^").count == 0usize || testing.by_text(&harness, "k").count != 5usize { os.exit(40i32) }
+    if testing.by_text(&harness, "Size").count == 0usize || testing.by_text(&harness, "k").count != 5usize { os.exit(40i32) }
     let (head_at, has_head) = centre_of(&harness, &runtime, 201u64)
     if !has_head || testing.tap(&harness, head_at.x, head_at.y) != ok || logs[0usize].sorts != 2usize || logs[0usize].sorted != 0usize { os.exit(41i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(42i32) }

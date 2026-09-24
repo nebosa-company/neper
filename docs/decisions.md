@@ -20062,3 +20062,1211 @@ ui_progress now samples the 4 tall bar, the 40% segment and the
   for now).
 - The Skeleton band's 10-degree angle.
 - The gauge's loading skeleton, and a neutral `primary` segmented scale.
+
+## D971 — Badges, banners, empty states, snackbars, notification lists and status bars draw their v2 specifications
+
+The last six P5-09 specs now draw their v2 look. The old functions keep their
+signatures, so every existing caller passes. Three glyphs join the shared set:
+`info`, `check-circle` and `warning`.
+
+**Badge.** `control.badge_of` draws a count 16 tall and at least 16 wide, 4 at
+the sides, fully rounded, in `label-small`:
+- urgent, the default: `error` / `on-error`;
+- emphasis: `primary` / `on-primary`;
+- neutral: `surface-container-highest` / `on-surface-variant`.
+
+The Dot kind is a 6 `error` disc. `badge_count` caps the count at "99+".
+`badge_anchor` puts a count 2 above an anchor and 12 before its end, and a dot
+with its centre 3 in from the top end corner. The badge is not in the tree;
+`badge_name` builds the anchor's name ("Builds, 2 failed"). `status_label`
+draws the tag: 24 tall, `radius-xs`, 8 at the sides, `label-medium`, with an
+optional 14 mark, in the success, warning, error, tertiary or secondary
+container pair. The old `badge` is the urgent count inside its old Status node.
+
+**Banner.** `control.banner_of` takes `BannerOptions` (title, standard layout,
+full-bleed). Every severity stands on `surface-container-low`, `radius-md`
+(square full-bleed). The severity is a 40 well in its status container pair
+with its icon, 16 before the text.
+- Inline: one line, 12 by 16 padding, then the text-button actions and the
+  close.
+- Standard: 16 top and sides, 8 at the foot, the `title-small` title over the
+  message, and the actions in a row below at the end, 8 apart.
+
+The close is a 40 `close` icon button named "Dismiss". Info, success and
+warning are polite statuses; only an error is an assertive alert. Warning was
+an alert before, so ui_feedback now expects a polite status.
+
+**Empty state.** `control.empty_state_of` takes `EmptyOptions` (art glyph,
+compact, a filled next step and a text alternative). It draws a centred column
+at most 360 wide (320 compact), padded 40 by 24 (24 by 16). The glyph sits in a
+72 `secondary-container` circle (48 compact) and is hidden from the tree. The
+title is `headline-small` (`title-medium` compact), the message `body-medium`
+`on-surface-variant`, with the specified gaps. Compact draws one outlined
+button. The region is a group named by the title, with the message as its
+hint. The old `empty_state` puts the caller's texture in the circle.
+
+**Snackbar and toast.** The snackbar is `inverse-surface`, `radius-xs`,
+elevation 3, at least 48 tall and 288 to 560 wide, padded 16/8/4, with the
+message in `inverse-on-surface`. Its action is a text button in
+`inverse-primary` (the new `tinted_button`), and its close a `close` icon
+button named "Dismiss" (`tinted_glyph_button`). It stands 24 from the bottom
+start. The toast is 340 wide on `surface-container-high`, `radius-md`,
+elevation 3, with a 32 info well, 12 in from the top end. The window clamp used
+to eat the overlay offset; the margin now rides inside the overlay as padding.
+
+**Notification list.** `control.notification_list_of` takes `NotificationItem`
+(title, message, time, severity, unread, day group, action, dismiss). The panel
+is `surface-container-low`, `radius-md`, clipping. A 56 header holds the title
+in `title-medium` and Mark all read, over a 1px `outline-variant` line. Day
+group headers are `label-medium` `on-surface-variant`. Each row is at least 72
+tall and has:
+- a 40 severity well;
+- the title (`title-small` unread, `body-medium` read), the message and the
+  time;
+- a text-button action;
+- an 8 `primary` unread dot;
+- a 32 Dismiss close.
+
+With no items, the list shows the compact empty state "You're all caught up".
+The region's name carries the unread count ("Notifications, 2 unread"), and an
+unread row's name starts "Unread, ". The old `notification_list` maps notices
+to read items, and Clear all became Mark all read.
+
+**Status bar.** `navigation.status_bar_of` takes `StatusItem` (text, glyph,
+tone, end group, press, progress). The bar is 24 tall and square on
+`surface-container` (`primary-container` in the mode variant), 4 in at the
+ends, with the start group, a spacer and the end group. Each item has 8 at its
+sides, an optional 16 glyph (in `error` or `warning`) and `body-small` text. A
+meter item draws a 48x4 fully rounded bar, `primary` on `secondary-container`.
+A pressable item is a button under the hover layer. Only the message item is a
+polite status. The old `status_bar` puts the first section at the start and
+the rest at the end.
+
+**Tests.**
+- ui_status3_v2 holds the badges, anchors, status labels, empty states and
+  banners.
+- ui_status4_v2 holds the snackbar and toast placement, colours and presses.
+- ui_status5_v2 holds the notification panel, groups, rows, names and presses,
+  the empty list, the status bar, its meter, its end item and the mode variant.
+- ui_feedback and ui_desktop grew taller for the v2 sizes; ui_feedback expects
+  a polite status for the warning banner.
+
+All 86 ui_* fixtures pass on Windows and Linux. With this, all twelve P5-09
+specs are delivered.
+
+**Still open.**
+- Motion everywhere: the badge scale, the banner height, the snackbar and toast
+  enter and exit, and new notification rows.
+- Snackbar timeouts, the compact bottom-centre placement, the two-line layout,
+  and the toast's title and severity (Notice has neither) and its stack of
+  three.
+- Badge counts past 999 as "1.2k", the 2px ring on tonal grounds, and a badge
+  option on icon buttons and navigation items.
+- The notification list's settings button, hover-only dismiss, Up/Down keys,
+  grouped repeats and loading rows.
+- The status bar's narrowing rules, tooltips and the inset focus ring.
+- The empty state's cross-fade and optical raise.
+
+## D972 — App bars, navigation stacks, breadcrumbs, tabs and menu bars draw their v2 specifications
+
+Five P5-10 specs now draw their v2 look. The old functions keep their
+signatures and route through the new ones, so every existing caller passes.
+Two glyphs join the shared set: `more-vert` and `menu`. A new
+`control.glyph_action` is the round glyph button with a disabled look and the
+tree's extra states (Expanded, Has popup, controls), for the bars' icon
+actions.
+
+**App bar.** `navigation.app_bar_of` takes `AppBarOptions` (size, scrolled,
+contextual title and clear, the More menu's state, Back's name and action, and
+a node to stand in place of the title). The bar is full-bleed and square on
+`surface`, `surface-container` once scrolled, with no divider or shadow and 4
+in at the sides.
+- Pointer density: a 48 row, 32 icon actions, `title-medium`. Touch: 64, 40
+  actions, `title-large`.
+- The title is one line with an ellipsis, 8 after the leading action (16 in
+  with none), centred in the center-aligned size, a heading of level 1.
+- Medium (112) and large (152) set the title on its own line in
+  `headline-small` and `headline-medium`, 16 in and 16 (28) above the edge.
+- Leading content is `on-surface`, trailing `on-surface-variant`. Actions stand
+  4 apart; past three the rest go into a More menu (`more-vert`, Has popup,
+  Expanded while open).
+- The contextual bar is `secondary-container`, leads with Clear selection and
+  says its title ("3 selected") politely.
+
+`navigation.bottom_app_bar` is 80 tall on `surface-container`, up to four
+actions from 4 in and a 56 FAB on `primary-container` with `radius-lg`, 16 from
+the end, casting no shadow. The old bar was `primary` with invisible Plain
+actions; worded actions are now text buttons in the bar's content colour.
+
+**Navigation stack.** `navigation.navigation_stack_of` puts the top page on
+`surface` under the v2 bar. Back is an `arrow-back` icon action in `on-surface`
+named "Back to <the page beneath>" (it was a worded "Back" lost on `primary`).
+Given a jump for each level, a pointer host three or more levels deep shows
+breadcrumbs in the bar in place of the title.
+
+**Breadcrumbs.** `navigation.breadcrumbs_of` takes `BreadcrumbsOptions`
+(hidden levels, the overflow menu's state, compact). The trail is one row:
+- a crumb is a link 32 tall (48 touch), 8 at its sides, `radius-sm`, its
+  `body-medium` label in `on-surface-variant` (`on-surface` hovered) under the
+  hover layer, at most 200 (160) wide with an ellipsis;
+- a 16 `chevron-right` in `on-surface-variant` stands between crumbs, out of
+  the tree, in place of the "/" text;
+- the current place is `title-small` (body-medium at 600) in `on-surface`, at
+  most 320 wide, marked Current, with no Tab stop;
+- hidden levels collapse into a `more-horiz` crumb named "Show 2 hidden levels"
+  whose menu lists them in order;
+- compact, the trail is the parent alone as a 48 link led by `chevron-left`.
+
+The trail is a group named by its label round a list.
+
+**Tabs.** `control.tabs_of` takes `TabsOptions` (secondary, fixed, width). The
+bar is `surface` over a 1px `outline-variant` line. A tab is 40 tall at pointer
+density (48 touch), 16 at its sides and at least 48 wide (fixed tabs share the
+width, at least 90 each). Its `title-small` label is `on-surface-variant`, the
+active one `primary` (`on-surface` secondary), under the label colour's state
+layer. The indicator is 3px `primary` as wide as the label (at least 24) with 3
+rounded top corners, or 2px across the tab when secondary. A scrollable bar
+starts 8 in (16 touch). Home and End join Left and Right. The old 50% selection
+tint is gone, and `tab_view` sets its page directly under the bar.
+
+**Menu bar.** `navigation.menu_bar_of` takes `BarMenu`s of `BarCommand`s
+(label, action, enabled, shortcut words, checked, separator before, destructive).
+- The bar is 32 tall on `surface`, 4 in at the ends. A title is 24 tall, 8 at
+  its sides, `radius-xs`, `body-medium` in `on-surface`, the titles touching;
+  the open one is `secondary-container` and Expanded.
+- Its menu hangs 2 below on `surface-container`, `radius-sm`, elevation 2, 8
+  at top and bottom, 200 to 320 wide.
+- A command is 32 tall, 12 at its sides: the 18 leading slot (a check, reserved
+  once any command is checked), the `body-medium` label (`error` when
+  destructive) and the shortcut in `on-surface-variant` at least 32 after it.
+  A separator is a 1px `outline-variant` line with 8 above and below; disabled
+  commands are `on-surface` at 38%.
+- A menu over 14 commands is refused with `TooLarge` rather than colliding with
+  the next title's keys.
+
+The old `menu_bar` maps its `overlay.MenuItem`s to plain commands; its titles
+were Outlined buttons.
+
+**Tests.**
+- ui_navigation_v2 holds the small bar, More and its menu, the contextual bar,
+  the medium and large sizes, the bottom bar and its FAB, and the stack's Back
+  and breadcrumbs.
+- ui_navigation2_v2 holds the trail, its overflow crumb and menu, the compact
+  parent link, both tab bars and their keys, and the menu bar, its open title,
+  menu, commands, separator, checked and disabled commands and Escape.
+
+All 88 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Motion: the app bar's collapse on scroll, hide on scroll and contextual
+  entry, stack transitions and predictive back, and the tab indicator's slide.
+- App bars: worded actions stay text buttons, and a disabled action is dimmed
+  rather than hidden.
+- Stacks: focus moves on push and pop, the discard guard and keeping the page
+  beneath.
+- Breadcrumbs: width-driven overflow (the caller says how many levels
+  collapse), middle ellipsis, the root icon, drop targets, sibling menus and the
+  editable path.
+- Tabs: icon tabs, badges, disabled tabs, the overflow button, scrolling and
+  the inset focus ring.
+- Menu bars: submenus, radio and icon items, menu mode (Alt, F10, Left/Right,
+  hover across titles), access keys, typeahead and the collapsed form.
+
+## D973 — Destination bars, navigation drawers, navigation splits, page indicators and pagination draw their v2 specifications
+
+Five more P5-10 specs now draw their v2 look. The old functions keep their
+signatures and route through the new ones, so every existing caller passes.
+
+**Destination bar.** `navigation.Destination` carries a label, an optional drawn
+icon, a badge (a count or word, or a dot) and the section it starts.
+`navigation.destination_bar_of` draws the three forms.
+- The bar is 80 tall on `surface-container`, 12 above, 16 below and 8 at the
+  sides, its destinations sharing the width.
+- The rail is 80 wide on `surface`, 16 from the top, its destinations 12 apart.
+- A bar or rail destination is its icon in a 32 tall fully rounded pill (64
+  wide in the bar, 56 in the rail) over its `label-medium` label, 4 apart and
+  centred. At rest both are `on-surface-variant`. Active, the pill is
+  `secondary-container` with the icon in `on-secondary-container` and the
+  label in `on-surface`. The state layer rides on the pill; a badge is D971's
+  count or dot on the icon.
+- The sidebar is `surface-container-low`, 12 in, with fully rounded 40 tall
+  rows (56 touch), 16 in and 24 at the end: a 24 icon and a `label-large`
+  label 12 apart, a trailing badge word, the active row `secondary-container`.
+  A section starts with a divider and its `label-medium` heading.
+
+Every destination is a tab named by its label and badge ("People, 3",
+"Calendar, new"), the active one Selected and Current, in a tab list named
+"Main". `destination_form` moves to the spec's thresholds: the rail from 600,
+the sidebar from 1200 (it was 600 and 840). The old bar drew Filled and Plain
+tabs on `surface-variant`, with labels at their tabs' top-left.
+
+**Navigation drawer.** `navigation.navigation_drawer_of` takes a header and
+destinations. The modal drawer is 256 to 360 wide on `surface-container-low`,
+its end corners `radius-lg`, elevation 1, 12 in, over a 32% `scrim` across the
+window (the old drawer had no scrim). Its header is `title-small`
+`on-surface-variant`; its rows are 56 tall, 16 in and 24 at the end, with
+sections, headings and dividers. It stays a modal dialog named "Navigation".
+`navigation.navigation_drawer_standard` is the in-layout form: square, no
+shadow, 8 in with 40 tall rows 12 in at pointer density (12 in with 56 rows at
+touch), a group named "Main". The old nested `surface-variant` sheet is gone.
+
+**Navigation split.** `navigation.navigation_split_of` takes
+`NavigationSplitOptions` (medium, the panes' names, the empty statement, the
+detail's title and pop).
+- Side by side from expanded width (840; medium on request). The list pane is
+  `surface-container-low` and the detail `surface`, flush across D966's sash,
+  now named "Resize list". The list keeps 200 and the detail 320 (280 and 360
+  at touch, where the window is 16 in and the panes take `radius-lg`, the
+  detail on `surface-container-lowest`).
+- Each pane is a group named by its label. With nothing selected, the detail
+  shows the empty statement centred in `body-medium` `on-surface-variant`.
+- In a single pane, the detail stands under a v2 app bar led by Back, named
+  "Back to <the list>" and firing the pop.
+
+The old `navigation_split` keeps the medium threshold. Beside the pane the
+detail is sized to what the pane and sash leave, since a 100% width in a
+flexible slot asks for the whole row.
+
+**Page indicator.** `collection.page_indicator_of` is one control: a fully
+rounded track 32 tall (48 touch), 12 in (16), under the `on-surface` state
+layer.
+- Its dots are 8 in `outline`, 8 apart; the current page is a 24 x 8 `primary`
+  pill.
+- Past seven pages, seven show, the window sliding with the pill, and the
+  outermost dots shrink to 6 and 4 where the set continues.
+- On media, the dots stand on a 32 tall `surface-container-high` pill.
+- A tap before the pill steps back one page and after it forward one. Left,
+  Right, Page Up and Page Down step; Home and End go to the ends.
+- It is a slider named "Page" with the value "Page 6 of 12", said politely.
+  Disabled, the dots are `on-surface` at 38% and it takes no focus.
+
+The old `page_indicator` keeps its per-dot tabs (ui_paged and the carousel tap
+them) but draws the v2 dots and pill.
+
+**Pagination.** `collection.pagination_of` lays out seven fixed slots: the
+first page, the last, the current and its neighbours, and an ellipsis for each
+gap. A page stands in for an ellipsis that would hide only one.
+- Previous and Next are `chevron-left` and `chevron-right` icon buttons,
+  `on-surface` at 38% at the ends.
+- Pages are round buttons 32 across (40 touch), 8 at the sides from three
+  digits, with `label-large` `on-surface-variant` numerals, named "Page 10".
+- The current page is `secondary-container`, Selected and Current, and does
+  nothing when pressed.
+- An ellipsis is "…" 20 wide (24 touch), out of the tree.
+- The compact form shows "Page 12 of 24" between the buttons.
+
+The old `pagination` keeps its sliding window, digit names and "Previous" and
+"Next", drawn the v2 way (it had outlined worded buttons and a Filled current
+page).
+
+**Tests.**
+- ui_navigation3_v2 holds the bar, rail and sidebar (pills, rows, badges in the
+  names, the divider and heading), the standard drawer, and the modal drawer's
+  width, corners, scrim, rows, pick and Escape.
+- ui_navigation4_v2 holds the split's panes, names, sash and empty statement,
+  the compact Back, the indicator's dots, pill, taps, keys and value, the
+  on-media pill, the seven slots with their names, current page and ellipses,
+  and the compact pagination.
+- ui_navigation now expects the rail at 900 and the sidebar at 1300.
+
+All 90 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Motion: the pill's growth, the drawer's slide, the split's push and the
+  indicator pill's slide.
+- Destination bars: the rail's menu button and FAB, the sidebar header and
+  hiding on scroll. Destinations are tabs, not links in a navigation landmark;
+  the spec allows tabs where the content changes without a URL.
+- Drawers: the edge swipe, focus return, right-to-left mirroring, and the
+  standard drawer's collapse and resize.
+- Splits: the touch gutter with its 4 x 48 handle (the touch split uses D966's
+  sash), the supporting pane, snap points and focus moves.
+- Page indicators: drag to scrub.
+- Pagination: the table-footer variant; the compact form keeps icon buttons
+  rather than text buttons.
+
+## D974 — Document tabs and wizards draw their v2 specifications
+
+The last two P5-10 specs now draw their v2 look, which completes the group. The
+old functions keep their signatures, so every existing caller passes.
+
+**Document tabs.** `navigation.document_tabs` and `document_tabs_marked` (the
+workspace's editor groups, with `active` for the focused group) draw the
+DocumentTabs spec.
+- The strip is 40 tall (56 touch) on `surface-container`, 4 in at the sides,
+  its tabs 2 apart along the bottom.
+- A tab is 36 tall (48 touch) and 96 to 220 wide (120 to 240), shrinking to
+  fit. It has `radius-sm` top corners, 12 in at the start (16 touch) and 4 at
+  the end.
+- Its `body-medium` title is one line with an ellipsis, `on-surface-variant`
+  at rest under the hover layer. The current tab is `surface` with an
+  `on-surface` title, and in the active group a 2px `primary` line runs along
+  its top edge.
+- The close slot is a 24 round button (40 touch) with a 16 (24) `close` glyph,
+  named "Close <title>". While the document is dirty and the tab is neither
+  hovered nor focused, it holds an 8 dot in the title colour instead, so the
+  button stays reachable.
+- A pinned tab has no close.
+- A tab's name carries its state ("lower.e, unsaved changes", "main.e,
+  pinned"). Home, End and Delete join Left and Right.
+
+Before, the current tab was `primary` mixed toward the selection, a dirty title
+was prefixed "* ", the close was a Plain "x", and tab heights varied from 32
+to 40. The line of D969 sat under the tab; it now runs along the top, as the
+spec draws it.
+
+**Wizard.** `navigation.wizard_of` takes `WizardStep`s (label, note, needs
+attention) and `WizardOptions` (horizontal, vertical or compact; in a dialog;
+the last step's verb).
+- Expanded, the wizard is on `surface` (a dialog: `surface-container-high`,
+  `radius-xl`). The `headline-small` title is a level-1 heading, 24 in and 20
+  from the top. The stepper is 24 in with 16 above and below, the content 24
+  in, and the footer 24 in with 16 above and below.
+- The footer is split: Cancel, a text button, at the start; Back (outlined,
+  hidden on the first step) and Next or Finish (filled, always enabled; the
+  caller reports an invalid step through the step itself) at the end, 8 apart.
+- A step is its 24 marker, then 8 on its `body-medium` label (`title-small`
+  current, `on-surface-variant` upcoming) over an optional `body-small` note.
+  Upcoming, the marker is a 1px `outline` ring round the number; current, a
+  `primary` disc with the number in `on-primary`; done, the disc with a check;
+  needing attention, the 24 `error` alert, its note in `error`.
+- Horizontal steps are joined by connectors at least 16 long, 8 clear of each
+  step: 1px `outline-variant`, or 2px `primary` after a done step. Vertical
+  steps stand in a 240 column at the start, joined by 16 tall connectors under
+  their markers.
+- Compact, the wizard fills the screen under a v2 app bar led by Back, or Close
+  on the first step (the app bar gained a `closing` option). It shows "Step 2
+  of 4: Build" over a 4 tall `primary` bar on `secondary-container`, and Next
+  full-width at the foot.
+
+The stepper is a list; each step is named with its state ("Account, completed",
+"Deploy, needs attention: Fix 1 field"), and the current one is Current. The
+old `wizard` draws the same horizontal form but keeps D853's contract: Back
+stays, disabled, on the first step, and Next and Finish follow `can_advance`.
+Its "+ " prefix for done steps is gone.
+
+**Tests.**
+- ui_navigation5_v2 holds the strip, the tab sizes, gaps and rounded corners,
+  the current tab's fill and top line, the dirty dot, the names, presses and
+  keys. It also holds the horizontal wizard's title, step names, markers,
+  connector and footer; the vertical dialog wizard with Back hidden; and the
+  compact wizard's Back bar, step text, progress, full-width "Create project"
+  and Enter.
+- ui_workspace expects the tab named "notes, unsaved changes" rather than the
+  "* notes" text.
+- ui_containers5_v2 samples the active group's line at the tab's top.
+- ui_productivity finds "Account, completed" rather than "+ Account".
+
+All 91 ui_* fixtures pass on Windows and Linux. With this, all twelve P5-10
+specs are delivered.
+
+**Still open.**
+- Document tabs: file-type icons (a pinned tab keeps its title), preview tabs,
+  the dragged lift and drop line, overflow scrolling, Show all open files, the
+  context menu, the read-only mark and the inset focus ring.
+- Wizards: pressable steps (non-linear wizards), focus moves and announcements
+  on step changes, Finish's progress ring and the discard confirmation.
+
+## D975 — Menus, context menus and tooltips draw their v2 specifications
+
+The first three P5-11 specs now draw their v2 look. The old functions keep their
+signatures, so every existing caller passes.
+
+**Menu.** `overlay.menu_of` takes `MenuCommand`s: a label, an action, enabled,
+a shortcut, checked, a separator before it, destructive, and the head of the
+group it starts. `overlay.menu` (and so `menu_button`, the app bar's More and
+the breadcrumbs' hidden levels) builds plain commands and routes through it.
+- The container is `surface-container`, `radius-sm`, elevation 2 and has no
+  border. It is 4 above and below its rows with a pointer (8 on touch), and 200
+  to 320 wide (112 to 280 on touch). It hangs 4 below its anchor and flips
+  above when there is no room below.
+- A command is a full-width row, 32 tall (48 on touch), 12 in at the sides with
+  8 between its parts (12 on touch). The parts are the 18 leading slot (24 on
+  touch), the `body-medium` label (`body-large` on touch) in `on-surface`, and,
+  with a pointer only, the shortcut in `body-medium` `on-surface-variant` at
+  the end, at least 24 after the label.
+- Once any command is checked, every command reserves the slot, and a checked
+  one shows the `check` in `on-surface`.
+- Every row takes the `on-surface` state layer. A destructive label is in
+  `error`, and its layer stays `on-surface`. A disabled command is `on-surface`
+  at 38% under no layer.
+- A separator is a 1px `outline-variant` line with 4 above and below (8 on
+  touch). A group head is `label-medium` `on-surface-variant`, 12 in, 8 above
+  and 4 below.
+- The commands are MenuItems in the tree directly (Checked when checked); no
+  Button node sits inside them any more.
+- The runtime now moves the focus between menu items. With an item focused,
+  Down and Up step as Tab does (wrapping and skipping disabled items), and Home
+  and End jump to the ends. This also serves the menu bar's menus and the
+  select's.
+
+**Context menu.** `overlay.context_menu_of` draws the same menu, 8 above and
+below its rows at either density.
+- From the pointer, its top-start corner sits at the pointer (+2, +2 in the
+  window). It flips to the pointer's start or above it where it would overflow.
+- From the keyboard, it hangs below the target at its start edge.
+- `navigation.context_menu` now routes through it (the keyboard form), where it
+  called the plain menu before.
+
+**Tooltip.** `overlay.tooltip_of` draws the plain tooltip, and `overlay.tooltip`
+routes through it.
+- It is `inverse-surface`, `radius-xs`, with no border or shadow. It is at
+  least 24 tall and at most 200 wide, 4 above and below and 8 at the sides.
+- The text is `body-small` `inverse-on-surface`, wrapping to two lines, with an
+  optional shortcut 8 after it.
+- It is centred 4 above its anchor and flips below at the top of the window.
+- `overlay.tooltip_wanted` no longer answers while the anchor is pressed, so a
+  click no longer flashes it. It answers at once on keyboard focus.
+
+`overlay.rich_tooltip` draws the rich tooltip:
+- `surface-container`, `radius-md`, elevation 2, at least 48 tall and at most
+  312 wide; 12 above, 16 at the sides and 8 below.
+- A `title-small` subhead 4 above the `body-medium` `on-surface-variant` text
+  (up to four lines), then up to two text buttons 8 below the text and 8 apart.
+- It sits 4 below the anchor with its end on the anchor's end.
+
+**Placement.** The widget runtime gained four overlay placements: BelowCenter,
+AboveCenter, BelowEnd, and At (a corner at a window point). An overlay whose
+side overflows the window now flips to the opposite side, its offset mirrored,
+when that side fits. Before, it was only clamped.
+
+Before, the menu was Plain `primary` buttons on a bordered `surface` sheet with
+`radius-xs`, the context menu was that menu below its anchor, and the tooltip
+was a bordered `surface-variant` caption below its anchor.
+
+**Tests.** ui_overlays_v2 holds:
+- the pointer menu's place, container, rim, row heights, head and separator
+  spacing, the separator's colour, and the tree (Menu, MenuItems, Checked,
+  disabled);
+- the keys (Down skipping the disabled command and wrapping, Up, Home, End,
+  Enter and Escape) and the hover layer;
+- the touch menu's 48 rows under an 8 rim;
+- the context menu flipped at the window's corner, dismissed by an outside press
+  that does not reach what is under it, and the keyboard form below its target;
+- the plain tooltip's colour, 24 height, centring 4 above its anchor and its
+  flip below at the top;
+- the rich tooltip's end alignment, height, colour, name and action.
+
+All 92 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Menus: icons, supporting lines, submenus, radio groups, typeahead and the
+  inset focus ring.
+- Context menus: the touch lift, scrim and long press; the target's selected
+  look and Show menu action stay the caller's.
+- Tooltips: the 500 ms hover delay and sweep window, the touch long press, the
+  rich tooltip's hover persistence, 40-tall actions, and setting the anchor's
+  `described_by` from inside the function.
+
+## D976 — Popups, flyouts and popovers draw their v2 specifications
+
+Three more P5-11 specs now draw their v2 look. The old functions keep their
+signatures, so every existing caller passes.
+
+**Popup.** `overlay.popup_of` draws the popup, and `overlay.popup` routes
+through it with no name.
+- The surface is `surface-container`, `radius-sm`, elevation 2, with no border.
+  It is 4 above and below its content and has no padding at the sides, so its
+  rows run edge to edge. It is 200 to 480 wide.
+- It stands 4 off its anchor on the `placement` side and flips when that side
+  overflows. It stays non-modal: presses elsewhere pass by it, and the anchor
+  keeps the focus.
+- It is a Group in the tree, named by `label`.
+- `overlay.popup_row` draws a suggestion row: full width, 40 tall (48 on
+  touch), 16 in at the sides, the `body-medium` label (`body-large` on touch)
+  in `on-surface`, and an optional meta text in `label-small`
+  `on-surface-variant` at the end, under the `on-surface` state layer. It is a
+  ListItem firing its action.
+
+**Flyout.** `overlay.flyout` (through `light_dismissed`) draws the flyout.
+- `surface-container`, `radius-md`, elevation 2, with no border.
+- With a pointer it is 12 at the sides and top and 8 below, 200 to 320 wide.
+  On touch it is 16 all round, 240 to 360 wide.
+- It stands 4 off its anchor on the `placement` side, flipping when that side
+  overflows. Before, the gap was always taken downward.
+
+**Popover.** `overlay.popover_of` draws the popover, and `overlay.popover`
+routes through it without actions.
+- `surface-container-high`, `radius-md`, elevation 3, with no border, 320 wide,
+  16 at the sides and top and 12 below, 12 between its blocks.
+- The header: the `title-medium` `on-surface` title (up to two lines, a level-2
+  heading keyed `key + 1` that labels the dialog) and a round Close button at
+  the end (keyed `key + 2`, 40 across with a 24 `close` glyph on touch, 32 and
+  18 with a pointer).
+- The content, then up to two actions at the end, 8 apart (keyed
+  `key + 3 + index`): the first, the main one, is tonal and stands last; the
+  other is a text button before it.
+- A 12 wide, 6 deep beak in the container's colour stands on the edge nearest
+  the anchor, 16 in from the corner, its tip 4 from the anchor and the card 10.
+  `control.beak` draws it as a filled triangle pointing at the anchor.
+- `overlay.dismissable_by` is `dismissable` with the dialog labelled by an
+  element; the popover passes its title.
+
+Before, all three stood on a bordered `surface` with `radius-xs` and 8 all
+round, always 4 below the anchor. The popover's title was a level-1 `title`
+heading with a Plain "x" button beside it, and it had no beak or actions.
+
+**Tests.** ui_overlays2_v2 holds:
+- the popup 4 below its field, at least 200 wide, `surface-container` with its
+  4 rim, its first 40 row at its start, its 88 height over two rows; the Group
+  named Suggestions of two ListItems; a press on another control passing by it,
+  and a row firing;
+- the flyout with a pointer 4 below its button, at least 200 wide, its 20
+  height over empty content, its colour, a modal Dialog named by its label,
+  and a press outside dismissing it without reaching what is under it;
+- the touch flyout's 32 height and 240 minimum width;
+- the popover to its anchor's right: 4 off it, 326 wide with the beak, its
+  colour, the beak 16 down with the page beside it, the level-2 heading
+  labelling the dialog, the 32 Close, the tonal main action last, both firing;
+- the popover below its anchor, 320 wide, the beak on top 4 below the anchor.
+
+All 93 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Popups: matching the anchor's width (it is 200 at least instead), the active
+  descendant, the loading bar, empty and error rows, the matched characters in
+  weight 600, and the footer row.
+- Flyouts: the anchor's selected look, Expanded and Controls stay the caller's;
+  no compact bottom-sheet form.
+- Popovers: the beak sits 16 from the near corner, on the anchor's centre only
+  for an anchor about 44 across; no busy state, dirty-task guard or compact
+  sheet.
+
+## D977 — Dialogs, sheets and action sheets draw their v2 specifications
+
+Three more P5-11 specs now draw their v2 look. The old functions keep their
+signatures.
+
+**Scrim.** `overlay.with_scrim` puts `scrim` at the scrim opacity (32%) across
+the window as an overlay of its own under a modal overlay. A press on it misses
+the modal overlay, which dismisses it. Dialogs and modal sheets stand on it.
+
+**Dialog.** `overlay.dialog` (and so `alert_dialog`) draws the v2 dialog.
+- It stands over the scrim, centred in the window.
+- The card is `surface-container-high`, `radius-xl`, elevation 3, with no
+  border, 24 all round, 280 to 560 wide.
+- The title is `headline-small` `on-surface`, a level-2 heading (it was level 1)
+  that labels the dialog, 16 above the content.
+- An alert dialog's message is `body-medium` `on-surface-variant`.
+- The actions sit 8 below the content at the end, 8 apart, at the control
+  height: the default one a filled button, a destructive one filled in `error`
+  (the Danger variant), the others text buttons.
+
+**Sheet.** `overlay.sheet` and `overlay.bottom_sheet` draw the modal sheet
+through `edged` and `sheet_frame`.
+- It stands over the scrim on `surface-container-low` with elevation 3 and
+  clips its content.
+- Along a side it is `width` wide and the window's height, its open edge's
+  corners `radius-lg`. Along the bottom it is the window's width up to 640,
+  centred, `height` tall (as tall as its content for 0), its top corners
+  `radius-xl`.
+- The header is the `title-large` `on-surface` title, 16 in, 56 tall (48 for a
+  side sheet with a pointer). A side sheet has a round Close button at the end,
+  8 in (40 across with a 24 `close` glyph, 32 and 18 with a pointer, named
+  "Close"). The content sits under it, 16 in at the sides.
+- A bottom sheet has a drag handle instead of the Close button: 32 by 4,
+  `radius-full`, `on-surface-variant` at 40%, centred 16 below the top.
+
+**Action sheet.** `overlay.action_sheet` draws the sheet-of-rows form.
+- The modal bottom sheet above with its handle, as tall as its content.
+- The title, when there is one, is a `body-small` `on-surface-variant` header
+  keyed `key + 1`, 16 in, 20 below the handle and 8 above the rows; without a
+  title, 16 stand there instead.
+- Each action is a full-width row, 48 tall, 16 in, its `body-large` label in
+  `on-surface` under the `on-surface` state layer. A destructive one is in
+  `error` after a 1px `outline-variant` divider with 8 around it.
+- Cancel is the last row, after another divider, and fires `dismiss`, as do
+  Escape and the scrim.
+
+Before, the dialog was a bordered `surface` card with `radius-sm`, a level-1
+`title` heading and Outlined buttons with no scrim; the sheets were plain
+`surface` panels with square corners, a `title` heading and a Plain "x" button;
+the action sheet was a column of Outlined buttons, the destructive ones filled
+in `error`, in a bottom sheet of a computed height.
+
+**Tests.** ui_overlays3_v2 holds:
+- the alert dialog's scrim, centred card, 280 minimum width, colour and 104
+  height over empty text; the actions 8 apart at the end 24 in, the destructive
+  one in `error`, the default in `primary`, Cancel a text button; the modal
+  Dialog labelled by its level-2 heading; Escape, a press on the scrim and the
+  destructive action;
+- the side sheet's 300 width along the right edge, the window's height, its
+  colour, the scrim beside it, its square top corner at the edge, the 32 Close
+  8 from the end in the 48 header, the Dialog labelled by its title, and Close
+  dismissing;
+- the bottom sheet's 200 height along the bottom, the window's width, its
+  colour, the handle 16 down at 40%, and no Close;
+- the action sheet's 282 height, its 48 rows, the divider before the
+  destructive row, an action firing and Cancel dismissing.
+
+ui_transient now expects the dialog's heading at level 2. All 94 ui_* fixtures
+pass on Windows and Linux.
+
+**Still open.**
+- Dialogs: the AlertDialog role (the Role enum has none), the icon well, scroll
+  dividers, the busy state, the full-screen form and the host's button order;
+  Escape and the scrim close only through a Cancel button.
+- Sheets: modal only; no standard (docked or peeking) sheets, detents,
+  drag-to-dismiss, Back button, actions footer or unsaved-input guard; a side
+  sheet keeps the caller's width rather than 256 to 400.
+- Action sheets: Cancel stays a row (the grouped form's) where the Android form
+  has none; no leading icons, grouped iOS cards or pointer-host menu form, and
+  "Cancel" is not localised.
+
+## D978 — The command palette and window switcher draw their v2 specifications
+
+The last two P5-11 specs now draw their v2 look. The old functions keep their
+signatures.
+
+**Command palette.** `navigation.command_palette` now draws the v2 palette.
+- It stands over a `scrim` at 32%.
+- The panel is `surface-container-high`, `radius-xl`, elevation 3, with no
+  border or padding, `width` wide (560 in the spec). It is top-centred 64 below
+  the window's top, placed by the widget runtime's new TopCenter placement.
+- The field is 56 tall, 16 in at the sides with 12 between its parts: a 24
+  `search` glyph, the query in `body-large` `on-surface` over the placeholder
+  in `on-surface-variant`, and an "Esc" hint in `body-small`.
+- A 1px `outline-variant` divider sits under the field.
+- The results are 4 below the divider, 8 in at the sides and 8 above the
+  footer. A row is 40 tall, 12 in, `radius-sm`, its `body-medium` label in
+  `on-surface`, centred in its height, under the `on-surface` layer. The active
+  row is `secondary-container` with its label in `on-secondary-container`.
+- With no match, an empty state takes the results' place: "No matching
+  commands" in `title-small` over a suggestion in `body-medium`
+  `on-surface-variant`, centred, 24 above and below and 16 in.
+- The footer is 32 tall and 16 in, under another divider, with the key hints in
+  `body-small` `on-surface-variant`.
+- The field no longer has a Clear button, so the row keys (`key + 3 + index`)
+  no longer collide with it. Up and Down now wrap at the ends.
+
+**Window switcher.** `navigation.window_switcher` now draws the list form.
+- The same panel, `width` wide and 64 down, with no scrim.
+- The same rows, 4 in from the top and bottom and 8 at the sides, with the
+  active one `secondary-container`.
+- Up and Down wrap.
+
+Before, both were bordered `surface` panels with `radius-sm` in the middle of
+the window, with no scrim. Their rows were Plain buttons, the active one a
+Filled `primary` button with its label at the top start, and the palette's
+field was the SearchBar pill.
+
+**Tests.** ui_overlays4_v2 holds:
+- the palette's place, width, scrim and colour; the divider under the field;
+  the row offsets, heights and fills; the footer's divider and the 222 height;
+- the tree (Dialog, TextField, ListItems with the active one Selected), typing,
+  Down, Enter, and Up wrapping from the first row;
+- the empty state's 142 height and text, and Escape;
+- the switcher's place, 128 height, row offsets, missing scrim and active fill,
+  Down, Up wrapping, and Escape.
+
+All 95 ui_* fixtures pass on Windows and Linux. With this, all eleven P5-11
+specs are delivered.
+
+**Still open.**
+- Palette: mode prefixes, group headings, categories, match highlighting,
+  shortcut key caps, unavailable rows, the busy bar, in-component ranking and
+  `active` reset, the Combobox/Listbox roles, and the compact full-screen form.
+- Switcher: the grid form with thumbnails, hold-to-switch, type-to-filter,
+  Close on hover and Delete, the detail line, and the Listbox/Option roles.
+
+## D979 — Rows, lists, the virtual list, grid view and virtual grid draw their v2 specifications
+
+Five P5-12 specs now draw their v2 look through new `*_of` forms. The old
+functions keep their signatures and take the v2 colours.
+
+**Row.** `collection.row_of` draws a `RowItem`: headline, supporting line,
+overline, meta, a leading and a trailing glyph, selected, a trailing check,
+disabled, and an action.
+- The height comes from the line count and density: 56/72/88 on touch,
+  48/64/80 with a pointer, 32/48 dense.
+- 16 in at the start and 24 at the end (12 dense), 8 above and below (0 dense).
+- A 24 leading glyph (18 dense) in `on-surface-variant`, 16 before the text
+  (12 dense).
+- A `body-large` `on-surface` headline (`body-medium` dense) between a
+  `label-small` overline and a `body-medium` supporting line (`body-small`
+  dense), both `on-surface-variant`. Each is one line, ellipsised.
+- The `label-small` meta and a 24 trailing glyph at the end.
+- The `on-surface` state layer covers the whole row. A selected row is
+  `secondary-container` with `on-secondary-container` content, plus a check
+  when asked. A disabled row is `on-surface` at 38%, with no layer and no focus.
+- A ListItem named by the headline, described by the supporting line, at its
+  position.
+
+**List.** `collection.list_of` stacks `row_of` rows.
+- Full bleed: on `surface` with 8 above and below. Grouped: on
+  `surface-container-low` with `radius-md`, a `label-medium` title 16 in and 8
+  above, and a `body-small` footnote 16 in and 8 below.
+- 1px `outline-variant` dividers between rows, inset as asked (16 when grouped).
+- A `title-small` `primary` subheader, padded 16/16/8.
+- With no rows, the compact empty state stands in their place.
+- Each row is a Tab stop; Up, Down, Home and End move the focus through
+  `roving`, which reuses the accordion's `control.FocusTo`.
+
+**Virtual list.** `collection.virtual_list_of` builds a `RowSource`'s rows at
+one height for the line count, on `surface`.
+- A divider under every row but the last.
+- Roving focus among the built rows.
+- A List named with the full count.
+
+**Grid view.** `collection.grid_view_of` lays out `Tile`s in
+`floor((width + 8) / (min + 8))` columns 8 apart, stretched to fill. The
+minimum is 144 with a pointer and 160 on touch.
+- A tile is `surface-container-low` with `radius-md`. Its 4:3 media, or a
+  `surface-container-highest` placeholder with a 36 picture glyph, sits above a
+  `title-small` name and a `body-small` meta, 8 below the media and 12 in.
+- Selected: `secondary-container`, the media inset 8 with `radius-xs`, and a
+  24 `primary` check with an `on-primary` tick 12 from the corner.
+- While selecting, an unselected tile shows a 2px `on-surface-variant` ring 8
+  from the corner.
+- Arrows move the focus in two dimensions.
+
+**Virtual grid.** `collection.virtual_grid_of` draws 1:1 `radius-sm` photo
+tiles in `floor((width - 24 + 4) / (min + 4))` columns, 4 apart and 12 in at
+the sides. The minimum is 112, or 96 on touch.
+
+**Thumb.** The runtime's scroll thumb is now 4 wide, fully rounded, 2 from the
+edge and at least 32 long. The collections paint it `on-surface-variant` at 50%.
+
+**Old functions.**
+- `row`, `cell`, `virtual_list` and `virtual_grid` use `secondary-container`
+  for selection instead of `selection`.
+- A cell is now a `surface-container-low` tile with `radius-md`.
+- The virtual list's separator no longer draws under the last row, and its
+  group is a List.
+- ui_collection now looks for the List, and ui_scroll samples the thumb at its
+  new place and length.
+
+**Tests.** ui_collections_v2 holds the row heights and offsets, the surface and
+divider pixels, the selected fill, the tree (names, hints, positions, selected
+and disabled), a tap, Tab with Down and Home, the grouped container's fill,
+corner, title, footnote and inset divider, the empty state, the virtual list's
+build window, count, divider and thumb, the grid's columns, gaps, placeholder,
+ring, caption fill, selected fill and check, and the virtual grid's photo
+geometry, build window, counts and fills.
+
+All 96 ui_* fixtures pass on Windows and Linux.
+
+A new function whose address is taken was enough to push the example app's
+build over a compiler capacity (`tool.Capacity`). Reusing `control.focus_to_fire`
+avoided it.
+
+**Still open.**
+- Row: avatar, thumbnail and control leading slots, context menu, long press,
+  selection motion, and the inset 3px ring.
+- List: the selection model and bar, typeahead, Page keys, sticky subheaders,
+  loading rows and insert motion.
+- Virtual list: overscan of a screen, focus that scrolls, sticky headers,
+  placeholders, end cap, paging, reverse mode, and a thumb that widens and fades.
+- Grid view: the selection model, typeahead, rubber band, reflow motion, drag
+  and drop, icon tiles, and the layer over the media.
+- Virtual grid: rows keyed by position, section headers, placeholders, paging
+  and the scrub label.
+
+## D980 — The header row, table rows and table draw their v2 specifications, and the data grid its dense frame
+
+Three more P5-12 specs now draw their v2 look, and the data grid draws its
+dense frame. The public functions keep their signatures.
+
+**Header row.** `collection.header_row` routes through `header_cells`.
+- A `surface-container` band over a 1px `outline-variant` line, 48 tall with a
+  pointer (56 touch, 40 dense).
+- A header cell a column, 16 in at the sides (12 dense). Its `title-small`
+  title is `on-surface-variant`, or `on-surface` when sorted.
+- A sorted column shows an 18 `arrow-up` or `arrow-down` 4 after the title, in
+  `on-surface`. A hovered unsorted column shows a faint one at 50%.
+- The cell carries the `on-surface` state layer.
+- After each cell sits an 8 wide resize handle. It draws a 1px
+  `outline-variant` line inset 12 top and bottom (8 when the header is 40), and
+  turns into a full-height 3px `primary` bar while hovered or dragged.
+- Header cells and handles now take hover.
+- The new `ArrowUp` and `ArrowDown` glyphs draw the arrows.
+
+**Table row.** `collection.table_row` routes through `table_row_of`.
+- Cells are 16 in (12 dense), with their content centred in the height.
+- The `on-surface` state layer covers the whole row. A selected row is
+  `secondary-container`.
+- A data grid row starts with its 40 wide row number in `label-medium`
+  `on-surface-variant` on `surface-container-low`, end-aligned 8 in, and has a
+  1px `outline-variant` line after every cell.
+
+**Table.** `collection.table` sits in a viewport on `surface`.
+- Every row but the last stands over a 1px `outline-variant` divider.
+- An `extent` of 0 takes the density's row height: 40 with a pointer, 48 touch,
+  32 dense.
+- The thumb is `on-surface-variant` at 50%.
+- Up, Down, Home and End move the focus among the built rows.
+
+**Data grid.** `collection.data_grid` is dense whatever the theme: a 40 header,
+32 rows (unless `extent` says otherwise) and 12 padding. It adds the
+row-number column, with a matching `surface-container-low` corner in the
+header, and grid lines both ways.
+
+**Before.** Header cells were `surface-variant` Label-role titles at the
+control height with " ^" or " v" appended, behind 4px `border` grips. Rows
+filled `selection`, had `space-xs` padding and no dividers.
+
+ui_tabular now looks for the plain titles, since the arrows replaced the ASCII
+marks.
+
+**Tests.** ui_collections2_v2 holds:
+- the header's 47 and 112 geometry, band, line and handle place;
+- the sorted arrow's ink only where the arrow is;
+- the handle's inset line, and the `primary` bar under the pointer;
+- the tree (Table counts, a sorted ColumnHeader);
+- the rows' 48 offset, 39 + 1 heights, `surface` and divider pixels, and the
+  selected fill;
+- a tap, and Tab with Down;
+- the data grid's 40/32 heights, row-number column and corner, grid line and
+  sorted column.
+
+All 97 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Header row: end-aligned numeric columns, the filter mark, the select-all
+  checkbox, the grouped tier, keyboard resizing, the reorder lift, aria-sort,
+  and handle keys that collide past 63 columns.
+- Table row: the selection checkbox column, disclosure and detail row, hover
+  row actions, and the disabled, dragged and loading looks.
+- Table: toolbar and selection bar, footer, pinned column and horizontal
+  scroll, loading, empty and error states, Page, Space, Enter and Escape keys,
+  and the compact list form.
+- Data grid: DataGridSpec stays undelivered. Its frame is drawn, but its
+  defining part, one active cell with separate navigation and edit modes, is
+  missing, along with the editor, invalid, range and dirty looks, the status
+  bar, clipboard, fill and undo. The caller's cells are still its editors.
+
+## D981 — The tree, outline and tree table draw their v2 specifications
+
+Three more P5-12 specs now draw their v2 look. `tree`, `outline` and
+`tree_table` keep their signatures. The new `outline_of` adds the header and
+the current heading.
+
+**Tree rows.** `tree_rows` draws every tree family row.
+- The indent is 20 a level, or 24 on touch.
+- The twisty is an 18 `chevron-right` in `on-surface-variant` in a 24 box. It
+  shows `chevron-down` when open. A leaf gets an empty 24 box. The twisty sits
+  8 before the content.
+- A tree row is inset 8 at the sides with `radius-sm`, and starts 4 before the
+  first twisty.
+- An `extent` of 0 gives 32 with a pointer (the trees' dense default) or 48 on
+  touch.
+- The `on-surface` state layer covers the row. A selected row is
+  `secondary-container`.
+- Left and Right toggle as before. Up, Down, Home and End now move the focus,
+  bound in the same scope to keep the element depth down.
+- The tree sits on `surface` with 4 above and below.
+
+**Outline.** With guides, each ancestor level gets a 1px `outline-variant` line
+the row's height, through the middle of that level's twisty (4 + 12 +
+level × 20). The lines now run on from row to row. Before, only the last step
+got a hairline, as tall as the indent box.
+- `outline_of` adds a 40 header (48 on touch) with "Outline" in `title-small`
+  16 in and a Collapse all text button (`key + 2`).
+- The current node's row carries a 3px `primary` bar inset 8 top and bottom,
+  and is reported Current.
+
+**Tree table.** The v2 header row (D980) sits over table rows (`table_row_of`:
+40 with a pointer, 48 touch, 32 dense, 16 in) with full-width 1px
+`outline-variant` dividers, on `surface`. The rows sit straight in the column,
+with no wrapping flex.
+
+**Before.** Rows were `table_row`s with a filled-triangle mark, indented by
+`space-lg`, filled `selection`, with no inset or radius.
+
+**Tests.** ui_collections3_v2 holds:
+- the tree's 8 inset, 4 top, 224 x 32 rows, `surface`, and the twisty's place,
+  width, 20 step and ink;
+- the selected fill and its rounded corner, five TreeItems;
+- a twisty tap, Tab with Down, End, and Right;
+- the outline's two guides, their gap, their continuity across rows, the
+  current bar and its inset, the Current state, the header's 40 and Collapse
+  all;
+- the tree table's 47 header, 39 + 1 and 40 rows, the full-width divider, the
+  surface and selected fills, and the twisty 16 into the cell and 20 a level.
+
+ui_tabular's tree table needed fewer levels. The roving scope was merged and
+the twisty centred by padding instead of an aligned box, and it passes
+unchanged.
+
+All 98 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Tree: at most 512 visible rows, not virtualised; no icon or meta slot,
+  twisty rotation motion, Right-to-child or Left-to-parent, `*`, typeahead,
+  rename, drag and drop, loading, disabled or checkbox rows, and no
+  Expand/Collapse actions on the item.
+- Outline: the bar sits 8 in at the row's start rather than on the pane's
+  edge; no numbers, filter, follow mode, sheet, or `primary` 600 label.
+- Tree table: no viewport or virtualisation, treegrid role, per-parent sort,
+  footer or loading rows, and the twisty starts 16 into the cell rather than 8.
+
+## D982 — The page view, carousel, pull to refresh, swipe actions and reorderable list draw their v2 specifications
+
+Five more P5-12 specs now draw their v2 look through new `*_of` forms. The old
+functions keep their signatures and behaviour. The drag cell (`Swipe`) now also
+keeps how far the drag has moved (`moved`), so a view can follow the finger
+from frame to frame. The existing drag handlers take a `settle` flag: the drag
+only records the distance, and the release decides.
+
+**Page view.** `collection.page_view_of`:
+- A `surface-container-low` viewport, `radius-md` inset or square full bleed.
+- It clips a strip of pages that follows the drag, moving a third as far past
+  either end. The release turns past half the width.
+- With a pointer, while the view or a button is hovered or focused, tonal 40
+  Previous and Next buttons (`secondary-container`, 24 chevrons) stand 12 in,
+  vertically centred, each gone at its end.
+- Left and Right, Page Up and Page Down, Home and End.
+- The indicator (`page_indicator_of`) sits 12 below, or on its media pill 16
+  above the bottom when full bleed.
+- A group saying "2 of 4", said politely.
+
+**Carousel.** `collection.carousel_of` draws a strip of `CarouselItem`s from
+`current`, 8 apart and 16 in (24 from 600 wide), clipped at the end.
+- Multi-browse: a large item (what is left after a 200 medium and a 56 small
+  one), the medium, and the small. Hero, or multi-browse too narrow for three:
+  large plus the small peek. Uncontained: `item_width` items to the edge.
+- Items are `radius-md`, filled with their tone's container
+  (`surface-container-highest`, `primary-container`, `secondary-container`,
+  `tertiary-container`) under their `on-` colour's state layer, 16 in. Media
+  sits at the top, with the `title-medium` title and `body-small` meta at the
+  bottom. A small item shows its media alone.
+- With a pointer, a header: the `title-medium` title and outlined 40 Previous
+  and Next buttons (32 dense), disabled at the ends. Left and Right step.
+
+**Pull to refresh.** `collection.pull_to_refresh_of`, on touch:
+- The content follows the damped pull (1:1 to 40, half past it, 120 at most).
+- A 40 `surface-container-high` elevation-2 indicator slides down with the pull.
+  Its 2.5 `primary` arc (60% until half the threshold) grows to 80% at the
+  80 threshold.
+- Armed past 80, the indicator is `primary-container` with an
+  `on-primary-container` arc, and the release refreshes.
+- While refreshing, the indicator rests 12 down with a quarter arc and the
+  content stands 64 down.
+
+With a pointer, it draws a 40 `refresh` icon button (the new `Refresh` glyph),
+disabled while refreshing, with F5 and Ctrl+R from within and an indeterminate
+linear bar under it.
+
+**Swipe actions.** `collection.swipe_actions_of`:
+- The row, on `surface`, slides over 80 wide tiles the row's height. Each tile
+  is filled by tone (`secondary-container`, `primary`, `error`) with a 24 glyph
+  over a `label-medium` label. There is an optional leading tile.
+- The release opens past 40% of the reveal stop and closes the other way.
+  Past 32 it runs the leading action. Past 60% of the width it runs the
+  outermost action, whose tile stretches to the row's end.
+- Escape closes. With a pointer, while hovered or focused, 32 icon buttons in
+  `on-surface-variant` stand 4 apart at the row's end.
+- The old swipe row's More now fires through `RevealSet` and `reveal_more` is
+  gone.
+
+**Reorderable list.** `collection.reorderable_list_of` draws `row_of` rows with
+a 24 `drag-handle` glyph: leading in a 32 target with a pointer, trailing in a
+48 target on touch.
+- A dragged handle lifts its row where the pointer holds it:
+  `surface-container-high` under the 16% `on-surface` layer, elevation 4,
+  `radius-sm`, inset 8.
+- The rows between make room around a `surface-container-low` gap. The drop
+  reports the move.
+- Alt or Ctrl with Up or Down moves the focused row; Up, Down, Home and End
+  move the focus.
+- Row holders are keyed so the drag survives the lifted row moving to the top
+  of the stack.
+
+**Compiler capacity.** The example app's build manifest has a fixed buffer
+(`src/tool.e` `manifest_file`: 65536 bytes plus 512 a module). Its unsafe
+inventory lists each function that casts, once, and it had 29 bytes left. The
+failure showed as `tool.Capacity`. The v2 builders now take their callbacks'
+`*void` context through one generic `ctx_of`, and the manifest has about 1.1 KB
+of room again.
+
+**Tests.** ui_collections4_v2 holds:
+- the page view's corners and indicator place, the hover Next's place and fill,
+  a tap turning, the strip under a held drag, the release turning, and the
+  polite group;
+- the carousel's 256/200/56 geometry, fills and corners, the disabled
+  Previous, Next stepping, and an item tap;
+- the pointer refresh's place, tap, F5, disabled state and busy bar;
+- the touch pull's armed indicator, content offset, refresh on release, and the
+  refreshing rest;
+- the swipe row's hidden tiles, drag-open, tile fills and slide, Escape, full
+  swipe to Delete, and the hover buttons;
+- the reorderable list's handle, lifted row geometry and fill, the gap, the
+  row making room, the reported move, and Ctrl+Down.
+
+All 99 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Motion: settle, fling velocity, rubber band, lift scale, reduced motion.
+- Page view: neighbours are built only while dragged.
+- Carousel: it steps an item at a time rather than scrolling freely with
+  snapping; items do not grow as they pass the edge; no "Show all" on touch.
+- Pull to refresh: the pull starts anywhere, not only at the top of a scroll;
+  the arc does not spin by itself; no new-row tag or outcome snackbar.
+- Swipe actions: no custom accessibility actions.
+- Reorderable list: the handle shows at rest rather than on hover; no drop
+  line, auto-scroll, keyboard pick-up or move actions.
+
+## D983 — The property grid and key-value editor draw their v2 specifications, and a touch press ripples
+
+The last two P5-12 editors now draw their v2 look, and the widget runtime draws
+the press ripple that P5-02 waited on. `property_grid` and `key_value_editor`
+keep their signatures and route through the new `*_of` forms.
+
+**Property grid.** `collection.property_grid_of`:
+- An optional header: the kind in `title-medium` over the name in
+  `body-medium` `on-surface-variant`, 8 in.
+- An optional 32 "Filter properties" field (`key + 300`). It narrows the rows
+  to names holding its text (case folded) and drops groups with none left.
+- A group heading is a 32 button (40 on touch) 8 below the one before: an 18
+  chevron in a 24 box, the `title-small` name in `on-surface`, and while shut
+  "N properties" in `label-small` `on-surface-variant` at the end, under the
+  state layer. It keeps its position keys and Expanded state.
+- A row is at least 40 tall (56 on touch). Its `body-medium`
+  `on-surface-variant` name is ellipsised in the `name_width` column, 36 in when
+  grouped (under the group names) or 8. The editor fills the rest, 8 from the
+  end, so a row is exactly `width` wide. Before, rows overflowed by the gap.
+- With a status callback, the last 32 are the reset slot. A modified property's
+  name turns `on-surface` and its slot holds a 32 `refresh` icon button
+  ("Reset NAME", `key + 400 + index`) reporting the index. A message stands
+  under the editor in `body-small` `error` after a 16 `error` icon.
+
+**Key-value editor.** `collection.key_value_editor_of`:
+- The column labels appear once, in `label-medium` `on-surface-variant`, 8 in.
+- A row is an outlined 40 name field (32 dense) and value field, 2:3 of what a
+  40 remove button (32 dense) leaves, 8 apart (4 dense), rows 8 apart.
+- The fields are named "Name" and "Value of NAME", with placeholders.
+- The remove is a `close` icon button in `on-surface-variant` named
+  "Remove NAME".
+- A repeated name marks its field invalid, with "Duplicate name" in
+  `body-small` `error` after a 16 `error` icon under the row.
+- An "Add variable" text button follows.
+- It is a table of three columns whose rows are Rows of Cells.
+- The words come from `KeyValueOptions` for localisation.
+
+Before, every field was labelled "Key" or "Value", every remove was an "x"
+button, and Add was outlined.
+
+**Press ripple (P5-02).** On a touch theme, `control.focus_look` sets the
+runtime's ripple colour: `on-surface` at the `state-pressed` opacity. A pointer
+theme clears it.
+- `widget.set_ripple_phase` takes the caller's clock, 0 to 1 over
+  `duration-medium-2` and eased with `e.ui.animation`.
+- `widget.place` draws the pressed element's ripple from the press point the
+  runtime keeps. It is a disc clipped to the element's shape, whose radius is
+  the phase times the distance to the farthest corner. It is drawn over the
+  pressed layer and under the focus ring.
+- The ripple's colour, phase and point fold into the subtree hash, so replay
+  keeps no stale disc.
+
+**Tests.**
+- ui_collections5_v2 holds the header, the field and heading offsets, the
+  32/320 headings with their twisty ink, the 40 rows 320 wide, the editors in
+  one column 128 in, the Expanded button and the table, Reset in the last 32
+  (named, reporting 1) with its message, a heading tap, the key-value labels,
+  the 360 remove offset and the 2:3 split, the pair-named Remove and value
+  field, the three-column table, remove and Add, "2 properties" on a shut
+  group, and the filter.
+- ui_ripple_v2 holds a touch row at phase 0, 0.5 and 1: the pressed layer
+  alone, then the disc over the press point but not the far end, then the whole
+  row. It also holds a rounded tile clipping the disc at its corner, and no
+  ripple on a pointer theme.
+
+All 101 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Property grid: groups keyed by position, the modified name not at 600 weight,
+  a draggable column divider, a selected row, and the touch list form.
+  Read-only and Mixed values are the caller's editors.
+- Key-value editor: the empty add-row, secret values, text mode, the ordered
+  variant, removal with Undo, `code` names, the `add` glyph, and the touch
+  list.
+- Ripple: one colour for every control rather than each control's content
+  colour, and no clock of its own.
+
+## D984 — The data grid gains its core: one active cell, navigation and edit modes, the cell editor and the invalid, range, dirty and status looks
+
+`collection.data_grid_of` draws the DataGrid core over state the caller keeps.
+Before, `data_grid` was the dense D980 table and the caller's cells were its
+editors. Now the grid has an active cell, modes and looks. `data_grid` keeps its
+signature and behaviour.
+
+**Model.**
+- The caller keeps a `GridState`: the active cell, the range anchor, the edit
+  mode and the draft's length in a buffer the caller owns.
+- A `GridSource` answers a `GridCell` for each cell: its text, an error message
+  (empty when valid), whether it is dirty and whether it is read only.
+- Every key, tap and edit reaches `change` as a `GridEvent`: Move, Extend, Edit,
+  Type, Commit or Cancel. Each event carries the cell it acted on and the next
+  state, so the caller applies it with `state = event.next`.
+- On Edit the caller copies the value into the draft. On Commit the draft is
+  the value for that cell, and the caller validates it.
+
+**Frame.** It keeps the D980 dense frame: a 40 header, 32 rows, the 40-wide row
+numbers and grid lines both ways. The rows are `owned`. They are neither
+focusable nor tapped, and they hold their cells unpadded, so each cell draws its
+own look.
+
+**Active cell.** It is ringed with an inset 3px `focus-ring`. It is also the
+grid's only focusable element (`key + 1`). That element is placed over the
+cell inside a clip of the cell's size, so the runtime's ring lies inside it
+too. Because the element never changes, the focus stays with it as it moves.
+A tapped cell becomes active and takes the focus.
+
+**Keys.** The grid's scope takes every key.
+- In navigation mode, the arrows, Home and End (Ctrl: the grid's first and
+  last cell) and Page Up and Page Down (a screen of rows) move the active cell.
+- Shift extends the range. Escape drops it.
+- Enter or F2 enters edit mode. F2 is matched on the raw key, VK 113 or keysym
+  65471, because `key_code` folds 113 into Q.
+
+**Editor.** In edit mode the editor (`key + 2`) stands over the active cell in
+a modal layer. The layer takes the focus when it appears and gives it back to
+the active cell when it goes.
+- The editor is a `body-medium` field on `surface-container-highest` inside a
+  2px `primary` inset outline, with a `primary` caret, 12 in.
+- It edits the caller's draft. Each change arrives as a Type event.
+- The editor keeps the arrows. Enter commits and moves down. Escape cancels.
+  A press outside commits.
+
+**Cell looks.**
+- Invalid: a 2px `error` inset outline, with an 18 `error` icon before the
+  value.
+- Dirty: a 2px `primary` bar at the start edge.
+- Read-only: `on-surface-variant` text.
+- In a range of more than one cell: `primary-container` with
+  `on-primary-container` text.
+- Each cell reports its invalid, read-only and selected states. Its hint is
+  the message, "Edited" or "Read only".
+
+**Status bar.** A 40-high bar, 12 in, stands under the grid. It shows "N errors"
+in `error` after an 18 `error` icon, then "N cells selected" in `body-medium`
+`on-surface-variant`. It is a polite live region.
+
+**Casts.** A generic `back_of`, the narrowing twin of D982's `ctx_of`, gives
+the new callbacks their typed context. None of them holds a cast of its own,
+and the example app still builds.
+
+**Tests.** ui_collections6_v2 holds:
+- the frame and the active cell's 119 x 31 box and ring;
+- the invalid outline and "1 error";
+- the dirty bar;
+- a tap moving the active cell and taking the focus;
+- Down, and Shift+Down's filled range with "2 cells selected";
+- Escape, Home, End, Ctrl+End, Ctrl+Home, Page Down and Page Up;
+- F2's editor over the cell, with its fill, outline and focus;
+- typing, then Enter committing and moving down with the focus back;
+- Enter editing and Escape cancelling;
+- the 5 x 2 grid in the tree.
+
+All 102 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Text cells only: no checkbox, select or date cells.
+- Keys: no Tab wrapping, typing to replace, double-click, F8, Shift+click,
+  Ctrl+A or row and column selection.
+- Clipboard, fill and undo.
+- The hover cell layer and the error tooltip.
+- The saving and disabled looks, and the cross-fade.
+- Row editing and touch sheet editing.
+- The caller keeps the active row in view; the ring is held inside the
+  viewport.

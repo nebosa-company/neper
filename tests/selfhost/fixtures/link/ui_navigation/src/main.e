@@ -212,7 +212,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (mail_2, has_mail_2) = find(tree_2, .Tab, "Mail")
     let (calendar_2, has_calendar_2) = find(tree_2, .Tab, "Calendar")
     if !has_mail_2 || !has_calendar_2 || calendar_2.bounds.y <= mail_2.bounds.y || calendar_2.bounds.x != mail_2.bounds.x { os.exit(35i32) }
-    if navigation.destination_form(400.0) != .Bottom || navigation.destination_form(700.0) != .Rail || navigation.destination_form(900.0) != .Sidebar { os.exit(36i32) }
+    if navigation.destination_form(400.0) != .Bottom || navigation.destination_form(900.0) != .Rail || navigation.destination_form(1300.0) != .Sidebar { os.exit(36i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(37i32) }
     try io.print("ui navigation ok\n")
     ret ok

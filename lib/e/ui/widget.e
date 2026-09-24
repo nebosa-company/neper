@@ -98,7 +98,13 @@ type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u
 // takes the focus when it appears and gives it back when it goes, bounds Tab to its
 // subtree, keeps the pointer from what is under it, and a press outside it fires
 // `dismiss`. Overlays stack in tree order; the last is on top.
-type Placement = enum u8 { Below, Above, Right, Left, Center }
+// v2 (D975, docs/ux/components/Menu, Tooltip, ContextMenu): BelowCenter and
+// AboveCenter centre the content on the anchor, BelowEnd aligns their ends, At
+// puts its top-start corner at `offset` in the window (a context menu at the
+// pointer); a side that overflows the window flips to the opposite side, the
+// offset mirrored, when that side fits. (D978) TopCenter centres the content
+// across the anchor with its top on the anchor's top (a palette 64 down the window).
+type Placement = enum u8 { Below, Above, Right, Left, Center, BelowCenter, AboveCenter, BelowEnd, At, TopCenter }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
 // The layout adapters that need a kind (D816): an aspect box is as wide as it may
 // be and as tall as the ratio says; a fitted box scales its content down to fit,
@@ -335,6 +341,10 @@ type State = struct {
     ring_color: paint.Color,
     ring_width: f32,
     ring_offset: f32,
+    // The press ripple (D983): its colour (clear on a host without one) and how
+    // far it has spread, 0 to 1.
+    ripple_color: paint.Color,
+    ripple_phase: f32,
     clip_rect: geometry.Rect,
     has_clip: bool,
     frame: u64,
@@ -767,6 +777,26 @@ fn set_focus_ring(widget_runtime: *Runtime, color: paint.Color, width: f32, offs
     s.ring_color = color
     s.ring_width = max_f(width, 0.0)
     s.ring_offset = max_f(offset, 0.0)
+}
+
+// v2 (D983, docs/ux/components/Button, Row, Card; widget plan P5-02): the press
+// ripple of a touch host. The element under a press carries a disc of `color`
+// centred on the press point, clipped to the element's shape, whose radius is
+// `phase` (0 to 1) of the distance to the element's farthest corner. The
+// runtime keeps the press point; the phase is the caller's clock --
+// `duration-medium-2` from the press, eased (`e.ui.animation`) -- and a clear
+// colour or a phase of 0 draws nothing. The theme sets the colour
+// (`control.focus_look`); the app sets the phase each frame.
+fn set_ripple(widget_runtime: *Runtime, color: paint.Color) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret }
+    s.ripple_color = color
+}
+
+fn set_ripple_phase(widget_runtime: *Runtime, phase: f32) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret }
+    s.ripple_phase = max_f(min_f(phase, 1.0), 0.0)
 }
 
 fn focus(widget_runtime: *Runtime, element: ElementId) -> err {
@@ -1240,6 +1270,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     let (own_hash, own_static) = hash_node(FNV_OFFSET, node)
     var subtree_hash = own_hash
     if ringed(s, index) { subtree_hash = hash_u64(hash_bytes(subtree_hash, bytes_of[paint.Color](&s.ring_color)), u64(u32(s.ring_width * 64.0))) }
+    if rippled(s, index) { subtree_hash = hash_f32(hash_f32(hash_f32(hash_bytes(subtree_hash, bytes_of[paint.Color](&s.ripple_color)), s.ripple_phase), s.arena_state.down.x), s.arena_state.down.y) }
     var static_subtree = own_static
     i = 0usize
     while i < node.children.len {
@@ -1742,6 +1773,7 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     try finish_place(b, clipped, layered)
     s.clip_rect = outer_clip
     s.has_clip = outer_has_clip
+    if rippled(s, element) { try place_ripple(s, a, b, bounds, corner) }
     if ringed(s, element) { try place_ring(s, a, b, bounds, corner) }
     let placed = &s.elements[element]
     if placed.static_subtree {
@@ -1921,15 +1953,18 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
     }
     if sc.scrollbar && content > e.viewport_extent {
         // ponytail: the thumb is painted, not dragged; a press on it scrolls the content.
+        // v2 (D979, docs/ux/components/VirtualList): 4 wide, fully rounded, 2 from
+        // the trailing edge, viewport squared over the content long, 32 at least.
+        // ponytail: no widening to 8 on hover, fade after 1.5 s or touch handle.
         let viewport = e.viewport_extent
         var length = viewport * viewport / content
-        if length < 8.0 { length = 8.0 }
+        if length < 32.0 { length = min_f(32.0, viewport) }
         var at = offset / content * viewport
         if at > viewport - length { at = viewport - length }
         if at < 0.0 { at = 0.0 }
-        var thumb = geometry.Rect { x: inner.x + inner.width - 4.0, y: inner.y + at, width: 4.0, height: length }
-        if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 4.0, width: length, height: 4.0 } }
-        try scene.push(b, scene.Command { FillRect: scene.FillRect { rect: thumb, brush: paint.Brush { Solid: sc.thumb } } })
+        var thumb = geometry.Rect { x: inner.x + inner.width - 6.0, y: inner.y + at, width: 4.0, height: length }
+        if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 6.0, width: length, height: 4.0 } }
+        try fill_shape(a, b, thumb, 2.0, paint.Brush { Solid: sc.thumb })
     }
     try scene.push(b, restore)
     ret ok
@@ -1939,16 +1974,32 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
 fn overlay_rect(anchor: geometry.Rect, size: geometry.Size, ov: Overlay, window_size: geometry.Size) -> geometry.Rect {
     var x = anchor.x
     var y = anchor.y
-    if ov.placement == .Below { y = anchor.y + anchor.height }
-    if ov.placement == .Above { y = anchor.y - size.height }
-    if ov.placement == .Right { x = anchor.x + anchor.width }
-    if ov.placement == .Left { x = anchor.x - size.width }
-    if ov.placement == .Center {
+    let p = ov.placement
+    let below = p == .Below || p == .BelowCenter || p == .BelowEnd
+    let above = p == .Above || p == .AboveCenter
+    if p == .BelowCenter || p == .AboveCenter || p == .TopCenter { x = anchor.x + (anchor.width - size.width) * 0.5 }
+    if p == .BelowEnd { x = anchor.x + anchor.width - size.width }
+    if below { y = anchor.y + anchor.height }
+    if above { y = anchor.y - size.height }
+    if p == .Right { x = anchor.x + anchor.width }
+    if p == .Left { x = anchor.x - size.width }
+    if p == .Center {
         x = (window_size.width - size.width) * 0.5
         y = (window_size.height - size.height) * 0.5
     }
+    if p == .At {
+        x = 0.0
+        y = 0.0
+    }
     x += ov.offset.x
     y += ov.offset.y
+    // Flip to the other side when this one overflows and that one fits (D975).
+    if below && y + size.height > window_size.height && anchor.y - size.height - ov.offset.y >= 0.0 { y = anchor.y - size.height - ov.offset.y }
+    if above && y < 0.0 && anchor.y + anchor.height - ov.offset.y + size.height <= window_size.height { y = anchor.y + anchor.height - ov.offset.y }
+    if p == .Right && x + size.width > window_size.width && anchor.x - size.width - ov.offset.x >= 0.0 { x = anchor.x - size.width - ov.offset.x }
+    if p == .Left && x < 0.0 && anchor.x + anchor.width - ov.offset.x + size.width <= window_size.width { x = anchor.x + anchor.width - ov.offset.x }
+    if p == .At && x + size.width > window_size.width && ov.offset.x - size.width >= 0.0 { x = ov.offset.x - size.width }
+    if p == .At && y + size.height > window_size.height && ov.offset.y - size.height >= 0.0 { y = ov.offset.y - size.height }
     if x + size.width > window_size.width { x = window_size.width - size.width }
     if y + size.height > window_size.height { y = window_size.height - size.height }
     if x < 0.0 { x = 0.0 }
@@ -2139,6 +2190,33 @@ fn ringed(s: *const State, element: usize) -> bool {
     if !s.has_focus || !s.focus_visible || usize(s.focus) != element || !(s.ring_width > 0.0) { ret false }
     let e = &s.elements[element]
     ret e.focusable && (e.kind != EDIT_TAG || e.ringed)
+}
+
+// Whether the element carries the press ripple (D983): pressed, with a colour
+// and a phase to draw.
+fn rippled(s: *const State, element: usize) -> bool {
+    ret s.arena_state.pressed && usize(s.arena_state.candidate) == element && s.ripple_phase > 0.0 && s.ripple_color.alpha > 0.0
+}
+
+// The ripple (D983): a disc from the press point, clipped to the element.
+fn place_ripple(s: *State, a: *mem.Arena, b: *scene.Builder, bounds: geometry.Rect, corner: style.Corners) -> err {
+    let p = s.arena_state.down
+    let dx = max_f(p.x - bounds.x, bounds.x + bounds.width - p.x)
+    let dy = max_f(p.y - bounds.y, bounds.y + bounds.height - p.y)
+    let reach = math.sqrt[f32](dx * dx + dy * dy) * s.ripple_phase
+    if !(reach > 0.0) { ret ok }
+    var save: scene.Command = .Save
+    var restore: scene.Command = .Restore
+    try scene.push(b, save)
+    if corner.top_left > 0.0 || corner.top_right > 0.0 || corner.bottom_right > 0.0 || corner.bottom_left > 0.0 {
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rounded: shape_of(bounds, corner, 0.0) } })
+    } else {
+        try scene.push(b, scene.Command { Clip: scene.Clip { Rect: bounds } })
+    }
+    let (disc, disc_error) = rounded_path(a, geometry.Rect { x: p.x - reach, y: p.y - reach, width: 2.0 * reach, height: 2.0 * reach }, reach)
+    if disc_error != ok { ret TooLarge }
+    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: disc, brush: paint.Brush { Solid: s.ripple_color } } })
+    ret scene.push(b, restore)
 }
 
 fn intersect(a: geometry.Rect, b: geometry.Rect) -> geometry.Rect {
@@ -2816,9 +2894,8 @@ fn collect_focusable(s: *State, index: usize, out: []u32, count: usize) -> usize
     ret n
 }
 
-// Tab and Shift+Tab: the next or previous focusable element in preorder, within
-// the trapping scope's subtree when the focus sits in one, wrapping at the ends.
-fn move_focus(s: *State, backward: bool) {
+// Where Tab walks: the trapping scope or modal overlay the focus sits in, or the tree.
+fn focus_root(s: *State) -> usize {
     var root = usize(s.root)
     if s.has_focus {
         let (found_scope, has_scope) = scope_of(s, usize(s.focus))
@@ -2826,6 +2903,39 @@ fn move_focus(s: *State, backward: bool) {
         let (found_overlay, has_overlay) = overlay_of(s, usize(s.focus))
         if has_overlay && s.elements[found_overlay].modal { root = found_overlay }
     }
+    ret root
+}
+
+// A menu's arrow keys (D975): with a menu item (role 22) focused, Down and Up move
+// the focus as Tab and Shift+Tab do (wrapping, disabled items skipped), Home and
+// End to the first and last; whether the key was taken.
+fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
+    if !s.has_focus || k.modifiers.shift || k.modifiers.control || k.modifiers.alt || k.modifiers.meta { ret false }
+    if code != 40u32 && code != 38u32 && code != 36u32 && code != 35u32 { ret false }
+    let e = &s.elements[usize(s.focus)]
+    var item = e.has_semantics && e.sem.role == 22u8
+    if !item && e.has_parent {
+        let up = &s.elements[usize(e.parent)]
+        item = up.has_semantics && up.sem.role == 22u8
+    }
+    if !item { ret false }
+    if code == 40u32 || code == 38u32 {
+        move_focus(s, code == 38u32)
+        ret true
+    }
+    var order: [256]u32 = zero
+    let count = collect_focusable(s, focus_root(s), order[..], 0usize)
+    if count == 0usize { ret true }
+    s.focus = order[0usize]
+    if code == 35u32 { s.focus = order[count - 1usize] }
+    s.focus_visible = true
+    ret true
+}
+
+// Tab and Shift+Tab: the next or previous focusable element in preorder, within
+// the trapping scope's subtree when the focus sits in one, wrapping at the ends.
+fn move_focus(s: *State, backward: bool) {
+    let root = focus_root(s)
     var order: [256]u32 = zero
     let count = collect_focusable(s, root, order[..], 0usize)
     if count == 0usize { ret }
@@ -3224,6 +3334,7 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
         let (edited, edit_error) = edit_key(s, editor, k)
         if edited || edit_error != ok { ret (true, edit_error) }
     }
+    if menu_key(s, code, k) { ret (true, ok) }
     if s.has_focus && s.elements[usize(s.focus)].live && s.elements[usize(s.focus)].kind == SLIDER_TAG {
         let (slid, slide_error) = slider_key(s, usize(s.focus), code)
         if slid || slide_error != ok { ret (true, slide_error) }

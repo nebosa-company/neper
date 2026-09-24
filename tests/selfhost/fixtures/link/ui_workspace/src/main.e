@@ -167,13 +167,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root, build_error) = build(&frame, &theme, ctx, documents[0usize..3usize], 1usize, &closers[0usize], sizes, 0usize)
     if build_error != ok || testing.pump(&harness, root, now) != ok { os.exit(11i32) }
     // The tabs: three tabs under a tab list named Documents, the second selected
-    // and marked dirty, the pinned first without a close button; the view shows.
+    // and named unsaved (D974: its dot in the close slot), the pinned first without
+    // a close button; the view shows.
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(12i32) }
     let (list, has_list) = find(tree, .TabList, "Documents")
     if !has_list || testing.by_role(&harness, .Tab).count != 3usize || testing.by_text(&harness, "Editor").count != 1usize { os.exit(13i32) }
-    let (notes, has_notes) = find(tree, .Tab, "notes")
-    if !has_notes || !notes.state.selected || !same(notes.hint, "unsaved") || testing.by_text(&harness, "* notes").count == 0usize { os.exit(14i32) }
+    let (notes, has_notes) = find(tree, .Tab, "notes, unsaved changes")
+    if !has_notes || !notes.state.selected || !same(notes.hint, "unsaved") || testing.by_text(&harness, "notes").count == 0usize { os.exit(14i32) }
     // The tabs are keyed from the strip's key: main.e is 2 + 1, notes 2 + 3, todo
     // 2 + 5; a pinned tab has no close (2 + 2), the others do.
     if testing.by_key(&harness, 4u64).count != 0usize || testing.by_key(&harness, 6u64).count != 1usize { os.exit(15i32) }

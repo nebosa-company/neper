@@ -192,13 +192,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_cancel || testing.tap(&harness, cancel_at.x, cancel_at.y) != ok || logs[0usize].cancels != 1usize { os.exit(17i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].cancels != 2usize { os.exit(18i32) }
     // On the last step, unable to advance: Finish stands disabled and Enter does
-    // nothing; Back fires; the first step is marked done.
+    // nothing; Back fires; the first step is named done (D974: a check marker).
     let (root_2, build_2_error) = build(&frame, &theme, ctx, &handlers[0usize], buffer, 2usize, false, false, false, 0usize)
     if build_2_error != ok || testing.pump(&harness, root_2, now) != ok { os.exit(19i32) }
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if tree_2_error != ok { os.exit(20i32) }
     let (finish_node, has_finish) = find(tree_2, .Button, "Finish")
-    if !has_finish || !finish_node.state.disabled || testing.by_text(&harness, "+ Account").count == 0usize || testing.by_label(&harness, "Next").count != 0usize { os.exit(21i32) }
+    if !has_finish || !finish_node.state.disabled || testing.by_label(&harness, "Account, completed").count == 0usize || testing.by_label(&harness, "Next").count != 0usize { os.exit(21i32) }
     let (back_at, has_back_at) = centre_of(&harness, &runtime, 3u64)
     if !has_back_at || testing.tap(&harness, back_at.x, back_at.y) != ok || logs[0usize].backs != 1usize { os.exit(22i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].finishes != 0usize { os.exit(23i32) }

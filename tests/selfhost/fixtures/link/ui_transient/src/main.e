@@ -194,7 +194,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A press outside dismisses too, and does not reach the save button under it.
     if testing.tap(&harness, save_at.x, save_at.y) != ok || logs[0usize].toggles != 3usize || logs[0usize].saves != 0usize { os.exit(33i32) }
     // The dialog: modal, labelled by its title, described by its message, a heading
-    // inside; Enter does nothing without a default button, Escape cancels.
+    // inside (level 2 since v2, D977); Enter does nothing without a default button,
+    // Escape cancels.
     let (root_4, build_4_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, true)
     if build_4_error != ok { os.exit(34i32) }
     if testing.pump(&harness, root_4, now) != ok { os.exit(35i32) }
@@ -205,7 +206,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dialog_node.relations.labelled_by.slot == 0u32 && dialog_node.relations.labelled_by.generation == 0u32 { os.exit(38i32) }
     if dialog_node.relations.described_by.slot == 0u32 && dialog_node.relations.described_by.generation == 0u32 { os.exit(39i32) }
     let (heading_node, has_heading) = find(tree_4, .Heading, "Delete file?")
-    if !has_heading || heading_node.level != 1u8 { os.exit(40i32) }
+    if !has_heading || heading_node.level != 2u8 { os.exit(40i32) }
     if testing.by_text(&harness, "This cannot be undone.").count != 1usize { os.exit(41i32) }
     // The dialog sits in the middle of the window.
     let (dialog_bounds, has_dialog_bounds) = testing.overlay_of(&harness, testing.by_key(&harness, 20u64).element)

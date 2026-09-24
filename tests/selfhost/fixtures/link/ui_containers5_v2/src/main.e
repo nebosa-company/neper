@@ -1,7 +1,7 @@
 // The v2 document workspace over editor groups (D969, widget plan P5-08,
 // docs/ux/components/MultiDocumentWorkspace) under the light theme at pointer
 // density: two groups side by side split by a 1px `outline-variant` line, the
-// active group's current tab over a 2px `primary` line and the other's not; a
+// active group's current tab with a 2px `primary` top line and the other's not; a
 // location bar of 24-tall crumbs whose press is a Crumb event; a group actions
 // button; in the active group Ctrl+Tab picks the most recently used document,
 // Ctrl+Shift+Tab the least, Alt+1 the first, Ctrl+PageDown wraps, Ctrl+Shift+T
@@ -157,12 +157,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (right, has_right) = bounds(&harness, &runtime, 1201u64)
     if !has_left || !has_right || !near(left.width, 300.0) || !near(right.x - left.x, 301.0) { os.exit(12i32) }
     if !is_color(shot, at(right.x - 0.5, right.y + 150.0), style.color(&tokens, .OutlineVariant)) || !is_color(shot, at(right.x + 100.0, right.y + 150.0), style.color(&tokens, .Background)) { os.exit(13i32) }
-    // The active group's current tab stands over the primary line; the other
-    // group's current tab does not.
+    // The active group's current tab carries the primary line along its top edge
+    // (D974, docs/ux/components/DocumentTabs); the other group's current tab does
+    // not.
     let (marked, has_marked) = bounds(&harness, &runtime, 1207u64)
     let (plain, has_plain) = bounds(&harness, &runtime, 1003u64)
     if !has_marked || !has_plain { os.exit(14i32) }
-    if !is_color(shot, at(marked.x + 12.0, marked.y + marked.height - 5.0), primary) || is_color(shot, at(plain.x + 12.0, plain.y + plain.height - 5.0), primary) { os.exit(15i32) }
+    if !is_color(shot, at(marked.x + 12.0, marked.y + 1.0), primary) || is_color(shot, at(plain.x + 12.0, plain.y + 1.0), primary) { os.exit(15i32) }
     // The location bar: 24-tall crumbs; a press is a Crumb event.
     let (crumb, has_crumb) = bounds(&harness, &runtime, 1153u64)
     if !has_crumb || !near(crumb.height, 24.0) || testing.by_label(&harness, "Group actions").count != 2usize { os.exit(16i32) }

@@ -2,7 +2,7 @@
 // light theme: a gauge and a level are read-only progress with digits, the level
 // invalid past its danger share; a snackbar shows the queue's head along the
 // bottom with its action and its close, a toast at the top right; a banner is an
-// alert when it warns and a status otherwise, an info bar closes; a skeleton is
+// alert for an error and a status otherwise (v2, D971), an info bar closes; a skeleton is
 // busy; an empty state offers its action; an accordion opens one disclosure.
 
 use e.gpu
@@ -129,7 +129,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, notices: []const control.Notice
     parts[8usize] = folded
     var column = style.defaults()
     column.width = style.Length { Px: 320.0 }
-    column.height = style.Length { Px: 600.0 }
+    column.height = style.Length { Px: 800.0 }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, column, parts[0usize..9usize]), ok)
 }
 
@@ -165,7 +165,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
-    let (h, harness_error) = testing.harness(a, &runtime, 320u32, 600u32, 1.0)
+    let (h, harness_error) = testing.harness(a, &runtime, 320u32, 800u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
     let (logs, logs_error) = mem.alloc[Log](a, 1usize)
@@ -214,17 +214,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (saved, has_saved) = find(tree, .Status, "Saved")
     if !has_saved || saved.live != .Polite { os.exit(19i32) }
     let (bar_bounds, has_bar) = testing.overlay_of(&harness, testing.by_key(&harness, 20u64).element)
-    if !has_bar || bar_bounds.y + bar_bounds.height < 560.0 || bar_bounds.y + bar_bounds.height > 600.0 { os.exit(20i32) }
+    if !has_bar || bar_bounds.y + bar_bounds.height < 760.0 || bar_bounds.y + bar_bounds.height > 800.0 { os.exit(20i32) }
     let (undo_at, has_undo) = centre_of(&harness, &runtime, 21u64)
     if !has_undo || testing.tap(&harness, undo_at.x, undo_at.y) != ok || logs[0usize].undos != 1usize { os.exit(21i32) }
     let (close_at, has_close) = centre_of(&harness, &runtime, 22u64)
     if !has_close || testing.tap(&harness, close_at.x, close_at.y) != ok || logs[0usize].dismisses != 1usize { os.exit(22i32) }
     let (toast_bounds, has_toast) = testing.overlay_of(&harness, testing.by_key(&harness, 30u64).element)
     if !has_toast || toast_bounds.y > 40.0 || toast_bounds.x + toast_bounds.width < 300.0 { os.exit(23i32) }
-    // The banner: an assertive alert; Settings fires. The info bar: a status whose
+    // The banner: a warning is a polite status in v2 (D971); Settings fires. The info bar: a status whose
     // close fires the dismiss.
-    let (battery, has_battery) = find(tree, .Alert, "Low battery")
-    if !has_battery || battery.live != .Assertive { os.exit(24i32) }
+    let (battery, has_battery) = find(tree, .Status, "Low battery")
+    if !has_battery || battery.live != .Polite { os.exit(24i32) }
     let (settings_at, has_settings) = centre_of(&harness, &runtime, 42u64)
     if !has_settings || testing.tap(&harness, settings_at.x, settings_at.y) != ok || logs[0usize].settings != 1usize { os.exit(25i32) }
     let (tip, has_tip) = find(tree, .Status, "Tip of the day")

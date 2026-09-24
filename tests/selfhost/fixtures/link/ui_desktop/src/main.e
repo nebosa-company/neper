@@ -1,7 +1,7 @@
 // `e.ui.control`'s desktop selection and history (D854, widget plan P3-05): a
 // font picker's family rows, style segments and size stepper each report their
 // choice and the preview stands; a notification list shows the caller's notices
-// with their actions and closes, and Clear all fires.
+// with their actions and closes, and Mark all read (v2, D971) fires.
 
 use e.gpu
 use e.io
@@ -83,12 +83,12 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, notices: []const co
     let (picker, picker_error) = control.font_picker(a, 1u64, t, "Font", families[..], family, styles[..], 0usize, 12i64, "The quick brown fox", widget.Change[usize] { ctx: ctx, invoke: on_family }, widget.Change[usize] { ctx: ctx, invoke: on_style }, widget.Change[i64] { ctx: ctx, invoke: on_size }, 3u32, 200.0)
     if picker_error != ok { ret (zero, picker_error) }
     parts[0usize] = picker
-    let (list, list_error) = control.notification_list(a, 100u64, t, "Notifications", notices, clear, 280.0, 120.0)
+    let (list, list_error) = control.notification_list(a, 100u64, t, "Notifications", notices, clear, 280.0, 220.0)
     if list_error != ok { ret (zero, list_error) }
     parts[1usize] = list
     var column = style.defaults()
     column.width = style.Length { Px: 320.0 }
-    column.height = style.Length { Px: 400.0 }
+    column.height = style.Length { Px: 600.0 }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, column, parts[0usize..2usize]), ok)
 }
 
@@ -124,7 +124,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
-    let (h, harness_error) = testing.harness(a, &runtime, 320u32, 400u32, 1.0)
+    let (h, harness_error) = testing.harness(a, &runtime, 320u32, 600u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
     let (logs, logs_error) = mem.alloc[Log](a, 1usize)
@@ -159,7 +159,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (plus_at, has_plus) = centre_of(&harness, &runtime, 1u64 + 80u64 + 2u64)
     if !has_plus || testing.tap(&harness, plus_at.x, plus_at.y) != ok || logs[0usize].sizes != 1usize || logs[0usize].size != 13i64 { os.exit(16i32) }
     // The notification list: two list items in a polite group; Undo fires the
-    // first's action; the second's close fires its dismiss; Clear all fires.
+    // first's action; the second's close fires its dismiss; Mark all read fires.
     let (notifications, has_notifications) = find(tree, .Group, "Notifications")
     if !has_notifications || notifications.live != .Polite || notifications.position.row_count != 2u32 { os.exit(17i32) }
     let (deleted, has_deleted) = find(tree, .ListItem, "Deleted 3 files")
