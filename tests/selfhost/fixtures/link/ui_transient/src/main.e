@@ -113,12 +113,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if renderer_error != ok { os.exit(3i32) }
     var renderer = r
     let tokens = style.reference(.Light)
+    let touch_tokens = style.adapt(&tokens, style.Adaptation { size: .Compact, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 96usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 12u16, max_commands: 256usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
+    let touch_theme = control.Theme { tokens: &touch_tokens, fonts: fonts, language: "", runtime: &runtime }
     let (h, harness_error) = testing.harness(a, &runtime, 320u32, 320u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
@@ -237,6 +239,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_delete || testing.tap(&harness, delete_at.x, delete_at.y) != ok || logs[0usize].deletes != 1usize { os.exit(43i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].cancels != 1usize { os.exit(44i32) }
     if testing.tap(&harness, 2.0, 318.0) != ok || logs[0usize].cancels != 2usize { os.exit(45i32) }
+    // Touch waits for a 500 ms hold, consumes the release, then keeps the plain
+    // tooltip for 1500 ms so the user can read it.
+    let touch_start = time.Instant { nanos: 5000000000i64 }
+    if testing.begin(&harness, touch_start) != ok { os.exit(51i32) }
+    let (touch_root, touch_root_error) = build(&frame, &touch_theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if touch_root_error != ok || testing.pump(&harness, touch_root, touch_start) != ok { os.exit(52i32) }
+    let (touch_save_at, has_touch_save) = centre_of(&harness, &runtime, 1u64)
+    if !has_touch_save || testing.send(&harness, input.Event { PointerDown: testing.pointer_at(touch_save_at.x, touch_save_at.y) }) != ok { os.exit(53i32) }
+    if testing.begin(&harness, touch_start) != ok { os.exit(54i32) }
+    let (touch_wait, touch_wait_error) = build(&frame, &touch_theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if touch_wait_error != ok || testing.pump(&harness, touch_wait, touch_start) != ok || testing.by_role(&harness, .Tooltip).count != 0usize || !widget.animation_frame_requested(&runtime) { os.exit(55i32) }
+    let touch_almost = time.Instant { nanos: 5499999999i64 }
+    if testing.begin(&harness, touch_almost) != ok { os.exit(56i32) }
+    let (touch_almost_root, touch_almost_error) = build(&frame, &touch_theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if touch_almost_error != ok || testing.pump(&harness, touch_almost_root, touch_almost) != ok || testing.by_role(&harness, .Tooltip).count != 0usize { os.exit(57i32) }
+    let touch_due = time.Instant { nanos: 5500000000i64 }
+    if testing.begin(&harness, touch_due) != ok { os.exit(58i32) }
+    let (touch_shown, touch_shown_error) = build(&frame, &touch_theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if touch_shown_error != ok || testing.pump(&harness, touch_shown, touch_due) != ok || testing.by_role(&harness, .Tooltip).count != 1usize { os.exit(59i32) }
+    if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(touch_save_at.x, touch_save_at.y) }) != ok || logs[0usize].saves != 0usize { os.exit(60i32) }
+    let touch_released = time.Instant { nanos: 5500000001i64 }
+    if testing.begin(&harness, touch_released) != ok { os.exit(61i32) }
+    let (touch_kept, touch_kept_error) = build(&frame, &touch_theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if touch_kept_error != ok || testing.pump(&harness, touch_kept, touch_released) != ok || testing.by_role(&harness, .Tooltip).count != 1usize || !widget.animation_frame_requested(&runtime) { os.exit(62i32) }
+    let touch_release_almost = time.Instant { nanos: 6999999999i64 }
+    if testing.begin(&harness, touch_release_almost) != ok { os.exit(63i32) }
+    let (touch_kept_almost, touch_kept_almost_error) = build(&frame, &touch_theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if touch_kept_almost_error != ok || testing.pump(&harness, touch_kept_almost, touch_release_almost) != ok || testing.by_role(&harness, .Tooltip).count != 1usize { os.exit(64i32) }
+    let touch_gone_at = time.Instant { nanos: 7000000000i64 }
+    if testing.begin(&harness, touch_gone_at) != ok { os.exit(65i32) }
+    let (touch_gone, touch_gone_error) = build(&frame, &touch_theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if touch_gone_error != ok || testing.pump(&harness, touch_gone, touch_gone_at) != ok || testing.by_role(&harness, .Tooltip).count != 0usize { os.exit(66i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(46i32) }
     try io.print("ui transient ok\n")
     ret ok

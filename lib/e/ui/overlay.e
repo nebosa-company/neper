@@ -22,10 +22,11 @@ error TooLarge
 // or focused from the keyboard.
 // v2 (D975, docs/ux/components/Tooltip): hover waits 500 ms, the next anchor in
 // a 1500 ms toolbar sweep shows at once, a press hides it, and keyboard focus
-// shows it at once. ponytail: no touch long press yet.
+// shows it at once; touch uses a 500 ms long press and remains 1500 ms after release.
 fn tooltip_wanted(t: *const control.Theme, anchor: widget.Key) -> bool {
     if mem.address_of(t.runtime) == 0usize { ret false }
-    ret widget.tooltip_wanted(t.runtime, anchor)
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    ret widget.tooltip_wanted(t.runtime, anchor, touch)
 }
 
 // Whether a rich tooltip is wanted after its initial hover delay and while the

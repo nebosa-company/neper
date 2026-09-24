@@ -362,6 +362,12 @@ type State = struct {
     tooltip_seen_at: i64,
     tooltip_last_at: i64,
     has_tooltip_last: bool,
+    tooltip_touch_anchor: Key,
+    has_tooltip_touch: bool,
+    tooltip_touch_at: i64,
+    tooltip_touch_release_at: i64,
+    tooltip_touch_shown: bool,
+    tooltip_touch_released: bool,
     long_press_key: Key,
     has_long_press: bool,
     long_press_at: i64,
@@ -4056,6 +4062,9 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .PointerDown as p:
         s.has_pointer = true
         s.arena_state.last = p.position
+        s.has_tooltip_touch = false
+        s.tooltip_touch_shown = false
+        s.tooltip_touch_released = false
         s.has_long_press = false
         s.long_press_fired = false
         // The topmost overlay under the pointer is the tree the press is in; a modal
@@ -4120,6 +4129,13 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .PointerUp as p:
         s.has_pointer = true
         s.arena_state.last = p.position
+        if s.has_tooltip_touch && s.tooltip_touch_shown {
+            s.tooltip_touch_released = true
+            s.tooltip_touch_release_at = s.animation_time.nanos
+            s.arena_state.pressed = false
+            s.arena_state.dragging = false
+            ret ok
+        }
         if s.long_press_fired {
             var chosen = 0usize
             var has_chosen = false
@@ -4219,6 +4235,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             s.has_long_press = false
             s.long_press_fired = false
         }
+        if s.has_tooltip_touch && !s.tooltip_touch_shown && distance_sq(p.position, s.arena_state.down) > gesture_slop() * gesture_slop() { s.has_tooltip_touch = false }
         if s.arena_state.pressed {
             let candidate = usize(s.arena_state.candidate)
             let e = &s.elements[candidate]
@@ -4335,6 +4352,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .Scroll as p:
         s.has_long_press = false
         s.long_press_fired = false
+        s.has_tooltip_touch = false
         s.has_rich_tooltip = false
         let (zoomed, has_zoomed) = hit_zoom(s, usize(s.root), p.position)
         if has_zoomed {
@@ -4359,6 +4377,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             s.has_rich_dismissed = true
             s.has_rich_tooltip = false
         }
+        if code == 27u32 { s.has_tooltip_touch = false }
         if menu_alt_key(code) {
             if !k.repeat {
                 s.menu_alt_down = true
@@ -4419,6 +4438,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .Close as w:
         ret ok
     case .Resize as m:
+        s.has_tooltip_touch = false
         s.has_rich_tooltip = false
         ret ok
     case .Focus as w:
@@ -4426,6 +4446,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .Blur as w:
         s.has_long_press = false
         s.long_press_fired = false
+        s.has_tooltip_touch = false
         s.has_rich_tooltip = false
         ret ok
     case .Lifecycle as l:
@@ -4678,9 +4699,45 @@ fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction {
 // Plain tooltips wait 500 ms for the first hovered anchor. Once one has shown,
 // another hovered within 1500 ms appears immediately (the toolbar sweep).
 // Keyboard focus remains immediate; pressing hides the tooltip.
-fn tooltip_wanted(widget_runtime: *Runtime, key: Key) -> bool {
+fn touch_tooltip_wanted(s: *State, key: Key) -> bool {
+    let now = s.animation_time.nanos
+    if s.has_tooltip_touch && s.tooltip_touch_anchor == key {
+        if s.tooltip_touch_shown {
+            if !s.tooltip_touch_released { ret true }
+            if now >= s.tooltip_touch_release_at && now - s.tooltip_touch_release_at >= 1500000000i64 {
+                s.has_tooltip_touch = false
+                s.tooltip_touch_shown = false
+                ret false
+            }
+            s.animation_due = true
+            ret true
+        }
+        if !s.arena_state.pressed || s.arena_state.dragging {
+            s.has_tooltip_touch = false
+            ret false
+        }
+    }
+    let (found, count) = find_by_key(s, key)
+    if count != 1usize || !s.arena_state.pressed || s.arena_state.dragging || !geometry.contains(s.elements[usize(found.slot)].bounds, s.arena_state.down) { ret false }
+    if !s.has_tooltip_touch || s.tooltip_touch_anchor != key {
+        s.tooltip_touch_anchor = key
+        s.has_tooltip_touch = true
+        s.tooltip_touch_at = now
+        s.tooltip_touch_shown = false
+        s.tooltip_touch_released = false
+    }
+    if now < s.tooltip_touch_at || now - s.tooltip_touch_at < 500000000i64 {
+        s.animation_due = true
+        ret false
+    }
+    s.tooltip_touch_shown = true
+    ret true
+}
+
+fn tooltip_wanted(widget_runtime: *Runtime, key: Key, touch: bool) -> bool {
     let (s, state_error) = state_of(widget_runtime)
     if state_error != ok { ret false }
+    if touch { ret touch_tooltip_wanted(s, key) }
     let current = interaction(widget_runtime, key)
     let now = s.animation_time.nanos
     if current.focus_visible {

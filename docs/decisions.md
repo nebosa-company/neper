@@ -21781,3 +21781,15 @@ still wins.
 `ui_overlays_v2` holds both the plain Button-to-Tooltip and rich Group-to-Tooltip
 relations on Windows and Linux. `ui_semantics` guards the general relationship
 bridge on both hosts.
+
+## D1022 — Plain touch tooltips use the runtime gesture arena
+
+At touch density `overlay.tooltip_wanted` now starts from the pressed anchor,
+requests frames until the 500 ms long-press boundary, and keeps the tooltip
+visible for 1500 ms after release. A completed long press consumes that release
+so the anchor's ordinary tap does not also run; movement beyond gesture slop,
+Escape, scroll, resize and blur cancel it.
+
+`ui_transient` holds both timing boundaries, release persistence and tap
+suppression on Windows and Linux. `ui_overlays_v2` and `ui_gesture` guard the
+existing context long press and general gesture dispatch on both hosts.
