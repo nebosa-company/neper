@@ -21953,3 +21953,14 @@ and dirty flags still reach the shared actions and separate outside dismissal.
 `ui_overlays2_v2` holds both the unchanged floating pointer form and the 640 by
 240 touch sheet with its Dialog semantics and actions on Windows and Linux.
 `popover-compact-sheet.png` is the Segoe UI visual check. D976 is complete.
+
+## D1036 — Busy dialogs wait for their default action
+
+`overlay.dialog_state` reuses the standard dialog and button loading state. Busy
+keeps the default action's width and name under its ring but routes presses and
+Enter to an inert submit, disables every other action, marks the Dialog Busy and
+temporarily removes the Cancel action used by Escape and the scrim.
+
+`ui_overlays3_v2` holds all action states and unchanged callback counters after
+button, Enter, Escape and scrim input on Windows and Linux. `dialog-busy.png` is
+the Segoe UI visual check.

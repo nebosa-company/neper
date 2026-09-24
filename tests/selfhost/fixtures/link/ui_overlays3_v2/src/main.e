@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, Side, Bottom, Actions }
+type Which = enum u8 { Dialog, DialogBusy, Side, Bottom, Actions }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -65,7 +65,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (items, items_error) = mem.alloc[widget.Node](a, 4usize)
     if items_error != ok { ret (zero, items_error) }
     let (inside, e1) = control.text(a, 0u64, "Inside", t, control.text_options())
-    let (alert, e2) = overlay.alert_dialog(a, 100u64, t, "Delete build?", "The artifacts go too.", s.buttons[0usize..3usize], which == .Dialog)
+    var alert: widget.Node = zero
+    var e2: err = ok
+    if which == .DialogBusy {
+        let (made_dialog, made_dialog_error) = overlay.dialog_state(a, 100u64, t, "Delete build?", inside, s.buttons[0usize..3usize], true, false, true)
+        alert = made_dialog
+        e2 = made_dialog_error
+    } else {
+        let (made_dialog, made_dialog_error) = overlay.alert_dialog(a, 100u64, t, "Delete build?", "The artifacts go too.", s.buttons[0usize..3usize], which == .Dialog)
+        alert = made_dialog
+        e2 = made_dialog_error
+    }
     let (side, e3) = overlay.sheet(a, 200u64, t, "Details", inside, which == .Side, &s.subs[3usize], 300.0)
     let (bottom, e4) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
     let (actions, e5) = overlay.action_sheet(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], which == .Actions, &s.subs[3usize])
@@ -181,6 +191,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 27u32, zero) != ok || s.counters[0usize].count != 1usize { os.exit(18i32) }
     if testing.tap(&harness, 5.0, 5.0) != ok || s.counters[0usize].count != 2usize { os.exit(19i32) }
     if !tap_key(&harness, &runtime, 104u64) || s.counters[1usize].count != 1usize { os.exit(20i32) }
+    // Busy keeps the default action's width under its ring, suppresses repeat
+    // Enter/presses and disables every other action; Escape and the scrim wait.
+    let cancel_before = s.counters[0usize].count
+    let delete_before = s.counters[1usize].count
+    let keep_before = s.counters[2usize].count
+    let (root_busy, build_busy_error) = build(&f, &theme, s, .DialogBusy)
+    if build_busy_error != ok || testing.pump(&harness, root_busy, time.Instant { nanos: 1050000000i64 }) != ok { os.exit(43i32) }
+    let (busy_tree, busy_tree_error) = testing.semantics(&harness)
+    if busy_tree_error != ok { os.exit(44i32) }
+    let (busy_dialog, has_busy_dialog) = find(busy_tree, .Dialog, "Delete build?")
+    let (busy_cancel, has_busy_cancel) = find(busy_tree, .Button, "Cancel")
+    let (busy_delete, has_busy_delete) = find(busy_tree, .Button, "Delete")
+    let (busy_keep, has_busy_keep) = find(busy_tree, .Button, "Keep")
+    if !has_busy_dialog || !busy_dialog.state.busy || !has_busy_cancel || !busy_cancel.state.disabled || !has_busy_delete || !busy_delete.state.disabled || !has_busy_keep || !busy_keep.state.busy || busy_keep.state.disabled { os.exit(45i32) }
+    if !tap_key(&harness, &runtime, 103u64) || !tap_key(&harness, &runtime, 104u64) || !tap_key(&harness, &runtime, 105u64) || testing.press_key(&harness, 13u32, zero) != ok || testing.press_key(&harness, 27u32, zero) != ok || testing.tap(&harness, 5.0, 5.0) != ok { os.exit(46i32) }
+    if s.counters[0usize].count != cancel_before || s.counters[1usize].count != delete_before || s.counters[2usize].count != keep_before { os.exit(47i32) }
     // The side sheet: 300 wide along the right edge, the window's height,
     // `surface-container-low`, its open edge's corners rounded; a 48 header
     // with a 32 Close 8 from the end that dismisses.

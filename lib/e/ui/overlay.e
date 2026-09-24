@@ -727,36 +727,52 @@ fn with_scrim(a: *mem.Arena, t: *const control.Theme, top: widget.Node) -> (widg
 // heading), 16 above the content, 8 above the actions at the end 8 apart -- the
 // default a filled button, a destructive one filled in `error`, the others text
 // buttons, all at the control height.
-// ponytail: no icon well, scroll dividers, busy state, full-screen form or host
+// ponytail: no icon well, scroll dividers, full-screen form or host
 // button order; Escape and the scrim close only through a Cancel button.
 fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool) -> (widget.Node, err) {
     let (made, made_error) = dialog_as(a, key, t, title, content, buttons, open, described, 23u8)
     ret (made, made_error)
 }
 
+fn dialog_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, busy: bool) -> (widget.Node, err) {
+    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy)
+    ret (made, made_error)
+}
+
 fn dialog_as(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8) -> (widget.Node, err) {
+    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, semantic_role, false)
+    ret (made, made_error)
+}
+
+fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var submit: widget.Submit = zero
     var cancel: widget.Submit = zero
     let (row, row_error) = mem.alloc[widget.Node](a, buttons.len)
     if row_error != ok { ret (zero, TooLarge) }
+    var idle: []widget.Submit = zero
+    if busy {
+        let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+        if idle_error != ok { ret (zero, TooLarge) }
+        made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
+        idle = made_idle
+    }
     var i = 0usize
     while i < buttons.len {
         let button_key = key + 3u64 + u64(i)
-        var variant: style.ControlVariant = .Plain
+        var options = control.button_options()
+        options.variant = .Plain
         if buttons[i].kind == .Default {
-            variant = .Filled
-            submit = buttons[i].action
+            options.variant = .Filled
+            options.loading = busy
+            if !busy { submit = buttons[i].action }
         }
-        if buttons[i].kind == .Destructive { variant = .Danger }
-        if buttons[i].kind == .Cancel { cancel = buttons[i].action }
-        let look = control.button_look(t, style.resolve(t.tokens, variant, control.control_state(t, button_key, true, false)), true)
-        var caption = control.text_options()
-        caption.role = .Label
-        caption.wrap = .None
-        let (label_node, label_error) = control.colored_text(a, 0u64, buttons[i].label, t, caption, look.foreground)
-        if label_error != ok { ret (zero, label_error) }
-        let (pressed, pressed_error) = control.pressable_states(a, button_key, t, 3u8, buttons[i].label, look, true, false, 0u32, 0u32, 0u64, &buttons[i].action, label_node)
+        if buttons[i].kind == .Destructive { options.variant = .Danger }
+        if buttons[i].kind == .Cancel && !busy { cancel = buttons[i].action }
+        if busy && buttons[i].kind != .Default { options.enabled = false }
+        var action = &buttons[i].action
+        if busy { action = &idle[0usize] }
+        let (pressed, pressed_error) = control.button(a, button_key, t, buttons[i].label, action, options)
         if pressed_error != ok { ret (zero, pressed_error) }
         row[i] = pressed
         i += 1usize
@@ -801,6 +817,7 @@ fn dialog_as(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     sem.role = semantic_role
     sem.label = title
     sem.states = accessibility.STATE_MODAL
+    if busy { sem.states = sem.states | accessibility.STATE_BUSY }
     sem.labelled_by = key + 1u64
     if described { sem.described_by = key + 2u64 }
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
