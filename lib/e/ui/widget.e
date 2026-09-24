@@ -3021,6 +3021,39 @@ fn leave_menu_mode(s: *State) {
     s.has_menu_saved_focus = false
 }
 
+// Alt plus a menu title's initial enters menu mode on that title and opens it.
+fn menu_bar_access_key(s: *State, logical: u32) -> (bool, err) {
+    let typed = unicode.to_lower_simple(logical)
+    if !unicode.is_alphabetic(typed) { ret (false, ok) }
+    let (bar, has_bar) = semantic_role_under(s, usize(s.root), 41u8)
+    if !has_bar { ret (false, ok) }
+    var targets: [32]u32 = zero
+    var owners: [32]u32 = zero
+    let count = collect_menu_titles(s, bar, targets[..], owners[..], 0usize)
+    var i = 0usize
+    while i < count {
+        let owner = &s.elements[usize(owners[i])]
+        if owner.text_len != 0usize {
+            let (first, _) = unicode.read_utf8(owner.text[0usize..owner.text_len], 0usize)
+            if unicode.to_lower_simple(first) == typed {
+                if !s.menu_mode {
+                    s.menu_saved_focus = s.focus
+                    s.has_menu_saved_focus = s.has_focus
+                }
+                s.focus = targets[i]
+                s.has_focus = true
+                s.focus_visible = true
+                s.menu_mode = true
+                let title = &s.elements[usize(targets[i])]
+                let fired = fire_gesture(title.gesture, Gesture { Tap: geometry.Point { x: title.bounds.x + title.bounds.width * 0.5, y: title.bounds.y + title.bounds.height * 0.5 } })
+                ret (true, fired)
+            }
+        }
+        i += 1usize
+    }
+    ret (false, ok)
+}
+
 // F10 enters the first MenuBar title. Left and Right walk titles, following an
 // open menu; Down opens the focused title; Escape leaves title mode.
 fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
@@ -3945,7 +3978,11 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             }
             ret ok
         }
-        if s.menu_alt_down { s.menu_alt_used = true }
+        if s.menu_alt_down {
+            s.menu_alt_used = true
+            let (accessed, access_error) = menu_bar_access_key(s, k.key.logical)
+            if accessed || access_error != ok { ret access_error }
+        }
         if s.has_focus {
             let f = &s.elements[usize(s.focus)]
             if f.live && f.kind == REGION_TAG && f.enabled && (f.gestures & GESTURE_TAP) != 0u8 && (code == 13u32 || code == 32u32) {

@@ -268,8 +268,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 27u32, zero) != ok { os.exit(42i32) }
     let (restored, has_restored) = testing.focused(&harness)
     if !has_restored || !same_element(restored, original) { os.exit(43i32) }
-    // Releasing Alt alone enters the same mode on Windows and X; using Alt
-    // with another key leaves focus alone.
+    // Releasing Alt alone enters the same mode on Windows and X; Alt+F opens
+    // File, while an unmatched Alt chord leaves focus alone.
     if testing.press_key(&harness, 18u32, zero) != ok { os.exit(45i32) }
     let (windows_alt, has_windows_alt) = testing.focused(&harness)
     if !has_windows_alt || !same_element(windows_alt, testing.by_key(&harness, 2401u64).element) || testing.press_key(&harness, 27u32, zero) != ok { os.exit(46i32) }
@@ -279,6 +279,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var alt: input.Modifiers = zero
     alt.alt = true
     if testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 70u32, logical: 70u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 70u32, logical: 70u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(49i32) }
+    let (accessed, has_accessed) = testing.focused(&harness)
+    if !has_accessed || !same_element(accessed, testing.by_key(&harness, 2401u64).element) || s.counters[9usize].count != 1usize || testing.press_key(&harness, 27u32, zero) != ok { os.exit(58i32) }
+    s.counters[9usize].count = 0usize
+    if testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 90u32, logical: 90u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 90u32, logical: 90u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(49i32) }
     let (after_chord, has_after_chord) = testing.focused(&harness)
     if !has_after_chord || !same_element(after_chord, original) { os.exit(50i32) }
     let (root_3, build_3_error) = build(&f, &theme, s, false, 0usize)

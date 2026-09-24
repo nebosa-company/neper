@@ -21466,3 +21466,16 @@ pre-menu tab on Windows and Linux.
 
 Buffered multi-letter typeahead, access-key underlines and activation, and
 submenus remain open.
+
+## D999 — Alt plus a menu-title initial opens that menu
+
+While Alt is down, the shared MenuBar path Unicode-case-folds the logical key
+against each title's first scalar. A match saves the old focus, focuses the title
+and fires its existing Show menu action; an unmatched chord remains available to
+the application and does not enter menu mode on Alt release.
+
+`ui_navigation2_v2` holds Alt+F opening File and Alt+Z leaving the original focus
+alone on Windows and Linux.
+
+Access-key underlines and item activation, buffered multi-letter typeahead, and
+submenus remain open.
