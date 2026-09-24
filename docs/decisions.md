@@ -21594,3 +21594,17 @@ Windows and Linux, while `ui_navigation2_v2` guards the existing MenuBar path;
 `menu-submenu.png` is the Segoe UI visual check.
 
 Compact touch replacement and the inset focus ring remain open.
+
+## D1008 — Menu focus rings are semantic and inset
+
+The runtime recognises a focused region beneath MenuItem, MenuItemCheckbox or
+MenuItemRadio semantics and draws the focus-ring stroke with its outer edge 3px
+inside the row. Other controls retain the normal outside ring and the existing
+clip fallback, so Menu, ContextMenu and MenuBar rows share one implementation
+without a menu-specific control API.
+
+`ui_overlays_v2` holds the inset and clear outer pixels on Windows and Linux;
+`ui_navigation2_v2` guards the MenuBar path, and `menu-submenu.png` is the Segoe
+UI visual check.
+
+Compact touch submenu replacement remains open.

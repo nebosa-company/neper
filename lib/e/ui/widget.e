@@ -1836,7 +1836,7 @@ fn place(s: *State, a: *mem.Arena, node: *const Node, element: usize, outer: geo
     s.clip_rect = outer_clip
     s.has_clip = outer_has_clip
     if rippled(s, element) { try place_ripple(s, a, b, bounds, corner) }
-    if ringed(s, element) { try place_ring(s, a, b, bounds, corner) }
+    if ringed(s, element) { try place_ring(s, a, b, element, bounds, corner) }
     let placed = &s.elements[element]
     if placed.static_subtree {
         placed.replay_from = u32(from)
@@ -2301,15 +2301,18 @@ fn intersect(a: geometry.Rect, b: geometry.Rect) -> geometry.Rect {
 }
 
 // The ring: a stroke `ring_width` wide whose outer edge is `ring_offset + ring_width`
-// outside the bounds, on the element's shape grown by the same; where the clip in
-// force would cut that, the stroke lies just inside the bounds instead (a row in a
-// list, a tab in a bar).
-fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, bounds: geometry.Rect, corner: style.Corners) -> err {
+// outside the bounds, on the element's shape grown by the same. Menu rows put its
+// outer edge 3px inside their edge-to-edge bounds; otherwise a clip that would cut
+// the outside ring moves it just inside the bounds.
+fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, element: usize, bounds: geometry.Rect, corner: style.Corners) -> err {
     let w = s.ring_width
     var grow = s.ring_offset + w * 0.5
     let reach = s.ring_offset + w
     let outer = geometry.Rect { x: bounds.x - reach, y: bounds.y - reach, width: bounds.width + 2.0 * reach, height: bounds.height + 2.0 * reach }
-    if s.has_clip {
+    let (_, menu_item) = menu_item_owner(s, element)
+    if menu_item {
+        grow = 0.0 - 3.0 - w * 0.5
+    } else if s.has_clip {
         let c = s.clip_rect
         if outer.x < c.x || outer.y < c.y || outer.x + outer.width > c.x + c.width || outer.y + outer.height > c.y + c.height { grow = 0.0 - w * 0.5 }
     }

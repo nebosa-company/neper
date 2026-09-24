@@ -4,8 +4,9 @@
 // a separator between them, a checked and a disabled command, and a 48-tall
 // radio command with a supporting line; a context command opens one cascading
 // submenu by Right and closes it by Left; Down, Up, Home and End move the focus
-// (skipping the disabled one, wrapping), Enter runs, Escape dismisses, a hovered
-// row takes the `on-surface` layer; touch supporting rows are 56 tall under an
+// (skipping the disabled one, wrapping), Enter runs, Escape dismisses, a focused
+// row has its ring inset 3 and a hovered row takes the `on-surface` layer; touch
+// supporting rows are 56 tall under an
 // 8 rim; a context menu at the pointer flipped to its start and
 // above it at the window's corner, and one opened from the keyboard below its
 // target; a plain tooltip on `inverse-surface` centred 4 above its anchor, 24
@@ -208,6 +209,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root, build_error) = build(&f, &theme, s, .Menu)
     if build_error != ok { os.exit(9i32) }
     if testing.pump(&harness, root, time.Instant { nanos: 1000000000i64 }) != ok { os.exit(10i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 101u64).element) != ok || testing.pump(&harness, root, time.Instant { nanos: 1000000001i64 }) != ok { os.exit(86i32) }
     let (shot, shot_error) = testing.snapshot(&harness, a)
     if shot_error != ok { os.exit(11i32) }
     let (tree, tree_error) = testing.semantics(&harness)
@@ -220,6 +222,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot, at(menu.x + 100.0, menu.y + 2.0), style.color(&tokens, .SurfaceContainer)) { os.exit(14i32) }
     let (new_row, has_new) = bounds(&harness, &runtime, 101u64)
     if !has_new || !near(new_row.y, menu.y + 4.0) || !near(new_row.height, 32.0) || !near(new_row.x, menu.x) || !near(new_row.width, menu.width) { os.exit(15i32) }
+    let ring_at_4 = is_color(shot, at(new_row.x + 4.0, new_row.y + 16.0), style.color(&tokens, .FocusRing))
+    let ring_at_5 = is_color(shot, at(new_row.x + 5.0, new_row.y + 16.0), style.color(&tokens, .FocusRing))
+    if (!ring_at_4 && !ring_at_5) || is_color(shot, at(new_row.x + 1.0, new_row.y + 16.0), style.color(&tokens, .FocusRing)) { os.exit(85i32) }
     // The group head (8 above, 4 below its line) before Minimap; the separator
     // (4, 1, 4) before Delete, a 1px `outline-variant` line.
     let (wrap_row, has_wrap) = bounds(&harness, &runtime, 102u64)

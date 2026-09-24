@@ -386,7 +386,6 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: 
 // aligned to the parent row; Right opens, Left closes, and hover uses D1004's
 // delay and safe triangle.
 // ponytail: touch submenus cascade rather than replacing the parent;
-// the focus ring is the runtime's outside ring rather than inset 3.
 fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     let around = control.if_else(touch, 8.0, 4.0)
