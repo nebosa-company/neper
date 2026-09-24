@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, action_icons: [3]control.GlyphKind, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, DialogDefaultFirst, DialogDefaultLast, DialogScrolled, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, SideStandard, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu, ActionsIos }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, DialogDefaultFirst, DialogDefaultLast, DialogScrolled, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, SideStandard, Bottom, BottomStandard, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu, ActionsIos }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -127,7 +127,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
         side = made_side
         e3 = made_side_error
     }
-    let (bottom, e4) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
+    var bottom: widget.Node = zero
+    var e4: err = ok
+    if which == .BottomStandard {
+        let (made_bottom, made_bottom_error) = overlay.standard_bottom_sheet(a, 300u64, t, "Share", inside, true, &s.subs[3usize], 120.0)
+        bottom = made_bottom
+        e4 = made_bottom_error
+    } else {
+        let (made_bottom, made_bottom_error) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
+        bottom = made_bottom
+        e4 = made_bottom_error
+    }
     var actions: widget.Node = zero
     var e5: err = ok
     if which == .ActionsIos {
@@ -180,6 +190,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
         docked[0usize] = widget.box(0u64, page, zero)
         docked[1usize] = side
         ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, page_style, docked[0usize..2usize]), ok)
+    }
+    if which == .BottomStandard {
+        let (docked, docked_error) = mem.alloc[widget.Node](a, 2usize)
+        if docked_error != ok { ret (zero, docked_error) }
+        var page = style.defaults()
+        page.width = style.Length { Percent: 100.0 }
+        page.height = style.Length { Flex: 1.0 }
+        page.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        docked[0usize] = widget.box(0u64, page, zero)
+        docked[1usize] = bottom
+        ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, page_style, docked[0usize..2usize]), ok)
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, page_style, items[0usize..5usize]), ok)
 }
@@ -457,6 +478,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot_3, at(320.0, bottom.y + 100.0), low) || !is_color(shot_3, at(2.0, bottom.y + 2.0), dimmed) { os.exit(32i32) }
     if !is_color(shot_3, at(320.0, bottom.y + 17.5), style.layer(low, style.color(&tokens, .OnSurfaceVariant), 0.4)) || !is_color(shot_3, at(320.0, bottom.y + 22.0), low) { os.exit(33i32) }
     if testing.by_key(&harness, 302u64).count != 0usize { os.exit(34i32) }
+    // A standard bottom sheet participates in the page column at its peek
+    // height, with a top divider and no modal scrim or focus trap.
+    let (root_bottom_standard, build_bottom_standard_error) = build(&f, &theme, s, .BottomStandard)
+    if build_bottom_standard_error != ok || testing.pump(&harness, root_bottom_standard, time.Instant { nanos: 1250000000i64 }) != ok { os.exit(118i32) }
+    let (bottom_standard_shot, bottom_standard_shot_error) = testing.snapshot(&harness, a)
+    if bottom_standard_shot_error != ok { os.exit(119i32) }
+    let (bottom_standard, has_bottom_standard) = bounds(&harness, &runtime, 300u64)
+    if !has_bottom_standard || !near(bottom_standard.x, 0.0) || !near(bottom_standard.y, 360.0) || !near(bottom_standard.width, 640.0) || !near(bottom_standard.height, 120.0) { os.exit(120i32) }
+    if !is_color(bottom_standard_shot, at(5.0, 5.0), page) || !is_color(bottom_standard_shot, at(320.0, 360.0), style.color(&tokens, .OutlineVariant)) || !is_color(bottom_standard_shot, at(320.0, 361.0), low) { os.exit(121i32) }
+    let (bottom_standard_tree, bottom_standard_tree_error) = testing.semantics(&harness)
+    if bottom_standard_tree_error != ok { os.exit(122i32) }
+    let (_, has_bottom_standard_region) = find(bottom_standard_tree, .Region, "Share")
+    let (_, has_bottom_standard_dialog) = find(bottom_standard_tree, .Dialog, "Share")
+    if !has_bottom_standard_region || has_bottom_standard_dialog { os.exit(123i32) }
     // The action sheet: as tall as its content (the handle 20, the header 28,
     // rows of 48, dividers of 17, 8 below); a divider before Delete; Share runs,
     // Cancel dismisses.
