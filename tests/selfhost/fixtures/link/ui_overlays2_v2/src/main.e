@@ -64,7 +64,8 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (items, items_error) = mem.alloc[widget.Node](a, 4usize)
     if items_error != ok { ret (zero, items_error) }
     let (search, e1) = control.button(a, 1u64, t, "Search", &s.subs[1usize], control.button_options())
-    let (filter, e2) = control.button(a, 2u64, t, "Filter", &s.subs[1usize], control.button_options())
+    let flyout_open = which == .Flyout
+    let (filter, e2) = overlay.flyout_button(a, 2u64, t, "Filter", 20u64, flyout_open, &s.subs[1usize])
     let (build_button, e3) = control.button(a, 3u64, t, "Build", &s.subs[1usize], control.button_options())
     let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize)
     if rows_error != ok { ret (zero, rows_error) }
@@ -75,7 +76,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let list = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..2usize])
     let (popup, e6) = overlay.popup_of(a, 10u64, t, 1u64, .Below, "Suggestions", list, which == .Popup)
     let (inside, e7) = control.text(a, 0u64, "Only my builds", t, control.text_options())
-    let (flyout, e8) = overlay.flyout(a, 20u64, t, 2u64, .Below, "Filters", inside, which == .Flyout, &s.subs[2usize])
+    let (flyout, e8) = overlay.flyout(a, 20u64, t, 2u64, .Below, "Filters", inside, flyout_open, &s.subs[2usize])
     var side: widget.Placement = .Right
     var owner = 3u64
     if which == .Below {
@@ -135,6 +136,19 @@ fn find(tree: accessibility.Tree, role: accessibility.Role, label: str) -> (acce
         i += 1usize
     }
     ret (zero, false)
+}
+
+fn same_element(a: widget.ElementId, b: widget.ElementId) -> bool {
+    ret a.slot == b.slot && a.generation == b.generation
+}
+
+fn has_action(node: accessibility.Node, wanted: accessibility.Action) -> bool {
+    var i = 0usize
+    while i < node.actions.len {
+        if node.actions[i] == wanted { ret true }
+        i += 1usize
+    }
+    ret false
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -200,12 +214,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (row, has_row) = bounds(&harness, &runtime, 11u64)
     if !has_row || !near(row.x, popup.x) || !near(row.y, popup.y + 4.0) || !near(row.height, 40.0) || !near(popup.height, 88.0) { os.exit(14i32) }
     let (group, has_group) = find(tree, .Group, "Suggestions")
-    if !has_group || testing.by_role(&harness, .ListItem).count != 2usize { os.exit(15i32) }
+    let (closed_filter, has_closed_filter) = find(tree, .Button, "Filter")
+    if !has_group || testing.by_role(&harness, .ListItem).count != 2usize || !has_closed_filter || closed_filter.state.selected || closed_filter.state.expanded || !has_action(closed_filter, .ShowMenu) { os.exit(15i32) }
     if !tap_key(&harness, &runtime, 2u64) || s.counters[1usize].count != 1usize { os.exit(16i32) }
     if !tap_key(&harness, &runtime, 12u64) || s.counters[0usize].count != 1usize { os.exit(17i32) }
     // The flyout with a pointer: 4 below Filter, 200 wide at least on
     // `surface-container`, 12 above and 8 below its content; a modal dialog named
-    // Filters; a press outside dismisses without reaching Search.
+    // Filters; its anchor stays selected tonal and reports Expanded/Controls;
+    // a press outside dismisses without reaching Search.
     let (root_2, build_2_error) = build(&f, &theme, s, .Flyout)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(18i32) }
     let (shot_2, shot_2_error) = testing.snapshot(&harness, a)
@@ -217,7 +233,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tree_2, tree_2_error) = testing.semantics(&harness)
     if tree_2_error != ok { os.exit(22i32) }
     let (filters, has_filters) = find(tree_2, .Dialog, "Filters")
-    if !has_filters || !filters.state.modal { os.exit(23i32) }
+    let (filter_node, has_filter_node) = find(tree_2, .Button, "Filter")
+    if !has_filters || !filters.state.modal || !has_filter_node || !filter_node.state.selected || !filter_node.state.expanded || !has_action(filter_node, .ShowMenu) || !same_element(filter_node.relations.controls, testing.by_key(&harness, 20u64).element) { os.exit(23i32) }
+    if !is_color(shot_2, at(filter.x + 3.0, filter.y + filter.height * 0.5), style.color(&tokens, .SecondaryContainer)) { os.exit(42i32) }
     if testing.tap(&harness, search.x + 4.0, search.y + 4.0) != ok || s.counters[2usize].count != 1usize || s.counters[1usize].count != 1usize { os.exit(24i32) }
     // On touch: 16 all round, 240 wide at least.
     let (root_3, build_3_error) = build(&f, &touch_theme, s, .Flyout)

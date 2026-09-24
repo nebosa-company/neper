@@ -21804,3 +21804,15 @@ not block the command. Hosts without haptic hardware install nothing.
 `ui_overlays_v2` holds one feedback pulse for each of two successful context
 holds, alongside the existing open and drag-release behavior, on Windows and
 Linux. Binding that callback to mobile haptic hardware remains host work.
+
+## D1024 — Standard flyout buttons own their open state
+
+`overlay.flyout_button` reuses the ordinary button press path but resolves the
+open anchor directly to `secondary-container` / `on-secondary-container`. It
+also publishes Selected, Expanded, Show menu and Controls pointing at the
+flyout key, so callers cannot omit the visual or accessibility half of the
+contract.
+
+`ui_overlays2_v2` holds the pixels and semantics on Windows and Linux, with the
+existing outside-dismiss behavior intact. `flyout-selected-anchor.png` is the
+Segoe UI visual check. Compact touch-sheet presentation remains open.

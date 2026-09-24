@@ -354,7 +354,7 @@ fn context_scrim_around(a: *mem.Arena, t: *const control.Theme, owner: widget.Ke
 
 // Touch context menu: 8 below its lifted target, under the target-preserving
 // scrim. The target's `show` action normally toggles `open` on long press.
-// ponytail: no host haptic tick yet.
+// Hosts may install `widget.set_long_press_feedback` for the boundary tick.
 fn context_menu_touch_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owner: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (floating, menu_error) = menu_at(a, key, t, owner, label, commands, true, dismiss, .Below, geometry.Point { x: 0.0, y: 8.0 }, 8.0, true)
@@ -976,13 +976,29 @@ fn dismissable_by(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement:
     ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: gap_offset(placement, gap), modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
 }
 
+// A standard flyout anchor: filled while closed, selected tonal while open, and
+// reporting Show menu / Expanded / Controls to the accessibility tree.
+fn flyout_button(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, flyout_key: widget.Key, open: bool, toggle: *const widget.Submit) -> (widget.Node, err) {
+    var variant: style.ControlVariant = .Filled
+    if open { variant = .Tonal }
+    let look = control.button_look(t, style.resolve(t.tokens, variant, control.control_state(t, key, true, false)), true)
+    var caption = control.text_options()
+    caption.role = .Label
+    caption.wrap = .None
+    let (label_node, label_error) = control.colored_text(a, 0u64, label, t, caption, look.foreground)
+    if label_error != ok { ret (zero, label_error) }
+    var states = 0u32
+    if open { states = accessibility.STATE_EXPANDED }
+    let (made, made_error) = control.pressable_states(a, key, t, 3u8, label, look, true, open, states, accessibility.ACTION_SHOW_MENU, flyout_key, toggle, label_node)
+    ret (made, made_error)
+}
+
 // A flyout: a light-dismissed popup against its anchor, placed while `open`.
 // v2 (D976, docs/ux/components/Flyout): `surface-container`, `radius-md`,
 // elevation 2, no border; 16 all round on touch, 12 at the sides and top and 8
 // below with a pointer; 240 to 360 wide on touch, 200 to 320 with a pointer; 4
 // off its anchor, flipping when that side overflows.
-// ponytail: the anchor's selected look, Expanded and Controls are the caller's;
-// no compact bottom-sheet presentation.
+// ponytail: no compact bottom-sheet presentation.
 fn flyout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (made, made_error) = light_dismissed(a, key, t, anchor, placement, label, content, dismiss)
