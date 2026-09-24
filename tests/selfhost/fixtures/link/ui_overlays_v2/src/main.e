@@ -2,7 +2,8 @@
 // ContextMenu, Tooltip) under the light theme: a pointer menu 4 below its
 // button on `surface-container`, 4 above and below its 32 rows, a group head and
 // a separator between them, a checked and a disabled command, and a 48-tall
-// radio command with a supporting line; Down, Up, Home and End move the focus
+// radio command with a supporting line; a context command opens one cascading
+// submenu by Right and closes it by Left; Down, Up, Home and End move the focus
 // (skipping the disabled one, wrapping), Enter runs, Escape dismisses, a hovered
 // row takes the `on-surface` layer; touch supporting rows are 56 tall under an
 // 8 rim; a context menu at the pointer flipped to its start and
@@ -31,8 +32,9 @@ use e.ui.widget
 
 type Counter = struct { count: usize }
 
-// The counters: 0 New, 1 the other commands, 2 dismiss, 3 Learn more, 4 anchors.
-type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, commands: [5]overlay.MenuCommand, pops: [2]overlay.MenuCommand, tips: [1]overlay.MenuItem }
+// The counters: 0 New, 1 the other commands, 2 dismiss, 3 Learn more, 4 anchors,
+// 5 submenu toggle, 6 submenu leaf.
+type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, commands: [5]overlay.MenuCommand, pops: [2]overlay.MenuCommand, pop_subs: [2]overlay.MenuCommand, tips: [1]overlay.MenuItem }
 
 type Which = enum u8 { Menu, Touch, Pointed, Keyboard }
 
@@ -73,6 +75,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (tip, e5) = overlay.tooltip_of(a, 200u64, t, 2u64, "Save file", "Ctrl+S", true)
     let (high, e6) = overlay.tooltip(a, 210u64, t, 1u64, "File menu", true)
     let (rich, e7) = overlay.rich_tooltip(a, 300u64, t, 3u64, "Incremental builds", "Only changed modules are rebuilt.", s.tips[0usize..1usize], true)
+    s.pops[0usize].submenu_open = s.counters[5usize].count % 2usize == 1usize
     let pointer = geometry.Point { x: 600.0, y: 460.0 }
     let (context, e8) = overlay.context_menu_of(a, 400u64, t, 3u64, "Actions for Info", s.pops[0usize..2usize], which == .Pointed || which == .Keyboard, &s.subs[2usize], pointer, which == .Pointed)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret (zero, e1) }
@@ -121,6 +124,19 @@ fn lifted(h: *testing.Harness, key: widget.Key) -> (geometry.Rect, bool) {
 fn focus_is(h: *testing.Harness, key: widget.Key) -> bool {
     let (now, has) = testing.focused(h)
     ret has && now.slot == testing.by_key(h, key).element.slot
+}
+
+fn same_element(a: widget.ElementId, b: widget.ElementId) -> bool {
+    ret a.slot == b.slot && a.generation == b.generation
+}
+
+fn has_action(node: accessibility.Node, wanted: accessibility.Action) -> bool {
+    var i = 0usize
+    while i < node.actions.len {
+        if node.actions[i] == wanted { ret true }
+        i += 1usize
+    }
+    ret false
 }
 
 fn find(tree: accessibility.Tree, role: accessibility.Role, label: str) -> (accessibility.Node, bool) {
@@ -179,7 +195,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.commands[4usize] = overlay.menu_command("Delete", s.subs[1usize])
     s.commands[4usize].separated = true
     s.commands[4usize].destructive = true
-    s.pops[0usize] = overlay.menu_command("Open", s.subs[1usize])
+    s.pop_subs[0usize] = overlay.menu_command("Code", s.subs[6usize])
+    s.pop_subs[1usize] = overlay.menu_command("Text", s.subs[6usize])
+    s.pops[0usize] = overlay.menu_command("Open with", s.subs[1usize])
+    s.pops[0usize].submenu = s.pop_subs[0usize..2usize]
+    s.pops[0usize].submenu_toggle = s.subs[5usize]
     s.pops[1usize] = overlay.menu_command("Rename", s.subs[1usize])
     s.tips[0usize] = overlay.MenuItem { label: "Learn more", action: s.subs[3usize], enabled: true }
     let (frame_storage, storage_error) = mem.alloc[u8](a, 2097152usize)
@@ -279,6 +299,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tree_4_error != ok { os.exit(45i32) }
     let (pop_node, has_pop_node) = find(tree_4, .Menu, "Actions for Info")
     if !has_pop_node || !focus_is(&harness, 401u64) { os.exit(46i32) }
+    // Right opens the general-menu submenu. Its first row aligns with its parent
+    // and it remains in the window when neither full side fits; the parent exposes
+    // Show menu / Expanded / Controls, and Left closes only that level.
+    if testing.press_key(&harness, 39u32, zero) != ok || s.counters[5usize].count != 1usize { os.exit(56i32) }
+    let (root_sub, root_sub_error) = build(&f, &theme, s, .Pointed)
+    if root_sub_error != ok || testing.pump(&harness, root_sub, time.Instant { nanos: 1350000000i64 }) != ok { os.exit(57i32) }
+    let (sub, has_sub) = lifted(&harness, 1424u64)
+    let (sub_first, has_sub_first) = bounds(&harness, &runtime, 1425u64)
+    if !has_sub { os.exit(80i32) }
+    if !has_sub_first { os.exit(81i32) }
+    if sub.x < 0.0 || sub.x + sub.width > 640.0 { os.exit(82i32) }
+    if !near(sub_first.y, open_row.y) { os.exit(83i32) }
+    if !focus_is(&harness, 1425u64) { os.exit(84i32) }
+    let (tree_sub, tree_sub_error) = testing.semantics(&harness)
+    if tree_sub_error != ok { os.exit(59i32) }
+    let (open_with, has_open_with) = find(tree_sub, .MenuItem, "Open with")
+    if !has_open_with || !open_with.state.expanded || !has_action(open_with, .ShowMenu) || !same_element(open_with.relations.controls, testing.by_key(&harness, 1424u64).element) { os.exit(60i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || s.counters[5usize].count != 2usize { os.exit(61i32) }
+    s.counters[5usize].count = 0usize
+    let (root_closed, root_closed_error) = build(&f, &theme, s, .Pointed)
+    if root_closed_error != ok || testing.pump(&harness, root_closed, time.Instant { nanos: 1375000000i64 }) != ok { os.exit(62i32) }
     // A press outside dismisses and does not reach Save.
     if testing.tap(&harness, save.x + 4.0, save.y + 4.0) != ok || s.counters[2usize].count != 2usize || s.counters[4usize].count != 0usize { os.exit(47i32) }
     // From the keyboard: below Info at its start edge.

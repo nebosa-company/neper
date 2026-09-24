@@ -3077,25 +3077,7 @@ fn menu_bar_access_key(s: *State, logical: u32) -> (bool, err) {
 // open menu; Down opens the focused title; Escape leaves title mode.
 fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
     if code != 65479u32 && code != 37u32 && code != 39u32 && code != 40u32 && code != 27u32 { ret (false, ok) }
-    let (bar, has_bar) = semantic_role_under(s, usize(s.root), 41u8)
-    if !has_bar { ret (false, ok) }
-    var targets: [32]u32 = zero
-    var owners: [32]u32 = zero
-    let count = collect_menu_titles(s, bar, targets[..], owners[..], 0usize)
-    if count == 0usize { ret (false, ok) }
     let plain = !k.modifiers.shift && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta
-    if code == 65479u32 && plain {
-        s.menu_typeahead_len = 0usize
-        if !s.menu_mode {
-            s.menu_saved_focus = s.focus
-            s.has_menu_saved_focus = s.has_focus
-        }
-        s.focus = targets[0usize]
-        s.has_focus = true
-        s.focus_visible = true
-        s.menu_mode = true
-        ret (true, ok)
-    }
     if s.has_focus && plain {
         let (item_owner, has_item) = menu_item_owner(s, usize(s.focus))
         if has_item && code == 39u32 && (s.elements[item_owner].sem.actions & 1024u32) != 0u32 {
@@ -3117,6 +3099,24 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
             }
             if modal_count > 1usize { ret (true, fire_submit(s.elements[top].dismiss)) }
         }
+    }
+    let (bar, has_bar) = semantic_role_under(s, usize(s.root), 41u8)
+    if !has_bar { ret (false, ok) }
+    var targets: [32]u32 = zero
+    var owners: [32]u32 = zero
+    let count = collect_menu_titles(s, bar, targets[..], owners[..], 0usize)
+    if count == 0usize { ret (false, ok) }
+    if code == 65479u32 && plain {
+        s.menu_typeahead_len = 0usize
+        if !s.menu_mode {
+            s.menu_saved_focus = s.focus
+            s.has_menu_saved_focus = s.has_focus
+        }
+        s.focus = targets[0usize]
+        s.has_focus = true
+        s.focus_visible = true
+        s.menu_mode = true
+        ret (true, ok)
     }
     if !s.has_focus || !plain || !descends_from(s, usize(s.focus), bar) { ret (false, ok) }
     var current = count

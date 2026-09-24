@@ -21579,3 +21579,18 @@ slot, shortcut, state and accessibility semantics.
 `menu-supporting.png` is the Segoe UI visual check.
 
 General-menu submenus and the inset focus ring remain open.
+
+## D1007 — General menus reuse the shared cascade runtime
+
+`overlay.MenuCommand` can own one submenu of at most eight commands, its open
+state and toggle. `menu_of` and `context_menu_of` draw the child menu beside its
+parent with a four-pixel overlap, keep the parent hover layer, and publish Show
+menu, Expanded and Controls. The shared runtime now handles Right and Left for
+these menus even when no MenuBar exists; delayed hover, the safe triangle and
+whole-chain leaf dismissal already use the same semantics.
+
+`ui_overlays_v2` holds Right/Left, child focus, placement and accessibility on
+Windows and Linux, while `ui_navigation2_v2` guards the existing MenuBar path;
+`menu-submenu.png` is the Segoe UI visual check.
+
+Compact touch replacement and the inset focus ring remain open.

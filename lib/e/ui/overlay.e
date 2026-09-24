@@ -167,9 +167,9 @@ type MenuItem = struct { label: str, action: widget.Submit, enabled: bool }
 // chosen, its shortcut's words ("Ctrl+S"; empty for none, never shown on touch),
 // whether it is checkable and checked (a check in the leading slot), a radio
 // choice (a 6px dot), or has a leading glyph; its optional supporting line;
-// whether a separator stands before it, whether it destroys (in `error`), and
-// the head of the group it starts.
-type MenuCommand = struct { label: str, supporting: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, head: str }
+// whether a separator stands before it, whether it destroys (in `error`), the
+// head of the group it starts, and its optional first-level submenu.
+type MenuCommand = struct { label: str, supporting: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, head: str, submenu: []const MenuCommand, submenu_open: bool, submenu_toggle: widget.Submit }
 
 // A plain enabled command.
 fn menu_command(label: str, action: widget.Submit) -> MenuCommand {
@@ -209,43 +209,48 @@ fn menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.
 }
 
 // v2 (D975, docs/ux/components/Menu): the menu 4 below its anchor (flipping
-// above), its commands keyed `key + 1 + index`.
+// above), its commands keyed `key + 1 + index`; submenu overlays use `key +
+// 1024 + 16 * index` and their commands continue from that key.
 fn menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
-    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, control.if_else(touch, 8.0, 4.0))
+    let rim = control.if_else(touch, 8.0, 4.0)
+    let (made, made_error) = menu_at(a, key, t, anchor, label, commands, open, dismiss, .Below, geometry.Point { x: 0.0, y: 4.0 }, rim, true)
+    ret (made, made_error)
+}
+
+fn menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, rim: f32, allow_submenus: bool) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, rim, allow_submenus)
     if panel_error != ok { ret (zero, panel_error) }
     let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
     if lifted_error != ok { ret (zero, TooLarge) }
     lifted[0usize] = panel
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .Below, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
 }
 
 // v2 (D975, docs/ux/components/ContextMenu): the menu for `owner` with its
 // top-start corner at the pointer `at` (+2, +2 in the window), flipping to the
 // pointer's start or above it where it would overflow; or, opened from the
 // keyboard (`pointed` false), below `owner` at its start edge. 8 above and below
-// its commands at either density; the commands keyed `key + 1 + index`.
+// its commands at either density; the commands keyed `key + 1 + index` and
+// submenu overlays following `menu_of`'s key scheme.
 // ponytail: no touch lift, scrim or long press; the target's selected look and
 // Show menu action stay the caller's.
 fn context_menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owner: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, at: geometry.Point, pointed: bool) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (panel, panel_error) = menu_panel(a, key, t, label, commands, dismiss, 8.0)
-    if panel_error != ok { ret (zero, panel_error) }
-    let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
-    if lifted_error != ok { ret (zero, TooLarge) }
-    lifted[0usize] = panel
-    var spec = widget.Overlay { anchor: owner, placement: .Below, offset: zero, modal: true, dismiss: *dismiss }
+    var anchor = owner
+    var placement: widget.Placement = .Below
+    var offset: geometry.Point = zero
     if pointed {
-        spec.anchor = 0u64
-        spec.placement = .At
-        spec.offset = geometry.Point { x: at.x + 2.0, y: at.y + 2.0 }
+        anchor = 0u64
+        placement = .At
+        offset = geometry.Point { x: at.x + 2.0, y: at.y + 2.0 }
     }
-    ret (widget.overlay(key, spec, style.defaults(), lifted[0usize..1usize]), ok)
+    let (made, made_error) = menu_at(a, key, t, anchor, label, commands, open, dismiss, placement, offset, 8.0, true)
+    ret (made, made_error)
 }
 
 // One command of a v2 menu (D975), keyed `item_key`, as `menu_panel` draws it.
-fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
+fn menu_row_of(a: *mem.Arena, item_key: widget.Key, submenu_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var row_height = control.if_else(touch, 48.0, 32.0)
     if c.supporting.len > 0usize { row_height = control.if_else(touch, 56.0, 48.0) }
@@ -255,7 +260,8 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     if touch { role = .BodyLarge }
     let line = style.text_style(t.tokens, role).line_height
     let surface_ink = style.color(t.tokens, .OnSurface)
-    let state = control.control_state(t, item_key, c.enabled, false)
+    var state = control.control_state(t, item_key, c.enabled, false)
+    if c.submenu_open { state.hovered = true }
     var ink = surface_ink
     if c.destructive { ink = style.color(t.tokens, .Error) }
     var muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -280,7 +286,7 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     look.padding_y = control.max_zero((row_height - tallest) * 0.5)
     look.min_height = row_height
     look.min_width = 24.0
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var p = 0usize
     if slotted {
@@ -323,7 +329,8 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     p += 1usize
     parts[p] = widget.spacer(0u64, 1.0)
     p += 1usize
-    if c.shortcut.len > 0usize && !touch {
+    let has_submenu = c.submenu.len != 0usize
+    if c.shortcut.len > 0usize && !touch && !has_submenu {
         caption.role = .BodyMedium
         let (keys_node, keys_error) = control.colored_text(a, 0u64, c.shortcut, t, caption, muted)
         if keys_error != ok { ret (zero, keys_error) }
@@ -331,6 +338,12 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = keys_node
         parts[p] = widget.padded(0u64, 24.0 - gap, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
+        p += 1usize
+    }
+    if has_submenu {
+        let (arrow, arrow_error) = control.icon_square(a, muted, .ChevronRight, slot)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        parts[p] = arrow
         p += 1usize
     }
     var line_style = style.defaults()
@@ -341,7 +354,16 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     var semantic_role = 22u8
     if c.checkable || c.checked { semantic_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
     if c.radio { semantic_role = accessibility.ROLE_MENU_ITEM_RADIO }
-    let (made, made_error) = control.pressable_states(a, item_key, t, semantic_role, c.label, look, c.enabled, false, sem_states, 0u32, 0u64, &c.action, content)
+    var sem_actions = 0u32
+    var controls = 0u64
+    var chosen = &c.action
+    if has_submenu {
+        sem_actions = accessibility.ACTION_SHOW_MENU
+        controls = submenu_key
+        chosen = &c.submenu_toggle
+        if c.submenu_open { sem_states = sem_states | accessibility.STATE_EXPANDED }
+    }
+    let (made, made_error) = control.pressable_states(a, item_key, t, semantic_role, c.label, look, c.enabled, false, sem_states, sem_actions, controls, chosen, content)
     ret (made, made_error)
 }
 
@@ -359,10 +381,13 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
 // `outline-variant` line with 4 above and below (8 touch); a group head is
 // `label-medium` `on-surface-variant`, 12 in, 8 above and 4 below. A menu in the
 // tree named `label`, its commands MenuItems (Checked when checked); the runtime
-// moves the focus through them with Down and Up, wrapping, and Home and End.
-// ponytail: no submenus;
+// moves the focus through them with Down and Up, wrapping, and Home and End. A
+// command may open one submenu to its right, overlapping by 4 with its first row
+// aligned to the parent row; Right opens, Left closes, and hover uses D1004's
+// delay and safe triangle.
+// ponytail: touch submenus cascade rather than replacing the parent;
 // the focus ring is the runtime's outside ring rather than inset 3.
-fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32) -> (widget.Node, err) {
+fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32, allow_submenus: bool) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     let around = control.if_else(touch, 8.0, 4.0)
     var slotted = false
@@ -371,12 +396,14 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         if commands[k].checkable || commands[k].checked || commands[k].radio || commands[k].pictured { slotted = true }
         k += 1usize
     }
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize * commands.len)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize * commands.len)
     if rows_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     var i = 0usize
     while i < commands.len {
         let c = &commands[i]
+        let has_submenu = c.submenu.len != 0usize
+        if has_submenu && (!allow_submenus || c.submenu.len > 8usize) { ret (zero, TooLarge) }
         if c.separated && i > 0usize {
             let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
             if lines_error != ok { ret (zero, TooLarge) }
@@ -405,10 +432,18 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             rows[n] = widget.padded(0u64, 12.0, 8.0, 12.0, 4.0, style.defaults(), heads[0usize..1usize])
             n += 1usize
         }
-        let (made, made_error) = menu_row_of(a, key + 1u64 + u64(i), t, c, slotted)
+        let item_key = key + 1u64 + u64(i)
+        let submenu_key = key + 1024u64 + 16u64 * u64(i)
+        let (made, made_error) = menu_row_of(a, item_key, submenu_key, t, c, slotted)
         if made_error != ok { ret (zero, made_error) }
         rows[n] = made
         n += 1usize
+        if has_submenu {
+            let (nested, nested_error) = menu_at(a, submenu_key, t, item_key, c.label, c.submenu, c.submenu_open, &c.submenu_toggle, .Right, geometry.Point { x: -4.0, y: -rim }, rim, false)
+            if nested_error != ok { ret (zero, nested_error) }
+            rows[n] = nested
+            n += 1usize
+        }
         i += 1usize
     }
     var raised = control.surface_options(t)
