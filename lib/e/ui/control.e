@@ -1049,11 +1049,44 @@ fn range_slider(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fir
     ret (node, node_error)
 }
 
+// A slider's value in its pill (D958): rounded digits in `label-large`
+// `inverse-on-surface` on `inverse-surface`, fully rounded.
+fn value_pill(a: *mem.Arena, t: *const Theme, value: f32) -> (widget.Node, err) {
+    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    var rounded = value + 0.5
+    if value < 0.0 { rounded = value - 0.5 }
+    let digit_count = write_i64(digits, i64(rounded))
+    var caption = text_options()
+    caption.role = .LabelLarge
+    caption.wrap = .None
+    let (reading, reading_error) = colored_text(a, 0u64, digits[0usize..digit_count], t, caption, style.color(t.tokens, .InverseOnSurface))
+    if reading_error != ok { ret (zero, reading_error) }
+    let (inside, inside_error) = mem.alloc[widget.Node](a, 1usize)
+    if inside_error != ok { ret (zero, TooLarge) }
+    inside[0usize] = reading
+    let line = style.text_style(t.tokens, .LabelLarge).line_height
+    var bubble = style.defaults()
+    bubble.min_width = style.Length { Px: 48.0 }
+    bubble.background = paint.Brush { Solid: style.color(t.tokens, .InverseSurface) }
+    bubble.radius = (line + 24.0) * 0.5
+    let sides = style.Length { Px: 16.0 }
+    let ends = style.Length { Px: 12.0 }
+    bubble.padding = style.EdgeLengths { left: sides, top: ends, right: sides, bottom: ends }
+    ret (widget.aligned(0u64, .Center, .Center, bubble, inside[0usize..1usize]), ok)
+}
+
 fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f32, second: f32, range: bool, low: f32, high: f32, step: f32, change: widget.Change[f32], change_second: widget.Change[f32], enabled: bool) -> (widget.Node, err) {
     // v2 (D956, docs/ux/components/Slider): 44 deep for its handle, the active part
     // and the handles `primary`, the rest `secondary-container`; disabled, those are
     // `on-surface` at 38% and 12%.
-    // ponytail: no hover halo, value label or ticks yet; they need the runtime to paint by the handle's own state.
+    // (D958) Hovered, a 6px `primary` halo at the hover opacity rounds the handle;
+    // pressed, the handle is 2 wide; a stepped slider shows 4 dots, `on-primary` on
+    // the active part and `on-secondary-container` beyond (38% disabled). While
+    // dragged or keyboard-focused, a single slider's value stands in an
+    // `inverse-surface` pill 8 above the handle, `label-large` in
+    // `inverse-on-surface`, at least 48 wide with 16 sides and 12 above and below.
+    // ponytail: the pill centres on the handle only while its value is no wider than 16; placing by the pill's measured width would centre any value.
     var track_style = style.defaults()
     track_style.width = style.Length { Px: 120.0 }
     track_style.height = style.Length { Px: 44.0 }
@@ -1061,14 +1094,38 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     var fill = style.color(t.tokens, .Primary)
     var rest = style.color(t.tokens, .SecondaryContainer)
     var words = ink
+    var tick_on = style.color(t.tokens, .OnPrimary)
+    var tick_off = style.color(t.tokens, .OnSecondaryContainer)
     if !enabled {
         fill = with_alpha(ink, t.tokens.states.disabled_content)
         rest = with_alpha(ink, t.tokens.states.disabled_container)
         words = fill
+        tick_on = fill
+        tick_off = fill
     }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    let state = control_state(t, key, enabled, false)
+    var halo = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    if enabled && state.hovered && !state.pressed { halo = with_alpha(style.color(t.tokens, .Primary), t.tokens.states.hover) }
+    var handle: f32 = 4.0
+    if enabled && state.pressed { handle = 2.0 }
+    let showing = enabled && !range && (state.pressed || state.focus_visible)
+    var count = 2usize
+    if showing { count = 3usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.slider(key, widget.Slider { value: first, second: second, range: range, low: low, high: high, step: step, vertical: false, track: rest, fill: fill, thumb: fill, change: change, change_second: change_second, enabled: enabled }, track_style)
+    parts[0usize] = widget.slider(key, widget.Slider { value: first, second: second, range: range, low: low, high: high, step: step, vertical: false, track: rest, fill: fill, thumb: fill, change: change, change_second: change_second, enabled: enabled, halo: halo, handle: handle, tick_on: tick_on, tick_off: tick_off }, track_style)
+    if showing {
+        let (pill, pill_error) = value_pill(a, t, first)
+        if pill_error != ok { ret (zero, pill_error) }
+        let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
+        if lifted_error != ok { ret (zero, TooLarge) }
+        lifted[0usize] = pill
+        var share: f32 = 0.0
+        if high > low { share = (first - low) / (high - low) }
+        if share < 0.0 { share = 0.0 }
+        if share > 1.0 { share = 1.0 }
+        parts[2usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Above, offset: geometry.Point { x: 8.0 + share * 104.0 - 24.0, y: 0.0 - 8.0 }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
+    }
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
@@ -1077,7 +1134,7 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     parts[1usize] = label_node
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
-    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..2usize])
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), parts[0usize..count])
     var sem: widget.Semantics = zero
     sem.role = 15u8
     sem.label = label
@@ -1759,7 +1816,7 @@ fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options
         chosen[i] = i == selected
         i += 1usize
     }
-    let (made, made_error) = listed(a, key, t, label, options, chosen, picks, rows, width, false)
+    let (made, made_error) = listed(a, key, t, label, options, chosen, picks, rows, width, false, true)
     ret (made, made_error)
 }
 
@@ -1773,7 +1830,8 @@ fn list_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options
 // its label in `on-secondary-container`, a list box's with a trailing check (18,
 // 24 on touch), a multi-select list's rows leading with a checkbox in its 40
 // circle, 4 from the edge.
-fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32, multi: bool) -> (widget.Node, err) {
+// Unframed (D958), it is the rows alone on the container, for a frame around more.
+fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, chosen: []const bool, picks: []const widget.Submit, rows: u32, width: f32, multi: bool, framed: bool) -> (widget.Node, err) {
     if picks.len != options.len || chosen.len != options.len { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, options.len)
     if items_error != ok { ret (zero, TooLarge) }
@@ -1865,6 +1923,12 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     let one = style.Length { Px: 1.0 }
     let four = style.Length { Px: 4.0 }
     view_style.padding = style.EdgeLengths { left: one, top: four, right: one, bottom: four }
+    if !framed {
+        view_style.width = style.Length { Px: row_width }
+        view_style.border = style.Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
+        view_style.radius = 0.0
+        view_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: four, right: style.Length { Px: 0.0 }, bottom: four }
+    }
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
     if view_error != ok { ret (zero, TooLarge) }
@@ -3748,8 +3812,84 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
 // A multi-select list: D824's list box with any number of rows selected, each
 // row's tap firing its own toggle; the caller keeps `selected`, one flag a row.
 fn multi_select_list(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: []const bool, toggles: []const widget.Submit, rows: u32, width: f32) -> (widget.Node, err) {
-    let (made, made_error) = listed(a, key, t, label, options, selected, toggles, rows, width, true)
+    let (made, made_error) = listed(a, key, t, label, options, selected, toggles, rows, width, true, true)
     ret (made, made_error)
+}
+
+// A multi-select list under its count bar (D958, docs/ux/components/MultiSelectList):
+// one 1px `outline-variant` box with 12 corners, clipped, holding a bar 40 tall (48
+// on touch) on `surface-container-low` that says "3 of 6 selected" in `title-small`
+// `on-surface`, 16 each side, with a text button (keyed `key + 1 + options.len`)
+// firing `all` -- "Select all" -- or, once every row is selected, `none` -- "Clear";
+// a 1px `outline-variant` rule under it, then the rows.
+fn multi_select_list_counted(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: []const bool, toggles: []const widget.Submit, rows: u32, width: f32, all: *const widget.Submit, none: *const widget.Submit) -> (widget.Node, err) {
+    let (list, list_error) = listed(a, key, t, label, options, selected, toggles, rows, width, true, false)
+    if list_error != ok { ret (zero, list_error) }
+    var picked = 0usize
+    var i = 0usize
+    while i < selected.len {
+        if selected[i] { picked += 1usize }
+        i += 1usize
+    }
+    let (said, said_error) = mem.alloc[u8](a, 64usize)
+    if said_error != ok { ret (zero, TooLarge) }
+    var at = write_i64(said, i64(picked))
+    at += copy_text(said[at..], " of ")
+    at += write_i64(said[at..], i64(options.len))
+    at += copy_text(said[at..], " selected")
+    var caption = text_options()
+    caption.role = .TitleSmall
+    caption.wrap = .None
+    let (count_node, count_error) = colored_text(a, 0u64, said[0usize..at], t, caption, style.color(t.tokens, .OnSurface))
+    if count_error != ok { ret (zero, count_error) }
+    var plain = button_options()
+    plain.variant = .Plain
+    var word = "Select all"
+    var action = all
+    if options.len != 0usize && picked == options.len {
+        word = "Clear"
+        action = none
+    }
+    let (toggle_all, toggle_error) = button(a, key + 1u64 + u64(options.len), t, word, action, plain)
+    if toggle_error != ok { ret (zero, toggle_error) }
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+    if bits_error != ok { ret (zero, TooLarge) }
+    bits[0usize] = count_node
+    bits[1usize] = toggle_all
+    var bar_height = t.tokens.sizes.control_md
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { bar_height = t.tokens.sizes.control_lg }
+    var bar = style.defaults()
+    bar.width = style.Length { Px: max_zero(width - 2.0) }
+    bar.height = style.Length { Px: bar_height }
+    bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+    let side = style.Length { Px: 16.0 }
+    let flat = style.Length { Px: 0.0 }
+    bar.padding = style.EdgeLengths { left: side, top: flat, right: style.Length { Px: 4.0 }, bottom: flat }
+    let (stack, stack_error) = mem.alloc[widget.Node](a, 3usize)
+    if stack_error != ok { ret (zero, TooLarge) }
+    stack[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, bar, bits[0usize..2usize])
+    var rule = sized_style(max_zero(width - 2.0), t.tokens.sizes.divider)
+    rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+    stack[1usize] = widget.box(0u64, rule, zero)
+    stack[2usize] = list
+    var frame = style.defaults()
+    frame.width = style.Length { Px: width }
+    frame.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+    frame.radius = t.tokens.radii.md
+    frame.overflow = .Clip
+    let one = style.Length { Px: 1.0 }
+    frame.padding = style.EdgeLengths { left: one, top: one, right: one, bottom: one }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, frame, stack[0usize..3usize]), ok)
+}
+
+// `words` copied into the front of `out`, as much as fits; how much that was.
+fn copy_text(out: []u8, words: str) -> usize {
+    var i = 0usize
+    while i < words.len && i < out.len {
+        out[i] = words[i]
+        i += 1usize
+    }
+    ret i
 }
 
 // ------------------------------------------ feedback and disclosure (D832, P2-04)

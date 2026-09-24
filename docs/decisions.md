@@ -19322,3 +19322,33 @@ at every use. A selector reads its instruction's fields many times, so the point
 loses. The copy stays: selectors take the instruction by value, and loops copy it
 out. To make this cheaper, change how a read through a pointer is generated -- keep
 the pointer in a register across the reads -- not the selectors' signatures.
+
+## D958 — The slider's states and the multi-select list's count bar; sliders are tab stops
+
+P5-05's last two. The slider (D956's tracks) gains what its specification shows by
+state: hovered, a 6px `primary` halo at the hover opacity rounds the handle;
+pressed, the handle is 2 wide; stepped, a 4 dot marks each step, `on-primary` on
+the active part and `on-secondary-container` beyond (38% disabled), hidden within
+the handle's clearance and when the steps would stand closer than 16 (at 8 a
+10-step slider read as a dashed line); dragged or keyboard-focused, a single
+slider shows its value in an `inverse-surface` pill 8 above the handle, `label-large`
+in `inverse-on-surface`, at least 48 wide. The control passes those states in
+`widget.Slider` (`halo`, `handle`, `tick_on`, `tick_off`) rather than the runtime
+reading them while it paints, so a state change changes the node and so the
+subtree's hash. Two runtime defects blocked it: a slider was never a hover target
+(its gestures lacked `GESTURE_HOVER`), and never a tab stop -- `focusable` asked
+only a region or an editor for its focusable flag, so a keyboard could not reach
+any slider. Both are fixed in `e.ui.widget`.
+
+`control.multi_select_list_counted` is the MultiSelectList specification's whole
+anatomy: one 1px `outline-variant` box with 12 corners, clipped, holding a
+`surface-container-low` bar 40 tall (48 on touch) that says "2 of 4 selected" in
+`title-small`, with a text button firing the caller's `all` ("Select all") or,
+once every row is chosen, `none` ("Clear"); a rule; then the rows. The plain
+`multi_select_list` stays for callers without those actions.
+
+`ui_selection3_v2` holds the ticks' colours and their absence at the handle, the
+bar, rule and frame, the button's word both ways, the halo, and the pill's width,
+place and colour after Tab reaches the slider. All 70 `ui_*` fixtures pass on
+Windows and Linux. The Selection group is complete; the value pill centres on the
+handle only while its value is no wider than 16.

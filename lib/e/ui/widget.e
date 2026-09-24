@@ -110,7 +110,10 @@ type Scrollbar = struct { viewport: Key, axis: ui_layout.Axis }
 // thumbs (`value` and `second`, `second` reported through `change_second`), a
 // press taking the nearer. The track, its filled part and the thumbs are painted
 // in the colours given; the value follows D807's rule for the caller's copy.
-type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32, step: f32, vertical: bool, track: paint.Color, fill: paint.Color, thumb: paint.Color, change: Change[f32], change_second: Change[f32], enabled: bool }
+// v2 (D958): the halo round a handle (clear for none), the handle's width (4, or 2
+// while pressed; 0 is 4), and the tick dots' colours on the active and inactive
+// track (clear for no ticks).
+type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32, step: f32, vertical: bool, track: paint.Color, fill: paint.Color, thumb: paint.Color, change: Change[f32], change_second: Change[f32], enabled: bool, halo: paint.Color, handle: f32, tick_on: paint.Color, tick_off: paint.Color }
 // A zoom view (D844, widget plan P2-11): its children laid out at their natural
 // size and painted scaled by `state.scale` and moved by `state.offset` inside its
 // own bounds, clipped; the wheel zooms about the pointer within `min_scale` and
@@ -1161,7 +1164,8 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
     case .Slider as sl:
         e.enabled = sl.enabled
         e.focusable = sl.enabled
-        e.gestures = GESTURE_TAP | GESTURE_DRAG
+        // Hovered too (D958), so its control can round the handle with its halo.
+        e.gestures = GESTURE_TAP | GESTURE_DRAG | GESTURE_HOVER
         if sl.value != e.node_value { e.slider_value = sl.value }
         if sl.second != e.node_second { e.slider_second = sl.second }
         e.node_value = sl.value
@@ -2197,19 +2201,41 @@ fn place_slider(s: *State, a: *mem.Arena, element: usize, sl: Slider, inner: geo
     let length = max_f(along - inset, 0.0)
     let first = slider_share(e, e.slider_value) * length
     let clear: f32 = 8.0
+    var width = sl.handle
+    if !(width > 0.0) { width = 4.0 }
+    var near_end: f32 = 0.0
+    var far_end = first
     if sl.range {
         let other = slider_share(e, e.slider_second) * length
-        let near_end = min_f(first, other)
-        let far_end = max_f(first, other)
+        near_end = min_f(first, other)
+        far_end = max_f(first, other)
         try slider_run(a, b, sl.vertical, inner, start, 0.0, near_end - clear, sl.track)
         try slider_run(a, b, sl.vertical, inner, start, near_end + clear, far_end - clear, sl.fill)
-        try slider_run(a, b, sl.vertical, inner, start, far_end + clear, length, sl.track)
-        try slider_handle(a, b, sl.vertical, inner, start, near_end, sl.thumb)
-        ret slider_handle(a, b, sl.vertical, inner, start, far_end, sl.thumb)
+    } else {
+        try slider_run(a, b, sl.vertical, inner, start, 0.0, first - clear, sl.fill)
     }
-    try slider_run(a, b, sl.vertical, inner, start, 0.0, first - clear, sl.fill)
-    try slider_run(a, b, sl.vertical, inner, start, first + clear, length, sl.track)
-    ret slider_handle(a, b, sl.vertical, inner, start, first, sl.thumb)
+    try slider_run(a, b, sl.vertical, inner, start, far_end + clear, length, sl.track)
+    // The ticks: a 4 dot at each step, none within the clearance of a handle, and
+    // none when the steps would stand closer than 16 apart.
+    if sl.step > 0.0 && (sl.tick_on.alpha > 0.0 || sl.tick_off.alpha > 0.0) && sl.high > sl.low {
+        let count = (sl.high - sl.low) / sl.step
+        if count >= 1.0 && length / count >= 16.0 {
+            var k = 0usize
+            while f32(k) <= count + 0.001 {
+                let spot = length * f32(k) / count
+                let off_first = spot < far_end - clear || spot > far_end + clear
+                let off_second = !sl.range || spot < near_end - clear || spot > near_end + clear
+                if off_first && off_second {
+                    var color = sl.tick_off
+                    if spot >= near_end && spot <= far_end { color = sl.tick_on }
+                    try slider_run(a, b, sl.vertical, inner, start, spot - 2.0, spot + 2.0, color)
+                }
+                k += 1usize
+            }
+        }
+    }
+    if sl.range { try slider_handle(a, b, sl.vertical, inner, start, near_end, width, sl.halo, sl.thumb) }
+    ret slider_handle(a, b, sl.vertical, inner, start, far_end, width, sl.halo, sl.thumb)
 }
 
 // A part of the track from `from` to `to` along it (from the bottom when vertical).
@@ -2221,13 +2247,19 @@ fn slider_run(a: *mem.Arena, b: *scene.Builder, vertical: bool, inner: geometry.
     ret fill_shape(a, b, r, thickness * 0.5, paint.Brush { Solid: color })
 }
 
-fn slider_handle(a: *mem.Arena, b: *scene.Builder, vertical: bool, inner: geometry.Rect, start: f32, spot: f32, color: paint.Color) -> err {
+// A handle `width` across and the box's depth long (44 at most), with its halo 6
+// out on each side when there is one.
+fn slider_handle(a: *mem.Arena, b: *scene.Builder, vertical: bool, inner: geometry.Rect, start: f32, spot: f32, width: f32, halo: paint.Color, color: paint.Color) -> err {
     var depth = inner.height
     if vertical { depth = inner.width }
     if depth > 44.0 { depth = 44.0 }
-    var r = geometry.Rect { x: inner.x + start + spot - 2.0, y: inner.y + inner.height * 0.5 - depth * 0.5, width: 4.0, height: depth }
-    if vertical { r = geometry.Rect { x: inner.x + inner.width * 0.5 - depth * 0.5, y: inner.y + inner.height - start - spot - 2.0, width: depth, height: 4.0 } }
-    ret fill_shape(a, b, r, 2.0, paint.Brush { Solid: color })
+    var r = geometry.Rect { x: inner.x + start + spot - width * 0.5, y: inner.y + inner.height * 0.5 - depth * 0.5, width: width, height: depth }
+    if vertical { r = geometry.Rect { x: inner.x + inner.width * 0.5 - depth * 0.5, y: inner.y + inner.height - start - spot - width * 0.5, width: depth, height: width } }
+    if halo.alpha > 0.0 {
+        let glow = geometry.Rect { x: r.x - 6.0, y: r.y - 6.0, width: r.width + 12.0, height: r.height + 12.0 }
+        try fill_shape(a, b, glow, (width + 12.0) * 0.5, paint.Brush { Solid: halo })
+    }
+    ret fill_shape(a, b, r, width * 0.5, paint.Brush { Solid: color })
 }
 
 // A value snapped to the step and kept in the range, set on the thumb held and
@@ -2727,7 +2759,8 @@ fn overlay_of(s: *State, index: usize) -> (usize, bool) {
 
 fn focusable(e: *const Element) -> bool {
     if !e.live || !e.enabled { ret false }
-    if e.kind == REGION_TAG || e.kind == EDIT_TAG { ret e.focusable }
+    // A slider is a tab stop too (D958): its keys move it once it has focus.
+    if e.kind == REGION_TAG || e.kind == EDIT_TAG || e.kind == SLIDER_TAG { ret e.focusable }
     ret e.has_action
 }
 
