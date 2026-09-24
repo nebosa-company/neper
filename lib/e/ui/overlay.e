@@ -1672,6 +1672,42 @@ fn standard_bottom_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme
     ret (made, made_error)
 }
 
+type SheetDetent = enum u8 { Peek, Half, Full }
+
+fn sheet_detent_height(t: *const control.Theme, detent: SheetDetent, peek_height: f32) -> f32 {
+    var peek = peek_height
+    if peek < 64.0 { peek = 64.0 }
+    var available: f32 = 640.0
+    if mem.address_of(t.runtime) != 0usize {
+        let surface = widget.surface_size(t.runtime)
+        available = surface.height
+    }
+    var full: f32 = available - 72.0
+    if full < 64.0 { full = 64.0 }
+    if peek > full { peek = full }
+    if detent == .Half { ret available * 0.5 }
+    if detent == .Full { ret full }
+    ret peek
+}
+
+fn sheet_detent_label(detent: SheetDetent) -> str {
+    if detent == .Half { ret "half height" }
+    if detent == .Full { ret "full height" }
+    ret "peek height"
+}
+
+fn bottom_sheet_detent(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, cycle: *const widget.Submit, detent: SheetDetent, peek_height: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (made, made_error) = edged_detent(a, key, t, title, content, dismiss, *dismiss, .Below, 0.0, sheet_detent_height(t, detent, peek_height), cycle, sheet_detent_label(detent), false)
+    ret (made, made_error)
+}
+
+fn standard_bottom_sheet_detent(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, close: *const widget.Submit, cycle: *const widget.Submit, detent: SheetDetent, peek_height: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (made, made_error) = edged_detent(a, key, t, title, content, close, *close, .Below, 0.0, sheet_detent_height(t, detent, peek_height), cycle, sheet_detent_label(detent), true)
+    ret (made, made_error)
+}
+
 fn sheet_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, back: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var clamped = width
@@ -1700,6 +1736,32 @@ fn sheet_handle(t: *const control.Theme, grips: []widget.Node) -> widget.Node {
     ret widget.aligned(0u64, .Center, .Start, row, grips[0usize..1usize])
 }
 
+fn sheet_resize_handle(a: *mem.Arena, key: widget.Key, t: *const control.Theme, grips: []widget.Node, cycle: *const widget.Submit, value: str) -> (widget.Node, err) {
+    var grip = control.sized_style(32.0, 4.0)
+    grip.radius = 2.0
+    grip.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.4) }
+    grips[0usize] = widget.box(0u64, grip, zero)
+    var holder = style.defaults()
+    holder.width = style.Length { Percent: 100.0 }
+    holder.height = style.Length { Px: 48.0 }
+    holder.padding.top = style.Length { Px: 16.0 }
+    grips[1usize] = widget.aligned(0u64, .Center, .Start, holder, grips[0usize..1usize])
+    let state = control.control_state(t, key, true, false)
+    var target_style = style.defaults()
+    target_style.width = style.Length { Percent: 100.0 }
+    target_style.height = style.Length { Px: 48.0 }
+    target_style.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state)) }
+    let (region_body, region_body_error) = mem.alloc[widget.Node](a, 1usize)
+    if region_body_error != ok { ret (zero, TooLarge) }
+    region_body[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](cycle), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, target_style, grips[1usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 3u8
+    sem.label = "Resize sheet"
+    sem.value = value
+    sem.actions = accessibility.ACTION_PRESS
+    ret (widget.semantics(0u64, sem, style.defaults(), region_body[0usize..1usize]), ok)
+}
+
 // v2 (D977, docs/ux/components/Sheet): the header -- the `title-large` `on-surface`
 // title (a heading keyed `key + 1`), 16 in, 56 tall (48 for a side sheet with a
 // pointer), and on a side sheet a round Close button at the end (keyed `key + 2`,
@@ -1707,28 +1769,34 @@ fn sheet_handle(t: *const control.Theme, grips: []widget.Node) -> widget.Node {
 // the content 16 in at the sides; a bottom sheet's drag handle above the header.
 fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     var no_actions: []const DialogButton = zero
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions, false)
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions, false, zero, "")
     ret (made, made_error)
 }
 
 fn edged_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit) -> (widget.Node, err) {
     var no_actions: []const DialogButton = zero
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, back, no_actions, false)
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, back, no_actions, false, zero, "")
     ret (made, made_error)
 }
 
 fn edged_with_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, actions: []const DialogButton) -> (widget.Node, err) {
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, actions, false)
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, actions, false, zero, "")
     ret (made, made_error)
 }
 
 fn edged_standard(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     var no_actions: []const DialogButton = zero
-    let (made, made_error) = edged_full(a, key, t, title, content, close, *close, placement, width, height, zero, no_actions, true)
+    let (made, made_error) = edged_full(a, key, t, title, content, close, *close, placement, width, height, zero, no_actions, true, zero, "")
     ret (made, made_error)
 }
 
-fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit, actions: []const DialogButton, standard: bool) -> (widget.Node, err) {
+fn edged_detent(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, cycle: *const widget.Submit, value: str, standard: bool) -> (widget.Node, err) {
+    var no_actions: []const DialogButton = zero
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions, standard, cycle, value)
+    ret (made, made_error)
+}
+
+fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit, actions: []const DialogButton, standard: bool, resize: *const widget.Submit, resize_value: str) -> (widget.Node, err) {
     if actions.len > 2usize { ret (zero, TooLarge) }
     let bottom = placement == .Below
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -1774,7 +1842,13 @@ fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
     if parts_error != ok { ret (zero, TooLarge) }
     var p = 0usize
     if bottom {
-        parts[0usize] = sheet_handle(t, bits[4usize..5usize])
+        if mem.address_of(resize) != 0usize {
+            let (handle, handle_error) = sheet_resize_handle(a, key + 2u64, t, bits[3usize..5usize], resize, resize_value)
+            if handle_error != ok { ret (zero, handle_error) }
+            parts[0usize] = handle
+        } else {
+            parts[0usize] = sheet_handle(t, bits[4usize..5usize])
+        }
         p = 1usize
     }
     parts[p] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, bar, header[0usize..n])
@@ -1828,7 +1902,7 @@ fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
 // open edge's corners `radius-lg`. A modal dialog in the tree named `label`,
 // labelled by the element keyed `key + 1`; Escape fires `dismiss` and a press
 // outside fires `outside` (normally the same action).
-// ponytail: no peeking bottom sheet, detents or drag-to-dismiss.
+// ponytail: no drag-to-dismiss.
 fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
