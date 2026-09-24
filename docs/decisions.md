@@ -22035,3 +22035,13 @@ A spacer keeps that footer at the sheet edge while content occupies the middle.
 `ui_overlays3_v2` holds the divider, footer geometry, button colours and both
 callbacks on Windows and Linux. `sheet-actions-footer.png` is the Segoe UI visual
 check.
+
+## D1044 — Action-sheet cancellation copy is caller-owned
+
+`overlay.action_sheet_localized` takes the translated cancellation label while
+the existing `action_sheet` keeps its zero-config "Cancel" default. This avoids
+inventing a locale service in the widget layer and leaves row geometry and
+dismissal unchanged.
+
+`ui_overlays3_v2` holds the supplied Button name and its dismissal callback on
+Windows and Linux.

@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -112,7 +112,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
         e3 = made_side_error
     }
     let (bottom, e4) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
-    let (actions, e5) = overlay.action_sheet(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], which == .Actions, &s.subs[3usize])
+    var actions: widget.Node = zero
+    var e5: err = ok
+    if which == .ActionsLocalized {
+        let (made_actions, made_actions_error) = overlay.action_sheet_localized(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], "Dismiss", true, &s.subs[3usize])
+        actions = made_actions
+        e5 = made_actions_error
+    } else {
+        let (made_actions, made_actions_error) = overlay.action_sheet(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], which == .Actions, &s.subs[3usize])
+        actions = made_actions
+        e5 = made_actions_error
+    }
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (zero, e1) }
     items[0usize] = alert
     items[1usize] = side
@@ -371,6 +381,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !tap_key(&harness, &runtime, 403u64) || s.counters[4usize].count != 1usize { os.exit(40i32) }
     let action_dismiss_before = s.counters[3usize].count
     if !tap_key(&harness, &runtime, 406u64) || s.counters[3usize].count != action_dismiss_before + 1usize { os.exit(41i32) }
+    // Hosts without a locale service can supply the translated cancel label.
+    let localized_dismiss_before = s.counters[3usize].count
+    let (root_localized, build_localized_error) = build(&f, &theme, s, .ActionsLocalized)
+    if build_localized_error != ok || testing.pump(&harness, root_localized, time.Instant { nanos: 1350000000i64 }) != ok { os.exit(81i32) }
+    let (localized_tree, localized_tree_error) = testing.semantics(&harness)
+    if localized_tree_error != ok { os.exit(82i32) }
+    let (_, has_dismiss_label) = find(localized_tree, .Button, "Dismiss")
+    if !has_dismiss_label || !tap_key(&harness, &runtime, 406u64) || s.counters[3usize].count != localized_dismiss_before + 1usize { os.exit(83i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(42i32) }
     try io.print("ui overlays3 v2 ok\n")
     ret ok

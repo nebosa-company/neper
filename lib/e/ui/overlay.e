@@ -1842,8 +1842,13 @@ fn sheet_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 // another divider. Escape, the scrim and Cancel fire `dismiss`.
 // ponytail: Cancel stays a row (the grouped form's) where the Android form has
 // none; no leading icons, grouped iOS cards or pointer-host menu form, and
-// "Cancel" is not localised.
+// no host locale service -- callers provide translated copy when needed.
 fn action_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = action_sheet_localized(a, key, t, title, buttons, "Cancel", open, dismiss)
+    ret (made, made_error)
+}
+
+fn action_sheet_localized(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, cancel_label: str, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * buttons.len + 5usize)
     if rows_error != ok { ret (zero, TooLarge) }
@@ -1879,7 +1884,7 @@ fn action_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         }
         var made: widget.Node = zero
         if cancelling {
-            let (row, row_error) = sheet_row(a, key + 3u64 + u64(i), t, "Cancel", ink, dismiss)
+            let (row, row_error) = sheet_row(a, key + 3u64 + u64(i), t, cancel_label, ink, dismiss)
             if row_error != ok { ret (zero, row_error) }
             made = row
         } else {
