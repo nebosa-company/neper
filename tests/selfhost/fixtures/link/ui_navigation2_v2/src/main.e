@@ -289,6 +289,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (file_node, has_file_node) = find(tree_3, .Button, "File")
     let (edit_node, has_edit_node) = find(tree_3, .Button, "Edit")
     if !has_file_node || !file_node.state.expanded || !has_edit_node || edit_node.state.expanded { os.exit(27i32) }
+    // A typed letter advances to the next matching command, case-insensitively.
+    if testing.press_key(&harness, 65u32, zero) != ok { os.exit(52i32) }
+    let (typed, has_typed) = testing.focused(&harness)
+    if !has_typed || !same_element(typed, testing.by_key(&harness, 2405u64).element) { os.exit(53i32) }
     // Right follows an open menu to its neighbour and fires that title.
     if testing.press_key(&harness, 39u32, zero) != ok || s.counters[9usize].count != 1usize { os.exit(44i32) }
     let (followed, has_followed) = testing.focused(&harness)

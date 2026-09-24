@@ -21442,3 +21442,14 @@ open on Windows and Linux.
 
 Access-key underlines and activation, typeahead, submenus and command focus
 return remain open.
+
+## D997 — Menu items support initial-letter typeahead
+
+The shared menu key path case-folds the logical key and each item's first UTF-8
+scalar, then advances through enabled menu items with wrapping. Repeated letters
+therefore cycle matching commands without component-specific state.
+
+`ui_navigation2_v2` holds New-to-Autosave movement on A on Windows and Linux.
+
+Buffered multi-letter typeahead, access-key underlines and activation, submenus
+and command focus return remain open.

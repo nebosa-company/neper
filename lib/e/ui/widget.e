@@ -27,6 +27,7 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.text.layout
+use e.text.unicode
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
@@ -3103,13 +3104,15 @@ fn menu_bar_hover(s: *State, point: geometry.Point) -> (bool, err) {
     ret (true, fired)
 }
 
-// A menu's arrow keys (D975): with a menu item (role 22 or checkbox role 37)
-// focused, Down and Up move
-// the focus as Tab and Shift+Tab do (wrapping, disabled items skipped), Home and
-// End to the first and last; whether the key was taken.
+// A menu's keys (D975, D997): with a menu item (role 22 or checkbox role 37)
+// focused, Down and Up move the focus as Tab and Shift+Tab do (wrapping,
+// disabled items skipped), Home and End jump, and a letter moves to the next
+// item whose label starts with it; whether the key was taken.
 fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     if !s.has_focus || k.modifiers.shift || k.modifiers.control || k.modifiers.alt || k.modifiers.meta { ret false }
-    if code != 40u32 && code != 38u32 && code != 36u32 && code != 35u32 { ret false }
+    let navigation = code == 40u32 || code == 38u32 || code == 36u32 || code == 35u32
+    let typed = unicode.to_lower_simple(k.key.logical)
+    if !navigation && !unicode.is_alphabetic(typed) { ret false }
     let e = &s.elements[usize(s.focus)]
     var item = e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8)
     if !item && e.has_parent {
@@ -3124,8 +3127,33 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     var order: [256]u32 = zero
     let count = collect_focusable(s, focus_root(s), order[..], 0usize)
     if count == 0usize { ret true }
-    s.focus = order[0usize]
-    if code == 35u32 { s.focus = order[count - 1usize] }
+    if code == 36u32 || code == 35u32 {
+        s.focus = order[0usize]
+        if code == 35u32 { s.focus = order[count - 1usize] }
+    } else {
+        var current = 0usize
+        var i = 0usize
+        while i < count {
+            if usize(order[i]) == usize(s.focus) { current = i }
+            i += 1usize
+        }
+        var step = 1usize
+        while step <= count {
+            let candidate = &s.elements[usize(order[(current + step) % count])]
+            var owner = candidate
+            if (!owner.has_semantics || (owner.sem.role != 22u8 && owner.sem.role != 37u8)) && owner.has_parent {
+                owner = &s.elements[usize(owner.parent)]
+            }
+            if owner.has_semantics && (owner.sem.role == 22u8 || owner.sem.role == 37u8) && owner.text_len != 0usize {
+                let (first, _) = unicode.read_utf8(owner.text[0usize..owner.text_len], 0usize)
+                if unicode.to_lower_simple(first) == typed {
+                    s.focus = order[(current + step) % count]
+                    step = count
+                }
+            }
+            step += 1usize
+        }
+    }
     s.focus_visible = true
     ret true
 }
