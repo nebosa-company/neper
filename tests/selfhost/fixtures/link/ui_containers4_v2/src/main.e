@@ -189,6 +189,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 257u64).element) != ok || testing.press_key(&harness, 27u32, no_modifiers) != ok { os.exit(44i32) }
     let (escaped, has_escaped) = testing.focused(&harness)
     if !has_escaped || !same_element(escaped, testing.by_role(&harness, .Main).element) { os.exit(45i32) }
+    // Ctrl+M uses the focused panel's existing maximise action.
+    var controlled: input.Modifiers = zero
+    controlled.control = true
+    if widget.focus(&runtime, testing.by_key(&harness, 241u64).element) != ok || testing.press_key(&harness, 77u32, controlled) != ok || s.model.maximised != 1u8 { os.exit(46i32) }
+    if testing.press_key(&harness, 77u32, controlled) != ok || s.model.maximised != 0u8 { os.exit(47i32) }
     // A strip button shows its panel; pressed again, it collapses the slot.
     if !tap_key(&harness, &runtime, 221u64) || s.model.current[0usize] != 1usize || s.model.collapsed[0usize] { os.exit(15i32) }
     if !frame(&harness, &f, &theme, s) || !tap_key(&harness, &runtime, 221u64) || !s.model.collapsed[0usize] { os.exit(16i32) }

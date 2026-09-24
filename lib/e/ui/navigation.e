@@ -2009,8 +2009,8 @@ fn panel_tab(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 // `primary` line inside the header's top edge) -- or, as a tab group, the panel
 // tabs (keyed `key + 4 + index`, Left and Right picking the neighbours) -- then
 // the header actions, 32 round buttons with 18 drawn icons and no gap: Maximise
-// (keyed `key + 2`; "Restore panel" with `chevron-down` while maximised) and
-// Close (keyed `key + 1`), named "Close <title> panel". Floating, the panel is
+// (keyed `key + 2`; "Restore panel" with `chevron-down` while maximised), Ctrl+M,
+// and Close (keyed `key + 1`), named "Close <title> panel". Floating, the panel is
 // `surface-container`, `radius-md`, `elevation-3`, at least 240 x 160, its
 // header 40 with a drag handle leading and a Dock button (`key + 3`, `dock-left`)
 // before Maximise, the title `on-surface` and no focus line. Busy, a 2px
@@ -2184,11 +2184,23 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, panel, parts[0usize..count])
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 1usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var shortcut_count = 0usize
+    if mem.address_of(options.maximise) != 0usize {
+        var held: input.Modifiers = zero
+        held.control = true
+        shortcuts[0usize] = widget.Shortcut { key: 77u32, modifiers: held, action: *options.maximise }
+        shortcut_count = 1usize
+    }
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..shortcut_count], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = accessibility.ROLE_REGION
     sem.label = title
     if options.busy { sem.states = accessibility.STATE_BUSY }
-    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
+    ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
 
 // v2 (D967, docs/ux/components/DockPanel, stacked): several tools in one side
@@ -2599,8 +2611,7 @@ fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: Doc
 // `dock_apply` turns into the caller's next model and placements. A group in the
 // tree.
 // ponytail: moving and tearing off are the caller's (a Move event through
-// dock_apply); no drag ghost, dock guide or drop preview, no double-click or
-// Ctrl+M.
+// dock_apply); no drag ghost, dock guide or drop preview or double-click.
 fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: DockModel, placements: []const DockPlacement, contents: []const widget.Node, centre: widget.Node, change: widget.Change[DockEvent], width: f32, height: f32) -> (widget.Node, err) {
     if contents.len != placements.len { ret (zero, TooLarge) }
     let (main_child, main_child_error) = mem.alloc[widget.Node](a, 1usize)

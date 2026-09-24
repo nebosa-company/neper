@@ -21388,3 +21388,16 @@ shared Separator role on Windows and Linux.
 
 Panel dragging, keyboard moving and native host accessibility publishing remain
 open.
+
+## D993 — Focused dock panels handle Ctrl+M
+
+Every dock panel carries a local shortcut scope. When the panel has a Maximise
+action, Ctrl+M invokes that same action, so the caller-owned DockModel toggles
+between maximised and restored without a second state path. Panels without the
+action expose no shortcut.
+
+`ui_containers4_v2` holds maximise and restore from a focused panel on Windows
+and Linux.
+
+Double-click restore, keyboard panel moving and pointer-driven moving remain
+open.
