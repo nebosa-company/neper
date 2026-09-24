@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neper Forge — UI showcase</title>
+  <link rel="stylesheet" href="components/bundle.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --primary:#b3c5ff; --on-primary:#003062; --primary-container:#00468b; --on-primary-container:#dae2ff;
+      --secondary-container:#39475f; --on-secondary-container:#d6e3ff; --tertiary:#ffb692; --tertiary-container:#733413; --on-tertiary-container:#ffdbcb;
+      --success:#83d5a1; --success-container:#11522e; --on-success-container:#a0f3bd; --warning:#e7c36c;
+      --surface:#0c0e14; --surface-container-lowest:#080a0f; --surface-container-low:#121318; --surface-container:#1e1f24; --surface-container-high:#292a2f; --surface-container-highest:#33353a;
+      --on-surface:#e1e2e9; --on-surface-variant:#c3c6d5; --outline:#8d909e; --outline-variant:#434653; --focus-ring:#b3c5ff;
+      --font-sans:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; --font-display:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; --font-mono:"Cascadia Code",Consolas,monospace;
+      --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px;
+      --radius-xs:4px; --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-xl:28px; --radius-full:9999px;
+      --control-sm:32px; --control-md:40px; --control-xl:56px; --icon-sm:18px; --icon-md:24px; --icon-lg:36px;
+      --divider:1px; --outline-focused:2px; --focus-ring-width:3px; --focus-ring-offset:2px;
+      --state-hover:.08; --state-focus:.1; --state-pressed:.1; --state-dragged:.16; --duration-short-2:100ms; --ease-standard:cubic-bezier(.2,0,0,1);
+      --elevation-1:0 1px 2px #0008,0 1px 3px 1px #0005; --elevation-2:0 2px 6px #0008; --elevation-3:0 8px 24px #0008;
+    }
+    * { box-sizing:border-box; }
+    body { min-width:1180px; margin:0; background:radial-gradient(circle at 15% 0%,#17274a 0,transparent 32%),var(--surface-container-lowest); }
+    .stage { min-height:900px; display:grid; place-items:center; padding:36px; }
+    .app { width:1320px; height:820px; display:grid; grid-template-columns:88px 1fr; overflow:hidden; border:1px solid var(--outline-variant); border-radius:24px; background:var(--surface); box-shadow:0 32px 90px #000b; }
+    .rail { display:flex; flex-direction:column; align-items:center; gap:12px; padding:20px 12px; background:var(--surface-container-low); border-right:1px solid var(--outline-variant); }
+    .logo { width:44px; height:44px; margin-bottom:20px; border-radius:12px; }
+    .rail button { width:56px; min-height:54px; display:grid; place-items:center; gap:2px; border-radius:16px; color:var(--on-surface-variant); font:600 10px/14px var(--font-sans); }
+    .rail button svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+    .rail button.selected { background:var(--secondary-container); color:var(--on-secondary-container); }
+    .rail .settings { margin-top:auto; }
+    .shell { min-width:0; display:grid; grid-template-rows:72px 1fr; }
+    .appbar { display:flex; align-items:center; gap:18px; padding:0 28px; border-bottom:1px solid var(--outline-variant); background:color-mix(in srgb,var(--surface-container-low) 88%,transparent); }
+    .brand { margin-right:auto; }
+    .brand strong { display:block; font:600 18px/24px var(--font-sans); }
+    .brand span { color:var(--on-surface-variant); font:400 12px/16px var(--font-sans); }
+    .search { width:270px; height:40px; display:flex; align-items:center; gap:10px; padding:0 14px; border-radius:var(--radius-full); background:var(--surface-container-high); color:var(--on-surface-variant); font-size:13px; }
+    .key { margin-left:auto; padding:2px 7px; border:1px solid var(--outline-variant); border-radius:6px; font:600 10px/14px var(--font-mono); }
+    .avatar { width:38px; height:38px; display:grid; place-items:center; border-radius:50%; background:var(--tertiary-container); color:var(--on-tertiary-container); font:600 12px/16px var(--font-sans); }
+    .content { overflow:hidden; padding:24px 28px 28px; }
+    .heading { display:flex; align-items:end; justify-content:space-between; margin-bottom:18px; }
+    .heading h1 { margin:0 0 3px; font:400 28px/36px var(--font-display); letter-spacing:-.2px; }
+    .heading p { margin:0; color:var(--on-surface-variant); font-size:13px; }
+    .action svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; }
+    .dashboard { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:18px; }
+    .main { min-width:0; display:grid; gap:16px; }
+    .hero { position:relative; min-height:154px; overflow:hidden; display:flex; align-items:center; justify-content:space-between; padding:26px 30px; border-radius:var(--radius-xl); background:linear-gradient(118deg,#093d77,#0c599e 58%,#366bb8); color:#fff; }
+    .hero::after { content:""; position:absolute; width:240px; height:240px; right:-54px; top:-82px; border:42px solid #ffffff16; border-radius:50%; }
+    .hero-copy { position:relative; z-index:1; max-width:500px; }
+    .hero .kicker { display:flex; align-items:center; gap:8px; margin-bottom:8px; font:600 11px/16px var(--font-sans); letter-spacing:.5px; }
+    .pulse { width:8px; height:8px; border-radius:50%; background:#8df0af; box-shadow:0 0 0 5px #8df0af24; }
+    .hero h2 { margin:0 0 6px; font:400 27px/34px var(--font-display); }
+    .hero p { margin:0; color:#e4edff; font-size:13px; }
+    .score { position:relative; z-index:1; width:104px; height:104px; display:grid; place-items:center; border:9px solid #ffffff2e; border-top-color:#a8f0be; border-right-color:#a8f0be; border-radius:50%; background:#002c58aa; text-align:center; }
+    .score strong { display:block; font:400 28px/30px var(--font-display); }
+    .score span { font-size:10px; color:#dbe8ff; }
+    .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .metric { min-height:112px; padding:18px; border-radius:var(--radius-md); background:var(--surface-container-low); border:1px solid var(--outline-variant); }
+    .metric-top { display:flex; align-items:center; justify-content:space-between; color:var(--on-surface-variant); font:600 11px/16px var(--font-sans); }
+    .trend { padding:2px 7px; border-radius:var(--radius-full); background:var(--success-container); color:var(--on-success-container); }
+    .metric strong { display:block; margin:10px 0 2px; font:400 27px/32px var(--font-display); }
+    .metric small { color:var(--on-surface-variant); }
+    .lower { min-width:0; display:grid; grid-template-columns:1.08fr .92fr; gap:16px; }
+    .panel { padding:20px; border-radius:var(--radius-md); background:var(--surface-container-low); border:1px solid var(--outline-variant); }
+    .panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .panel-head h3 { margin:0; font:600 15px/22px var(--font-sans); }
+    .panel-head span { color:var(--on-surface-variant); font-size:11px; }
+    .chart { width:100%; height:116px; display:block; }
+    .chart text { fill:var(--on-surface-variant); font:10px var(--font-sans); }
+    .chart .grid { stroke:var(--outline-variant); stroke-width:1; }
+    .chart .area { fill:url(#area); }
+    .chart .line { fill:none; stroke:var(--primary); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+    .runs { width:100%; border-collapse:collapse; font-size:12px; }
+    .runs td { padding:9px 0; border-top:1px solid var(--outline-variant); }
+    .runs td:last-child { text-align:right; color:var(--on-surface-variant); }
+    .run-name { display:flex; align-items:center; gap:8px; font-weight:600; }
+    .ok { width:18px; height:18px; display:grid; place-items:center; border-radius:50%; background:var(--success-container); color:var(--on-success-container); font-size:11px; }
+    .side { display:grid; gap:16px; align-content:start; }
+    .receipt { padding:22px; border-radius:var(--radius-xl); background:var(--primary-container); color:var(--on-primary-container); }
+    .receipt-head { display:flex; align-items:center; gap:12px; }
+    .seal { width:42px; height:42px; display:grid; place-items:center; border-radius:14px; background:var(--primary); color:var(--on-primary); font-size:21px; }
+    .receipt h3 { margin:0; font:600 16px/22px var(--font-sans); }
+    .receipt .hash { margin-top:3px; opacity:.8; font:11px/16px var(--font-mono); }
+    .checks { display:grid; gap:10px; margin:20px 0; }
+    .check { display:flex; align-items:center; gap:10px; font-size:12px; }
+    .check::before { content:"✓"; width:18px; height:18px; display:grid; place-items:center; border-radius:50%; background:#a0f3bd; color:#08441f; font-weight:700; }
+    .receipt-foot { display:flex; align-items:center; justify-content:space-between; padding-top:16px; border-top:1px solid #dbe6ff33; font-size:11px; }
+    .pipeline { padding:20px; border-radius:var(--radius-md); background:var(--surface-container-low); border:1px solid var(--outline-variant); }
+    .pipeline h3 { margin:0 0 16px; font:600 15px/22px var(--font-sans); }
+    .step { display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:10px; padding:9px 0; }
+    .step + .step { border-top:1px solid var(--outline-variant); }
+    .step-num { width:26px; height:26px; display:grid; place-items:center; border-radius:9px; background:var(--surface-container-high); color:var(--primary); font:600 10px/14px var(--font-mono); }
+    .step strong { display:block; font-size:12px; }
+    .step small { color:var(--on-surface-variant); }
+    .status { padding:3px 8px; border-radius:var(--radius-full); background:var(--success-container); color:var(--on-success-container); font:600 10px/14px var(--font-sans); }
+    .footer-note { display:flex; align-items:center; gap:8px; color:var(--on-surface-variant); font-size:11px; }
+    .footer-note b { color:var(--on-surface); }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="stage">
+    <div class="app" role="application" aria-label="Neper Forge build dashboard">
+      <nav class="rail" aria-label="Workspace">
+        <img class="logo" src="../gtm/logo/neper-icon.svg" alt="Neper">
+        <button class="selected" aria-label="Overview"><svg viewBox="0 0 24 24"><path d="M4 4h6v7H4zM14 4h6v4h-6zM14 12h6v8h-6zM4 15h6v5H4z"/></svg><span>Overview</span></button>
+        <button aria-label="Runs"><svg viewBox="0 0 24 24"><path d="M5 18V8m7 10V4m7 14v-7"/></svg><span>Runs</span></button>
+        <button aria-label="Artifacts"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v10H4zM4 7V5h7l2 2"/></svg><span>Artifacts</span></button>
+        <button aria-label="Team"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 19c.4-4 2.4-6 6-6s5.6 2 6 6M16 6.5a3 3 0 0 1 0 5.8M16 14c3 0 4.6 1.7 5 5"/></svg><span>Team</span></button>
+        <button class="settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg><span>Settings</span></button>
+      </nav>
+
+      <div class="shell">
+        <header class="appbar">
+          <div class="brand"><strong>Neper Forge</strong><span>Continuous verification</span></div>
+          <div class="search" role="search"><span>⌕</span><span>Search builds, artifacts, hashes</span><span class="key">⌘ K</span></div>
+          <span class="nu-chip selected">main</span>
+          <button class="nu-icon-btn tonal" aria-label="Notifications">◉</button>
+          <div class="avatar" aria-label="Ada Lovelace">AL</div>
+        </header>
+
+        <main class="content">
+          <div class="heading">
+            <div><h1>Good morning, Ada</h1><p>Your workspace is healthy. Every artifact is verified.</p></div>
+            <button class="nu-btn action"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Run verification</button>
+          </div>
+
+          <div class="dashboard">
+            <div class="main">
+              <section class="hero" aria-label="Release readiness">
+                <div class="hero-copy"><div class="kicker"><span class="pulse"></span> RELEASE 0.9.0 · READY</div><h2>From prompt to proof.</h2><p>Source, edits, tests, dependencies, and native artifacts agree.</p></div>
+                <div class="score"><div><strong>98</strong><span>confidence</span></div></div>
+              </section>
+
+              <section class="metrics" aria-label="Build metrics">
+                <article class="metric"><div class="metric-top"><span>COMPILE</span><span class="trend">↓ 12%</span></div><strong>34 ms</strong><small>1.02M lines/sec/core</small></article>
+                <article class="metric"><div class="metric-top"><span>BINARY</span><span class="trend">− 8 KB</span></div><strong>6,144 B</strong><small>Extreme dead-code elimination</small></article>
+                <article class="metric"><div class="metric-top"><span>VERIFIED</span><span class="trend">100%</span></div><strong>248 / 248</strong><small>Windows · Linux · macOS</small></article>
+              </section>
+
+              <section class="lower">
+                <article class="panel">
+                  <div class="panel-head"><h3>Build health</h3><span>Last 7 days</span></div>
+                  <svg class="chart" viewBox="0 0 430 116" preserveAspectRatio="none" aria-label="Build health chart">
+                    <defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b3c5ff" stop-opacity=".32"/><stop offset="1" stop-color="#b3c5ff" stop-opacity="0"/></linearGradient></defs>
+                    <path class="grid" d="M0 18H430M0 56H430M0 94H430"/><path class="area" d="M0 88 58 78 116 83 174 55 232 61 290 36 348 42 430 14V108H0Z"/><path class="line" d="M0 88 58 78 116 83 174 55 232 61 290 36 348 42 430 14"/><circle cx="430" cy="14" r="5" fill="#b3c5ff"/><text x="0" y="114">Mon</text><text x="198" y="114">Thu</text><text x="402" y="114">Sun</text>
+                  </svg>
+                  <div class="footer-note"><span class="pulse"></span><span><b>99.7%</b> verified on the first pass</span></div>
+                </article>
+
+                <article class="panel">
+                  <div class="panel-head"><h3>Recent artifacts</h3><span>View all →</span></div>
+                  <table class="runs" aria-label="Recent artifacts"><tbody>
+                    <tr><td><span class="run-name"><span class="ok">✓</span>neper.exe</span></td><td>6 KB · 2m</td></tr>
+                    <tr><td><span class="run-name"><span class="ok">✓</span>compiler.em</span></td><td>fixed point · 8m</td></tr>
+                    <tr><td><span class="run-name"><span class="ok">✓</span>e.ui.bundle</span></td><td>112 controls · 14m</td></tr>
+                    <tr><td><span class="run-name"><span class="ok">✓</span>receipt.json</span></td><td>signed · 14m</td></tr>
+                  </tbody></table>
+                </article>
+              </section>
+            </div>
+
+            <aside class="side" aria-label="Verification details">
+              <article class="receipt">
+                <div class="receipt-head"><div class="seal">✓</div><div><h3>Verification receipt</h3><div class="hash">sha256:7fc2…a91e</div></div></div>
+                <div class="checks"><div class="check">Snapshot is immutable</div><div class="check">248 tests passed</div><div class="check">0 unsafe boundaries</div><div class="check">Stage 2 equals stage 3</div></div>
+                <div class="receipt-foot"><span>neper 0.9.0 · x64</span><strong>View proof →</strong></div>
+              </article>
+
+              <article class="pipeline">
+                <h3>Verification pipeline</h3>
+                <div class="step"><span class="step-num">01</span><div><strong>Understand</strong><small>Bounded semantic context</small></div><span class="status">done</span></div>
+                <div class="step"><span class="step-num">02</span><div><strong>Check</strong><small>Causal diagnostics</small></div><span class="status">done</span></div>
+                <div class="step"><span class="step-num">03</span><div><strong>Test</strong><small>Hermetic execution</small></div><span class="status">done</span></div>
+                <div class="step"><span class="step-num">04</span><div><strong>Prove</strong><small>Content-addressed receipt</small></div><span class="status">done</span></div>
+              </article>
+            </aside>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
