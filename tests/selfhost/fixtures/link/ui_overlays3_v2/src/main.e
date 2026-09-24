@@ -29,10 +29,10 @@ use e.ui.widget
 
 type Counter = struct { count: usize }
 
-// The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share.
+// The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, Bottom, Actions }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, Bottom, Actions }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -91,8 +91,18 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     var side_width: f32 = 300.0
     if which == .SideNarrow { side_width = 100.0 }
     if which == .SideWide { side_width = 500.0 }
-    let side_open = which == .Side || which == .SideNarrow || which == .SideWide
-    let (side, e3) = overlay.sheet(a, 200u64, t, "Details", inside, side_open, &s.subs[3usize], side_width)
+    let side_open = which == .Side || which == .SideNarrow || which == .SideWide || which == .SideBack
+    var side: widget.Node = zero
+    var e3: err = ok
+    if which == .SideBack {
+        let (made_side, made_side_error) = overlay.sheet_with_back(a, 200u64, t, "Details", inside, true, &s.subs[3usize], &s.subs[5usize], side_width)
+        side = made_side
+        e3 = made_side_error
+    } else {
+        let (made_side, made_side_error) = overlay.sheet(a, 200u64, t, "Details", inside, side_open, &s.subs[3usize], side_width)
+        side = made_side
+        e3 = made_side_error
+    }
     let (bottom, e4) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
     let (actions, e5) = overlay.action_sheet(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], which == .Actions, &s.subs[3usize])
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (zero, e1) }
@@ -292,6 +302,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_wide_error != ok || testing.pump(&harness, root_wide, time.Instant { nanos: 1175000000i64 }) != ok { os.exit(66i32) }
     let (wide, has_wide) = lifted(&harness, 200u64)
     if !has_wide || !near(wide.width, 400.0) || !near(wide.x + wide.width, 640.0) { os.exit(67i32) }
+    // An optional Back button precedes the title while Close remains at the end.
+    let (root_back, build_back_error) = build(&f, &theme, s, .SideBack)
+    if build_back_error != ok || testing.pump(&harness, root_back, time.Instant { nanos: 1185000000i64 }) != ok { os.exit(68i32) }
+    let (back_button, has_back_button) = bounds(&harness, &runtime, 203u64)
+    let (back_close, has_back_close) = bounds(&harness, &runtime, 202u64)
+    let (back_tree, back_tree_error) = testing.semantics(&harness)
+    if back_tree_error != ok { os.exit(69i32) }
+    let (_, has_back_semantics) = find(back_tree, .Button, "Back")
+    if !has_back_button || !has_back_close || back_button.x >= back_close.x || !has_back_semantics || !tap_key(&harness, &runtime, 203u64) || s.counters[5usize].count != 1usize { os.exit(70i32) }
     // The bottom sheet: 200 tall along the bottom, its top corners rounded, the
     // handle 16 down in `on-surface-variant` at 40%; no Close.
     let (root_3, build_3_error) = build(&f, &theme, s, .Bottom)

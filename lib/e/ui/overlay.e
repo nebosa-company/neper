@@ -1570,6 +1570,21 @@ fn bottom_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     ret (made, made_error)
 }
 
+fn sheet_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, back: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var clamped = width
+    if clamped < 256.0 { clamped = 256.0 }
+    if clamped > 400.0 { clamped = 400.0 }
+    let (made, made_error) = edged_with_back(a, key, t, title, content, dismiss, *dismiss, .Right, clamped, 0.0, back)
+    ret (made, made_error)
+}
+
+fn bottom_sheet_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, back: *const widget.Submit, height: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (made, made_error) = edged_with_back(a, key, t, title, content, dismiss, *dismiss, .Below, 0.0, height, back)
+    ret (made, made_error)
+}
+
 // A bottom sheet's drag handle (D977): 32 by 4, `radius-full`, `on-surface-variant`
 // at 40%, centred 16 from the sheet's top.
 fn sheet_handle(t: *const control.Theme, grips: []widget.Node) -> widget.Node {
@@ -1589,6 +1604,11 @@ fn sheet_handle(t: *const control.Theme, grips: []widget.Node) -> widget.Node {
 // 40 across with a 24 `close`, 32 and 18 with a pointer, named "Close") -- over
 // the content 16 in at the sides; a bottom sheet's drag handle above the header.
 fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
+    let (made, made_error) = edged_with_back(a, key, t, title, content, dismiss, outside, placement, width, height, zero)
+    ret (made, made_error)
+}
+
+fn edged_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit) -> (widget.Node, err) {
     let bottom = placement == .Below
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var heading = control.text_options()
@@ -1604,18 +1624,30 @@ fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, co
     title_sem.label = title
     title_sem.level = 1u8
     bits[1usize] = widget.semantics(0u64, title_sem, style.defaults(), bits[0usize..1usize])
-    bits[2usize] = widget.spacer(0u64, 1.0)
-    var n = 2usize
+    let (header, header_error) = mem.alloc[widget.Node](a, 4usize)
+    if header_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    let has_back = mem.address_of(back) != 0usize
+    if has_back {
+        let (back_button, back_error) = control.glyph_button(a, key + 3u64, t, .ArrowBack, "Back", back, control.if_else(touch, 40.0, 32.0), control.if_else(touch, 24.0, 18.0))
+        if back_error != ok { ret (zero, back_error) }
+        header[n] = back_button
+        n += 1usize
+    }
+    header[n] = bits[1usize]
+    n += 1usize
+    header[n] = widget.spacer(0u64, 1.0)
+    n += 1usize
     if !bottom {
         let (close, close_error) = control.glyph_button(a, key + 2u64, t, .Cross, "Close", dismiss, control.if_else(touch, 40.0, 32.0), control.if_else(touch, 24.0, 18.0))
         if close_error != ok { ret (zero, close_error) }
-        bits[3usize] = close
-        n = 3usize
+        header[n] = close
+        n += 1usize
     }
     var bar = style.defaults()
     bar.width = style.Length { Percent: 100.0 }
     bar.height = style.Length { Px: control.if_else(!bottom && !touch, 48.0, 56.0) }
-    bar.padding.left = style.Length { Px: 16.0 }
+    bar.padding.left = style.Length { Px: control.if_else(has_back, 8.0, 16.0) }
     bar.padding.right = style.Length { Px: control.if_else(bottom, 16.0, 8.0) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -1624,7 +1656,7 @@ fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, co
         parts[0usize] = sheet_handle(t, bits[4usize..5usize])
         p = 1usize
     }
-    parts[p] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, bar, bits[1usize..1usize + n])
+    parts[p] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, bar, header[0usize..n])
     bits[5usize] = content
     parts[p + 1usize] = widget.padded(0u64, 16.0, 0.0, 16.0, 0.0, style.defaults(), bits[5usize..6usize])
     let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..p + 2usize])
@@ -1640,7 +1672,7 @@ fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, co
 // labelled by the element keyed `key + 1`; Escape fires `dismiss` and a press
 // outside fires `outside` (normally the same action).
 // ponytail: modal only -- no standard (docked or peeking) sheets, detents,
-// drag-to-dismiss, Back button, actions footer or unsaved-input guard.
+// drag-to-dismiss, actions footer or unsaved-input guard.
 fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)

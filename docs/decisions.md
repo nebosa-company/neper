@@ -22005,3 +22005,13 @@ the nearest bound.
 
 `ui_overlays3_v2` holds both bounds and the fixed right edge on Windows and
 Linux. `sheet-width-clamp.png` is the Segoe UI visual check.
+
+## D1041 — Sheet headers can navigate back
+
+`overlay.sheet_with_back` and `bottom_sheet_with_back` add one optional named
+Back icon button before the title. The shared header reduces its start inset to
+8px, keeps the title and spacer together, and preserves side-sheet Close or the
+bottom-sheet drag handle without parallel sheet implementations.
+
+`ui_overlays3_v2` holds the Back/Close ordering, Button semantics and callback
+on Windows and Linux. `sheet-back.png` is the Segoe UI visual check.
