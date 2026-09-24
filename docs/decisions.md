@@ -21942,3 +21942,14 @@ reaching the anchor; its Close button and Escape keep the real dismissal action.
 `ui_overlays2_v2` holds the untouched dismiss and anchor counters after an
 outside press, then the dismissal after Escape, on Windows and Linux. D976 now
 has only the compact popover presentation open.
+
+## D1035 — Compact touch popovers reuse the bottom sheet
+
+`overlay.popover_adaptive` keeps the anchored popover at pointer density. At
+Compact touch size it reuses the existing modal bottom sheet at half the current
+surface height, preserving the body and action row while dropping the beak. Busy
+and dirty flags still reach the shared actions and separate outside dismissal.
+
+`ui_overlays2_v2` holds both the unchanged floating pointer form and the 640 by
+240 touch sheet with its Dialog semantics and actions on Windows and Linux.
+`popover-compact-sheet.png` is the Segoe UI visual check. D976 is complete.

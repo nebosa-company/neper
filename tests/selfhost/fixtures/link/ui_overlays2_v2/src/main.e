@@ -31,7 +31,7 @@ type Counter = struct { count: usize }
 // The counters: 0 rows, 1 anchors, 2 dismiss, 3 main action, 4 other action.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, actions: [2]overlay.MenuItem }
 
-type Which = enum u8 { Popup, PopupEmpty, PopupError, PopupFooter, PopupLoading, Flyout, FlyoutCompact, Popover, PopoverBusy, PopoverDirty, Below }
+type Which = enum u8 { Popup, PopupEmpty, PopupError, PopupFooter, PopupLoading, Flyout, FlyoutCompact, Popover, PopoverBusy, PopoverDirty, PopoverCompact, Below }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -124,7 +124,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     }
     var popover: widget.Node = zero
     var e9: err = ok
-    if which == .PopoverBusy || which == .PopoverDirty {
+    if which == .PopoverCompact {
+        let (made_popover, made_popover_error) = overlay.popover_adaptive(a, 30u64, t, owner, side, "Build 4128", inside, s.actions[0usize..2usize], true, false, false, &s.subs[2usize], .Compact)
+        popover = made_popover
+        e9 = made_popover_error
+    } else if which == .PopoverBusy || which == .PopoverDirty {
         let (made_popover, made_popover_error) = overlay.popover_state(a, 30u64, t, owner, side, "Build 4128", inside, s.actions[0usize..2usize], true, which == .PopoverBusy, which == .PopoverDirty, &s.subs[2usize])
         popover = made_popover
         e9 = made_popover_error
@@ -418,6 +422,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (dirty_search, has_dirty_search) = bounds(&harness, &runtime, 1u64)
     if !has_dirty_search || testing.tap(&harness, dirty_search.x + dirty_search.width * 0.5, dirty_search.y + dirty_search.height * 0.5) != ok || s.counters[2usize].count != dismiss_before || s.counters[1usize].count != anchor_before { os.exit(74i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || s.counters[2usize].count != dismiss_before + 1usize { os.exit(75i32) }
+    // Compact size alone leaves the pointer popover floating; compact touch
+    // reuses the half-height bottom sheet with the same body and actions.
+    let (root_compact_pointer, build_compact_pointer_error) = build(&f, &theme, s, .PopoverCompact)
+    if build_compact_pointer_error != ok || testing.pump(&harness, root_compact_pointer, time.Instant { nanos: 1700000000i64 }) != ok { os.exit(76i32) }
+    let (compact_pointer, has_compact_pointer) = lifted(&harness, 30u64)
+    let (compact_anchor, has_compact_anchor) = bounds(&harness, &runtime, 3u64)
+    if !has_compact_pointer || !has_compact_anchor || !near(compact_pointer.x, compact_anchor.x + compact_anchor.width + 4.0) || !near(compact_pointer.width, 326.0) { os.exit(77i32) }
+    let (root_compact_popover, build_compact_popover_error) = build(&f, &touch_theme, s, .PopoverCompact)
+    if build_compact_popover_error != ok || testing.pump(&harness, root_compact_popover, time.Instant { nanos: 1800000000i64 }) != ok { os.exit(78i32) }
+    let (compact_popover, has_compact_popover) = lifted(&harness, 30u64)
+    let (compact_popover_tree, compact_popover_tree_error) = testing.semantics(&harness)
+    if compact_popover_tree_error != ok { os.exit(79i32) }
+    let (compact_popover_dialog, has_compact_popover_dialog) = find(compact_popover_tree, .Dialog, "Build 4128")
+    let (_, has_compact_main) = find(compact_popover_tree, .Button, "Rerun")
+    let (_, has_compact_other) = find(compact_popover_tree, .Button, "Open log")
+    if !has_compact_popover || !near(compact_popover.x, 0.0) || !near(compact_popover.y, 240.0) || !near(compact_popover.width, 640.0) || !near(compact_popover.height, 240.0) || !has_compact_popover_dialog || !compact_popover_dialog.state.modal || !has_compact_main || !has_compact_other { os.exit(80i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok

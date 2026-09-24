@@ -1239,10 +1239,44 @@ fn popover(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 // container's colour stands on the near edge, centred on the anchor but at least
 // 16 in from a corner, its tip 4 from the anchor (the container 10); a modal
 // dialog in the tree.
-// ponytail: no compact sheet.
 fn popover_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     let (made, made_error) = popover_state(a, key, t, anchor, placement, title, content, actions, open, false, false, dismiss)
     ret (made, made_error)
+}
+
+fn popover_action_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, actions: []const MenuItem, busy: bool) -> (widget.Node, err) {
+    let (row, row_error) = mem.alloc[widget.Node](a, actions.len)
+    if row_error != ok { ret (zero, TooLarge) }
+    var idle: []widget.Submit = zero
+    if busy {
+        let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+        if idle_error != ok { ret (zero, TooLarge) }
+        made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
+        idle = made_idle
+    }
+    var i = 0usize
+    while i < actions.len {
+        var options = control.button_options()
+        options.variant = .Plain
+        if i == 0usize { options.variant = .Tonal }
+        options.enabled = actions[i].enabled
+        var action = &actions[i].action
+        if busy {
+            if i == 0usize {
+                options.loading = true
+                action = &idle[0usize]
+            } else {
+                options.enabled = false
+            }
+        }
+        let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, actions[i].label, action, options)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        row[actions.len - 1usize - i] = pressed
+        i += 1usize
+    }
+    var full = style.defaults()
+    full.width = style.Length { Percent: 100.0 }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, full, row[0usize..actions.len]), ok)
 }
 
 // The same with the main action's loading ring shown and repeat actions ignored;
@@ -1280,36 +1314,9 @@ fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor
     parts[1usize] = content
     var n = 2usize
     if actions.len > 0usize {
-        let (row, row_error) = mem.alloc[widget.Node](a, actions.len)
-        if row_error != ok { ret (zero, TooLarge) }
-        var idle: []widget.Submit = zero
-        if busy {
-            let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
-            if idle_error != ok { ret (zero, TooLarge) }
-            made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
-            idle = made_idle
-        }
-        var i = 0usize
-        while i < actions.len {
-            var options = control.button_options()
-            options.variant = .Plain
-            if i == 0usize { options.variant = .Tonal }
-            options.enabled = actions[i].enabled
-            var action = &actions[i].action
-            if busy {
-                if i == 0usize {
-                    options.loading = true
-                    action = &idle[0usize]
-                } else {
-                    options.enabled = false
-                }
-            }
-            let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, actions[i].label, action, options)
-            if pressed_error != ok { ret (zero, pressed_error) }
-            row[actions.len - 1usize - i] = pressed
-            i += 1usize
-        }
-        parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 8.0 }, full, row[0usize..actions.len])
+        let (action_row, action_row_error) = popover_action_row(a, key, t, actions, busy)
+        if action_row_error != ok { ret (zero, action_row_error) }
+        parts[2usize] = action_row
         n = 3usize
     }
     var raised = control.surface_options(t)
@@ -1373,13 +1380,41 @@ fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor
     ret (made, made_error)
 }
 
+// The popover stays anchored except at compact touch size, where the same body
+// and actions use the existing half-height modal bottom sheet without a beak.
+fn popover_adaptive(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, busy: bool, dirty: bool, dismiss: *const widget.Submit, size: style.SizeClass) -> (widget.Node, err) {
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    if size != .Compact || !touch {
+        let (floating, floating_error) = popover_state(a, key, t, anchor, placement, title, content, actions, open, busy, dirty, dismiss)
+        ret (floating, floating_error)
+    }
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    if actions.len > 2usize { ret (zero, TooLarge) }
+    var sheet_content = content
+    if actions.len > 0usize {
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = content
+        let (action_row, action_row_error) = popover_action_row(a, key, t, actions, busy)
+        if action_row_error != ok { ret (zero, action_row_error) }
+        parts[1usize] = action_row
+        sheet_content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 12.0 }, style.defaults(), parts[0usize..2usize])
+    }
+    var height: f32 = 320.0
+    if mem.address_of(t.runtime) != 0usize { height = widget.surface_size(t.runtime).height * 0.5 }
+    var outside = *dismiss
+    if dirty { outside = widget.Submit { ctx: zero, invoke: zero } }
+    let (sheet_node, sheet_error) = edged(a, key, t, title, sheet_content, dismiss, outside, .Below, 0.0, height)
+    ret (sheet_node, sheet_error)
+}
+
 // A sheet: a modal panel `width` wide along the right edge of the window, the
 // window's height, with a title and a close button (keyed `key + 1`, `key + 2`)
 // above the content, placed while `open`; Escape and a press outside fire
 // `dismiss`. A modal dialog in the tree named by the title.
 fn sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (made, made_error) = edged(a, key, t, title, content, dismiss, .Right, width, 0.0)
+    let (made, made_error) = edged(a, key, t, title, content, dismiss, *dismiss, .Right, width, 0.0)
     ret (made, made_error)
 }
 
@@ -1387,7 +1422,7 @@ fn sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, co
 // `height` tall; v2 (D977), a drag handle rather than the close button.
 fn bottom_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, height: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (made, made_error) = edged(a, key, t, title, content, dismiss, .Below, 0.0, height)
+    let (made, made_error) = edged(a, key, t, title, content, dismiss, *dismiss, .Below, 0.0, height)
     ret (made, made_error)
 }
 
@@ -1409,7 +1444,7 @@ fn sheet_handle(t: *const control.Theme, grips: []widget.Node) -> widget.Node {
 // pointer), and on a side sheet a round Close button at the end (keyed `key + 2`,
 // 40 across with a 24 `close`, 32 and 18 with a pointer, named "Close") -- over
 // the content 16 in at the sides; a bottom sheet's drag handle above the header.
-fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
+fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var heading = control.text_options()
@@ -1449,7 +1484,7 @@ fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, co
     bits[5usize] = content
     parts[p + 1usize] = widget.padded(0u64, 16.0, 0.0, 16.0, 0.0, style.defaults(), bits[5usize..6usize])
     let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..p + 2usize])
-    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, placement, width, height)
+    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, outside, placement, width, height)
     ret (made, made_error)
 }
 
@@ -1458,12 +1493,12 @@ fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, co
 // width up to 640, centred, `height` tall (0: as tall as its content), its top
 // corners `radius-xl`; along a side `width` wide and the window's height, its
 // open edge's corners `radius-lg`. A modal dialog in the tree named `label`,
-// labelled by the element keyed `key + 1`; Escape and a press outside fire
-// `dismiss`.
+// labelled by the element keyed `key + 1`; Escape fires `dismiss` and a press
+// outside fires `outside` (normally the same action).
 // ponytail: modal only -- no standard (docked or peeking) sheets, detents,
 // drag-to-dismiss, Back button, actions footer or unsaved-input guard; a side
 // sheet keeps the caller's width rather than 256 to 400.
-fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
+fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
     if body_error != ok { ret (zero, TooLarge) }
@@ -1509,7 +1544,7 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]))
+    let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: placement, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]))
     ret (made, made_error)
 }
 
@@ -1605,7 +1640,7 @@ fn action_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     rows[n] = widget.box(0u64, control.sized_style(1.0, 8.0), zero)
     n += 1usize
     let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..n])
-    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, .Below, 0.0, 0.0)
+    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, *dismiss, .Below, 0.0, 0.0)
     ret (made, made_error)
 }
 
