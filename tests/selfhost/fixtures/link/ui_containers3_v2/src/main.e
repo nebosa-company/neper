@@ -182,8 +182,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (top, has_top) = bounds(&harness, &runtime, 51u64)
     let (middle, has_middle) = bounds(&harness, &runtime, 53u64)
     let (last_body, has_last) = bounds(&harness, &runtime, 56u64)
-    if !has_top || !has_middle || !has_last || !near(top.height, 32.0) || !near(last_body.height, 51.0) || !near(middle.y - top.y, 32.0 + 51.0 + 1.0) { os.exit(21i32) }
+    if !has_top || !has_middle || !has_last || !near(top.width, 200.0) || !near(top.height, 32.0) || !near(last_body.height, 51.0) || !near(middle.y - top.y, 32.0 + 51.0 + 1.0) { os.exit(21i32) }
     if !is_color(shot, at(top.x + 150.0, top.y + 60.0), style.color(&tokens, .SurfaceContainerLow)) || !is_color(shot, at(top.x + 150.0, middle.y - 0.5), style.color(&tokens, .OutlineVariant)) { os.exit(22i32) }
+    if testing.tap(&harness, top.x + 190.0, top.y + 16.0) != ok || stores[0usize].hits[5usize] != 1u32 { os.exit(25i32) }
     if testing.tap(&harness, middle.x + 10.0, middle.y + 16.0) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(23i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(24i32) }
     try io.print("ui containers3 v2 ok\n")

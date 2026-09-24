@@ -2183,8 +2183,6 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
 // and controlling its body (`key + 2 + 2 * index`); the open bodies share the
 // height left, 1px `outline-variant` lines between sections. A group in the tree
 // named `label`.
-// ponytail: a header's target is as wide as its content, since pressable_states
-// takes no width; pass the slot's width in when a full-row target matters.
 fn dock_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, titles: []const str, contents: []const widget.Node, open: []const bool, toggles: []const widget.Submit) -> (widget.Node, err) {
     let n = titles.len
     if contents.len != n || open.len != n || toggles.len != n { ret (zero, TooLarge) }
@@ -2235,7 +2233,7 @@ fn dock_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             states = accessibility.STATE_EXPANDED
             actions = accessibility.ACTION_COLLAPSE
         }
-        let (header, header_error) = control.pressable_states(a, header_key, t, 3u8, titles[i], look, true, false, states, actions, header_key + 1u64, &toggles[i], row)
+        let (header, header_error) = control.pressable_states_fill(a, header_key, t, 3u8, titles[i], look, true, false, states, actions, header_key + 1u64, &toggles[i], true, row)
         if header_error != ok { ret (zero, header_error) }
         items[count] = header
         count += 1usize

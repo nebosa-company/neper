@@ -21336,3 +21336,14 @@ pill's centre over the handle on Windows and Linux.
 
 Other measured-text work, including segment and breadcrumb placement, remains
 open.
+
+## D989 — Stacked dock headers fill their slot
+
+The shared pressable builder has an explicit fill-width form. Stacked dock
+headers use it so their visual state and hit region span the full panel slot,
+while existing buttons keep intrinsic width.
+
+`ui_containers3_v2` holds the 200-pixel header width and a press at its far edge
+on Windows and Linux.
+
+Dock focus cycling, busy motion and panel dragging remain open.

@@ -1599,7 +1599,14 @@ fn pressable(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: s
 // The same with more for the tree: further state bits, further actions, and an
 // element the button controls (0 for none).
 fn pressable_states(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, look: style.ResolvedControl, enabled: bool, selected: bool, states: u32, actions: u32, controls: widget.Key, action: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
+    let (node, node_error) = pressable_states_fill(a, key, t, role, label, look, enabled, selected, states, actions, controls, action, false, content)
+    ret (node, node_error)
+}
+
+// A pressable whose hit region may fill the width offered by its parent.
+fn pressable_states_fill(a: *mem.Arena, key: widget.Key, t: *const Theme, role: u8, label: str, look: style.ResolvedControl, enabled: bool, selected: bool, states: u32, actions: u32, controls: widget.Key, action: *const widget.Submit, fill: bool, content: widget.Node) -> (widget.Node, err) {
     var s = style.defaults()
+    if fill { s.width = style.Length { Percent: 100.0 } }
     s.background = paint.Brush { Solid: look.background }
     s.border = style.Border { width: look.border_width, color: look.border }
     s.radius = look.radius
