@@ -1562,11 +1562,30 @@ fn sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, co
     ret (made, made_error)
 }
 
+fn sheet_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dirty: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var clamped = width
+    if clamped < 256.0 { clamped = 256.0 }
+    if clamped > 400.0 { clamped = 400.0 }
+    var outside = *dismiss
+    if dirty { outside = widget.Submit { ctx: zero, invoke: zero } }
+    let (made, made_error) = edged(a, key, t, title, content, dismiss, outside, .Right, clamped, 0.0)
+    ret (made, made_error)
+}
+
 // A bottom sheet: the same along the bottom edge, the window's width and
 // `height` tall; v2 (D977), a drag handle rather than the close button.
 fn bottom_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, height: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (made, made_error) = edged(a, key, t, title, content, dismiss, *dismiss, .Below, 0.0, height)
+    ret (made, made_error)
+}
+
+fn bottom_sheet_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dirty: bool, dismiss: *const widget.Submit, height: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var outside = *dismiss
+    if dirty { outside = widget.Submit { ctx: zero, invoke: zero } }
+    let (made, made_error) = edged(a, key, t, title, content, dismiss, outside, .Below, 0.0, height)
     ret (made, made_error)
 }
 
@@ -1672,7 +1691,7 @@ fn edged_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
 // labelled by the element keyed `key + 1`; Escape fires `dismiss` and a press
 // outside fires `outside` (normally the same action).
 // ponytail: modal only -- no standard (docked or peeking) sheets, detents,
-// drag-to-dismiss, actions footer or unsaved-input guard.
+// drag-to-dismiss or actions footer.
 fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)

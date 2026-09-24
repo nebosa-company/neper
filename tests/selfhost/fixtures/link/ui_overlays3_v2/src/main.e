@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, Bottom, Actions }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, Bottom, Actions }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -91,10 +91,14 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     var side_width: f32 = 300.0
     if which == .SideNarrow { side_width = 100.0 }
     if which == .SideWide { side_width = 500.0 }
-    let side_open = which == .Side || which == .SideNarrow || which == .SideWide || which == .SideBack
+    let side_open = which == .Side || which == .SideNarrow || which == .SideWide || which == .SideBack || which == .SideDirty
     var side: widget.Node = zero
     var e3: err = ok
-    if which == .SideBack {
+    if which == .SideDirty {
+        let (made_side, made_side_error) = overlay.sheet_state(a, 200u64, t, "Details", inside, true, true, &s.subs[3usize], side_width)
+        side = made_side
+        e3 = made_side_error
+    } else if which == .SideBack {
         let (made_side, made_side_error) = overlay.sheet_with_back(a, 200u64, t, "Details", inside, true, &s.subs[3usize], &s.subs[5usize], side_width)
         side = made_side
         e3 = made_side_error
@@ -311,6 +315,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if back_tree_error != ok { os.exit(69i32) }
     let (_, has_back_semantics) = find(back_tree, .Button, "Back")
     if !has_back_button || !has_back_close || back_button.x >= back_close.x || !has_back_semantics || !tap_key(&harness, &runtime, 203u64) || s.counters[5usize].count != 1usize { os.exit(70i32) }
+    // Dirty sheet tasks consume the scrim while Close and Escape retain the
+    // caller's real dismissal action.
+    let dirty_dismiss_before = s.counters[3usize].count
+    let (root_dirty, build_dirty_error) = build(&f, &theme, s, .SideDirty)
+    if build_dirty_error != ok || testing.pump(&harness, root_dirty, time.Instant { nanos: 1190000000i64 }) != ok { os.exit(71i32) }
+    if testing.tap(&harness, 5.0, 5.0) != ok || s.counters[3usize].count != dirty_dismiss_before { os.exit(72i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || s.counters[3usize].count != dirty_dismiss_before + 1usize { os.exit(73i32) }
     // The bottom sheet: 200 tall along the bottom, its top corners rounded, the
     // handle 16 down in `on-surface-variant` at 40%; no Close.
     let (root_3, build_3_error) = build(&f, &theme, s, .Bottom)
@@ -337,7 +348,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_share || !has_download || !near(share.height, 48.0) || !near(share.y, acts.y + 48.0) || !near(download.y, share.y + 48.0) { os.exit(38i32) }
     if !is_color(shot_4, at(320.0, download.y + 56.5), style.color(&tokens, .OutlineVariant)) || !is_color(shot_4, at(320.0, download.y + 52.0), low) { os.exit(39i32) }
     if !tap_key(&harness, &runtime, 403u64) || s.counters[4usize].count != 1usize { os.exit(40i32) }
-    if !tap_key(&harness, &runtime, 406u64) || s.counters[3usize].count != 2usize { os.exit(41i32) }
+    let action_dismiss_before = s.counters[3usize].count
+    if !tap_key(&harness, &runtime, 406u64) || s.counters[3usize].count != action_dismiss_before + 1usize { os.exit(41i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(42i32) }
     try io.print("ui overlays3 v2 ok\n")
     ret ok

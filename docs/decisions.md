@@ -22015,3 +22015,12 @@ bottom-sheet drag handle without parallel sheet implementations.
 
 `ui_overlays3_v2` holds the Back/Close ordering, Button semantics and callback
 on Windows and Linux. `sheet-back.png` is the Segoe UI visual check.
+
+## D1042 — Dirty sheets keep their task open
+
+`overlay.sheet_state` and `bottom_sheet_state` reuse the shared sheet frame with
+an inert outside action while `dirty` is set. The modal scrim press is consumed,
+but the trapping scope keeps the real dismissal callback for Close and Escape.
+
+`ui_overlays3_v2` holds the unchanged dismiss count after the scrim and the
+single Escape dismissal on Windows and Linux.
