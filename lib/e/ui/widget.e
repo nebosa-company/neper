@@ -3008,6 +3008,19 @@ fn menu_alt_key(code: u32) -> bool {
     ret code == 18u32 || code == 65513u32 || code == 65514u32
 }
 
+fn leave_menu_mode(s: *State) {
+    if !s.menu_mode { ret }
+    if s.has_menu_saved_focus && s.elements[usize(s.menu_saved_focus)].live {
+        s.focus = s.menu_saved_focus
+        s.has_focus = true
+        s.focus_visible = true
+    } else {
+        s.has_focus = false
+    }
+    s.menu_mode = false
+    s.has_menu_saved_focus = false
+}
+
 // F10 enters the first MenuBar title. Left and Right walk titles, following an
 // open menu; Down opens the focused title; Escape leaves title mode.
 fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
@@ -3060,15 +3073,7 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
         ret (true, fired)
     }
     if code == 27u32 && s.menu_mode && usize(s.focus) == usize(targets[current]) {
-        if s.has_menu_saved_focus && s.elements[usize(s.menu_saved_focus)].live {
-            s.focus = s.menu_saved_focus
-            s.has_focus = true
-            s.focus_visible = true
-        } else {
-            s.has_focus = false
-        }
-        s.menu_mode = false
-        s.has_menu_saved_focus = false
+        leave_menu_mode(s)
         ret (true, ok)
     }
     ret (false, ok)
@@ -3156,6 +3161,33 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     }
     s.focus_visible = true
     ret true
+}
+
+// A chosen menu command closes its modal menu and gives keyboard menu mode's
+// saved focus back. The command action runs first, so a failed command remains
+// visible and focused for recovery.
+fn menu_tap(s: *State, index: usize, point: geometry.Point) -> err {
+    let fired = fire_gesture(s.elements[index].gesture, Gesture { Tap: point })
+    if fired != ok { ret fired }
+    var at = index
+    var item = false
+    while true {
+        let e = &s.elements[at]
+        if e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8) {
+            item = true
+            break
+        }
+        if !e.has_parent { break }
+        at = usize(e.parent)
+    }
+    if !item { ret ok }
+    let (modal, has_modal) = topmost_modal(s)
+    if has_modal && descends_from(s, index, modal) {
+        let dismissed = fire_submit(s.elements[modal].dismiss)
+        if dismissed != ok { ret dismissed }
+    }
+    leave_menu_mode(s)
+    ret ok
 }
 
 // Tab and Shift+Tab: the next or previous focusable element in preorder, within
@@ -3770,7 +3802,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                     s.arena_state.dragging = false
                     ret fire_gesture(e.gesture, Gesture { DragEnd: p.position })
                 }
-                if (e.gestures & GESTURE_TAP) != 0u8 && geometry.contains(e.bounds, p.position) { ret fire_gesture(e.gesture, Gesture { Tap: p.position }) }
+                if (e.gestures & GESTURE_TAP) != 0u8 && geometry.contains(e.bounds, p.position) { ret menu_tap(s, candidate, p.position) }
             }
             ret ok
         }
@@ -3917,7 +3949,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         if s.has_focus {
             let f = &s.elements[usize(s.focus)]
             if f.live && f.kind == REGION_TAG && f.enabled && (f.gestures & GESTURE_TAP) != 0u8 && (code == 13u32 || code == 32u32) {
-                ret fire_gesture(f.gesture, Gesture { Tap: geometry.Point { x: f.bounds.x + f.bounds.width * 0.5, y: f.bounds.y + f.bounds.height * 0.5 } })
+                ret menu_tap(s, usize(s.focus), geometry.Point { x: f.bounds.x + f.bounds.width * 0.5, y: f.bounds.y + f.bounds.height * 0.5 })
             }
         }
         let (taken, key_error) = dispatch_key(s, k)

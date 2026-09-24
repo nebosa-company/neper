@@ -21453,3 +21453,16 @@ therefore cycle matching commands without component-specific state.
 
 Buffered multi-letter typeahead, access-key underlines and activation, submenus
 and command focus return remain open.
+
+## D998 — Menu commands dismiss and restore menu-mode focus
+
+The shared tap dispatcher recognises MenuItem and MenuItemCheckbox ancestors.
+After a successful command it fires the top modal overlay's existing dismiss
+action and leaves menu mode, restoring the focus saved by Alt or F10. Failed
+commands stay open and focused for recovery.
+
+`ui_navigation2_v2` holds pointer command activation, dismissal and return to the
+pre-menu tab on Windows and Linux.
+
+Buffered multi-letter typeahead, access-key underlines and activation, and
+submenus remain open.

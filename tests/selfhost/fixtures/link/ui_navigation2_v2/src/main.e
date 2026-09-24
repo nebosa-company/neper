@@ -289,6 +289,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (file_node, has_file_node) = find(tree_3, .Button, "File")
     let (edit_node, has_edit_node) = find(tree_3, .Button, "Edit")
     if !has_file_node || !file_node.state.expanded || !has_edit_node || edit_node.state.expanded { os.exit(27i32) }
+    s.counters[9usize].count = 0usize
+    if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || s.counters[9usize].count != 1usize || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(54i32) }
+    s.counters[9usize].count = 0usize
     // A typed letter advances to the next matching command, case-insensitively.
     if testing.press_key(&harness, 65u32, zero) != ok { os.exit(52i32) }
     let (typed, has_typed) = testing.focused(&harness)
@@ -312,7 +315,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (auto_node, has_auto_node) = find(tree_3, .MenuItem, "Autosave")
     let (delete_node, has_delete_node) = find(tree_3, .MenuItem, "Delete")
     if testing.by_role(&harness, .MenuItem).count != 4usize || !has_auto_node || !auto_node.state.checked || !has_delete_node || !delete_node.state.disabled { os.exit(30i32) }
-    if !tap_key(&harness, &runtime, 2403u64) || s.counters[10usize].count != 1usize || testing.press_key(&harness, 27u32, zero) != ok || s.counters[9usize].count != 1usize { os.exit(31i32) }
+    if !tap_key(&harness, &runtime, 2403u64) || s.counters[10usize].count != 1usize || s.counters[9usize].count != 1usize { os.exit(31i32) }
+    let (returned, has_returned) = testing.focused(&harness)
+    if !has_returned || !same_element(returned, original) { os.exit(55i32) }
     // The overflow crumb open: Expanded, its menu holding lib and e in order.
     let (root_2, build_2_error) = build(&f, &theme, s, true, 9usize)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(32i32) }
