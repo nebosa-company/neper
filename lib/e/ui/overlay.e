@@ -893,10 +893,44 @@ fn popup_empty(a: *mem.Arena, key: widget.Key, t: *const control.Theme, message:
     ret (widget.semantics(key, sem, style.defaults(), framed[0usize..1usize]), ok)
 }
 
+// A popup error: alert icon and message followed by one quiet Retry action.
+fn popup_error(a: *mem.Arena, key: widget.Key, t: *const control.Theme, message: str, retry: *const widget.Submit) -> (widget.Node, err) {
+    let (items, items_error) = mem.alloc[widget.Node](a, 4usize)
+    if items_error != ok { ret (zero, TooLarge) }
+    let alarm = style.color(t.tokens, .Error)
+    let (mark, mark_error) = control.icon_square(a, alarm, .Alert, 18.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    items[0usize] = mark
+    var words = control.text_options()
+    words.role = .BodyMedium
+    words.wrap = .Word
+    let (message_node, message_error) = control.colored_text(a, 0u64, message, t, words, alarm)
+    if message_error != ok { ret (zero, message_error) }
+    items[1usize] = message_node
+    items[2usize] = widget.spacer(0u64, 1.0)
+    var plain = control.button_options()
+    plain.variant = .Plain
+    let (again, again_error) = control.button(a, key + 1u64, t, "Retry", retry, plain)
+    if again_error != ok { ret (zero, again_error) }
+    items[3usize] = again
+    var row = style.defaults()
+    row.width = style.Length { Percent: 100.0 }
+    row.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 12.0 } }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, row, items[0usize..4usize])
+    var sem: widget.Semantics = zero
+    sem.role = 24u8
+    sem.label = message
+    sem.states = accessibility.STATE_INVALID
+    sem.live = 2u8
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
 // v2 (D976/D987, docs/ux/components/Popup): the popup surface matches its anchor
 // within 200..480 and sits 4 off it on the `placement` side (flipping when that
 // side overflows), a group in the tree named `label`.
-// ponytail: no loading bar or error row; the anchor keeps the focus
+// ponytail: no loading bar; the anchor keeps the focus
 // because the popup takes none.
 fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
@@ -2069,8 +2103,8 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         var raised_style = control.surface_style(t, raised)
         raised_style.padding.top = style.Length { Px: 8.0 }
         raised_style.padding.bottom = style.Length { Px: 8.0 }
-        let (lifted, popup_error) = mem.alloc[widget.Node](a, 2usize)
-        if popup_error != ok { ret (zero, TooLarge) }
+        let (lifted, lifted_error) = mem.alloc[widget.Node](a, 2usize)
+        if lifted_error != ok { ret (zero, TooLarge) }
         lifted[1usize] = widget.box(0u64, raised_style, column[0usize..1usize])
         var list_sem: widget.Semantics = zero
         list_sem.role = 10u8

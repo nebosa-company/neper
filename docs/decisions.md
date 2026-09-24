@@ -21837,3 +21837,14 @@ row or exposing an empty surface.
 `ui_overlays2_v2` holds the status and live-region contract on Windows and
 Linux. `popup-empty.png` is the Segoe UI visual check. Loading, error,
 match-highlight and footer parts remain open.
+
+## D1027 — Popup failures are actionable alerts
+
+`overlay.popup_error` draws the error-colour alert glyph and one-line message
+beside one Plain Retry button, with the same 12 by 16 row padding as the empty
+state. The row is an assertive invalid Alert while Retry remains an ordinary
+button using the caller's submit action.
+
+`ui_overlays2_v2` holds the alert state, live priority and Retry activation on
+Windows and Linux. `popup-error-row.png` is the Segoe UI visual check. Loading,
+match-highlight and footer parts remain open.

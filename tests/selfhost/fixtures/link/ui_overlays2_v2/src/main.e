@@ -31,7 +31,7 @@ type Counter = struct { count: usize }
 // The counters: 0 rows, 1 anchors, 2 dismiss, 3 main action, 4 other action.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, actions: [2]overlay.MenuItem }
 
-type Which = enum u8 { Popup, PopupEmpty, Flyout, Popover, Below }
+type Which = enum u8 { Popup, PopupEmpty, PopupError, Flyout, Popover, Below }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -80,7 +80,12 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
         popup_content = empty
         e11 = empty_error
     }
-    let popup_open = which == .Popup || which == .PopupEmpty
+    if which == .PopupError {
+        let (failed, failed_error) = overlay.popup_error(a, 14u64, t, "Search failed", &s.subs[5usize])
+        popup_content = failed
+        e11 = failed_error
+    }
+    let popup_open = which == .Popup || which == .PopupEmpty || which == .PopupError
     let (popup, e6) = overlay.popup_of(a, 10u64, t, 1u64, .Below, "Suggestions", popup_content, popup_open)
     var active_key = 0u64
     if which == .Popup { active_key = 11u64 }
@@ -241,6 +246,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_empty_popup { os.exit(46i32) }
     if !has_empty_status { os.exit(47i32) }
     if empty_status.live != .Polite { os.exit(48i32) }
+    // Errors are assertive alerts with one ordinary Retry button.
+    let (root_error, popup_error) = build(&f, &theme, s, .PopupError)
+    if popup_error != ok || testing.pump(&harness, root_error, time.Instant { nanos: 1075000000i64 }) != ok { os.exit(49i32) }
+    let (error_tree, error_tree_error) = testing.semantics(&harness)
+    if error_tree_error != ok { os.exit(50i32) }
+    let (error_status, has_error_status) = find(error_tree, .Alert, "Search failed")
+    let (retry_node, has_retry) = find(error_tree, .Button, "Retry")
+    if !has_error_status { os.exit(51i32) }
+    if !error_status.state.invalid { os.exit(53i32) }
+    if error_status.live != .Assertive { os.exit(54i32) }
+    if !has_retry { os.exit(55i32) }
+    if !tap_key(&harness, &runtime, 15u64) || s.counters[5usize].count != 1usize { os.exit(52i32) }
     // The flyout with a pointer: 4 below Filter, 200 wide at least on
     // `surface-container`, 12 above and 8 below its content; a modal dialog named
     // Filters; its anchor stays selected tonal and reports Expanded/Controls;
