@@ -21679,3 +21679,14 @@ rejected instead of weakening a critical extension.
 
 `crypto_x509` carries signed permitted, outside, and excluded descendant chains
 and passes on Windows and Linux.
+
+## D1014 — Bonsai defaults to review-only model edits
+
+Bonsai model sessions expose repository-rooted read, search, and edit tools by
+default. They neither execute model-modified code nor commit it; a completed edit
+is left for operator review and verification. The legacy unrestricted shell and
+automatic host test/commit workflow remain available only behind the explicit
+`--unsafe-compatibility` warning flag.
+
+Focused Python tests hold the default tool surface, traversal rejection, review
+boundary, and opt-in compatibility path.

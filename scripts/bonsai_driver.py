@@ -4,15 +4,17 @@
 Usage:  python scripts/bonsai_driver.py [--endpoint http://localhost:8080/v1] [--model KEY]
                                         [--kind modules|queue|all] [--max-tasks N] [--rounds 60]
                                         [--session-minutes 120] [--skip-linux] [--dry-run]
+                                        [--unsafe-compatibility]
 
 Each session: pick the next eligible task (README rules), give the model the README,
-the language card and the task file, let it work with four tools until it says DONE,
-then gate on the self-host suites. Green: regenerate progress and tasks, commit the
-touched paths. Red: revert every touched path and move on. Talks either to an
+the language card and the task file, let it work with repository-scoped read, search
+and edit tools until it says DONE, then leave the changes unexecuted and uncommitted
+for review. `--unsafe-compatibility` restores the old shell, automatic suite and
+commit workflow. Talks either to an
 OpenAI-compatible server (`--endpoint`, e.g. the PrismML llama.cpp fork's llama-server)
 or to LM Studio through `pip install lmstudio` and `lms server start`.
 """
-import argparse, datetime, json, re, subprocess, sys, time
+import argparse, datetime, json, shlex, subprocess, sys, time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -26,7 +28,6 @@ TASKS = ROOT / "docs" / "tasks"
 STATE = ROOT / "build" / "bonsai" / "state.json"
 LOGS = ROOT / "build" / "bonsai"
 PROTECTED = ("docs/tasks/", "docs/progress.html", "docs/work-done.jsonl", "scripts/bonsai_driver.py", ".git/")
-FORBIDDEN_CMD = re.compile(r"git\s+(add\s+(-A|\.)|commit|push|reset|checkout|clean|stash|rebase)|rm\s+-rf?\s+/|Remove-Item.*-Recurse")
 
 
 def endpoint_allowed(url):
@@ -43,8 +44,8 @@ def endpoint_allowed(url):
         parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"})
 
 
-def sh(cmd, timeout=600, cwd=ROOT, shell=False):
-    p = subprocess.run(cmd, cwd=cwd, shell=shell, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+def sh(cmd, timeout=600, cwd=ROOT):
+    p = subprocess.run(cmd, cwd=cwd, shell=False, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
@@ -98,17 +99,25 @@ def next_task(kind, state):
 
 
 # ---------------------------------------------------------------- tools
-def _inside(path):
+def _repo_path(path):
     p = (ROOT / path).resolve()
-    rel = p.relative_to(ROOT).as_posix()
-    if any(rel.startswith(x) for x in PROTECTED):
+    try:
+        rel = p.relative_to(ROOT).as_posix()
+    except ValueError:
+        raise ValueError("path escapes repository: " + str(path))
+    return p, rel
+
+
+def _inside(path):
+    p, rel = _repo_path(path)
+    if any(rel == x.rstrip("/") or rel.startswith(x) for x in PROTECTED):
         raise ValueError("protected path: " + rel)
     return p
 
 
 def read_lines(path: str, start: int = 1, end: int = 120) -> str:
     """Read lines start..end (1-based, inclusive, at most 400) of a repository file."""
-    p = (ROOT / path).resolve()
+    p, _ = _repo_path(path)
     lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
     end = min(end, start + 399, len(lines))
     return "\n".join("%d\t%s" % (i, lines[i - 1]) for i in range(max(1, start), end + 1)) or "(empty range; file has %d lines)" % len(lines)
@@ -116,7 +125,8 @@ def read_lines(path: str, start: int = 1, end: int = 120) -> str:
 
 def search(pattern: str, path: str = ".", fixed: bool = True) -> str:
     """git grep -n for a pattern under a path (fixed string by default); at most 60 hits."""
-    args = ["grep", "-n", "-I"] + (["-F"] if fixed else ["-E"]) + ["-e", pattern, "--", path]
+    _, rel = _repo_path(path)
+    args = ["grep", "-n", "-I"] + (["-F"] if fixed else ["-E"]) + ["-e", pattern, "--", rel]
     _, out = git(*args)
     hits = out.splitlines()
     return "\n".join(hits[:60]) + ("\n... %d more" % (len(hits) - 60) if len(hits) > 60 else "") or "(no hits)"
@@ -146,9 +156,7 @@ BASH = r"C:\Program Files\Git\bin\bash.exe"
 
 
 def run(command: str, timeout_seconds: int = 900) -> str:
-    """Run a POSIX shell command (Git Bash: `&&`, `2>/dev/null`, `ls`, `grep` all work) in the repository root; output capped at 8 KB. A .ps1 script runs as `powershell -ExecutionPolicy Bypass -File the.ps1`. git commit/add/reset/checkout and recursive deletes are refused."""
-    if FORBIDDEN_CMD.search(command):
-        return "Error: refused; the driver commits and reverts, not the agent."
+    """Run an unrestricted POSIX shell. Exposed only by --unsafe-compatibility."""
     try:
         code, out = sh([BASH, "-lc", command], timeout=min(timeout_seconds, 3600))
     except subprocess.TimeoutExpired:
@@ -159,36 +167,50 @@ def run(command: str, timeout_seconds: int = 900) -> str:
 
 
 # ---------------------------------------------------------------- one session
-def prompt_for(task_file):
+def prompt_for(task_file, unsafe_compatibility=False):
     readme = (TASKS / "README.md").read_text(encoding="utf-8")
     card = (ROOT / "docs" / "llm-neper-card.md").read_text(encoding="utf-8")
+    shell_note = (" An unrestricted `run` shell and automatic host verification are enabled by the operator."
+                  if unsafe_compatibility else
+                  " No command or network tool is available; finish the edit for operator review and verification.")
+    completion = ("Reply with a line starting DONE when the task file's fixture passes on this host with the self-hosted compiler"
+                  if unsafe_compatibility else
+                  "Reply with a line starting DONE when the requested edit and fixture are ready for operator verification")
+    action = ("Build with the self-hosted compiler" if unsafe_compatibility else
+              "Implement the requested change")
     system = ("You are implementing one feature of the neper compiler and library, alone, in a git checkout at %s.\n"
-              "Follow the README and the task file exactly. Tools: read_lines, search, edit, run. Never read a file over 120 KB whole.\n"
-              "`run` is a POSIX shell (Git Bash), not PowerShell: `&&`, `2>/dev/null`, `ls`, `grep` work; a `.ps1` script runs as "
-              "`powershell -ExecutionPolicy Bypass -File the.ps1`; the README's `& x` spellings are PowerShell, drop the `&`.\n"
+              "Follow the README and the task file exactly. Tools: read_lines, search, edit.%s Never read a file over 120 KB whole.\n"
               "Budget: read only what the task file names (its dependencies, one sibling module, one sibling fixture and that fixture's "
               "two runner blocks), then WRITE. Reading past the fifth round without an edit is the failure mode to avoid; you can read "
               "more later when a build error asks for it.\n"
-              "Do not commit, add, reset or checkout; the driver does. Reply with a line starting DONE when the task file's "
-              "fixture passes on this host with the self-hosted compiler, or BLOCKED: <reason> when you cannot proceed.\n\n"
-              "=== docs/tasks/README.md ===\n%s\n\n=== docs/llm-neper-card.md ===\n%s") % (ROOT.as_posix(), readme, card)
+              "Do not commit, add, reset or checkout. %s, or BLOCKED: <reason> when you cannot proceed.\n\n"
+              "=== docs/tasks/README.md ===\n%s\n\n=== docs/llm-neper-card.md ===\n%s") % (ROOT.as_posix(), shell_note, completion, readme, card)
     user = ("=== %s ===\n%s\n\nTake the first unchecked line of 'Remaining work' (for a module: the whole fence, in order). "
-            "Build with the self-hosted compiler, add the fixture and both runner entries, then reply DONE or BLOCKED."
-            % (task_file.relative_to(ROOT).as_posix(), task_file.read_text(encoding="utf-8")))
+            "%s, add the fixture and both runner entries, then reply DONE or BLOCKED."
+            % (task_file.relative_to(ROOT).as_posix(), task_file.read_text(encoding="utf-8"), action))
     return system, user
 
 
-TOOLS = {"read_lines": read_lines, "search": search, "edit": edit, "run": run}
-TOOL_SCHEMAS = [
+SAFE_TOOLS = {"read_lines": read_lines, "search": search, "edit": edit}
+SAFE_TOOL_SCHEMAS = [
     {"type": "function", "function": {"name": "read_lines", "description": read_lines.__doc__, "parameters": {"type": "object", "properties": {
         "path": {"type": "string"}, "start": {"type": "integer"}, "end": {"type": "integer"}}, "required": ["path"]}}},
     {"type": "function", "function": {"name": "search", "description": search.__doc__, "parameters": {"type": "object", "properties": {
         "pattern": {"type": "string"}, "path": {"type": "string"}, "fixed": {"type": "boolean"}}, "required": ["pattern"]}}},
     {"type": "function", "function": {"name": "edit", "description": edit.__doc__, "parameters": {"type": "object", "properties": {
         "path": {"type": "string"}, "old": {"type": "string"}, "new": {"type": "string"}}, "required": ["path", "old", "new"]}}},
-    {"type": "function", "function": {"name": "run", "description": run.__doc__, "parameters": {"type": "object", "properties": {
-        "command": {"type": "string"}, "timeout_seconds": {"type": "integer"}}, "required": ["command"]}}},
 ]
+RUN_TOOL_SCHEMA = {"type": "function", "function": {"name": "run", "description": run.__doc__, "parameters": {"type": "object", "properties": {
+    "command": {"type": "string"}, "timeout_seconds": {"type": "integer"}}, "required": ["command"]}}}
+
+
+def exposed_tools(unsafe_compatibility=False):
+    tools = dict(SAFE_TOOLS)
+    schemas = list(SAFE_TOOL_SCHEMAS)
+    if unsafe_compatibility:
+        tools["run"] = run
+        schemas.append(RUN_TOOL_SCHEMA)
+    return tools, schemas
 
 
 def endpoint_up(args):
@@ -206,7 +228,10 @@ def restart_server(args, log):
         return False
     subprocess.run(["taskkill", "/F", "/IM", "llama-server.exe"], capture_output=True)
     time.sleep(2)
-    subprocess.Popen(args.server_cmd, shell=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=open(LOGS / "llama-server.log", "a"))
+    command = args.server_cmd if sys.platform == "win32" else shlex.split(args.server_cmd)
+    with open(LOGS / "llama-server.log", "a") as server_log:
+        subprocess.Popen(command, shell=False, cwd=ROOT,
+                         stdout=subprocess.DEVNULL, stderr=server_log)
     for _ in range(60):
         time.sleep(3)
         if endpoint_up(args):
@@ -219,7 +244,8 @@ def restart_server(args, log):
 def session_openai(task_file, args, log):
     """The same session over an OpenAI-compatible /v1/chat/completions (llama-server, LM Studio's server)."""
     import urllib.request
-    system, user = prompt_for(task_file)
+    system, user = prompt_for(task_file, args.unsafe_compatibility)
+    tools, tool_schemas = exposed_tools(args.unsafe_compatibility)
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     deadline = time.time() + args.session_minutes * 60
     restarts = {}
@@ -232,7 +258,7 @@ def session_openai(task_file, args, log):
         if time.time() > deadline:
             log.write("\n!!! session exceeded %d minutes\n" % args.session_minutes)
             return "error"
-        body = json.dumps({"model": args.model, "messages": messages, "tools": TOOL_SCHEMAS, "temperature": 0.6, "top_p": 0.95,
+        body = json.dumps({"model": args.model, "messages": messages, "tools": tool_schemas, "temperature": 0.6, "top_p": 0.95,
                            "max_tokens": args.max_tokens}).encode("utf-8")
         req = urllib.request.Request(args.endpoint.rstrip("/") + "/chat/completions", data=body, headers={"Content-Type": "application/json"})
         try:
@@ -283,7 +309,7 @@ def session_openai(task_file, args, log):
                 continue
             try:
                 kwargs = json.loads(fn.get("arguments") or "{}")
-                result = TOOLS[fn["name"]](**kwargs) if fn["name"] in TOOLS else "Error: unknown tool " + fn["name"]
+                result = tools[fn["name"]](**kwargs) if fn["name"] in tools else "Error: unknown tool " + fn["name"]
             except Exception as e:
                 result = "Error: %s: %s" % (type(e).__name__, e)
             if since_edit >= args.read_budget - 1:
@@ -298,7 +324,8 @@ def session_openai(task_file, args, log):
 def session(model, task_id, task_file, args, log):
     if args.endpoint:
         return session_openai(task_file, args, log)
-    system, user = prompt_for(task_file)
+    system, user = prompt_for(task_file, args.unsafe_compatibility)
+    tools, _ = exposed_tools(args.unsafe_compatibility)
     chat = lms.Chat(system)
     chat.add_user_message(user)
     deadline = time.time() + args.session_minutes * 60
@@ -321,7 +348,7 @@ def session(model, task_id, task_file, args, log):
         log.write("\n=== round %d ===\n" % i)
 
     try:
-        model.act(chat, [read_lines, search, edit, run], max_prediction_rounds=args.rounds,
+        model.act(chat, list(tools.values()), max_prediction_rounds=args.rounds,
                   config={"temperature": 0.6, "top_p_sampling": 0.95, "context_overflow_policy": "stopAtLimit"},
                   on_message=on_message, on_round_start=on_round_start)
     except Exception as e:  # timeouts, context overflow, server drops: all mean "not proven"
@@ -377,9 +404,13 @@ def main():
     ap.add_argument("--distro", default="Ubuntu-24.04")
     ap.add_argument("--skip-linux", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="print the next task and exit")
+    ap.add_argument("--unsafe-compatibility", action="store_true",
+                    help="DANGEROUS: restore the unrestricted shell and execute model-modified code on the host")
     args = ap.parse_args()
     if args.endpoint and not endpoint_allowed(args.endpoint):
         ap.error("--endpoint must use HTTPS, or HTTP on localhost/loopback")
+    if args.unsafe_compatibility:
+        print("WARNING: --unsafe-compatibility gives model output unrestricted host command execution", file=sys.stderr)
 
     LOGS.mkdir(parents=True, exist_ok=True)
     state = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {"failures": {}, "done": []}
@@ -409,6 +440,9 @@ def main():
             verdict = session(model, task_id, task_file, args, log)
             touched = touched_paths()
             print("  agent:", verdict, "| touched:", len(touched))
+            if verdict == "done" and touched and not args.unsafe_compatibility:
+                print("  review: secure mode left the changes unexecuted and uncommitted")
+                break
             ok = verdict == "done" and bool(touched) and suites(args, log)
             if ok:
                 ok = commit(task_id, title, touched)

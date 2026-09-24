@@ -2,7 +2,7 @@
 
 ## Remediation status
 
-The first isolated remediation batch is complete in the working tree:
+Remediation completed so far:
 
 - M1: TAR entry and link paths reject slash/backslash roots, parent segments,
   drive-qualified segments, and unsafe PAX link paths.
@@ -14,9 +14,13 @@ The first isolated remediation batch is complete in the working tree:
 - H2: verified chains reject unknown critical extensions, CA key usage without
   `keyCertSign`, and excess CA depth under `pathLenConstraint`; critical DNS
   `nameConstraints` are parsed and applied to every descendant SAN.
+- H1: Bonsai's default model session exposes only repository-rooted read,
+  search, and edit tools, then leaves changes unexecuted and uncommitted for
+  review. The former unrestricted host workflow requires an explicit
+  `--unsafe-compatibility` flag and warning.
 
-The focused fixtures pass on Windows and Linux, and all 12 tests in
-`tests.test_llm_edit_benchmark` pass. H1, H3, M3, and M5 remain open.
+The focused fixtures pass on Windows and Linux, and all 15 tests in
+`tests.test_llm_edit_benchmark` pass. H3, M3, and M5 remain open.
 
 ## Executive summary
 

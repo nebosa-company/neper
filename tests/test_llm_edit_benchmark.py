@@ -2,8 +2,10 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from urllib.request import urlopen
 from urllib.error import HTTPError
 
@@ -12,6 +14,14 @@ RUNNER = Path(__file__).parents[1] / "benchmarks" / "llm_edit" / "run.py"
 SPEC = importlib.util.spec_from_file_location("llm_edit_benchmark", RUNNER)
 benchmark = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(benchmark)
+
+
+def load_bonsai(name="bonsai_driver_security"):
+    path = Path(__file__).parents[1] / "scripts" / "bonsai_driver.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class BenchmarkScoringTests(unittest.TestCase):
@@ -95,10 +105,7 @@ class BenchmarkScoringTests(unittest.TestCase):
         jev_spec = importlib.util.spec_from_file_location("jev_router_urls", jev_path)
         jev = importlib.util.module_from_spec(jev_spec)
         jev_spec.loader.exec_module(jev)
-        bonsai_path = Path(__file__).parents[1] / "scripts" / "bonsai_driver.py"
-        bonsai_spec = importlib.util.spec_from_file_location("bonsai_driver_urls", bonsai_path)
-        bonsai = importlib.util.module_from_spec(bonsai_spec)
-        bonsai_spec.loader.exec_module(bonsai)
+        bonsai = load_bonsai("bonsai_driver_urls")
         for allowed in ("https://api.example/v1", "http://localhost:8080/v1",
                         "http://127.0.0.1:8080/v1", "http://[::1]:8080/v1"):
             self.assertTrue(jev.api_url_allowed(allowed))
@@ -107,6 +114,53 @@ class BenchmarkScoringTests(unittest.TestCase):
                         "https://api.example/v1?redirect=elsewhere", "not-a-url"):
             self.assertFalse(jev.api_url_allowed(refused))
             self.assertFalse(bonsai.endpoint_allowed(refused))
+
+    def test_bonsai_model_tools_are_safe_by_default(self):
+        bonsai = load_bonsai()
+        tools, schemas = bonsai.exposed_tools()
+        self.assertEqual(set(tools), {"read_lines", "search", "edit"})
+        self.assertNotIn('"run"', json.dumps(schemas))
+        unsafe_tools, unsafe_schemas = bonsai.exposed_tools(unsafe_compatibility=True)
+        self.assertIn("run", unsafe_tools)
+        self.assertIn('"run"', json.dumps(unsafe_schemas))
+
+    def test_bonsai_read_and_search_paths_stay_in_checkout(self):
+        bonsai = load_bonsai("bonsai_driver_paths")
+        with tempfile.TemporaryDirectory() as temp:
+            parent = Path(temp)
+            root = parent / "repo"
+            root.mkdir()
+            (root / "inside.txt").write_text("inside\n", encoding="utf-8")
+            (parent / "secret.txt").write_text("secret\n", encoding="utf-8")
+            bonsai.ROOT = root
+            self.assertIn("inside", bonsai.read_lines("inside.txt"))
+            with self.assertRaisesRegex(ValueError, "path escapes repository"):
+                bonsai.read_lines("../secret.txt")
+            with self.assertRaisesRegex(ValueError, "path escapes repository"):
+                bonsai.search("secret", "..")
+
+    def test_bonsai_secure_mode_does_not_execute_model_changes(self):
+        bonsai = load_bonsai("bonsai_driver_execution")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            task = root / "task.md"
+            task.write_text("# candidate\n", encoding="utf-8")
+            bonsai.ROOT = root
+            bonsai.LOGS = root / "logs"
+            bonsai.STATE = root / "state.json"
+            argv = ["bonsai_driver.py", "--endpoint", "http://localhost:8080/v1"]
+            with (patch.object(sys, "argv", argv),
+                  patch.object(bonsai, "next_task", return_value=("candidate", task)),
+                  patch.object(bonsai, "endpoint_up", return_value=True),
+                  patch.object(bonsai, "session", return_value="done"),
+                  patch.object(bonsai, "touched_paths", side_effect=[[], ["candidate.e"]]),
+                  patch.object(bonsai, "suites") as suites,
+                  patch.object(bonsai, "commit") as commit,
+                  patch.object(bonsai, "revert") as revert):
+                bonsai.main()
+            suites.assert_not_called()
+            commit.assert_not_called()
+            revert.assert_not_called()
 
     def test_audits_observable_agent_activity(self):
         semantic_path = Path(__file__).parents[1] / "benchmarks" / "llm_edit" / "semantic.py"
