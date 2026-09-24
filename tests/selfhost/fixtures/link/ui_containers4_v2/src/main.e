@@ -21,6 +21,7 @@ use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.navigation
 use e.ui.style
@@ -45,6 +46,21 @@ fn close_to(value: u8, expected: f32) -> bool {
     let e = expected * 255.0
     let v = f32(value)
     ret v - e < 4.0 && e - v < 4.0
+}
+
+fn same_element(a: widget.ElementId, b: widget.ElementId) -> bool {
+    ret a.slot == b.slot && a.generation == b.generation
+}
+
+fn has_role(h: *testing.Harness, element: widget.ElementId, role: accessibility.Role) -> bool {
+    let (tree, tree_error) = testing.semantics(h)
+    if tree_error != ok { ret false }
+    var i = 0usize
+    while i < tree.nodes.len {
+        if same_element(tree.nodes[i].id, element) { ret tree.nodes[i].role == role }
+        i += 1usize
+    }
+    ret false
 }
 
 fn blank(w: f32, h: f32) -> widget.Node {
@@ -144,6 +160,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (floated, has_floated) = bounds(&harness, &runtime, 380u64)
     if !has_left || !near(left.x, 40.0) || !near(left.width, 200.0) || testing.by_role(&harness, .Tab).count != 4usize { os.exit(13i32) }
     if !has_floated || !near(floated.x, 500.0) || !near(floated.y, 60.0) || !near(floated.width, 260.0) { os.exit(14i32) }
+    // F6 walks panel, sash and main landmarks in tree order; Shift reverses,
+    // and Escape returns to main.
+    if testing.by_role(&harness, .Main).count != 1usize { os.exit(31i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 241u64).element) != ok || !frame(&harness, &f, &theme, s) { os.exit(32i32) }
+    let (focused_shot, focused_shot_error) = testing.snapshot(&harness, a)
+    if focused_shot_error != ok || !is_color(focused_shot, at(left.x + 8.0, left.y + 1.0), style.color(&tokens, .Primary)) { os.exit(33i32) }
+    let (kept_focus, has_kept_focus) = testing.focused(&harness)
+    if !has_kept_focus || !same_element(kept_focus, testing.by_key(&harness, 241u64).element) { os.exit(33i32) }
+    var no_modifiers: input.Modifiers = zero
+    if testing.press_key(&harness, 65475u32, no_modifiers) != ok { os.exit(34i32) }
+    let (on_sash, has_on_sash) = testing.focused(&harness)
+    if !has_on_sash || !has_role(&harness, on_sash, .Separator) { os.exit(35i32) }
+    if testing.press_key(&harness, 65475u32, no_modifiers) != ok { os.exit(36i32) }
+    let (on_main, has_on_main) = testing.focused(&harness)
+    if !has_on_main || !same_element(on_main, testing.by_role(&harness, .Main).element) { os.exit(37i32) }
+    if testing.press_key(&harness, 65475u32, no_modifiers) != ok { os.exit(38i32) }
+    let (on_bottom_sash, has_on_bottom_sash) = testing.focused(&harness)
+    if !has_on_bottom_sash || !has_role(&harness, on_bottom_sash, .Separator) { os.exit(39i32) }
+    if testing.press_key(&harness, 65475u32, no_modifiers) != ok { os.exit(40i32) }
+    let (on_panel, has_on_panel) = testing.focused(&harness)
+    if !has_on_panel || !has_role(&harness, on_panel, .Region) { os.exit(41i32) }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
+    if testing.press_key(&harness, 65475u32, shifted) != ok || testing.press_key(&harness, 65475u32, shifted) != ok { os.exit(42i32) }
+    let (backward, has_backward) = testing.focused(&harness)
+    if !has_backward || !same_element(backward, testing.by_role(&harness, .Main).element) { os.exit(43i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 257u64).element) != ok || testing.press_key(&harness, 27u32, no_modifiers) != ok { os.exit(44i32) }
+    let (escaped, has_escaped) = testing.focused(&harness)
+    if !has_escaped || !same_element(escaped, testing.by_role(&harness, .Main).element) { os.exit(45i32) }
     // A strip button shows its panel; pressed again, it collapses the slot.
     if !tap_key(&harness, &runtime, 221u64) || s.model.current[0usize] != 1usize || s.model.collapsed[0usize] { os.exit(15i32) }
     if !frame(&harness, &f, &theme, s) || !tap_key(&harness, &runtime, 221u64) || !s.model.collapsed[0usize] { os.exit(16i32) }

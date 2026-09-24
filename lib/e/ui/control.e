@@ -4435,8 +4435,8 @@ fn handle_nudge(ctx: *void) -> err {
 
 // A resizable pane: the content sized `size` along `axis` (the caller keeps the
 // size and hears each change), the sash of D966 after it, between `low` and
-// `high` (0: no limit). The pane is keyed `key + 1`, the sash `key + 2`, a slider
-// in the tree named "Resize " and `label`, its value the size in px.
+// `high` (0: no limit). The pane is keyed `key + 1`, the sash `key + 2`, a
+// separator in the tree named "Resize " and `label`, its value the size in px.
 fn resizable_pane(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, change: widget.Change[f32], content: widget.Node) -> (widget.Node, err) {
     let (named, named_error) = mem.alloc[u8](a, label.len + 7usize)
     if named_error != ok { ret (zero, TooLarge) }
@@ -4483,10 +4483,10 @@ fn sash_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // hover and keyboard focus (always, `on-surface-variant`, on touch) and, dragged,
 // the line is 2px `primary` and the grip `primary`. As a dock layout's (`bar`),
 // hover and drag draw a 4px `primary` bar and no grip. Arrows move it 8, 48 with
-// Shift; Home and End go to the limits. A slider in the tree named `label`, its
+// Shift; Home and End go to the limits. A separator in the tree named `label`, its
 // value the size ("240 px"), controlling the pane.
 // ponytail: no double-click reset, Escape cancel, snap-to-close, size readout or
-// resize cursor, and the role is Slider (no Separator role yet).
+// resize cursor.
 fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node, bar: bool) -> (widget.Node, err) {
     let vertical = axis == .Vertical
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -4585,7 +4585,7 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     var said_len = write_i64(said, i64(size))
     said_len += copy_text(said[said_len..24usize], " px")
     var sem: widget.Semantics = zero
-    sem.role = 15u8
+    sem.role = accessibility.ROLE_SEPARATOR
     sem.label = label
     sem.value = said[0usize..said_len]
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT
@@ -4604,7 +4604,7 @@ fn split_view(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.A
 // `position` along `axis`, D966's sash after it (8 hit, the 1px `outline-variant`
 // line, the 4 x 48 grip on hover, focus and drag, 2px `primary` dragged), and
 // `second` filling the rest on `surface`; the sash keeps `min_first` and
-// `min_second` of each and is a slider named `label` with the first pane's size
+// `min_second` of each and is a separator named `label` with the first pane's size
 // as its value. The pane is keyed `key + 1` (its content `key + 2`, its sash
 // `key + 3`); a group in the tree.
 // ponytail: no stacking below the breakpoint, snap points, ratio across window

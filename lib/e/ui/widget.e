@@ -3013,6 +3013,68 @@ fn move_focus(s: *State, backward: bool) {
     s.focus_visible = true
 }
 
+fn semantic_target(e: *const Element, roles: []const u8) -> bool {
+    if !e.live || !e.has_semantics { ret false }
+    var i = 0usize
+    while i < roles.len {
+        if roles[i] != 0u8 && e.sem.role == roles[i] { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+fn collect_semantic_targets(s: *State, index: usize, roles: []const u8, out: []u32, count: usize) -> usize {
+    var n = count
+    let e = &s.elements[index]
+    if !e.live { ret n }
+    if semantic_target(e, roles) && n < out.len {
+        out[n] = u32(index)
+        n += 1usize
+    }
+    var at = e.first_child
+    var has = e.has_child
+    while has {
+        n = collect_semantic_targets(s, usize(at), roles, out, n)
+        let child = &s.elements[usize(at)]
+        has = child.has_sibling
+        at = child.next_sibling
+    }
+    ret n
+}
+
+// Move focus among semantic landmarks in tree order. A focused descendant
+// counts as its containing landmark; zero role codes are ignored.
+fn focus_semantics(widget_runtime: *Runtime, roles: []const u8, backward: bool) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    var order: [256]u32 = zero
+    let count = collect_semantic_targets(s, usize(s.root), roles, order[..], 0usize)
+    if count == 0usize { ret ok }
+    var current = count
+    if s.has_focus {
+        var i = 0usize
+        while i < count {
+            let candidate = usize(order[i])
+            if usize(s.focus) == candidate || descends_from(s, usize(s.focus), candidate) { current = i }
+            i += 1usize
+        }
+    }
+    var next = 0usize
+    if current < count {
+        if backward {
+            next = (current + count - 1usize) % count
+        } else {
+            next = (current + 1usize) % count
+        }
+    } else if backward {
+        next = count - 1usize
+    }
+    s.focus = order[next]
+    s.has_focus = true
+    s.focus_visible = true
+    ret ok
+}
+
 // ---------------------------------------------------------------------- editing
 
 // The host's key as a Windows virtual code: an X keysym for the keys the editor
@@ -3948,6 +4010,16 @@ fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction {
     if count == 0usize { ret zero }
     let index = usize(found.slot)
     ret Interaction { hovered: s.arena_state.has_hovered && usize(s.arena_state.hovered) == index, pressed: s.arena_state.pressed && usize(s.arena_state.candidate) == index, focused: s.has_focus && usize(s.focus) == index, focus_visible: s.has_focus && s.focus_visible && usize(s.focus) == index }
+}
+
+// Whether focus is on the keyed element or one of its descendants.
+fn focus_within(widget_runtime: *const Runtime, key: Key) -> bool {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed || !s.has_focus { ret false }
+    let (found, count) = find_by_key(s, key)
+    if count == 0usize { ret false }
+    let root = usize(found.slot)
+    ret usize(s.focus) == root || descends_from(s, usize(s.focus), root)
 }
 
 // A slider's values, for a harness.

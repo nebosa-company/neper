@@ -231,7 +231,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if pane_2.count != 1usize || !has_pane_2 || !near(pane_2_bounds.width, 150.0) { os.exit(46i32) }
     let (tree_4, tree_4_error) = testing.semantics(&harness)
     if tree_4_error != ok { os.exit(47i32) }
-    let (divider, has_divider) = find(tree_4, .Slider, "Divider")
+    let (divider, has_divider) = find(tree_4, .Separator, "Divider")
     if !has_divider { os.exit(48i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui panes ok\n")

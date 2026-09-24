@@ -186,7 +186,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_split || !has_pane || !near(pane.width, 280.0) || !is_color(shot, at(pane.x + 10.0, pane.y + 80.0), style.color(&tokens, .SurfaceContainerLow)) || !is_color(shot, at(split.x + 600.0, split.y + 20.0), style.color(&tokens, .Background)) { os.exit(13i32) }
     let (builds, has_builds) = find(tree, .Group, "Builds")
     let (detail, has_detail) = find(tree, .Group, "Build 4127")
-    let (sash, has_sash) = find(tree, .Slider, "Resize list")
+    let (sash, has_sash) = find(tree, .Separator, "Resize list")
     if !has_builds || !has_detail || !has_sash { os.exit(14i32) }
     if testing.by_text(&harness, "Select a build to see its log").count != 1usize || testing.by_text(&harness, "Log").count != 1usize { os.exit(15i32) }
     // Compact: the detail under a 48 bar, Back named for the list, popping.

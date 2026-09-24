@@ -2,8 +2,9 @@
 // over `os.window_poll`, each naming its window by `window.Id`. Pointer positions
 // are logical pixels -- the host's client pixels over the window's scale -- and the
 // button set is tracked per queue so a `Pointer` carries every button held. Keys
-// keep the host's virtual code as `physical` and `logical` alike: a layout-aware
-// logical key waits on the host telling the two apart. Text arrives per code point;
+// keep the host's virtual code as `physical` and `logical` alike (Windows function
+// keys are normalised to X11's 0xffbe range): a layout-aware logical key waits on
+// the host telling the two apart. Text arrives per code point;
 // IME composition is not delivered, and `composition_rect` is `TooLarge` for the
 // caller that must know, since the fence has no `Unsupported` here.
 //

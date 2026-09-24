@@ -21369,3 +21369,22 @@ a region labelled by its disclosure header; the stack wrapper remains a group.
 
 Native host accessibility publishing, dock focus cycling and panel dragging
 remain open.
+
+## D992 — Dock focus cycles through semantic landmarks
+
+`Main` is appended to the accessibility role surface. DockLayout marks its
+centre Main, publishes shared resize handles as Separators, and handles F6 and
+Shift+F6 by moving focus through Main, Region and Separator landmarks in tree
+order; Escape from a panel returns to Main. Windows normalises F1–F12 to X's
+non-character keysym range, avoiding the VK_F6/lowercase-`u` collision.
+
+DockPanel reads focus-within from the runtime for its header line. The line's
+layer remains in the tree at rest, so gaining focus does not retire the focused
+child during reconciliation.
+
+`ui_containers4_v2` holds forward, reverse and Escape traversal plus
+the focus line. `ui_containers2_v2`, `ui_navigation4_v2` and `ui_panes` hold the
+shared Separator role on Windows and Linux.
+
+Panel dragging, keyboard moving and native host accessibility publishing remain
+open.

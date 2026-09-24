@@ -2021,11 +2021,12 @@ fn panel_tab(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 // ponytail: moving a floating panel is the caller's (its header is no drag region yet).
 fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit, options: DockPanelOptions) -> (widget.Node, err) {
     let floating = options.floating
+    let focused = options.focused || widget.focus_within(t.runtime, key)
     var h = t.tokens.sizes.control_sm
     if floating { h = t.tokens.sizes.control_md }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     var ink = muted
-    if options.focused || floating { ink = style.color(t.tokens, .OnSurface) }
+    if focused || floating { ink = style.color(t.tokens, .OnSurface) }
     let (head, head_error) = mem.alloc[widget.Node](a, 6usize)
     if head_error != ok { ret (zero, TooLarge) }
     var used = 0usize
@@ -2116,12 +2117,13 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
     if parts_error != ok { ret (zero, TooLarge) }
     parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, head[0usize..used])
     parts[0usize] = parts[3usize]
-    if options.focused && !floating {
-        // The line lies over the header's top edge, inside its 32.
+    if !floating {
+        // Keep the line layer in the tree at rest so gaining focus does not
+        // replace the header subtree (and retire the focused child).
         var line = style.defaults()
         line.width = style.Length { Percent: 100.0 }
         line.height = style.Length { Px: 2.0 }
-        line.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        if focused { line.background = paint.Brush { Solid: style.color(t.tokens, .Primary) } }
         parts[4usize] = widget.positioned(0u64, 0.0, 0.0, line, zero)
         var header = style.defaults()
         header.width = style.Length { Percent: 100.0 }
@@ -2181,12 +2183,12 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, panel, parts[0usize..count])
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, panel, parts[0usize..count])
     var sem: widget.Semantics = zero
     sem.role = accessibility.ROLE_REGION
     sem.label = title
     if options.busy { sem.states = accessibility.STATE_BUSY }
-    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
 }
 
 // v2 (D967, docs/ux/components/DockPanel, stacked): several tools in one side
@@ -2423,6 +2425,19 @@ fn dock_fire(ctx: *void) -> err {
     ret widget.fire_change[DockEvent](f.change, f.event)
 }
 
+type DockFocus = struct { runtime: *widget.Runtime, backward: bool, centre: bool }
+
+fn dock_focus_fire(ctx: *void) -> err {
+    let f = mem.cast[*DockFocus](ctx)
+    var roles: [3]u8 = zero
+    roles[0usize] = accessibility.ROLE_MAIN
+    if !f.centre {
+        roles[1usize] = accessibility.ROLE_REGION
+        roles[2usize] = accessibility.ROLE_SEPARATOR
+    }
+    ret widget.focus_semantics(f.runtime, roles[..], f.backward)
+}
+
 type DockResize = struct { change: widget.Change[DockEvent] }
 
 fn dock_resize_fire(ctx: *void, sizes: DockSizes) -> err {
@@ -2585,9 +2600,15 @@ fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: Doc
 // tree.
 // ponytail: moving and tearing off are the caller's (a Move event through
 // dock_apply); no drag ghost, dock guide or drop preview, no double-click or
-// Ctrl+M, no F6.
+// Ctrl+M.
 fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: DockModel, placements: []const DockPlacement, contents: []const widget.Node, centre: widget.Node, change: widget.Change[DockEvent], width: f32, height: f32) -> (widget.Node, err) {
     if contents.len != placements.len { ret (zero, TooLarge) }
+    let (main_child, main_child_error) = mem.alloc[widget.Node](a, 1usize)
+    if main_child_error != ok { ret (zero, TooLarge) }
+    main_child[0usize] = centre
+    var main_sem: widget.Semantics = zero
+    main_sem.role = accessibility.ROLE_MAIN
+    let main = widget.semantics(key + 8u64, main_sem, style.defaults(), main_child[0usize..1usize])
     var handle: f32 = 8.0
     if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { handle = 24.0 }
     // The activity strip.
@@ -2632,7 +2653,7 @@ fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model
     if single_error != ok { ret (zero, TooLarge) }
     if model.maximised != 0u8 {
         // The maximised slot's panel, or the centre, alone.
-        single[0usize] = centre
+        single[0usize] = main
         full.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
         var chosen = placements.len
         if model.maximised == 1u8 { chosen = shown_left }
@@ -2655,7 +2676,7 @@ fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model
         if has_bottom { middle_height = max_f(height - model.sizes.bottom - handle, 0.0) }
         let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
         if centred_error != ok { ret (zero, TooLarge) }
-        centred[0usize] = centre
+        centred[0usize] = main
         var centre_style = style.defaults()
         centre_style.width = style.Length { Percent: 100.0 }
         centre_style.height = style.Length { Px: middle_height }
@@ -2773,9 +2794,23 @@ fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model
     if stacked_error != ok { ret (zero, TooLarge) }
     stacked[0usize] = layers[0usize]
     if layer_count > 1usize { stacked[0usize] = widget.stack(0u64, control.sized_style(width, height), layers[0usize..layer_count]) }
+    let (focuses, focuses_error) = mem.alloc[DockFocus](a, 3usize)
+    if focuses_error != ok { ret (zero, TooLarge) }
+    focuses[0usize] = DockFocus { runtime: t.runtime, backward: false, centre: false }
+    focuses[1usize] = DockFocus { runtime: t.runtime, backward: true, centre: false }
+    focuses[2usize] = DockFocus { runtime: t.runtime, backward: false, centre: true }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    shortcuts[0usize] = widget.Shortcut { key: 65475u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&focuses[0usize]), invoke: dock_focus_fire } }
+    var shifted: input.Modifiers = zero
+    shifted.shift = true
+    shortcuts[1usize] = widget.Shortcut { key: 65475u32, modifiers: shifted, action: widget.Submit { ctx: mem.cast[*void](&focuses[1usize]), invoke: dock_focus_fire } }
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..2usize], default_action: zero, cancel_action: widget.Submit { ctx: mem.cast[*void](&focuses[2usize]), invoke: dock_focus_fire }, keys: zero }, style.defaults(), stacked[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
-    ret (widget.semantics(key, sem, style.defaults(), stacked[0usize..1usize]), ok)
+    ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
 
 fn max_f(a: f32, b: f32) -> f32 {

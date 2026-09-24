@@ -3334,6 +3334,9 @@ fn window_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) -
         event.kind = .KeyDown
         if message == 257u32 || message == 261u32 { event.kind = .KeyUp }
         event.key = u32(wparam & 255usize)
+        // Match X11's non-character function-key range so F1-F12 cannot
+        // collide with lowercase Latin keysyms (VK_F6 is ASCII `u`).
+        if event.key >= 112u32 && event.key <= 123u32 { event.key = 65470u32 + event.key - 112u32 }
         event.repeat = ((mem.bitcast[usize](lparam) >> 30usize) & 1usize) != 0usize
         window_push(event)
         if message == 260u32 || message == 261u32 { ret raw_default_procedure(handle, message, wparam, lparam) }

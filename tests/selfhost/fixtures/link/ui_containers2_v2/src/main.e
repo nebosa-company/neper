@@ -200,9 +200,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A slider named for the pane, its value the size.
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(14i32) }
-    let (named, has_named) = find(tree, .Slider, "Resize Files")
+    let (named, has_named) = find(tree, .Separator, "Resize Files")
     if !has_named || !same(named.value, "100 px") { os.exit(15i32) }
-    let (builds, has_builds) = find(tree, .Slider, "Builds")
+    let (builds, has_builds) = find(tree, .Separator, "Builds")
     if !has_builds { os.exit(16i32) }
     // Hovered, the 4 x 48 grip shows in outline on the next frame.
     if testing.hover(&harness, sash.x + 4.0, mid) != ok { os.exit(17i32) }
