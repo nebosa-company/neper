@@ -21690,3 +21690,15 @@ automatic host test/commit workflow remain available only behind the explicit
 
 Focused Python tests hold the default tool surface, traversal rejection, review
 boundary, and opt-in compatibility path.
+
+## D1015 — IDNA labels enforce IDNA 2008 validity
+
+After the existing simple-lowercase mapping, U-labels must satisfy Unicode 15.0
+PVALID, every RFC 5892 CONTEXTJ and CONTEXTO condition, the RFC 5893 bidirectional
+rule, and the leading-combiner rule. Incoming `xn--` labels are decoded,
+validated, and re-encoded canonically so A-label form cannot bypass U-label
+checks. The mapping deliberately remains IDNA 2008 rather than UTS #46.
+
+The generated tables are reproducible from the pinned `idna` 3.4 reference, and
+`net_idna` holds valid and invalid context, bidi, PVALID, combiner, and A-label
+cases on Windows and Linux.

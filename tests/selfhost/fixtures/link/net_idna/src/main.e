@@ -1,8 +1,10 @@
 // `e.net.idna`: every RFC 3492 7.1 sample encodes to the RFC's Punycode and decodes back
 // (codes 1-19 encode, 101-119 decode), `to_ascii` agrees with the Python `idna` package
 // (uts46, non-transitional: ß stays ß) on the plan's domains and `to_unicode` reverses it,
-// the hyphen, length and buffer errors answer by name, and a bad digit is `Invalid`.
-// Expected values: scratchpad/net_idna/reference.py.
+// every RFC 5892 contextual rule has a positive and negative case, PVALID and RFC 5893
+// Bidi refusals cannot enter through either U-labels or A-labels, and the hyphen, length,
+// buffer and bad-digit errors answer by name. The Unicode 15.0 tables come from
+// reference.py beside this fixture.
 
 use e.io
 use e.mem
@@ -54,6 +56,12 @@ fn failing(input: []const u8, expected: err, code: i32) {
     var scratch: [512]u32 = zero
     let (n, ascii_error) = idna.to_ascii(input, out[..], scratch[..])
     if ascii_error != expected { os.exit(code) }
+}
+
+fn unicode_failing(input: []const u8, code: i32) {
+    var out: [256]u8 = zero
+    let (_, unicode_error) = idna.to_unicode(input, out[..])
+    if unicode_error != idna.Invalid { os.exit(code) }
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -113,6 +121,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 27: the ideographic full stop separates labels; 28: an A-label passes through.
     domain("\xe4\xbe\x8b\xe3\x81\x88\xe3\x80\x82\xe3\x83\x86\xe3\x82\xb9\xe3\x83\x88", "xn--r8jz45g.xn--zckzah", "\xe4\xbe\x8b\xe3\x81\x88.\xe3\x83\x86\xe3\x82\xb9\xe3\x83\x88", 27i32)
     domain("xn--bcher-kva.example", "xn--bcher-kva.example", "b\xc3\xbccher.example", 28i32)
+    domain("XN--BCHER-KVA.Example", "xn--bcher-kva.example", "b\xc3\xbccher.example", 29i32)
 
     // 40-44: the hyphen and length rules.
     failing("a..b", idna.Invalid, 40i32)
@@ -155,6 +164,42 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 53-54: the predicates.
     if !idna.is_ascii_label("abc-1") || idna.is_ascii_label("b\xc3\xbccher") { os.exit(53i32) }
     if !idna.label_valid("xn--bcher-kva") || idna.label_valid("ab--cd") || idna.label_valid("") || idna.label_valid("a_b") { os.exit(54i32) }
+
+    // 60-69: every RFC 5892 contextual rule, including both CONTEXTJ paths.
+    domain("l\xc2\xb7l", "xn--ll-0ea", "l\xc2\xb7l", 60i32)
+    domain("\xcd\xb5\xce\xb1", "xn--wva4j", "\xcd\xb5\xce\xb1", 61i32)
+    domain("\xd7\x90\xd7\xb3", "xn--4db4e", "\xd7\x90\xd7\xb3", 62i32)
+    domain("\xe3\x82\xab\xe3\x83\xbb\xe3\x83\x8a", "xn--lck2c6g", "\xe3\x82\xab\xe3\x83\xbb\xe3\x83\x8a", 63i32)
+    domain("\xd8\xa7\xd9\xa1\xd9\xa2", "xn--mgb0jd", "\xd8\xa7\xd9\xa1\xd9\xa2", 64i32)
+    domain("\xd8\xa7\xdb\xb1\xdb\xb2", "xn--mgb81bd", "\xd8\xa7\xdb\xb1\xdb\xb2", 65i32)
+    domain("\xe0\xa4\x95\xe0\xa5\x8d\xe2\x80\x8d", "xn--11b6iy14e", "\xe0\xa4\x95\xe0\xa5\x8d\xe2\x80\x8d", 66i32)
+    domain("\xe0\xa4\x95\xe0\xa5\x8d\xe2\x80\x8c", "xn--11b6iv14e", "\xe0\xa4\x95\xe0\xa5\x8d\xe2\x80\x8c", 67i32)
+    domain("\xd9\x86\xe2\x80\x8c\xd9\x86", "xn--ihba709q", "\xd9\x86\xe2\x80\x8c\xd9\x86", 68i32)
+    domain("\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9", "xn--mgbcd4a2b0d2b", "\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9", 69i32)
+
+    // 80-92: bad contexts, disallowed/unassigned scalars and RFC 5893 failures.
+    failing("a\xc2\xb7b", idna.Invalid, 80i32)
+    failing("\xcd\xb5a", idna.Invalid, 81i32)
+    failing("a\xd7\xb3", idna.Invalid, 82i32)
+    failing("a\xe3\x83\xbbb", idna.Invalid, 83i32)
+    failing("\xd9\xa1\xdb\xb2", idna.Invalid, 84i32)
+    failing("a\xe2\x80\x8cb", idna.Invalid, 85i32)
+    failing("a\xe2\x80\x8db", idna.Invalid, 98i32)
+    failing("abc\xf0\x9f\x98\x80", idna.Invalid, 86i32)
+    failing("\xef\xac\x81", idna.Invalid, 87i32)
+    failing("\xcc\x81a", idna.Invalid, 88i32)
+    failing("\xd9\x80", idna.Invalid, 89i32)
+    failing("\xd8\xa7a", idna.Invalid, 90i32)
+    failing("\xd8\xa71\xd9\xa1", idna.Invalid, 91i32)
+    failing("\xcd\xb8", idna.Invalid, 92i32)
+
+    // A-labels cannot bypass U-label validity checks on decode or pass-through.
+    unicode_failing("xn--abc-th33b", 93i32)
+    unicode_failing("xn--ab-0ea", 94i32)
+    unicode_failing("xn--a-ymc", 95i32)
+    unicode_failing("xn--jm6c", 96i32)
+    failing("xn--abc-th33b", idna.Invalid, 97i32)
+    unicode_failing("xn--ab-m1t", 99i32)
 
     try io.print("net idna ok\n")
     ret ok
