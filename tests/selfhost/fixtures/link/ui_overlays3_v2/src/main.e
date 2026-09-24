@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, Side, Bottom, Actions }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, Side, Bottom, Actions }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -67,7 +67,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (inside, e1) = control.text(a, 0u64, "Inside", t, control.text_options())
     var alert: widget.Node = zero
     var e2: err = ok
-    if which == .DialogBusy {
+    if which == .DialogIcon {
+        let (made_dialog, made_dialog_error) = overlay.dialog_with_icon(a, 100u64, t, "Delete build?", inside, s.buttons[0usize..3usize], .Warning, true, true, false)
+        alert = made_dialog
+        e2 = made_dialog_error
+    } else if which == .DialogBusy {
         let (made_dialog, made_dialog_error) = overlay.dialog_state(a, 100u64, t, "Delete build?", inside, s.buttons[0usize..3usize], true, false, true)
         alert = made_dialog
         e2 = made_dialog_error
@@ -220,6 +224,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dismiss_tree_error != ok { os.exit(49i32) }
     let (_, has_dismiss_dialog) = find(dismiss_tree, .Dialog, "Delete build?")
     if !has_dismiss_dialog || testing.press_key(&harness, 27u32, zero) != ok || testing.tap(&harness, 5.0, 5.0) != ok || s.counters[0usize].count != dismiss_before + 2usize { os.exit(50i32) }
+    // The optional 24 icon sits in a centred 40 error well above the centred
+    // level-2 title, adding one 40 block and a 16 gap.
+    let (root_icon, build_icon_error) = build(&f, &theme, s, .DialogIcon)
+    if build_icon_error != ok || testing.pump(&harness, root_icon, time.Instant { nanos: 1090000000i64 }) != ok { os.exit(51i32) }
+    let (icon_shot, icon_shot_error) = testing.snapshot(&harness, a)
+    if icon_shot_error != ok { os.exit(52i32) }
+    let (icon_card, has_icon_card) = lifted(&harness, 100u64)
+    if !has_icon_card || !near(icon_card.height, 160.0) || !is_color(icon_shot, at(icon_card.x + icon_card.width * 0.5 + 15.0, icon_card.y + 44.0), style.color(&tokens, .ErrorContainer)) { os.exit(53i32) }
+    let (icon_tree, icon_tree_error) = testing.semantics(&harness)
+    if icon_tree_error != ok { os.exit(54i32) }
+    let (icon_heading, has_icon_heading) = find(icon_tree, .Heading, "Delete build?")
+    if !has_icon_heading || icon_heading.level != 2u8 { os.exit(55i32) }
     // The side sheet: 300 wide along the right edge, the window's height,
     // `surface-container-low`, its open edge's corners rounded; a 48 header
     // with a 32 Close 8 from the end that dismisses.

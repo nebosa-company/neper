@@ -727,30 +727,35 @@ fn with_scrim(a: *mem.Arena, t: *const control.Theme, top: widget.Node) -> (widg
 // heading), 16 above the content, 8 above the actions at the end 8 apart -- the
 // default a filled button, a destructive one filled in `error`, the others text
 // buttons, all at the control height.
-// ponytail: no icon well, scroll dividers, full-screen form or host button order.
+// ponytail: no scroll dividers, full-screen form or host button order.
 fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool) -> (widget.Node, err) {
     let (made, made_error) = dialog_as(a, key, t, title, content, buttons, open, described, 23u8)
     ret (made, made_error)
 }
 
 fn dialog_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, busy: bool) -> (widget.Node, err) {
-    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy, zero)
+    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy, zero, false, .Info, false)
+    ret (made, made_error)
+}
+
+fn dialog_with_icon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, icon: control.GlyphKind, destructive: bool, open: bool, described: bool) -> (widget.Node, err) {
+    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, false, zero, true, icon, destructive)
     ret (made, made_error)
 }
 
 // A basic dialog with an explicit fallback used by Escape and its scrim when
 // the button list has no Cancel action.
 fn dialog_dismissable(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, busy: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy, *dismiss)
+    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy, *dismiss, false, .Info, false)
     ret (made, made_error)
 }
 
 fn dialog_as(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8) -> (widget.Node, err) {
-    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, semantic_role, false, zero)
+    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, semantic_role, false, zero, false, .Info, false)
     ret (made, made_error)
 }
 
-fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit) -> (widget.Node, err) {
+fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit, has_icon: bool, icon: control.GlyphKind, destructive_icon: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var submit: widget.Submit = zero
     var cancel: widget.Submit = zero
@@ -788,6 +793,7 @@ fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
     if parts_error != ok { ret (zero, TooLarge) }
     var heading = control.text_options()
     heading.role = .HeadlineSmall
+    if has_icon { heading.align = .Center }
     let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, .OnSurface))
     if title_error != ok { ret (zero, title_error) }
     let (titled, titled_error) = mem.alloc[widget.Node](a, 1usize)
@@ -798,6 +804,30 @@ fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
     title_sem.label = title
     title_sem.level = 2u8
     parts[0usize] = widget.semantics(0u64, title_sem, style.defaults(), titled[0usize..1usize])
+    if has_icon {
+        var well_fill: style.ColorRole = .SecondaryContainer
+        var well_ink: style.ColorRole = .OnSecondaryContainer
+        if destructive_icon {
+            well_fill = .ErrorContainer
+            well_ink = .OnErrorContainer
+        }
+        let (mark, mark_error) = control.icon_square(a, style.color(t.tokens, well_ink), icon, 24.0)
+        if mark_error != ok { ret (zero, mark_error) }
+        let (mark_body, mark_body_error) = mem.alloc[widget.Node](a, 1usize)
+        if mark_body_error != ok { ret (zero, TooLarge) }
+        mark_body[0usize] = mark
+        var well = control.sized_style(40.0, 40.0)
+        well.radius = 20.0
+        well.background = paint.Brush { Solid: style.color(t.tokens, well_fill) }
+        let icon_well = widget.aligned(0u64, .Center, .Center, well, mark_body[0usize..1usize])
+        let (header, header_error) = mem.alloc[widget.Node](a, 2usize)
+        if header_error != ok { ret (zero, TooLarge) }
+        header[0usize] = icon_well
+        header[1usize] = parts[0usize]
+        var header_style = style.defaults()
+        header_style.width = style.Length { Percent: 100.0 }
+        parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 16.0 }, header_style, header[0usize..2usize])
+    }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = content

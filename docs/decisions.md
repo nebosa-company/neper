@@ -21974,3 +21974,13 @@ and the scrim without inventing a button or guessing which action means close.
 
 `ui_overlays3_v2` holds alert Escape, inert alert scrims and both explicit basic
 dismissal paths on Windows and Linux.
+
+## D1038 — Dialog icons use one centred consequence well
+
+`overlay.dialog_with_icon` adds the optional 24px glyph in a centred 40px round
+well above the title. Ordinary consequences use secondary-container colours;
+destructive ones use error-container colours. The level-2 title is centred only
+for this form, while the existing body and actions remain unchanged.
+
+`ui_overlays3_v2` holds the added 56px icon block, error-well pixel and heading
+semantics on Windows and Linux. `dialog-icon.png` is the Segoe UI visual check.
