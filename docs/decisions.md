@@ -22109,3 +22109,14 @@ state or viewport abstraction is introduced.
 
 `ui_overlays3_v2` holds both divider pixels around separated content on Windows
 and Linux. `dialog-scroll-dividers.png` is the Segoe UI visual check.
+
+## D1051 — Standard side sheets live in page layout
+
+`overlay.standard_sheet` reuses the sheet header and bounded width, then returns
+a square `surface-container-low` Region with one `outline-variant` divider on its
+inner edge. It has no overlay, scrim, elevation or focus trap: the caller places
+it beside a flexible page so the page narrows naturally.
+
+`ui_overlays3_v2` holds the 300px dock, page width, edge pixels, Region semantics
+and Close callback on Windows and Linux. `standard-side-sheet.png` is the Segoe
+UI visual check.
