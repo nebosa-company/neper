@@ -21908,3 +21908,15 @@ implementation.
 its modal Dialog semantics, and the unchanged floating touch form on Windows
 and Linux. `flyout-compact-sheet.png` is the Segoe UI visual check. D976 now has
 only popover work open.
+
+## D1032 — Popover beaks stay centred on their anchors
+
+`overlay.popover_of` derives its beak position from the last reconciled anchor
+bounds. Vertical placements reuse `widget.overlay_rect` at the fixed 320px
+surface width, shift the surface only when needed to keep the beak at least 16px
+from a corner, then recompute the inset after viewport clamping. Side placements
+apply the same anchor-centre offset on their cross axis.
+
+`ui_overlays2_v2` holds below and side placement pixels on Windows and Linux.
+`popover-centered-beak-final.png` is the Segoe UI visual check. The remaining
+popover work is its busy state, dirty-task guard and compact sheet.

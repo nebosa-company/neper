@@ -344,9 +344,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if shot_4_error != ok { os.exit(28i32) }
     let (anchor, has_anchor) = bounds(&harness, &runtime, 3u64)
     let (pop, has_pop) = lifted(&harness, 30u64)
-    if !has_anchor || !has_pop || !near(pop.x, anchor.x + anchor.width + 4.0) || !near(pop.width, 326.0) { os.exit(29i32) }
+    if !has_anchor || !has_pop { os.exit(29i32) }
+    if !near(pop.x, anchor.x + anchor.width + 4.0) || !near(pop.width, 326.0) { os.exit(67i32) }
     let high = style.color(&tokens, .SurfaceContainerHigh)
-    if !is_color(shot_4, at(pop.x + 166.0, pop.y + 8.0), high) || !is_color(shot_4, at(pop.x + 4.0, pop.y + 22.0), high) || !is_color(shot_4, at(pop.x + 3.0, pop.y + 8.0), style.color(&tokens, .Background)) { os.exit(30i32) }
+    if !is_color(shot_4, at(pop.x + 166.0, pop.y + 8.0), high) || !is_color(shot_4, at(pop.x + 4.0, anchor.y + anchor.height * 0.5), high) || !is_color(shot_4, at(pop.x + 3.0, pop.y + 8.0), style.color(&tokens, .Background)) { os.exit(30i32) }
     // Its title names the dialog as a level-2 heading; Close is 32 across and
     // dismisses; Rerun, the tonal main action, stands last and runs.
     let (tree_4, tree_4_error) = testing.semantics(&harness)
@@ -368,8 +369,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (shot_5, shot_5_error) = testing.snapshot(&harness, a)
     if shot_5_error != ok { os.exit(38i32) }
     let (under, has_under) = lifted(&harness, 30u64)
-    if !has_under || !near(under.y, search.y + search.height + 4.0) || !near(under.width, 320.0) { os.exit(39i32) }
-    if !is_color(shot_5, at(under.x + 22.0, under.y + 4.0), high) || !is_color(shot_5, at(under.x + 8.0, under.y + 3.0), style.color(&tokens, .Background)) { os.exit(40i32) }
+    let (below_anchor, has_below_anchor) = bounds(&harness, &runtime, 1u64)
+    if !has_under || !has_below_anchor || !near(under.y, below_anchor.y + below_anchor.height + 4.0) || !near(under.width, 320.0) { os.exit(39i32) }
+    var first_beak = 0usize
+    var last_beak = 0usize
+    var beak_pixels = 0usize
+    var beak_x = usize(under.x)
+    while beak_x < usize(under.x + under.width) {
+        if is_color(shot_5, at(f32(beak_x), under.y + 5.0), high) {
+            if beak_pixels == 0usize { first_beak = beak_x }
+            last_beak = beak_x
+            beak_pixels += 1usize
+        }
+        beak_x += 1usize
+    }
+    let beak_delta = f32(first_beak + last_beak) * 0.5 - (below_anchor.x + below_anchor.width * 0.5)
+    if beak_pixels == 0usize || beak_delta < -1.1 || beak_delta > 1.1 { os.exit(40i32) }
+    if !is_color(shot_5, at(under.x + 8.0, under.y + 3.0), style.color(&tokens, .Background)) { os.exit(68i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok

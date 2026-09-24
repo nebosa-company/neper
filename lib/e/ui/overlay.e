@@ -1149,6 +1149,11 @@ fn dismissable(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement: wi
 
 // The same labelled by the element keyed `by` (0 for none, D976).
 fn dismissable_by(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement: widget.Placement, label: str, surface: widget.Node, dismiss: *const widget.Submit, gap: f32, by: widget.Key) -> (widget.Node, err) {
+    let (made, made_error) = dismissable_by_offset(a, key, anchor, placement, label, surface, dismiss, gap_offset(placement, gap), by)
+    ret (made, made_error)
+}
+
+fn dismissable_by_offset(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement: widget.Placement, label: str, surface: widget.Node, dismiss: *const widget.Submit, offset: geometry.Point, by: widget.Key) -> (widget.Node, err) {
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = surface
@@ -1164,7 +1169,7 @@ fn dismissable_by(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement:
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: gap_offset(placement, gap), modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
 }
 
 // A standard flyout anchor: filled while closed, selected tonal while open, and
@@ -1226,10 +1231,10 @@ fn popover(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 // pointer, in `on-surface-variant`) -- then the content, then up to two actions
 // at the end 8 apart (keyed `key + 3 + index`): the first, the main one, tonal
 // and last, the other a text button before it. A 12 wide, 6 deep beak in the
-// container's colour stands on the near edge, 16 in from the corner, its tip 4
-// from the anchor (the container 10); a modal dialog in the tree.
-// ponytail: the beak sits 16 from the near corner, on the anchor's centre only
-// for an anchor about 44 across; no busy state, dirty-task guard or compact sheet.
+// container's colour stands on the near edge, centred on the anchor but at least
+// 16 in from a corner, its tip 4 from the anchor (the container 10); a modal
+// dialog in the tree.
+// ponytail: no busy state, dirty-task guard or compact sheet.
 fn popover_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if actions.len > 2usize { ret (zero, TooLarge) }
@@ -1296,11 +1301,31 @@ fn popover_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     if placement == .Above || placement == .AboveCenter { pointing = .ChevronDown }
     let (tip, tip_error) = control.beak(a, fill, pointing, control.if_else(across, 6.0, 12.0), control.if_else(across, 12.0, 6.0))
     if tip_error != ok { ret (zero, tip_error) }
+    var inset: f32 = 16.0
+    var offset = gap_offset(placement, 4.0)
+    if mem.address_of(t.runtime) != 0usize {
+        let (anchor_bounds, has_anchor) = widget.bounds_for_key(t.runtime, anchor)
+        if has_anchor {
+            if across {
+                offset.y = anchor_bounds.height * 0.5 - 22.0
+            } else {
+                let surface = widget.surface_size(t.runtime)
+                let first_placed = widget.overlay_rect(anchor_bounds, geometry.Size { width: 320.0, height: 0.0 }, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, surface)
+                let wanted = anchor_bounds.x + anchor_bounds.width * 0.5 - first_placed.x - 6.0
+                if wanted < 16.0 { offset.x += wanted - 16.0 }
+                if wanted > 292.0 { offset.x += wanted - 292.0 }
+                let placed = widget.overlay_rect(anchor_bounds, geometry.Size { width: 320.0, height: 0.0 }, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, surface)
+                inset = anchor_bounds.x + anchor_bounds.width * 0.5 - placed.x - 6.0
+                if inset < 16.0 { inset = 16.0 }
+                if inset > 292.0 { inset = 292.0 }
+            }
+        }
+    }
     let (tips, tips_error) = mem.alloc[widget.Node](a, 1usize)
     if tips_error != ok { ret (zero, TooLarge) }
     tips[0usize] = tip
-    var tip_node = widget.padded(0u64, 16.0, 0.0, 0.0, 0.0, style.defaults(), tips[0usize..1usize])
-    if across { tip_node = widget.padded(0u64, 0.0, 16.0, 0.0, 0.0, style.defaults(), tips[0usize..1usize]) }
+    var tip_node = widget.padded(0u64, inset, 0.0, 0.0, 0.0, style.defaults(), tips[0usize..1usize])
+    if across { tip_node = widget.padded(0u64, 0.0, inset, 0.0, 0.0, style.defaults(), tips[0usize..1usize]) }
     let box_node = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 12.0 }, plate, parts[0usize..n])
     // The beak comes first on the anchor's side: before the card below or to the
     // right of the anchor, after it above or to the left.
@@ -1313,7 +1338,7 @@ fn popover_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
         card[1usize] = tip_node
     }
     let joined = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), card[0usize..2usize])
-    let (made, made_error) = dismissable_by(a, key, anchor, placement, title, joined, dismiss, 4.0, key + 1u64)
+    let (made, made_error) = dismissable_by_offset(a, key, anchor, placement, title, joined, dismiss, offset, key + 1u64)
     ret (made, made_error)
 }
 
