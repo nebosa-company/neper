@@ -1840,8 +1840,7 @@ fn sheet_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 // and 8 below; the actions `sheet_row`s in `on-surface`, a destructive one in
 // `error` after a 1px `outline-variant` divider with 8 around; Cancel last after
 // another divider. Escape, the scrim and Cancel fire `dismiss`.
-// ponytail: Cancel stays a row (the grouped form's) where the Android form has
-// none; no leading icons, grouped iOS cards or pointer-host menu form, and
+// ponytail: no leading icons, grouped iOS cards or pointer-host menu form, and
 // no host locale service -- callers provide translated copy when needed.
 fn action_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     let (made, made_error) = action_sheet_localized(a, key, t, title, buttons, "Cancel", open, dismiss)
@@ -1849,6 +1848,16 @@ fn action_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
 }
 
 fn action_sheet_localized(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, cancel_label: str, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = action_sheet_form(a, key, t, title, buttons, cancel_label, true, open, dismiss)
+    ret (made, made_error)
+}
+
+fn action_sheet_android(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = action_sheet_form(a, key, t, title, buttons, "", false, open, dismiss)
+    ret (made, made_error)
+}
+
+fn action_sheet_form(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, cancel_label: str, has_cancel: bool, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * buttons.len + 5usize)
     if rows_error != ok { ret (zero, TooLarge) }
@@ -1869,7 +1878,9 @@ fn action_sheet_localized(a: *mem.Arena, key: widget.Key, t: *const control.Them
         n += 1usize
     }
     var i = 0usize
-    while i <= buttons.len {
+    var count = buttons.len
+    if has_cancel { count += 1usize }
+    while i < count {
         let cancelling = i == buttons.len
         var ink = style.color(t.tokens, .OnSurface)
         if !cancelling && buttons[i].kind == .Destructive { ink = style.color(t.tokens, .Error) }

@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -114,7 +114,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (bottom, e4) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
     var actions: widget.Node = zero
     var e5: err = ok
-    if which == .ActionsLocalized {
+    if which == .ActionsAndroid {
+        let (made_actions, made_actions_error) = overlay.action_sheet_android(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], true, &s.subs[3usize])
+        actions = made_actions
+        e5 = made_actions_error
+    } else if which == .ActionsLocalized {
         let (made_actions, made_actions_error) = overlay.action_sheet_localized(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], "Dismiss", true, &s.subs[3usize])
         actions = made_actions
         e5 = made_actions_error
@@ -389,6 +393,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if localized_tree_error != ok { os.exit(82i32) }
     let (_, has_dismiss_label) = find(localized_tree, .Button, "Dismiss")
     if !has_dismiss_label || !tap_key(&harness, &runtime, 406u64) || s.counters[3usize].count != localized_dismiss_before + 1usize { os.exit(83i32) }
+    // Android leaves dismissal to the scrim, Escape/system back and gestures,
+    // so the visible Cancel row and its divider are absent.
+    let android_dismiss_before = s.counters[3usize].count
+    let (root_android, build_android_error) = build(&f, &theme, s, .ActionsAndroid)
+    if build_android_error != ok || testing.pump(&harness, root_android, time.Instant { nanos: 1380000000i64 }) != ok { os.exit(84i32) }
+    let (android_sheet, has_android_sheet) = lifted(&harness, 400u64)
+    let (android_tree, android_tree_error) = testing.semantics(&harness)
+    if android_tree_error != ok { os.exit(85i32) }
+    let (_, has_android_cancel) = find(android_tree, .Button, "Cancel")
+    if !has_android_sheet || !near(android_sheet.height, 217.0) || has_android_cancel || testing.by_key(&harness, 406u64).count != 0usize || testing.press_key(&harness, 27u32, zero) != ok || s.counters[3usize].count != android_dismiss_before + 1usize { os.exit(86i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(42i32) }
     try io.print("ui overlays3 v2 ok\n")
     ret ok

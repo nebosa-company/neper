@@ -22045,3 +22045,13 @@ dismissal unchanged.
 
 `ui_overlays3_v2` holds the supplied Button name and its dismissal callback on
 Windows and Linux.
+
+## D1045 — Android action sheets omit visible Cancel
+
+`overlay.action_sheet_android` reuses the sheet-of-rows builder without adding
+the grouped form's Cancel row or divider. The modal scope still maps Escape (and
+therefore a host system-back bridge) plus the scrim to the dismissal callback.
+
+`ui_overlays3_v2` holds the 217px content height, absent Cancel semantics and
+Escape dismissal on Windows and Linux. `action-sheet-android.png` is the Segoe
+UI visual check.
