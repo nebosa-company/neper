@@ -361,15 +361,17 @@ fn contexto_ok(points: []const u32, pos: usize) -> bool {
     ret false
 }
 
-fn bidi_ok(points: []const u32) -> bool {
-    var needs_rule = false
+fn has_rtl(points: []const u32) -> bool {
     var j = 0usize
     while j < points.len {
         let direction = bidi.class_of(points[j])
-        if direction == .R || direction == .AL || direction == .AN { needs_rule = true }
+        if direction == .R || direction == .AL || direction == .AN { ret true }
         j += 1usize
     }
-    if !needs_rule { ret true }
+    ret false
+}
+
+fn bidi_rule_ok(points: []const u32) -> bool {
     let first = bidi.class_of(points[0usize])
     var rtl = false
     if first == .R || first == .AL {
@@ -380,7 +382,7 @@ fn bidi_ok(points: []const u32) -> bool {
     var ending = false
     var has_en = false
     var has_an = false
-    j = 0usize
+    var j = 0usize
     while j < points.len {
         let direction = bidi.class_of(points[j])
         if rtl {
@@ -403,6 +405,10 @@ fn bidi_ok(points: []const u32) -> bool {
         j += 1usize
     }
     ret ending && !(has_en && has_an)
+}
+
+fn bidi_ok(points: []const u32) -> bool {
+    ret !has_rtl(points) || bidi_rule_ok(points)
 }
 
 fn u_label_valid(points: []const u32) -> bool {
@@ -448,7 +454,7 @@ fn decode_a_label(label: str, points: []u32) -> (usize, err) {
         if points[j] >= 128u32 { has_non_ascii = true }
         j += 1usize
     }
-    if !has_non_ascii || !points_are_nfc(points[..count]) || !u_label_valid(points[..count]) { ret (0usize, Invalid) }
+    if !has_non_ascii || !hyphens_ok(points[..count]) || !points_are_nfc(points[..count]) || !u_label_valid(points[..count]) { ret (0usize, Invalid) }
     var canonical: [64]u8 = zero
     let (encoded, encode_error) = punycode_encode(points[..count], canonical[..])
     if encode_error != ok || encoded != label.len - 4usize { ret (0usize, Invalid) }
@@ -458,6 +464,45 @@ fn decode_a_label(label: str, points: []u32) -> (usize, err) {
         j += 1usize
     }
     ret (count, ok)
+}
+
+// RFC 5893 applies its rule to every label when any label in the domain is RTL.
+// Work on the ASCII form so both conversion directions share the same decision.
+fn domain_bidi_ok(domain: str) -> bool {
+    var points: [64]u32 = zero
+    var lowered: [64]u8 = zero
+    var any_rtl = false
+    var every_label_ok = true
+    var start = 0usize
+    var off = 0usize
+    var more = true
+    while more {
+        if off >= domain.len || domain[off] == 46u8 {
+            let label = domain[start..off]
+            if !label_valid(label) { ret false }
+            var count = label.len
+            var j = 0usize
+            while j < label.len {
+                var c = label[j]
+                if c >= 65u8 && c <= 90u8 { c += 32u8 }
+                lowered[j] = c
+                points[j] = u32(c)
+                j += 1usize
+            }
+            if has_xn_prefix(lowered[..label.len]) {
+                let (decoded, decode_error) = decode_a_label(lowered[..label.len], points[..])
+                if decode_error != ok { ret false }
+                count = decoded
+            }
+            let label_points = points[..count]
+            if has_rtl(label_points) { any_rtl = true }
+            if !bidi_rule_ok(label_points) { every_label_ok = false }
+            if off >= domain.len { more = false }
+            start = off + 1usize
+        }
+        off += 1usize
+    }
+    ret !any_rtl || every_label_ok
 }
 
 // One label of `to_ascii`, written at the start of `out`; answers how many bytes.
@@ -546,6 +591,7 @@ fn to_ascii(domain: str, out: []u8, scratch: []u32) -> (usize, err) {
             off += width
         }
     }
+    if !domain_bidi_ok(out[..used]) { ret (0usize, Invalid) }
     ret (used, ok)
 }
 
@@ -553,6 +599,7 @@ fn to_ascii(domain: str, out: []u8, scratch: []u32) -> (usize, err) {
 // bytes. Labels split on `.`; an `xn--` label is Punycode-decoded, any other label is
 // copied with ASCII letters lowercased. `Invalid` for a bad label or Punycode.
 fn to_unicode(domain: str, out: []u8) -> (usize, err) {
+    if !domain_bidi_ok(domain) { ret (0usize, Invalid) }
     var points: [64]u32 = zero
     var lowered: [64]u8 = zero
     var used = 0usize

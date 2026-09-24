@@ -4237,9 +4237,15 @@ for hot_mode in --release --time; do
     [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     cmp -s "$test_build/cycle$hot_mode" "$test_build/cycle-clean$hot_mode"
     python3 "$repo/scripts/check_incremental.py" "$cycle_manifest" 'main=kept:edges-hold' 'ring=rebuilt:invalid-artifact'
-    python3 -c "import json,re,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if all(re.fullmatch('[0-9a-f]{8}', e.get('artifact_crc32c','')) for e in d['incremental']) else 1)" "$cycle_manifest"
+    python3 -c "import json,re,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if all(re.fullmatch('[0-9a-f]{8}', e.get('artifact_crc32c','')) and re.fullmatch('[0-9a-f]{64}', e.get('artifact_sha256','')) for e in d['incremental']) else 1)" "$cycle_manifest"
     [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     python3 "$repo/scripts/check_incremental.py" "$cycle_manifest" 'main=kept:stable' 'ring=kept:stable'
+    # Changed machine code plus a compensating padding edit preserves CRC32C but not
+    # the authenticated SHA-256 identity, so it must be rebuilt.
+    python3 "$repo/benchmarks/fuzz/corrupt.py" crc-preserve "$cycle_main"
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    cmp -s "$test_build/cycle$hot_mode" "$test_build/cycle-clean$hot_mode"
+    python3 "$repo/scripts/check_incremental.py" "$cycle_manifest" 'main=rebuilt:invalid-artifact' 'ring=kept:stable'
     # Keyed cache authenticity (H24): rewriting both artifact and manifest cannot forge the tag.
     python3 "$repo/benchmarks/fuzz/corrupt.py" cycle "$cycle_ring" e.os e.io
     python3 "$repo/benchmarks/fuzz/corrupt.py" manifest "$cycle_manifest" "$cycle_ring" ring

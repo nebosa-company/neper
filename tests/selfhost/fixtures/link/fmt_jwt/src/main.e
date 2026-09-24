@@ -127,6 +127,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if jwt.claims_check("{\"exp\":1700000600,\"exp\":0}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(5i32) }
     let (_, duplicate_alg) = jwt.algorithm("{\"alg\":\"HS256\",\"alg\":\"none\"}")
     if duplicate_alg != jwt.Malformed { os.exit(5i32) }
+    // Unused/custom claims are still one unambiguous JSON object.
+    if jwt.claims_check("{\"sub\":\"alice\",\"sub\":\"admin\"}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
+    if jwt.claims_check("{}trailing", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
+    if jwt.claims_check("{\"exp\":2000}{}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
+    if jwt.claims_check("{\"custom\":garbage}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
+    if jwt.claims_check("{\"custom\":01}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
+    if jwt.claims_check("{\"custom\":\"\\q\"}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
+    if jwt.claims_check("{\"custom\":\"\\ud800\"}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
+    if jwt.claims_check("{\"custom\":\"\xff\"}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
+    if jwt.claims_check("\x0b{}", 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
+    if jwt.claims_check("{\"custom\":{\"list\":[true,false,null,1.5e+2,\"\\ud83d\\ude00\"]}} \n", 1i64, "", "", 0i64) != ok { os.exit(7i32) }
+    let (_, duplicate_custom) = jwt.algorithm("{\"alg\":\"HS256\",\"kid\":\"one\",\"kid\":\"two\"}")
+    if duplicate_custom != jwt.Malformed { os.exit(7i32) }
+    var many_claims: [1033]u8 = zero
+    many_claims[0] = 123u8
+    var claim_at = 0usize
+    while claim_at < 129usize {
+        let at = 1usize + claim_at * 8usize
+        many_claims[at] = 34u8
+        many_claims[at + 1usize] = 48u8 + u8(claim_at / 100usize)
+        many_claims[at + 2usize] = 48u8 + u8((claim_at / 10usize) % 10usize)
+        many_claims[at + 3usize] = 48u8 + u8(claim_at % 10usize)
+        many_claims[at + 4usize] = 34u8
+        many_claims[at + 5usize] = 58u8
+        many_claims[at + 6usize] = 48u8
+        many_claims[at + 7usize] = 44u8
+        claim_at += 1usize
+    }
+    many_claims[1024] = 125u8
+    if jwt.claims_check(many_claims[..1025usize], 1i64, "", "", 0i64) != ok { os.exit(7i32) }
+    many_claims[1024] = 44u8
+    many_claims[1032] = 125u8
+    if jwt.claims_check(many_claims[..], 1i64, "", "", 0i64) != jwt.Malformed { os.exit(7i32) }
 
     // 6: signing reproduces PyJWT byte for byte.
     let (n256, sign_error) = jwt.sign_hs256(hs_header(.HS256), payload_text(), hs_key(), buffer[0..])

@@ -616,7 +616,10 @@ fn constraints_allow(issuer: Certificate, descendants: []const Certificate) -> b
             let name = certificate.dns_names[name_index]
             var excluded_index = 0usize
             while excluded_index < issuer.excluded_dns.len {
-                if dns_within_constraint(name, issuer.excluded_dns[excluded_index]) { ret false }
+                let excluded = issuer.excluded_dns[excluded_index]
+                // A wildcard SAN denotes every matching host. Its literal spelling
+                // can be outside a forbidden subtree while one matching host is its base.
+                if dns_within_constraint(name, excluded) || dns_match(name, excluded) { ret false }
                 excluded_index += 1usize
             }
             if issuer.permitted_dns.len > 0usize {

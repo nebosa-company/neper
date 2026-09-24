@@ -4,8 +4,9 @@
 // seeds; signing derives the scalar and prefix from SHA-512 of the seed. Verification
 // rejects a non-canonical point or scalar encoding and a public key of small order.
 //
-// ponytail: scalar multiplication is double-and-add and varies with the scalar; the
-// field core is duplicated from kx.e because a fence admits no shared private helper.
+// Scalar multiplication always doubles and adds, then selects by an arithmetic mask;
+// scalar reduction similarly uses a fixed subtract-and-select schedule. The field core
+// is duplicated from kx.e because a fence admits no shared private helper.
 use e.crypto.hash as hash
 use e.crypto.mac as mac
 use e.algo.bignum as bignum
@@ -304,13 +305,34 @@ fn pt_add(p: Pt, q: Pt) -> Pt {
     ret r
 }
 
+fn fe_select(a: Fe, b: Fe, choose_b: u8) -> Fe {
+    let mask = 0i64 -% i64(choose_b)
+    var out: Fe = zero
+    var i = 0usize
+    while i < 10usize {
+        out.v[i] = (a.v[i] & ~mask) | (b.v[i] & mask)
+        i += 1usize
+    }
+    ret out
+}
+
+fn pt_select(a: Pt, b: Pt, choose_b: u8) -> Pt {
+    ret Pt {
+        x: fe_select(a.x, b.x, choose_b),
+        y: fe_select(a.y, b.y, choose_b),
+        z: fe_select(a.z, b.z, choose_b),
+        t: fe_select(a.t, b.t, choose_b) }
+}
+
 fn pt_mul(scalar: [32]u8, p: Pt) -> Pt {
     var r = pt_identity()
     var i = 256usize
     while i > 0usize {
         i -= 1usize
-        r = pt_add(r, r)
-        if (scalar[i / 8usize] >> u8(i % 8usize)) & 1u8 == 1u8 { r = pt_add(r, p) }
+        let doubled = pt_add(r, r)
+        let added = pt_add(doubled, p)
+        let bit = (scalar[i / 8usize] >> u8(i % 8usize)) & 1u8
+        r = pt_select(doubled, added, bit)
     }
     ret r
 }
@@ -324,7 +346,8 @@ fn pt_encode(p: Pt) -> [32]u8 {
     let x = fe_mul(p.x, inv)
     let y = fe_mul(p.y, inv)
     var out = fe_to_bytes(y)
-    if fe_is_negative(x) { out[31] = out[31] | 128u8 }
+    let x_bytes = fe_to_bytes(x)
+    out[31] = out[31] | ((x_bytes[0] & 1u8) << 7u8)
     ret out
 }
 
@@ -403,24 +426,28 @@ fn sc_geq_l(r: [9]u32) -> bool {
     ret true
 }
 
-fn sc_sub_l(r_in: [9]u32) -> [9]u32 {
-    var r = r_in
+// `r` is below 2L. Subtract L and select the reduced value without branching on r.
+fn sc_reduce_once(r_in: [9]u32) -> [9]u32 {
+    var reduced = r_in
     var borrow = 0u64
     var i = 0usize
     while i < 8usize {
-        let lhs = u64(r[i])
-        let rhs = u64(sc_l(i)) + borrow
-        if lhs >= rhs {
-            r[i] = u32(lhs - rhs)
-            borrow = 0u64
-        } else {
-            r[i] = u32(lhs + 4294967296u64 - rhs)
-            borrow = 1u64
-        }
+        let difference = u64(r_in[i]) -% (u64(sc_l(i)) +% borrow)
+        reduced[i] = u32(difference & 4294967295u64)
+        borrow = (difference >> 63u32) & 1u64
         i += 1usize
     }
-    r[8] = r[8] - u32(borrow)
-    ret r
+    let high = u64(r_in[8]) -% borrow
+    reduced[8] = u32(high & 4294967295u64)
+    borrow = (high >> 63u32) & 1u64
+    let use_reduced = 0u32 -% u32(borrow ^ 1u64)
+    var out: [9]u32 = zero
+    i = 0usize
+    while i < 9usize {
+        out[i] = (r_in[i] & ~use_reduced) | (reduced[i] & use_reduced)
+        i += 1usize
+    }
+    ret out
 }
 
 // The 512-bit little-endian value reduced mod L, one bit at a time.
@@ -437,7 +464,7 @@ fn sc_reduce_wide(wide: [16]u32) -> Sc {
             carry = u32(shifted >> 32u32)
             j += 1usize
         }
-        if sc_geq_l(r) { r = sc_sub_l(r) }
+        r = sc_reduce_once(r)
     }
     var s: Sc = zero
     i = 0usize
@@ -497,7 +524,7 @@ fn sc_add(a: Sc, b: Sc) -> Sc {
         i += 1usize
     }
     r[8] = u32(carry)
-    if sc_geq_l(r) { r = sc_sub_l(r) }
+    r = sc_reduce_once(r)
     var s: Sc = zero
     i = 0usize
     while i < 8usize {
@@ -1222,42 +1249,10 @@ fn pss_hash(message: []const u8, salt: []const u8) -> [32]u8 {
     ret hash.sha256_done(&h)
 }
 
+// Private RSA is unavailable until `e.algo.bignum` has constant-time modular
+// exponentiation. Public PSS and PKCS#1 v1.5 verification remain available.
 fn rsa_pss_sign(a: *mem.Arena, n: []const u8, d: []const u8, message: []const u8, salt: []const u8, out: []u8) -> (usize, err) {
-    if salt.len != rsa_salt_len() { ret (0usize, Invalid) }
-    let (modulus, n_error) = bignum.int_from_bytes_be(a, n)
-    if n_error != ok { ret (0usize, n_error) }
-    let (exponent, d_error) = bignum.int_from_bytes_be(a, d)
-    if d_error != ok { ret (0usize, d_error) }
-    let mod_bits = bignum.int_bits(modulus)
-    let em_bits = mod_bits - 1usize
-    let em_len = (em_bits + 7usize) / 8usize
-    let k = (mod_bits + 7usize) / 8usize
-    if mod_bits < 8usize * (salt.len + 34usize) + 2usize || k > rsa_max_bytes() { ret (0usize, InvalidKey) }
-    if out.len < k { ret (0usize, TooSmall) }
-    var em: [512]u8 = zero
-    let h = pss_hash(message, salt)
-    let db_len = em_len - 33usize
-    em[db_len - salt.len - 1usize] = 1u8
-    var i = 0usize
-    while i < salt.len {
-        em[db_len - salt.len + i] = salt[i]
-        i += 1usize
-    }
-    mgf1_xor(h[0..], em[..db_len])
-    em[0] = em[0] & (255u8 >> u8(8usize * em_len - em_bits))
-    i = 0usize
-    while i < 32usize {
-        em[db_len + i] = h[i]
-        i += 1usize
-    }
-    em[em_len - 1usize] = 188u8
-    let (m, m_error) = bignum.int_from_bytes_be(a, em[..em_len])
-    if m_error != ok { ret (0usize, m_error) }
-    let (s, s_error) = bignum.int_mod_pow(a, m, exponent, modulus)
-    if s_error != ok { ret (0usize, s_error) }
-    let store_error = bignum.int_to_bytes_be(s, out[..k])
-    if store_error != ok { ret (0usize, store_error) }
-    ret (k, ok)
+    ret (0usize, Unsupported)
 }
 
 fn rsa_pss(a: *mem.Arena, n: []const u8, d: []const u8, message: []const u8, salt: []const u8, out: []u8) -> (usize, err) {

@@ -21848,3 +21848,27 @@ button using the caller's submit action.
 `ui_overlays2_v2` holds the alert state, live priority and Retry activation on
 Windows and Linux. `popup-error-row.png` is the Segoe UI visual check. Loading,
 match-highlight and footer parts remain open.
+
+## D1028 — Security re-review binds cache bytes and closes library gaps
+
+An authenticated CRC32C was not an authenticated artifact identity: changed
+machine code with compensating padding could preserve that checksum. Manifests
+now bind each artifact's full SHA-256, verified by both serial and worker reuse
+paths; missing digests rebuild. Stable reuse, CRC-preserving mutations, and
+artifact-plus-manifest mutations pass on Windows and Linux in debug and release.
+The strict schema includes the digest and HMAC fields. Self-host compilation also
+requires the interface-hash helpers not to shadow the imported `source` module.
+
+Ed25519 multiplication/reduction now follow fixed schedules and masked selection;
+RSA-PSS private signing fails closed as `Unsupported`, keeping public verification.
+Crypto fixtures pass on both hosts and Ed25519 passes release checks. Focused x64
+control-flow inspection found no secret-bit branch in the changed helpers, but is
+not a formal microarchitectural constant-time proof.
+
+X.509 excluded DNS constraints reject overlapping wildcard SANs. JWT member lookup
+validates the complete object and all top-level duplicates, with a documented
+128-member bound. IDNA applies the Bidi rule across every label in an RTL domain
+and checks decoded A-label hyphens. Adversarial fixtures and the TLS fixture pass
+on both hosts. The audit report records these corrections to the earlier blanket
+completion claim; no claim of vulnerability-free source or full TLS conformance
+is made.

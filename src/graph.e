@@ -41,6 +41,10 @@ type Module = struct {
     // recorded in the manifest and checked against it on the next warm build.
     artifact_hash: usize,
     artifact_hash_known: bool,
+    // The artifact's cryptographic digest (H24): unlike CRC-32C, this binds the
+    // exact bytes authorized by the authenticated build manifest.
+    artifact_sha256: str,
+    artifact_sha256_known: bool,
     // Where the text's lines begin (D315): tokens carry offsets, and a line is looked
     // up here when a diagnostic, a trap record or a tooling record asks.
     lines: []usize,
@@ -594,7 +598,7 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     let (spelling, spelling_error) = spelling_of(a, g, path)
     if spelling_error != ok { ret (0usize, spelling_error) }
     var no_inventory: []const u8 = zero
-    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
+    g.modules[index] = Module { name: name, path: path, text: "", owned_count: 0usize, owned_starts: zero, owned_ends: zero, owned_original_roots: zero, owned_original_paths: zero, owned_original_starts: zero, inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, artifact_sha256: "", artifact_sha256_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }

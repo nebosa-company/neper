@@ -4290,10 +4290,20 @@ foreach ($hotMode in @('--release', '--time')) {
     if ($LASTEXITCODE -ne 0) { throw "the manifest after a rewritten artifact does not say invalid-artifact ($hotMode)" }
     $cycleRecorded = (Get-Content -Raw -LiteralPath $cycleManifest | ConvertFrom-Json).incremental
     if (@($cycleRecorded | Where-Object { $_.artifact_crc32c -notmatch '^[0-9a-f]{8}$' }).Count -ne 0) { throw "the manifest does not record every artifact's checksum ($hotMode)" }
+    if (@($cycleRecorded | Where-Object { $_.artifact_sha256 -notmatch '^[0-9a-f]{64}$' }).Count -ne 0) { throw "the manifest does not record every artifact's SHA-256 ($hotMode)" }
     $cycleStable = & $compiler emit-executable (Join-Path $cycleScratch 'src\main.e') $repo 'x64' 'windows' $cycleExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $cycleStable -ne 'executable written') { throw "the warm build over the whole cache failed ($hotMode)" }
     & python (Join-Path $repo 'scripts/check_incremental.py') $cycleManifest 'main=kept:stable' 'ring=kept:stable'
     if ($LASTEXITCODE -ne 0) { throw "the whole cache was not stable ($hotMode)" }
+    # A CRC32C collision does not preserve the artifact's authenticated identity:
+    # changed machine code plus a compensating padding edit, with the signed manifest
+    # untouched, must rebuild the artifact rather than reuse it.
+    & python (Join-Path $repo 'benchmarks/fuzz/corrupt.py') crc-preserve $cycleMain
+    $cycleCollision = & $compiler emit-executable (Join-Path $cycleScratch 'src\main.e') $repo 'x64' 'windows' $cycleExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $cycleCollision -ne 'executable written') { throw "the warm build over a CRC-preserving forgery failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cycleExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $cycleClean).Hash) { throw "the warm build over a CRC-preserving forgery is not the clean build ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $cycleManifest 'main=rebuilt:invalid-artifact' 'ring=kept:stable'
+    if ($LASTEXITCODE -ne 0) { throw "a CRC-preserving artifact forgery was reused ($hotMode)" }
     # Keyed cache authenticity (H24): rewriting both a valid artifact and its manifest
     # checksum cannot forge the manifest tag, so no cache record is trusted.
     & python (Join-Path $repo 'benchmarks/fuzz/corrupt.py') cycle $cycleRing e.os e.io

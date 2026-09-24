@@ -494,8 +494,8 @@ fn self_test() -> err {
 // function body removed, so an edit inside a body moves `body_sha256` alone. Over
 // the module's tokens (D316): it lexed the text again, for every module, on every
 // build. The scanner-driven form stays for a text that has no tokens.
-fn interface_cut(a: *mem.Arena, source: str, tokens: []const lex.Token) -> (str, err) {
-    let (kept, kept_error) = mem.alloc[u8](a, source.len)
+fn interface_cut(a: *mem.Arena, content: str, tokens: []const lex.Token) -> (str, err) {
+    let (kept, kept_error) = mem.alloc[u8](a, content.len)
     if kept_error != ok { ret ("", kept_error) }
     var written = 0usize
     var copied_to = 0usize
@@ -525,7 +525,7 @@ fn interface_cut(a: *mem.Arena, source: str, tokens: []const lex.Token) -> (str,
                     // Keep through the `{`; the body starts after it.
                     var from = copied_to
                     while from < token.end {
-                        kept[written] = source[from]
+                        kept[written] = content[from]
                         written += 1usize
                         from += 1usize
                     }
@@ -551,26 +551,26 @@ fn interface_cut(a: *mem.Arena, source: str, tokens: []const lex.Token) -> (str,
         }
         previous = token.kind
     }
-    while copied_to < source.len {
-        kept[written] = source[copied_to]
+    while copied_to < content.len {
+        kept[written] = content[copied_to]
         written += 1usize
         copied_to += 1usize
     }
     ret (kept[0usize..written], ok)
 }
 
-fn interface_sha256_hex(a: *mem.Arena, source: str, tokens: []const lex.Token) -> (str, err) {
-    let (kept, cut_error) = interface_cut(a, source, tokens)
+fn interface_sha256_hex(a: *mem.Arena, content: str, tokens: []const lex.Token) -> (str, err) {
+    let (kept, cut_error) = interface_cut(a, content, tokens)
     if cut_error != ok { ret ("", cut_error) }
     let (digest, digest_error) = sha256_hex(a, kept)
     ret (digest, digest_error)
 }
 
 // The same over a text with no token stream: scanned into a buffer of its own.
-fn interface_sha256_hex_scanned(a: *mem.Arena, source: str) -> (str, err) {
-    let (tokens, tokens_error) = mem.alloc[lex.Token](a, source.len + 16usize)
+fn interface_sha256_hex_scanned(a: *mem.Arena, content: str) -> (str, err) {
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, content.len + 16usize)
     if tokens_error != ok { ret ("", tokens_error) }
-    var scanner = lex.init(source)
+    var scanner = lex.init(content)
     var count = 0usize
     while true {
         if count == tokens.len { ret ("", Capacity) }
@@ -579,6 +579,6 @@ fn interface_sha256_hex_scanned(a: *mem.Arena, source: str) -> (str, err) {
         count += 1usize
         if token.kind == .Eof { break }
     }
-    let (digest, digest_error) = interface_sha256_hex(a, source, tokens[0usize..count])
+    let (digest, digest_error) = interface_sha256_hex(a, content, tokens[0usize..count])
     ret (digest, digest_error)
 }

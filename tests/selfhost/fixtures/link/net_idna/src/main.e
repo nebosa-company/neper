@@ -201,6 +201,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     failing("xn--abc-th33b", idna.Invalid, 97i32)
     unicode_failing("xn--ab-m1t", 99i32)
 
+    // RFC 5893 is domain-wide: numeric-only labels are fine until an RTL sibling
+    // makes every label subject to the Bidi rule. LTR sibling labels still pass.
+    domain("\xd7\x90.abc", "xn--4db.abc", "\xd7\x90.abc", 120i32)
+    domain("123.example", "123.example", "123.example", 121i32)
+    failing("\xd7\x90.123", idna.Invalid, 122i32)
+    failing("123.\xd7\x90", idna.Invalid, 123i32)
+    unicode_failing("xn--4db.123", 124i32)
+    unicode_failing("123.xn--4db", 125i32)
+
+    // Decoding an A-label must not bypass the U-label's third/fourth hyphen rule.
+    unicode_failing("xn--ab---epa", 126i32)
+    failing("xn--ab---epa", idna.Invalid, 127i32)
+    failing("ab--\xc3\xa9", idna.Invalid, 128i32)
+
     try io.print("net idna ok\n")
     ret ok
 }

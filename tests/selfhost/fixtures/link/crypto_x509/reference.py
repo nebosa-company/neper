@@ -79,6 +79,10 @@ outside_leaf = build(name("outside"), constrained_mid.subject, leaf_key.public_k
                      start, end, dns=["www.outside.example"], serial=15)
 blocked_leaf = build(name("blocked"), constrained_mid.subject, leaf_key.public_key(), constrained_key,
                      start, end, dns=["blocked.allowed.example"], serial=16)
+wildcard_leaf = build(name("wildcard"), constrained_mid.subject, leaf_key.public_key(), constrained_key,
+                     start, end, dns=["*.allowed.example"], serial=17)
+safe_wildcard_leaf = build(name("safe-wildcard"), constrained_mid.subject, leaf_key.public_key(), constrained_key,
+                          start, end, dns=["*.safe.allowed.example"], serial=18)
 p256_root_key = ec.derive_private_key(1, ec.SECP256R1())
 p256_leaf_key = ec.derive_private_key(2, ec.SECP256R1())
 p256_root = build(name("P256 Root"), name("P256 Root"), p256_root_key.public_key(), p256_root_key,
@@ -101,6 +105,7 @@ der = {n: c.public_bytes(serialization.Encoding.DER) for n, c in
         ("zero_mid", zero_mid), ("sub_mid", sub_mid), ("deep_leaf", deep_leaf),
         ("constrained_mid", constrained_mid), ("allowed_leaf", allowed_leaf),
         ("outside_leaf", outside_leaf), ("blocked_leaf", blocked_leaf),
+        ("wildcard_leaf", wildcard_leaf), ("safe_wildcard_leaf", safe_wildcard_leaf),
         ("p256_root", p256_root), ("p256_leaf", p256_leaf),
         ("p384_suffix", p384_suffix)]}
 pem_text = b"".join(c.public_bytes(serialization.Encoding.PEM) for c in [root, mid])
@@ -261,6 +266,16 @@ BODY = '''    let (root, e1) = x509.parse(a, root_der)
     if e40 != x509.NameMismatch { os.exit(47) }
     let (blocked_chain, e41) = x509.verify(a, blocked_leaf, options(roots[0..], constrained_intermediates[0..], "blocked.allowed.example", .Any, 4u16))
     if e41 != x509.NameMismatch { os.exit(48) }
+    // Wildcards cannot grant a hostname excluded by an ancestor constraint.
+    let (wildcard_leaf, e42) = x509.parse(a, wildcard_leaf_der)
+    let (safe_wildcard_leaf, e43) = x509.parse(a, safe_wildcard_leaf_der)
+    if e42 != ok || e43 != ok { os.exit(49) }
+    let (_, e44) = x509.verify(a, wildcard_leaf, options(roots[0..], constrained_intermediates[0..], "blocked.allowed.example", .Any, 4u16))
+    if e44 != x509.NameMismatch { os.exit(50) }
+    let (_, e45) = x509.verify(a, wildcard_leaf, options(roots[0..], constrained_intermediates[0..], "www.allowed.example", .Any, 4u16))
+    if e45 != x509.NameMismatch { os.exit(51) }
+    let (_, e46) = x509.verify(a, safe_wildcard_leaf, options(roots[0..], constrained_intermediates[0..], "www.safe.allowed.example", .Any, 4u16))
+    if e46 != ok { os.exit(52) }
     ret ok
 }
 ''' % (start_ns, end_ns)

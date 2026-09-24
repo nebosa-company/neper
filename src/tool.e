@@ -6343,6 +6343,10 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
             try hex32(out, g.modules[reason_at].artifact_hash)
             try byte(out, 34u8)
         }
+        if g.modules[reason_at].artifact_sha256_known {
+            try text(out, ",\"artifact_sha256\":")
+            try quoted(out, g.modules[reason_at].artifact_sha256)
+        }
         try byte(out, 125u8)
         reason_at += 1usize
     }

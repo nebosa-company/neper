@@ -1,8 +1,8 @@
 // `e.crypto.sign` / `e.crypto.kx` / `e.crypto.mac` / `e.crypto.hash` extensions:
 // P-256/BIP-340 public verification plus fail-closed secret operations, Poly1305
 // (RFC 8439 2.5.2), BLAKE3 (the official vectors and tree-boundary lengths),
-// fail-closed ffdhe2048 secret operations, and RSASSA-PSS / PKCS#1 v1.5 against
-// Python `cryptography`. Every check has its own exit code.
+// fail-closed ffdhe2048 and RSA secret operations, and RSASSA-PSS / PKCS#1 v1.5
+// public verification against Python `cryptography`. Every check has its own exit code.
 use e.os
 use e.io
 use e.mem
@@ -210,7 +210,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, bad_error) = kx.dh_shared(a, dh_secret_a[0..], one[0..], secret_out[0..])
     if bad_error != kx.Unsupported { os.exit(85i32) }
     try io.print("dh ok\n")
-    // 90-95: RSA-PSS and PKCS#1 v1.5 over a 2048-bit key.
+    // 90-95: RSA secret operation fails closed; known signatures verify publicly.
     var rsa_n: [256]u8 = zero
     var rsa_d: [256]u8 = zero
     var rsa_e: [3]u8 = zero
@@ -225,7 +225,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         si += 1usize
     }
     let (rsa_len, rsa_error) = sign.rsa_pss_sign(a, rsa_n[0..], rsa_d[0..], "The quick brown fox jumps over the lazy dog", salt[0..], rsa_sig[0..])
-    if rsa_error != ok || rsa_len != 256usize || !same_hex(rsa_sig[0..], "2fbbfafb87d492b5a757eac47e4b1693cb71afdf9592c3de7ee5a53eeb8ad4411792ec1e3e0199c8e4fe2ba2e3b43bd1bcdd2bb93815a03de1d9ca24ed61b57a266560049269da5949897ea8793f0487cdd39b85362f32b636bfc8b06188e0067119caa42aa71573a0b0d9c82b97d6cda7be6bbecbccb5a753f27781dc482a7beec33bb036c031b291d5bd8b1bc97b62a4a39b3c41d217aa2d584351ee72f21031b406d4d2fded7c2f2d0ca65e191ed55233c8a54c557f5c803428ffe88f0d726ac17bd139c8a72784b65b69a6dedeb9fd76ff096ab0aba2dda4baa6d3ebb7eca1870c9b8af8878ee1d1fc1cbe2e258c46cdcefe7e7f51f6a9c09f93815e4dc4") { os.exit(90i32) }
+    if rsa_error != sign.Unsupported || rsa_len != 0usize { os.exit(90i32) }
+    let _ = unhex("2fbbfafb87d492b5a757eac47e4b1693cb71afdf9592c3de7ee5a53eeb8ad4411792ec1e3e0199c8e4fe2ba2e3b43bd1bcdd2bb93815a03de1d9ca24ed61b57a266560049269da5949897ea8793f0487cdd39b85362f32b636bfc8b06188e0067119caa42aa71573a0b0d9c82b97d6cda7be6bbecbccb5a753f27781dc482a7beec33bb036c031b291d5bd8b1bc97b62a4a39b3c41d217aa2d584351ee72f21031b406d4d2fded7c2f2d0ca65e191ed55233c8a54c557f5c803428ffe88f0d726ac17bd139c8a72784b65b69a6dedeb9fd76ff096ab0aba2dda4baa6d3ebb7eca1870c9b8af8878ee1d1fc1cbe2e258c46cdcefe7e7f51f6a9c09f93815e4dc4", rsa_sig[0..])
     if !sign.rsa_pss_verify(a, rsa_n[0..], rsa_e[0..], "The quick brown fox jumps over the lazy dog", rsa_sig[0..]) { os.exit(91i32) }
     let _ = unhex("378284c477481101cd8197fd2f66514280e1a579bb737a3d2c00f021038c58c27a0a1f6f9c12db1e968b19c084fac7143679d0be5a1543ac4e80e7cc8e988fea5ed63d71b35fbc1346903cc6840a507687bd61ac126660c020c98edcb498aab250691731735749531c0457b5aa5859a3154eb16b3d366b1a5ebe7d870febdf7aea4e10e185cfbbc73c68db7c2fbfae9a45e4aacc80ce2f1bb4a633734d3e6538f935235d2fabbb7f748ee54750153b187b075a5b9ecf0ef8002b046bc0db8b1a41435f0dcd65260d38e939a964f6f89431bbe212c677e7df8a6a77c149a2d7df92887153b4d62dce3fc33a07b524db4719b185dfd74ccade879892daba3eff44", rsa_sig[0..])
     if !sign.rsa_pss_verify(a, rsa_n[0..], rsa_e[0..], "another message", rsa_sig[0..]) { os.exit(92i32) }

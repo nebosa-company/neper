@@ -12,8 +12,10 @@ use e.bytes
 use e.crypto.hash as hash
 use e.crypto.mac as mac
 use e.crypto.sign as sign
+use e.fmt.json
 use e.mem
 use e.str
+use e.text.utf8
 
 type Alg = enum u8 { None, HS256, HS384, HS512, EdDSA }
 type Parts = struct { header: str, payload: str, signature: str }
@@ -76,8 +78,21 @@ fn payload(token: str, dst: []u8) -> (str, err) {
 
 fn skip_space(s: str, from: usize) -> usize {
     var i = from
-    while i < s.len && str.is_ascii_space(s[i]) { i += 1usize }
+    while i < s.len && (s[i] == 32u8 || s[i] == 9u8 || s[i] == 10u8 || s[i] == 13u8) { i += 1usize }
     ret i
+}
+
+fn escape_hex(s: str, from: usize) -> (u32, err) {
+    if from > s.len || s.len - from < 4usize { ret (0u32, Malformed) }
+    var value = 0u32
+    var i = from
+    while i < from + 4usize {
+        let (digit, valid) = json.hex_value(s[i])
+        if !valid { ret (0u32, Malformed) }
+        value = value * 16u32 + digit
+        i += 1usize
+    }
+    ret (value, ok)
 }
 
 // `from` is the opening quote; answers the index after the closing one.
@@ -85,7 +100,25 @@ fn skip_string(s: str, from: usize) -> (usize, err) {
     var i = from + 1usize
     while i < s.len {
         if s[i] == 34u8 { ret (i + 1usize, ok) }
-        if s[i] == 92u8 { i += 1usize }
+        if s[i] < 32u8 { ret (0usize, Malformed) }
+        if s[i] == 92u8 {
+            i += 1usize
+            if i >= s.len { ret (0usize, Malformed) }
+            let escape = s[i]
+            if escape == 117u8 {
+                let (point, hex_error) = escape_hex(s, i + 1usize)
+                if hex_error != ok { ret (0usize, hex_error) }
+                i += 4usize
+                if point >= 55296u32 && point <= 56319u32 {
+                    if s.len - i < 7usize || s[i + 1usize] != 92u8 || s[i + 2usize] != 117u8 { ret (0usize, Malformed) }
+                    let (low, low_error) = escape_hex(s, i + 3usize)
+                    if low_error != ok || low < 56320u32 || low > 57343u32 { ret (0usize, Malformed) }
+                    i += 6usize
+                } else if point >= 56320u32 && point <= 57343u32 { ret (0usize, Malformed) }
+            } else if escape != 34u8 && escape != 92u8 && escape != 47u8 && escape != 98u8 && escape != 102u8 && escape != 110u8 && escape != 114u8 && escape != 116u8 {
+                ret (0usize, Malformed)
+            }
+        }
         i += 1usize
     }
     ret (0usize, Malformed)
@@ -120,23 +153,36 @@ fn skip_value(s: str, from: usize, depth: usize) -> (usize, err) {
             i = skip_space(s, i + 1usize)
         }
     }
-    // A number or literal: everything up to a delimiter.
+    // Validate the entire scalar lexeme, including claims the caller does not use.
     var i = from
     while i < s.len && s[i] != 44u8 && s[i] != 125u8 && s[i] != 93u8 && !str.is_ascii_space(s[i]) { i += 1usize }
     if i == from { ret (0usize, Malformed) }
+    let raw = s[from..i]
+    if !str.eq(raw, "true") && !str.eq(raw, "false") && !str.eq(raw, "null") {
+        let (_, number_error) = json.number(raw)
+        if number_error != ok { ret (0usize, Malformed) }
+    }
     ret (i, ok)
 }
 
 // The raw text of the top-level member `name` of the object `object` (a string
 // keeps its quotes), and whether it was present. Escaped member names are refused
-// rather than given a second spelling, and a requested member must occur once.
+// rather than given a second spelling. Every claim name is unique, including
+// application claims. At most 128 top-level members keep duplicate checks bounded
+// without introducing allocation into this API.
 fn member(object: str, name: str) -> (str, bool, err) {
+    if !utf8.validate(object) { ret ("", false, Malformed) }
     var i = skip_space(object, 0usize)
     if i >= object.len || object[i] != 123u8 { ret ("", false, Malformed) }
     i = skip_space(object, i + 1usize)
-    if i < object.len && object[i] == 125u8 { ret ("", false, ok) }
+    if i < object.len && object[i] == 125u8 {
+        if skip_space(object, i + 1usize) != object.len { ret ("", false, Malformed) }
+        ret ("", false, ok)
+    }
     var found = false
     var found_value: str = ""
+    var keys: [128]str = zero
+    var key_count = 0usize
     while true {
         if i >= object.len || object[i] != 34u8 { ret ("", false, Malformed) }
         let (key_end, key_error) = skip_string(object, i)
@@ -147,19 +193,29 @@ fn member(object: str, name: str) -> (str, bool, err) {
             if key[key_at] == 92u8 { ret ("", false, Malformed) }
             key_at += 1usize
         }
+        key_at = 0usize
+        while key_at < key_count {
+            if str.eq(keys[key_at], key) { ret ("", false, Malformed) }
+            key_at += 1usize
+        }
+        if key_count == keys.len { ret ("", false, Malformed) }
+        keys[key_count] = key
+        key_count += 1usize
         i = skip_space(object, key_end)
         if i >= object.len || object[i] != 58u8 { ret ("", false, Malformed) }
         i = skip_space(object, i + 1usize)
         let (value_end, value_error) = skip_value(object, i, 0usize)
         if value_error != ok { ret ("", false, value_error) }
         if str.eq(key, name) {
-            if found { ret ("", false, Malformed) }
             found = true
             found_value = object[i..value_end]
         }
         i = skip_space(object, value_end)
         if i >= object.len { ret ("", false, Malformed) }
-        if object[i] == 125u8 { ret (found_value, found, ok) }
+        if object[i] == 125u8 {
+            if skip_space(object, i + 1usize) != object.len { ret ("", false, Malformed) }
+            ret (found_value, found, ok)
+        }
         if object[i] != 44u8 { ret ("", false, Malformed) }
         i = skip_space(object, i + 1usize)
     }

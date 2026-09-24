@@ -7,30 +7,80 @@ Remediation completed so far:
 - M1: TAR entry and link paths reject slash/backslash roots, parent segments,
   drive-qualified segments, and unsafe PAX link paths.
 - M2: CBOR `skip` enforces a 128-container nesting ceiling.
-- M4: JWT security-member lookup rejects escaped names and duplicate requested
-  claims instead of permitting two semantic spellings.
+- M4: JWT lookup validates the complete UTF-8 JSON object, rejects escaped
+  top-level names and all duplicate top-level names, and caps objects at 128
+  members. Malformed strings, primitive values, and trailing data are rejected.
 - L1: model endpoints require HTTPS, except for exact loopback hosts over HTTP;
   userinfo, queries, fragments, malformed ports, and other schemes are refused.
 - H2: verified chains reject unknown critical extensions, CA key usage without
   `keyCertSign`, and excess CA depth under `pathLenConstraint`; critical DNS
-  `nameConstraints` are parsed and applied to every descendant SAN.
+  `nameConstraints` are parsed and applied to every descendant SAN, including
+  wildcard SANs that overlap a specifically excluded hostname.
 - H1: Bonsai's default model session exposes only repository-rooted read,
   search, and edit tools, then leaves changes unexecuted and uncommitted for
   review. The former unrestricted host workflow requires an explicit
   `--unsafe-compatibility` flag and warning.
 - M5: IDNA validates Unicode 15.0 PVALID code points, RFC 5892 contextual
-  characters, RFC 5893 bidirectional labels, leading combiners, and incoming
-  A-label canonical form.
+  characters, RFC 5893 domain-wide bidirectional rules, leading combiners, and
+  incoming A-label canonical form and decoded hyphen restrictions.
 - H3: AES uses algebraic constant-control-flow substitution, GHASH, Poly1305,
   and ML-KEM remove secret-dependent branches, and the variable-time P-256,
-  BIP-340, FFDHE, and ML-DSA secret operations fail closed as `Unsupported`;
-  their public verification paths remain available.
+  BIP-340, FFDHE, ML-DSA, and RSA-PSS secret operations fail closed as
+  `Unsupported`. Ed25519 secret scalar multiplication and reduction now use a
+  fixed schedule and masked selection. Public signature verification remains
+  available; this is not a formal proof of microarchitectural constant time.
 - M3: build manifests carry HMAC-SHA-256 authentication under a random per-user
-  key kept outside project caches. Unauthenticated manifests and artifacts not
-  recorded by an authenticated manifest are rebuilt from source.
+  key kept outside project caches and bind the full SHA-256 digest of every
+  artifact. Unauthenticated manifests, missing digests, and mismatching artifacts
+  are rebuilt from source; CRC32C is only a corruption check.
 
 The focused fixtures pass on Windows and Linux, and all 15 tests in
-`tests.test_llm_edit_benchmark` pass. All findings in this audit are remediated.
+`tests.test_llm_edit_benchmark` passed in the first remediation pass. The confirmed
+findings below have targeted mitigations; the second pass corrected incomplete
+fixes and does not establish that all source code is vulnerability-free.
+
+## Second-pass verification
+
+The earlier claim that all findings were fully remediated was too broad. Re-review
+found five remaining gaps, now addressed:
+
+1. **M3:** an authenticated CRC32C alone did not bind artifact contents. A
+   machine-code mutation with compensating padding preserved the recorded CRC
+   and the untouched signed manifest, and was reused as `stable`. The manifest
+   now authenticates the full artifact SHA-256; both worker and serial reuse paths
+   verify it. Old manifests without that digest rebuild. The CRC-preserving
+   mutation and artifact-plus-manifest mutation regressions rebuild the clean
+   executable on Windows and Linux, in debug and release modes; unchanged caches
+   still reuse normally. Both self-host runners include these checks.
+2. **H3:** Ed25519 still branched on secret scalar bits and RSA-PSS still used
+   variable-time private exponentiation. Ed25519 now uses fixed-schedule point
+   operations, masked selection/reduction, and arithmetic sign-bit encoding.
+   RSA-PSS signing returns `Unsupported`; public verification is unchanged.
+   `crypto_sign`, `crypto_sign_plan`, `crypto_pq`, `crypto_cipher`, and
+   `crypto_aead` pass on both hosts; Ed25519 also passes release fixtures.
+   Inspection of emitted x64 control flow for `pt_mul`, `fe_select`,
+   `sc_reduce_once`, and `pt_encode` found no secret-bit-dependent branch. This
+   focused check is not comprehensive side-channel certification.
+3. **H2:** a wildcard SAN could cover a concrete excluded hostname without being
+   rejected. Excluded-name checks now test that overlap. Signed-chain fixtures
+   reject the overlapping wildcard even when another covered host is requested,
+   while allowing a non-overlapping wildcard.
+4. **M4:** duplicate unrequested claims and malformed unrequested JSON values
+   escaped validation. Every top-level name is now checked for uniqueness and
+   the entire object must be valid JSON. Fixtures cover duplicate custom/header
+   members, trailing bytes, malformed escapes/surrogates/UTF-8/numbers, valid
+   nested values, and the 128/129-member boundary.
+5. **M5:** bidi validation was per-label only and decoded A-labels skipped hyphen
+   restrictions. When any label is RTL, every label now passes the domain-wide
+   Bidi rule, including ASCII siblings. Conversion in both directions rejects
+   RTL-plus-numeric-label domains and malformed decoded hyphens; ordinary ASCII
+   numeric domains and valid mixed RTL/LTR domains still pass.
+
+The updated `fmt_jwt`, `crypto_x509`, `net_idna`, and transitive `net_tls` fixtures
+pass on Windows and Linux. The IDNA table generator remains reproducible.
+The strict manifest schema now accepts the authentication tag and artifact digest;
+schema conformance passed 2,808 records in 307 files. Semgrep and Grype were not
+reinstalled or rerun; their results below are historical.
 
 ## Executive summary
 
@@ -57,7 +107,7 @@ This is a source audit, not a proof of absence. Semgrep does not parse Neper's
 `.e` language, so the custom runtime and library findings below come from manual
 trust-boundary review and targeted tests.
 
-## Findings
+## Findings (initial audit)
 
 ### H1 — The autonomous Bonsai driver gives model output unsandboxed host command execution
 
@@ -158,18 +208,19 @@ the decoder.
 ### M3 — Build-cache integrity is forgeable by an actor that can edit the cache
 
 **Evidence:**
-`docs/tasks/compiler/C042-hostile-inputs-artifact-integrity-and-aggregate-limits-v1-pr.md:47-54`.
+`src/main.e` artifact reuse, `src/tool.e` manifest publication, and the C042
+record in `docs/work-done.jsonl` (D1020, corrected by D1028).
 
 Artifacts were hashed and checked against an unkeyed manifest, so an actor that
 could replace both could make a malicious artifact satisfy the old check.
 
 **Remediation:** manifests now carry an HMAC-SHA-256 tag made with a random
-per-user key stored outside the project cache. The compiler authenticates the
-manifest before reusing any artifact or prior executable digest and rebuilds
-unrecorded artifacts. A regression rewrites both an artifact checksum and its
-manifest entry and proves both modules rebuild to the clean image on Windows and
-Linux. If no key can be obtained, the build succeeds with an unsigned manifest
-that cannot authorize later cache reuse.
+per-user key stored outside the project cache, binding each artifact's full
+SHA-256 rather than only CRC32C. The compiler authenticates the manifest before
+reusing any artifact or prior executable digest and rebuilds unrecorded or
+mismatching artifacts. Both CRC-preserving and manifest-rewriting regressions
+rebuild the clean image on Windows and Linux. If no key can be obtained, the
+build succeeds with an unsigned manifest that cannot authorize later cache reuse.
 
 **Recommendation:** authenticate the manifest with a key held outside the cache,
 or treat all cache contents as untrusted and rebuild from source whenever the
@@ -219,7 +270,7 @@ task metadata to an unintended endpoint.
 permit `http` only for an explicit loopback development mode. Parse the URL once
 and reject other schemes.
 
-## Automated results
+## Automated results (initial audit)
 
 ### Semgrep 1.178.0
 
@@ -264,7 +315,7 @@ Raw report: `build/security-audit/grype.json`. Grype was installed from Anchore'
 official installer in the ignored local path `build/security-tools/grype/bin`
 and run through WSL.
 
-## Targeted regression checks
+## Targeted regression checks (initial audit)
 
 The existing `crypto_x509`, `net_tls`, `fmt_tar`, `fmt_cbor`, and `fmt_jwt`
 self-host fixtures were compiled with
@@ -288,7 +339,7 @@ currently contains the adversarial cases described above.
   nesting/resource caps, extensive fuzz coverage, and an authenticated manifest
   whose key is held outside project caches.
 
-## Remediation order (completed)
+## Original remediation priorities
 
 1. Sandbox or remove the Bonsai shell tool before running model-authored tasks on
    a workstation containing credentials.

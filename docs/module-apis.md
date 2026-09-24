@@ -5253,6 +5253,8 @@ fn fe_2d() -> Fe
 fn fe_sqrt_m1() -> Fe
 fn pt_identity() -> Pt
 fn pt_add(p: Pt, q: Pt) -> Pt
+fn fe_select(a: Fe, b: Fe, choose_b: u8) -> Fe
+fn pt_select(a: Pt, b: Pt, choose_b: u8) -> Pt
 fn pt_mul(scalar: [32]u8, p: Pt) -> Pt
 fn pt_is_identity(p: Pt) -> bool
 fn pt_encode(p: Pt) -> [32]u8
@@ -5261,7 +5263,7 @@ fn pt_decode(bytes: [32]u8) -> (Pt, bool)
 fn pt_base() -> Pt
 fn sc_l(index: usize) -> u32
 fn sc_geq_l(r: [9]u32) -> bool
-fn sc_sub_l(r_in: [9]u32) -> [9]u32
+fn sc_reduce_once(r_in: [9]u32) -> [9]u32
 fn sc_reduce_wide(wide: [16]u32) -> Sc
 fn sc_from_bytes(bytes: []const u8) -> Sc
 fn sc_to_bytes(s: Sc) -> [32]u8
@@ -5398,6 +5400,10 @@ fn xmss(height: usize, sk_seed: [32]u8, sk_prf: [32]u8, pub_seed: [32]u8, nodes:
 `Ed25519SecretKey.bytes` is the 32-byte seed form. Verification rejects non-canonical
 encodings and small-order public keys. `P256PublicKey` is the uncompressed SEC1 point;
 P-256 verification hashes with SHA-256 and accepts strict DER ECDSA signatures.
+RSA-PSS, P-256, BIP-340, and ML-DSA signing return `Unsupported` until a
+constant-time secret-key implementation is available; their public verification
+APIs remain usable. Ed25519 uses fixed-schedule scalar operations and masked
+selection; focused emitted-code inspection is not formal side-channel certification.
 
 ### `e.crypto.kx`
 

@@ -4155,7 +4155,9 @@ fn dirname(path: str) -> str {
 
 // The authenticated previous manifest's `incremental` entries indexed by module name
 // (D473, H24):
-// each entry's `artifact_crc32c`, when it has one, into a slot the name finds.
+// each entry's `artifact_crc32c` and `artifact_sha256`, when it has both, into a
+// slot the name finds. The CRC remains a quick corruption check; SHA-256 is the
+// authenticated identity of the artifact bytes.
 // A manifest without them -- none, older, or unauthenticated -- records nothing,
 // so no artifact is reused.
 fn index_manifest_hashes(a: *mem.Arena, hot: *HotLoad, manifest: str, capacity: usize) -> err {
@@ -4165,6 +4167,9 @@ fn index_manifest_hashes(a: *mem.Arena, hot: *HotLoad, manifest: str, capacity: 
     let (values, values_error) = mem.alloc[usize](a, capacity + 1usize)
     if values_error != ok { ret values_error }
     hot.manifest_values = values
+    let (sha_values, sha_values_error) = mem.alloc[str](a, capacity + 1usize)
+    if sha_values_error != ok { ret sha_values_error }
+    hot.manifest_sha_values = sha_values
     var count = 0usize
     let key = "\"module\":\""
     var at = 0usize
@@ -4175,7 +4180,8 @@ fn index_manifest_hashes(a: *mem.Arena, hot: *HotLoad, manifest: str, capacity: 
             var entry_end = name_end
             while entry_end < manifest.len && manifest[entry_end] != 125u8 { entry_end += 1usize }
             let digits = json_str_after(manifest[name_end..entry_end], "\"artifact_crc32c\":\"")
-            if digits.len == 8usize {
+            let sha = json_str_after(manifest[name_end..entry_end], "\"artifact_sha256\":\"")
+            if digits.len == 8usize && sha.len == 64usize && hex_string(digits) && hex_string(sha) {
                 var value = 0usize
                 var digit_at = 0usize
                 while digit_at < 8usize {
@@ -4187,6 +4193,7 @@ fn index_manifest_hashes(a: *mem.Arena, hot: *HotLoad, manifest: str, capacity: 
                     digit_at += 1usize
                 }
                 values[count] = value
+                sha_values[count] = sha
                 try lookup.insert(&hot.manifest_names, 0usize, 0usize, manifest[at + key.len..name_end], count)
                 count += 1usize
             }
@@ -4197,12 +4204,23 @@ fn index_manifest_hashes(a: *mem.Arena, hot: *HotLoad, manifest: str, capacity: 
     ret ok
 }
 
-// The checksum the previous manifest recorded for a module (D473), if any.
-fn manifest_recorded_hash(hot: *HotLoad, module_name: str) -> (usize, bool) {
-    if !lookup.attached(&hot.manifest_names) { ret (0usize, false) }
+fn hex_string(value: str) -> bool {
+    var at = 0usize
+    while at < value.len {
+        let ch = value[at]
+        if !((ch >= 48u8 && ch <= 57u8) || (ch >= 97u8 && ch <= 102u8)) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// The checksum and cryptographic digest the previous authenticated manifest
+// recorded for a module, if any.
+fn manifest_recorded_hash(hot: *HotLoad, module_name: str) -> (usize, str, bool) {
+    if !lookup.attached(&hot.manifest_names) { ret (0usize, "", false) }
     let (slot, found) = lookup.find(&hot.manifest_names, 0usize, 0usize, module_name)
-    if !found || slot >= hot.manifest_values.len { ret (0usize, false) }
-    ret (hot.manifest_values[slot], true)
+    if !found || slot >= hot.manifest_values.len || slot >= hot.manifest_sha_values.len { ret (0usize, "", false) }
+    ret (hot.manifest_values[slot], hot.manifest_sha_values[slot], true)
 }
 
 fn json_str_after(line: str, key: str) -> str {
@@ -6324,6 +6342,8 @@ type HotLoad = struct {
     recorded: []usize,
     recorded_known: []bool,
     hash_now: []usize,
+    recorded_artifact_sha: []str,
+    artifact_sha_now: []str,
     // The bytes' SHA-256 per module as the hot load read them (D507), for the
     // verification of a key hit and for the manifest's input line; and the
     // injected collision, `--fault-collision`, under which every key is a hit.
@@ -6334,6 +6354,7 @@ type HotLoad = struct {
     manifest_read: bool,
     manifest_names: lookup.Index,
     manifest_values: []usize,
+    manifest_sha_values: []str,
 }
 
 // A wave's artifacts on worker threads (D324): each worker reads its modules' artifacts
@@ -6360,6 +6381,8 @@ type ArtifactWorker = struct {
     recorded: []usize,
     recorded_known: []bool,
     hash_now: []usize,
+    recorded_artifact_sha: []str,
+    artifact_sha_now: []str,
     sha_now: []str,
     fault_collision: bool,
 }
@@ -6373,8 +6396,9 @@ fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     w.sha_now[module_index] = sha
     var (reason, unchanged) = artifact_identity(&w.arena, old, old_error, w.texts[at], sha, w.mode_id, w.compiler_identity, w.fault_collision)
     if unchanged {
-        let (hash, verified) = artifact_content_verified(old, w.recorded[module_index], w.recorded_known[module_index])
+        let (hash, artifact_sha, verified) = artifact_content_verified(&w.arena, old, w.recorded[module_index], w.recorded_artifact_sha[module_index], w.recorded_known[module_index])
         w.hash_now[module_index] = hash
+        w.artifact_sha_now[module_index] = artifact_sha
         if !verified {
             reason = 6u8
             unchanged = false
@@ -6392,11 +6416,13 @@ fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
 // anchor: a file whole by its own checksum but not the
 // one the manifest saw written -- replaced, or rewritten with the checksum redone --
 // is not the cache's.
-fn artifact_content_verified(old: []const u8, recorded: usize, recorded_known: bool) -> (usize, bool) {
+fn artifact_content_verified(a: *mem.Arena, old: []const u8, recorded: usize, recorded_sha: str, recorded_known: bool) -> (usize, str, bool) {
     let (checksum, checksum_error) = em.artifact_checksum(old)
-    if checksum_error != ok { ret (0usize, false) }
-    if !recorded_known || checksum != recorded { ret (checksum, false) }
-    ret (checksum, true)
+    if checksum_error != ok { ret (0usize, "", false) }
+    let (sha, sha_error) = artifact_hash.sha256_hex(a, old)
+    if sha_error != ok { ret (checksum, "", false) }
+    if !recorded_known || checksum != recorded || !same(sha, recorded_sha) { ret (checksum, sha, false) }
+    ret (checksum, sha, true)
 }
 
 // A key hit proved (D507, H15): the 64-bit key is a candidate fingerprint, not an
@@ -6531,6 +6557,8 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
         workers[worker_at].recorded = hot.recorded
         workers[worker_at].recorded_known = hot.recorded_known
         workers[worker_at].hash_now = hot.hash_now
+        workers[worker_at].recorded_artifact_sha = hot.recorded_artifact_sha
+        workers[worker_at].artifact_sha_now = hot.artifact_sha_now
         workers[worker_at].sha_now = hot.sha_now
         workers[worker_at].fault_collision = hot.fault_collision
         workers[worker_at].mode_id = mode_id
@@ -6574,8 +6602,9 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
                 hot.sha_now[module_index] = sha
                 var (reason, unchanged) = artifact_identity(a, old, old_error, loaded.modules[module_index].text, sha, mode_id, loaded.compiler_identity, hot.fault_collision)
                 if unchanged {
-                    let (hash, verified) = artifact_content_verified(old, hot.recorded[module_index], hot.recorded_known[module_index])
+                    let (hash, artifact_sha, verified) = artifact_content_verified(a, old, hot.recorded[module_index], hot.recorded_artifact_sha[module_index], hot.recorded_known[module_index])
                     hot.hash_now[module_index] = hash
+                    hot.artifact_sha_now[module_index] = artifact_sha
                     if !verified {
                         reason = 6u8
                         unchanged = false
@@ -6620,8 +6649,9 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
         var to_parse = 0usize
         module_at = wave_start
         while module_at < wave_end {
-            let (recorded, recorded_known) = manifest_recorded_hash(hot, loaded.modules[module_at].name)
+            let (recorded, recorded_sha, recorded_known) = manifest_recorded_hash(hot, loaded.modules[module_at].name)
             hot.recorded[module_at] = recorded
+            hot.recorded_artifact_sha[module_at] = recorded_sha
             hot.recorded_known[module_at] = recorded_known
             module_at += 1usize
         }
@@ -6813,6 +6843,10 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     if recorded_known_error != ok { ret recorded_known_error }
     let (hash_now, hash_now_error) = mem.alloc[usize](a, loaded.modules.len)
     if hash_now_error != ok { ret hash_now_error }
+    let (recorded_artifact_sha, recorded_artifact_sha_error) = mem.alloc[str](a, loaded.modules.len)
+    if recorded_artifact_sha_error != ok { ret recorded_artifact_sha_error }
+    let (artifact_sha_now, artifact_sha_now_error) = mem.alloc[str](a, loaded.modules.len)
+    if artifact_sha_now_error != ok { ret artifact_sha_now_error }
     let (sha_now, sha_now_error) = mem.alloc[str](a, loaded.modules.len)
     if sha_now_error != ok { ret sha_now_error }
     var at = 0usize
@@ -6824,6 +6858,8 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
         recorded[at] = 0usize
         recorded_known[at] = false
         hash_now[at] = 0usize
+        recorded_artifact_sha[at] = ""
+        artifact_sha_now[at] = ""
         sha_now[at] = ""
         at += 1usize
     }
@@ -6836,6 +6872,8 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     hot.recorded = recorded
     hot.recorded_known = recorded_known
     hot.hash_now = hash_now
+    hot.recorded_artifact_sha = recorded_artifact_sha
+    hot.artifact_sha_now = artifact_sha_now
     ret ok
 }
 
@@ -6915,6 +6953,8 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
             if hot.unchanged[hashed_at] {
                 loaded.modules[hashed_at].artifact_hash = hot.hash_now[hashed_at]
                 loaded.modules[hashed_at].artifact_hash_known = true
+                loaded.modules[hashed_at].artifact_sha256 = hot.artifact_sha_now[hashed_at]
+                loaded.modules[hashed_at].artifact_sha256_known = true
             }
             hashed_at += 1usize
         }
@@ -8300,6 +8340,10 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     if written_hash_error != ok { ret written_hash_error }
     loaded.modules[module_index].artifact_hash = written_hash
     loaded.modules[module_index].artifact_hash_known = true
+    let (written_sha, written_sha_error) = artifact_hash.sha256_hex(a, held)
+    if written_sha_error != ok { ret written_sha_error }
+    loaded.modules[module_index].artifact_sha256 = written_sha
+    loaded.modules[module_index].artifact_sha256_known = true
     // A cold build holds its artifacts for the link alone (D325); a hot one keeps them.
     if !hot.on { ret ok }
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
