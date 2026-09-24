@@ -63,7 +63,7 @@ fn same(a: str, b: str) -> bool {
 fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (widget.Node, err) {
     let (items, items_error) = mem.alloc[widget.Node](a, 4usize)
     if items_error != ok { ret (zero, items_error) }
-    let (search, e1) = control.button(a, 1u64, t, "Search", &s.subs[1usize], control.button_options())
+    let (search_button, e1) = control.button(a, 1u64, t, "Search", &s.subs[1usize], control.button_options())
     let flyout_open = which == .Flyout
     let (filter, e2) = overlay.flyout_button(a, 2u64, t, "Filter", 20u64, flyout_open, &s.subs[1usize])
     let (build_button, e3) = control.button(a, 3u64, t, "Build", &s.subs[1usize], control.button_options())
@@ -75,6 +75,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     rows[1usize] = second
     let list = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..2usize])
     let (popup, e6) = overlay.popup_of(a, 10u64, t, 1u64, .Below, "Suggestions", list, which == .Popup)
+    let (search, e10) = overlay.popup_combobox(a, "Search files", 10u64, 11u64, which == .Popup, search_button)
     let (inside, e7) = control.text(a, 0u64, "Only my builds", t, control.text_options())
     let (flyout, e8) = overlay.flyout(a, 20u64, t, 2u64, .Below, "Filters", inside, flyout_open, &s.subs[2usize])
     var side: widget.Placement = .Right
@@ -84,7 +85,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
         owner = 1u64
     }
     let (popover, e9) = overlay.popover_of(a, 30u64, t, owner, side, "Build 4128", inside, s.actions[0usize..2usize], which == .Popover || which == .Below, &s.subs[2usize])
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret (zero, e1) }
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret (zero, e1) }
     let (anchors, anchors_error) = mem.alloc[widget.Node](a, 3usize)
     if anchors_error != ok { ret (zero, anchors_error) }
     anchors[0usize] = search
@@ -214,8 +215,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (row, has_row) = bounds(&harness, &runtime, 11u64)
     if !has_row || !near(row.x, popup.x) || !near(row.y, popup.y + 4.0) || !near(row.height, 40.0) || !near(popup.height, 88.0) { os.exit(14i32) }
     let (group, has_group) = find(tree, .Group, "Suggestions")
+    let (search_combo, has_search_combo) = find(tree, .Combobox, "Search files")
     let (closed_filter, has_closed_filter) = find(tree, .Button, "Filter")
-    if !has_group || testing.by_role(&harness, .ListItem).count != 2usize || !has_closed_filter || closed_filter.state.selected || closed_filter.state.expanded || !has_action(closed_filter, .ShowMenu) { os.exit(15i32) }
+    if !has_group || testing.by_role(&harness, .ListItem).count != 2usize || !has_search_combo || !search_combo.state.expanded || !same_element(search_combo.relations.controls, testing.by_key(&harness, 10u64).element) || !same_element(search_combo.relations.active, testing.by_key(&harness, 11u64).element) || !has_closed_filter || closed_filter.state.selected || closed_filter.state.expanded || !has_action(closed_filter, .ShowMenu) { os.exit(15i32) }
     if !tap_key(&harness, &runtime, 2u64) || s.counters[1usize].count != 1usize { os.exit(16i32) }
     if !tap_key(&harness, &runtime, 12u64) || s.counters[0usize].count != 1usize { os.exit(17i32) }
     // The flyout with a pointer: 4 below Filter, 200 wide at least on

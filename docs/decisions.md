@@ -21816,3 +21816,13 @@ contract.
 `ui_overlays2_v2` holds the pixels and semantics on Windows and Linux, with the
 existing outside-dismiss behavior intact. `flyout-selected-anchor.png` is the
 Segoe UI visual check. Compact touch-sheet presentation remains open.
+
+## D1025 — Suggestion popup owners expose the active descendant
+
+`overlay.popup_combobox` wraps the caller's existing focusable field with the
+Combobox role and, while its popup is open, publishes Expanded, Controls and the
+keyed active-descendant relation. The popup remains non-modal, so real focus
+does not move into its virtual selection.
+
+`ui_overlays2_v2` holds the popup and active-row identities on Windows and
+Linux. Loading, empty, error, match-highlight and footer parts remain open.

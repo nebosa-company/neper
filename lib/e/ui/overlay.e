@@ -852,11 +852,28 @@ fn popup(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget
     ret (made, made_error)
 }
 
+// A suggestion popup's owner: the caller's field remains the focusable child,
+// while this combobox reports the open popup and its virtual active row.
+fn popup_combobox(a: *mem.Arena, label: str, popup_key: widget.Key, active_key: widget.Key, open: bool, field: widget.Node) -> (widget.Node, err) {
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = field
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.ROLE_COMBOBOX
+    sem.label = label
+    sem.controls = popup_key
+    if open {
+        sem.states = accessibility.STATE_EXPANDED
+        sem.active = active_key
+    }
+    ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
 // v2 (D976/D987, docs/ux/components/Popup): the popup surface matches its anchor
 // within 200..480 and sits 4 off it on the `placement` side (flipping when that
 // side overflows), a group in the tree named `label`.
-// ponytail: no active descendant, loading bar, or empty and error rows; the
-// anchor keeps the focus because the popup takes none.
+// ponytail: no loading bar or empty and error rows; the anchor keeps the focus
+// because the popup takes none.
 fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (surface, surface_error) = popup_surface(a, t, content)
