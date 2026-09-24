@@ -19928,3 +19928,65 @@ All 80 ui_* fixtures pass on Windows and Linux.
 - Double-click restore and Ctrl+M.
 - The sash hover delay.
 - F6 cycling.
+
+## D969 — The document workspace draws its v2 editor groups, location bar, compact form and MRU keys
+
+`navigation.multi_document_workspace_of` draws the MultiDocumentWorkspace spec
+over editor groups that the caller owns. Each `EditorGroup` holds its documents,
+the current one, the documents in most-recently-used order, and the crumbs for
+its location bar. `WorkspaceOptions` gives the active group, the axis the groups
+split along, and whether the layout is compact. The old
+`multi_document_workspace` is unchanged.
+
+**Split groups.** The groups share the axis between 1px `outline-variant`
+lines. Each group has:
+- its document tabs, drawn by the new `document_tabs_marked`. The active group's
+  current tab stands over a 2px `primary` line; the other groups' lines are
+  clear.
+- a 32 `more-horiz` Group actions button at the end of the strip.
+- a 24-tall location bar when it has crumbs. Each crumb is 24 tall with 4 at
+  each side, in `body-small` `on-surface-variant`. The last crumb is
+  `label-medium` `on-surface`, and 12px `chevron-right` marks stand between
+  crumbs.
+- its view, on `surface`.
+
+**Keys in the active group.**
+- Ctrl+W closes the current document.
+- Ctrl+PageDown and Ctrl+PageUp pick the next and previous document, wrapping
+  at the ends.
+- Ctrl+Tab picks the most recently used document before the current one.
+  Ctrl+Shift+Tab picks the least recently used.
+- Alt+1..9 pick the document at that place.
+- Ctrl+Shift+T reopens, and Ctrl+\ splits.
+
+A scope holds at most 8 shortcuts (the runtime's `MAX_SHORTCUTS`), so the keys
+are nested in scopes of 8.
+
+**Compact.** The active group's current document stands alone under a 56 app
+bar. The bar shows the document's title in `title-large` and a 32 outlined
+`radius-sm` count button with a 48 target, which opens the switcher.
+
+**Empty.** With no documents, the empty state gains the tonal Open recent
+button.
+
+**Events.** Every press and key reaches the caller as a `WorkspaceEvent`: Pick,
+Close, Move, Split, Reopen, OpenRecent, Crumb, Switcher or GroupMenu.
+
+**Runtime change.** `widget.dispatch_key` used to take every Tab for focus
+movement, so Ctrl+Tab could never reach a shortcut. It now moves focus on plain
+Tab and Shift+Tab only.
+
+**Tests.** ui_containers5_v2 holds the split, the active group's line, the crumb
+height and crumb event, the group actions, every key, the compact count button,
+and Open recent. All 81 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Group sashes and resizing.
+- The 2x2 grid, and dragging tabs between groups.
+- Showing the WindowSwitcher while Ctrl is held. For now the caller opens
+  `window_switcher` on the Switcher event.
+- `nu-kbd` key caps in the empty state.
+- Restore hooks beyond the caller's own model.
+- macOS and Web key maps.
+
+With this, all ten P5-08 specs are delivered.

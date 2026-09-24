@@ -3210,10 +3210,12 @@ fn same_modifiers(a: input.Modifiers, b: input.Modifiers) -> bool {
 }
 
 // A key down walks the scopes from the focused element up: a matching shortcut
-// fires, Enter is the default action, Escape the cancel one; Tab moves focus first.
+// fires, Enter is the default action, Escape the cancel one; Tab moves focus first
+// -- plain or with Shift only (D969): Ctrl+Tab is a shortcut, a workspace's
+// most-recently-used switch.
 fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
     let code = key_code(k.key.physical)
-    if code == 9u32 {
+    if code == 9u32 && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta {
         move_focus(s, k.modifiers.shift)
         ret (true, ok)
     }

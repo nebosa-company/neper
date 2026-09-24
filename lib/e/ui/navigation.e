@@ -457,6 +457,14 @@ fn tab_close_fire(ctx: *void) -> err {
 // `DocumentMove` (pinned tabs neither move nor take a drop), and Left and Right
 // from a focused tab pick the neighbours. A tab list in the tree named `label`.
 fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove]) -> (widget.Node, err) {
+    let (made, made_error) = document_tabs_marked(a, key, t, label, documents, current, pick, close, move, false, false)
+    ret (made, made_error)
+}
+
+// The same, `marked` (D969, an editor group of the workspace): each tab stands
+// over a 2px line, `primary` under the current tab while `active` (the group
+// with the keyboard focus), clear otherwise.
+fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], marked: bool, active: bool) -> (widget.Node, err) {
     if documents.len > 64usize { ret (zero, TooLarge) }
     let (tabs, tabs_error) = mem.alloc[widget.Node](a, documents.len)
     if tabs_error != ok { ret (zero, TooLarge) }
@@ -514,6 +522,16 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
         let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..part_count])
+        if marked {
+            let (lined, lined_error) = mem.alloc[widget.Node](a, 2usize)
+            if lined_error != ok { ret (zero, TooLarge) }
+            lined[0usize] = body[0usize]
+            var line = style.defaults()
+            line.height = style.Length { Px: 2.0 }
+            if chosen && active { line.background = paint.Brush { Solid: style.color(t.tokens, .Primary) } }
+            lined[1usize] = widget.box(0u64, line, zero)
+            body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .End, cross: .Stretch, gap: 2.0 }, style.defaults(), lined[0usize..2usize])
+        }
         var tab_style = style.defaults()
         tab_style.background = paint.Brush { Solid: look.background }
         tab_style.min_height = style.Length { Px: t.tokens.metrics.control_height }
@@ -1434,7 +1452,7 @@ fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Th
     if viewed_error != ok { ret (zero, TooLarge) }
     viewed[0usize] = view
     if documents.len == 0usize {
-        let (empty, empty_error) = workspace_empty(a, t)
+        let (empty, empty_error) = workspace_empty(a, t, 0u64, zero)
         if empty_error != ok { ret (zero, empty_error) }
         viewed[0usize] = empty
         view_style.height = style.Length { Px: height }
@@ -1478,8 +1496,9 @@ fn multi_document_workspace(a: *mem.Arena, key: widget.Key, t: *const control.Th
     ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
 
-// The workspace's empty state (D966): the heading over the shortcut rows.
-fn workspace_empty(a: *mem.Arena, t: *const control.Theme) -> (widget.Node, err) {
+// The workspace's empty state (D966): the heading over the shortcut rows; and
+// (D969) with `recent`, a small tonal Open recent button (keyed `key`) under them.
+fn workspace_empty(a: *mem.Arena, t: *const control.Theme, key: widget.Key, recent: *const widget.Submit) -> (widget.Node, err) {
     let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize)
     if rows_error != ok { ret (zero, TooLarge) }
     var said = control.text_options()
@@ -1498,13 +1517,383 @@ fn workspace_empty(a: *mem.Arena, t: *const control.Theme) -> (widget.Node, err)
     caption.wrap = .None
     let (heading, heading_error) = control.colored_text(a, 0u64, "No open files", t, caption, style.color(t.tokens, .OnSurface))
     if heading_error != ok { ret (zero, heading_error) }
-    let (blocks, blocks_error) = mem.alloc[widget.Node](a, 2usize)
+    let (blocks, blocks_error) = mem.alloc[widget.Node](a, 3usize)
     if blocks_error != ok { ret (zero, TooLarge) }
     blocks[0usize] = heading
     var list = style.defaults()
     list.width = style.Length { Px: 240.0 }
     blocks[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, list, rows[0usize..3usize])
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), blocks[0usize..2usize]), ok)
+    var count = 2usize
+    if mem.address_of(recent) != 0usize {
+        var tonal = control.button_options()
+        tonal.variant = .Tonal
+        let (button, button_error) = control.button(a, key, t, "Open recent", recent, tonal)
+        if button_error != ok { ret (zero, button_error) }
+        blocks[2usize] = button
+        count = 3usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), blocks[0usize..count]), ok)
+}
+
+// ------------------------------------------------- editor groups (D969)
+
+// An editor group, the caller's: its documents and current one, its documents
+// most recently used first (for Ctrl+Tab), and the location bar's crumbs (none:
+// no bar).
+type EditorGroup = struct { documents: []const Document, current: usize, recent: []const usize, crumbs: []const str }
+
+// What a press or a key in the workspace asks: pick, close or move a document of
+// `group`, split the active group, reopen the last closed document, open a
+// recent one, follow crumb `index`, open the document switcher, or open the
+// group's actions menu.
+type WorkspaceEventKind = enum u8 { Pick, Close, Move, Split, Reopen, OpenRecent, Crumb, Switcher, GroupMenu }
+type WorkspaceEvent = struct { kind: WorkspaceEventKind, group: usize, index: usize, move: DocumentMove }
+
+// The workspace's layout: the active group, the axis the groups divide
+// (Horizontal: side by side), and the compact form.
+type WorkspaceOptions = struct { active: usize, axis: ui_layout.Axis, compact: bool }
+
+fn workspace_options() -> WorkspaceOptions {
+    var out: WorkspaceOptions = zero
+    out.axis = .Horizontal
+    ret out
+}
+
+type GroupRelay = struct { kind: WorkspaceEventKind, group: usize, index: usize, change: widget.Change[WorkspaceEvent] }
+
+fn relay_index_fire(ctx: *void, index: usize) -> err {
+    let r = mem.cast[*GroupRelay](ctx)
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: index, move: zero })
+}
+
+fn relay_move_fire(ctx: *void, moved: DocumentMove) -> err {
+    let r = mem.cast[*GroupRelay](ctx)
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: .Move, group: r.group, index: moved.from, move: moved })
+}
+
+fn relay_fire(ctx: *void) -> err {
+    let r = mem.cast[*GroupRelay](ctx)
+    ret widget.fire_change[WorkspaceEvent](r.change, WorkspaceEvent { kind: r.kind, group: r.group, index: r.index, move: zero })
+}
+
+fn relay(a: *mem.Arena, kind: WorkspaceEventKind, group: usize, index: usize, change: widget.Change[WorkspaceEvent]) -> (*GroupRelay, err) {
+    let (relays, relays_error) = mem.alloc[GroupRelay](a, 1usize)
+    if relays_error != ok { ret (zero, TooLarge) }
+    relays[0usize] = GroupRelay { kind: kind, group: group, index: index, change: change }
+    ret (&relays[0usize], ok)
+}
+
+fn relay_submit(a: *mem.Arena, kind: WorkspaceEventKind, group: usize, index: usize, change: widget.Change[WorkspaceEvent]) -> (*widget.Submit, err) {
+    let (r, r_error) = relay(a, kind, group, index, change)
+    if r_error != ok { ret (zero, r_error) }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
+    if actions_error != ok { ret (zero, TooLarge) }
+    actions[0usize] = widget.Submit { ctx: mem.cast[*void](r), invoke: relay_fire }
+    ret (&actions[0usize], ok)
+}
+
+// A location bar (D969): 24 tall, the crumbs 24 tall with 4 at each side in
+// `body-small` `on-surface-variant`, the last `label-medium` `on-surface`,
+// `chevron-right` 12 marks between; a crumb press is a Crumb event. Keyed
+// `key + index`.
+fn location_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, crumbs: []const str, group: usize, change: widget.Change[WorkspaceEvent]) -> (widget.Node, err) {
+    let (items, items_error) = mem.alloc[widget.Node](a, 2usize * crumbs.len)
+    if items_error != ok { ret (zero, TooLarge) }
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var count = 0usize
+    var i = 0usize
+    while i < crumbs.len {
+        if i > 0usize {
+            let (mark, mark_error) = control.icon_square(a, muted, .ChevronRight, 12.0)
+            if mark_error != ok { ret (zero, mark_error) }
+            items[count] = mark
+            count += 1usize
+        }
+        let last = i + 1usize == crumbs.len
+        var ink = muted
+        var caption = control.text_options()
+        caption.role = .BodySmall
+        caption.wrap = .None
+        if last {
+            ink = style.color(t.tokens, .OnSurface)
+            caption.role = .LabelMedium
+        }
+        let (words, words_error) = control.colored_text(a, 0u64, crumbs[i], t, caption, ink)
+        if words_error != ok { ret (zero, words_error) }
+        let (go, go_error) = relay_submit(a, .Crumb, group, i, change)
+        if go_error != ok { ret (zero, go_error) }
+        let state = control.control_state(t, key + u64(i), true, false)
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
+        look.foreground = ink
+        look.border_width = 0.0
+        look.opacity = 1.0
+        look.radius = t.tokens.radii.xs
+        look.custom_padding = true
+        look.padding = 4.0
+        look.padding_y = 4.0
+        look.min_height = 24.0
+        look.min_width = 8.0
+        let (crumb, crumb_error) = control.pressable(a, key + u64(i), t, 9u8, crumbs[i], look, true, false, go, words)
+        if crumb_error != ok { ret (zero, crumb_error) }
+        items[count] = crumb
+        count += 1usize
+        i += 1usize
+    }
+    var bar = style.defaults()
+    bar.height = style.Length { Px: 24.0 }
+    bar.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, items[0usize..count]), ok)
+}
+
+// v2 (D969, docs/ux/components/MultiDocumentWorkspace): the workspace over the
+// caller's editor groups, `width` by `height`, divided along the options' axis by
+// 1px `outline-variant` lines. A group (its parts keyed from `key + 1 + 200 *
+// group`; its tabs from `+ 2`) is its document tabs (marked: the active group's current tab over the
+// 2px `primary` line), a `more-horiz` 32 button at the strip's end for its
+// actions menu, the location bar under them while it has crumbs, and its view on
+// `surface`. The active group's scope holds the keys: Ctrl+W closes, Ctrl+PageDown
+// and Ctrl+PageUp pick the next and previous (wrapping), Ctrl+Tab the most
+// recently used before the current and Ctrl+Shift+Tab the least, Alt+1..9 the
+// document at that place, Ctrl+Shift+T reopens and Ctrl+\ splits. With no
+// documents in any group, the empty state stands centred with the tonal Open
+// recent button (`key + 900`). Compact, the active group's current document
+// stands alone under a 56 app bar of its title in `title-large` and a 32
+// outlined `radius-sm` count button (`key + 901`, 48 target) opening the
+// switcher. Every press and key is a `WorkspaceEvent` for the caller to apply.
+// A group in the tree named `label`, each group a group named by its current
+// document.
+// ponytail: groups share the axis equally (no group sashes, no 2 x 2 grid, no
+// drag between groups); the switcher itself is the caller's (window_switcher);
+// no restore hooks beyond the caller's own model; macOS/Web key maps not done.
+fn multi_document_workspace_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, groups: []const EditorGroup, views: []const widget.Node, options: WorkspaceOptions, change: widget.Change[WorkspaceEvent], width: f32, height: f32) -> (widget.Node, err) {
+    if views.len != groups.len { ret (zero, TooLarge) }
+    var total = 0usize
+    var g = 0usize
+    while g < groups.len {
+        total += groups[g].documents.len
+        g += 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    let (single, single_error) = mem.alloc[widget.Node](a, 2usize)
+    if single_error != ok { ret (zero, TooLarge) }
+    var ground = control.sized_style(width, height)
+    ground.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    ground.overflow = .Clip
+    if total == 0usize {
+        let (recent, recent_error) = relay_submit(a, .OpenRecent, 0usize, 0usize, change)
+        if recent_error != ok { ret (zero, recent_error) }
+        let (empty, empty_error) = workspace_empty(a, t, key + 900u64, recent)
+        if empty_error != ok { ret (zero, empty_error) }
+        single[0usize] = empty
+        single[1usize] = widget.aligned(0u64, .Center, .Center, ground, single[0usize..1usize])
+        ret (widget.semantics(key, sem, style.defaults(), single[1usize..2usize]), ok)
+    }
+    var active = options.active
+    if active >= groups.len { active = 0usize }
+    if options.compact {
+        let group = groups[active]
+        var title: str = ""
+        if group.current < group.documents.len { title = group.documents[group.current].title }
+        let (bar_parts, bar_parts_error) = mem.alloc[widget.Node](a, 4usize)
+        if bar_parts_error != ok { ret (zero, TooLarge) }
+        var caption = control.text_options()
+        caption.role = .TitleLarge
+        caption.wrap = .None
+        let (heading, heading_error) = control.colored_text(a, 0u64, title, t, caption, style.color(t.tokens, .OnSurface))
+        if heading_error != ok { ret (zero, heading_error) }
+        bar_parts[0usize] = heading
+        bar_parts[1usize] = widget.spacer(0u64, 1.0)
+        let (counted, counted_error) = mem.alloc[u8](a, 24usize)
+        if counted_error != ok { ret (zero, TooLarge) }
+        let n = control.write_i64(counted, i64(total))
+        var small = control.text_options()
+        small.role = .LabelMedium
+        small.wrap = .None
+        let (number, number_error) = control.colored_text(a, 0u64, counted[0usize..n], t, small, style.color(t.tokens, .OnSurface))
+        if number_error != ok { ret (zero, number_error) }
+        let (switcher, switcher_error) = relay_submit(a, .Switcher, active, 0usize, change)
+        if switcher_error != ok { ret (zero, switcher_error) }
+        let state = control.control_state(t, key + 901u64, true, false)
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
+        look.foreground = style.color(t.tokens, .OnSurface)
+        look.border = style.color(t.tokens, .Outline)
+        look.border_width = 1.0
+        look.opacity = 1.0
+        look.radius = t.tokens.radii.sm
+        look.custom_padding = true
+        look.padding = 8.0
+        look.padding_y = 8.0
+        look.min_width = 32.0
+        look.min_height = 32.0
+        let (counter, counter_error) = control.pressable(a, key + 901u64, t, 3u8, "Documents", look, true, false, switcher, number)
+        if counter_error != ok { ret (zero, counter_error) }
+        bar_parts[3usize] = counter
+        // The count button's 48 target around its 32 box.
+        bar_parts[2usize] = widget.padded(0u64, 8.0, 8.0, 8.0, 8.0, style.defaults(), bar_parts[3usize..4usize])
+        var bar = style.defaults()
+        bar.width = style.Length { Px: width }
+        bar.height = style.Length { Px: 56.0 }
+        bar.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+        let (column, column_error) = mem.alloc[widget.Node](a, 3usize)
+        if column_error != ok { ret (zero, TooLarge) }
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, bar_parts[0usize..3usize])
+        column[2usize] = views[active]
+        var view_style = style.defaults()
+        view_style.width = style.Length { Px: width }
+        view_style.height = style.Length { Px: max_f(height - 56.0, 0.0) }
+        view_style.overflow = .Clip
+        column[1usize] = widget.box(0u64, view_style, column[2usize..3usize])
+        single[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, ground, column[0usize..2usize])
+        ret (widget.semantics(key, sem, style.defaults(), single[0usize..1usize]), ok)
+    }
+    // The groups along the axis, equal shares between 1px lines.
+    let n_groups = groups.len
+    let across = options.axis == .Horizontal
+    var share_w = width
+    var share_h = height
+    if across {
+        share_w = (width - f32(n_groups - 1usize)) / f32(n_groups)
+    } else {
+        share_h = (height - f32(n_groups - 1usize)) / f32(n_groups)
+    }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * n_groups)
+    if cells_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    g = 0usize
+    while g < n_groups {
+        let group = groups[g]
+        let base = key + 1u64 + 200u64 * u64(g)
+        if g > 0usize {
+            var line = style.defaults()
+            line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            if across {
+                line.width = style.Length { Px: 1.0 }
+                line.height = style.Length { Px: height }
+            } else {
+                line.height = style.Length { Px: 1.0 }
+                line.width = style.Length { Px: width }
+            }
+            cells[count] = widget.box(0u64, line, zero)
+            count += 1usize
+        }
+        let (picked, picked_error) = relay(a, .Pick, g, 0usize, change)
+        let (closed, closed_error) = relay(a, .Close, g, 0usize, change)
+        let (moved, moved_error) = relay(a, .Move, g, 0usize, change)
+        if picked_error != ok || closed_error != ok || moved_error != ok { ret (zero, TooLarge) }
+        let pick = widget.Change[usize] { ctx: mem.cast[*void](picked), invoke: relay_index_fire }
+        let close = widget.Change[usize] { ctx: mem.cast[*void](closed), invoke: relay_index_fire }
+        let move = widget.Change[DocumentMove] { ctx: mem.cast[*void](moved), invoke: relay_move_fire }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        let (strip_parts, strip_parts_error) = mem.alloc[widget.Node](a, 3usize)
+        if strip_parts_error != ok { ret (zero, TooLarge) }
+        let (strip, strip_error) = document_tabs_marked(a, base + 1u64, t, label, group.documents, group.current, pick, close, move, true, g == active)
+        if strip_error != ok { ret (zero, strip_error) }
+        strip_parts[0usize] = strip
+        strip_parts[1usize] = widget.spacer(0u64, 1.0)
+        let (menu, menu_error) = relay_submit(a, .GroupMenu, g, 0usize, change)
+        if menu_error != ok { ret (zero, menu_error) }
+        let (more, more_error) = control.glyph_button(a, base + 190u64, t, .MoreHoriz, "Group actions", menu, 32.0, t.tokens.sizes.icon_sm)
+        if more_error != ok { ret (zero, more_error) }
+        strip_parts[2usize] = more
+        var head = style.defaults()
+        head.width = style.Length { Px: share_w }
+        head.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
+        parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head, strip_parts[0usize..3usize])
+        var used = 1usize
+        if group.crumbs.len != 0usize {
+            let (located, located_error) = location_bar(a, base + 150u64, t, group.crumbs, g, change)
+            if located_error != ok { ret (zero, located_error) }
+            parts[used] = located
+            used += 1usize
+        }
+        parts[3usize] = views[g]
+        var view_style = style.defaults()
+        view_style.width = style.Length { Px: share_w }
+        view_style.height = style.Length { Flex: 1.0 }
+        view_style.overflow = .Clip
+        view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        parts[used] = widget.box(0u64, view_style, parts[3usize..4usize])
+        used += 1usize
+        let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+        if framed_error != ok { ret (zero, TooLarge) }
+        framed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, control.sized_style(share_w, share_h), parts[0usize..used])
+        // The active group's keys.
+        var held = framed[0usize]
+        if g == active && group.documents.len > 0usize {
+            let docs = group.documents.len
+            let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 16usize)
+            if keys_error != ok { ret (zero, TooLarge) }
+            var bound = 0usize
+            var ctrl: input.Modifiers = zero
+            ctrl.control = true
+            var ctrl_shift = ctrl
+            ctrl_shift.shift = true
+            var alt: input.Modifiers = zero
+            alt.alt = true
+            var next = 0usize
+            if group.current + 1usize < docs { next = group.current + 1usize }
+            var previous = docs - 1usize
+            if group.current > 0usize && group.current < docs { previous = group.current - 1usize }
+            let (closing, closing_error) = relay_submit(a, .Close, g, group.current, change)
+            let (forward, forward_error) = relay_submit(a, .Pick, g, next, change)
+            let (backward, backward_error) = relay_submit(a, .Pick, g, previous, change)
+            let (reopen, reopen_error) = relay_submit(a, .Reopen, g, 0usize, change)
+            let (split, split_error) = relay_submit(a, .Split, g, 0usize, change)
+            if closing_error != ok || forward_error != ok || backward_error != ok || reopen_error != ok || split_error != ok { ret (zero, TooLarge) }
+            keys[0usize] = widget.Shortcut { key: 87u32, modifiers: ctrl, action: *closing }
+            keys[1usize] = widget.Shortcut { key: 34u32, modifiers: ctrl, action: *forward }
+            keys[2usize] = widget.Shortcut { key: 33u32, modifiers: ctrl, action: *backward }
+            keys[3usize] = widget.Shortcut { key: 84u32, modifiers: ctrl_shift, action: *reopen }
+            keys[4usize] = widget.Shortcut { key: 220u32, modifiers: ctrl, action: *split }
+            bound = 5usize
+            if group.recent.len > 1usize {
+                let (mru, mru_error) = relay_submit(a, .Pick, g, group.recent[1usize], change)
+                let (lru, lru_error) = relay_submit(a, .Pick, g, group.recent[group.recent.len - 1usize], change)
+                if mru_error != ok || lru_error != ok { ret (zero, TooLarge) }
+                keys[bound] = widget.Shortcut { key: 9u32, modifiers: ctrl, action: *mru }
+                keys[bound + 1usize] = widget.Shortcut { key: 9u32, modifiers: ctrl_shift, action: *lru }
+                bound += 2usize
+            }
+            var place = 0usize
+            while place < docs && place < 9usize {
+                let (jump, jump_error) = relay_submit(a, .Pick, g, place, change)
+                if jump_error != ok { ret (zero, jump_error) }
+                keys[bound] = widget.Shortcut { key: 49u32 + u32(place), modifiers: alt, action: *jump }
+                bound += 1usize
+                place += 1usize
+            }
+            // A scope holds at most 8 shortcuts: nest one per 8.
+            let (wraps, wraps_error) = mem.alloc[widget.Node](a, 3usize)
+            if wraps_error != ok { ret (zero, TooLarge) }
+            wraps[0usize] = framed[0usize]
+            var from = 0usize
+            var level = 0usize
+            while from < bound {
+                var upto = from + 8usize
+                if upto > bound { upto = bound }
+                wraps[level + 1usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: keys[from..upto], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), wraps[level..level + 1usize])
+                level += 1usize
+                from = upto
+            }
+            held = wraps[level]
+        }
+        let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
+        if named_error != ok { ret (zero, TooLarge) }
+        named[0usize] = held
+        var group_sem: widget.Semantics = zero
+        group_sem.role = 2u8
+        if group.current < group.documents.len { group_sem.label = group.documents[group.current].title }
+        cells[count] = widget.semantics(base, group_sem, style.defaults(), named[0usize..1usize])
+        count += 1usize
+        g += 1usize
+    }
+    single[0usize] = widget.flex(0u64, ui_layout.Flex { axis: options.axis, main: .Start, cross: .Start, gap: 0.0 }, ground, cells[0usize..count])
+    ret (widget.semantics(key, sem, style.defaults(), single[0usize..1usize]), ok)
 }
 
 // ------------------------------------------------- productivity navigation (D853, P3-04)
