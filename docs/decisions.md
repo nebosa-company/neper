@@ -22143,3 +22143,16 @@ cycle action for tap, Enter or Space.
 `ui_overlays3_v2` holds 96/240/408px detents, the half-height value, the standard
 peek and both pointer/keyboard activations on Windows and Linux.
 `bottom-sheet-half-detent.png` is the Segoe UI visual check.
+
+## D1054 — Modal bottom sheets follow and settle downward drags
+
+The existing detent handle keeps only its current downward distance in keyed
+runtime state. During a drag the modal sheet is translated by that distance
+1:1; release below 64px snaps it back, while release at or beyond the threshold
+asks the caller for the next lower detent, or uses the existing dismissal action
+when the current detent is Peek. Tap, Enter and Space still use the independent
+cycle action.
+
+`ui_overlays3_v2` holds the live 36px translation, short snap-back, lower-detent
+settle and Peek dismissal on Windows and Linux. The existing
+`bottom-sheet-half-detent.png` remains the Segoe UI handle check.

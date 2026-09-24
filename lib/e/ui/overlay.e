@@ -1696,15 +1696,58 @@ fn sheet_detent_label(detent: SheetDetent) -> str {
     ret "peek height"
 }
 
+type SheetDrag = struct { moved: f32 }
+type SheetDragging = struct { cell: *SheetDrag, has_cell: bool, tap: widget.Submit, settle: widget.Submit, threshold: f32 }
+
+fn sheet_drag_cell(t: *const control.Theme, key: widget.Key) -> (*SheetDrag, bool) {
+    var none: *SheetDrag = zero
+    if mem.address_of(t.runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    let (kept, _, kept_error) = widget.state[SheetDrag](&build, key, SheetDrag { moved: 0.0 })
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
+fn sheet_drag(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*SheetDragging](ctx)
+    switch g {
+    case .Tap as at:
+        ret widget.fire_submit(d.tap)
+    case .DragStart as at:
+        if d.has_cell { d.cell.moved = 0.0 }
+        ret ok
+    case .DragMove as moved:
+        if d.has_cell {
+            d.cell.moved = moved.position.y - moved.start.y
+            if d.cell.moved < 0.0 { d.cell.moved = 0.0 }
+        }
+        ret ok
+    case .DragEnd as at:
+        if !d.has_cell { ret ok }
+        let moved = d.cell.moved
+        d.cell.moved = 0.0
+        if moved >= d.threshold { ret widget.fire_submit(d.settle) }
+        ret ok
+    default:
+        ret ok
+    }
+}
+
 fn bottom_sheet_detent(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, cycle: *const widget.Submit, detent: SheetDetent, peek_height: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (made, made_error) = edged_detent(a, key, t, title, content, dismiss, *dismiss, .Below, 0.0, sheet_detent_height(t, detent, peek_height), cycle, sheet_detent_label(detent), false)
+    var settle = cycle
+    if detent == .Peek { settle = dismiss }
+    let (made, made_error) = edged_detent(a, key, t, title, content, dismiss, *dismiss, .Below, 0.0, sheet_detent_height(t, detent, peek_height), cycle, settle, sheet_detent_label(detent), false, true)
     ret (made, made_error)
 }
 
 fn standard_bottom_sheet_detent(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, close: *const widget.Submit, cycle: *const widget.Submit, detent: SheetDetent, peek_height: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (made, made_error) = edged_detent(a, key, t, title, content, close, *close, .Below, 0.0, sheet_detent_height(t, detent, peek_height), cycle, sheet_detent_label(detent), true)
+    let (made, made_error) = edged_detent(a, key, t, title, content, close, *close, .Below, 0.0, sheet_detent_height(t, detent, peek_height), cycle, cycle, sheet_detent_label(detent), true, false)
     ret (made, made_error)
 }
 
@@ -1736,7 +1779,7 @@ fn sheet_handle(t: *const control.Theme, grips: []widget.Node) -> widget.Node {
     ret widget.aligned(0u64, .Center, .Start, row, grips[0usize..1usize])
 }
 
-fn sheet_resize_handle(a: *mem.Arena, key: widget.Key, t: *const control.Theme, grips: []widget.Node, cycle: *const widget.Submit, value: str) -> (widget.Node, err) {
+fn sheet_resize_handle(a: *mem.Arena, key: widget.Key, t: *const control.Theme, grips: []widget.Node, cycle: *const widget.Submit, settle: *const widget.Submit, cell: *SheetDrag, has_cell: bool, value: str) -> (widget.Node, err) {
     var grip = control.sized_style(32.0, 4.0)
     grip.radius = 2.0
     grip.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.4) }
@@ -1753,7 +1796,12 @@ fn sheet_resize_handle(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     target_style.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state)) }
     let (region_body, region_body_error) = mem.alloc[widget.Node](a, 1usize)
     if region_body_error != ok { ret (zero, TooLarge) }
-    region_body[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](cycle), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, target_style, grips[1usize..2usize])
+    let (dragging, dragging_error) = mem.alloc[SheetDragging](a, 1usize)
+    if dragging_error != ok { ret (zero, TooLarge) }
+    dragging[0usize] = SheetDragging { cell: cell, has_cell: has_cell, tap: *cycle, settle: *settle, threshold: 64.0 }
+    var gestures = 1u8 | 4u8
+    if has_cell { gestures |= 2u8 }
+    region_body[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&dragging[0usize]), invoke: sheet_drag }, gestures: gestures, enabled: true, focusable: true }, target_style, grips[1usize..2usize])
     var sem: widget.Semantics = zero
     sem.role = 3u8
     sem.label = "Resize sheet"
@@ -1769,36 +1817,39 @@ fn sheet_resize_handle(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // the content 16 in at the sides; a bottom sheet's drag handle above the header.
 fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     var no_actions: []const DialogButton = zero
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions, false, zero, "")
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions, false, zero, zero, "", false)
     ret (made, made_error)
 }
 
 fn edged_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit) -> (widget.Node, err) {
     var no_actions: []const DialogButton = zero
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, back, no_actions, false, zero, "")
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, back, no_actions, false, zero, zero, "", false)
     ret (made, made_error)
 }
 
 fn edged_with_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, actions: []const DialogButton) -> (widget.Node, err) {
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, actions, false, zero, "")
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, actions, false, zero, zero, "", false)
     ret (made, made_error)
 }
 
 fn edged_standard(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     var no_actions: []const DialogButton = zero
-    let (made, made_error) = edged_full(a, key, t, title, content, close, *close, placement, width, height, zero, no_actions, true, zero, "")
+    let (made, made_error) = edged_full(a, key, t, title, content, close, *close, placement, width, height, zero, no_actions, true, zero, zero, "", false)
     ret (made, made_error)
 }
 
-fn edged_detent(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, cycle: *const widget.Submit, value: str, standard: bool) -> (widget.Node, err) {
+fn edged_detent(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, cycle: *const widget.Submit, settle: *const widget.Submit, value: str, standard: bool, draggable: bool) -> (widget.Node, err) {
     var no_actions: []const DialogButton = zero
-    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions, standard, cycle, value)
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions, standard, cycle, settle, value, draggable)
     ret (made, made_error)
 }
 
-fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit, actions: []const DialogButton, standard: bool, resize: *const widget.Submit, resize_value: str) -> (widget.Node, err) {
+fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit, actions: []const DialogButton, standard: bool, resize: *const widget.Submit, settle: *const widget.Submit, resize_value: str, draggable: bool) -> (widget.Node, err) {
     if actions.len > 2usize { ret (zero, TooLarge) }
     let bottom = placement == .Below
+    let (drag_cell, has_drag_cell) = sheet_drag_cell(t, key + 2u64)
+    var drag_offset: f32 = 0.0
+    if draggable && has_drag_cell { drag_offset = drag_cell.moved }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var heading = control.text_options()
     heading.role = .TitleLarge
@@ -1843,7 +1894,7 @@ fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
     var p = 0usize
     if bottom {
         if mem.address_of(resize) != 0usize {
-            let (handle, handle_error) = sheet_resize_handle(a, key + 2u64, t, bits[3usize..5usize], resize, resize_value)
+            let (handle, handle_error) = sheet_resize_handle(a, key + 2u64, t, bits[3usize..5usize], resize, settle, drag_cell, draggable && has_drag_cell, resize_value)
             if handle_error != ok { ret (zero, handle_error) }
             parts[0usize] = handle
         } else {
@@ -1891,7 +1942,7 @@ fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
         let (made, made_error) = standard_sheet_frame(a, key, t, title, column, placement, width, height)
         ret (made, made_error)
     }
-    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, outside, placement, width, height)
+    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, outside, placement, width, height, drag_offset)
     ret (made, made_error)
 }
 
@@ -1902,10 +1953,9 @@ fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: st
 // open edge's corners `radius-lg`. A modal dialog in the tree named `label`,
 // labelled by the element keyed `key + 1`; Escape fires `dismiss` and a press
 // outside fires `outside` (normally the same action).
-// ponytail: no drag-to-dismiss.
-fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
+fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, drag_offset: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
-    let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
+    let (body, body_error) = mem.alloc[widget.Node](a, 5usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = column
     var raised = control.surface_options(t)
@@ -1932,15 +1982,25 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     body[1usize] = widget.box(0u64, panel, body[0usize..1usize])
     var placed = body[1usize]
     if bottom {
+        if drag_offset > 0.0 && height > 0.0 {
+            var slot = style.defaults()
+            slot.width = style.Length { Percent: 100.0 }
+            slot.max_width = style.Length { Px: 640.0 }
+            slot.height = style.Length { Px: height }
+            body[2usize] = widget.positioned(0u64, 0.0, drag_offset, slot, body[1usize..2usize])
+            body[3usize] = widget.stack(0u64, slot, body[2usize..3usize])
+            placed = body[3usize]
+        }
         var centre = style.defaults()
         centre.width = style.Length { Percent: 100.0 }
-        placed = widget.aligned(0u64, .Center, .End, centre, body[1usize..2usize])
+        body[4usize] = placed
+        placed = widget.aligned(0u64, .Center, .End, centre, body[4usize..5usize])
     }
-    body[2usize] = placed
+    body[4usize] = placed
     var none: []const widget.Shortcut = zero
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), body[2usize..3usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *dismiss, keys: zero }, style.defaults(), body[4usize..5usize])
     var sem: widget.Semantics = zero
     sem.role = 23u8
     sem.label = label
@@ -2276,7 +2336,7 @@ fn action_sheet_form(a: *mem.Arena, key: widget.Key, t: *const control.Theme, ti
     rows[n] = widget.box(0u64, control.sized_style(1.0, 8.0), zero)
     n += 1usize
     let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..n])
-    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, *dismiss, .Below, 0.0, 0.0)
+    let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, *dismiss, .Below, 0.0, 0.0, 0.0)
     ret (made, made_error)
 }
 
