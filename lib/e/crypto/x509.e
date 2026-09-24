@@ -17,7 +17,7 @@ use e.fmt.asn1 as asn1
 use e.fmt.pem as pem
 
 type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey, P256: sign.P256PublicKey, Unsupported: []const u8 }
-type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool }
+type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool, has_path_len: bool, path_len: u16, has_key_usage: bool, key_cert_sign: bool, unhandled_critical: bool }
 type Pool = struct { certificates: []const Certificate }
 type VerifyOptions = struct { roots: Pool, intermediates: Pool, dns_name: str, now: time.Instant, usage: KeyUsage, max_depth: u16 }
 type KeyUsage = enum u8 { ServerAuth, ClientAuth, CodeSigning, EmailProtection, Any }
@@ -301,7 +301,9 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
     } else {
         certificate.public_key = PublicKey{ Unsupported: key_bits.content[1usize..] }
     }
-    // Extensions [3] EXPLICIT, v3 only: subjectAltName and basicConstraints.
+    // Extensions [3] EXPLICIT, v3 only. An unhandled critical extension is kept
+    // on the certificate so an unused supplied suffix can parse but no verified
+    // chain can pass through it.
     var names: []const str = zero
     while true {
         let (rest, has_rest, rest_error) = asn1.reader_next_err(&fields)
@@ -329,30 +331,70 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
                 let (first_payload, payload_error) = next(&parts)
                 if payload_error != ok { ret (zero, payload_error) }
                 var payload = first_payload
-                if payload.tag.number == 1u32 {
+                var critical = false
+                if payload.tag.class == .Universal && payload.tag.number == 1u32 && !payload.tag.constructed {
+                    if payload.content.len != 1usize { ret (zero, InvalidCertificate) }
+                    critical = payload.content[0] != 0u8
                     let (after_critical, critical_error) = next(&parts)
                     if critical_error != ok { ret (zero, critical_error) }
                     payload = after_critical
                 }
-                if payload.tag.number != 4u32 { ret (zero, InvalidCertificate) }
+                if payload.tag.class != .Universal || payload.tag.number != 4u32 || payload.tag.constructed { ret (zero, InvalidCertificate) }
+                let (_, has_extension_tail, extension_tail_error) = asn1.reader_next_err(&parts)
+                if extension_tail_error != ok || has_extension_tail { ret (zero, InvalidCertificate) }
                 let san: [3]u8 = [3]u8{ 85, 29, 17 }
                 let basic: [3]u8 = [3]u8{ 85, 29, 19 }
+                let key_usage: [3]u8 = [3]u8{ 85, 29, 15 }
+                let extended_usage: [3]u8 = [3]u8{ 85, 29, 37 }
+                var handled = false
                 if oid_equal(extension_oid.content, san[0..]) {
+                    handled = true
                     let (parsed, san_error) = parse_dns_names(a, payload.content)
                     if san_error != ok { ret (zero, san_error) }
                     names = parsed
                 }
                 if oid_equal(extension_oid.content, basic[0..]) {
+                    handled = true
                     var constraints = asn1.reader(payload.content, DEPTH)
                     let (sequence, sequence_error) = expect(&constraints, 16u32, true)
                     if sequence_error != ok { ret (zero, sequence_error) }
                     let (flags0, flags_error) = inside(sequence)
                     if flags_error != ok { ret (zero, flags_error) }
                     var flags = flags0
-                    let (ca, has_ca, ca_error) = asn1.reader_next_err(&flags)
-                    if ca_error != ok { ret (zero, InvalidCertificate) }
-                    if has_ca && ca.tag.number == 1u32 && ca.content.len == 1usize && ca.content[0] == 255u8 { certificate.is_ca = true }
+                    let (first, has_first, first_error) = asn1.reader_next_err(&flags)
+                    if first_error != ok { ret (zero, InvalidCertificate) }
+                    var constraint = first
+                    var has_constraint = has_first
+                    if has_constraint && constraint.tag.class == .Universal && constraint.tag.number == 1u32 && !constraint.tag.constructed {
+                        if constraint.content.len != 1usize { ret (zero, InvalidCertificate) }
+                        certificate.is_ca = constraint.content[0] != 0u8
+                        let (after_ca, has_after_ca, after_ca_error) = asn1.reader_next_err(&flags)
+                        if after_ca_error != ok { ret (zero, InvalidCertificate) }
+                        constraint = after_ca
+                        has_constraint = has_after_ca
+                    }
+                    if has_constraint {
+                        if constraint.tag.class != .Universal || constraint.tag.number != 2u32 || constraint.tag.constructed { ret (zero, InvalidCertificate) }
+                        let (distance, distance_error) = asn1.integer_of(constraint)
+                        if distance_error != ok || distance < 0i64 || distance > 65535i64 || !certificate.is_ca { ret (zero, InvalidCertificate) }
+                        certificate.has_path_len = true
+                        certificate.path_len = u16(distance)
+                        let (_, has_constraint_tail, constraint_tail_error) = asn1.reader_next_err(&flags)
+                        if constraint_tail_error != ok || has_constraint_tail { ret (zero, InvalidCertificate) }
+                    }
                 }
+                if oid_equal(extension_oid.content, key_usage[0..]) {
+                    handled = true
+                    var encoded_bits = asn1.reader(payload.content, DEPTH)
+                    let (bits, bits_error) = expect(&encoded_bits, 3u32, false)
+                    if bits_error != ok || bits.content.len == 0usize || bits.content[0] > 7u8 { ret (zero, InvalidCertificate) }
+                    let (_, has_bits_tail, bits_tail_error) = asn1.reader_next_err(&encoded_bits)
+                    if bits_tail_error != ok || has_bits_tail { ret (zero, InvalidCertificate) }
+                    certificate.has_key_usage = true
+                    certificate.key_cert_sign = bits.content.len > 1usize && (bits.content[1] & 4u8) != 0u8
+                }
+                if oid_equal(extension_oid.content, extended_usage[0..]) { handled = true }
+                if critical && !handled { certificate.unhandled_critical = true }
             }
         }
     }
@@ -553,6 +595,7 @@ fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, e
     if limit == 0usize { limit = 8usize }
     let (links, links_error) = mem.alloc[Certificate](a, limit + 1usize)
     if links_error != ok { ret (zero, links_error) }
+    if leaf.unhandled_critical { ret (zero, InvalidCertificate) }
     if !in_window(leaf, options.now) { ret (zero, Expired) }
     if options.dns_name.len > 0usize {
         var matched = false
@@ -582,7 +625,10 @@ fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, e
         }
         let (intermediate, has_intermediate) = find_issuer(options.intermediates, current.issuer)
         if !has_intermediate || same_der(intermediate.der, current.der) { ret (zero, UnknownAuthority) }
+        if intermediate.unhandled_critical { ret (zero, InvalidCertificate) }
         if !intermediate.is_ca { ret (zero, UnknownAuthority) }
+        if intermediate.has_key_usage && !intermediate.key_cert_sign { ret (zero, UnknownAuthority) }
+        if intermediate.has_path_len && count - 1usize > usize(intermediate.path_len) { ret (zero, UnknownAuthority) }
         if !in_window(intermediate, options.now) { ret (zero, Expired) }
         if verify_signature(current, intermediate) != ok { ret (zero, UnknownAuthority) }
         if count >= limit { ret (zero, TooDeep) }

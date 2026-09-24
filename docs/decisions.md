@@ -21642,3 +21642,16 @@ starts at the root.
 leaf-chain closure and focus restoration on Windows and Linux;
 `ui_navigation2_v2` guards the pointer cascade, and `menu-touch-submenu.png` is
 the Segoe UI visual check.
+
+## D1011 — X.509 critical policy fails closed
+
+A parsed certificate records whether it contains an unhandled critical
+extension, a CA path-length ceiling, and key usage with `keyCertSign`. Verification
+refuses a chain through an unhandled critical extension, a CA whose present key
+usage excludes certificate signing, or more subordinate CAs than its path length
+allows. Unsupported critical `nameConstraints` therefore fail closed instead of
+being silently ignored; applying permitted/excluded DNS subtrees remains a
+compatibility feature, not a validation bypass.
+
+`crypto_x509` carries signed adversarial certificates for each rejection and
+passes on Windows and Linux alongside the existing valid Ed25519 and P-256 chains.

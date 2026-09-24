@@ -11,9 +11,13 @@ The first isolated remediation batch is complete in the working tree:
   claims instead of permitting two semantic spellings.
 - L1: model endpoints require HTTPS, except for exact loopback hosts over HTTP;
   userinfo, queries, fragments, malformed ports, and other schemes are refused.
+- H2: verified chains reject unknown critical extensions, CA key usage without
+  `keyCertSign`, and excess CA depth under `pathLenConstraint`. Critical
+  `nameConstraints` currently fail closed as unhandled rather than being applied.
 
 The focused fixtures pass on Windows and Linux, and all 12 tests in
-`tests.test_llm_edit_benchmark` pass. H1, H2, H3, M3, and M5 remain open.
+`tests.test_llm_edit_benchmark` pass. H1, H3, M3, and M5 remain open; full
+`nameConstraints` support remains a compatibility gap under H2.
 
 ## Executive summary
 
