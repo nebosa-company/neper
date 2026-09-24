@@ -21826,3 +21826,14 @@ does not move into its virtual selection.
 
 `ui_overlays2_v2` holds the popup and active-row identities on Windows and
 Linux. Loading, empty, error, match-highlight and footer parts remain open.
+
+## D1026 — Empty popups announce their result
+
+`overlay.popup_empty` draws one `body-medium` `on-surface-variant` message with
+12 vertical and 16 horizontal padding, wrapped in a polite Status semantic node.
+Owners can therefore keep an open popup informative without manufacturing a
+row or exposing an empty surface.
+
+`ui_overlays2_v2` holds the status and live-region contract on Windows and
+Linux. `popup-empty.png` is the Segoe UI visual check. Loading, error,
+match-highlight and footer parts remain open.

@@ -864,15 +864,39 @@ fn popup_combobox(a: *mem.Arena, label: str, popup_key: widget.Key, active_key: 
     sem.controls = popup_key
     if open {
         sem.states = accessibility.STATE_EXPANDED
-        sem.active = active_key
+        if active_key != 0u64 { sem.active = active_key }
     }
     ret (widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// An open popup with no results: one polite body-medium status row, padded 12
+// vertically and 16 at the sides instead of an empty surface.
+fn popup_empty(a: *mem.Arena, key: widget.Key, t: *const control.Theme, message: str) -> (widget.Node, err) {
+    var words = control.text_options()
+    words.role = .BodyMedium
+    words.wrap = .Word
+    let (text_node, text_error) = control.colored_text(a, 0u64, message, t, words, style.color(t.tokens, .OnSurfaceVariant))
+    if text_error != ok { ret (zero, text_error) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = text_node
+    var row = style.defaults()
+    row.width = style.Length { Percent: 100.0 }
+    row.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 12.0 } }
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.box(0u64, row, body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 26u8
+    sem.label = message
+    sem.live = 1u8
+    ret (widget.semantics(key, sem, style.defaults(), framed[0usize..1usize]), ok)
 }
 
 // v2 (D976/D987, docs/ux/components/Popup): the popup surface matches its anchor
 // within 200..480 and sits 4 off it on the `placement` side (flipping when that
 // side overflows), a group in the tree named `label`.
-// ponytail: no loading bar or empty and error rows; the anchor keeps the focus
+// ponytail: no loading bar or error row; the anchor keeps the focus
 // because the popup takes none.
 fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }

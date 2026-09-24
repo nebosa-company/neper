@@ -31,7 +31,7 @@ type Counter = struct { count: usize }
 // The counters: 0 rows, 1 anchors, 2 dismiss, 3 main action, 4 other action.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, actions: [2]overlay.MenuItem }
 
-type Which = enum u8 { Popup, Flyout, Popover, Below }
+type Which = enum u8 { Popup, PopupEmpty, Flyout, Popover, Below }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -73,9 +73,18 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (second, e5) = overlay.popup_row(a, 12u64, t, "math.e", "", &s.subs[0usize])
     rows[0usize] = first
     rows[1usize] = second
-    let list = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..2usize])
-    let (popup, e6) = overlay.popup_of(a, 10u64, t, 1u64, .Below, "Suggestions", list, which == .Popup)
-    let (search, e10) = overlay.popup_combobox(a, "Search files", 10u64, 11u64, which == .Popup, search_button)
+    var popup_content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..2usize])
+    var e11: err = ok
+    if which == .PopupEmpty {
+        let (empty, empty_error) = overlay.popup_empty(a, 13u64, t, "No files match ovrly")
+        popup_content = empty
+        e11 = empty_error
+    }
+    let popup_open = which == .Popup || which == .PopupEmpty
+    let (popup, e6) = overlay.popup_of(a, 10u64, t, 1u64, .Below, "Suggestions", popup_content, popup_open)
+    var active_key = 0u64
+    if which == .Popup { active_key = 11u64 }
+    let (search, e10) = overlay.popup_combobox(a, "Search files", 10u64, active_key, popup_open, search_button)
     let (inside, e7) = control.text(a, 0u64, "Only my builds", t, control.text_options())
     let (flyout, e8) = overlay.flyout(a, 20u64, t, 2u64, .Below, "Filters", inside, flyout_open, &s.subs[2usize])
     var side: widget.Placement = .Right
@@ -85,7 +94,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
         owner = 1u64
     }
     let (popover, e9) = overlay.popover_of(a, 30u64, t, owner, side, "Build 4128", inside, s.actions[0usize..2usize], which == .Popover || which == .Below, &s.subs[2usize])
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret (zero, e1) }
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret (zero, e1) }
     let (anchors, anchors_error) = mem.alloc[widget.Node](a, 3usize)
     if anchors_error != ok { ret (zero, anchors_error) }
     anchors[0usize] = search
@@ -220,6 +229,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_group || testing.by_role(&harness, .ListItem).count != 2usize || !has_search_combo || !search_combo.state.expanded || !same_element(search_combo.relations.controls, testing.by_key(&harness, 10u64).element) || !same_element(search_combo.relations.active, testing.by_key(&harness, 11u64).element) || !has_closed_filter || closed_filter.state.selected || closed_filter.state.expanded || !has_action(closed_filter, .ShowMenu) { os.exit(15i32) }
     if !tap_key(&harness, &runtime, 2u64) || s.counters[1usize].count != 1usize { os.exit(16i32) }
     if !tap_key(&harness, &runtime, 12u64) || s.counters[0usize].count != 1usize { os.exit(17i32) }
+    // Empty results are a padded polite status row, never a blank popup.
+    let (root_empty, empty_error) = build(&f, &theme, s, .PopupEmpty)
+    if empty_error != ok || testing.pump(&harness, root_empty, time.Instant { nanos: 1050000000i64 }) != ok { os.exit(43i32) }
+    let (empty_bounds, has_empty_bounds) = bounds(&harness, &runtime, 13u64)
+    let (empty_popup, has_empty_popup) = lifted(&harness, 10u64)
+    let (empty_tree, empty_tree_error) = testing.semantics(&harness)
+    if empty_tree_error != ok { os.exit(44i32) }
+    let (empty_status, has_empty_status) = find(empty_tree, .Status, "No files match ovrly")
+    if !has_empty_bounds { os.exit(45i32) }
+    if !has_empty_popup { os.exit(46i32) }
+    if !has_empty_status { os.exit(47i32) }
+    if empty_status.live != .Polite { os.exit(48i32) }
     // The flyout with a pointer: 4 below Filter, 200 wide at least on
     // `surface-container`, 12 above and 8 below its content; a modal dialog named
     // Filters; its anchor stays selected tonal and reports Expanded/Controls;
