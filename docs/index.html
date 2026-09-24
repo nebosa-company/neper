@@ -146,10 +146,7 @@
     .more-features[open] .more-closed { display: none; }
     .more-features[open] .more-open { display: inline; }
 
-    .video-slot { display: grid; place-items: center; aspect-ratio: 16 / 8; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface-container-low); text-align: center; }
-    .play { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto var(--space-4); border-radius: var(--radius-full); background: var(--primary-container); color: var(--on-primary-container); font-size: 22px; }
-    .video-slot strong { display: block; }
-    .video-slot small { color: var(--muted); }
+    .demo-video { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface-container-low); object-fit: contain; }
 
     .final { display: flex; align-items: end; justify-content: space-between; gap: var(--space-8); margin-top: var(--space-16); padding: var(--space-10); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
     .final h2 { max-width: 700px; margin-bottom: 0; }
@@ -169,7 +166,6 @@
       .benefit { min-height: auto; }
       .ui-showcase figcaption { align-items: flex-start; flex-direction: column; }
       .proof-callout { padding: var(--space-6); }
-      .video-slot { aspect-ratio: 4 / 3; }
       .final, footer { align-items: flex-start; flex-direction: column; }
       .final { padding: var(--space-6); }
     }
@@ -375,13 +371,9 @@ hello, neper</code></pre>
         <div class="eyebrow">05 // watch it work</div>
         <h2>From prompt to native binary.</h2>
         <p class="section-intro">See one agent generate, check, repair, test, and compile a CPU/GPU program without leaving the deterministic Neper toolchain.</p>
-        <div class="video-slot" role="img" aria-label="Reserved space for a Neper demonstration video">
-          <div>
-            <span class="play" aria-hidden="true">▶</span>
-            <strong>demo video goes here</strong>
-            <small>16:9 · captions recommended</small>
-          </div>
-        </div>
+        <video class="demo-video" controls playsinline preload="metadata" poster="gtm/neper-capabilities-poster.png" aria-label="Neper capabilities demonstration">
+          <source src="gtm/neper-capabilities.mp4" type="video/mp4">
+        </video>
       </section>
 
       <section class="final">
