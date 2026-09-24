@@ -294,6 +294,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (followed, has_followed) = testing.focused(&harness)
     if !has_followed || !same_element(followed, testing.by_key(&harness, 2417u64).element) { os.exit(44i32) }
     s.counters[9usize].count = 0usize
+    let (edit_title, has_edit_title) = bounds(&harness, &runtime, 2417u64)
+    if !has_edit_title || testing.hover(&harness, edit_title.x + edit_title.width * 0.5, edit_title.y + edit_title.height * 0.5) != ok || s.counters[9usize].count != 1usize { os.exit(51i32) }
+    s.counters[9usize].count = 0usize
     // Its menu 2 below on `surface-container`, at least 200 wide; four commands
     // 32 tall, a separator line before Autosave, Autosave checked, Delete
     // disabled.

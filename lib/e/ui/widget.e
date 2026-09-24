@@ -343,6 +343,8 @@ type State = struct {
     menu_mode: bool,
     menu_alt_down: bool,
     menu_alt_used: bool,
+    menu_hovered_title: u32,
+    has_menu_hovered_title: bool,
     // The focus ring (D940): shown only when the focus came by the keyboard or the
     // program, never by a pointer press; its colour, width and gap outside the
     // element, set from the theme; the clip the element being placed lies within.
@@ -3071,6 +3073,36 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
     ret (false, ok)
 }
 
+// A modal menu normally owns pointer hit testing. Its bar is the one exception:
+// entering another title follows the open menu to that title.
+fn menu_bar_hover(s: *State, point: geometry.Point) -> (bool, err) {
+    let (bar, has_bar) = semantic_role_under(s, usize(s.root), 41u8)
+    if !has_bar { ret (false, ok) }
+    var targets: [32]u32 = zero
+    var owners: [32]u32 = zero
+    let count = collect_menu_titles(s, bar, targets[..], owners[..], 0usize)
+    var opened = count
+    var hit = count
+    var i = 0usize
+    while i < count {
+        if (s.elements[usize(owners[i])].sem.states & 16u32) != 0u32 { opened = i }
+        if geometry.contains(s.elements[usize(targets[i])].bounds, point) { hit = i }
+        i += 1usize
+    }
+    if opened == count || hit == count {
+        s.has_menu_hovered_title = false
+        ret (false, ok)
+    }
+    let hovered_title = targets[hit]
+    if s.has_menu_hovered_title && s.menu_hovered_title == hovered_title { ret (true, ok) }
+    s.menu_hovered_title = hovered_title
+    s.has_menu_hovered_title = true
+    if hit == opened { ret (true, ok) }
+    let title = &s.elements[usize(hovered_title)]
+    let fired = fire_gesture(title.gesture, Gesture { Tap: geometry.Point { x: title.bounds.x + title.bounds.width * 0.5, y: title.bounds.y + title.bounds.height * 0.5 } })
+    ret (true, fired)
+}
+
 // A menu's arrow keys (D975): with a menu item (role 22 or checkbox role 37)
 // focused, Down and Up move
 // the focus as Tab and Shift+Tab do (wrapping, disabled items skipped), Home and
@@ -3798,6 +3830,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             s.arena_state.last = p.position
             ret fire_gesture(e.gesture, Gesture { DragMove: Drag { start: s.arena_state.down, position: p.position, delta: delta } })
         }
+        let (barred, bar_error) = menu_bar_hover(s, p.position)
+        if barred || bar_error != ok { ret bar_error }
         // Hover: entering one region leaves the last; a modal overlay keeps the
         // pointer from what is under it.
         var from = usize(s.root)

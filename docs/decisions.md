@@ -21429,3 +21429,16 @@ and Linux.
 
 Access-key underlines and activation, hover-switching, typeahead, submenus and
 command focus return remain open.
+
+## D996 — Open menu bars follow hovered titles
+
+Pointer movement checks the open MenuBar's semantic titles before modal-overlay
+hit gating. Entering a different title fires that title's existing action once;
+moving within it does not repeat, and moving back into the menu returns to normal
+overlay hit testing.
+
+`ui_navigation2_v2` holds switching from File to Edit while File's modal menu is
+open on Windows and Linux.
+
+Access-key underlines and activation, typeahead, submenus and command focus
+return remain open.
