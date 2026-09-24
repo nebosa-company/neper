@@ -1628,7 +1628,9 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // the clock a time or duration field ends in.
 // (D962) The person, picture and alert marks an avatar, an image and a status
 // fall back to, and a stroke width per glyph so an icon strokes 1.75 at 24.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert }
+// (D967) The drag handle, dock-left, maximise, more-horiz and arrow-back marks a
+// dock panel's and a workspace's header actions draw.
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32 }
 
 // An ellipse of four quarter arcs about a centre.
@@ -1762,6 +1764,40 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.72, y: y + h * 0.72 })
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.72, y: y + h * 0.28 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.28, y: y + h * 0.72 })
+    }
+    if g.kind == .DragHandle {
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.2, y: y + h * 0.4 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.8, y: y + h * 0.4 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.2, y: y + h * 0.6 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.8, y: y + h * 0.6 })
+    }
+    if g.kind == .DockLeft || g.kind == .Maximize {
+        // A window; dock-left adds its docked strip at the start.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.17, y: y + h * 0.2 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.83, y: y + h * 0.2 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.83, y: y + h * 0.8 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.17, y: y + h * 0.8 })
+        try geometry.close_path(&builder)
+        if g.kind == .DockLeft {
+            try geometry.move_to(&builder, geometry.Point { x: x + w * 0.4, y: y + h * 0.2 })
+            try geometry.line_to(&builder, geometry.Point { x: x + w * 0.4, y: y + h * 0.8 })
+        }
+    }
+    if g.kind == .MoreHoriz {
+        // Three dots as round-capped strokes of no length.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.25, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.26, y: y + h * 0.5 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.5, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.51, y: y + h * 0.5 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.75, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.76, y: y + h * 0.5 })
+    }
+    if g.kind == .ArrowBack {
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.8, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.2, y: y + h * 0.5 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.45, y: y + h * 0.25 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.2, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.45, y: y + h * 0.75 })
     }
     ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&builder), brush: paint.Brush { Solid: g.color }, stroke: paint.Stroke { width: g.stroke, cap: .Round, join: .Round, miter_limit: 4.0 } } })
 }

@@ -77,6 +77,12 @@ fn blank(w: f32, h: f32) -> widget.Node {
     ret widget.box(0u64, control.sized_style(w, h), zero)
 }
 
+fn focused_panel() -> navigation.DockPanelOptions {
+    var out = navigation.dock_panel_options()
+    out.focused = true
+    ret out
+}
+
 fn sized_row(a: *mem.Arena, w: f32, h: f32, child: widget.Node) -> (widget.Node, err) {
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, held_error) }
@@ -92,7 +98,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     if e1 != ok { ret (zero, e1) }
     let (pane_row, e1b) = sized_row(a, 300.0, 100.0, pane)
     let (split, e2) = control.split_view_named(a, 30u64, t, "Builds", .Horizontal, blank(10.0, 10.0), blank(10.0, 10.0), 100.0, 60.0, 60.0, widget.Change[f32] { ctx: ctx, invoke: on_size }, 300.0, 60.0)
-    let (panel, e3) = navigation.dock_panel_of(a, 50u64, t, "Explorer", blank(10.0, 10.0), &s.press, true)
+    let (panel, e3) = navigation.dock_panel_of(a, 50u64, t, "Explorer", blank(10.0, 10.0), &s.press, focused_panel())
     if e3 != ok { ret (zero, e3) }
     let (panel_row, e3b) = sized_row(a, 200.0, 120.0, panel)
     let (dock, e4) = navigation.dock_layout(a, 70u64, t, blank(10.0, 10.0), blank(10.0, 10.0), blank(10.0, 10.0), blank(10.0, 10.0), navigation.DockSizes { left: 200.0, right: 200.0, bottom: 100.0 }, widget.Change[navigation.DockSizes] { ctx: ctx, invoke: on_sizes }, 800.0, 300.0)

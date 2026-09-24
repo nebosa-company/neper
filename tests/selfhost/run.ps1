@@ -3204,6 +3204,12 @@ $uiContainers2V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $uiContainers2V2Written -ne 'executable written') { throw 'ui_containers2_v2 emission failed' }
 $uiContainers2V2Output = & $uiContainers2V2Path
 if ($LASTEXITCODE -ne 0 -or $uiContainers2V2Output -ne 'ui containers2 v2 ok') { throw "ui_containers2_v2 answered wrongly: exit $LASTEXITCODE" }
+# v2 dock panel tab group, floating and stacked variants (D967, P5-08)
+$uiContainers3V2Path = Join-Path $testBuild 'ui-containers3-v2-selfhost.exe'
+$uiContainers3V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_containers3_v2\src\main.e') $repo 'x64' 'windows' $uiContainers3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiContainers3V2Written -ne 'executable written') { throw 'ui_containers3_v2 emission failed' }
+$uiContainers3V2Output = & $uiContainers3V2Path
+if ($LASTEXITCODE -ne 0 -or $uiContainers3V2Output -ne 'ui containers3 v2 ok') { throw "ui_containers3_v2 answered wrongly: exit $LASTEXITCODE" }
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 $uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'

@@ -565,29 +565,177 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 
 // A dock panel: the docked panel of D966 below, unfocused.
 fn dock_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit) -> (widget.Node, err) {
-    let (made, made_error) = dock_panel_of(a, key, t, title, content, close, false)
+    let (made, made_error) = dock_panel_of(a, key, t, title, content, close, dock_panel_options())
     ret (made, made_error)
 }
 
-// v2 (D966, docs/ux/components/DockPanel, docked): `surface-container-low`,
-// square, no border and no padding (sashes separate panels), filling its slot and
-// clipping the content under a 32 header, 12 at the start and 4 at the end: the
-// title in `label-medium` `on-surface-variant` (`on-surface` while `focused`,
-// with a 2px `primary` line inside the header's top edge) and a 32 round Close
-// button (keyed `key + 1`, firing `close`) with an 18 drawn cross in
-// `on-surface-variant`, named "Close <title> panel". A group in the tree named by
-// the title.
-// ponytail: single docked panel only; the tab group, stacked and floating
-// variants, Maximise, the busy bar and empty slot, the Region landmark and F6
-// wait for a panel model in the dock layout.
-fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit, focused: bool) -> (widget.Node, err) {
+// A dock panel's state (D967): focus inside it, floating rather than docked,
+// maximised, busy, the empty-state sentence (set: shown in place of the
+// content), the tab group sharing its slot (the panels' names, their count badges
+// -- empty or one each --, the current one and a pick each), and the Maximise and
+// Dock actions (none: no button).
+type DockPanelOptions = struct { focused: bool, floating: bool, maximised: bool, busy: bool, empty: str, tabs: []const str, counts: []const str, current: usize, picks: []const widget.Submit, maximise: *const widget.Submit, dock: *const widget.Submit }
+
+fn dock_panel_options() -> DockPanelOptions {
+    var out: DockPanelOptions = zero
+    ret out
+}
+
+// A panel tab (D967): `label-medium`, 12 each side, 32 tall under the
+// `on-surface` state layer; the current one `on-surface` over a 2px `primary`
+// line as wide as its label, the others `on-surface-variant`; a count badge on
+// `secondary-container` after the label.
+fn panel_tab(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, count: str, chosen: bool, pick: *const widget.Submit) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, chosen)
+    var ink = style.color(t.tokens, .OnSurfaceVariant)
+    if chosen { ink = style.color(t.tokens, .OnSurface) }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
+    look.foreground = ink
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 12.0
+    look.padding_y = 0.0
+    look.min_height = t.tokens.sizes.control_sm
+    look.min_width = 24.0
     var caption = control.text_options()
     caption.role = .LabelMedium
     caption.wrap = .None
-    var ink = style.color(t.tokens, .OnSurfaceVariant)
-    if focused { ink = style.color(t.tokens, .OnSurface) }
-    let (title_node, title_error) = control.colored_text(a, 0u64, title, t, caption, ink)
-    if title_error != ok { ret (zero, title_error) }
+    let (words, words_error) = control.colored_text(a, 0u64, label, t, caption, ink)
+    if words_error != ok { ret (zero, words_error) }
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 4usize)
+    if bits_error != ok { ret (zero, TooLarge) }
+    bits[0usize] = words
+    var used = 1usize
+    if count.len != 0usize {
+        var small = control.text_options()
+        small.role = .LabelSmall
+        small.wrap = .None
+        let (said, said_error) = control.colored_text(a, 0u64, count, t, small, style.color(t.tokens, .OnSecondaryContainer))
+        if said_error != ok { ret (zero, said_error) }
+        bits[3usize] = said
+        var pill = style.defaults()
+        pill.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) }
+        pill.radius = 8.0
+        pill.min_width = style.Length { Px: 16.0 }
+        pill.min_height = style.Length { Px: 16.0 }
+        pill.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+        bits[1usize] = widget.box(0u64, pill, bits[3usize..4usize])
+        used = 2usize
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 3usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), bits[0usize..used])
+    var line = style.defaults()
+    line.height = style.Length { Px: 2.0 }
+    if chosen { line.background = paint.Brush { Solid: style.color(t.tokens, .Primary) } }
+    column[1usize] = widget.box(0u64, line, zero)
+    var stacked = style.defaults()
+    stacked.height = style.Length { Px: t.tokens.sizes.control_sm }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .End, cross: .Stretch, gap: 7.0 }, stacked, column[0usize..2usize])
+    let (made, made_error) = control.pressable_states(a, key, t, 19u8, label, look, true, chosen, 0u32, 0u32, 0u64, pick, content)
+    ret (made, made_error)
+}
+
+// v2 (D966, D967, docs/ux/components/DockPanel): docked, `surface-container-low`,
+// square, no border and no padding (sashes separate panels), at least 160 wide,
+// under a 32 header, 12 at the start and 4 at the end: the title in
+// `label-medium` `on-surface-variant` (`on-surface` while `focused`, with a 2px
+// `primary` line inside the header's top edge) -- or, as a tab group, the panel
+// tabs (keyed `key + 4 + index`, Left and Right picking the neighbours) -- then
+// the header actions, 32 round buttons with 18 drawn icons and no gap: Maximise
+// (keyed `key + 2`; "Restore panel" with `chevron-down` while maximised) and
+// Close (keyed `key + 1`), named "Close <title> panel". Floating, the panel is
+// `surface-container`, `radius-md`, `elevation-3`, at least 240 x 160, its
+// header 40 with a drag handle leading and a Dock button (`key + 3`, `dock-left`)
+// before Maximise, the title `on-surface` and no focus line. Busy, a 2px
+// `primary` bar runs under the header; with an empty sentence the body is that
+// sentence in `body-small` `on-surface-variant`, 12 in and 8 down. A group in
+// the tree named by the title, busy while busy.
+// ponytail: the busy bar stands still (no indeterminate sweep); moving a floating
+// panel is the caller's (its header is no drag region yet).
+fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit, options: DockPanelOptions) -> (widget.Node, err) {
+    let floating = options.floating
+    var h = t.tokens.sizes.control_sm
+    if floating { h = t.tokens.sizes.control_md }
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var ink = muted
+    if options.focused || floating { ink = style.color(t.tokens, .OnSurface) }
+    let (head, head_error) = mem.alloc[widget.Node](a, 6usize)
+    if head_error != ok { ret (zero, TooLarge) }
+    var used = 0usize
+    if floating {
+        let (handle, handle_error) = control.icon_square(a, muted, .DragHandle, t.tokens.sizes.icon_sm)
+        if handle_error != ok { ret (zero, handle_error) }
+        head[used] = handle
+        used += 1usize
+    }
+    if options.tabs.len != 0usize {
+        if options.picks.len != options.tabs.len { ret (zero, TooLarge) }
+        let (tabbed, tabbed_error) = mem.alloc[widget.Node](a, options.tabs.len)
+        if tabbed_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < options.tabs.len {
+            var count: str = ""
+            if options.counts.len == options.tabs.len { count = options.counts[i] }
+            let (tab, tab_error) = panel_tab(a, key + 4u64 + u64(i), t, options.tabs[i], count, i == options.current, &options.picks[i])
+            if tab_error != ok { ret (zero, tab_error) }
+            tabbed[i] = tab
+            i += 1usize
+        }
+        let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+        if shortcuts_error != ok { ret (zero, TooLarge) }
+        var bound = 0usize
+        if options.current > 0usize && options.current < options.tabs.len {
+            shortcuts[bound] = widget.Shortcut { key: 37u32, modifiers: zero, action: options.picks[options.current - 1usize] }
+            bound += 1usize
+        }
+        if options.current + 1usize < options.tabs.len {
+            shortcuts[bound] = widget.Shortcut { key: 39u32, modifiers: zero, action: options.picks[options.current + 1usize] }
+            bound += 1usize
+        }
+        let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
+        if row_error != ok { ret (zero, TooLarge) }
+        row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), tabbed[0usize..options.tabs.len])
+        var strip: widget.Semantics = zero
+        strip.role = 20u8
+        strip.label = title
+        strip.column_count = u32(options.tabs.len)
+        let (listed, listed_error) = mem.alloc[widget.Node](a, 1usize)
+        if listed_error != ok { ret (zero, TooLarge) }
+        listed[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), row[0usize..1usize])
+        head[used] = widget.semantics(0u64, strip, style.defaults(), listed[0usize..1usize])
+    } else {
+        var caption = control.text_options()
+        caption.role = .LabelMedium
+        caption.wrap = .None
+        let (title_node, title_error) = control.colored_text(a, 0u64, title, t, caption, ink)
+        if title_error != ok { ret (zero, title_error) }
+        head[used] = title_node
+    }
+    used += 1usize
+    head[used] = widget.spacer(0u64, 1.0)
+    used += 1usize
+    if floating && mem.address_of(options.dock) != 0usize {
+        let (docker, docker_error) = control.glyph_button(a, key + 3u64, t, .DockLeft, "Dock panel", options.dock, 32.0, t.tokens.sizes.icon_sm)
+        if docker_error != ok { ret (zero, docker_error) }
+        head[used] = docker
+        used += 1usize
+    }
+    if mem.address_of(options.maximise) != 0usize {
+        var kind: control.GlyphKind = .Maximize
+        var said: str = "Maximise panel"
+        if options.maximised {
+            kind = .ChevronDown
+            said = "Restore panel"
+        }
+        let (bigger, bigger_error) = control.glyph_button(a, key + 2u64, t, kind, said, options.maximise, 32.0, t.tokens.sizes.icon_sm)
+        if bigger_error != ok { ret (zero, bigger_error) }
+        head[used] = bigger
+        used += 1usize
+    }
     let (named, named_error) = mem.alloc[u8](a, title.len + 12usize)
     if named_error != ok { ret (zero, TooLarge) }
     var n = control.copy_text(named, "Close ")
@@ -595,32 +743,156 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
     n += control.copy_text(named[n..named.len], " panel")
     let (closer, closer_error) = control.glyph_button(a, key + 1u64, t, .Cross, named[0usize..n], close, 32.0, t.tokens.sizes.icon_sm)
     if closer_error != ok { ret (zero, closer_error) }
-    let (head, head_error) = mem.alloc[widget.Node](a, 2usize)
-    if head_error != ok { ret (zero, TooLarge) }
-    head[0usize] = title_node
-    head[1usize] = closer
+    head[used] = closer
+    used += 1usize
     var bar = style.defaults()
     bar.width = style.Length { Percent: 100.0 }
-    bar.height = style.Length { Px: t.tokens.sizes.control_sm }
+    bar.height = style.Length { Px: h }
     bar.padding = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: t.tokens.spacing.xs }, bar, head[0usize..2usize])
-    parts[0usize] = parts[2usize]
-    if focused {
+    parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, head[0usize..used])
+    parts[0usize] = parts[3usize]
+    if options.focused && !floating {
         // The line lies over the header's top edge, inside its 32.
         var line = style.defaults()
         line.width = style.Length { Percent: 100.0 }
         line.height = style.Length { Px: 2.0 }
         line.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
-        parts[3usize] = widget.positioned(0u64, 0.0, 0.0, line, zero)
+        parts[4usize] = widget.positioned(0u64, 0.0, 0.0, line, zero)
         var header = style.defaults()
         header.width = style.Length { Percent: 100.0 }
-        header.height = style.Length { Px: t.tokens.sizes.control_sm }
-        parts[0usize] = widget.stack(0u64, header, parts[2usize..4usize])
+        header.height = style.Length { Px: h }
+        parts[0usize] = widget.stack(0u64, header, parts[3usize..5usize])
     }
-    parts[1usize] = content
-    let count = 2usize
+    var count = 1usize
+    if options.busy {
+        // A 40% `primary` segment on a clear track.
+        let (segments, segments_error) = mem.alloc[widget.Node](a, 2usize)
+        if segments_error != ok { ret (zero, TooLarge) }
+        var busy_bar = style.defaults()
+        busy_bar.width = style.Length { Flex: 2.0 }
+        busy_bar.height = style.Length { Px: 2.0 }
+        busy_bar.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        segments[0usize] = widget.box(0u64, busy_bar, zero)
+        segments[1usize] = widget.spacer(0u64, 3.0)
+        var track = style.defaults()
+        track.height = style.Length { Px: 2.0 }
+        parts[count] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, track, segments[0usize..2usize])
+        count += 1usize
+    }
+    parts[count] = content
+    if options.empty.len != 0usize {
+        var said = control.text_options()
+        said.role = .BodySmall
+        let (sentence, sentence_error) = control.colored_text(a, 0u64, options.empty, t, said, muted)
+        if sentence_error != ok { ret (zero, sentence_error) }
+        parts[5usize] = sentence
+        parts[count] = widget.padded(0u64, 12.0, 8.0, 12.0, 0.0, style.defaults(), parts[5usize..6usize])
+    }
+    count += 1usize
+    var panel = style.defaults()
+    panel.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+    panel.width = style.Length { Percent: 100.0 }
+    panel.height = style.Length { Percent: 100.0 }
+    panel.min_width = style.Length { Px: 160.0 }
+    panel.overflow = .Clip
+    if floating {
+        panel.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+        panel.radius = t.tokens.radii.md
+        panel.min_width = style.Length { Px: 240.0 }
+        panel.min_height = style.Length { Px: 160.0 }
+        panel.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 6.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[3usize]) }
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, panel, parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = title
+    if options.busy { sem.states = accessibility.STATE_BUSY }
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// v2 (D967, docs/ux/components/DockPanel, stacked): several tools in one side
+// slot on `surface-container-low`, each under a 32 header (keyed
+// `key + 1 + 2 * index`, 12 at the start) of a `chevron-down` (`chevron-right`
+// collapsed) 18 in `on-surface-variant` and the title in `label-medium`
+// `on-surface-variant`, under the `on-surface` state layer, firing its toggle
+// and controlling its body (`key + 2 + 2 * index`); the open bodies share the
+// height left, 1px `outline-variant` lines between sections. A group in the tree
+// named `label`.
+// ponytail: a header's target is as wide as its content, since pressable_states
+// takes no width; pass the slot's width in when a full-row target matters.
+fn dock_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, titles: []const str, contents: []const widget.Node, open: []const bool, toggles: []const widget.Submit) -> (widget.Node, err) {
+    let n = titles.len
+    if contents.len != n || open.len != n || toggles.len != n { ret (zero, TooLarge) }
+    let (items, items_error) = mem.alloc[widget.Node](a, 3usize * n)
+    if items_error != ok { ret (zero, TooLarge) }
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var count = 0usize
+    var i = 0usize
+    while i < n {
+        let header_key = key + 1u64 + 2u64 * u64(i)
+        if i > 0usize {
+            var line = style.defaults()
+            line.height = style.Length { Px: t.tokens.sizes.divider }
+            line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            items[count] = widget.box(0u64, line, zero)
+            count += 1usize
+        }
+        let state = control.control_state(t, header_key, true, false)
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
+        look.foreground = muted
+        look.border_width = 0.0
+        look.opacity = 1.0
+        look.radius = 0.0
+        look.custom_padding = true
+        look.padding = 4.0
+        look.padding_start = 12.0
+        look.padding_y = (t.tokens.sizes.control_sm - t.tokens.sizes.icon_sm) * 0.5
+        look.min_height = t.tokens.sizes.control_sm
+        look.min_width = 1.0
+        var kind: control.GlyphKind = .ChevronRight
+        if open[i] { kind = .ChevronDown }
+        let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+        if bits_error != ok { ret (zero, TooLarge) }
+        let (chevron, chevron_error) = control.icon_square(a, muted, kind, t.tokens.sizes.icon_sm)
+        if chevron_error != ok { ret (zero, chevron_error) }
+        bits[0usize] = chevron
+        var caption = control.text_options()
+        caption.role = .LabelMedium
+        caption.wrap = .None
+        let (words, words_error) = control.colored_text(a, 0u64, titles[i], t, caption, muted)
+        if words_error != ok { ret (zero, words_error) }
+        bits[1usize] = words
+        let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), bits[0usize..2usize])
+        var states = 0u32
+        var actions = accessibility.ACTION_EXPAND
+        if open[i] {
+            states = accessibility.STATE_EXPANDED
+            actions = accessibility.ACTION_COLLAPSE
+        }
+        let (header, header_error) = control.pressable_states(a, header_key, t, 3u8, titles[i], look, true, false, states, actions, header_key + 1u64, &toggles[i], row)
+        if header_error != ok { ret (zero, header_error) }
+        items[count] = header
+        count += 1usize
+        if open[i] {
+            let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+            if body_error != ok { ret (zero, TooLarge) }
+            body[0usize] = contents[i]
+            var sem: widget.Semantics = zero
+            sem.role = 2u8
+            sem.labelled_by = header_key
+            var share = style.defaults()
+            share.height = style.Length { Flex: 1.0 }
+            share.overflow = .Clip
+            items[count] = widget.semantics(header_key + 1u64, sem, share, body[0usize..1usize])
+            count += 1usize
+        }
+        i += 1usize
+    }
     var panel = style.defaults()
     panel.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
     panel.width = style.Length { Percent: 100.0 }
@@ -628,11 +900,11 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
     panel.overflow = .Clip
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, panel, parts[0usize..count])
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, panel, items[0usize..count])
     var sem: widget.Semantics = zero
     sem.role = 2u8
-    sem.label = title
-    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+    sem.label = label
+    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
 }
 
 // The sizes of a dock layout's side panels, the caller's value.

@@ -19826,3 +19826,54 @@ Still open:
 - MultiDocumentWorkspace has one editor group: no split groups, active-group line,
   location bar, compact count button, MRU Ctrl+Tab, Alt+1..9 or Ctrl+Shift+T, no
   `nu-kbd` keys or Open recent in the empty state, and no restore hooks.
+
+## D967 — Dock panels draw their tab-group, stacked and floating v2 variants
+
+`navigation.dock_panel_of` now takes `DockPanelOptions`, and `dock_panel` keeps
+its signature by passing the defaults. The options are `focused`, `floating`,
+`maximised`, `busy`, `empty`, `tabs`, `counts`, `current`, `picks`, `maximise`
+and `dock`. Each variant draws the DockPanel spec:
+
+- **Tab group.** With tabs, the header holds panel tabs in place of the title,
+  keyed `key + 4 + index`. Each tab is `label-medium`, 12 at each side and 32
+  tall, under the `on-surface` state layer. The current tab is `on-surface` over a
+  2px `primary` line as wide as its label and count badge; the others are
+  `on-surface-variant`. The badge sits on `secondary-container`. Left and Right
+  pick the neighbours, and the strip is a TabList named by the title.
+- **Header actions.** The actions are 32 round `glyph_button`s with 18 icons and
+  no gap. Maximise (`key + 2`) draws a new maximise mark; while maximised it
+  flips to `chevron-down` and is named "Restore panel". Close is `key + 1`.
+- **Floating.** A floating panel is `surface-container` with `radius-md` corners,
+  `elevation-3` and a 240 x 160 minimum. Its header is 40 tall, with a
+  drag-handle mark leading, an `on-surface` title and no focus line. A Dock
+  button (`key + 3`, dock-left mark) stands before Maximise.
+- **Busy and empty.** A busy panel shows a 2px `primary` segment, 40% of the
+  track, under the header, and reports Busy in the tree. An empty sentence
+  replaces the body, in `body-small` `on-surface-variant`, 12 in and 8 down.
+- **Stacked.** `navigation.dock_stack` draws this variant. Each header is 32
+  tall, with an 18 `chevron-down` (`chevron-right` when collapsed) and the title
+  in `label-medium` `on-surface-variant`, under the state layer. Headers are
+  Expanded buttons that control their bodies, and the open bodies share the
+  height that is left. The slot is `surface-container-low`, with 1px
+  `outline-variant` lines between sections.
+
+`control.GlyphKind` gains DragHandle, DockLeft, Maximize, MoreHoriz and
+ArrowBack. The busy bar is a flex row: a stretched flex lays its children out at
+the stretched width, where a stretched leaf ignores its Percent width.
+
+ui_containers3_v2 holds:
+- the tab heights, the current tab's line and the badge fill;
+- the Maximise and Close names;
+- a tab tap followed by Right;
+- the floating panel's ground, its rounded corner, the 40 header, the busy bar,
+  Dock and Restore, and the empty sentence;
+- the stacked headers, the shared body heights, the divider and a header's tap.
+
+ui_containers2_v2 passes `DockPanelOptions`. All 79 ui_* fixtures pass on
+Windows and Linux.
+
+Still open:
+- the Region landmark and F6 cycling;
+- the indeterminate sweep of the busy bar;
+- dragging a floating panel by its header;
+- full-row stacked header targets, since `pressable_states` takes no width.
