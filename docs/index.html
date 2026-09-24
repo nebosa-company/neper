@@ -112,10 +112,9 @@
 
         <div class="terminal" id="syntax" aria-label="Neper hello world example">
           <div class="terminal-bar">hello.e — neper</div>
-          <pre><code><span class="kw">use</span> e.mem
-<span class="kw">use</span> e.io
+          <pre><code><span class="kw">use</span> e.io
 
-<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+<span class="kw">fn</span> <span class="fn">main</span>(args: []str) -&gt; err {
     <span class="kw">try</span> io.print(<span class="str">"hello, neper\n"</span>)
     <span class="kw">ret</span> ok
 }
