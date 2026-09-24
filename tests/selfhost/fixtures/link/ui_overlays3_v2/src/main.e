@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, action_icons: [3]control.GlyphKind, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -62,7 +62,7 @@ fn same(a: str, b: str) -> bool {
 }
 
 fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (widget.Node, err) {
-    let (items, items_error) = mem.alloc[widget.Node](a, 4usize)
+    let (items, items_error) = mem.alloc[widget.Node](a, 5usize)
     if items_error != ok { ret (zero, items_error) }
     let (inside, e1) = control.text(a, 0u64, "Inside", t, control.text_options())
     var alert: widget.Node = zero
@@ -114,7 +114,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (bottom, e4) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
     var actions: widget.Node = zero
     var e5: err = ok
-    if which == .ActionsAndroidIcons {
+    if which == .ActionsMenu {
+        let (made_actions, made_actions_error) = overlay.action_sheet_menu(a, 400u64, t, 450u64, "build-4128.zip", s.actions[0usize..3usize], true, &s.subs[3usize])
+        actions = made_actions
+        e5 = made_actions_error
+    } else if which == .ActionsAndroidIcons {
         let (made_actions, made_actions_error) = overlay.action_sheet_android_with_icons(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], s.action_icons[0usize..3usize], true, &s.subs[3usize])
         actions = made_actions
         e5 = made_actions_error
@@ -135,12 +139,18 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     items[0usize] = alert
     items[1usize] = side
     items[2usize] = bottom
-    items[3usize] = actions
+    items[3usize] = widget.box(0u64, style.defaults(), zero)
+    if which == .ActionsMenu {
+        let (anchor, anchor_error) = control.button(a, 450u64, t, "More", &s.subs[3usize], control.button_options())
+        if anchor_error != ok { ret (zero, anchor_error) }
+        items[3usize] = anchor
+    }
+    items[4usize] = actions
     var page_style = style.defaults()
     page_style.width = style.Length { Px: 640.0 }
     page_style.height = style.Length { Px: 480.0 }
     page_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, page_style, items[0usize..4usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, page_style, items[0usize..5usize]), ok)
 }
 
 fn at(x: f32, y: f32) -> usize {
@@ -420,6 +430,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if android_icons_tree_error != ok { os.exit(88i32) }
     let (_, has_icon_share) = find(android_icons_tree, .Button, "Share")
     if !has_android_icons_sheet || !near(android_icons_sheet.height, 217.0) || !has_icon_share || !tap_key(&harness, &runtime, 403u64) || s.counters[4usize].count != icon_share_before + 1usize { os.exit(89i32) }
+    // Pointer hosts reuse the anchored menu: no scrim, drag handle or Cancel.
+    let menu_share_before = s.counters[4usize].count
+    let menu_dismiss_before = s.counters[3usize].count
+    let (root_action_menu, build_action_menu_error) = build(&f, &theme, s, .ActionsMenu)
+    if build_action_menu_error != ok || testing.pump(&harness, root_action_menu, time.Instant { nanos: 1420000000i64 }) != ok { os.exit(90i32) }
+    let (action_menu_tree, action_menu_tree_error) = testing.semantics(&harness)
+    if action_menu_tree_error != ok { os.exit(91i32) }
+    let (_, has_action_menu) = find(action_menu_tree, .Menu, "build-4128.zip")
+    let (_, has_action_menu_share) = find(action_menu_tree, .MenuItem, "Share")
+    let (_, has_action_menu_delete) = find(action_menu_tree, .MenuItem, "Delete")
+    if !has_action_menu || !has_action_menu_share || !has_action_menu_delete || testing.by_key(&harness, 404u64).count != 0usize { os.exit(92i32) }
+    if !tap_key(&harness, &runtime, 401u64) || s.counters[4usize].count != menu_share_before + 1usize { os.exit(93i32) }
+    if s.counters[3usize].count != menu_dismiss_before + 1usize { os.exit(94i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(42i32) }
     try io.print("ui overlays3 v2 ok\n")
     ret ok

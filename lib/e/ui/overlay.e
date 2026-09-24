@@ -1881,6 +1881,20 @@ fn action_sheet_android_with_icons(a: *mem.Arena, key: widget.Key, t: *const con
     ret (made, made_error)
 }
 
+fn action_sheet_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, title: str, buttons: []const DialogButton, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (commands, commands_error) = mem.alloc[MenuCommand](a, buttons.len)
+    if commands_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < buttons.len {
+        commands[i] = menu_command(buttons[i].label, buttons[i].action)
+        commands[i].destructive = buttons[i].kind == .Destructive
+        commands[i].separated = commands[i].destructive
+        i += 1usize
+    }
+    let (made, made_error) = menu_of(a, key, t, anchor, title, commands[0usize..buttons.len], open, dismiss)
+    ret (made, made_error)
+}
+
 fn action_sheet_form(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, icons: []const control.GlyphKind, cancel_label: str, has_cancel: bool, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if icons.len != 0usize && icons.len != buttons.len { ret (zero, TooLarge) }

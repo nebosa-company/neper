@@ -22066,3 +22066,14 @@ follows its error label.
 `ui_overlays3_v2` holds the unchanged sheet geometry, Button semantics and
 callback on Windows and Linux. `action-sheet-icons.png` is the Segoe UI visual
 check.
+
+## D1047 — Pointer action sheets reuse Menu
+
+`overlay.action_sheet_menu` maps the same action records into the existing
+anchored Menu surface. A destructive action keeps its error label and separator;
+there is no sheet scrim, handle or Cancel row, and the menu's established action
+chain closes it after a selection.
+
+`ui_overlays3_v2` holds Menu/MenuItem semantics plus one command and dismissal
+callback on Windows and Linux. `action-sheet-menu.png` is the Segoe UI visual
+check.
