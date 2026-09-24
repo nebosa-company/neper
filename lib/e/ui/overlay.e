@@ -1234,8 +1234,15 @@ fn popover(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 // container's colour stands on the near edge, centred on the anchor but at least
 // 16 in from a corner, its tip 4 from the anchor (the container 10); a modal
 // dialog in the tree.
-// ponytail: no busy state, dirty-task guard or compact sheet.
+// ponytail: no dirty-task guard or compact sheet.
 fn popover_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = popover_state(a, key, t, anchor, placement, title, content, actions, open, false, dismiss)
+    ret (made, made_error)
+}
+
+// The same with the main action's loading ring shown and repeat actions ignored;
+// secondary actions are disabled until the caller clears `busy`.
+fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, busy: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if actions.len > 2usize { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -1269,13 +1276,29 @@ fn popover_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
     if actions.len > 0usize {
         let (row, row_error) = mem.alloc[widget.Node](a, actions.len)
         if row_error != ok { ret (zero, TooLarge) }
+        var idle: []widget.Submit = zero
+        if busy {
+            let (made_idle, idle_error) = mem.alloc[widget.Submit](a, 1usize)
+            if idle_error != ok { ret (zero, TooLarge) }
+            made_idle[0usize] = widget.Submit { ctx: zero, invoke: zero }
+            idle = made_idle
+        }
         var i = 0usize
         while i < actions.len {
             var options = control.button_options()
             options.variant = .Plain
             if i == 0usize { options.variant = .Tonal }
             options.enabled = actions[i].enabled
-            let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, actions[i].label, &actions[i].action, options)
+            var action = &actions[i].action
+            if busy {
+                if i == 0usize {
+                    options.loading = true
+                    action = &idle[0usize]
+                } else {
+                    options.enabled = false
+                }
+            }
+            let (pressed, pressed_error) = control.button(a, key + 3u64 + u64(i), t, actions[i].label, action, options)
             if pressed_error != ok { ret (zero, pressed_error) }
             row[actions.len - 1usize - i] = pressed
             i += 1usize

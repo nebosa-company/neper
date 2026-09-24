@@ -21920,3 +21920,14 @@ apply the same anchor-centre offset on their cross axis.
 `ui_overlays2_v2` holds below and side placement pixels on Windows and Linux.
 `popover-centered-beak-final.png` is the Segoe UI visual check. The remaining
 popover work is its busy state, dirty-task guard and compact sheet.
+
+## D1033 — Busy popovers suppress repeated actions
+
+`overlay.popover_state` adds one caller-owned Busy flag without duplicating the
+popover. While set, the tonal main action keeps its width and label in the tree,
+shows the standard loading ring and routes repeated presses to an inert submit;
+secondary actions are disabled while Close remains available.
+
+`ui_overlays2_v2` holds the Busy and Disabled states and unchanged counters on
+Windows and Linux. `popover-busy.png` is the Segoe UI visual check. D976 now has
+only the dirty-task guard and compact presentation open.

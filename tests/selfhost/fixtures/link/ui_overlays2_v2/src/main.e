@@ -31,7 +31,7 @@ type Counter = struct { count: usize }
 // The counters: 0 rows, 1 anchors, 2 dismiss, 3 main action, 4 other action.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, actions: [2]overlay.MenuItem }
 
-type Which = enum u8 { Popup, PopupEmpty, PopupError, PopupFooter, PopupLoading, Flyout, FlyoutCompact, Popover, Below }
+type Which = enum u8 { Popup, PopupEmpty, PopupError, PopupFooter, PopupLoading, Flyout, FlyoutCompact, Popover, PopoverBusy, Below }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -122,7 +122,17 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
         side = .Below
         owner = 1u64
     }
-    let (popover, e9) = overlay.popover_of(a, 30u64, t, owner, side, "Build 4128", inside, s.actions[0usize..2usize], which == .Popover || which == .Below, &s.subs[2usize])
+    var popover: widget.Node = zero
+    var e9: err = ok
+    if which == .PopoverBusy {
+        let (made_popover, made_popover_error) = overlay.popover_state(a, 30u64, t, owner, side, "Build 4128", inside, s.actions[0usize..2usize], true, true, &s.subs[2usize])
+        popover = made_popover
+        e9 = made_popover_error
+    } else {
+        let (made_popover, made_popover_error) = overlay.popover_of(a, 30u64, t, owner, side, "Build 4128", inside, s.actions[0usize..2usize], which == .Popover || which == .Below, &s.subs[2usize])
+        popover = made_popover
+        e9 = made_popover_error
+    }
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret (zero, e1) }
     let (anchors, anchors_error) = mem.alloc[widget.Node](a, 3usize)
     if anchors_error != ok { ret (zero, anchors_error) }
@@ -386,6 +396,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let beak_delta = f32(first_beak + last_beak) * 0.5 - (below_anchor.x + below_anchor.width * 0.5)
     if beak_pixels == 0usize || beak_delta < -1.1 || beak_delta > 1.1 { os.exit(40i32) }
     if !is_color(shot_5, at(under.x + 8.0, under.y + 3.0), style.color(&tokens, .Background)) { os.exit(68i32) }
+    // Busy keeps Close available, spins the main action without repeating it,
+    // and disables the secondary action.
+    let main_before = s.counters[3usize].count
+    let other_before = s.counters[4usize].count
+    let (root_busy, build_busy_error) = build(&f, &theme, s, .PopoverBusy)
+    if build_busy_error != ok || testing.pump(&harness, root_busy, time.Instant { nanos: 1500000000i64 }) != ok { os.exit(69i32) }
+    let (busy_tree, busy_tree_error) = testing.semantics(&harness)
+    if busy_tree_error != ok { os.exit(70i32) }
+    let (busy_main, has_busy_main) = find(busy_tree, .Button, "Rerun")
+    let (busy_other, has_busy_other) = find(busy_tree, .Button, "Open log")
+    let (busy_close, has_busy_close) = find(busy_tree, .Button, "Close")
+    if !has_busy_main || !busy_main.state.busy || busy_main.state.disabled || !has_busy_other || !busy_other.state.disabled || !has_busy_close || busy_close.state.disabled { os.exit(71i32) }
+    if !tap_key(&harness, &runtime, 33u64) || !tap_key(&harness, &runtime, 34u64) || s.counters[3usize].count != main_before || s.counters[4usize].count != other_before { os.exit(72i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok
