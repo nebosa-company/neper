@@ -209,7 +209,7 @@ A check (diagnostic) fixture lives under `tests/selfhost/fixtures/check/<name>` 
 | file | title | status |
 |---|---|---|
 | [`ui/P5-02-interaction-paint.md`](ui/P5-02-interaction-paint.md) | P5 — Interaction paint | 2/3 delivered; blocked by P4 |
-| [`ui/P5-08-containers-to-the-v2-specification.md`](ui/P5-08-containers-to-the-v2-specification.md) | P5 — Containers to the v2 specification | 8/10 delivered; blocked by P4 |
+| [`ui/P5-08-containers-to-the-v2-specification.md`](ui/P5-08-containers-to-the-v2-specification.md) | P5 — Containers to the v2 specification | 9/10 delivered; blocked by P4 |
 | [`ui/P5-09-status-to-the-v2-specification.md`](ui/P5-09-status-to-the-v2-specification.md) | P5 — Status to the v2 specification | 0/12 delivered; blocked by P4 |
 | [`ui/P5-10-navigation-to-the-v2-specification.md`](ui/P5-10-navigation-to-the-v2-specification.md) | P5 — Navigation to the v2 specification | 0/12 delivered; blocked by P4 |
 | [`ui/P5-11-overlays-to-the-v2-specification.md`](ui/P5-11-overlays-to-the-v2-specification.md) | P5 — Overlays to the v2 specification | 0/11 delivered; blocked by P4 |

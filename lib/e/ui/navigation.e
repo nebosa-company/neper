@@ -928,6 +928,11 @@ fn dock_move_fire(ctx: *void, moved: f32) -> err {
         next.bottom = m.extent - moved - m.handle
         if next.bottom < 0.0 { next.bottom = 0.0 }
     }
+    // (D968) The middle's sash with no left slot's width in `extent`.
+    if m.side == 3u8 {
+        next.right = m.extent - moved - m.handle
+        if next.right < 0.0 { next.right = 0.0 }
+    }
     ret widget.fire_change[DockSizes](m.change, next)
 }
 
@@ -999,8 +1004,9 @@ fn dock_layout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, left: wi
     let (righted, righted_error) = mem.alloc[widget.Node](a, 1usize)
     if righted_error != ok { ret (zero, TooLarge) }
     righted[0usize] = right
+    // Sized, not a flex share: a panel's 100% would ask for the whole row (D968).
     var right_style = style.defaults()
-    right_style.width = style.Length { Flex: 1.0 }
+    right_style.width = style.Length { Px: max_f(width - sizes.left - middle_width - 2.0 * handle, 0.0) }
     right_style.height = style.Length { Percent: 100.0 }
     right_style.overflow = .Clip
     let (row, row_error) = mem.alloc[widget.Node](a, 3usize)
@@ -1014,6 +1020,394 @@ fn dock_layout(a: *mem.Arena, key: widget.Key, t: *const control.Theme, left: wi
     var sem: widget.Semantics = zero
     sem.role = 2u8
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// ------------------------------------------------- the dock layout's slot model (D968)
+
+// Where a panel stands: a side slot, the bottom slot, floating over the layout,
+// or closed.
+type DockSlot = enum u8 { Left, Right, Bottom, Floating, Hidden }
+
+// A panel's place in a dock layout, the caller's: its name and activity-strip
+// mark, the slot it is in and the slot it docks back to, and, floating, its
+// rectangle over the layout.
+type DockPlacement = struct { name: str, icon: control.GlyphKind, slot: DockSlot, home: DockSlot, x: f32, y: f32, width: f32, height: f32 }
+
+// The layout's own state, the caller's: the slot sizes, the panel each side slot
+// shows (`current[0]` left, `[1]` right, `[2]` bottom), which slots are
+// collapsed, and what is maximised (0 nothing, 1 left, 2 right, 3 bottom, 4 the
+// centre). A plain value, so the caller can save and restore it.
+type DockModel = struct { sizes: DockSizes, current: [3]usize, collapsed: [3]bool, maximised: u8 }
+
+// What a press or a drag in the layout asks of the model.
+type DockEventKind = enum u8 { Resize, Pick, Toggle, Close, Maximise, Dock, Move }
+type DockEvent = struct { kind: DockEventKind, panel: usize, slot: DockSlot, sizes: DockSizes }
+
+type DockFire = struct { event: DockEvent, change: widget.Change[DockEvent] }
+
+fn dock_fire(ctx: *void) -> err {
+    let f = mem.cast[*DockFire](ctx)
+    ret widget.fire_change[DockEvent](f.change, f.event)
+}
+
+type DockResize = struct { change: widget.Change[DockEvent] }
+
+fn dock_resize_fire(ctx: *void, sizes: DockSizes) -> err {
+    let r = mem.cast[*DockResize](ctx)
+    ret widget.fire_change[DockEvent](r.change, DockEvent { kind: .Resize, panel: 0usize, slot: .Left, sizes: sizes })
+}
+
+fn slot_index(slot: DockSlot) -> usize {
+    if slot == .Right { ret 1usize }
+    if slot == .Bottom { ret 2usize }
+    ret 0usize
+}
+
+fn side_slot(slot: DockSlot) -> bool {
+    ret slot == .Left || slot == .Right || slot == .Bottom
+}
+
+// The panel a slot shows: its current one while it stands there, else the first
+// that does (`placements.len` for none).
+fn slot_panel(model: DockModel, placements: []const DockPlacement, slot: DockSlot) -> usize {
+    let wanted = model.current[slot_index(slot)]
+    if wanted < placements.len && placements[wanted].slot == slot { ret wanted }
+    var i = 0usize
+    while i < placements.len {
+        if placements[i].slot == slot { ret i }
+        i += 1usize
+    }
+    ret placements.len
+}
+
+// An event applied to the caller's model and placements: a resize takes the new
+// sizes; a pick shows a panel in its slot; a toggle (an activity-strip button)
+// collapses the slot showing that panel, or shows it (reopening a closed one in
+// its home slot); a close hides a panel; a maximise maximises its slot or
+// restores it (panel `placements.len`: the centre); a dock returns a floating
+// panel to its home slot; a move puts a panel in `slot` (a side slot becomes its
+// home) -- the caller drives moves and tear-offs through this, and sets a
+// floating panel's rectangle itself.
+fn dock_apply(model: *DockModel, placements: []DockPlacement, e: DockEvent) {
+    if e.kind == .Resize {
+        model.sizes = e.sizes
+        ret
+    }
+    if e.kind == .Maximise {
+        var wanted_slot = 4u8
+        if e.panel < placements.len { wanted_slot = u8(slot_index(placements[e.panel].slot)) + 1u8 }
+        if model.maximised == wanted_slot {
+            model.maximised = 0u8
+        } else {
+            model.maximised = wanted_slot
+        }
+        ret
+    }
+    if e.panel >= placements.len { ret }
+    let p = &placements[e.panel]
+    if e.kind == .Pick && side_slot(p.slot) { model.current[slot_index(p.slot)] = e.panel }
+    if e.kind == .Toggle {
+        if side_slot(p.slot) {
+            let s = slot_index(p.slot)
+            if slot_panel(*model, placements, p.slot) == e.panel && !model.collapsed[s] {
+                model.collapsed[s] = true
+                ret
+            }
+        }
+        if p.slot == .Hidden { p.slot = p.home }
+        if side_slot(p.slot) {
+            model.current[slot_index(p.slot)] = e.panel
+            model.collapsed[slot_index(p.slot)] = false
+        }
+    }
+    if e.kind == .Close { p.slot = .Hidden }
+    if e.kind == .Dock {
+        p.slot = p.home
+        if side_slot(p.slot) { model.current[slot_index(p.slot)] = e.panel }
+    }
+    if e.kind == .Move {
+        p.slot = e.slot
+        if side_slot(e.slot) {
+            p.home = e.slot
+            model.current[slot_index(e.slot)] = e.panel
+            model.collapsed[slot_index(e.slot)] = false
+        }
+    }
+}
+
+// The fire for an event about `panel`.
+fn dock_action(a: *mem.Arena, kind: DockEventKind, panel: usize, change: widget.Change[DockEvent]) -> (*widget.Submit, err) {
+    let (fires, fires_error) = mem.alloc[DockFire](a, 1usize)
+    if fires_error != ok { ret (zero, TooLarge) }
+    fires[0usize] = DockFire { event: DockEvent { kind: kind, panel: panel, slot: .Left, sizes: zero }, change: change }
+    let (actions, actions_error) = mem.alloc[widget.Submit](a, 1usize)
+    if actions_error != ok { ret (zero, TooLarge) }
+    actions[0usize] = widget.Submit { ctx: mem.cast[*void](&fires[0usize]), invoke: dock_fire }
+    ret (&actions[0usize], ok)
+}
+
+// The panel a slot shows, as a dock panel keyed `key` (its tabs the slot's
+// panels when it holds more than one), or a floating panel.
+fn slot_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: DockModel, placements: []const DockPlacement, contents: []const widget.Node, shown: usize, change: widget.Change[DockEvent]) -> (widget.Node, err) {
+    let slot = placements[shown].slot
+    var options = dock_panel_options()
+    let (maximise, maximise_error) = dock_action(a, .Maximise, shown, change)
+    if maximise_error != ok { ret (zero, maximise_error) }
+    let s = slot_index(slot)
+    options.maximised = side_slot(slot) && model.maximised == u8(s) + 1u8
+    if slot == .Floating {
+        options.floating = true
+        let (docking, docking_error) = dock_action(a, .Dock, shown, change)
+        if docking_error != ok { ret (zero, docking_error) }
+        options.dock = docking
+    } else {
+        options.maximise = maximise
+        var n = 0usize
+        var i = 0usize
+        while i < placements.len {
+            if placements[i].slot == slot { n += 1usize }
+            i += 1usize
+        }
+        if n > 1usize {
+            let (names, names_error) = mem.alloc[str](a, n)
+            if names_error != ok { ret (zero, TooLarge) }
+            let (picks, picks_error) = mem.alloc[widget.Submit](a, n)
+            if picks_error != ok { ret (zero, TooLarge) }
+            var k = 0usize
+            i = 0usize
+            while i < placements.len {
+                if placements[i].slot == slot {
+                    names[k] = placements[i].name
+                    let (pick, pick_error) = dock_action(a, .Pick, i, change)
+                    if pick_error != ok { ret (zero, pick_error) }
+                    picks[k] = *pick
+                    if i == shown { options.current = k }
+                    k += 1usize
+                }
+                i += 1usize
+            }
+            options.tabs = names[0usize..n]
+            options.picks = picks[0usize..n]
+        }
+    }
+    let (closing, closing_error) = dock_action(a, .Close, shown, change)
+    if closing_error != ok { ret (zero, closing_error) }
+    let (made, made_error) = dock_panel_of(a, key, t, placements[shown].name, contents[shown], closing, options)
+    ret (made, made_error)
+}
+
+// v2 (D968, docs/ux/components/DockLayout): the dock layout over a slot model.
+// The activity strip leads, 40 wide on `surface-container`, with a 32 round
+// button (keyed `key + 20 + index`, 4 apart and 4 in) for each panel whose home
+// is a side slot, the open ones tonal (`secondary-container`); a press toggles
+// the panel (collapse its slot, or show it). The left, right and bottom slots
+// show their current panel (a dock panel keyed `key + 40`, `key + 56` and
+// `key + 72`, tabbed when the slot holds several, its Maximise and Close raising
+// events), sized by D966's sashes (160 sides, 96 bottom, 320 x 160 centre); a
+// collapsed or empty slot takes no room and no sash. Maximised, the slot's panel
+// or the centre fills the area beside the strip. Floating panels (keyed
+// `key + 100 + 16 * index`) stand over the layout at their rectangles with a Dock
+// button. Every press and drag reaches `change` as a `DockEvent`, which
+// `dock_apply` turns into the caller's next model and placements. A group in the
+// tree.
+// ponytail: moving and tearing off are the caller's (a Move event through
+// dock_apply); no drag ghost, dock guide or drop preview, no double-click or
+// Ctrl+M, no F6.
+fn dock_layout_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, model: DockModel, placements: []const DockPlacement, contents: []const widget.Node, centre: widget.Node, change: widget.Change[DockEvent], width: f32, height: f32) -> (widget.Node, err) {
+    if contents.len != placements.len { ret (zero, TooLarge) }
+    var handle: f32 = 8.0
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { handle = 24.0 }
+    // The activity strip.
+    let (buttons, buttons_error) = mem.alloc[widget.Node](a, placements.len + 1usize)
+    if buttons_error != ok { ret (zero, TooLarge) }
+    var strip_count = 0usize
+    var i = 0usize
+    while i < placements.len {
+        let home = placements[i].home
+        if home == .Left || home == .Right {
+            let s = slot_index(placements[i].slot)
+            let open = (placements[i].slot == .Left || placements[i].slot == .Right) && !model.collapsed[s] && slot_panel(model, placements, placements[i].slot) == i
+            let (toggle, toggle_error) = dock_action(a, .Toggle, i, change)
+            if toggle_error != ok { ret (zero, toggle_error) }
+            let (button, button_error) = control.glyph_toggle(a, key + 20u64 + u64(i), t, placements[i].icon, placements[i].name, toggle, t.tokens.sizes.control_sm, t.tokens.sizes.icon_sm, open)
+            if button_error != ok { ret (zero, button_error) }
+            buttons[strip_count] = button
+            strip_count += 1usize
+        }
+        i += 1usize
+    }
+    var strip_w: f32 = 0.0
+    if strip_count > 0usize { strip_w = t.tokens.sizes.control_md }
+    let area_w = width - strip_w
+    // The side slots.
+    let shown_left = slot_panel(model, placements, .Left)
+    let shown_right = slot_panel(model, placements, .Right)
+    let shown_bottom = slot_panel(model, placements, .Bottom)
+    let has_left = shown_left < placements.len && !model.collapsed[0usize]
+    let has_right = shown_right < placements.len && !model.collapsed[1usize]
+    let has_bottom = shown_bottom < placements.len && !model.collapsed[2usize]
+    let (resizes, resizes_error) = mem.alloc[DockResize](a, 1usize)
+    if resizes_error != ok { ret (zero, TooLarge) }
+    resizes[0usize] = DockResize { change: change }
+    let sized = widget.Change[DockSizes] { ctx: mem.cast[*void](&resizes[0usize]), invoke: dock_resize_fire }
+    var body: widget.Node = zero
+    var full = style.defaults()
+    full.width = style.Length { Px: area_w }
+    full.height = style.Length { Px: height }
+    full.overflow = .Clip
+    let (single, single_error) = mem.alloc[widget.Node](a, 1usize)
+    if single_error != ok { ret (zero, TooLarge) }
+    if model.maximised != 0u8 {
+        // The maximised slot's panel, or the centre, alone.
+        single[0usize] = centre
+        full.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        var chosen = placements.len
+        if model.maximised == 1u8 { chosen = shown_left }
+        if model.maximised == 2u8 { chosen = shown_right }
+        if model.maximised == 3u8 { chosen = shown_bottom }
+        if chosen < placements.len {
+            let (panel_node, panel_error) = slot_node(a, key + 40u64 + 16u64 * u64(model.maximised - 1u8), t, model, placements, contents, chosen, change)
+            if panel_error != ok { ret (zero, panel_error) }
+            single[0usize] = panel_node
+        }
+        body = widget.box(0u64, full, single[0usize..1usize])
+    } else {
+        var left_w: f32 = 0.0
+        if has_left { left_w = model.sizes.left + handle }
+        var right_w: f32 = 0.0
+        if has_right { right_w = model.sizes.right + handle }
+        let middle_w = max_f(area_w - left_w - right_w, 0.0)
+        // The middle: the centre over the bottom slot.
+        var middle_height = height
+        if has_bottom { middle_height = max_f(height - model.sizes.bottom - handle, 0.0) }
+        let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+        if centred_error != ok { ret (zero, TooLarge) }
+        centred[0usize] = centre
+        var centre_style = style.defaults()
+        centre_style.width = style.Length { Percent: 100.0 }
+        centre_style.height = style.Length { Px: middle_height }
+        centre_style.overflow = .Clip
+        centre_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        let centre_box = widget.box(0u64, centre_style, centred[0usize..1usize])
+        var middle = centre_box
+        if has_bottom {
+            let (bottom_node, bottom_error) = slot_node(a, key + 72u64, t, model, placements, contents, shown_bottom, change)
+            if bottom_error != ok { ret (zero, bottom_error) }
+            let (lower, lower_error) = mem.alloc[widget.Node](a, 2usize)
+            if lower_error != ok { ret (zero, TooLarge) }
+            lower[0usize] = bottom_node
+            var bottom_style = style.defaults()
+            bottom_style.width = style.Length { Percent: 100.0 }
+            bottom_style.height = style.Length { Px: model.sizes.bottom }
+            bottom_style.overflow = .Clip
+            lower[1usize] = widget.box(0u64, bottom_style, lower[0usize..1usize])
+            let (moves, moves_error) = mem.alloc[DockMove](a, 1usize)
+            if moves_error != ok { ret (zero, TooLarge) }
+            moves[0usize] = DockMove { side: 2u8, sizes: model.sizes, extent: height, handle: handle, change: sized }
+            let (pane, pane_error) = control.pane_with_reserve(a, key + 7u64, t, "Resize bottom panel", .Vertical, middle_height, 160.0, height - t.tokens.sizes.control_sm - 64.0 - handle, 0u64, 0.0, widget.Change[f32] { ctx: mem.cast[*void](&moves[0usize]), invoke: dock_move_fire }, centre_box, true)
+            if pane_error != ok { ret (zero, pane_error) }
+            let (stacked, stacked_error) = mem.alloc[widget.Node](a, 2usize)
+            if stacked_error != ok { ret (zero, TooLarge) }
+            stacked[0usize] = pane
+            stacked[1usize] = lower[1usize]
+            var middle_style = style.defaults()
+            middle_style.width = style.Length { Percent: 100.0 }
+            middle_style.height = style.Length { Px: height }
+            middle = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, middle_style, stacked[0usize..2usize])
+        }
+        let (row, row_error) = mem.alloc[widget.Node](a, 3usize)
+        if row_error != ok { ret (zero, TooLarge) }
+        var row_count = 0usize
+        if has_left {
+            let (left_node, left_node_error) = slot_node(a, key + 40u64, t, model, placements, contents, shown_left, change)
+            if left_node_error != ok { ret (zero, left_node_error) }
+            let (moves, moves_error) = mem.alloc[DockMove](a, 1usize)
+            if moves_error != ok { ret (zero, TooLarge) }
+            moves[0usize] = DockMove { side: 0u8, sizes: model.sizes, extent: area_w, handle: handle, change: sized }
+            let (pane, pane_error) = control.pane_with_reserve(a, key + 1u64, t, "Resize left panel", .Horizontal, model.sizes.left, 160.0, area_w - right_w - 320.0 - handle, 0u64, 0.0, widget.Change[f32] { ctx: mem.cast[*void](&moves[0usize]), invoke: dock_move_fire }, left_node, true)
+            if pane_error != ok { ret (zero, pane_error) }
+            row[row_count] = pane
+            row_count += 1usize
+        }
+        if has_right {
+            // The middle's sash sizes the middle; the right is what remains.
+            let (moves, moves_error) = mem.alloc[DockMove](a, 1usize)
+            if moves_error != ok { ret (zero, TooLarge) }
+            moves[0usize] = DockMove { side: 3u8, sizes: model.sizes, extent: area_w - left_w, handle: handle, change: sized }
+            let (pane, pane_error) = control.pane_with_reserve(a, key + 4u64, t, "Resize right panel", .Horizontal, middle_w, 320.0, area_w - left_w - 160.0 - handle, 0u64, 0.0, widget.Change[f32] { ctx: mem.cast[*void](&moves[0usize]), invoke: dock_move_fire }, middle, true)
+            if pane_error != ok { ret (zero, pane_error) }
+            row[row_count] = pane
+            row_count += 1usize
+            let (right_node, right_node_error) = slot_node(a, key + 56u64, t, model, placements, contents, shown_right, change)
+            if right_node_error != ok { ret (zero, right_node_error) }
+            let (righted, righted_error) = mem.alloc[widget.Node](a, 1usize)
+            if righted_error != ok { ret (zero, TooLarge) }
+            righted[0usize] = right_node
+            // Sized, not a flex share: a panel's 100% would ask for the whole row.
+            var right_style = style.defaults()
+            right_style.width = style.Length { Px: max_f(area_w - left_w - middle_w - handle, 0.0) }
+            right_style.height = style.Length { Percent: 100.0 }
+            right_style.overflow = .Clip
+            row[row_count] = widget.box(0u64, right_style, righted[0usize..1usize])
+            row_count += 1usize
+        } else {
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = middle
+            var rest = style.defaults()
+            rest.width = style.Length { Px: max_f(area_w - left_w, 0.0) }
+            rest.height = style.Length { Percent: 100.0 }
+            row[row_count] = widget.box(0u64, rest, held[0usize..1usize])
+            row_count += 1usize
+        }
+        body = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, full, row[0usize..row_count])
+    }
+    // The strip beside the body, and the floating panels over both.
+    let (outer, outer_error) = mem.alloc[widget.Node](a, 2usize)
+    if outer_error != ok { ret (zero, TooLarge) }
+    var outer_count = 0usize
+    if strip_count > 0usize {
+        var strip = style.defaults()
+        strip.width = style.Length { Px: strip_w }
+        strip.height = style.Length { Px: height }
+        strip.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+        let edge = style.Length { Px: 4.0 }
+        strip.padding = style.EdgeLengths { left: edge, top: edge, right: edge, bottom: edge }
+        outer[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, strip, buttons[0usize..strip_count])
+        outer_count = 1usize
+    }
+    outer[outer_count] = body
+    outer_count += 1usize
+    let (layers, layers_error) = mem.alloc[widget.Node](a, placements.len + 1usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, control.sized_style(width, height), outer[0usize..outer_count])
+    var layer_count = 1usize
+    i = 0usize
+    while i < placements.len {
+        let p = placements[i]
+        if p.slot == .Floating {
+            let (floated, floated_error) = slot_node(a, key + 100u64 + 16u64 * u64(i), t, model, placements, contents, i, change)
+            if floated_error != ok { ret (zero, floated_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = floated
+            layers[layer_count] = widget.positioned(0u64, p.x, p.y, control.sized_style(p.width, p.height), held[0usize..1usize])
+            layer_count += 1usize
+        }
+        i += 1usize
+    }
+    let (stacked, stacked_error) = mem.alloc[widget.Node](a, 1usize)
+    if stacked_error != ok { ret (zero, TooLarge) }
+    stacked[0usize] = layers[0usize]
+    if layer_count > 1usize { stacked[0usize] = widget.stack(0u64, control.sized_style(width, height), layers[0usize..layer_count]) }
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    ret (widget.semantics(key, sem, style.defaults(), stacked[0usize..1usize]), ok)
+}
+
+fn max_f(a: f32, b: f32) -> f32 {
+    if a > b { ret a }
+    ret b
 }
 
 // A multi-document workspace: the document tabs (keyed `key + 1`) over the

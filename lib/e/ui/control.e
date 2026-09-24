@@ -3914,10 +3914,22 @@ fn split_view_named(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
 // `side` across (32), the drawn glyph `glyph_size` (18) in `on-surface-variant` under
 // its state layer, named `label`.
 fn glyph_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32) -> (widget.Node, err) {
-    let state = control_state(t, key, true, false)
-    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    let (node, node_error) = glyph_toggle(a, key, t, kind, label, action, side, glyph_size, false)
+    ret (node, node_error)
+}
+
+// The same as a toggle (D968, a dock layout's activity strip): selected, it is
+// tonal, `secondary-container` with the glyph in `on-secondary-container`, and
+// Selected in the tree.
+fn glyph_toggle(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, label: str, action: *const widget.Submit, side: f32, glyph_size: f32, selected: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, true, selected)
+    var muted = style.color(t.tokens, .OnSurfaceVariant)
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = with_alpha(muted, state_opacity(t, state))
+    if selected {
+        muted = style.color(t.tokens, .OnSecondaryContainer)
+        look.background = style.layer(style.color(t.tokens, .SecondaryContainer), muted, state_opacity(t, state))
+    }
     look.foreground = muted
     look.border_width = 0.0
     look.opacity = 1.0
@@ -3929,7 +3941,7 @@ fn glyph_button(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind
     look.min_height = side
     let (mark, mark_error) = icon_square(a, muted, kind, glyph_size)
     if mark_error != ok { ret (zero, mark_error) }
-    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, false, action, mark)
+    let (node, node_error) = pressable(a, key, t, 3u8, label, look, true, selected, action, mark)
     ret (node, node_error)
 }
 

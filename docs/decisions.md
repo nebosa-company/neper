@@ -19877,3 +19877,54 @@ Still open:
 - the indeterminate sweep of the busy bar;
 - dragging a floating panel by its header;
 - full-row stacked header targets, since `pressable_states` takes no width.
+
+## D968 — The dock layout runs on a slot model with an activity strip, collapse and maximise
+
+`navigation.dock_layout_of` draws the DockLayout spec over a model that the
+caller owns. `dock_layout` is unchanged.
+
+**The model.**
+- `DockPlacement`, one per panel: its name, its activity-strip glyph, its slot
+  (Left, Right, Bottom, Floating or Hidden), its home slot, and its rectangle
+  while floating.
+- `DockModel`: the sizes, the current panel for each side slot, a collapsed flag
+  for each slot, and what is maximised (a slot or the centre). It is a plain
+  value, so the caller can save and restore a layout.
+- Every press and drag reaches the caller as a `DockEvent`: Resize, Pick,
+  Toggle, Close, Maximise, Dock or Move. `navigation.dock_apply` folds an event
+  into the model and the placements.
+- The caller drives moving and tear-off by sending Move events through
+  `dock_apply`, and sets a floating panel's rectangle itself.
+
+**What it draws.**
+- **Activity strip.** It leads the layout, 40 wide on `surface-container`, with
+  4 of padding and 4 between buttons. Each panel whose home is a side slot gets a
+  32 round `control.glyph_toggle` (new). The button is tonal
+  (`secondary-container`) while its panel is open. Pressing it shows the panel,
+  or collapses the slot if the panel is already showing.
+- **Side slots.** Each shows its current panel through `dock_panel_of`, with tabs
+  when the slot holds several panels. Maximise fills the area beside the strip
+  and flips to Restore. Close hides the panel, and the slot shows the next one. A
+  collapsed or empty slot takes no room and has no sash.
+- **Sashes.** They keep D966's bars and minimums.
+- **Floating panels.** They stand over the layout at their rectangles. Dock
+  returns one to its home slot as a tab.
+
+**Fixes.**
+- The right slot, in `dock_layout` too, is now sized instead of taking a flex
+  share. A panel that is 100% wide asked for the whole row and squeezed every
+  pane.
+- A maximise local was named `target`, which is reserved. It was renamed.
+
+**Tests.** ui_containers4_v2 holds the strip and its tonal button, the tabs, the
+floating placement, a press that shows a panel and a second press that collapses
+its slot, maximise and restore, close, dock, a sash resize, and a caller's Move.
+All 80 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Moving a panel with the pointer: the ghost, the dock guide, the drop preview
+  and tear-off by drag.
+- Keyboard moving.
+- Double-click restore and Ctrl+M.
+- The sash hover delay.
+- F6 cycling.
