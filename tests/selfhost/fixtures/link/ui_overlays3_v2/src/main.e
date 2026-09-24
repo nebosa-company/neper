@@ -21,6 +21,7 @@ use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
@@ -501,10 +502,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (resize_semantics, has_resize_semantics) = find(half_tree, .Button, "Resize sheet")
     if !has_half_sheet || !near(half_sheet.height, 240.0) || !has_resize_handle || !near(resize_handle.height, 48.0) || !has_resize_semantics || !same(resize_semantics.value, "half height") { os.exit(128i32) }
     if !tap_key(&harness, &runtime, 302u64) || testing.press_key(&harness, 13u32, zero) != ok || s.counters[6usize].count != resize_before + 2usize { os.exit(129i32) }
+    // The modal handle follows a downward drag exactly. A short release snaps
+    // back; crossing 64px asks the caller for the next lower detent.
+    let drag_from = geometry.Point { x: resize_handle.x + resize_handle.width * 0.5, y: resize_handle.y + resize_handle.height * 0.5 }
+    let drag_short = geometry.Point { x: drag_from.x, y: drag_from.y + 36.0 }
+    let drag_cycle_before = s.counters[6usize].count
+    if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(drag_from.x, drag_from.y) }) != ok || testing.send(&harness, input.Event { PointerMove: testing.pointer_at(drag_short.x, drag_short.y) }) != ok { os.exit(132i32) }
+    let (root_half_drag, build_half_drag_error) = build(&f, &theme, s, .BottomHalf)
+    if build_half_drag_error != ok || testing.pump(&harness, root_half_drag, time.Instant { nanos: 1225000000i64 }) != ok { os.exit(133i32) }
+    let (dragged_sheet, has_dragged_sheet) = lifted(&harness, 300u64)
+    if !has_dragged_sheet || !near(dragged_sheet.y, half_sheet.y + 36.0) { os.exit(134i32) }
+    if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(drag_short.x, drag_short.y) }) != ok || s.counters[6usize].count != drag_cycle_before { os.exit(135i32) }
+    let (root_half_settled, build_half_settled_error) = build(&f, &theme, s, .BottomHalf)
+    if build_half_settled_error != ok || testing.pump(&harness, root_half_settled, time.Instant { nanos: 1227500000i64 }) != ok { os.exit(136i32) }
+    let (settled_handle, has_settled_handle) = bounds(&harness, &runtime, 302u64)
+    if !has_settled_handle || testing.drag(&harness, geometry.Point { x: settled_handle.x + settled_handle.width * 0.5, y: settled_handle.y + settled_handle.height * 0.5 }, geometry.Point { x: settled_handle.x + settled_handle.width * 0.5, y: settled_handle.y + settled_handle.height * 0.5 + 80.0 }, 2usize) != ok || s.counters[6usize].count != drag_cycle_before + 1usize { os.exit(137i32) }
     let (root_full, build_full_error) = build(&f, &theme, s, .BottomFull)
     if build_full_error != ok || testing.pump(&harness, root_full, time.Instant { nanos: 1230000000i64 }) != ok { os.exit(130i32) }
     let (full_sheet, has_full_sheet) = lifted(&harness, 300u64)
     if !has_full_sheet || !near(full_sheet.height, 408.0) || !near(full_sheet.y, 72.0) { os.exit(131i32) }
+    // The same downward release at peek dismisses the modal sheet.
+    let dismiss_before_drag = s.counters[3usize].count
+    let (root_peek_drag, build_peek_drag_error) = build(&f, &theme, s, .BottomPeek)
+    if build_peek_drag_error != ok || testing.pump(&harness, root_peek_drag, time.Instant { nanos: 1235000000i64 }) != ok { os.exit(138i32) }
+    let (peek_handle, has_peek_handle) = bounds(&harness, &runtime, 302u64)
+    if !has_peek_handle || testing.drag(&harness, geometry.Point { x: peek_handle.x + peek_handle.width * 0.5, y: peek_handle.y + peek_handle.height * 0.5 }, geometry.Point { x: peek_handle.x + peek_handle.width * 0.5, y: peek_handle.y + peek_handle.height * 0.5 + 80.0 }, 2usize) != ok || s.counters[3usize].count != dismiss_before_drag + 1usize { os.exit(139i32) }
     // A standard bottom sheet participates in the page column at its peek
     // height, with a top divider and no modal scrim or focus trap.
     let (root_bottom_standard, build_bottom_standard_error) = build(&f, &theme, s, .BottomStandard)
