@@ -413,7 +413,7 @@ fn gallery(a: *mem.Arena, t: *const style.ThemeTokens, text_style: layout.Style,
     if button_body_error != ok { ret (zero, button_body_error) }
     button_body[0usize] = widget.region(3u64, widget.Region { gesture: widget.GestureAction { ctx: ctx, invoke: on_gallery_press }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, gallery_box(t, 80.0, t.metrics.control_height, filled), labels[1usize..2usize])
     items[1usize] = widget.semantics(2u64, button, style.defaults(), button_body[0usize..1usize])
-    items[2usize] = widget.edit(4u64, widget.Edit { buffer: gallery_state.field[..], len: gallery_state.field_len, style: text_style, color: outlined.foreground, selection: style.color(t, .Selection), change: widget.Change[str] { ctx: ctx, invoke: on_gallery_field }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false }, gallery_box(t, 120.0, t.metrics.control_height, outlined))
+    items[2usize] = widget.edit(4u64, widget.Edit { buffer: gallery_state.field[..], len: gallery_state.field_len, style: text_style, color: outlined.foreground, selection: style.color(t, .Selection), change: widget.Change[str] { ctx: ctx, invoke: on_gallery_field }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, gallery_box(t, 120.0, t.metrics.control_height, outlined))
     var checkbox: widget.Semantics = zero
     checkbox.role = 4u8
     checkbox.label = "Notify"

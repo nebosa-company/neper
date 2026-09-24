@@ -104,7 +104,7 @@ fn build(a: *mem.Arena, ctx: *void, buffer: []u8, len: usize, state: widget.Zoom
     // An editor for the clipboard commands.
     var no_fonts: []const layout.FontChoice = zero
     let text_style = layout.Style { fonts: no_fonts, language: "", line_height: 16.0 }
-    parts[2usize] = widget.edit(30u64, widget.Edit { buffer: buffer, len: len, style: text_style, color: paint.rgba(0.0, 0.0, 0.0, 1.0), selection: paint.rgba(0.5, 0.5, 1.0, 1.0), change: widget.Change[str] { ctx: ctx, invoke: on_change }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false }, sized(120.0, 20.0))
+    parts[2usize] = widget.edit(30u64, widget.Edit { buffer: buffer, len: len, style: text_style, color: paint.rgba(0.0, 0.0, 0.0, 1.0), selection: paint.rgba(0.5, 0.5, 1.0, 1.0), change: widget.Change[str] { ctx: ctx, invoke: on_change }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, sized(120.0, 20.0))
     parts[3usize] = widget.box(0u64, sized(10.0, 10.0), zero)
     var column = style.defaults()
     column.width = style.Length { Px: 320.0 }

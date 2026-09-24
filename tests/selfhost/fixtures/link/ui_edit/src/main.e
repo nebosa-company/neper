@@ -214,8 +214,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if children_error != ok { os.exit(12i32) }
     let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
     let blue = paint.rgba(0.0, 0.0, 1.0, 1.0)
-    children[0usize] = widget.edit(1u64, widget.Edit { buffer: first_buffer, len: 0usize, style: text_style, color: white, selection: blue, change: widget.Change[str] { ctx: ctx, invoke: on_change }, submit: widget.Submit { ctx: ctx, invoke: on_submit }, enabled: true, read_only: false, multiline: false, secret: false }, sized(64.0, 20.0))
-    children[1usize] = widget.edit(2u64, widget.Edit { buffer: second_buffer, len: 0usize, style: text_style, color: white, selection: blue, change: zero, submit: widget.Submit { ctx: ctx, invoke: on_submit }, enabled: true, read_only: false, multiline: true, secret: false }, sized(64.0, 60.0))
+    children[0usize] = widget.edit(1u64, widget.Edit { buffer: first_buffer, len: 0usize, style: text_style, color: white, selection: blue, change: widget.Change[str] { ctx: ctx, invoke: on_change }, submit: widget.Submit { ctx: ctx, invoke: on_submit }, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, sized(64.0, 20.0))
+    children[1usize] = widget.edit(2u64, widget.Edit { buffer: second_buffer, len: 0usize, style: text_style, color: white, selection: blue, change: zero, submit: widget.Submit { ctx: ctx, invoke: on_submit }, enabled: true, read_only: false, multiline: true, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, sized(64.0, 60.0))
     var column = style.defaults()
     column.width = style.Length { Px: 64.0 }
     column.height = style.Length { Px: 100.0 }

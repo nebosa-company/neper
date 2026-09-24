@@ -98,10 +98,41 @@ fn text(a: *mem.Arena, key: widget.Key, value: str, t: *const Theme, options: Te
 
 // A selectable text: a read-only editor over the caller's buffer, so the caret,
 // the selection, Shift+arrows and copy are the editor's (D807).
+// v2 (D963, docs/ux/components/SelectableText): the inline value or message --
+// the selection filled `primary-container` with the selected glyphs repainted
+// `on-primary-container`, a 2px `primary` caret, and no Tab stop (a press still
+// focuses it); `selectable_block` is the block form.
 fn selectable_text(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *const Theme, options: TextOptions) -> (widget.Node, err) {
+    let (node, node_error) = selectable(a, key, buffer, len, t, options, false)
+    ret (node, node_error)
+}
+
+// v2 (D963): the block form for logs and output -- `surface-container-high`,
+// `radius-sm` 8, padding 12 by 16, in the `code` role, a Tab stop with the focus
+// ring round the block.
+fn selectable_block(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *const Theme, options: TextOptions) -> (widget.Node, err) {
+    var coded = options
+    coded.role = .Code
+    let (node, node_error) = selectable(a, key, buffer, len, t, coded, true)
+    ret (node, node_error)
+}
+
+// ponytail: the unfocused-window colour, the context menu, touch handles and
+// toolbar, word selection, a Text role with Copy, and `align`/`max_lines` are
+// not yet the editor's.
+fn selectable(a: *mem.Arena, key: widget.Key, buffer: []u8, len: usize, t: *const Theme, options: TextOptions, block: bool) -> (widget.Node, err) {
     let (text_look, style_error) = text_style(a, t, options.role)
     if style_error != ok { ret (zero, style_error) }
-    ret (widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, options.color), selection: style.color(t.tokens, .Selection), change: zero, submit: zero, enabled: true, read_only: true, multiline: options.wrap != .None, secret: false }, style.defaults()), ok)
+    var look = style.defaults()
+    if block {
+        focus_look(t)
+        look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+        look.radius = t.tokens.radii.sm
+        let side = style.Length { Px: 16.0 }
+        let top = style.Length { Px: 12.0 }
+        look.padding = style.EdgeLengths { left: side, top: top, right: side, bottom: top }
+    }
+    ret (widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, options.color), selection: style.color(t.tokens, .PrimaryContainer), change: zero, submit: zero, enabled: true, read_only: true, multiline: options.wrap != .None || block, secret: false, marked: style.color(t.tokens, .OnPrimaryContainer), caret: style.color(t.tokens, .Primary), untabbed: !block, ringed: block }, look), ok)
 }
 
 fn link_tap(ctx: *void, g: widget.Gesture) -> err {
@@ -1866,7 +1897,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         editor[at] = hint_node
         at += 1usize
     }
-    editor[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret }, editor_style)
+    editor[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: value_color, selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: options.read_only, multiline: multiline, secret: secret, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
     at += 1usize
     let (lines, lines_error) = mem.alloc[widget.Node](a, 4usize)
     if lines_error != ok { ret (zero, TooLarge) }
@@ -2063,7 +2094,7 @@ fn search_field(a: *mem.Arena, key: widget.Key, t: *const Theme, buffer: []u8, l
     var editor_style = style.defaults()
     editor_style.width = style.Length { Percent: 100.0 }
     editor_style.min_height = style.Length { Px: line }
-    layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false }, editor_style)
+    layers[at] = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: change, submit: submit, enabled: options.enabled, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
     at += 1usize
     var count = 1usize
     if len != 0usize { count = 2usize }
@@ -4204,7 +4235,7 @@ fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, toke
     var editor_style = style.defaults()
     editor_style.min_width = style.Length { Px: 96.0 }
     editor_style.min_height = style.Length { Px: line }
-    let bare = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: typed, submit: add, enabled: true, read_only: false, multiline: false, secret: false }, editor_style)
+    let bare = widget.edit(key, widget.Edit { buffer: buffer, len: len, style: text_look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: typed, submit: add, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, editor_style)
     var input_count = 1usize
     if len == 0usize && tokens.len == 0usize && label.len != 0usize { input_count = 2usize }
     let (input_parts, input_parts_error) = mem.alloc[widget.Node](a, input_count)

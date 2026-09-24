@@ -78,8 +78,11 @@ type Scope = struct { traps_focus: bool, shortcuts: []const Shortcut, default_ac
 // text, IME composition, clipboard, undo -- and reports every change as the new
 // value through `change`; Enter in a single-line editor fires `submit`. A `len`
 // the caller changes between frames replaces the value; one it leaves alone keeps
-// the runtime's edits.
-type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool, secret: bool }
+// the runtime's edits. (D963) `marked` repaints the selected glyphs (alpha 0:
+// they keep `color`); `caret` is a 2px caret's colour (alpha 0: a 1px caret in
+// `color`); `untabbed` keeps it out of the Tab order (a press still focuses it);
+// `ringed` gives it the focus ring the runtime draws round other controls.
+type Edit = struct { buffer: []u8, len: usize, style: layout.Style, color: paint.Color, selection: paint.Color, change: Change[str], submit: Submit, enabled: bool, read_only: bool, multiline: bool, secret: bool, marked: paint.Color, caret: paint.Color, untabbed: bool, ringed: bool }
 // Semantics (D809, widget plan P0-06): what an element says of itself to the
 // accessibility tree beyond what its kind implies. `role` is `e.ui.accessibility`'s
 // role code (0 keeps the kind's); the label, value and hint are copied into the
@@ -260,6 +263,8 @@ type Element = struct {
     read_only: bool,
     multiline: bool,
     secret: bool,
+    untabbed: bool,
+    ringed: bool,
     text_origin: geometry.Point,
     text_width: f32,
     // What the element says of itself: its semantics with the label in `text` and
@@ -1141,6 +1146,8 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.read_only = ed.read_only
         e.multiline = ed.multiline
         e.secret = ed.secret
+        e.untabbed = ed.untabbed
+        e.ringed = ed.ringed
         e.focusable = ed.enabled
         e.gestures = GESTURE_TAP | GESTURE_DRAG
     case .Semantics as sm:
@@ -1825,6 +1832,25 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
         }
     }
     try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: origin, brush: paint.Brush { Solid: ed.color } } })
+    if focused_here && ed.marked.alpha > 0.0 {
+        // The selected glyphs again in their own colour, clipped to the selection.
+        let (lo, hi) = selection_of(e)
+        if lo < hi {
+            let (marks, marks_error) = layout.selection(a, &copies[0usize], lo, hi)
+            if marks_error != ok { ret InvalidTree }
+            var m = 0usize
+            while m < marks.len {
+                let r = marks[m]
+                var save: scene.Command = .Save
+                var restore: scene.Command = .Restore
+                try scene.push(b, save)
+                try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.Rect { x: origin.x + r.x, y: origin.y + r.y, width: r.width, height: r.height } } })
+                try scene.push(b, scene.Command { Text: scene.DrawText { layout: &copies[0usize], origin: origin, brush: paint.Brush { Solid: ed.marked } } })
+                try scene.push(b, restore)
+                m += 1usize
+            }
+        }
+    }
     if focused_here {
         if s.compose_len != 0usize {
             let (under, under_error) = layout.selection(a, &copies[0usize], e.caret, e.caret + s.compose_len)
@@ -1837,7 +1863,13 @@ fn place_edit(s: *State, a: *mem.Arena, element: usize, ed: Edit, inner: geometr
             }
         }
         let c = layout.caret(&copies[0usize], e.caret + s.compose_len)
-        try push_rect(b, geometry.Rect { x: c.x, y: c.y, width: 1.0, height: c.height }, origin, ed.color)
+        var caret_color = ed.color
+        var caret_width: f32 = 1.0
+        if ed.caret.alpha > 0.0 {
+            caret_color = ed.caret
+            caret_width = 2.0
+        }
+        try push_rect(b, geometry.Rect { x: c.x, y: c.y, width: caret_width, height: c.height }, origin, caret_color)
     }
     ret ok
 }
@@ -2106,7 +2138,7 @@ fn fill_shape(a: *mem.Arena, b: *scene.Builder, r: geometry.Rect, radius: f32, b
 fn ringed(s: *const State, element: usize) -> bool {
     if !s.has_focus || !s.focus_visible || usize(s.focus) != element || !(s.ring_width > 0.0) { ret false }
     let e = &s.elements[element]
-    ret e.focusable && e.kind != EDIT_TAG
+    ret e.focusable && (e.kind != EDIT_TAG || e.ringed)
 }
 
 fn intersect(a: geometry.Rect, b: geometry.Rect) -> geometry.Rect {
@@ -2769,7 +2801,7 @@ fn collect_focusable(s: *State, index: usize, out: []u32, count: usize) -> usize
     var n = count
     let e = &s.elements[index]
     if !e.live { ret n }
-    if focusable(e) && n < out.len {
+    if focusable(e) && !(e.kind == EDIT_TAG && e.untabbed) && n < out.len {
         out[n] = u32(index)
         n += 1usize
     }

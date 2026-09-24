@@ -19599,3 +19599,49 @@ single selection colour and stays a tab stop. Still open for the five delivered:
   overlays and series tokens.
 - Text: middle truncation, host text scaling, the system-font fallback and the
   loading skeleton.
+
+## D963 — Selectable text draws its v2 specification
+
+`control.selectable_text` now draws the inline value and message forms of
+docs/ux/components/SelectableText. The selection fills `primary-container`, and
+the selected glyphs are drawn again in `on-primary-container`, clipped to the
+selection's rectangles. Before, the text kept its colour over the single
+`Selection` fill. The caret is 2px `primary`, not 1px in the text colour. The
+value is no longer a Tab stop, though a press still focuses it for selecting.
+The new `control.selectable_block` is the block form for logs and output: a
+`surface-container-high` box with 8 corners and 12 by 16 padding, in the `code`
+role and multiline. It is a Tab stop and wears the runtime's focus ring round
+the block.
+
+The drawing lives in the editor. `widget.Edit` gains four fields:
+- `marked`: the selected glyphs' colour, where alpha 0 keeps the text colour.
+- `caret`: the colour of a 2px caret, where alpha 0 keeps the 1px caret in the
+  text colour.
+- `untabbed`: leaves the editor out of the Tab order.
+- `ringed`: gives the editor the focus ring other controls wear.
+
+Every other editor passes zero and false, so fields, search, the text area and
+the fixtures that build editors directly keep their looks and their Tab order.
+
+tests/selfhost/fixtures/link/ui_content2_v2 uses the square-glyph font. It checks
+that Tab passes the inline value and focuses the block, and that the block is one
+`code` line plus 24 of padding on `surface-container-high` and ringed in
+`focus-ring` on the next frame. A press then focuses the inline value, and
+Shift+End selects its three glyphs. Inside the selection it finds the
+`primary-container` fill and the `on-primary-container` glyphs, and none of the
+plain text colour. The caret after the third glyph is `primary`. ui_content still
+holds the read-only editor that selects and refuses typing. All 75 ui_* fixtures
+pass on Windows and Linux, and the Windows example builds.
+
+Still open for SelectableText:
+- the unfocused-window selection colour;
+- the context menu, the touch handles and floating toolbar;
+- word and line selection on double and triple click;
+- the copy button's check swap;
+- a Text role with the Selectable state and a Copy action (it still reports a
+  read-only text field);
+- honouring `align`, `max_lines` and `ellipsis`.
+
+RichText stays undelivered. Its spans still sit on one line: it has no word wrap
+across spans, no baseline alignment, no code, key or mention kinds, no link
+underline or link states, no padded link target and no `max_lines`.

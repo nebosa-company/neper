@@ -116,7 +116,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     described.column_count = 5u32
     described.level = 2u8
     children[0usize] = widget.semantics(2u64, described, sized(40.0, 10.0), inner[0usize..1usize])
-    children[1usize] = widget.edit(4u64, widget.Edit { buffer: buffer, len: 5usize, style: text_style, color: paint.rgba(1.0, 1.0, 1.0, 1.0), selection: paint.rgba(0.0, 0.0, 1.0, 1.0), change: widget.Change[str] { ctx: ctx, invoke: on_change }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false }, sized(40.0, 16.0))
+    children[1usize] = widget.edit(4u64, widget.Edit { buffer: buffer, len: 5usize, style: text_style, color: paint.rgba(1.0, 1.0, 1.0, 1.0), selection: paint.rgba(0.0, 0.0, 1.0, 1.0), change: widget.Change[str] { ctx: ctx, invoke: on_change }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, sized(40.0, 16.0))
     children[2usize] = widget.text(5u64, widget.Text { value: "Theme", style: text_style, color: paint.rgba(1.0, 1.0, 1.0, 1.0), wrap: .Word, align: .Start, max_lines: 0u32, ellipsis: "" }, style.defaults())
     var hidden: widget.Semantics = zero
     hidden.hidden = true
