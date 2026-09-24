@@ -39,7 +39,7 @@ type Counter = struct { count: usize }
 // 5 submenu toggle, 6 submenu leaf, 7 touch submenu toggle, 8 context toggle.
 type Store = struct { counters: [9]Counter, subs: [9]widget.Submit, commands: [5]overlay.MenuCommand, touch_subs: [2]overlay.MenuCommand, pops: [2]overlay.MenuCommand, pop_subs: [2]overlay.MenuCommand, tips: [1]overlay.MenuItem }
 
-type Which = enum u8 { Menu, Touch, Pointed, Keyboard, ContextTouch }
+type Which = enum u8 { Menu, Touch, Pointed, Keyboard, ContextTouch, Rich }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -88,7 +88,9 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (menu, e4) = overlay.menu_of(a, 100u64, t, 1u64, "File", s.commands[0usize..5usize], which == .Menu || which == .Touch, &s.subs[2usize])
     let (tip, e5) = overlay.tooltip_of(a, 200u64, t, 2u64, "Save file", "Ctrl+S", true)
     let (high, e6) = overlay.tooltip(a, 210u64, t, 1u64, "File menu", true)
-    let (rich, e7) = overlay.rich_tooltip(a, 300u64, t, 3u64, "Incremental builds", "Only changed modules are rebuilt.", s.tips[0usize..1usize], true)
+    var rich_shown = true
+    if which == .Rich { rich_shown = overlay.rich_tooltip_wanted(t, 3u64, 300u64) }
+    let (rich, e7) = overlay.rich_tooltip(a, 300u64, t, 3u64, "Incremental builds", "Only changed modules are rebuilt.", s.tips[0usize..1usize], rich_shown)
     s.pops[0usize].submenu_open = s.counters[5usize].count % 2usize == 1usize
     let pointer = geometry.Point { x: 600.0, y: 460.0 }
     var context: widget.Node = zero
@@ -456,6 +458,61 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(rename_at.x, rename_at.y) }) != ok || s.counters[1usize].count != leaf_before + 1usize || s.counters[8usize].count != 6usize || s.counters[4usize].count != 0usize { os.exit(134i32) }
     let (drag_done, drag_done_error) = build(&f, &touch_theme, s, .ContextTouch)
     if drag_done_error != ok || testing.pump(&harness, drag_done, time.Instant { nanos: 2540000000i64 }) != ok || testing.by_key(&harness, 400u64).count != 0usize { os.exit(135i32) }
+    // Rich tooltips wait 500 ms, bridge the pointer's 4px crossing for 300 ms,
+    // remain for focus inside either surface, and dismiss on Escape.
+    let rich_start = time.Instant { nanos: 3000000000i64 }
+    if testing.hover(&harness, 5.0, 470.0) != ok || testing.begin(&harness, rich_start) != ok { os.exit(136i32) }
+    let (rich_closed, rich_closed_error) = build(&f, &theme, s, .Rich)
+    if rich_closed_error != ok || testing.pump(&harness, rich_closed, rich_start) != ok || testing.by_key(&harness, 300u64).count != 0usize { os.exit(137i32) }
+    let (rich_info, has_rich_info) = bounds(&harness, &runtime, 3u64)
+    if !has_rich_info || testing.hover(&harness, rich_info.x + rich_info.width * 0.5, rich_info.y + rich_info.height * 0.5) != ok { os.exit(138i32) }
+    if testing.begin(&harness, rich_start) != ok { os.exit(139i32) }
+    let (rich_wait, rich_wait_error) = build(&f, &theme, s, .Rich)
+    if rich_wait_error != ok || testing.pump(&harness, rich_wait, rich_start) != ok || testing.by_key(&harness, 300u64).count != 0usize || !widget.animation_frame_requested(&runtime) { os.exit(140i32) }
+    let rich_almost = time.Instant { nanos: 3499999999i64 }
+    if testing.begin(&harness, rich_almost) != ok { os.exit(141i32) }
+    let (rich_almost_root, rich_almost_error) = build(&f, &theme, s, .Rich)
+    if rich_almost_error != ok || testing.pump(&harness, rich_almost_root, rich_almost) != ok || testing.by_key(&harness, 300u64).count != 0usize { os.exit(142i32) }
+    let rich_due = time.Instant { nanos: 3500000000i64 }
+    if testing.begin(&harness, rich_due) != ok { os.exit(143i32) }
+    let (rich_open, rich_open_error) = build(&f, &theme, s, .Rich)
+    if rich_open_error != ok || testing.pump(&harness, rich_open, rich_due) != ok { os.exit(144i32) }
+    let (rich_bounds, has_rich_bounds) = lifted(&harness, 300u64)
+    let (rich_action, has_rich_action) = bounds(&harness, &runtime, 301u64)
+    if !has_rich_bounds || !has_rich_action || !near(rich_action.height, 40.0) { os.exit(145i32) }
+    if testing.hover(&harness, rich_bounds.x + 8.0, rich_bounds.y + 20.0) != ok { os.exit(146i32) }
+    let rich_cross = time.Instant { nanos: 3500000001i64 }
+    if testing.begin(&harness, rich_cross) != ok { os.exit(147i32) }
+    let (rich_cross_root, rich_cross_error) = build(&f, &theme, s, .Rich)
+    if rich_cross_error != ok || testing.pump(&harness, rich_cross_root, rich_cross) != ok || testing.by_key(&harness, 300u64).count != 1usize { os.exit(148i32) }
+    if testing.hover(&harness, 5.0, 470.0) != ok { os.exit(149i32) }
+    let rich_leave = time.Instant { nanos: 3500000002i64 }
+    if testing.begin(&harness, rich_leave) != ok { os.exit(150i32) }
+    let (rich_grace, rich_grace_error) = build(&f, &theme, s, .Rich)
+    if rich_grace_error != ok || testing.pump(&harness, rich_grace, rich_leave) != ok || testing.by_key(&harness, 300u64).count != 1usize || !widget.animation_frame_requested(&runtime) { os.exit(151i32) }
+    let rich_grace_almost = time.Instant { nanos: 3800000001i64 }
+    if testing.begin(&harness, rich_grace_almost) != ok { os.exit(152i32) }
+    let (rich_grace_almost_root, rich_grace_almost_error) = build(&f, &theme, s, .Rich)
+    if rich_grace_almost_error != ok || testing.pump(&harness, rich_grace_almost_root, rich_grace_almost) != ok || testing.by_key(&harness, 300u64).count != 1usize { os.exit(153i32) }
+    let rich_gone_at = time.Instant { nanos: 3800000002i64 }
+    if testing.begin(&harness, rich_gone_at) != ok { os.exit(154i32) }
+    let (rich_gone, rich_gone_error) = build(&f, &theme, s, .Rich)
+    if rich_gone_error != ok || testing.pump(&harness, rich_gone, rich_gone_at) != ok || testing.by_key(&harness, 300u64).count != 0usize { os.exit(155i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 30u64).element) != ok { os.exit(156i32) }
+    let rich_focus_at = time.Instant { nanos: 3900000000i64 }
+    if testing.begin(&harness, rich_focus_at) != ok { os.exit(157i32) }
+    let (rich_focused, rich_focused_error) = build(&f, &theme, s, .Rich)
+    if rich_focused_error != ok || testing.pump(&harness, rich_focused, rich_focus_at) != ok || testing.by_key(&harness, 300u64).count != 1usize { os.exit(158i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 301u64).element) != ok || testing.hover(&harness, 5.0, 470.0) != ok { os.exit(159i32) }
+    let rich_action_focus_at = time.Instant { nanos: 4300000000i64 }
+    if testing.begin(&harness, rich_action_focus_at) != ok { os.exit(160i32) }
+    let (rich_action_focused, rich_action_focused_error) = build(&f, &theme, s, .Rich)
+    if rich_action_focused_error != ok || testing.pump(&harness, rich_action_focused, rich_action_focus_at) != ok || testing.by_key(&harness, 300u64).count != 1usize { os.exit(161i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok { os.exit(162i32) }
+    let rich_escape_at = time.Instant { nanos: 4300000001i64 }
+    if testing.begin(&harness, rich_escape_at) != ok { os.exit(163i32) }
+    let (rich_escaped, rich_escaped_error) = build(&f, &theme, s, .Rich)
+    if rich_escaped_error != ok || testing.pump(&harness, rich_escaped, rich_escape_at) != ok || testing.by_key(&harness, 300u64).count != 0usize { os.exit(164i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(51i32) }
     try io.print("ui overlays v2 ok\n")
     ret ok

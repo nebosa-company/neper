@@ -28,6 +28,13 @@ fn tooltip_wanted(t: *const control.Theme, anchor: widget.Key) -> bool {
     ret widget.tooltip_wanted(t.runtime, anchor)
 }
 
+// Whether a rich tooltip is wanted after its initial hover delay and while the
+// pointer or focus crosses between its anchor and interactive surface.
+fn rich_tooltip_wanted(t: *const control.Theme, anchor: widget.Key, tooltip_key: widget.Key) -> bool {
+    if mem.address_of(t.runtime) == 0usize { ret false }
+    ret widget.rich_tooltip_wanted(t.runtime, anchor, tooltip_key)
+}
+
 // A tooltip: `text` beside `anchor`, keyed `key`, placed only while `shown` (an
 // empty box otherwise); a tooltip in the tree that describes nothing by itself --
 // the anchor's `described_by` is the caller's. The plain tooltip of D975 below.
@@ -89,8 +96,6 @@ fn tooltip_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: w
 // two text buttons (keyed `key + 1 + index`) 8 below it and 8 apart. Below the
 // anchor, its end aligned with the anchor's, 4 from it, flipping above; a
 // non-modal overlay, a tooltip in the tree named by the subhead (or the text).
-// ponytail: the caller keeps it up while the pointer is over it (no 300 ms
-// grace), and the actions are 32 tall at pointer density rather than 40.
 fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, subhead: str, text: str, actions: []const MenuItem, shown: bool) -> (widget.Node, err) {
     if !shown { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if actions.len > 2usize { ret (zero, TooLarge) }
@@ -121,10 +126,21 @@ fn rich_tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
         if buttons_error != ok { ret (zero, TooLarge) }
         var i = 0usize
         while i < actions.len {
-            var plain = control.button_options()
-            plain.variant = .Plain
-            plain.enabled = actions[i].enabled
-            let (pressed, pressed_error) = control.button(a, key + 1u64 + u64(i), t, actions[i].label, &actions[i].action, plain)
+            let action_key = key + 1u64 + u64(i)
+            let state = control.control_state(t, action_key, actions[i].enabled, false)
+            var look = style.resolve(t.tokens, .Plain, state)
+            look.radius = 20.0
+            look.custom_padding = true
+            look.padding = 12.0
+            look.padding_y = control.max_zero((40.0 - style.text_style(t.tokens, .Label).line_height) * 0.5)
+            look.min_height = 40.0
+            look.min_width = 24.0
+            var caption = control.text_options()
+            caption.role = .Label
+            caption.wrap = .None
+            let (said, said_error) = control.colored_text(a, 0u64, actions[i].label, t, caption, look.foreground)
+            if said_error != ok { ret (zero, said_error) }
+            let (pressed, pressed_error) = control.pressable(a, action_key, t, 3u8, actions[i].label, look, actions[i].enabled, false, &actions[i].action, said)
             if pressed_error != ok { ret (zero, pressed_error) }
             buttons[i] = pressed
             i += 1usize

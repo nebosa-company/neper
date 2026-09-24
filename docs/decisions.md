@@ -21745,3 +21745,16 @@ receives the release. Releasing elsewhere still only suppresses the target tap.
 `ui_overlays_v2` holds a second 500 ms press, movement onto Rename, its pressed
 interaction, leaf activation, context dismissal and target suppression on
 Windows and Linux. A host haptic tick is the remaining context-touch gap.
+
+## D1019 — Rich tooltips keep the anchor-to-surface crossing open
+
+`overlay.rich_tooltip_wanted` gives a rich tooltip one keyed runtime lifecycle:
+the first pointer hover waits 500 ms, keyboard focus opens immediately, and the
+surface remains present while the pointer or focus is inside either the anchor
+or tooltip. Leaving both starts a 300 ms bridge across their gap. Escape latches
+dismissal until the anchor is left; scroll, resize and blur dismiss immediately.
+
+Rich-tooltip actions use the existing pressable path with a 40px minimum height
+at pointer density. `ui_overlays_v2` holds the delay and grace boundaries,
+anchor/tooltip hover, anchor/action focus, Escape and action height on Windows
+and Linux; `rich-tooltip-persistent.png` is the Segoe UI visual check.

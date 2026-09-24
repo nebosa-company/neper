@@ -366,6 +366,15 @@ type State = struct {
     has_long_press: bool,
     long_press_at: i64,
     long_press_fired: bool,
+    rich_anchor_key: Key,
+    rich_tooltip_key: Key,
+    has_rich_tooltip: bool,
+    rich_tooltip_shown: bool,
+    rich_hover_at: i64,
+    rich_leave_at: i64,
+    rich_leaving: bool,
+    rich_dismissed_key: Key,
+    has_rich_dismissed: bool,
     // The focus ring (D940): shown only when the focus came by the keyboard or the
     // program, never by a pointer press; its colour, width and gap outside the
     // element, set from the theme; the clip the element being placed lies within.
@@ -388,6 +397,7 @@ type State = struct {
     has_scene: bool,
     closed: bool,
     arena_state: Arena,
+    has_pointer: bool,
     // Editing: a scratch region for hit-test layouts, the composition (preedit) of
     // the focused editor, the fallback clipboard for a host without one, and the
     // undo history -- entries and their byte pool -- with the redo point.
@@ -4043,6 +4053,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     if !s.has_root { ret ok }
     switch event {
     case .PointerDown as p:
+        s.has_pointer = true
+        s.arena_state.last = p.position
         s.has_long_press = false
         s.long_press_fired = false
         // The topmost overlay under the pointer is the tree the press is in; a modal
@@ -4105,6 +4117,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             s.elements[viewport].scroll_velocity = 0.0
         }
     case .PointerUp as p:
+        s.has_pointer = true
+        s.arena_state.last = p.position
         if s.long_press_fired {
             var chosen = 0usize
             var has_chosen = false
@@ -4183,6 +4197,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .PointerMove as p:
+        s.has_pointer = true
         if s.long_press_fired {
             s.arena_state.last = p.position
             s.arena_state.pressed = false
@@ -4319,6 +4334,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .Scroll as p:
         s.has_long_press = false
         s.long_press_fired = false
+        s.has_rich_tooltip = false
         let (zoomed, has_zoomed) = hit_zoom(s, usize(s.root), p.position)
         if has_zoomed {
             // A notch scales by a tenth either way.
@@ -4337,6 +4353,11 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .KeyDown as k:
         // Enter or Space on a focused tap region is a tap at its centre.
         let code = key_code(k.key.physical)
+        if code == 27u32 && s.has_rich_tooltip {
+            s.rich_dismissed_key = s.rich_anchor_key
+            s.has_rich_dismissed = true
+            s.has_rich_tooltip = false
+        }
         if menu_alt_key(code) {
             if !k.repeat {
                 s.menu_alt_down = true
@@ -4397,12 +4418,14 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .Close as w:
         ret ok
     case .Resize as m:
+        s.has_rich_tooltip = false
         ret ok
     case .Focus as w:
         ret ok
     case .Blur as w:
         s.has_long_press = false
         s.long_press_fired = false
+        s.has_rich_tooltip = false
         ret ok
     case .Lifecycle as l:
         ret ok
@@ -4689,6 +4712,67 @@ fn tooltip_wanted(widget_runtime: *Runtime, key: Key) -> bool {
         s.animation_due = true
         ret false
     }
+    ret true
+}
+
+fn pointer_within_key(s: *State, key: Key) -> bool {
+    if !s.has_pointer { ret false }
+    let (found, count) = find_by_key(s, key)
+    if count != 1usize { ret false }
+    ret geometry.contains(s.elements[usize(found.slot)].bounds, s.arena_state.last)
+}
+
+// Rich tooltips use the same 500 ms first-hover delay as plain ones, remain
+// while the pointer is over either surface or focus is within either, and keep
+// a 300 ms bridge while the pointer crosses their 4px gap.
+fn rich_tooltip_wanted(widget_runtime: *Runtime, anchor: Key, tooltip: Key) -> bool {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret false }
+    let now = s.animation_time.nanos
+    let anchor_pointed = pointer_within_key(s, anchor)
+    let tooltip_pointed = pointer_within_key(s, tooltip)
+    let anchor_focused = s.focus_visible && focus_within(widget_runtime, anchor)
+    let tooltip_focused = focus_within(widget_runtime, tooltip)
+    if s.has_rich_dismissed && s.rich_dismissed_key == anchor {
+        if anchor_pointed || anchor_focused { ret false }
+        s.has_rich_dismissed = false
+    }
+    if !s.has_rich_tooltip || s.rich_anchor_key != anchor || s.rich_tooltip_key != tooltip {
+        s.rich_anchor_key = anchor
+        s.rich_tooltip_key = tooltip
+        s.has_rich_tooltip = anchor_pointed || anchor_focused
+        s.rich_tooltip_shown = anchor_focused
+        s.rich_hover_at = now
+        s.rich_leaving = false
+    }
+    if !s.has_rich_tooltip { ret false }
+    if !s.rich_tooltip_shown {
+        if anchor_focused { s.rich_tooltip_shown = true }
+        if !anchor_pointed && !anchor_focused {
+            s.has_rich_tooltip = false
+            ret false
+        }
+        if !s.rich_tooltip_shown && (now < s.rich_hover_at || now - s.rich_hover_at < 500000000i64) {
+            s.animation_due = true
+            ret false
+        }
+        s.rich_tooltip_shown = true
+    }
+    if anchor_pointed || tooltip_pointed || anchor_focused || tooltip_focused {
+        s.rich_leaving = false
+        ret true
+    }
+    if !s.rich_leaving {
+        s.rich_leave_at = now
+        s.rich_leaving = true
+    }
+    if now >= s.rich_leave_at && now - s.rich_leave_at >= 300000000i64 {
+        s.has_rich_tooltip = false
+        s.rich_tooltip_shown = false
+        s.rich_leaving = false
+        ret false
+    }
+    s.animation_due = true
     ret true
 }
 
