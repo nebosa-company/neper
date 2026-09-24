@@ -34,7 +34,7 @@ type Counter = struct { count: usize }
 
 // The counters: 0-4 crumbs, 5 overflow toggle, 6-8 tabs, 9 menu toggles, 10
 // commands.
-type Store = struct { counters: [12]Counter, subs: [12]widget.Submit, crumbs: [5]widget.Submit, tabs: [3]widget.Submit, toggles: [2]widget.Submit, file: [4]navigation.BarCommand, edit: [1]navigation.BarCommand, menus: [2]navigation.BarMenu }
+type Store = struct { counters: [12]Counter, subs: [12]widget.Submit, crumbs: [5]widget.Submit, tabs: [3]widget.Submit, toggles: [2]widget.Submit, file: [5]navigation.BarCommand, edit: [1]navigation.BarCommand, menus: [2]navigation.BarMenu }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -198,16 +198,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.file[1usize] = command
     s.file[1usize].label = "Open"
     s.file[2usize] = command
-    s.file[2usize].label = "Autosave"
-    s.file[2usize].checked = true
-    s.file[2usize].separated = true
+    s.file[2usize].label = "Other"
     s.file[3usize] = command
-    s.file[3usize].label = "Delete"
-    s.file[3usize].destructive = true
-    s.file[3usize].enabled = false
+    s.file[3usize].label = "Autosave"
+    s.file[3usize].checked = true
+    s.file[3usize].separated = true
+    s.file[4usize] = command
+    s.file[4usize].label = "Delete"
+    s.file[4usize].destructive = true
+    s.file[4usize].enabled = false
     s.edit[0usize] = command
     s.edit[0usize].label = "Undo"
-    s.menus[0usize] = navigation.BarMenu { label: "File", commands: s.file[0usize..4usize] }
+    s.menus[0usize] = navigation.BarMenu { label: "File", commands: s.file[0usize..5usize] }
     s.menus[1usize] = navigation.BarMenu { label: "Edit", commands: s.edit[0usize..1usize] }
     let (frame_storage, storage_error) = mem.alloc[u8](a, 2097152usize)
     if storage_error != ok { os.exit(8i32) }
@@ -303,10 +305,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.counters[10usize].count = 0usize
     if testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(61i32) }
     s.counters[9usize].count = 0usize
-    // A typed letter advances to the next matching command, case-insensitively.
-    if testing.press_key(&harness, 65u32, zero) != ok { os.exit(52i32) }
+    // Prefix typeahead expires after 500 ms: delayed T does not extend O, while
+    // immediate O,T selects Other.
+    if testing.press_key(&harness, 79u32, zero) != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1600000000i64 }) != ok || testing.press_key(&harness, 84u32, zero) != ok { os.exit(52i32) }
     let (typed, has_typed) = testing.focused(&harness)
-    if !has_typed || !same_element(typed, testing.by_key(&harness, 2405u64).element) { os.exit(53i32) }
+    if !has_typed || !same_element(typed, testing.by_key(&harness, 2404u64).element) || testing.pump(&harness, root_3, time.Instant { nanos: 2200000000i64 }) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok || testing.press_key(&harness, 79u32, zero) != ok || testing.press_key(&harness, 84u32, zero) != ok { os.exit(53i32) }
+    let (prefixed, has_prefixed) = testing.focused(&harness)
+    if !has_prefixed || !same_element(prefixed, testing.by_key(&harness, 2405u64).element) { os.exit(62i32) }
     // Right follows an open menu to its neighbour and fires that title.
     if testing.press_key(&harness, 39u32, zero) != ok || s.counters[9usize].count != 1usize { os.exit(44i32) }
     let (followed, has_followed) = testing.focused(&harness)
@@ -315,17 +320,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (edit_title, has_edit_title) = bounds(&harness, &runtime, 2417u64)
     if !has_edit_title || testing.hover(&harness, edit_title.x + edit_title.width * 0.5, edit_title.y + edit_title.height * 0.5) != ok || s.counters[9usize].count != 1usize { os.exit(51i32) }
     s.counters[9usize].count = 0usize
-    // Its menu 2 below on `surface-container`, at least 200 wide; four commands
+    // Its menu 2 below on `surface-container`, at least 200 wide; five commands
     // 32 tall, a separator line before Autosave, Autosave checked, Delete
     // disabled.
     let (menu, has_menu) = testing.overlay_of(&harness, testing.by_key(&harness, 2402u64).element)
     if !has_menu || !near(menu.y, file.y + 26.0) || menu.width < 200.0 || !is_color(shot_3, at(menu.x + 100.0, menu.y + 4.0), style.color(&tokens, .SurfaceContainer)) { os.exit(28i32) }
     let (open_row, has_open_row) = bounds(&harness, &runtime, 2404u64)
-    let (auto_row, has_auto_row) = bounds(&harness, &runtime, 2405u64)
-    if !has_open_row || !has_auto_row || !near(open_row.height, 32.0) || !near(auto_row.y, open_row.y + 49.0) || !is_color(shot_3, at(menu.x + 100.0, open_row.y + 40.5), style.color(&tokens, .OutlineVariant)) { os.exit(29i32) }
+    let (auto_row, has_auto_row) = bounds(&harness, &runtime, 2406u64)
+    if !has_open_row || !has_auto_row || !near(open_row.height, 32.0) || !near(auto_row.y, open_row.y + 81.0) || !is_color(shot_3, at(menu.x + 100.0, open_row.y + 72.5), style.color(&tokens, .OutlineVariant)) { os.exit(29i32) }
     let (auto_node, has_auto_node) = find(tree_3, .MenuItem, "Autosave")
     let (delete_node, has_delete_node) = find(tree_3, .MenuItem, "Delete")
-    if testing.by_role(&harness, .MenuItem).count != 4usize || !has_auto_node || !auto_node.state.checked || !has_delete_node || !delete_node.state.disabled { os.exit(30i32) }
+    if testing.by_role(&harness, .MenuItem).count != 5usize || !has_auto_node || !auto_node.state.checked || !has_delete_node || !delete_node.state.disabled { os.exit(30i32) }
     if !tap_key(&harness, &runtime, 2403u64) || s.counters[10usize].count != 1usize || s.counters[9usize].count != 1usize { os.exit(31i32) }
     let (returned, has_returned) = testing.focused(&harness)
     if !has_returned || !same_element(returned, original) { os.exit(55i32) }

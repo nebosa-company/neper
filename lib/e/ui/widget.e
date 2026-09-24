@@ -346,6 +346,9 @@ type State = struct {
     menu_alt_used: bool,
     menu_hovered_title: u32,
     has_menu_hovered_title: bool,
+    menu_typeahead: [16]u32,
+    menu_typeahead_len: usize,
+    menu_typeahead_at: i64,
     // The focus ring (D940): shown only when the focus came by the keyboard or the
     // program, never by a pointer press; its colour, width and gap outside the
     // element, set from the theme; the clip the element being placed lies within.
@@ -3009,6 +3012,7 @@ fn menu_alt_key(code: u32) -> bool {
 }
 
 fn leave_menu_mode(s: *State) {
+    s.menu_typeahead_len = 0usize
     if !s.menu_mode { ret }
     if s.has_menu_saved_focus && s.elements[usize(s.menu_saved_focus)].live {
         s.focus = s.menu_saved_focus
@@ -3036,6 +3040,7 @@ fn menu_bar_access_key(s: *State, logical: u32) -> (bool, err) {
         if owner.text_len != 0usize {
             let (first, _) = unicode.read_utf8(owner.text[0usize..owner.text_len], 0usize)
             if unicode.to_lower_simple(first) == typed {
+                s.menu_typeahead_len = 0usize
                 if !s.menu_mode {
                     s.menu_saved_focus = s.focus
                     s.has_menu_saved_focus = s.has_focus
@@ -3066,6 +3071,7 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
     if count == 0usize { ret (false, ok) }
     let plain = !k.modifiers.shift && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta
     if code == 65479u32 && plain {
+        s.menu_typeahead_len = 0usize
         if !s.menu_mode {
             s.menu_saved_focus = s.focus
             s.has_menu_saved_focus = s.has_focus
@@ -3089,6 +3095,7 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
     if current == count && opened < count { current = opened }
     if current == count { ret (false, ok) }
     if code == 37u32 || code == 39u32 {
+        s.menu_typeahead_len = 0usize
         var next = (current + 1usize) % count
         if code == 37u32 { next = (current + count - 1usize) % count }
         s.focus = targets[next]
@@ -3101,6 +3108,7 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
         ret (true, ok)
     }
     if code == 40u32 && usize(s.focus) == usize(targets[current]) {
+        s.menu_typeahead_len = 0usize
         let title = &s.elements[usize(targets[current])]
         let fired = fire_gesture(title.gesture, Gesture { Tap: geometry.Point { x: title.bounds.x + title.bounds.width * 0.5, y: title.bounds.y + title.bounds.height * 0.5 } })
         ret (true, fired)
@@ -3137,6 +3145,7 @@ fn menu_bar_hover(s: *State, point: geometry.Point) -> (bool, err) {
     s.menu_hovered_title = hovered_title
     s.has_menu_hovered_title = true
     if hit == opened { ret (true, ok) }
+    s.menu_typeahead_len = 0usize
     let title = &s.elements[usize(hovered_title)]
     let fired = fire_gesture(title.gesture, Gesture { Tap: geometry.Point { x: title.bounds.x + title.bounds.width * 0.5, y: title.bounds.y + title.bounds.height * 0.5 } })
     ret (true, fired)
@@ -3152,6 +3161,33 @@ fn menu_item_owner(s: *State, index: usize) -> (usize, bool) {
     }
 }
 
+fn menu_label_starts(owner: *const Element, prefix: []const u32) -> bool {
+    var at = 0usize
+    var i = 0usize
+    while i < prefix.len {
+        if at >= owner.text_len { ret false }
+        let (scalar, width) = unicode.read_utf8(owner.text[0usize..owner.text_len], at)
+        if unicode.to_lower_simple(scalar) != prefix[i] { ret false }
+        at += width
+        i += 1usize
+    }
+    ret true
+}
+
+fn focus_menu_prefix(s: *State, order: []const u32, count: usize, current: usize, prefix: []const u32) -> bool {
+    var step = 1usize
+    while step <= count {
+        let candidate = usize(order[(current + step) % count])
+        let (owner_at, has_owner) = menu_item_owner(s, candidate)
+        if has_owner && menu_label_starts(&s.elements[owner_at], prefix) {
+            s.focus = u32(candidate)
+            ret true
+        }
+        step += 1usize
+    }
+    ret false
+}
+
 // A menu's keys (D975, D997): with a menu item (role 22 or checkbox role 37)
 // focused, Down and Up move the focus as Tab and Shift+Tab do (wrapping,
 // disabled items skipped), Home and End jump, and a letter moves to the next
@@ -3164,6 +3200,7 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     let (_, has_item) = menu_item_owner(s, usize(s.focus))
     if !has_item { ret false }
     if code == 40u32 || code == 38u32 {
+        s.menu_typeahead_len = 0usize
         move_focus(s, code == 38u32)
         ret true
     }
@@ -3171,6 +3208,7 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     let count = collect_focusable(s, focus_root(s), order[..], 0usize)
     if count == 0usize { ret true }
     if code == 36u32 || code == 35u32 {
+        s.menu_typeahead_len = 0usize
         s.focus = order[0usize]
         if code == 35u32 { s.focus = order[count - 1usize] }
     } else {
@@ -3180,19 +3218,17 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
             if usize(order[i]) == usize(s.focus) { current = i }
             i += 1usize
         }
-        var step = 1usize
-        while step <= count {
-            let candidate = usize(order[(current + step) % count])
-            let (owner_at, has_owner) = menu_item_owner(s, candidate)
-            if has_owner && s.elements[owner_at].text_len != 0usize {
-                let owner = &s.elements[owner_at]
-                let (first, _) = unicode.read_utf8(owner.text[0usize..owner.text_len], 0usize)
-                if unicode.to_lower_simple(first) == typed {
-                    s.focus = u32(candidate)
-                    step = count
-                }
-            }
-            step += 1usize
+        let now = s.animation_time.nanos
+        if s.menu_typeahead_len == 16usize || now < s.menu_typeahead_at || now - s.menu_typeahead_at >= 500000000i64 {
+            s.menu_typeahead_len = 0usize
+        }
+        s.menu_typeahead_at = now
+        s.menu_typeahead[s.menu_typeahead_len] = typed
+        s.menu_typeahead_len += 1usize
+        if !focus_menu_prefix(s, order[..], count, current, s.menu_typeahead[0usize..s.menu_typeahead_len]) && s.menu_typeahead_len > 1usize {
+            s.menu_typeahead[0usize] = typed
+            s.menu_typeahead_len = 1usize
+            let _ = focus_menu_prefix(s, order[..], count, current, s.menu_typeahead[0usize..1usize])
         }
     }
     s.focus_visible = true
@@ -3207,6 +3243,7 @@ fn menu_tap(s: *State, index: usize, point: geometry.Point) -> err {
     if fired != ok { ret fired }
     let (_, item) = menu_item_owner(s, index)
     if !item { ret ok }
+    s.menu_typeahead_len = 0usize
     let (modal, has_modal) = topmost_modal(s)
     if has_modal && descends_from(s, index, modal) {
         let dismissed = fire_submit(s.elements[modal].dismiss)
@@ -3766,7 +3803,10 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         var from = usize(s.root)
         let (over, inside, has_over) = overlay_at(s, p.position)
         if has_over {
-            if !inside { ret fire_submit(s.elements[over].dismiss) }
+            if !inside {
+                s.menu_typeahead_len = 0usize
+                ret fire_submit(s.elements[over].dismiss)
+            }
             from = over
         }
         // The arena takes the pointer for the deepest region that taps or drags; an

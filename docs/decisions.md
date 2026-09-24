@@ -21490,3 +21490,15 @@ command runs, the modal menu dismisses and pre-menu focus returns.
 Windows and Linux.
 
 Access-key underlines, buffered multi-letter typeahead and submenus remain open.
+
+## D1001 — Menu typeahead buffers Unicode prefixes for 500 ms
+
+The shared menu key path retains at most sixteen case-folded scalars. Letters
+within 500 ms extend the prefix; after that boundary a new prefix starts. A
+prefix with no match falls back to its last letter, preserving repeated-letter
+cycling without a second algorithm.
+
+`ui_navigation2_v2` holds delayed O,T staying on Open and immediate O,T selecting
+Other on Windows and Linux.
+
+Access-key underlines and submenus remain open.
