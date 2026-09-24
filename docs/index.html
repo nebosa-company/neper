@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Neper is a minimal native language designed for models to write and people to audit.">
-  <title>Neper — native code for the agent era</title>
+  <meta name="description" content="Neper is the first general-purpose programming language optimized end to end for LLM-generated software.">
+  <title>Neper — the LLM-optimized programming language</title>
   <link rel="icon" href="gtm/logo/neper-icon.svg" type="image/svg+xml">
   <style>
     :root {
@@ -54,15 +54,37 @@
     .str { color: #f5c875; }
     .prompt { color: var(--green); }
 
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 72px; border: 1px solid var(--line); }
+    .metric { padding: 22px; }
+    .metric + .metric { border-left: 1px solid var(--line); }
+    .metric strong { display: block; color: var(--green); font-size: clamp(22px, 3vw, 32px); line-height: 1.2; }
+    .metric span { color: var(--muted); font-size: 12px; }
+
     section { padding-top: 120px; }
     h2 { margin: 0 0 12px; font-size: clamp(28px, 4vw, 42px); line-height: 1.15; letter-spacing: -.035em; }
     .section-intro { max-width: 650px; margin: 0 0 42px; color: var(--muted); }
-    .benefits { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); }
-    .benefit { min-height: 230px; padding: 28px; }
-    .benefit + .benefit { border-left: 1px solid var(--line); }
+    .benefits { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; border: 1px solid var(--line); background: var(--line); }
+    .benefit { min-height: 240px; padding: 28px; background: var(--page); }
     .benefit b { display: block; margin-bottom: 48px; color: var(--green); font-size: 13px; font-weight: 400; }
     .benefit h3 { margin: 0 0 12px; font-size: 20px; }
     .benefit p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .library-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; border: 1px solid var(--line); background: var(--line); }
+    .library-item { padding: 22px; background: var(--panel); }
+    .library-item code { color: var(--green); font: inherit; font-size: 14px; }
+    .library-item p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+
+    .gpu-layout { display: grid; grid-template-columns: .72fr 1.28fr; gap: 48px; align-items: center; }
+    .gpu-copy p { color: var(--muted); }
+    .gpu-copy ul { margin: 28px 0 0; padding: 0; list-style: none; }
+    .gpu-copy li { padding: 12px 0; border-top: 1px solid var(--line); }
+    .gpu-copy li::before { content: "> "; color: var(--green); }
+
+    .llm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; border: 1px solid var(--line); background: var(--line); counter-reset: llm; }
+    .llm-feature { position: relative; min-height: 150px; padding: 24px 24px 24px 64px; background: var(--page); counter-increment: llm; }
+    .llm-feature::before { content: counter(llm, decimal-leading-zero); position: absolute; left: 24px; color: var(--green); font-size: 12px; }
+    .llm-feature h3 { margin: 0 0 8px; font-size: 16px; }
+    .llm-feature p { margin: 0; color: var(--muted); font-size: 13px; }
 
     .video-slot { display: grid; place-items: center; aspect-ratio: 16 / 8; border: 1px dashed #415069; background: linear-gradient(135deg, #101823, #0b1119); text-align: center; }
     .play { display: grid; place-items: center; width: 68px; height: 68px; margin: 0 auto 18px; border: 1px solid var(--green); border-radius: 50%; color: var(--green); font-size: 23px; }
@@ -78,9 +100,10 @@
       .nav-links a:not(:last-child) { display: none; }
       main { padding-top: 30px; }
       .hero { grid-template-columns: 1fr; gap: 48px; min-height: auto; }
-      .benefits { grid-template-columns: 1fr; }
+      .metrics, .benefits, .library-grid, .llm-grid, .gpu-layout { grid-template-columns: 1fr; }
+      .metrics { margin-top: 48px; }
+      .metric + .metric { border-left: 0; border-top: 1px solid var(--line); }
       .benefit { min-height: auto; }
-      .benefit + .benefit { border-left: 0; border-top: 1px solid var(--line); }
       .video-slot { aspect-ratio: 4 / 3; }
       .final, footer { align-items: flex-start; flex-direction: column; }
     }
@@ -92,7 +115,9 @@
     <nav aria-label="Primary navigation">
       <a class="brand" href="#top"><img src="gtm/logo/neper-icon.svg" alt=""><span>neper</span></a>
       <div class="nav-links">
-        <a href="#why">why neper</a>
+        <a href="#speed">speed</a>
+        <a href="#gpu">cpu + gpu</a>
+        <a href="#llm">llm stack</a>
         <a href="#demo">demo</a>
         <a href="https://github.com/nebosa-company/neper">github ↗</a>
       </div>
@@ -101,12 +126,12 @@
     <main id="top">
       <div class="hero">
         <div>
-          <div class="eyebrow">&gt; built for generated software_</div>
-          <h1>Native code your agent can write. <span>And you can audit.</span></h1>
-          <p class="lede">Neper is a small procedural language with explicit memory, deterministic tools, and direct machine-code output. Less magic for the model. Less archaeology for you.</p>
+          <div class="eyebrow">&gt; first of its kind_</div>
+          <h1>The first general-purpose language <span>optimized end to end for LLMs.</span></h1>
+          <p class="lede">Generate, search, edit, verify, and ship in one deterministic stack. Neper combines a model-native language, an ultra-rich standard library, and direct CPU/GPU machine code that humans can still audit.</p>
           <div class="actions">
             <a class="button" href="https://github.com/nebosa-company/neper">View on GitHub →</a>
-            <a class="button secondary" href="#syntax">See the syntax</a>
+            <a class="button secondary" href="#llm">See every LLM feature</a>
           </div>
         </div>
 
@@ -124,33 +149,125 @@ hello, neper</code></pre>
         </div>
       </div>
 
-      <section id="why">
-        <div class="eyebrow">01 // why neper</div>
-        <h2>Designed around the code review.</h2>
-        <p class="section-intro">Generated code is cheap. Understanding it is not. Neper spends syntax on certainty so humans and tools can find, verify, and change the right thing quickly.</p>
+      <div class="metrics" aria-label="Neper performance and platform summary">
+        <div class="metric"><strong>1M+ LOC</strong><span>per second, per core</span></div>
+        <div class="metric"><strong>&lt; 1 sec</strong><span>whole-project rebuild target</span></div>
+        <div class="metric"><strong>CPU + GPU</strong><span>one language, one module</span></div>
+        <div class="metric"><strong>0 VM</strong><span>tiny native executables</span></div>
+      </div>
+
+      <section id="speed">
+        <div class="eyebrow">01 // ultra by design</div>
+        <h2>Everything between prompt and binary is optimized.</h2>
+        <p class="section-intro">Neper is not a familiar language with an AI tool bolted on. Its vocabulary, compiler protocol, library, artifacts, and hardware model are designed as one system for generated software.</p>
         <div class="benefits">
           <article class="benefit">
-            <b>[ readable ]</b>
-            <h3>Predictable source</h3>
-            <p>No overloaded names. Explicit casts. One path, one module. A declaration is where grep says it is.</p>
+            <b>[ ultra fast ]</b>
+            <h3>One million lines. Under one second.</h3>
+            <p>A direct emitter, declaration-level incremental work, and no LLVM make 1M+ lines/sec/core the baseline design target—not a stretch goal.</p>
           </article>
           <article class="benefit">
-            <b>[ reproducible ]</b>
-            <h3>Deterministic tools</h3>
-            <p>The compiler works offline, emits stable artifacts, and checks its own self-hosted build.</p>
+            <b>[ ultra small ]</b>
+            <h3>Executables without an ecosystem attached.</h3>
+            <p>Direct native code, reachable code only, no VM, no garbage collector, and no LLVM runtime. Ship the program, not the toolchain.</p>
           </article>
           <article class="benefit">
-            <b>[ native ]</b>
-            <h3>Close to the machine</h3>
-            <p>Arena memory and direct CPU/GPU code generation. No garbage collector. No LLVM in the pipeline.</p>
+            <b>[ ultra rich ]</b>
+            <h3>A standard library built to finish products.</h3>
+            <p>Algorithms, crypto, codecs, compression, data, networking, time, concurrency, UI, ML, and GPU compute—versioned and tested together.</p>
+          </article>
+          <article class="benefit">
+            <b>[ ultra precise ]</b>
+            <h3>Keywords optimized for model tokens.</h3>
+            <p>A compact, frozen vocabulary gives every keyword one job. No aliases, overloads, contextual meanings, or macro dialects to make the model guess.</p>
           </article>
         </div>
       </section>
 
+      <section id="library">
+        <div class="eyebrow">02 // batteries included</div>
+        <h2>An ultra-rich standard library.</h2>
+        <p class="section-intro">One coherent library surface replaces dependency archaeology. Every module is fenced, fixture-driven, and available to the compiler, the agent, and the reviewer under the same version.</p>
+        <div class="library-grid">
+          <div class="library-item"><code>e.algo</code><p>sorting, search, graphs, geometry, hashing, random</p></div>
+          <div class="library-item"><code>e.crypto</code><p>hashes, signatures, encryption, key derivation, X.509</p></div>
+          <div class="library-item"><code>e.codec</code><p>JSON, XML, CSV, images, archives, binary formats</p></div>
+          <div class="library-item"><code>e.compress</code><p>deflate, gzip, zstd, lz4, brotli, streaming codecs</p></div>
+          <div class="library-item"><code>e.data</code><p>collections, tables, schemas, query, validation</p></div>
+          <div class="library-item"><code>e.net</code><p>HTTP, TLS, DNS, WebSocket, QUIC, MQTT</p></div>
+          <div class="library-item"><code>e.text</code><p>Unicode, regex, search, diff, templates, locale</p></div>
+          <div class="library-item"><code>e.time</code><p>calendars, time zones, schedules, monotonic clocks</p></div>
+          <div class="library-item"><code>e.task</code><p>threads, synchronization, pools, resilience</p></div>
+          <div class="library-item"><code>e.ui</code><p>native windows, layout, controls, accessibility</p></div>
+          <div class="library-item"><code>e.ml</code><p>linear algebra, classifiers, clustering, neural nets</p></div>
+          <div class="library-item"><code>e.gpu</code><p>CPU, Vulkan, CUDA, tensors, images, presentation</p></div>
+        </div>
+      </section>
+
+      <section id="gpu">
+        <div class="eyebrow">03 // one module, every processor</div>
+        <div class="gpu-layout">
+          <div class="gpu-copy">
+            <h2>Write once. Step on CPU. Launch on GPU.</h2>
+            <p>A plain Neper function marked <code>@gpu</code> compiles beside its host code. Run the same kernel on the CPU for exact debugging, then launch it through Vulkan or CUDA without changing languages or build systems.</p>
+            <ul>
+              <li>one type system and module</li>
+              <li>compile-time checked kernel arguments</li>
+              <li>explicit transfers and synchronization</li>
+              <li>CPU backend for deterministic debugging</li>
+            </ul>
+          </div>
+          <div class="terminal" aria-label="Neper CPU and GPU kernel example">
+            <div class="terminal-bar">saxpy.e — CPU + Vulkan + CUDA</div>
+            <pre><code><span class="kw">use</span> e.gpu
+
+<span class="kw">@gpu</span>(256)
+<span class="kw">fn</span> <span class="fn">saxpy</span>(a: f32, x: []const f32, y: []f32) {
+    <span class="kw">let</span> i = usize(gpu.gid.x)
+    <span class="kw">if</span> i &lt; x.len { y[i] = a*x[i] + y[i] }
+}
+
+<span class="kw">fn</span> <span class="fn">run</span>(q: *gpu.Queue, x: []const f32, y: []f32) -&gt; err {
+    <span class="kw">let</span> dx = <span class="kw">try</span> gpu.upload[f32](q, x)
+    <span class="kw">let</span> dy = <span class="kw">try</span> gpu.upload[f32](q, y)
+    <span class="kw">try</span> gpu.launch[saxpy](q, gpu.grid1(x.len), 2.0, dx, dy)
+    <span class="kw">try</span> gpu.download(q, dy, y)
+    <span class="kw">ret</span> ok
+}
+
+<span class="prompt">// q may target .Cpu, .Vulkan, or .Cuda</span></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="llm">
+        <div class="eyebrow">04 // the complete llm stack</div>
+        <h2>Optimized for every step an LLM takes.</h2>
+        <p class="section-intro">“LLM-friendly” is not syntax sugar. Neper reduces uncertainty and token cost across generation, retrieval, editing, compilation, repair, testing, and final verification.</p>
+        <div class="llm-grid">
+          <article class="llm-feature"><h3>Single-purpose keywords</h3><p>A short, closed vocabulary with no synonyms or contextual meanings keeps generation compact and deterministic.</p></article>
+          <article class="llm-feature"><h3>No overloaded names</h3><p>Each name resolves one way. Calls, operators, protocols, and imports never depend on a hidden candidate set.</p></article>
+          <article class="llm-feature"><h3>Search-stable declarations</h3><p>Every top-level declaration begins at column zero with a keyword, and a file path is its module name.</p></article>
+          <article class="llm-feature"><h3>Explicit semantics</h3><p>Casts, allocation, ownership, error flow, transfers, and unsafe boundaries are written where they happen.</p></article>
+          <article class="llm-feature"><h3>Canonical formatting</h3><p>One formatter produces one layout, shrinking diffs and preventing agents from spending tokens debating style.</p></article>
+          <article class="llm-feature"><h3>Lossless syntax model</h3><p>Tokens retain exact spans and trivia; the recoverable tree preserves source identity instead of reconstructing it.</p></article>
+          <article class="llm-feature"><h3>Bounded semantic context</h3><p>The compiler returns the types, effects, ownership, callers, and dependencies needed for one edit—not an entire repository.</p></article>
+          <article class="llm-feature"><h3>Stable JSON protocols</h3><p>Tokens, syntax, symbols, references, tests, builds, and results use versioned machine-readable records.</p></article>
+          <article class="llm-feature"><h3>Causal diagnostics</h3><p>Stable codes, exact spans, expected and actual types, related causes, and bounded notes explain what failed and why.</p></article>
+          <article class="llm-feature"><h3>Machine-applicable repairs</h3><p>Typed fixes include confidence, preconditions, and affected spans so an agent can repair without guessing.</p></article>
+          <article class="llm-feature"><h3>Transactional edits</h3><p>Rename and change plans verify snapshot hashes and unrelated-diff guards before anything is applied.</p></article>
+          <article class="llm-feature"><h3>Declaration-level reuse</h3><p>Incremental builds recheck only affected declarations and explain every keep-or-rebuild decision.</p></article>
+          <article class="llm-feature"><h3>Deterministic artifacts</h3><p>Offline builds, content identities, immutable snapshots, and authenticated caches make repeated results comparable.</p></article>
+          <article class="llm-feature"><h3>Generated-code source maps</h3><p>Diagnostics in generated files route back to the source span the model should actually change.</p></article>
+          <article class="llm-feature"><h3>Built-in verification</h3><p>Tests, timeouts, structured events, reproducible manifests, and self-host fixed points define an objective stop state.</p></article>
+          <article class="llm-feature"><h3>Compiler-issued LLM cards</h3><p>The grammar, APIs, diagnostics, and capability surface are emitted as compact model context for the selected toolchain.</p></article>
+        </div>
+      </section>
+
       <section id="demo">
-        <div class="eyebrow">02 // watch it work</div>
+        <div class="eyebrow">05 // watch it work</div>
         <h2>From prompt to native binary.</h2>
-        <p class="section-intro">A clean home for the project walkthrough, compiler demo, or sixty-second pitch.</p>
+        <p class="section-intro">See one agent generate, check, repair, test, and compile a CPU/GPU program without leaving the deterministic Neper toolchain.</p>
         <div class="video-slot" role="img" aria-label="Reserved space for a Neper demonstration video">
           <div>
             <span class="play" aria-hidden="true">▶</span>
@@ -161,13 +278,13 @@ hello, neper</code></pre>
       </section>
 
       <section class="final">
-        <h2>Small language.<br>Short feedback loop.</h2>
+        <h2>One language.<br>Every machine.<br>Built for models.</h2>
         <a class="button" href="https://github.com/nebosa-company/neper#readme">Read the README →</a>
       </section>
     </main>
 
     <footer>
-      <span>neper / the language a model can write and a compiler can prove.</span>
+      <span>neper / the first general-purpose language optimized end to end for LLMs.</span>
       <a href="progress.html">readiness →</a>
     </footer>
   </div>
