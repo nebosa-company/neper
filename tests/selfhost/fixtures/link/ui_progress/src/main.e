@@ -68,14 +68,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let root = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, column, items[0usize..3usize])
     if testing.pump(&harness, root, time.Instant { nanos: 1000000000i64 }) != ok { os.exit(12i32) }
     if testing.by_role(&harness, .Progress).count != 3usize { os.exit(13i32) }
-    // The bar's fill is three tenths of the 100 px track; the indeterminate bar's a
-    // quarter, a quarter in, and busy.
+    // The bar's fill is three tenths of the 100 px track, 4 tall (v2, D970); the
+    // indeterminate bar's segment 40% wide at the start of its cycle, and busy.
     let (track, has_track) = widget.bounds_of(&runtime, testing.by_key(&harness, 1u64).element)
     let (fill, has_fill) = widget.bounds_of(&runtime, testing.by_key(&harness, 2u64).element)
-    if !has_track || !has_fill || !near(fill.width, 30.0) || !near(fill.x, track.x) || !near(fill.height, tokens.spacing.sm) { os.exit(14i32) }
+    if !has_track || !has_fill || !near(fill.width, 30.0) || !near(fill.x, track.x) || !near(fill.height, 4.0) { os.exit(14i32) }
     let (waiting_track, has_waiting) = widget.bounds_of(&runtime, testing.by_key(&harness, 3u64).element)
     let (segment, has_segment) = widget.bounds_of(&runtime, testing.by_key(&harness, 4u64).element)
-    if !has_waiting || !has_segment || !near(segment.width, 25.0) || !near(segment.x, waiting_track.x + 25.0) { os.exit(15i32) }
+    if !has_waiting || !has_segment || !near(segment.width, 40.0) || !near(segment.x, waiting_track.x) { os.exit(15i32) }
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(16i32) }
     var busy = 0usize
@@ -85,8 +85,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if busy != 1usize { os.exit(17i32) }
-    // The ring: 40 px, its stroke 4 px wide 18 px from the centre; at a half the
-    // right side is the primary colour and the left the variant surface.
+    // The ring: 40 px, its stroke 40/12 wide about 18 px from the centre; at a half the
+    // right side is the primary colour and the left the secondary container (v2).
     let (ring, has_ring) = widget.bounds_of(&runtime, testing.by_key(&harness, 6u64).element)
     if !has_ring || !near(ring.width, 40.0) { os.exit(18i32) }
     let (shot, shot_error) = testing.snapshot(&harness, a)
@@ -94,7 +94,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let cx = usize(ring.x + 20.0)
     let cy = usize(ring.y + 20.0)
     let primary = style.color(&tokens, .Primary)
-    let variant = style.color(&tokens, .SurfaceVariant)
+    let variant = style.color(&tokens, .SecondaryContainer)
     let right = (cy * 120usize + cx + 18usize) * 4usize
     let left = (cy * 120usize + cx - 18usize) * 4usize
     if !close_to(shot.pixels[right], primary.red) || !close_to(shot.pixels[right + 2usize], primary.blue) { os.exit(20i32) }

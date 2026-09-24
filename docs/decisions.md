@@ -19990,3 +19990,75 @@ and Open recent. All 81 ui_* fixtures pass on Windows and Linux.
 - macOS and Web key maps.
 
 With this, all ten P5-08 specs are delivered.
+
+## D970 — Progress bars and rings, gauges, levels, placeholders and skeletons draw their v2 specifications
+
+Six P5-09 specs now draw their v2 look. The old functions keep their signatures
+and call new `_of` forms with default options, so every existing caller passes.
+
+**Progress bar.** `control.progress_bar_of` takes `ProgressOptions` (thick,
+full-bleed, buffer, tone, phase, content colour). The bar is 4 tall (8 thick)
+and fully rounded. The `primary` indicator (keyed `key + 1`) stands 4 clear of
+the `secondary-container` track, which ends in a 4 `primary` stop dot (2 in on
+the thick bar). The buffered segment is `primary` 32% over the track.
+Full-bleed is square with no gaps. The Error tone is `error` on
+`error-container`; Paused is `on-surface-variant` on
+`surface-container-highest`. Indeterminate, a 40% segment travels the track
+with the caller's phase. The progress node's value is the percent ("30%").
+
+**Progress ring.** `control.progress_ring_of` strokes a round-capped `primary`
+arc from 12 o'clock over a `secondary-container` track that keeps a gap clear of
+both cap ends. The stroke follows the size: 4 at 48, 3 at 36, 2 at 24, 2.25
+under 22 (no gap), and 4.5 from 64, where the percent stands inside in
+`label-medium`. A value above zero shows at least 4% of the turn.
+Indeterminate draws a quarter arc with no track, turned by the phase. The
+content-colour mode draws the arc alone; the loading button now uses it. The
+ring paints with `sweep_path` over any start and sweep, which replaced the
+ten-chord fan.
+
+**Gauge.** `control.gauge_of` takes `GaugeOptions` (warning and critical shares,
+unit, status, no data, stale). It draws a 270-degree arc open at the bottom,
+radius 40% of the size, stroke 10%, round caps:
+- the `surface-container-highest` track;
+- the `warning-container` band from the warning threshold;
+- the value arc in `primary`, `warning` or `error`.
+
+The readout stands inside (`display-small` from 128, `title-large` smaller)
+over the unit in `body-small`. Below come the `title-small` name and a status
+line with a 16 alert mark when not normal. The inner ring no longer publishes
+a second Progress node; the gauge is one node, and the status is its hint.
+
+**Level.** `control.level_of` takes `LevelOptions` (value text, status, small,
+limit, segments, bars). A `label-large` name and `body-medium` value header
+stands 6 above an 8 tall bar (4 small, no header). The bar splits into the fill
+(`primary`, `warning` from `warn`, `error` from `danger`, at least 4 above
+zero) and the `surface-container-highest` rest, 4 apart. It has the 2x16 limit
+mark and the status line. Segmented draws 32x6 segments and bars draws 6-wide
+rising bars, lit in `error`, `warning` or `success` as the share rises.
+
+**Placeholder and skeleton.** `control.placeholder_of` draws text lines (12,
+fully rounded), circles and content-radius blocks in
+`surface-container-highest`. `control.skeleton_of` draws lines (`radius-xs`),
+circles, pills and rectangles, using `surface-container-lowest` on a highest
+ground; `control.skeleton_row` composes a 72 list row. Both carry one
+region-wide sweep. `control.placeholder_sweep` holds the phase and the band.
+`control.placeholder_region` wraps the content with a 1x1 probe that paints
+first and records where the region stands, so every shape's band (a
+`surface-container-high` gradient clipped to the shape) is the same band. The
+region is the busy, named group; its shapes are out of the tree. The lone
+`placeholder` and `skeleton` stay their own busy nodes, and the skeleton no
+longer pulses its opacity.
+
+**Tests.** ui_status_v2 holds the bars, rings, gauge and levels by pixel and
+tree. ui_status2_v2 holds the region, the shapes, the shared band and the row.
+ui_progress now samples the 4 tall bar, the 40% segment and the
+`secondary-container` track. All 83 ui_* fixtures pass on Windows and Linux.
+
+**Still open.**
+- Value easing, and the 300 ms show delay and 500 ms minimum. e.ui has no
+  animation clock; the caller drives the phase.
+- The two-segment indeterminate bar.
+- The progress label row, detail line and completion icon (composed with Text
+  for now).
+- The Skeleton band's 10-degree angle.
+- The gauge's loading skeleton, and a neutral `primary` segmented scale.

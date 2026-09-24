@@ -3222,6 +3222,18 @@ $uiContainers5V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $uiContainers5V2Written -ne 'executable written') { throw 'ui_containers5_v2 emission failed' }
 $uiContainers5V2Output = & $uiContainers5V2Path
 if ($LASTEXITCODE -ne 0 -or $uiContainers5V2Output -ne 'ui containers5 v2 ok') { throw "ui_containers5_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 meters: progress bar and ring, gauge, level (D970, widget plan P5-09)
+$uiStatusV2Path = Join-Path $testBuild 'ui-status-v2-selfhost.exe'
+$uiStatusV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_status_v2\src\main.e') $repo 'x64' 'windows' $uiStatusV2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatusV2Written -ne 'executable written') { throw 'ui_status_v2 emission failed' }
+$uiStatusV2Output = & $uiStatusV2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatusV2Output -ne 'ui status v2 ok') { throw "ui_status_v2 answered wrongly: exit $LASTEXITCODE" }
+# The v2 loading shapes: placeholder and skeleton (D970, widget plan P5-09)
+$uiStatus2V2Path = Join-Path $testBuild 'ui-status2-v2-selfhost.exe'
+$uiStatus2V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_status2_v2\src\main.e') $repo 'x64' 'windows' $uiStatus2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatus2V2Written -ne 'executable written') { throw 'ui_status2_v2 emission failed' }
+$uiStatus2V2Output = & $uiStatus2V2Path
+if ($LASTEXITCODE -ne 0 -or $uiStatus2V2Output -ne 'ui status2 v2 ok') { throw "ui_status2_v2 answered wrongly: exit $LASTEXITCODE" }
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 $uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'

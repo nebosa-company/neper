@@ -1282,15 +1282,133 @@ fn avatar(a: *mem.Arena, key: widget.Key, t: *const Theme, texture: scene.Textur
     ret (widget.semantics(key, sem, style.defaults(), disc[0usize..1usize]), ok)
 }
 
-// A placeholder: a rounded block in the variant surface colour standing in for
-// content to come, busy in the tree.
-fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32) -> (widget.Node, err) {
+// A loading region's sweep (D970, docs/ux/components/Placeholder and Skeleton):
+// the band's phase (the caller's clock, in turns; below zero, or under reduced
+// motion, none), the region's width, the band's share of it and its colour, and
+// where the region stands on the page -- learnt when the region's probe paints,
+// which is before its shapes, so every shape's band is the same band.
+type Sweep = struct { x: f32, y: f32, known: bool, phase: f32, span: f32, band: f32, stops: [3]paint.Stop }
+
+// A sweep for a region `span` wide at `phase`, its band `band` of the width
+// (Placeholder 45%, Skeleton 40%) in `surface-container-high`.
+fn placeholder_sweep(a: *mem.Arena, t: *const Theme, phase: f32, span: f32, band: f32) -> (*Sweep, err) {
+    let (sweeps, sweeps_error) = mem.alloc[Sweep](a, 1usize)
+    if sweeps_error != ok { ret (zero, TooLarge) }
+    var s: Sweep = zero
+    s.phase = phase
+    if t.tokens.motion.reduced { s.phase = 0.0 - 1.0 }
+    s.span = span
+    s.band = band
+    let high = style.color(t.tokens, .SurfaceContainerHigh)
+    s.stops[0usize] = paint.Stop { offset: 0.0, color: with_alpha(high, 0.0) }
+    s.stops[1usize] = paint.Stop { offset: 0.5, color: high }
+    s.stops[2usize] = paint.Stop { offset: 1.0, color: with_alpha(high, 0.0) }
+    sweeps[0usize] = s
+    ret (&sweeps[0usize], ok)
+}
+
+fn probe_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let s = mem.cast[*Sweep](ctx)
+    s.x = area.x
+    s.y = area.y
+    s.known = true
+    ret ok
+}
+
+fn band_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let s = mem.cast[*Sweep](ctx)
+    if !s.known || s.phase < 0.0 { ret ok }
+    let width = s.span * s.band
+    let turn = s.phase - f32(i64(s.phase))
+    let left = s.x - width + turn * (s.span + width)
+    let brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: left, y: area.y }, end: geometry.Point { x: left + width, y: area.y }, stops: s.stops[0usize..3usize] } }
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: area, brush: brush } })
+}
+
+fn sweep_node(sweep: *Sweep, draw: fn(*void, *scene.Builder, geometry.Rect) -> err, width: f32, height: f32) -> widget.Node {
+    var none: []const widget.Node = zero
+    ret widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](sweep), measure: ring_measure, paint: draw, state: widget.bytes_of[Sweep](sweep) } }, style: sized_style(width, height), children: none }
+}
+
+// A loading shape: a `width` by `height` block in `color` with `radius`,
+// clipping the region's band when there is a sweep; not in the tree.
+fn loading_shape(a: *mem.Arena, key: widget.Key, width: f32, height: f32, radius: f32, color: paint.Color, sweep: *Sweep) -> (widget.Node, err) {
     var block = sized_style(width, height)
-    block.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
-    block.radius = t.tokens.radii.xs
+    block.background = paint.Brush { Solid: color }
+    block.radius = radius
+    block.overflow = .Clip
+    if mem.address_of(sweep) == 0usize { ret (widget.box(key, block, zero), ok) }
+    let (bands, bands_error) = mem.alloc[widget.Node](a, 1usize)
+    if bands_error != ok { ret (zero, TooLarge) }
+    bands[0usize] = sweep_node(sweep, band_paint, width, height)
+    ret (widget.box(key, block, bands[0usize..1usize]), ok)
+}
+
+// v2 (D970, docs/ux/components/Placeholder): the region being loaded, named
+// `label` and busy, its shapes (in `content`) left out of the tree; its probe
+// learns where it stands so the sweep crosses every shape together.
+fn placeholder_region(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, sweep: *Sweep, content: widget.Node) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    if mem.address_of(sweep) != 0usize {
+        parts[2usize] = sweep_node(sweep, probe_paint, 1.0, 1.0)
+        parts[0usize] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), parts[2usize..3usize])
+        count = 1usize
+    }
+    parts[count] = content
+    count += 1usize
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.box(0u64, block, zero)
+    body[0usize] = widget.stack(0u64, style.defaults(), parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    sem.states = accessibility.STATE_BUSY
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
+// A placeholder's shape (D970): a text line, a block with the content's radius,
+// or a circle.
+type PlaceholderShape = enum u8 { Block, Line, Circle }
+type PlaceholderOptions = struct { shape: PlaceholderShape, radius: f32, sweep: *Sweep }
+
+fn placeholder_options(t: *const Theme) -> PlaceholderOptions {
+    var out: PlaceholderOptions = zero
+    out.shape = .Block
+    out.radius = t.tokens.radii.md
+    ret out
+}
+
+// v2 (D970, docs/ux/components/Placeholder): a shape in `surface-container-highest`
+// -- a block `width` by `height` with `options.radius` (`radius-md` by default), a
+// text line `height` tall (12 when 0) and fully rounded, or a circle `width`
+// across -- carrying its region's sweep, a band 45% of the region wide fading to
+// `surface-container-high`; it is not in the tree (its region is).
+fn placeholder_of(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, options: PlaceholderOptions) -> (widget.Node, err) {
+    var h = height
+    var radius = options.radius
+    if options.shape == .Line {
+        if h <= 0.0 { h = 12.0 }
+        radius = h * 0.5
+    }
+    if options.shape == .Circle {
+        h = width
+        radius = width * 0.5
+    }
+    let (node, node_error) = loading_shape(a, key, width, h, radius, style.color(t.tokens, .SurfaceContainerHighest), options.sweep)
+    ret (node, node_error)
+}
+
+// A placeholder standing alone: a `radius-xs` block that is its own busy node.
+fn placeholder(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32) -> (widget.Node, err) {
+    var options = placeholder_options(t)
+    options.radius = t.tokens.radii.xs
+    let (shape_node, shape_error) = placeholder_of(a, 0u64, t, width, height, options)
+    if shape_error != ok { ret (zero, shape_error) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = shape_node
     var sem: widget.Semantics = zero
     sem.states = accessibility.STATE_BUSY
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
@@ -1428,7 +1546,10 @@ fn button(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *
         hidden.alpha = 0.0
         let (kept, kept_error) = colored_text(a, 0u64, label, t, caption, hidden)
         if kept_error != ok { ret (zero, kept_error) }
-        let (ring, ring_error) = progress_ring(a, 0u64, t, label, 0.0, true, t.tokens.sizes.icon_sm)
+        // v2 (D970, docs/ux/components/ProgressRing): the 18 ring takes the content colour.
+        var inked = progress_options()
+        inked.content = look.foreground
+        let (ring, ring_error) = progress_ring_of(a, 0u64, t, label, 0.0, true, t.tokens.sizes.icon_sm, inked)
         if ring_error != ok { ret (zero, ring_error) }
         let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
         if parts_error != ok { ret (zero, TooLarge) }
@@ -2266,46 +2387,157 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
 
 // ------------------------------------------------------------ progress (D822, P1-09)
 
-// A progress bar: a track in the variant surface, the filled part -- keyed
-// `key + 1` -- in the primary colour as wide as `value` (0..1) says; indeterminate,
-// a quarter-wide segment sits a quarter in and the tree says busy. A progress role
-// in the tree with the label.
+// How a progress indicator reads (D970): active, failed, or paused.
+type ProgressTone = enum u8 { Active, Error, Paused }
+// A progress indicator's look (D970): the thick (8) bar, the full-bleed bar
+// (square, no gaps), the buffered share (0 for none), the tone, the phase of the
+// indeterminate motion (the caller's clock, in turns), and a content colour for a
+// ring inside a button (alpha 0: the tone's colours).
+type ProgressOptions = struct { thick: bool, full_bleed: bool, buffer: f32, tone: ProgressTone, phase: f32, content: paint.Color }
+
+fn progress_options() -> ProgressOptions {
+    var out: ProgressOptions = zero
+    out.tone = .Active
+    ret out
+}
+
+// The indicator and track colours of a tone: `primary` on `secondary-container`,
+// `error` on `error-container`, paused `on-surface-variant` on
+// `surface-container-highest`.
+fn progress_ink(t: *const Theme, tone: ProgressTone) -> paint.Color {
+    if tone == .Error { ret style.color(t.tokens, .Error) }
+    if tone == .Paused { ret style.color(t.tokens, .OnSurfaceVariant) }
+    ret style.color(t.tokens, .Primary)
+}
+
+fn progress_ground(t: *const Theme, tone: ProgressTone) -> paint.Color {
+    if tone == .Error { ret style.color(t.tokens, .ErrorContainer) }
+    if tone == .Paused { ret style.color(t.tokens, .SurfaceContainerHighest) }
+    ret style.color(t.tokens, .SecondaryContainer)
+}
+
+fn clamp_share(value: f32) -> f32 {
+    if value < 0.0 { ret 0.0 }
+    if value > 1.0 { ret 1.0 }
+    ret value
+}
+
+// A share as whole percent ("30%"), in the arena.
+fn percent_text(a: *mem.Arena, share: f32) -> (str, err) {
+    let (digits, digits_error) = mem.alloc[u8](a, 24usize)
+    if digits_error != ok { ret (zero, TooLarge) }
+    let count = write_i64(digits, i64(share * 100.0 + 0.5))
+    digits[count] = 37u8
+    ret (digits[0usize..count + 1usize], ok)
+}
+
+// A solid rounded piece of a bar.
+fn bar_piece(key: widget.Key, width: f32, height: f32, color: paint.Color, radius: f32) -> widget.Node {
+    var s = sized_style(width, height)
+    s.background = paint.Brush { Solid: color }
+    s.radius = radius
+    ret widget.box(key, s, zero)
+}
+
+// A progress bar `width` wide: the v2 look with the default options.
 fn progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32) -> (widget.Node, err) {
-    var share = value
-    if share < 0.0 { share = 0.0 }
-    if share > 1.0 { share = 1.0 }
-    let height = t.tokens.spacing.sm
-    var track = sized_style(width, height)
-    track.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
-    track.radius = height * 0.5
-    track.overflow = .Clip
-    var filled = style.defaults()
-    filled.height = style.Length { Px: height }
-    filled.width = style.Length { Percent: share * 100.0 }
-    filled.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
-    filled.radius = height * 0.5
+    let (node, node_error) = progress_bar_of(a, key, t, label, value, indeterminate, width, progress_options())
+    ret (node, node_error)
+}
+
+// v2 (D970, docs/ux/components/ProgressBar): 4 tall (8 thick), fully rounded; the
+// active indicator (keyed `key + 1`) as long as `value`'s share, 4 apart from the
+// `secondary-container` track (and from the buffered segment, `primary` 32% over
+// the track), a 4 `primary` stop dot at the track's end (2 in on the thick bar);
+// full-bleed square with no gaps. Error is `error` on `error-container`, paused
+// `on-surface-variant` on `surface-container-highest`. Indeterminate, a 40%
+// segment travels the track with `phase` and the tree says busy; determinate,
+// the value is the percent ("30%"). A progress role named `label`.
+// ponytail: one travelling segment, not the specification's two; the label row,
+// detail line and completion icon compose with Text beside the bar.
+fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {
+    let share = clamp_share(value)
+    let h: f32 = if_else(options.thick, 8.0, 4.0)
+    let gap: f32 = if_else(options.full_bleed, 0.0, 4.0)
+    let r: f32 = if_else(options.full_bleed, 0.0, h * 0.5)
+    let ink = progress_ink(t, options.tone)
+    let ground = progress_ground(t, options.tone)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
     if indeterminate {
-        filled.width = style.Length { Px: width * 0.25 }
-        filled.margin = style.EdgeLengths { left: style.Length { Px: width * 0.25 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        let seg = width * 0.4
+        var turn = options.phase - f32(i64(options.phase))
+        if turn < 0.0 { turn = turn + 1.0 }
+        let x = (width - seg) * turn
+        if x > gap {
+            parts[n] = bar_piece(0u64, x - gap, h, ground, r)
+            n += 1usize
+        }
+        parts[n] = bar_piece(key + 1u64, seg, h, ink, r)
+        n += 1usize
+        let after = width - x - seg - gap
+        if after > 0.0 {
+            parts[n] = bar_piece(0u64, after, h, ground, r)
+            n += 1usize
+        }
+    } else {
+        var rest = width
+        let done = share * width
+        if done > 0.0 {
+            parts[n] = bar_piece(key + 1u64, done, h, ink, r)
+            n += 1usize
+            rest = rest - done - gap
+        }
+        let buffered = clamp_share(options.buffer)
+        if buffered > share && rest > 0.0 {
+            let piece = (buffered - share) * width - gap
+            if piece > 0.0 {
+                parts[n] = bar_piece(0u64, piece, h, style.layer(ground, ink, 0.32), r)
+                n += 1usize
+                rest = rest - piece - gap
+            }
+        }
+        if rest > 0.0 {
+            // The track holds the stop dot at its end, centred, 2 in on the thick bar.
+            let (dots, dots_error) = mem.alloc[widget.Node](a, 1usize)
+            if dots_error != ok { ret (zero, TooLarge) }
+            dots[0usize] = bar_piece(0u64, 4.0, 4.0, ink, 2.0)
+            var track = sized_style(rest, h)
+            track.background = paint.Brush { Solid: ground }
+            track.radius = r
+            let inset = style.Length { Px: (h - 4.0) * 0.5 }
+            let flat = style.Length { Px: 0.0 }
+            track.padding = style.EdgeLengths { left: flat, top: flat, right: inset, bottom: flat }
+            parts[n] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .End, cross: .Center, gap: 0.0 }, track, dots[0usize..1usize])
+            n += 1usize
+        }
     }
-    let (fill, fill_error) = mem.alloc[widget.Node](a, 1usize)
-    if fill_error != ok { ret (zero, TooLarge) }
-    fill[0usize] = widget.box(key + 1u64, filled, zero)
     let (bar, bar_error) = mem.alloc[widget.Node](a, 1usize)
     if bar_error != ok { ret (zero, TooLarge) }
-    bar[0usize] = widget.box(0u64, track, fill[0usize..1usize])
+    bar[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, sized_style(width, h), parts[0usize..n])
     var sem: widget.Semantics = zero
     sem.role = 16u8
     sem.label = label
-    if indeterminate { sem.states = accessibility.STATE_BUSY }
+    if indeterminate {
+        sem.states = accessibility.STATE_BUSY
+    } else {
+        let (shown, shown_error) = percent_text(a, share)
+        if shown_error != ok { ret (zero, shown_error) }
+        sem.value = shown
+    }
     ret (widget.semantics(key, sem, style.defaults(), bar[0usize..1usize]), ok)
 }
 
-// What a ring paints: its colours and its share, kept in the frame arena, which
-// outlives the paint (a custom node's context is read during placement only), and
-// the arena its paths are built in -- the frame's, since the scene copies a path
-// when the frame is compiled, after the paint returned.
-type Ring = struct { track: paint.Color, fill: paint.Color, share: f32, thickness: f32, arena: *mem.Arena }
+// What a ring paints (v2, D970): the track over `sweep` radians clockwise from
+// `start` (radians from the top), the value arc through `share` of it, the gap in
+// pixels kept clear between cap ends on either side of the value (0: the track
+// runs under it), and a band in its own colour from `band_from` of the sweep to
+// the end (1 or more: none). Kept in the frame arena, which outlives the paint (a
+// custom node's context is read during placement only), with the arena its paths
+// are built in -- the frame's, since the scene copies a path when the frame is
+// compiled, after the paint returned.
+type Ring = struct { track: paint.Color, fill: paint.Color, share: f32, thickness: f32, arena: *mem.Arena, start: f32, sweep: f32, gap: f32, band: paint.Color, band_from: f32 }
 
 fn ring_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size {
     ret geometry.Size { width: 0.0, height: 0.0 }
@@ -2382,36 +2614,112 @@ fn ring_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     if area.height < radius { radius = area.height }
     radius = radius * 0.5 - ring.thickness * 0.5
     if radius <= 0.0 { ret ok }
-    let stroke = paint.Stroke { width: ring.thickness, cap: .Butt, join: .Round, miter_limit: 4.0 }
-    let (track, track_error) = arc_path(scratch, cx, cy, radius, 1.0)
-    if track_error != ok { ret track_error }
-    try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: track, brush: paint.Brush { Solid: ring.track }, stroke: stroke } })
-    if ring.share <= 0.0 { ret ok }
-    let (arc, arc_error) = arc_path(scratch, cx, cy, radius, ring.share)
+    let stroke = paint.Stroke { width: ring.thickness, cap: .Round, join: .Round, miter_limit: 4.0 }
+    let value = ring.share * ring.sweep
+    var from = ring.start
+    var to = ring.start + ring.sweep
+    if ring.gap > 0.0 && value > 0.0 {
+        // Round caps reach half a stroke past each end, so the gap between cap
+        // ends is the gap plus a stroke of arc.
+        let cut = (ring.gap + ring.thickness) / radius
+        from = ring.start + value + cut
+        to = ring.start + ring.sweep - cut
+    }
+    if ring.track.alpha > 0.0 && to > from {
+        let (track, track_error) = sweep_path(scratch, cx, cy, radius, from, to - from)
+        if track_error != ok { ret track_error }
+        try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: track, brush: paint.Brush { Solid: ring.track }, stroke: stroke } })
+    }
+    if ring.band_from < 1.0 {
+        let band_start = ring.start + ring.band_from * ring.sweep
+        let (band, band_error) = sweep_path(scratch, cx, cy, radius, band_start, ring.start + ring.sweep - band_start)
+        if band_error != ok { ret band_error }
+        try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: band, brush: paint.Brush { Solid: ring.band }, stroke: stroke } })
+    }
+    if value <= 0.0 { ret ok }
+    let (arc, arc_error) = sweep_path(scratch, cx, cy, radius, ring.start, value)
     if arc_error != ok { ret arc_error }
     ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: arc, brush: paint.Brush { Solid: ring.fill }, stroke: stroke } })
 }
 
-// A progress ring of `size`: the track in the variant surface, the arc from the
-// top in the primary colour through `value` of the turn; indeterminate, a quarter
-// turn and busy in the tree. A progress role with the label.
-fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32) -> (widget.Node, err) {
-    var share = value
-    if share < 0.0 { share = 0.0 }
-    if share > 1.0 { share = 1.0 }
-    if indeterminate { share = 0.25 }
+// A ring as a custom node of `side`, keyed `key`, painting `ring`.
+fn ring_node(a: *mem.Arena, key: widget.Key, ring: Ring, side: f32) -> (widget.Node, err) {
     let (rings, rings_error) = mem.alloc[Ring](a, 1usize)
     if rings_error != ok { ret (zero, TooLarge) }
-    rings[0usize] = Ring { track: style.color(t.tokens, .SurfaceVariant), fill: style.color(t.tokens, .Primary), share: share, thickness: t.tokens.spacing.xs, arena: a }
-    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
-    if body_error != ok { ret (zero, TooLarge) }
+    rings[0usize] = ring
     var none: []const widget.Node = zero
-    body[0usize] = widget.Node { key: key + 1u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&rings[0usize]), measure: ring_measure, paint: ring_paint, state: widget.bytes_of[Ring](&rings[0usize]) } }, style: sized_style(size, size), children: none }
+    ret (widget.Node { key: key, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&rings[0usize]), measure: ring_measure, paint: ring_paint, state: widget.bytes_of[Ring](&rings[0usize]) } }, style: sized_style(side, side), children: none }, ok)
+}
+
+// A progress ring of `size`: the v2 look with the default options.
+fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32) -> (widget.Node, err) {
+    let (node, node_error) = progress_ring_of(a, key, t, label, value, indeterminate, size, progress_options())
+    ret (node, node_error)
+}
+
+// v2 (D970, docs/ux/components/ProgressRing): the ring (keyed `key + 1`) strokes
+// its `primary` arc with round caps clockwise from 12 o'clock through `value` of
+// the turn (at least 4% once above zero), over a `secondary-container` track kept
+// a gap clear of either cap end; the stroke scales with the size -- 4 at 48 (gap
+// 4), 3 at 36, 2 at 24, 2.25 under 22 (no gap), 4.5 from 64, where the percent
+// stands inside in `label-medium` `on-surface`. Error is `error` on
+// `error-container`; a content colour (a ring inside a button) draws the arc
+// alone in it. Indeterminate, a quarter arc with no track turns with `phase` and
+// the tree says busy; determinate, the value is the percent.
+fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32, options: ProgressOptions) -> (widget.Node, err) {
+    var share = clamp_share(value)
+    if share > 0.0 && share < 0.04 { share = 0.04 }
+    var stroke = size / 12.0
+    var gap = stroke
+    if size < 22.0 {
+        stroke = 2.25
+        gap = 0.0
+    }
+    if size >= 64.0 {
+        stroke = 4.5
+        gap = 4.0
+    }
+    var ring = Ring { track: progress_ground(t, options.tone), fill: progress_ink(t, options.tone), share: share, thickness: stroke, arena: a, start: 0.0, sweep: 6.2831855, gap: gap, band: zero, band_from: 2.0 }
+    if options.content.alpha > 0.0 {
+        ring.fill = options.content
+        ring.track = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    }
+    if indeterminate {
+        ring.track = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        ring.share = 0.25
+        ring.gap = 0.0
+        ring.start = options.phase * 6.2831855
+    }
+    let (painted, painted_error) = ring_node(a, key + 1u64, ring, size)
+    if painted_error != ok { ret (zero, painted_error) }
+    let (body, body_error) = mem.alloc[widget.Node](a, 3usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = painted
+    var count = 1usize
     var sem: widget.Semantics = zero
     sem.role = 16u8
     sem.label = label
-    if indeterminate { sem.states = accessibility.STATE_BUSY }
-    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+    if indeterminate {
+        sem.states = accessibility.STATE_BUSY
+    } else {
+        let (shown, shown_error) = percent_text(a, share)
+        if shown_error != ok { ret (zero, shown_error) }
+        sem.value = shown
+        if size >= 64.0 {
+            var inside = text_options()
+            inside.role = .LabelMedium
+            inside.wrap = .None
+            let (reading, reading_error) = colored_text(a, 0u64, shown, t, inside, style.color(t.tokens, .OnSurface))
+            if reading_error != ok { ret (zero, reading_error) }
+            body[2usize] = reading
+            body[1usize] = widget.aligned(0u64, .Center, .Center, sized_style(size, size), body[2usize..3usize])
+            let (layered, layered_error) = mem.alloc[widget.Node](a, 1usize)
+            if layered_error != ok { ret (zero, TooLarge) }
+            layered[0usize] = widget.stack(0u64, sized_style(size, size), body[0usize..2usize])
+            ret (widget.semantics(key, sem, style.defaults(), layered[0usize..1usize]), ok)
+        }
+    }
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..count]), ok)
 }
 
 // ---------------------------------------------------------- text fields (D823, P1-10)
@@ -5433,76 +5741,305 @@ fn copy_text(out: []u8, words: str) -> usize {
 
 // ------------------------------------------ feedback and disclosure (D832, P2-04)
 
-// A gauge: a read-only ring through `value`'s share of `low..high` with the value
-// written under it as digits (rounded); a progress in the tree named `label`
-// with those digits as its value.
-fn gauge(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, size: f32) -> (widget.Node, err) {
-    if high <= low { ret (zero, TooLarge) }
-    let share = (value - low) / (high - low)
-    let (ring, ring_error) = progress_ring(a, key + 1u64, t, label, share, false, size)
-    if ring_error != ok { ret (zero, ring_error) }
+// A value rounded to whole digits, in the arena.
+fn rounded_digits(a: *mem.Arena, value: f32) -> (str, err) {
     let (digits, digits_error) = mem.alloc[u8](a, 21usize)
     if digits_error != ok { ret (zero, TooLarge) }
     var rounded = value + 0.5
     if value < 0.0 { rounded = value - 0.5 }
-    let digit_count = write_i64(digits, i64(rounded))
-    var caption = text_options()
-    caption.role = .Label
-    caption.wrap = .None
-    let (reading, reading_error) = text_node(a, 0u64, digits[0usize..digit_count], t, caption)
-    if reading_error != ok { ret (zero, reading_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    let count = write_i64(digits, i64(rounded))
+    ret (digits[0usize..count], ok)
+}
+
+// A meter's state words (D970): a 16 `alert` mark in `tone` (none when `marked`
+// is false) before `words` in `body-small` `on-surface-variant`.
+fn status_line(a: *mem.Arena, t: *const Theme, words: str, marked: bool, tone: style.ColorRole) -> (widget.Node, err) {
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+    if bits_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    if marked {
+        let (mark, mark_error) = stroked_glyph(a, style.color(t.tokens, tone), .Alert, 16.0, 1.5)
+        if mark_error != ok { ret (zero, mark_error) }
+        bits[n] = mark
+        n += 1usize
+    }
+    var small = text_options()
+    small.role = .BodySmall
+    small.wrap = .None
+    let (said, said_error) = colored_text(a, 0u64, words, t, small, style.color(t.tokens, .OnSurfaceVariant))
+    if said_error != ok { ret (zero, said_error) }
+    bits[n] = said
+    n += 1usize
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), bits[0usize..n]), ok)
+}
+
+// A gauge's thresholds and words (D970): the warning and critical shares of the
+// range (1 or more: none), the unit or context under the readout, the status word
+// (empty: Normal, High or Critical once there are thresholds), and the no-data and
+// stale states.
+type GaugeOptions = struct { warn: f32, critical: f32, unit: str, status: str, no_data: bool, stale: bool }
+
+fn gauge_options() -> GaugeOptions {
+    var out: GaugeOptions = zero
+    out.warn = 2.0
+    out.critical = 2.0
+    ret out
+}
+
+// A gauge: the v2 look with no thresholds.
+fn gauge(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, size: f32) -> (widget.Node, err) {
+    let (node, node_error) = gauge_of(a, key, t, label, value, low, high, size, gauge_options())
+    ret (node, node_error)
+}
+
+// v2 (D970, docs/ux/components/Gauge): a 270-degree arc open at the bottom (keyed
+// `key + 1`), from lower left clockwise, its radius 40% of `size` and its stroke
+// 10% with round caps: the `surface-container-highest` track, the
+// `warning-container` band from the warning threshold to the maximum, and the
+// value arc in `primary` -- `warning` past the warning threshold, `error` past the
+// critical one; the readout inside, rounded digits in `display-small` (from 128;
+// `title-large` smaller) `on-surface` over the unit in `body-small`
+// `on-surface-variant`; the name in `title-small` 4 below, then the status line
+// (the word, and a 16 alert mark in the status colour when not normal). No data
+// draws the track alone with "-" and "No data"; stale draws the arc and readout
+// in `on-surface-variant`. One progress node named `label` with the digits as its
+// value and the status word as its hint; the ring is not in the tree.
+// ponytail: value changes jump (no easing) and the loading skeleton is the
+// caller's; the no-data readout is an ASCII hyphen.
+fn gauge_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, size: f32, options: GaugeOptions) -> (widget.Node, err) {
+    if high <= low { ret (zero, TooLarge) }
+    let share = clamp_share((value - low) / (high - low))
+    var tone: style.ColorRole = .Primary
+    var word = "Normal"
+    if share >= options.warn {
+        tone = .Warning
+        word = "High"
+    }
+    if share >= options.critical {
+        tone = .Error
+        word = "Critical"
+    }
+    let thresholds = options.warn < 1.0 || options.critical < 1.0
+    var fill = style.color(t.tokens, tone)
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var ink = style.color(t.tokens, .OnSurface)
+    if options.stale {
+        fill = muted
+        ink = muted
+    }
+    var ring = Ring { track: style.color(t.tokens, .SurfaceContainerHighest), fill: fill, share: share, thickness: size * 0.1, arena: a, start: 0.0 - 2.3561945, sweep: 4.712389, gap: 0.0, band: style.color(t.tokens, .WarningContainer), band_from: options.warn }
+    if options.no_data { ring.share = 0.0 }
+    // The stroke's centre line at 40% of the size: the ring square 90% of it.
+    let (painted, painted_error) = ring_node(a, key + 1u64, ring, size * 0.9)
+    if painted_error != ok { ret (zero, painted_error) }
+    var shown = "-"
+    if !options.no_data {
+        let (digits, digits_error) = rounded_digits(a, value)
+        if digits_error != ok { ret (zero, digits_error) }
+        shown = digits
+    }
+    var big = text_options()
+    big.role = .DisplaySmall
+    if size < 128.0 { big.role = .TitleLarge }
+    big.wrap = .None
+    let (readout, readout_error) = colored_text(a, 0u64, shown, t, big, ink)
+    if readout_error != ok { ret (zero, readout_error) }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 2usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = readout
+    var inner_count = 1usize
+    if options.unit.len != 0usize {
+        var small = text_options()
+        small.role = .BodySmall
+        small.wrap = .None
+        let (unit_node, unit_error) = colored_text(a, 0u64, options.unit, t, small, muted)
+        if unit_error != ok { ret (zero, unit_error) }
+        inner[1usize] = unit_node
+        inner_count = 2usize
+    }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 3usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    let pad = size * 0.05
+    layers[2usize] = painted
+    layers[0usize] = widget.padded(0u64, pad, pad, pad, pad, sized_style(size, size), layers[2usize..3usize])
+    layers[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, sized_style(size, size), inner[0usize..inner_count])
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = ring
-    parts[1usize] = reading
+    parts[0usize] = widget.stack(0u64, sized_style(size, size), layers[0usize..2usize])
+    var count = 1usize
+    if label.len != 0usize {
+        var name_look = text_options()
+        name_look.role = .TitleSmall
+        name_look.wrap = .None
+        let (name_node, name_error) = colored_text(a, 0u64, label, t, name_look, style.color(t.tokens, .OnSurface))
+        if name_error != ok { ret (zero, name_error) }
+        parts[count] = name_node
+        count += 1usize
+    }
+    var status = options.status
+    if status.len == 0usize && thresholds { status = word }
+    if options.no_data { status = "No data" }
+    if status.len != 0usize {
+        let (line, line_error) = status_line(a, t, status, tone != .Primary && !options.no_data, tone)
+        if line_error != ok { ret (zero, line_error) }
+        parts[count] = line
+        count += 1usize
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..2usize])
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), parts[0usize..count])
     var sem: widget.Semantics = zero
     sem.role = 16u8
     sem.label = label
-    sem.value = digits[0usize..digit_count]
+    sem.value = shown
+    sem.hint = status
     ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
 }
 
-// A level: a read-only bar filled through `value`'s share of `low..high`, in the
-// primary colour, the secondary from `warn` and the error colour from `danger`
-// (shares of the range; 1 or more for never); a progress in the tree named
-// `label` with the value as digits.
+// A level's words and form (D970): the value with its scale ("27 of 64 GB";
+// empty: the rounded digits), the status line, the small form (4 tall, no
+// header), the limit mark at the warning share, and the segmented form (2 to 5
+// segments) or the bars form (rising bars) in place of the continuous bar.
+type LevelOptions = struct { value_text: str, status: str, small: bool, limit: bool, segments: u32, bars: bool }
+
+fn level_options() -> LevelOptions {
+    var out: LevelOptions = zero
+    ret out
+}
+
+// A level: the v2 continuous look.
 fn level(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, warn: f32, danger: f32, width: f32) -> (widget.Node, err) {
+    let (node, node_error) = level_of(a, key, t, label, value, low, high, warn, danger, width, level_options())
+    ret (node, node_error)
+}
+
+// v2 (D970, docs/ux/components/Level): a header (the name in `label-large`, the
+// value in `body-medium` `on-surface-variant` at the end) 6 above an 8 tall bar
+// (4 small, no header) split into the fill (keyed `key + 1`, as long as `value`'s
+// share of `low..high` and at least 4 above zero) and the
+// `surface-container-highest` rest, 4 apart, both fully rounded; the fill
+// `primary`, `warning` from `warn` and `error` from `danger` (shares of the
+// range; 1 or more for never); the 2x16 `on-surface-variant` limit mark at
+// `warn`; the status line under it, with a 16 alert mark in the status colour
+// when not normal. Segmented, 32x6 segments 4 apart fill in `error`, `warning`
+// or `success` as the share rises; bars, four 6 wide bars 6/10/14/18 tall. A
+// progress node named `label` with the value text, the status as its hint, and
+// invalid from `danger`.
+// ponytail: value changes jump (no easing); segmented scales always take the
+// strength colours (no neutral `primary` scale).
+fn level_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, low: f32, high: f32, warn: f32, danger: f32, width: f32, options: LevelOptions) -> (widget.Node, err) {
     if high <= low { ret (zero, TooLarge) }
-    var share = (value - low) / (high - low)
-    if share < 0.0 { share = 0.0 }
-    if share > 1.0 { share = 1.0 }
+    let share = clamp_share((value - low) / (high - low))
     var tone: style.ColorRole = .Primary
-    if share >= warn { tone = .Secondary }
+    if share >= warn { tone = .Warning }
     if share >= danger { tone = .Error }
-    let height = t.tokens.spacing.sm
-    var track = sized_style(width, height)
-    track.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
-    track.radius = height * 0.5
-    var filled = style.defaults()
-    filled.height = style.Length { Px: height }
-    filled.width = style.Length { Percent: share * 100.0 }
-    filled.background = paint.Brush { Solid: style.color(t.tokens, tone) }
-    filled.radius = height * 0.5
-    let (fill, fill_error) = mem.alloc[widget.Node](a, 1usize)
-    if fill_error != ok { ret (zero, TooLarge) }
-    fill[0usize] = widget.box(key + 1u64, filled, zero)
-    let (bar, bar_error) = mem.alloc[widget.Node](a, 1usize)
-    if bar_error != ok { ret (zero, TooLarge) }
-    bar[0usize] = widget.box(0u64, track, fill[0usize..1usize])
-    let (digits, digits_error) = mem.alloc[u8](a, 21usize)
-    if digits_error != ok { ret (zero, TooLarge) }
-    var rounded = value + 0.5
-    if value < 0.0 { rounded = value - 0.5 }
-    let digit_count = write_i64(digits, i64(rounded))
+    let rest_color = style.color(t.tokens, .SurfaceContainerHighest)
+    var shown = options.value_text
+    if shown.len == 0usize {
+        let (digits, digits_error) = rounded_digits(a, value)
+        if digits_error != ok { ret (zero, digits_error) }
+        shown = digits
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    let discrete = options.segments > 0u32 || options.bars
+    if !options.small && label.len != 0usize {
+        let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize)
+        if heads_error != ok { ret (zero, TooLarge) }
+        var name_look = text_options()
+        name_look.role = .LabelLarge
+        name_look.wrap = .None
+        let (name_node, name_error) = colored_text(a, 0u64, label, t, name_look, style.color(t.tokens, .OnSurface))
+        if name_error != ok { ret (zero, name_error) }
+        heads[0usize] = name_node
+        var head_count = 1usize
+        if !discrete {
+            var value_look = text_options()
+            value_look.role = .BodyMedium
+            value_look.wrap = .None
+            let (value_node, value_error) = colored_text(a, 0u64, shown, t, value_look, style.color(t.tokens, .OnSurfaceVariant))
+            if value_error != ok { ret (zero, value_error) }
+            heads[1usize] = value_node
+            head_count = 2usize
+        }
+        var head_style = style.defaults()
+        head_style.width = style.Length { Px: width }
+        parts[count] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 8.0 }, head_style, heads[0usize..head_count])
+        count += 1usize
+    }
+    if discrete {
+        // Segments or rising bars, lit up to the share.
+        var steps = options.segments
+        if options.bars { steps = 4u32 }
+        if steps > 8u32 { steps = 8u32 }
+        let lit = u32(share * f32(steps) + 0.5)
+        var lit_tone: style.ColorRole = .Success
+        if lit * 3u32 <= 2u32 * steps { lit_tone = .Warning }
+        if lit * 3u32 <= steps { lit_tone = .Error }
+        let (cells, cells_error) = mem.alloc[widget.Node](a, usize(steps))
+        if cells_error != ok { ret (zero, TooLarge) }
+        var i = 0u32
+        while i < steps {
+            var c = rest_color
+            if i < lit { c = style.color(t.tokens, lit_tone) }
+            if options.bars {
+                cells[usize(i)] = bar_piece(0u64, 6.0, 6.0 + 4.0 * f32(i), c, 1.0)
+            } else {
+                cells[usize(i)] = bar_piece(0u64, 32.0, 6.0, c, 3.0)
+            }
+            i += 1u32
+        }
+        parts[count] = widget.flex(key + 1u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 4.0 }, style.defaults(), cells[0usize..usize(steps)])
+        count += 1usize
+    } else {
+        let h: f32 = if_else(options.small, 4.0, 8.0)
+        var done = share * width
+        if share > 0.0 && done < 4.0 { done = 4.0 }
+        let (pieces, pieces_error) = mem.alloc[widget.Node](a, 2usize)
+        if pieces_error != ok { ret (zero, TooLarge) }
+        var n = 0usize
+        var rest = width
+        if share > 0.0 {
+            pieces[n] = bar_piece(key + 1u64, done, h, style.color(t.tokens, tone), h * 0.5)
+            n += 1usize
+            rest = width - done - 4.0
+        }
+        if rest > 0.0 {
+            pieces[n] = bar_piece(0u64, rest, h, rest_color, h * 0.5)
+            n += 1usize
+        }
+        let bar = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, sized_style(width, h), pieces[0usize..n])
+        if options.limit && warn < 1.0 && !options.small {
+            // The limit mark stands 16 tall across the bar at the warning share.
+            let (marks, marks_error) = mem.alloc[widget.Node](a, 4usize)
+            if marks_error != ok { ret (zero, TooLarge) }
+            marks[2usize] = bar
+            marks[3usize] = bar_piece(0u64, 2.0, 16.0, style.color(t.tokens, .OnSurfaceVariant), 1.0)
+            marks[0usize] = widget.positioned(0u64, 0.0, 4.0, style.defaults(), marks[2usize..3usize])
+            marks[1usize] = widget.positioned(0u64, warn * width - 1.0, 0.0, style.defaults(), marks[3usize..4usize])
+            parts[count] = widget.stack(0u64, sized_style(width, 16.0), marks[0usize..2usize])
+        } else {
+            parts[count] = bar
+        }
+        count += 1usize
+    }
+    if options.status.len != 0usize && !options.small {
+        let (line, line_error) = status_line(a, t, options.status, tone != .Primary, tone)
+        if line_error != ok { ret (zero, line_error) }
+        parts[count] = line
+        count += 1usize
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 6.0 }, style.defaults(), parts[0usize..count])
     var sem: widget.Semantics = zero
     sem.role = 16u8
     sem.label = label
-    sem.value = digits[0usize..digit_count]
+    sem.value = shown
+    sem.hint = options.status
     if share >= danger { sem.states = accessibility.STATE_INVALID }
-    ret (widget.semantics(key, sem, style.defaults(), bar[0usize..1usize]), ok)
+    ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
 }
 
 // A transient notice: its text, an optional action (an empty label for none) and
@@ -5658,22 +6195,81 @@ fn noted(a: *mem.Arena, key: widget.Key, t: *const Theme, severity: Severity, me
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }
 
-// A skeleton: a rounded placeholder of `width` by `height` in the surface variant
-// whose opacity breathes with `phase` (the caller's clock, in radians) unless the
-// theme's motion is reduced; busy and unnamed in the tree.
+// A skeleton block's shape (D970): a text line, a circle, a rectangle with the
+// media's radius, or a pill; `on_highest` for a block standing on
+// `surface-container-highest`.
+type SkeletonShape = enum u8 { Line, Circle, Rect, Pill }
+type SkeletonOptions = struct { shape: SkeletonShape, radius: f32, sweep: *Sweep, on_highest: bool }
+
+fn skeleton_options() -> SkeletonOptions {
+    var out: SkeletonOptions = zero
+    out.shape = .Rect
+    ret out
+}
+
+// v2 (D970, docs/ux/components/Skeleton): a block in `surface-container-highest`
+// (`surface-container-lowest` on a `surface-container-highest` ground): a text
+// line with `radius-xs`, a circle `width` across, a rectangle with
+// `options.radius`, or a pill fully rounded; carrying its region's shimmer, a
+// `surface-container-high` band 40% of the region wide; not in the tree.
+// ponytail: the band is upright, not angled 10 degrees; the 300 ms show delay and
+// 500 ms minimum are the caller's timing.
+fn skeleton_of(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, options: SkeletonOptions) -> (widget.Node, err) {
+    var h = height
+    var radius = options.radius
+    if options.shape == .Line { radius = t.tokens.radii.xs }
+    if options.shape == .Pill { radius = h * 0.5 }
+    if options.shape == .Circle {
+        h = width
+        radius = width * 0.5
+    }
+    var fill = style.color(t.tokens, .SurfaceContainerHighest)
+    if options.on_highest { fill = style.color(t.tokens, .SurfaceContainerLowest) }
+    let (node, node_error) = loading_shape(a, key, width, h, radius, fill, options.sweep)
+    ret (node, node_error)
+}
+
+// A list row's skeleton (D970): a 72 tall row `width` wide, 16 in, with a 40
+// avatar circle and two lines 16 after it -- 14 tall at 60% and 12 tall at 40% of
+// the text's width, 8 apart.
+fn skeleton_row(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, sweep: *Sweep) -> (widget.Node, err) {
+    var circle = skeleton_options()
+    circle.shape = .Circle
+    circle.sweep = sweep
+    var lined = skeleton_options()
+    lined.shape = .Line
+    lined.sweep = sweep
+    let text_width = max_zero(width - 32.0 - 56.0)
+    let (avatar_node, e1) = skeleton_of(a, 0u64, t, 40.0, 40.0, circle)
+    let (first, e2) = skeleton_of(a, 0u64, t, text_width * 0.6, 14.0, lined)
+    let (second, e3) = skeleton_of(a, 0u64, t, text_width * 0.4, 12.0, lined)
+    if e1 != ok || e2 != ok || e3 != ok { ret (zero, TooLarge) }
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 4usize)
+    if lines_error != ok { ret (zero, TooLarge) }
+    lines[2usize] = first
+    lines[3usize] = second
+    lines[0usize] = avatar_node
+    lines[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), lines[2usize..4usize])
+    var row_style = sized_style(width, 72.0)
+    let side = style.Length { Px: 16.0 }
+    let flat = style.Length { Px: 0.0 }
+    row_style.padding = style.EdgeLengths { left: side, top: flat, right: side, bottom: flat }
+    ret (widget.flex(key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, row_style, lines[0usize..2usize]), ok)
+}
+
+// A skeleton standing alone: a `radius-xs` rectangle `width` by `height` that is
+// its own region, busy and unnamed, its shimmer at `phase` (the caller's clock, in
+// radians) and still under reduced motion.
 fn skeleton(a: *mem.Arena, key: widget.Key, t: *const Theme, width: f32, height: f32, phase: f32) -> (widget.Node, err) {
-    var block = sized_style(width, height)
-    block.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceVariant) }
-    block.radius = t.tokens.radii.xs
-    block.opacity = 1.0
-    if !t.tokens.motion.reduced { block.opacity = 0.7 + 0.3 * math.sin[f32](phase) }
-    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
-    if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.box(0u64, block, zero)
-    var sem: widget.Semantics = zero
-    sem.role = 2u8
-    sem.states = accessibility.STATE_BUSY
-    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+    let (sweep, sweep_error) = placeholder_sweep(a, t, phase / 6.2831855, width, 0.4)
+    if sweep_error != ok { ret (zero, sweep_error) }
+    var options = skeleton_options()
+    options.radius = t.tokens.radii.xs
+    options.sweep = sweep
+    let (block, block_error) = skeleton_of(a, 0u64, t, width, height, options)
+    if block_error != ok { ret (zero, block_error) }
+    let (region, region_error) = placeholder_region(a, key, t, "", sweep, block)
+    ret (region, region_error)
 }
 
 // An empty state: an icon (a zero texture for none), a title, a muted message

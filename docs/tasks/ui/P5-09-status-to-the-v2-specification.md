@@ -6,7 +6,7 @@
 | module | `e.ui.control` |
 | module surface | `partial`, layer 6, deps `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.scene`, `e.math`, `e.mem`, `e.text.layout`, `e.text.shape`, `e.ui.accessibility`, `e.ui.input`, `e.ui.layout`, `e.ui.style`, `e.ui.widget` |
 | blocked by | `P4` |
-| delivered | 0 of 12 |
+| delivered | 6 of 12 |
 
 ## Eligibility
 
@@ -21,13 +21,13 @@ Every component below is implemented in `e.ui.control`, exercised by a determini
 - [ ] `BadgeSpec`
 - [ ] `BannerSpec`
 - [ ] `EmptyStateSpec`
-- [ ] `GaugeSpec`
-- [ ] `LevelSpec`
+- [x] `GaugeSpec`
+- [x] `LevelSpec`
 - [ ] `NotificationListSpec`
-- [ ] `PlaceholderSpec`
-- [ ] `ProgressBarSpec`
-- [ ] `ProgressRingSpec`
-- [ ] `SkeletonSpec`
+- [x] `PlaceholderSpec`
+- [x] `ProgressBarSpec`
+- [x] `ProgressRingSpec`
+- [x] `SkeletonSpec`
 - [ ] `SnackbarSpec`
 - [ ] `StatusBarSpec`
 

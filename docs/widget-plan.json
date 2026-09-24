@@ -1301,7 +1301,15 @@
             "SnackbarSpec",
             "StatusBarSpec"
           ],
-          "delivered": []
+          "delivered": [
+            "GaugeSpec",
+            "LevelSpec",
+            "PlaceholderSpec",
+            "ProgressBarSpec",
+            "ProgressRingSpec",
+            "SkeletonSpec"
+          ],
+          "evidence": "(D970) control.progress_bar_of draws the 4 tall (8 thick) fully rounded bar: the primary indicator as long as the value, 4 clear of the secondary-container track (and of the buffered segment, primary 32% over the track), a 4 primary stop dot at the track's end (2 in on the thick bar), full-bleed square with no gaps, error (error on error-container) and paused (on-surface-variant on surface-container-highest) tones, an indeterminate 40% segment travelling with the caller's phase, and the percent as the progress value; control.progress_ring_of strokes a round-capped primary arc from 12 o'clock over a secondary-container track kept a gap clear of both cap ends, stroke by size (4 at 48, 3 at 36, 2 at 24, 2.25 under 22 with no gap, 4.5 from 64 with the percent inside in label-medium), a 4% minimum arc, an indeterminate quarter arc with no track turning with the phase, and a content-colour mode the loading button now uses; control.gauge_of draws the 270-degree arc open at the bottom (radius 40% of the size, stroke 10%, round caps) on a surface-container-highest track with the warning-container band and a primary/warning/error value arc, the readout inside (display-small from 128, title-large smaller) over the body-small unit, the title-small name and a status line with a 16 alert mark, no-data and stale states, and one progress node with the status as its hint; control.level_of draws the label-large name and body-medium value header 6 above an 8 tall (4 small) bar split into the primary/warning/error fill (at least 4) and the surface-container-highest rest 4 apart, the 2x16 limit mark, the status line, 32x6 segments and 6-wide rising bars; control.placeholder_of draws text lines (12, fully rounded), circles and blocks in surface-container-highest and control.skeleton_of lines (radius-xs), circles, pills and rectangles (surface-container-lowest on a highest ground) with control.skeleton_row, both carrying one region-wide surface-container-high sweep band (control.placeholder_sweep, learnt by the region's probe) inside control.placeholder_region, the busy named region with its shapes out of the tree. ui_status_v2 and ui_status2_v2 (with ui_progress, ui_feedback, ui_surface) hold them on Windows and Linux. Open: value easing and the 300 ms show delay / 500 ms minimum (no animation clock in e.ui; the caller drives phase), the two-segment indeterminate bar, the progress label row, detail line and completion icon (composed with Text), the Skeleton band's 10-degree angle, the gauge's loading skeleton, and a neutral primary segmented scale."
         },
         {
           "id": "P5-10",
