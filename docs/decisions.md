@@ -21479,3 +21479,14 @@ alone on Windows and Linux.
 
 Access-key underlines and item activation, buffered multi-letter typeahead, and
 submenus remain open.
+
+## D1000 — Alt plus a menu-item initial runs that command
+
+When a menu item owns focus, its access keys take priority over MenuBar titles.
+Alt plus an item's Unicode-case-folded initial uses the shared tap path, so the
+command runs, the modal menu dismisses and pre-menu focus returns.
+
+`ui_navigation2_v2` holds Alt+N choosing New and restoring the original tab on
+Windows and Linux.
+
+Access-key underlines, buffered multi-letter typeahead and submenus remain open.

@@ -296,6 +296,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.counters[9usize].count = 0usize
     if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || s.counters[9usize].count != 1usize || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(54i32) }
     s.counters[9usize].count = 0usize
+    if testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 78u32, logical: 78u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 78u32, logical: 78u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(59i32) }
+    let (item_returned, has_item_returned) = testing.focused(&harness)
+    if !has_item_returned || !same_element(item_returned, original) || s.counters[10usize].count != 1usize || s.counters[9usize].count != 1usize { os.exit(60i32) }
+    s.counters[9usize].count = 0usize
+    s.counters[10usize].count = 0usize
+    if testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(61i32) }
+    s.counters[9usize].count = 0usize
     // A typed letter advances to the next matching command, case-insensitively.
     if testing.press_key(&harness, 65u32, zero) != ok { os.exit(52i32) }
     let (typed, has_typed) = testing.focused(&harness)

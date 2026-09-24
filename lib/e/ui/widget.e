@@ -3142,6 +3142,16 @@ fn menu_bar_hover(s: *State, point: geometry.Point) -> (bool, err) {
     ret (true, fired)
 }
 
+fn menu_item_owner(s: *State, index: usize) -> (usize, bool) {
+    var at = index
+    while true {
+        let e = &s.elements[at]
+        if e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8) { ret (at, true) }
+        if !e.has_parent { ret (0usize, false) }
+        at = usize(e.parent)
+    }
+}
+
 // A menu's keys (D975, D997): with a menu item (role 22 or checkbox role 37)
 // focused, Down and Up move the focus as Tab and Shift+Tab do (wrapping,
 // disabled items skipped), Home and End jump, and a letter moves to the next
@@ -3151,13 +3161,8 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
     let navigation = code == 40u32 || code == 38u32 || code == 36u32 || code == 35u32
     let typed = unicode.to_lower_simple(k.key.logical)
     if !navigation && !unicode.is_alphabetic(typed) { ret false }
-    let e = &s.elements[usize(s.focus)]
-    var item = e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8)
-    if !item && e.has_parent {
-        let up = &s.elements[usize(e.parent)]
-        item = up.has_semantics && (up.sem.role == 22u8 || up.sem.role == 37u8)
-    }
-    if !item { ret false }
+    let (_, has_item) = menu_item_owner(s, usize(s.focus))
+    if !has_item { ret false }
     if code == 40u32 || code == 38u32 {
         move_focus(s, code == 38u32)
         ret true
@@ -3177,15 +3182,13 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
         }
         var step = 1usize
         while step <= count {
-            let candidate = &s.elements[usize(order[(current + step) % count])]
-            var owner = candidate
-            if (!owner.has_semantics || (owner.sem.role != 22u8 && owner.sem.role != 37u8)) && owner.has_parent {
-                owner = &s.elements[usize(owner.parent)]
-            }
-            if owner.has_semantics && (owner.sem.role == 22u8 || owner.sem.role == 37u8) && owner.text_len != 0usize {
+            let candidate = usize(order[(current + step) % count])
+            let (owner_at, has_owner) = menu_item_owner(s, candidate)
+            if has_owner && s.elements[owner_at].text_len != 0usize {
+                let owner = &s.elements[owner_at]
                 let (first, _) = unicode.read_utf8(owner.text[0usize..owner.text_len], 0usize)
                 if unicode.to_lower_simple(first) == typed {
-                    s.focus = order[(current + step) % count]
+                    s.focus = u32(candidate)
                     step = count
                 }
             }
@@ -3202,17 +3205,7 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
 fn menu_tap(s: *State, index: usize, point: geometry.Point) -> err {
     let fired = fire_gesture(s.elements[index].gesture, Gesture { Tap: point })
     if fired != ok { ret fired }
-    var at = index
-    var item = false
-    while true {
-        let e = &s.elements[at]
-        if e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8) {
-            item = true
-            break
-        }
-        if !e.has_parent { break }
-        at = usize(e.parent)
-    }
+    let (_, item) = menu_item_owner(s, index)
     if !item { ret ok }
     let (modal, has_modal) = topmost_modal(s)
     if has_modal && descends_from(s, index, modal) {
@@ -3221,6 +3214,32 @@ fn menu_tap(s: *State, index: usize, point: geometry.Point) -> err {
     }
     leave_menu_mode(s)
     ret ok
+}
+
+// While a menu owns focus, Alt plus an item's initial runs that item.
+fn menu_item_access_key(s: *State, logical: u32) -> (bool, err) {
+    if !s.has_focus { ret (false, ok) }
+    let (_, focused_item) = menu_item_owner(s, usize(s.focus))
+    if !focused_item { ret (false, ok) }
+    let typed = unicode.to_lower_simple(logical)
+    if !unicode.is_alphabetic(typed) { ret (false, ok) }
+    var order: [256]u32 = zero
+    let count = collect_focusable(s, focus_root(s), order[..], 0usize)
+    var i = 0usize
+    while i < count {
+        let candidate = usize(order[i])
+        let (owner_at, has_owner) = menu_item_owner(s, candidate)
+        if has_owner && s.elements[owner_at].text_len != 0usize {
+            let owner = &s.elements[owner_at]
+            let (first, _) = unicode.read_utf8(owner.text[0usize..owner.text_len], 0usize)
+            if unicode.to_lower_simple(first) == typed {
+                let e = &s.elements[candidate]
+                ret (true, menu_tap(s, candidate, geometry.Point { x: e.bounds.x + e.bounds.width * 0.5, y: e.bounds.y + e.bounds.height * 0.5 }))
+            }
+        }
+        i += 1usize
+    }
+    ret (false, ok)
 }
 
 // Tab and Shift+Tab: the next or previous focusable element in preorder, within
@@ -3980,6 +3999,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         }
         if s.menu_alt_down {
             s.menu_alt_used = true
+            let (item_accessed, item_access_error) = menu_item_access_key(s, k.key.logical)
+            if item_accessed || item_access_error != ok { ret item_access_error }
             let (accessed, access_error) = menu_bar_access_key(s, k.key.logical)
             if accessed || access_error != ok { ret access_error }
         }
