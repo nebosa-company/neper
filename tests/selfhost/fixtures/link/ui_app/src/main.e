@@ -21,6 +21,7 @@ type Model = struct { builds: usize }
 
 fn build(model: *Model, ctx: *widget.BuildContext) -> (widget.Node, err) {
     model.builds += 1usize
+    if model.builds < 3usize { widget.request_animation_frame(ctx.runtime) }
     var s = style.defaults()
     s.width = style.Length { Px: 200.0 }
     s.height = style.Length { Px: 120.0 }
@@ -53,7 +54,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if again_error != ok || !again { os.exit(3i32) }
         rounds += 1usize
     }
-    if model.builds < 1usize || app.frames_of(&running) < 1u64 { os.exit(4i32) }
+    if model.builds < 3usize || app.frames_of(&running) < 3u64 { os.exit(4i32) }
     app.stop(&running)
     let (after_stop, stop_error) = app.step(&running, time.Duration { nanos: 0i64 })
     if stop_error != ok || after_stop { os.exit(5i32) }

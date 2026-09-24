@@ -64,12 +64,17 @@ fn build(a: *mem.Arena, t: *const control.Theme) -> (widget.Node, err) {
     let (r1, e5) = control.progress_ring(a, 200u64, t, "Tests", 0.25, false, 48.0)
     let (r2, e6) = control.progress_ring(a, 210u64, t, "Setup", 0.25, false, 64.0)
     let (r3, e7) = control.progress_ring(a, 220u64, t, "Loading", 0.0, true, 48.0)
-    if e5 != ok || e6 != ok || e7 != ok { ret (zero, e5) }
-    let (rings, rings_error) = mem.alloc[widget.Node](a, 3usize)
+    var reduced_tokens = *t.tokens
+    reduced_tokens.motion.reduced = true
+    let reduced_theme = control.Theme { tokens: &reduced_tokens, fonts: t.fonts, language: t.language, runtime: t.runtime }
+    let (r4, e15) = control.progress_ring(a, 230u64, &reduced_theme, "Reduced", 0.0, true, 48.0)
+    if e5 != ok || e6 != ok || e7 != ok || e15 != ok { ret (zero, e5) }
+    let (rings, rings_error) = mem.alloc[widget.Node](a, 4usize)
     if rings_error != ok { ret (zero, rings_error) }
     rings[0usize] = r1
     rings[1usize] = r2
     rings[2usize] = r3
+    rings[3usize] = r4
     var limits = control.gauge_options()
     limits.warn = 0.8
     limits.critical = 0.95
@@ -98,7 +103,7 @@ fn build(a: *mem.Arena, t: *const control.Theme) -> (widget.Node, err) {
     items[1usize] = b2
     items[2usize] = b3
     items[3usize] = b4
-    items[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 16.0 }, style.defaults(), rings[0usize..3usize])
+    items[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 16.0 }, style.defaults(), rings[0usize..4usize])
     items[5usize] = g1
     items[6usize] = l1
     items[7usize] = l2
@@ -196,13 +201,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let cy = ring.y + 24.0
     if !is_color(shot, at(cx + 15.5, cy - 15.5), primary) || !is_color(shot, at(cx, cy + 22.0), track) { os.exit(21i32) }
     if !is_color(shot, at(cx + 21.6, cy + 4.2), ground) { os.exit(22i32) }
-    // 64: the percent inside. Indeterminate: busy, a quarter arc, no track.
+    // 64: the percent inside. Indeterminate: busy, the first frame of the
+    // growing arc at the top, no track, and another animation frame requested.
     let (setup, has_setup) = find(tree, "Setup")
     if !has_setup || !same(setup.value, "25%") || testing.by_text(&harness, "25%").count != 1usize { os.exit(23i32) }
     let (spinner, has_spinner) = bounds(&harness, &runtime, 221u64)
     let (loading, has_loading) = find(tree, "Loading")
-    if !has_spinner || !has_loading || !loading.state.busy { os.exit(24i32) }
-    if !is_color(shot, at(spinner.x + 24.0 + 15.5, spinner.y + 24.0 - 15.5), primary) || !is_color(shot, at(spinner.x + 24.0, spinner.y + 46.0), ground) { os.exit(25i32) }
+    if !has_spinner || !has_loading || !loading.state.busy || !widget.animation_frame_requested(&runtime) { os.exit(24i32) }
+    if !is_color(shot, at(spinner.x + 24.0, spinner.y + 2.0), primary) || !is_color(shot, at(spinner.x + 24.0, spinner.y + 46.0), ground) { os.exit(25i32) }
+    // Reduced motion keeps a 75% arc in place and pulses its opacity.
+    let (reduced, has_reduced) = bounds(&harness, &runtime, 231u64)
+    if !has_reduced || !is_color(shot, at(reduced.x + 46.0, reduced.y + 24.0), style.layer(ground, primary, 0.38)) || !is_color(shot, at(reduced.x + 8.5, reduced.y + 8.5), ground) { os.exit(40i32) }
     // The gauge: radius 64 (40% of 160), stroke 16; at 85 past the 80 threshold the
     // arc is `warning` through the top, the band `warning-container` beyond the
     // value, and the bottom open.

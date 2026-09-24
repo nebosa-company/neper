@@ -63,12 +63,23 @@ fn state_of(h: *const Harness) -> (*State, err) {
 fn pump(h: *Harness, root: widget.Node, now: time.Instant) -> err {
     let (s, state_error) = state_of(h)
     if state_error != ok { ret state_error }
+    // The caller builds `root` before this call, so keep any frame request made
+    // during that build while making the supplied instant visible to painting.
+    widget.set_frame_time(s.runtime, now)
     var frame = mem.arena_from(s.frame_storage)
     let logical_width = f32(s.width) / s.scale
     let logical_height = f32(s.height) / s.scale
     let (compiled, reconcile_error) = widget.reconcile(s.runtime, &frame, root, ui_layout.Constraints { min_width: 0.0, max_width: logical_width, min_height: 0.0, max_height: logical_height })
     if reconcile_error != ok { ret reconcile_error }
     ret scene.render(widget.renderer_of(s.runtime), compiled, s.drawable, geometry.Size { width: logical_width, height: logical_height })
+}
+
+// Start a clocked frame before building its tree.
+fn begin(h: *Harness, now: time.Instant) -> err {
+    let (s, state_error) = state_of(h)
+    if state_error != ok { ret state_error }
+    widget.begin_frame(s.runtime, now)
+    ret ok
 }
 
 fn send(h: *Harness, event: input.Event) -> err {

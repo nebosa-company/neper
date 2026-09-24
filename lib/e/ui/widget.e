@@ -22,6 +22,7 @@ use e.gpu
 use e.math
 use e.mem
 use e.os
+use e.time
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -345,6 +346,10 @@ type State = struct {
     // far it has spread, 0 to 1.
     ripple_color: paint.Color,
     ripple_phase: f32,
+    // One time for every animation built in this frame, and whether any of them
+    // asked the application to keep presenting frames.
+    animation_time: time.Instant,
+    animation_due: bool,
     clip_rect: geometry.Rect,
     has_clip: bool,
     frame: u64,
@@ -636,6 +641,37 @@ fn state_of(widget_runtime: *Runtime) -> (*State, err) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize || s.closed { ret (s, InvalidTree) }
     ret (s, ok)
+}
+
+// Start one animation frame. The application and test harness call this before
+// a tree is built or reconciled so every control observes the same instant.
+fn begin_frame(widget_runtime: *Runtime, now: time.Instant) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret }
+    s.animation_time = now
+    s.animation_due = false
+}
+
+fn set_frame_time(widget_runtime: *Runtime, now: time.Instant) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error == ok { s.animation_time = now }
+}
+
+fn frame_time(widget_runtime: *Runtime) -> time.Instant {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret time.Instant { nanos: 0i64 } }
+    ret s.animation_time
+}
+
+fn request_animation_frame(widget_runtime: *Runtime) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error == ok { s.animation_due = true }
+}
+
+fn animation_frame_requested(widget_runtime: *Runtime) -> bool {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret false }
+    ret s.animation_due
 }
 
 fn element_of(s: *State, id: ElementId) -> (usize, bool) {

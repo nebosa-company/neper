@@ -84,6 +84,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (h, harness_error) = testing.harness(a, &runtime, 40u32, 30u32, 1.0)
     if harness_error != ok { os.exit(12i32) }
     var harness = h
+    widget.begin_frame(&runtime, start)
+    if animation.frame_time(&runtime).nanos != start.nanos || !near(animation.cycle(&runtime, time.millis(100i64)), 0.0) || !widget.animation_frame_requested(&runtime) { os.exit(30i32) }
+    let quarter = time.instant_add(start, time.millis(25i64))
+    widget.begin_frame(&runtime, quarter)
+    if widget.animation_frame_requested(&runtime) || !near(animation.cycle(&runtime, time.millis(100i64)), 0.25) || !near(animation.pulse(&runtime, time.millis(100i64), 0.4, 1.0), 0.7) { os.exit(31i32) }
     var counter = Counter { presses: 0usize }
     let (children, children_error) = mem.alloc[widget.Node](a, 2usize)
     if children_error != ok { os.exit(13i32) }

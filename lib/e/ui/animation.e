@@ -2,8 +2,9 @@
 // and its value at an instant is a number in `0..1` -- the eased fraction of the
 // way through, held at the ends, reversed on the way back when `reverse` is set,
 // wrapped when `repeating`. Nothing runs by itself: a widget reads `value` when it
-// builds and asks for the next frame through `request` while it is not finished,
-// which is `widget.invalidate` under another name.
+// builds and asks for the next frame through `request` while it is not finished.
+// The runtime clock gives every control one shared instant per frame; `cycle` and
+// `pulse` both keep the application presenting until their caller stops asking.
 
 use e.time
 use e.ui.widget
@@ -67,7 +68,34 @@ fn restart(c: *Controller, now: time.Instant) {
     c.start = now
 }
 
-// The element wants another frame: the same wish `widget.invalidate` records.
+// The instant shared by every animation in the current frame.
+fn frame_time(runtime: *widget.Runtime) -> time.Instant {
+    ret widget.frame_time(runtime)
+}
+
+// A repeating linear turn in `0..1` on the shared clock.
+fn cycle(runtime: *widget.Runtime, period: time.Duration) -> f32 {
+    if period.nanos <= 0i64 { ret 1.0 }
+    widget.request_animation_frame(runtime)
+    var at = frame_time(runtime).nanos % period.nanos
+    if at < 0i64 { at += period.nanos }
+    ret f32(at) / f32(period.nanos)
+}
+
+// A 0 -> 1 -> 0 wave over one turn.
+fn triangle(turn: f32) -> f32 {
+    var t = turn - f32(i64(turn))
+    if t < 0.0 { t += 1.0 }
+    if t < 0.5 { ret t * 2.0 }
+    ret (1.0 - t) * 2.0
+}
+
+fn pulse(runtime: *widget.Runtime, period: time.Duration, low: f32, high: f32) -> f32 {
+    ret low + (high - low) * triangle(cycle(runtime, period))
+}
+
+// The element wants another frame and must not reuse its previous scene.
 fn request(runtime: *widget.Runtime, element: widget.ElementId) {
     widget.invalidate(runtime, element)
+    widget.request_animation_frame(runtime)
 }

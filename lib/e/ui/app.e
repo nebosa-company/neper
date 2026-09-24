@@ -152,6 +152,9 @@ fn step(app: *App, timeout: time.Duration) -> (bool, err) {
 fn present_frame(s: *State) -> err {
     let (metrics, metrics_error) = window.metrics(&s.win)
     if metrics_error != ok { ret Failed }
+    let (now, clock_error) = time.monotonic()
+    if clock_error != ok { ret Failed }
+    widget.begin_frame(&s.runtime, now)
     var frame = mem.arena_from(s.frame_storage)
     if metrics.scale > 0.0 { widget.set_snap(&s.runtime, 1.0 / metrics.scale) }
     let (root, has_root) = widget.root_of(&s.runtime)
@@ -167,7 +170,7 @@ fn present_frame(s: *State) -> err {
     if render_error != ok { ret render_error }
     if window.request_frame(&s.win) != ok { ret Failed }
     s.frames += 1u64
-    s.frame_due = false
+    s.frame_due = widget.animation_frame_requested(&s.runtime)
     s.echo = true
     ret ok
 }

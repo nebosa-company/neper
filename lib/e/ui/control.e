@@ -11,12 +11,14 @@
 
 use e.math
 use e.mem
+use e.time
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.text.layout
 use e.text.shape
 use e.ui.accessibility
+use e.ui.animation
 use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
@@ -2658,13 +2660,14 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
 type ProgressTone = enum u8 { Active, Error, Paused }
 // A progress indicator's look (D970): the thick (8) bar, the full-bleed bar
 // (square, no gaps), the buffered share (0 for none), the tone, the phase of the
-// indeterminate motion (the caller's clock, in turns), and a content colour for a
-// ring inside a button (alpha 0: the tone's colours).
+// indeterminate motion (negative: the shared clock; otherwise an exact turn),
+// and a content colour for a ring inside a button (alpha 0: the tone's colours).
 type ProgressOptions = struct { thick: bool, full_bleed: bool, buffer: f32, tone: ProgressTone, phase: f32, content: paint.Color }
 
 fn progress_options() -> ProgressOptions {
     var out: ProgressOptions = zero
     out.tone = .Active
+    out.phase = 0.0 - 1.0
     ret out
 }
 
@@ -2687,6 +2690,13 @@ fn clamp_share(value: f32) -> f32 {
     if value < 0.0 { ret 0.0 }
     if value > 1.0 { ret 1.0 }
     ret value
+}
+
+fn progress_turn(t: *const Theme, phase: f32, period: time.Duration) -> f32 {
+    if phase < 0.0 { ret animation.cycle(t.runtime, period) }
+    var turn = phase - f32(i64(phase))
+    if turn < 0.0 { turn += 1.0 }
+    ret turn
 }
 
 // A share as whole percent ("30%"), in the arena.
@@ -2717,11 +2727,12 @@ fn progress_bar(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, val
 // `secondary-container` track (and from the buffered segment, `primary` 32% over
 // the track), a 4 `primary` stop dot at the track's end (2 in on the thick bar);
 // full-bleed square with no gaps. Error is `error` on `error-container`, paused
-// `on-surface-variant` on `surface-container-highest`. Indeterminate, a 40%
-// segment travels the track with `phase` and the tree says busy; determinate,
+// `on-surface-variant` on `surface-container-highest`. Indeterminate, two
+// growing segments travel the track on the shared two-second clock and the tree
+// says busy; under reduced motion two fixed segments pulse in place. Determinate,
 // the value is the percent ("30%"). A progress role named `label`.
-// ponytail: one travelling segment, not the specification's two; the label row,
-// detail line and completion icon compose with Text beside the bar.
+// ponytail: the label row, detail line and completion icon compose with Text
+// beside the bar.
 fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, width: f32, options: ProgressOptions) -> (widget.Node, err) {
     let share = clamp_share(value)
     let h: f32 = if_else(options.thick, 8.0, 4.0)
@@ -2729,24 +2740,53 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     let r: f32 = if_else(options.full_bleed, 0.0, h * 0.5)
     let ink = progress_ink(t, options.tone)
     let ground = progress_ground(t, options.tone)
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     if indeterminate {
-        let seg = width * 0.4
-        var turn = options.phase - f32(i64(options.phase))
-        if turn < 0.0 { turn = turn + 1.0 }
-        let x = (width - seg) * turn
-        if x > gap {
-            parts[n] = bar_piece(0u64, x - gap, h, ground, r)
-            n += 1usize
-        }
-        parts[n] = bar_piece(key + 1u64, seg, h, ink, r)
+        var track = sized_style(width, h)
+        track.background = paint.Brush { Solid: ground }
+        track.radius = r
+        track.overflow = .Clip
+        parts[n] = widget.box(0u64, track, zero)
         n += 1usize
-        let after = width - x - seg - gap
-        if after > 0.0 {
-            parts[n] = bar_piece(0u64, after, h, ground, r)
+        let turn = progress_turn(t, options.phase, time.seconds(2i64))
+        if t.tokens.motion.reduced {
+            let alpha = 0.38 + 0.62 * animation.triangle(turn)
+            let faded = with_alpha(ink, alpha)
+            let first = bar_piece(key + 1u64, width * 0.25, h, faded, r)
+            let second = bar_piece(key + 2u64, width * 0.25, h, faded, r)
+            let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = first
+            held[1usize] = second
+            parts[n] = widget.positioned(0u64, width * 0.15, 0.0, style.defaults(), held[0usize..1usize])
             n += 1usize
+            parts[n] = widget.positioned(0u64, width * 0.60, 0.0, style.defaults(), held[1usize..2usize])
+            n += 1usize
+        } else {
+            var phases: [2]f32 = zero
+            phases[0usize] = turn
+            phases[1usize] = turn + 0.5
+            if phases[1usize] >= 1.0 { phases[1usize] = phases[1usize] - 1.0 }
+            var i = 0usize
+            while i < 2usize {
+                let wave = animation.triangle(phases[i])
+                let length = width * (0.15 + 0.25 * wave)
+                let centre = width * (0.0 - 0.2 + 1.4 * phases[i])
+                var left = centre - length * 0.5
+                var right = centre + length * 0.5
+                if left < 0.0 { left = 0.0 }
+                if right > width { right = width }
+                if right > left {
+                    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+                    if held_error != ok { ret (zero, TooLarge) }
+                    held[0usize] = bar_piece(key + 1u64 + u64(i), right - left, h, ink, r)
+                    parts[n] = widget.positioned(0u64, left, 0.0, style.defaults(), held[0usize..1usize])
+                    n += 1usize
+                }
+                i += 1usize
+            }
         }
     } else {
         var rest = width
@@ -2782,7 +2822,11 @@ fn progress_bar_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, 
     }
     let (bar, bar_error) = mem.alloc[widget.Node](a, 1usize)
     if bar_error != ok { ret (zero, TooLarge) }
-    bar[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, sized_style(width, h), parts[0usize..n])
+    if indeterminate {
+        bar[0usize] = widget.stack(0u64, sized_style(width, h), parts[0usize..n])
+    } else {
+        bar[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: gap }, sized_style(width, h), parts[0usize..n])
+    }
     var sem: widget.Semantics = zero
     sem.role = 16u8
     sem.label = label
@@ -2931,8 +2975,10 @@ fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, va
 // 4), 3 at 36, 2 at 24, 2.25 under 22 (no gap), 4.5 from 64, where the percent
 // stands inside in `label-medium` `on-surface`. Error is `error` on
 // `error-container`; a content colour (a ring inside a button) draws the arc
-// alone in it. Indeterminate, a quarter arc with no track turns with `phase` and
-// the tree says busy; determinate, the value is the percent.
+// alone in it. Indeterminate, an arc spins once per 1.5 seconds while growing
+// from 10% to 75% and shrinking; under reduced motion a still 75% arc pulses
+// from 38% to full opacity every two seconds. The tree says busy; determinate,
+// the value is the percent.
 fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: f32, indeterminate: bool, size: f32, options: ProgressOptions) -> (widget.Node, err) {
     var share = clamp_share(value)
     if share > 0.0 && share < 0.04 { share = 0.04 }
@@ -2953,9 +2999,17 @@ fn progress_ring_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str,
     }
     if indeterminate {
         ring.track = paint.rgba(0.0, 0.0, 0.0, 0.0)
-        ring.share = 0.25
         ring.gap = 0.0
-        ring.start = options.phase * 6.2831855
+        if t.tokens.motion.reduced {
+            let turn = progress_turn(t, options.phase, time.seconds(2i64))
+            ring.share = 0.75
+            ring.fill = with_alpha(ring.fill, 0.38 + 0.62 * animation.triangle(turn))
+            ring.start = 0.0
+        } else {
+            let turn = progress_turn(t, options.phase, time.millis(1500i64))
+            ring.share = 0.10 + 0.65 * animation.triangle(turn)
+            ring.start = turn * 6.2831855
+        }
     }
     let (painted, painted_error) = ring_node(a, key + 1u64, ring, size)
     if painted_error != ok { ret (zero, painted_error) }

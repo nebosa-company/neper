@@ -21288,3 +21288,24 @@ existing editor copy path. Native accessibility action storage is widened to
 
 Host bridges still publish these trees as unsupported; implementing the
 platform APIs is a separate batch.
+
+## D986 — One runtime clock drives animation frames and reduced-motion progress
+
+The widget runtime owns one instant for each frame and one request bit for the
+next frame. `e.ui.app` reads the monotonic clock before it builds and continues
+presenting while a control requests animation; `e.ui.testing.begin` sets the
+same clock deterministically before a test builds. `e.ui.animation.cycle` and
+`pulse` are the shared periodic forms. A negative progress phase uses that clock;
+a non-negative phase remains an exact deterministic override.
+
+Indeterminate progress bars now draw two growing, travelling segments on a
+two-second cycle. Progress rings spin on a 1.5-second cycle while their arc grows
+from 10% to 75% and shrinks. With reduced motion, the segments stay fixed and a
+75% ring stays still while their opacity pulses from 38% to 100% every two
+seconds.
+
+`ui_app`, `ui_testing`, `ui_progress` and `ui_status_v2` hold the clock,
+scheduling, standard motion and reduced-motion forms on Windows and Linux.
+
+Determinate value easing and its show/minimum timing remain open, as do the
+composed label/detail/completion rows and the angled loading band.
