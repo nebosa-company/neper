@@ -727,7 +727,7 @@ fn with_scrim(a: *mem.Arena, t: *const control.Theme, top: widget.Node) -> (widg
 // heading), 16 above the content, 8 above the actions at the end 8 apart -- the
 // default a filled button, a destructive one filled in `error`, the others text
 // buttons, all at the control height.
-// ponytail: no scroll dividers, full-screen form or host button order.
+// ponytail: no scroll dividers or host button order.
 fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool) -> (widget.Node, err) {
     let (made, made_error) = dialog_as(a, key, t, title, content, buttons, open, described, 23u8)
     ret (made, made_error)
@@ -864,6 +864,91 @@ fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
     if semantic_role == accessibility.ROLE_ALERT_DIALOG { outside = widget.Submit { ctx: zero, invoke: zero } }
     let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]))
     ret (made, made_error)
+}
+
+// Below the medium window threshold a form dialog becomes a full-window surface
+// with a 56px Close/title/Save bar; larger sizes keep the ordinary dialog.
+fn dialog_adaptive(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, size: style.SizeClass) -> (widget.Node, err) {
+    if size != .Compact {
+        let (made, made_error) = dialog(a, key, t, title, content, buttons, open, described)
+        ret (made, made_error)
+    }
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var submit: widget.Submit = zero
+    var cancel: widget.Submit = zero
+    var submit_index = 0usize
+    var cancel_index = 0usize
+    var i = 0usize
+    while i < buttons.len {
+        if buttons[i].kind == .Default {
+            submit = buttons[i].action
+            submit_index = i
+        }
+        if buttons[i].kind == .Cancel {
+            cancel = buttons[i].action
+            cancel_index = i
+        }
+        i += 1usize
+    }
+    if !widget.submit_set(submit.invoke) || !widget.submit_set(cancel.invoke) { ret (zero, TooLarge) }
+    let (bar, bar_error) = mem.alloc[widget.Node](a, 4usize)
+    if bar_error != ok { ret (zero, TooLarge) }
+    let (close, close_error) = control.glyph_button(a, key + 2u64, t, .Cross, "Close", &buttons[cancel_index].action, 48.0, 24.0)
+    if close_error != ok { ret (zero, close_error) }
+    bar[0usize] = close
+    var heading = control.text_options()
+    heading.role = .TitleLarge
+    heading.wrap = .None
+    let (title_node, title_error) = control.colored_text(a, key + 1u64, title, t, heading, style.color(t.tokens, .OnSurface))
+    if title_error != ok { ret (zero, title_error) }
+    let (titled, titled_error) = mem.alloc[widget.Node](a, 1usize)
+    if titled_error != ok { ret (zero, TooLarge) }
+    titled[0usize] = title_node
+    var title_sem: widget.Semantics = zero
+    title_sem.role = 25u8
+    title_sem.label = title
+    title_sem.level = 2u8
+    bar[1usize] = widget.semantics(0u64, title_sem, style.defaults(), titled[0usize..1usize])
+    bar[2usize] = widget.spacer(0u64, 1.0)
+    var save_options = control.button_options()
+    save_options.variant = .Plain
+    let (save, save_error) = control.button(a, key + 3u64 + u64(submit_index), t, buttons[submit_index].label, &buttons[submit_index].action, save_options)
+    if save_error != ok { ret (zero, save_error) }
+    bar[3usize] = save
+    var bar_style = style.defaults()
+    bar_style.width = style.Length { Percent: 100.0 }
+    bar_style.height = style.Length { Px: 56.0 }
+    bar_style.padding.left = style.Length { Px: 4.0 }
+    bar_style.padding.right = style.Length { Px: 8.0 }
+    let (page, page_error) = mem.alloc[widget.Node](a, 2usize)
+    if page_error != ok { ret (zero, TooLarge) }
+    page[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, bar_style, bar[0usize..4usize])
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = content
+    page[1usize] = widget.padded(0u64, 16.0, 8.0, 16.0, 16.0, style.defaults(), held[0usize..1usize])
+    var surface = style.defaults()
+    surface.width = style.Length { Percent: 100.0 }
+    surface.height = style.Length { Percent: 100.0 }
+    surface.background = paint.Brush { Solid: style.color(t.tokens, .Surface) }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, surface, page[0usize..2usize])
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = column
+    var none: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: submit, cancel_action: cancel, keys: zero }, style.defaults(), body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 23u8
+    sem.label = title
+    sem.states = accessibility.STATE_MODAL
+    sem.labelled_by = key + 1u64
+    if described { sem.described_by = key + 2u64 }
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
+    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: cancel }, style.defaults(), framed[0usize..1usize]), ok)
 }
 
 // -------------------------------------------- transient presentation (D841, P2-09)

@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, Side, Bottom, Actions }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, Bottom, Actions }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -67,7 +67,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (inside, e1) = control.text(a, 0u64, "Inside", t, control.text_options())
     var alert: widget.Node = zero
     var e2: err = ok
-    if which == .DialogIcon {
+    if which == .DialogCompact {
+        let (made_dialog, made_dialog_error) = overlay.dialog_adaptive(a, 100u64, t, "Delete build?", inside, s.buttons[0usize..3usize], true, false, .Compact)
+        alert = made_dialog
+        e2 = made_dialog_error
+    } else if which == .DialogIcon {
         let (made_dialog, made_dialog_error) = overlay.dialog_with_icon(a, 100u64, t, "Delete build?", inside, s.buttons[0usize..3usize], .Warning, true, true, false)
         alert = made_dialog
         e2 = made_dialog_error
@@ -141,12 +145,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if renderer_error != ok { os.exit(3i32) }
     var renderer = r
     let tokens = style.reference(.Light)
+    let touch_tokens = style.adapt(&tokens, style.Adaptation { size: .Compact, capabilities: style.Capabilities { hover: false, fine_pointer: false, keyboard: false, touch: true, pen: false, resizable: false, multi_window: false, insets: zero }, profile: .Touch })
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 800usize, max_states: 64usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 40u16, max_commands: 8192usize })
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
+    let touch_theme = control.Theme { tokens: &touch_tokens, fonts: fonts, language: "", runtime: &runtime }
     let (h, harness_error) = testing.harness(a, &runtime, 640u32, 480u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
@@ -236,6 +242,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if icon_tree_error != ok { os.exit(54i32) }
     let (icon_heading, has_icon_heading) = find(icon_tree, .Heading, "Delete build?")
     if !has_icon_heading || icon_heading.level != 2u8 { os.exit(55i32) }
+    // Compact dialogs fill the window without a scrim and replace the action
+    // row with a 56px Close/title/default-action bar.
+    let compact_cancel_before = s.counters[0usize].count
+    let compact_keep_before = s.counters[2usize].count
+    let (root_compact, build_compact_error) = build(&f, &touch_theme, s, .DialogCompact)
+    if build_compact_error != ok || testing.pump(&harness, root_compact, time.Instant { nanos: 1095000000i64 }) != ok { os.exit(56i32) }
+    let (compact_shot, compact_shot_error) = testing.snapshot(&harness, a)
+    if compact_shot_error != ok { os.exit(57i32) }
+    let (compact_dialog, has_compact_dialog) = lifted(&harness, 100u64)
+    let (compact_close, has_compact_close) = bounds(&harness, &runtime, 102u64)
+    let (compact_save, has_compact_save) = bounds(&harness, &runtime, 105u64)
+    if !has_compact_dialog { os.exit(58i32) }
+    if !near(compact_dialog.x, 0.0) || !near(compact_dialog.y, 0.0) || !near(compact_dialog.width, 640.0) || !near(compact_dialog.height, 480.0) { os.exit(60i32) }
+    if !has_compact_close || !near(compact_close.height, 48.0) { os.exit(61i32) }
+    if !has_compact_save || !near(compact_save.height, touch_tokens.metrics.control_height) { os.exit(62i32) }
+    if !is_color(compact_shot, at(5.0, 100.0), style.color(&touch_tokens, .Surface)) { os.exit(63i32) }
+    if !tap_key(&harness, &runtime, 102u64) { os.exit(59i32) }
+    if !tap_key(&harness, &runtime, 105u64) { os.exit(59i32) }
+    if s.counters[0usize].count != compact_cancel_before + 1usize || s.counters[2usize].count != compact_keep_before + 1usize { os.exit(59i32) }
     // The side sheet: 300 wide along the right edge, the window's height,
     // `surface-container-low`, its open edge's corners rounded; a 48 header
     // with a 32 Close 8 from the end that dismisses.

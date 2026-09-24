@@ -21984,3 +21984,14 @@ for this form, while the existing body and actions remain unchanged.
 
 `ui_overlays3_v2` holds the added 56px icon block, error-well pixel and heading
 semantics on Windows and Linux. `dialog-icon.png` is the Segoe UI visual check.
+
+## D1039 — Compact dialogs become full-window forms
+
+`overlay.dialog_adaptive` keeps the standard card outside Compact size. Compact
+uses a scrimless surface filling the window, with a 56px bar containing a 48px
+Close button, the `title-large` level-2 heading and the existing default action
+as a text button; the body is inset 16px at the sides.
+
+The same Cancel and default actions own Escape, Enter and the visible controls.
+`ui_overlays3_v2` holds geometry, colour and both actions on Windows and Linux.
+`dialog-full-screen.png` is the Segoe UI visual check.
