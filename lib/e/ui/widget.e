@@ -346,6 +346,11 @@ type State = struct {
     menu_alt_used: bool,
     menu_hovered_title: u32,
     has_menu_hovered_title: bool,
+    menu_hover_target: u32,
+    has_menu_hover_target: bool,
+    menu_hover_at: i64,
+    menu_safe_from: geometry.Point,
+    has_menu_safe_from: bool,
     menu_typeahead: [16]u32,
     menu_typeahead_len: usize,
     menu_typeahead_at: i64,
@@ -2695,6 +2700,8 @@ fn place_stack(s: *State, a: *mem.Arena, node: *const Node, element: usize, inne
 fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, constraints: ui_layout.Constraints) -> (scene.SceneId, err) {
     let (s, state_error) = state_of(widget_runtime)
     if state_error != ok { ret (zero, state_error) }
+    let hover_error = menu_hover_tick(s)
+    if hover_error != ok { ret (zero, hover_error) }
     s.frame += 1u64
     // The whole tree is unvisited, then the root matched against the previous root.
     var old_roots: [1]u32 = zero
@@ -3188,6 +3195,142 @@ fn menu_item_owner(s: *State, index: usize) -> (usize, bool) {
         if !e.has_parent { ret (0usize, false) }
         at = usize(e.parent)
     }
+}
+
+fn menu_item_region(s: *State, owner: usize) -> (usize, bool) {
+    var one: [1]u32 = zero
+    if collect_focusable(s, owner, one[..], 0usize) == 0usize { ret (0usize, false) }
+    ret (usize(one[0usize]), true)
+}
+
+// Hover may move between the two modal overlays in a cascading menu. Other
+// modal overlays still block everything below their topmost surface.
+fn menu_hover_overlay_at(s: *State, p: geometry.Point) -> (usize, bool, bool) {
+    var blocker = 0usize
+    var has_blocker = false
+    var i = s.overlay_count
+    while i > 0usize {
+        i -= 1usize
+        let element = usize(s.overlays[i])
+        let e = &s.elements[element]
+        if !e.live { continue }
+        let (_, is_menu) = semantic_role_under(s, element, 21u8)
+        if geometry.contains(e.overlay_bounds, p) { ret (element, true, true) }
+        if e.modal && !has_blocker {
+            blocker = element
+            has_blocker = true
+        }
+        if e.modal && !is_menu { ret (element, false, true) }
+    }
+    ret (blocker, false, has_blocker)
+}
+
+fn triangle_side(a: geometry.Point, b: geometry.Point, p: geometry.Point) -> f32 {
+    ret (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y)
+}
+
+fn in_triangle(p: geometry.Point, a: geometry.Point, b: geometry.Point, c: geometry.Point) -> bool {
+    let ab = triangle_side(a, b, p)
+    let bc = triangle_side(b, c, p)
+    let ca = triangle_side(c, a, p)
+    let negative = ab < 0.0 || bc < 0.0 || ca < 0.0
+    let positive = ab > 0.0 || bc > 0.0 || ca > 0.0
+    ret !(negative && positive)
+}
+
+// The one expanded submenu parent, its tap region and controlled overlay.
+fn open_submenu(s: *State) -> (usize, usize, usize, bool) {
+    var i = 0usize
+    while i < s.elements.len {
+        let e = &s.elements[i]
+        if e.live && e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8) && (e.sem.actions & 1024u32) != 0u32 && (e.sem.states & 16u32) != 0u32 && e.sem.controls != 0u64 {
+            let (item_region, has_region) = menu_item_region(s, i)
+            let (controlled, count) = find_by_key(s, e.sem.controls)
+            if has_region && count != 0usize && s.elements[usize(controlled.slot)].kind == OVERLAY_TAG { ret (i, item_region, usize(controlled.slot), true) }
+        }
+        i += 1usize
+    }
+    ret (0usize, 0usize, 0usize, false)
+}
+
+fn menu_safe_triangle(s: *State, submenu: usize, point: geometry.Point) -> bool {
+    if !s.has_menu_safe_from { ret false }
+    let from = s.menu_safe_from
+    let bounds = s.elements[submenu].overlay_bounds
+    var edge = bounds.x
+    if bounds.x + bounds.width <= from.x { edge = bounds.x + bounds.width }
+    ret in_triangle(point, from, geometry.Point { x: edge, y: bounds.y }, geometry.Point { x: edge, y: bounds.y + bounds.height })
+}
+
+fn schedule_menu_hover(s: *State, candidate: usize) {
+    if !s.has_menu_hover_target || usize(s.menu_hover_target) != candidate {
+        s.menu_hover_target = u32(candidate)
+        s.has_menu_hover_target = true
+        s.menu_hover_at = s.animation_time.nanos
+    }
+    s.animation_due = true
+}
+
+// Submenus open after 200 ms. An open parent's action is also its close action;
+// the safe triangle suppresses that close while the pointer heads into the child.
+fn menu_submenu_hover(s: *State, point: geometry.Point, surface: usize, inside_surface: bool, over: usize, has_over: bool) {
+    let (open_owner, open_region, open_overlay, has_open) = open_submenu(s)
+    if has_open && inside_surface && surface == open_overlay {
+        s.has_menu_hover_target = false
+        ret
+    }
+    var owner = 0usize
+    var has_owner = false
+    if has_over {
+        let (found_owner, found) = menu_item_owner(s, over)
+        owner = found_owner
+        has_owner = found
+    }
+    if has_owner && owner == open_owner {
+        s.menu_safe_from = point
+        s.has_menu_safe_from = true
+        s.has_menu_hover_target = false
+        ret
+    }
+    if has_open && menu_safe_triangle(s, open_overlay, point) {
+        s.has_menu_hover_target = false
+        ret
+    }
+    if has_owner && (s.elements[owner].sem.actions & 1024u32) != 0u32 {
+        schedule_menu_hover(s, over)
+        ret
+    }
+    if has_open && inside_surface {
+        schedule_menu_hover(s, open_region)
+        ret
+    }
+    s.has_menu_hover_target = false
+}
+
+fn menu_hover_tick(s: *State) -> err {
+    if !s.has_menu_hover_target { ret ok }
+    let candidate = usize(s.menu_hover_target)
+    if candidate >= s.elements.len || !s.elements[candidate].live || s.elements[candidate].kind != REGION_TAG {
+        s.has_menu_hover_target = false
+        ret ok
+    }
+    if s.animation_time.nanos < s.menu_hover_at || s.animation_time.nanos - s.menu_hover_at < 200000000i64 {
+        s.animation_due = true
+        ret ok
+    }
+    s.has_menu_hover_target = false
+    s.menu_safe_from = s.arena_state.last
+    s.has_menu_safe_from = true
+    let e = &s.elements[candidate]
+    let (candidate_owner, has_candidate_owner) = menu_item_owner(s, candidate)
+    let (open_owner, open_region, _, has_open) = open_submenu(s)
+    if has_candidate_owner && has_open && candidate_owner != open_owner && (s.elements[candidate_owner].sem.actions & 1024u32) != 0u32 {
+        let closed = fire_gesture(s.elements[open_region].gesture, Gesture { Tap: geometry.Point { x: s.elements[open_region].bounds.x + s.elements[open_region].bounds.width * 0.5, y: s.elements[open_region].bounds.y + s.elements[open_region].bounds.height * 0.5 } })
+        if closed != ok { ret closed }
+    }
+    let fired = fire_gesture(e.gesture, Gesture { Tap: geometry.Point { x: e.bounds.x + e.bounds.width * 0.5, y: e.bounds.y + e.bounds.height * 0.5 } })
+    if fired == ok { s.animation_due = true }
+    ret fired
 }
 
 fn menu_label_starts(owner: *const Element, prefix: []const u32) -> bool {
@@ -4016,17 +4159,23 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             s.arena_state.last = p.position
             ret fire_gesture(e.gesture, Gesture { DragMove: Drag { start: s.arena_state.down, position: p.position, delta: delta } })
         }
+        s.arena_state.last = p.position
         let (barred, bar_error) = menu_bar_hover(s, p.position)
         if barred || bar_error != ok { ret bar_error }
         // Hover: entering one region leaves the last; a modal overlay keeps the
-        // pointer from what is under it.
+        // pointer from what is under it. Cascading menus may move between their
+        // two modal surfaces.
         var from = usize(s.root)
-        let (top, top_inside, has_top) = overlay_at(s, p.position)
+        let (top, top_inside, has_top) = menu_hover_overlay_at(s, p.position)
         if has_top {
-            if !top_inside { ret ok }
+            if !top_inside {
+                menu_submenu_hover(s, p.position, top, false, 0usize, false)
+                ret ok
+            }
             from = top
         }
         let (over, has_over) = hit_region(s, from, p.position, GESTURE_HOVER)
+        menu_submenu_hover(s, p.position, from, true, over, has_over)
         if s.arena_state.has_hovered && (!has_over || over != usize(s.arena_state.hovered)) {
             let previous = usize(s.arena_state.hovered)
             s.arena_state.has_hovered = false

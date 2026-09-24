@@ -978,8 +978,7 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // by `label`.
 // A command can open one submenu to its right, overlapping by 4 and aligned 8
 // above the row; Right opens it, Left closes it, and a leaf closes both menus.
-// ponytail: one submenu level only; no delayed hover/safe triangle, radio or
-// icon items or collapsed form.
+// ponytail: one submenu level only; no radio or icon items or collapsed form.
 // Command dismissal and focus return are shared by the widget runtime.
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
@@ -1075,7 +1074,8 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
             n += 1usize
         }
         let item_key = key + 1u64 + u64(i)
-        let state = control.control_state(t, item_key, c.enabled, false)
+        var state = control.control_state(t, item_key, c.enabled, false)
+        if c.submenu_open { state.hovered = true }
         var ink = style.color(t.tokens, .OnSurface)
         if c.destructive { ink = style.color(t.tokens, .Error) }
         var muted = style.color(t.tokens, .OnSurfaceVariant)

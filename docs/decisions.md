@@ -21530,3 +21530,21 @@ full-chain dismissal, focus return and Left closure on Windows and Linux;
 
 Deeper cascades, delayed hover with a safe triangle, radio and icon items, and
 the collapsed form remain open.
+
+## D1004 — Submenu hover waits and protects diagonal travel
+
+The shared menu runtime arms a submenu only after the pointer rests on its
+parent for 200 ms and keeps animation frames due until that boundary. Cascading
+menu overlays may route hover back to their parent surface; other modal overlays
+retain normal topmost blocking.
+
+An expanded parent records the pointer origin and suppresses sibling activation
+inside the triangle leading to the child menu's near edge. Leaving that triangle
+closes the old child after the same delay; moving to another submenu closes the
+old parent before opening the new one. The expanded row keeps the 8% hover layer.
+
+`ui_navigation2_v2` holds the 199/200 ms boundary, animation-frame request,
+lower-menu hover routing, safe path and outside-path close on Windows and Linux;
+`menu-bar-submenu.png` is the Segoe UI visual check.
+
+Deeper cascades, radio and icon items, and the collapsed form remain open.

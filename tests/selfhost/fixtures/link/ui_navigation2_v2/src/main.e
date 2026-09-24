@@ -9,7 +9,7 @@
 // a 32 tall menu bar on `surface` whose open 24 tall title is
 // `secondary-container`, its menu 2 below on `surface-container`, 32 tall
 // commands, a separator, a checked command, and one right-side submenu opened
-// and closed by the shared menu keyboard path.
+// by keyboard or 200 ms hover with a safe diagonal path into it.
 
 use e.gpu
 use e.io
@@ -336,6 +336,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_typed || !same_element(typed, testing.by_key(&harness, 2404u64).element) || testing.pump(&harness, root_3, time.Instant { nanos: 2200000000i64 }) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok || testing.press_key(&harness, 79u32, zero) != ok || testing.press_key(&harness, 84u32, zero) != ok { os.exit(53i32) }
     let (prefixed, has_prefixed) = testing.focused(&harness)
     if !has_prefixed || !same_element(prefixed, testing.by_key(&harness, 2405u64).element) { os.exit(62i32) }
+    let (other_row, has_other_row) = bounds(&harness, &runtime, 2405u64)
+    s.counters[11usize].count = 0usize
+    if !has_other_row || testing.hover(&harness, other_row.x + other_row.width * 0.5, other_row.y + other_row.height * 0.5) != ok || s.counters[11usize].count != 0usize || !widget.animation_frame_requested(&runtime) { os.exit(63i32) }
+    if testing.pump(&harness, root_3, time.Instant { nanos: 2399000000i64 }) != ok || s.counters[11usize].count != 0usize || !widget.animation_frame_requested(&runtime) { os.exit(64i32) }
+    if testing.pump(&harness, root_3, time.Instant { nanos: 2400000000i64 }) != ok || s.counters[11usize].count != 1usize { os.exit(65i32) }
     s.counters[9usize].count = 0usize
     s.counters[10usize].count = 0usize
     s.counters[11usize].count = 0usize
@@ -348,6 +353,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tree_sub, tree_sub_error) = testing.semantics(&harness)
     let (other_node, has_other_node) = find(tree_sub, .MenuItem, "Other")
     if tree_sub_error != ok || !has_other_node || !other_node.state.expanded || !has_action(other_node, .ShowMenu) || !same_element(other_node.relations.controls, testing.by_key(&harness, 2449u64).element) { os.exit(66i32) }
+    let (submenu_bounds, has_submenu_bounds) = testing.overlay_of(&harness, testing.by_key(&harness, 2449u64).element)
+    let (auto_safe, has_auto_safe) = bounds(&harness, &runtime, 2406u64)
+    if !has_submenu_bounds || !has_auto_safe || testing.hover(&harness, other_row.x + other_row.width * 0.5, other_row.y + other_row.height * 0.5) != ok || testing.hover(&harness, submenu_bounds.x - 1.0, auto_safe.y + auto_safe.height * 0.5) != ok || !widget.interaction(&runtime, 2406u64).hovered { os.exit(70i32) }
+    if testing.pump(&harness, root_sub, time.Instant { nanos: 2410000000i64 }) != ok || s.counters[11usize].count != 1usize { os.exit(71i32) }
+    if testing.hover(&harness, auto_safe.x + 8.0, auto_safe.y + auto_safe.height * 0.5) != ok || testing.pump(&harness, root_sub, time.Instant { nanos: 2610000000i64 }) != ok || s.counters[11usize].count != 2usize { os.exit(72i32) }
+    s.counters[11usize].count = 1usize
     let (on_recent, has_on_recent) = testing.focused(&harness)
     if !has_on_recent || !same_element(on_recent, testing.by_key(&harness, 2450u64).element) { os.exit(67i32) }
     if testing.press_key(&harness, 13u32, zero) != ok { os.exit(67i32) }
