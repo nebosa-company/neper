@@ -8,8 +8,8 @@
 // secondary fixed bar sharing its width with a 2px line across the active tab;
 // a 32 tall menu bar on `surface` whose open 24 tall title is
 // `secondary-container`, its menu 2 below on `surface-container`, 32 tall
-// commands, a separator, a checked command, and one right-side submenu opened
-// by keyboard or 200 ms hover with a safe diagonal path into it.
+// commands with aligned icon/check/radio slots, a separator, and one right-side
+// submenu opened by keyboard or 200 ms hover with a safe diagonal path into it.
 
 use e.gpu
 use e.io
@@ -205,12 +205,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.file[0usize] = command
     s.file[0usize].label = "New"
     s.file[0usize].shortcut = "Ctrl+N"
+    s.file[0usize].pictured = true
+    s.file[0usize].glyph = .Picture
     s.file[1usize] = command
     s.file[1usize].label = "Open"
     s.file[2usize] = command
     s.file[2usize].label = "Other"
     s.file[3usize] = command
     s.file[3usize].label = "Autosave"
+    s.file[3usize].checkable = true
     s.file[3usize].checked = true
     s.file[3usize].separated = true
     s.file[4usize] = command
@@ -219,8 +222,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.file[4usize].enabled = false
     s.submenu[0usize] = command
     s.submenu[0usize].label = "Recent"
+    s.submenu[0usize].radio = true
+    s.submenu[0usize].checked = true
     s.submenu[1usize] = command
     s.submenu[1usize].label = "Workspace"
+    s.submenu[1usize].radio = true
     s.file[2usize].submenu = s.submenu[..]
     s.file[2usize].submenu_toggle = s.subs[11usize]
     s.edit[0usize] = command
@@ -351,8 +357,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_sub, root_sub_error) = build(&f, &theme, s, false, 0usize)
     if root_sub_error != ok || testing.pump(&harness, root_sub, time.Instant { nanos: 2210000000i64 }) != ok { os.exit(66i32) }
     let (tree_sub, tree_sub_error) = testing.semantics(&harness)
+    if tree_sub_error != ok { os.exit(66i32) }
+    let radio_count = testing.by_role(&harness, .MenuItemRadio).count
     let (other_node, has_other_node) = find(tree_sub, .MenuItem, "Other")
-    if tree_sub_error != ok || !has_other_node || !other_node.state.expanded || !has_action(other_node, .ShowMenu) || !same_element(other_node.relations.controls, testing.by_key(&harness, 2449u64).element) { os.exit(66i32) }
+    let (recent_node, has_recent_node) = find(tree_sub, .MenuItemRadio, "Recent")
+    if !has_other_node || !other_node.state.expanded || !has_action(other_node, .ShowMenu) || !same_element(other_node.relations.controls, testing.by_key(&harness, 2449u64).element) { os.exit(73i32) }
+    if !has_recent_node || !recent_node.state.checked { os.exit(74i32) }
+    if radio_count != 2usize { os.exit(75i32) }
     let (submenu_bounds, has_submenu_bounds) = testing.overlay_of(&harness, testing.by_key(&harness, 2449u64).element)
     let (auto_safe, has_auto_safe) = bounds(&harness, &runtime, 2406u64)
     if !has_submenu_bounds || !has_auto_safe || testing.hover(&harness, other_row.x + other_row.width * 0.5, other_row.y + other_row.height * 0.5) != ok || testing.hover(&harness, submenu_bounds.x - 1.0, auto_safe.y + auto_safe.height * 0.5) != ok || !widget.interaction(&runtime, 2406u64).hovered { os.exit(70i32) }
@@ -387,7 +398,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_open_row || !has_auto_row || !near(open_row.height, 32.0) || !near(auto_row.y, open_row.y + 81.0) || !is_color(shot_3, at(menu.x + 100.0, open_row.y + 72.5), style.color(&tokens, .OutlineVariant)) { os.exit(29i32) }
     let (auto_node, has_auto_node) = find(tree_3, .MenuItem, "Autosave")
     let (delete_node, has_delete_node) = find(tree_3, .MenuItem, "Delete")
-    if testing.by_role(&harness, .MenuItem).count != 5usize || !has_auto_node || !auto_node.state.checked || !has_delete_node || !delete_node.state.disabled { os.exit(30i32) }
+    let (auto_check, has_auto_check) = find(tree_3, .MenuItemCheckbox, "Autosave")
+    if testing.by_role(&harness, .MenuItem).count != 4usize || !has_auto_check || !auto_check.state.checked || has_auto_node || !has_delete_node || !delete_node.state.disabled { os.exit(30i32) }
     if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(69i32) }
     s.counters[9usize].count = 0usize
     if !tap_key(&harness, &runtime, 2403u64) || s.counters[10usize].count != 1usize || s.counters[9usize].count != 1usize { os.exit(31i32) }

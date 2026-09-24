@@ -3191,7 +3191,7 @@ fn menu_item_owner(s: *State, index: usize) -> (usize, bool) {
     var at = index
     while true {
         let e = &s.elements[at]
-        if e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8) { ret (at, true) }
+        if e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8 || e.sem.role == 42u8) { ret (at, true) }
         if !e.has_parent { ret (0usize, false) }
         at = usize(e.parent)
     }
@@ -3243,7 +3243,7 @@ fn open_submenu(s: *State) -> (usize, usize, usize, bool) {
     var i = 0usize
     while i < s.elements.len {
         let e = &s.elements[i]
-        if e.live && e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8) && (e.sem.actions & 1024u32) != 0u32 && (e.sem.states & 16u32) != 0u32 && e.sem.controls != 0u64 {
+        if e.live && e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8 || e.sem.role == 42u8) && (e.sem.actions & 1024u32) != 0u32 && (e.sem.states & 16u32) != 0u32 && e.sem.controls != 0u64 {
             let (item_region, has_region) = menu_item_region(s, i)
             let (controlled, count) = find_by_key(s, e.sem.controls)
             if has_region && count != 0usize && s.elements[usize(controlled.slot)].kind == OVERLAY_TAG { ret (i, item_region, usize(controlled.slot), true) }
@@ -3360,7 +3360,7 @@ fn focus_menu_prefix(s: *State, order: []const u32, count: usize, current: usize
     ret false
 }
 
-// A menu's keys (D975, D997): with a menu item (role 22 or checkbox role 37)
+// A menu's keys (D975, D997): with a menu item (plain, checkbox or radio)
 // focused, Down and Up move the focus as Tab and Shift+Tab do (wrapping,
 // disabled items skipped), Home and End jump, and a letter moves to the next
 // item whose label starts with it; whether the key was taken.

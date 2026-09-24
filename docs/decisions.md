@@ -21548,3 +21548,22 @@ lower-menu hover routing, safe path and outside-path close on Windows and Linux;
 `menu-bar-submenu.png` is the Segoe UI visual check.
 
 Deeper cascades, radio and icon items, and the collapsed form remain open.
+
+## D1005 — Menus draw icon, checkbox and radio leading slots
+
+`overlay.MenuCommand` and `navigation.BarCommand` now distinguish checkable,
+radio and pictured commands. A menu reserves its leading column when any command
+uses one: checked options draw the 18/24 check, selected radio choices a centred
+6-pixel dot, and pictured commands their requested glyph; destructive and
+disabled colours continue through the same row styling.
+
+Radio commands publish the added MenuItemRadio role and Checked state through
+the accessibility tree and bridge record. Existing checked commands now publish
+MenuItemCheckbox in MenuBar as well as Menu.
+
+`ui_overlays_v2` and `ui_navigation2_v2` hold glyph, checkbox and radio variants
+and their roles on Windows and Linux; `menu-bar-submenu.png` is the Segoe UI
+visual check.
+
+Supporting lines, deeper general-menu submenus, the MenuBar's deeper cascades
+and collapsed form remain open.

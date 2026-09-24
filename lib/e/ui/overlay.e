@@ -165,10 +165,10 @@ type MenuItem = struct { label: str, action: widget.Submit, enabled: bool }
 
 // A command in a v2 menu (D975): its label, what it does, whether it may be
 // chosen, its shortcut's words ("Ctrl+S"; empty for none, never shown on touch),
-// whether it is checkable and checked (a check in the leading slot), whether a
-// separator stands before it, whether it destroys (in `error`), and the head of
-// the group it starts (empty for none).
-type MenuCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, separated: bool, destructive: bool, head: str }
+// whether it is checkable and checked (a check in the leading slot), a radio
+// choice (a 6px dot), or has a leading glyph; whether a separator stands before
+// it, whether it destroys (in `error`), and the head of the group it starts.
+type MenuCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, head: str }
 
 // A plain enabled command.
 fn menu_command(label: str, action: widget.Submit) -> MenuCommand {
@@ -177,6 +177,17 @@ fn menu_command(label: str, action: widget.Submit) -> MenuCommand {
     c.action = action
     c.enabled = true
     ret c
+}
+
+fn menu_radio_dot(a: *mem.Arena, color: paint.Color, slot: f32) -> (widget.Node, err) {
+    let (marks, marks_error) = mem.alloc[widget.Node](a, 1usize)
+    if marks_error != ok { ret (zero, TooLarge) }
+    var dot = control.sized_style(6.0, 6.0)
+    dot.background = paint.Brush { Solid: color }
+    dot.radius = 3.0
+    marks[0usize] = widget.box(0u64, dot, zero)
+    let inset = (slot - 6.0) * 0.5
+    ret (widget.padded(0u64, inset, inset, inset, inset, style.defaults(), marks[0usize..1usize]), ok)
 }
 
 // A menu: a modal overlay below `anchor` of the items keyed `key + 1 + index`,
@@ -246,13 +257,13 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     var ink = surface_ink
     if c.destructive { ink = style.color(t.tokens, .Error) }
     var muted = style.color(t.tokens, .OnSurfaceVariant)
-    var tick = surface_ink
+    var mark_ink = surface_ink
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = control.with_alpha(surface_ink, control.state_opacity(t, state))
     if !c.enabled {
         ink = control.with_alpha(surface_ink, t.tokens.states.disabled_content)
         muted = ink
-        tick = ink
+        mark_ink = ink
         look.background = control.with_alpha(ink, 0.0)
     }
     look.foreground = ink
@@ -270,8 +281,18 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     if parts_error != ok { ret (zero, TooLarge) }
     var p = 0usize
     if slotted {
-        if c.checked {
-            let (mark, mark_error) = control.icon_square(a, tick, .Check, slot)
+        if c.radio && c.checked {
+            let (mark, mark_error) = menu_radio_dot(a, mark_ink, slot)
+            if mark_error != ok { ret (zero, mark_error) }
+            parts[p] = mark
+        } else if c.checked {
+            let (mark, mark_error) = control.icon_square(a, mark_ink, .Check, slot)
+            if mark_error != ok { ret (zero, mark_error) }
+            parts[p] = mark
+        } else if c.pictured && !c.radio && !c.checkable {
+            var icon_ink = muted
+            if c.destructive { icon_ink = ink }
+            let (mark, mark_error) = control.icon_square(a, icon_ink, c.glyph, slot)
             if mark_error != ok { ret (zero, mark_error) }
             parts[p] = mark
         } else {
@@ -305,6 +326,7 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     if c.checked { sem_states = accessibility.STATE_CHECKED }
     var semantic_role = 22u8
     if c.checkable || c.checked { semantic_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
+    if c.radio { semantic_role = accessibility.ROLE_MENU_ITEM_RADIO }
     let (made, made_error) = control.pressable_states(a, item_key, t, semantic_role, c.label, look, c.enabled, false, sem_states, 0u32, 0u64, &c.action, content)
     ret (made, made_error)
 }
@@ -323,7 +345,7 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
 // `label-medium` `on-surface-variant`, 12 in, 8 above and 4 below. A menu in the
 // tree named `label`, its commands MenuItems (Checked when checked); the runtime
 // moves the focus through them with Down and Up, wrapping, and Home and End.
-// ponytail: no icons, supporting lines, submenus, radio groups or typeahead;
+// ponytail: no supporting lines or submenus;
 // the focus ring is the runtime's outside ring rather than inset 3.
 fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -331,7 +353,7 @@ fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     var slotted = false
     var k = 0usize
     while k < commands.len {
-        if commands[k].checked { slotted = true }
+        if commands[k].checkable || commands[k].checked || commands[k].radio || commands[k].pictured { slotted = true }
         k += 1usize
     }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize * commands.len)

@@ -163,11 +163,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     s.commands[0usize] = overlay.menu_command("New", s.subs[0usize])
     s.commands[0usize].shortcut = "Ctrl+N"
+    s.commands[0usize].pictured = true
+    s.commands[0usize].glyph = .Picture
     s.commands[1usize] = overlay.menu_command("Word wrap", s.subs[1usize])
     s.commands[1usize].checkable = true
     s.commands[1usize].checked = true
     s.commands[2usize] = overlay.menu_command("Minimap", s.subs[1usize])
     s.commands[2usize].head = "View"
+    s.commands[2usize].radio = true
+    s.commands[2usize].checked = true
     s.commands[3usize] = overlay.menu_command("Quit", s.subs[1usize])
     s.commands[3usize].enabled = false
     s.commands[4usize] = overlay.menu_command("Delete", s.subs[1usize])
@@ -203,15 +207,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_wrap || !has_mini || !has_quit || !has_delete || !near(wrap_row.y, new_row.y + 32.0) || !near(mini_row.y, wrap_row.y + 44.0) || !near(delete_row.y, quit_row.y + 41.0) { os.exit(16i32) }
     if !is_color(shot, at(menu.x + 100.0, quit_row.y + 36.0), style.color(&tokens, .OutlineVariant)) || !is_color(shot, at(menu.x + 100.0, quit_row.y + 34.0), style.color(&tokens, .SurfaceContainer)) { os.exit(17i32) }
     if !near(menu.height, 4.0 + 32.0 * 5.0 + 12.0 + 9.0 + 4.0) { os.exit(18i32) }
-    // The tree: a menu named File, its checked command a MenuItemCheckbox, its
-    // group break a Separator, and Quit disabled.
+    // The tree: a menu named File, checked checkbox and radio commands, its group
+    // break a Separator, and Quit disabled.
     let (menu_node, has_menu_node) = find(tree, .Menu, "File")
     let (wrap_node, has_wrap_node) = find(tree, .MenuItemCheckbox, "Word wrap")
+    let (mini_node, has_mini_node) = find(tree, .MenuItemRadio, "Minimap")
     let (quit_node, has_quit_node) = find(tree, .MenuItem, "Quit")
     if !has_menu_node { os.exit(19i32) }
     if !has_wrap_node || !wrap_node.state.checked { os.exit(54i32) }
+    if !has_mini_node || !mini_node.state.checked { os.exit(54i32) }
     if !has_quit_node || !quit_node.state.disabled { os.exit(55i32) }
-    if testing.by_role(&harness, .MenuItem).count != 4usize { os.exit(52i32) }
+    if testing.by_role(&harness, .MenuItem).count != 3usize { os.exit(52i32) }
     if testing.by_role(&harness, .Separator).count != 1usize { os.exit(53i32) }
     // The keys: the focus starts on New; Down walks, skipping Quit, and wraps; Up
     // wraps back; End and Home jump; Enter runs New; Escape dismisses.
@@ -222,7 +228,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 38u32, zero) != ok || !focus_is(&harness, 105u64) { os.exit(24i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !focus_is(&harness, 101u64) { os.exit(25i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || !focus_is(&harness, 105u64) { os.exit(26i32) }
-    if testing.press_key(&harness, 36u32, zero) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.counters[0usize].count != 1usize { os.exit(27i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.counters[0usize].count != 1usize || s.counters[2usize].count != 1usize { os.exit(27i32) }
+    s.counters[2usize].count = 0usize
     if testing.press_key(&harness, 27u32, zero) != ok || s.counters[2usize].count != 1usize { os.exit(28i32) }
     // The plain tooltip: `inverse-surface`, 24 tall, centred 4 above Save.
     let (save, has_save) = bounds(&harness, &runtime, 2u64)

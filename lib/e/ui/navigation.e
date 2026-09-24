@@ -902,9 +902,10 @@ type MenuBarItem = struct { label: str, items: []const overlay.MenuItem }
 
 // A command in a menu bar's menu (D972): its label, what it does, whether it may
 // be chosen, its shortcut's words ("Ctrl+S"; empty for none), whether it is
-// checked (a check in the leading slot), whether a separator stands before it,
-// and whether it destroys (in `error`).
-type BarCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checked: bool, separated: bool, destructive: bool, submenu: []const BarCommand, submenu_open: bool, submenu_toggle: widget.Submit }
+// checkable and checked, a radio choice or pictured with a leading glyph,
+// whether a separator stands before it, whether it destroys (in `error`), and
+// its first-level submenu state and toggle.
+type BarCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, submenu: []const BarCommand, submenu_open: bool, submenu_toggle: widget.Submit }
 
 // A menu of the v2 menu bar (D972): its title and its commands.
 type BarMenu = struct { label: str, commands: []const BarCommand }
@@ -978,7 +979,7 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // by `label`.
 // A command can open one submenu to its right, overlapping by 4 and aligned 8
 // above the row; Right opens it, Left closes it, and a leaf closes both menus.
-// ponytail: one submenu level only; no radio or icon items or collapsed form.
+// ponytail: one submenu level only; no collapsed form.
 // Command dismissal and focus return are shared by the widget runtime.
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
@@ -1051,7 +1052,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
     var slotted = false
     var k = 0usize
     while k < commands.len {
-        if commands[k].checked { slotted = true }
+        if commands[k].checkable || commands[k].checked || commands[k].radio || commands[k].pictured { slotted = true }
         k += 1usize
     }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize * commands.len)
@@ -1099,8 +1100,18 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
         if parts_error != ok { ret (zero, TooLarge) }
         var p = 0usize
         if slotted {
-            if c.checked {
-                let (tick, tick_error) = control.icon_square(a, muted, .Check, 18.0)
+            if c.radio && c.checked {
+                let (tick, tick_error) = overlay.menu_radio_dot(a, ink, 18.0)
+                if tick_error != ok { ret (zero, tick_error) }
+                parts[p] = tick
+            } else if c.checked {
+                let (tick, tick_error) = control.icon_square(a, ink, .Check, 18.0)
+                if tick_error != ok { ret (zero, tick_error) }
+                parts[p] = tick
+            } else if c.pictured && !c.radio && !c.checkable {
+                var icon_ink = muted
+                if c.destructive { icon_ink = ink }
+                let (tick, tick_error) = control.icon_square(a, icon_ink, c.glyph, 18.0)
                 if tick_error != ok { ret (zero, tick_error) }
                 parts[p] = tick
             } else {
@@ -1137,6 +1148,9 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
         let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, line_style, parts[0usize..p])
         var sem_states = 0u32
         if c.checked { sem_states = accessibility.STATE_CHECKED }
+        var semantic_role = 22u8
+        if c.checkable || c.checked { semantic_role = accessibility.ROLE_MENU_ITEM_CHECKBOX }
+        if c.radio { semantic_role = accessibility.ROLE_MENU_ITEM_RADIO }
         var sem_actions = 0u32
         var controls = 0u64
         var chosen = &c.action
@@ -1147,7 +1161,7 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
             chosen = &c.submenu_toggle
             if c.submenu_open { sem_states = sem_states | accessibility.STATE_EXPANDED }
         }
-        let (made, made_error) = control.pressable_states(a, item_key, t, 22u8, c.label, look, c.enabled, false, sem_states, sem_actions, controls, chosen, content)
+        let (made, made_error) = control.pressable_states(a, item_key, t, semantic_role, c.label, look, c.enabled, false, sem_states, sem_actions, controls, chosen, content)
         if made_error != ok { ret (zero, made_error) }
         rows[n] = made
         n += 1usize
