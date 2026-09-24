@@ -19645,3 +19645,66 @@ Still open for SelectableText:
 RichText stays undelivered. Its spans still sit on one line: it has no word wrap
 across spans, no baseline alignment, no code, key or mention kinds, no link
 underline or link states, no padded link target and no `max_lines`.
+
+## D964 — Rich text draws its v2 specification
+
+`control.paragraph` is the v2 rich text of docs/ux/components/RichText. It takes
+`RichSpan { value, kind, color, action, visited }` spans, where `SpanKind` is
+Plain, Strong, Emphasis, Code, Key, Mention or Link, and `RichOptions { role,
+width, max_lines, ellipsis }`. The base role is `body-medium`, or `body-large` on
+touch, and every line keeps its line height.
+
+The layout is the control's own, with no new runtime primitive. It measures each
+piece with `layout.layout`: the advance comes from the caret at the end, so
+trailing spaces count, and the width that must fit leaves them out. A plain span
+breaks into words that keep their trailing spaces. Code, key, mention and link
+spans stay whole. Pieces go into lines at the caller's width, breaking at word
+boundaries across spans, and each line is a stack of positioned pieces. Every
+piece is dropped by the line's baseline minus its own, so pieces in different
+roles share one baseline.
+
+The span looks:
+- Strong: the weight-600 title role of the base size.
+- Mention: the same role, in `primary`.
+- Code: the `code` role on `surface-container-high`, with `radius-xs` corners and
+  4 on each side.
+- Key: the `code` role on `surface-container-lowest` in a 1px `outline-variant`
+  edge.
+- Link: `primary`, or `link-visited` once visited. It has a 1px underline 3 below
+  the baseline, snapped to a whole pixel. Hovered, the underline is 2px over an 8%
+  `primary` wash; pressed, the wash is 10%.
+
+A pressable link or mention is a Link node keyed `key + 1 + span index`, and its
+target is 32 tall (48 on touch). The paragraph reserves that overhang above and
+below its lines, so the target never moves the text. `max_lines` keeps the first
+lines and ends the last one with the ellipsis after the last whole piece before
+which it fits. Pieces are whole, so the cut never falls inside a link. The
+paragraph is a Text named by all its words. The old `rich_text` keeps its
+one-line form, and ui_content still holds it.
+
+tests/selfhost/fixtures/link/ui_content3_v2 uses the square-glyph font, with its
+cmap widened so the space is a square too. It checks a paragraph 120 wide:
+- it is two lines plus the 12 of link overhang;
+- its first words are the body colour, and the code piece starts on its fill;
+- the code glyphs' foot is on the body glyphs' foot;
+- the link moved whole to the second line, with a 32 target 6 above the line;
+- the link's column holds the glyph and the underline, and the mention's only
+  the glyph;
+- there is one Link node, and a tap on it fires.
+
+It also checks that a paragraph cut to one line at 60 ends with the ellipsis
+after its second word and draws nothing after it, and that it is named by its
+full text. It checks the key's edge and fill and the visited link's colour. Last,
+it checks that hovering washes the link on the next frame. All 76 ui_* fixtures
+pass on Windows and Linux, and the Windows example builds. With this, all seven
+P5-07 content specifications are delivered.
+
+Still open:
+- Emphasis is upright, because no italic face is chosen.
+- A key is the code line's height with a 1px edge, not 24 with a 2px foot.
+- Each word is also a Text node of its own; a Custom paragraph node would fold
+  them into the paragraph's one.
+- A link never breaks, so it has no two-fragment hover or focus.
+- The focus ring is the runtime's rectangle round the target, not round the
+  span's box on each line.
+- The paragraph needs a width to wrap; it does not take its parent's.

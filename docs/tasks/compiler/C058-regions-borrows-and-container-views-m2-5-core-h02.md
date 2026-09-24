@@ -118,7 +118,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `.len`: `src/main.e`×542‡, `src/check.e`×333‡, `src/tool.e`×309‡, `src/em.e`×168‡, `lib/e/fmt/json.e`×154†, `lib/e/os.linux.e`×145‡, `lib/e/algo/sketch.e`×139†, `lib/e/ui/control.e`×136‡
+- `.len`: `src/main.e`×542‡, `src/check.e`×333‡, `src/tool.e`×309‡, `src/em.e`×168‡, `lib/e/fmt/json.e`×154†, `lib/e/ui/control.e`×149‡, `lib/e/os.linux.e`×145‡, `lib/e/algo/sketch.e`×139†
 - `mem.reset`: `lib/e/os.windows.e`×70‡, `lib/e/os.linux.e`×54‡, `lib/e/fmt/json.e`×26†, `lib/e/net/http.e`×26†, `lib/e/io.e`×17, `lib/e/fs.e`×14, `lib/e/grep.e`×10, `lib/e/net/ws.e`×7
 - `context_moves.ends`: `tests/conformance/tools/context_moves.x64-linux.expected.jsonl`×1, `tests/conformance/tools/context_moves.x64-windows.expected.jsonl`×1
 - `Resource`: `src/check.e`×144‡, `src/main.e`×16‡, `lib/e/fmt/brotli.e`×1‡

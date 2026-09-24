@@ -142,7 +142,8 @@ fn link_tap(ctx: *void, g: widget.Gesture) -> err {
 }
 
 // Rich text: the spans laid side by side, each in its own role and colour, a
-// linked span a tap region with the link role.
+// linked span a tap region with the link role. `paragraph` is the v2 rich text
+// (D964).
 // ponytail: the spans sit on one line; wrapping across spans waits on a span-aware layout.
 fn rich_text(a: *mem.Arena, key: widget.Key, spans: []const Span, t: *const Theme) -> (widget.Node, err) {
     let (children, children_error) = mem.alloc[widget.Node](a, spans.len)
@@ -172,6 +173,308 @@ fn rich_text(a: *mem.Arena, key: widget.Key, spans: []const Span, t: *const Them
         i += 1usize
     }
     ret (widget.flex(key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), children[0usize..spans.len]), ok)
+}
+
+// What a span of a v2 paragraph is (D964): plain, strong (weight 600), emphasis,
+// inline code, a keyboard key, a mention, or a link.
+type SpanKind = enum u8 { Plain, Strong, Emphasis, Code, Key, Mention, Link }
+// A span of a paragraph: its words, its kind, its colour role (plain, strong,
+// emphasis and code), the action a link or mention fires when pressed (unset: a
+// mention is not pressable), and whether a link was visited. The spans outlive
+// the element, as an action's context does.
+type RichSpan = struct { value: str, kind: SpanKind, color: style.ColorRole, action: widget.Submit, visited: bool }
+// A paragraph's base role (it sets every line's height), the width it wraps in
+// (0: one line), the most lines it shows (0: all) and the mark a cut line ends in.
+type RichOptions = struct { role: style.TextRole, width: f32, max_lines: u32, ellipsis: str }
+// A laid piece: a word (with its trailing spaces) or a whole code, key, mention or
+// link span; its width, the width that must fit (no trailing spaces), and the
+// baseline of its text inside its box.
+type Piece = struct { span: usize, start: usize, end: usize, width: f32, fit: f32, baseline: f32 }
+
+fn rich_span(value: str, kind: SpanKind) -> RichSpan {
+    ret RichSpan { value: value, kind: kind, color: .OnSurface, action: zero, visited: false }
+}
+
+// `body-medium` on pointer hosts, `body-large` on touch.
+fn rich_options(t: *const Theme) -> RichOptions {
+    var base: style.TextRole = .BodyMedium
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { base = .BodyLarge }
+    ret RichOptions { role: base, width: 0.0, max_lines: 0u32, ellipsis: "…" }
+}
+
+// A span kind's text role under a base role.
+fn span_role(kind: SpanKind, base: style.TextRole) -> style.TextRole {
+    if kind == .Code || kind == .Key { ret .Code }
+    if kind == .Strong || kind == .Mention {
+        if base == .BodyLarge { ret .TitleMedium }
+        ret .TitleSmall
+    }
+    ret base
+}
+
+// Whether a span is laid as one piece that never breaks inside.
+fn span_whole(kind: SpanKind) -> bool {
+    ret kind == .Code || kind == .Key || kind == .Mention || kind == .Link
+}
+
+// The advance of a run of text in a role (its trailing spaces included), the width
+// that must fit (without them) and its first baseline; nothing without fonts.
+fn run_metrics(a: *mem.Arena, t: *const Theme, role: style.TextRole, words: str) -> (f32, f32, f32, err) {
+    if t.fonts.len == 0usize || words.len == 0usize { ret (0.0, 0.0, 0.0, ok) }
+    let (look, look_error) = text_style(a, t, role)
+    if look_error != ok { ret (0.0, 0.0, 0.0, look_error) }
+    let (laid, laid_error) = layout.layout(a, words, look, layout.Options { width: 0.0, max_lines: 0u32, align: .Start, wrap: .None, ellipsis: "" })
+    if laid_error != ok { ret (0.0, 0.0, 0.0, laid_error) }
+    let (laids, laids_error) = mem.alloc[layout.Layout](a, 1usize)
+    if laids_error != ok { ret (0.0, 0.0, 0.0, TooLarge) }
+    laids[0usize] = laid
+    var baseline: f32 = 0.0
+    if laid.lines.len != 0usize { baseline = laid.lines[0usize].baseline - laid.bounds.y }
+    let tail = layout.caret(&laids[0usize], words.len)
+    ret (max_of(tail.x - laid.bounds.x, laid.bounds.width), laid.bounds.width, baseline, ok)
+}
+
+// v2 (D964, docs/ux/components/RichText): one paragraph of spans in a base role
+// (`body-medium`, `body-large` on touch) whose line height every line keeps. Plain
+// spans break at word boundaries across spans; code, key, mention and link spans
+// never break inside. Every piece of a line sits on the line's baseline. Strong
+// and mentions take the weight-600 title role of the base size, mentions in
+// `primary`; code is the `code` role on `surface-container-high` with `radius-xs`
+// and 4 sides; a key is the `code` role on `surface-container-lowest` in a 1px
+// `outline-variant` edge. A link is `primary` (`link-visited` once visited) with a
+// 1px underline 3 below the baseline; hovered, the underline is 2px over a
+// `primary` 8% wash, pressed a 10% wash; its tall_target is `tall_target-pointer` 32 tall
+// (48 on touch) without moving the text, so a paragraph with a pressable span
+// reserves the overhang above and below. `max_lines` cuts the paragraph with the
+// ellipsis after the last whole piece that fits, so a link is never cut. Links
+// and mentions are Link nodes keyed `key + 1 + span index`; the paragraph is a
+// Text named by all its words.
+// ponytail: emphasis is upright (no italic face), a key is the code line's
+// height with a 1px edge (not 24 with a 2px foot), and the word pieces are also
+// Text nodes of their own; a Custom paragraph node would fold them into one.
+fn paragraph(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const RichSpan, options: RichOptions) -> (widget.Node, err) {
+    focus_look(t)
+    // The pieces: whole spans, or words with their trailing spaces.
+    var count = 0usize
+    var i = 0usize
+    while i < spans.len {
+        let v = spans[i].value
+        if span_whole(spans[i].kind) {
+            count += 1usize
+        } else {
+            var k = 0usize
+            while k < v.len {
+                if k == 0usize || (v[k] != 32u8 && v[k - 1usize] == 32u8) { count += 1usize }
+                k += 1usize
+            }
+        }
+        i += 1usize
+    }
+    let (pieces, pieces_error) = mem.alloc[Piece](a, count + 1usize)
+    if pieces_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var pressable_seen = false
+    i = 0usize
+    while i < spans.len {
+        let span = &spans[i]
+        let role = span_role(span.kind, options.role)
+        if (span.kind == .Link || span.kind == .Mention) && widget.submit_set(span.action.invoke) { pressable_seen = true }
+        var k = 0usize
+        while k < span.value.len {
+            var end = span.value.len
+            if !span_whole(span.kind) {
+                end = k
+                while end < span.value.len && span.value[end] != 32u8 { end += 1usize }
+                while end < span.value.len && span.value[end] == 32u8 { end += 1usize }
+            }
+            let (width, fit, baseline, width_error) = run_metrics(a, t, role, span.value[k..end])
+            if width_error != ok { ret (zero, width_error) }
+            var sides: f32 = 0.0
+            if span.kind == .Code || span.kind == .Key { sides = 2.0 * t.tokens.spacing.xs }
+            pieces[n] = Piece { span: i, start: k, end: end, width: width + sides, fit: fit + sides, baseline: baseline }
+            n += 1usize
+            k = end
+        }
+        i += 1usize
+    }
+    // The lines: a piece that would pass the width starts the next one.
+    let (starts, starts_error) = mem.alloc[usize](a, n + 1usize)
+    if starts_error != ok { ret (zero, TooLarge) }
+    var line_count = 0usize
+    var x: f32 = 0.0
+    i = 0usize
+    while i < n {
+        if i == 0usize || (options.width > 0.0 && x > 0.0 && x + pieces[i].fit > options.width) {
+            starts[line_count] = i
+            line_count += 1usize
+            x = 0.0
+        }
+        x += pieces[i].width
+        i += 1usize
+    }
+    starts[line_count] = n
+    // The cut: the last kept line ends with the ellipsis after the last whole
+    // piece before which it fits.
+    var shown = n
+    var cut = false
+    var dots: f32 = 0.0
+    if options.max_lines != 0u32 && line_count > usize(options.max_lines) {
+        line_count = usize(options.max_lines)
+        cut = true
+        let (dots_width, dots_fit, dots_baseline, dots_error) = run_metrics(a, t, options.role, options.ellipsis)
+        if dots_error != ok { ret (zero, dots_error) }
+        dots = dots_width
+        shown = starts[line_count]
+        let first = starts[line_count - 1usize]
+        while shown > first + 1usize {
+            var end_x: f32 = 0.0
+            var p = first
+            while p + 1usize < shown {
+                end_x += pieces[p].width
+                p += 1usize
+            }
+            end_x += pieces[shown - 1usize].fit
+            if !(options.width > 0.0) || end_x + dots <= options.width { break }
+            shown -= 1usize
+        }
+        starts[line_count] = shown
+    }
+    let line_h = style.text_style(t.tokens, options.role).line_height
+    var tall_target = t.tokens.sizes.target_pointer
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { tall_target = t.tokens.sizes.target_touch }
+    var overhang: f32 = 0.0
+    if pressable_seen && tall_target > line_h { overhang = (tall_target - line_h) * 0.5 }
+    // The pieces placed on their lines' baselines.
+    let (placed, placed_error) = mem.alloc[widget.Node](a, shown + 2usize)
+    if placed_error != ok { ret (zero, TooLarge) }
+    var widest: f32 = 0.0
+    var line = 0usize
+    var p_at = 0usize
+    while line < line_count {
+        var lb: f32 = 0.0
+        var p = starts[line]
+        while p < starts[line + 1usize] {
+            if pieces[p].baseline > lb { lb = pieces[p].baseline }
+            p += 1usize
+        }
+        let top = overhang + f32(line) * line_h
+        x = 0.0
+        p = starts[line]
+        while p < starts[line + 1usize] {
+            let (made, made_error) = rich_piece(a, key, t, spans, &pieces[p], options, line_h, lb, tall_target, overhang, x, top)
+            if made_error != ok { ret (zero, made_error) }
+            placed[p_at] = made
+            p_at += 1usize
+            x += pieces[p].width
+            p += 1usize
+        }
+        if cut && line + 1usize == line_count {
+            var marked = text_options()
+            marked.role = options.role
+            marked.wrap = .None
+            let (mark, mark_error) = colored_text(a, 0u64, options.ellipsis, t, marked, style.color(t.tokens, .OnSurface))
+            if mark_error != ok { ret (zero, mark_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = mark
+            placed[p_at] = widget.positioned(0u64, x, top, style.defaults(), held[0usize..1usize])
+            p_at += 1usize
+            x += dots
+        }
+        if x > widest { widest = x }
+        line += 1usize
+    }
+    var box_width = widest
+    if options.width > 0.0 { box_width = options.width }
+    placed[p_at] = widget.stack(0u64, sized_style(box_width, f32(line_count) * line_h + 2.0 * overhang), placed[0usize..p_at])
+    // The paragraph's name: every word of every span.
+    var total = 0usize
+    i = 0usize
+    while i < spans.len {
+        total += spans[i].value.len
+        i += 1usize
+    }
+    let (named, named_error) = mem.alloc[u8](a, total)
+    if named_error != ok { ret (zero, TooLarge) }
+    var at = 0usize
+    i = 0usize
+    while i < spans.len {
+        at += copy_text(named[at..total], spans[i].value)
+        i += 1usize
+    }
+    var sem: widget.Semantics = zero
+    sem.role = ROLE_TEXT
+    sem.label = named[0usize..at]
+    ret (widget.semantics(key, sem, style.defaults(), placed[p_at..p_at + 1usize]), ok)
+}
+
+// One piece at `x` on the line whose top is `top` and baseline `lb` below it.
+fn rich_piece(a: *mem.Arena, key: widget.Key, t: *const Theme, spans: []const RichSpan, piece: *const Piece, options: RichOptions, line_h: f32, lb: f32, tall_target: f32, overhang: f32, x: f32, top: f32) -> (widget.Node, err) {
+    let span = &spans[piece.span]
+    let role = span_role(span.kind, options.role)
+    var ink = style.color(t.tokens, span.color)
+    if span.kind == .Mention || span.kind == .Link { ink = style.color(t.tokens, .Primary) }
+    if span.kind == .Link && span.visited { ink = style.color(t.tokens, .LinkVisited) }
+    var said = text_options()
+    said.role = role
+    said.wrap = .None
+    let (words, words_error) = colored_text(a, 0u64, span.value[piece.start..piece.end], t, said, ink)
+    if words_error != ok { ret (zero, words_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 6usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = words
+    let drop = lb - piece.baseline
+    var look = style.defaults()
+    if span.kind == .Code || span.kind == .Key {
+        let side = style.Length { Px: t.tokens.spacing.xs }
+        let none = style.Length { Px: 0.0 }
+        look.padding = style.EdgeLengths { left: side, top: none, right: side, bottom: none }
+        look.radius = t.tokens.radii.xs
+        look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+        if span.kind == .Key {
+            look.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+            look.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+        }
+    }
+    let live_link = (span.kind == .Link || span.kind == .Mention) && widget.submit_set(span.action.invoke)
+    if !live_link && span.kind != .Link {
+        ret (widget.positioned(0u64, x, top + drop, look, parts[0usize..1usize]), ok)
+    }
+    // A link: the words over the wash with the underline 3 below the baseline,
+    // on a whole pixel.
+    let link_key = key + 1u64 + u64(piece.span)
+    var state: style.ControlState = zero
+    if live_link { state = control_state(t, link_key, true, false) }
+    var body = sized_style(piece.width, line_h)
+    if state.pressed { body.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .Primary), t.tokens.states.pressed) } }
+    if state.hovered && !state.pressed { body.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .Primary), t.tokens.states.hover) } }
+    parts[1usize] = widget.positioned(0u64, 0.0, drop, style.defaults(), parts[0usize..1usize])
+    var count = 1usize
+    if span.kind == .Link {
+        var thick = t.tokens.sizes.divider
+        if state.hovered { thick = 2.0 }
+        var rule = sized_style(piece.fit, thick)
+        rule.background = paint.Brush { Solid: ink }
+        parts[2usize] = widget.positioned(0u64, 0.0, math.round[f32](lb + 3.0), rule, zero)
+        count = 2usize
+    }
+    parts[3usize] = widget.stack(0u64, body, parts[1usize..1usize + count])
+    if !live_link {
+        ret (widget.positioned(0u64, x, top, style.defaults(), parts[3usize..4usize]), ok)
+    }
+    let lift = (tall_target - line_h) * 0.5
+    let reach = max_of(tall_target, line_h)
+    var reach_style = sized_style(piece.width, reach)
+    reach_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: max_zero(lift) }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    parts[4usize] = widget.region(link_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&span.action), invoke: link_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, reach_style, parts[3usize..4usize])
+    var linked: widget.Semantics = zero
+    linked.role = ROLE_LINK
+    linked.label = span.value
+    linked.actions = accessibility.ACTION_PRESS
+    let (outer, outer_error) = mem.alloc[widget.Node](a, 1usize)
+    if outer_error != ok { ret (zero, TooLarge) }
+    outer[0usize] = widget.semantics(0u64, linked, style.defaults(), parts[4usize..5usize])
+    ret (widget.positioned(0u64, x, top - max_zero(lift), style.defaults(), outer[0usize..1usize]), ok)
 }
 
 fn labelled(a: *mem.Arena, key: widget.Key, role: u8, label: str, inner: widget.Node) -> (widget.Node, err) {
