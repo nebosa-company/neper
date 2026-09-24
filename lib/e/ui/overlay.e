@@ -166,9 +166,10 @@ type MenuItem = struct { label: str, action: widget.Submit, enabled: bool }
 // A command in a v2 menu (D975): its label, what it does, whether it may be
 // chosen, its shortcut's words ("Ctrl+S"; empty for none, never shown on touch),
 // whether it is checkable and checked (a check in the leading slot), a radio
-// choice (a 6px dot), or has a leading glyph; whether a separator stands before
-// it, whether it destroys (in `error`), and the head of the group it starts.
-type MenuCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, head: str }
+// choice (a 6px dot), or has a leading glyph; its optional supporting line;
+// whether a separator stands before it, whether it destroys (in `error`), and
+// the head of the group it starts.
+type MenuCommand = struct { label: str, supporting: str, action: widget.Submit, enabled: bool, shortcut: str, checkable: bool, checked: bool, radio: bool, pictured: bool, glyph: control.GlyphKind, separated: bool, destructive: bool, head: str }
 
 // A plain enabled command.
 fn menu_command(label: str, action: widget.Submit) -> MenuCommand {
@@ -246,7 +247,8 @@ fn context_menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owne
 // One command of a v2 menu (D975), keyed `item_key`, as `menu_panel` draws it.
 fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: *const MenuCommand, slotted: bool) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
-    let row_height = control.if_else(touch, 48.0, 32.0)
+    var row_height = control.if_else(touch, 48.0, 32.0)
+    if c.supporting.len > 0usize { row_height = control.if_else(touch, 56.0, 48.0) }
     let slot = control.if_else(touch, 24.0, 18.0)
     let gap = control.if_else(touch, 12.0, 8.0)
     var role: style.TextRole = .BodyMedium
@@ -273,6 +275,7 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     look.custom_padding = true
     look.padding = 12.0
     var tallest = line
+    if c.supporting.len > 0usize { tallest += style.text_style(t.tokens, .BodySmall).line_height }
     if slotted && slot > tallest { tallest = slot }
     look.padding_y = control.max_zero((row_height - tallest) * 0.5)
     look.min_height = row_height
@@ -305,7 +308,18 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
     caption.wrap = .None
     let (said, said_error) = control.colored_text(a, 0u64, c.label, t, caption, ink)
     if said_error != ok { ret (zero, said_error) }
-    parts[p] = said
+    var words = said
+    if c.supporting.len > 0usize {
+        let (lines, lines_error) = mem.alloc[widget.Node](a, 2usize)
+        if lines_error != ok { ret (zero, TooLarge) }
+        lines[0usize] = said
+        caption.role = .BodySmall
+        let (note, note_error) = control.colored_text(a, 0u64, c.supporting, t, caption, muted)
+        if note_error != ok { ret (zero, note_error) }
+        lines[1usize] = note
+        words = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), lines[0usize..2usize])
+    }
+    parts[p] = words
     p += 1usize
     parts[p] = widget.spacer(0u64, 1.0)
     p += 1usize
@@ -333,7 +347,8 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
 
 // v2 (D975, docs/ux/components/Menu): `surface-container`, `radius-sm`, elevation
 // 2, no border, `rim` above and below its commands; 200 to 320 wide with a pointer
-// (112 to 280 on touch). A command is a full-width row 32 tall (48 touch), 12 at
+// (112 to 280 on touch). A command is a full-width row 32 tall (48 touch), or
+// 48 (56 touch) with a `body-small` supporting line, 12 at
 // its sides, 8 between its parts (12 touch): the 18 leading slot (24 touch; a
 // check in `on-surface`, reserved in every command once any is checked), the
 // `body-medium` label (`body-large` touch) in `on-surface` (`error` when
@@ -345,7 +360,7 @@ fn menu_row_of(a: *mem.Arena, item_key: widget.Key, t: *const control.Theme, c: 
 // `label-medium` `on-surface-variant`, 12 in, 8 above and 4 below. A menu in the
 // tree named `label`, its commands MenuItems (Checked when checked); the runtime
 // moves the focus through them with Down and Up, wrapping, and Home and End.
-// ponytail: no supporting lines or submenus;
+// ponytail: no submenus;
 // the focus ring is the runtime's outside ring rather than inset 3.
 fn menu_panel(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, commands: []const MenuCommand, dismiss: *const widget.Submit, rim: f32) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm

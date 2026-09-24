@@ -21567,3 +21567,15 @@ visual check.
 
 Supporting lines, deeper general-menu submenus, the MenuBar's deeper cascades
 and collapsed form remain open.
+
+## D1006 — Menu commands support a secondary line
+
+`overlay.MenuCommand.supporting` adds a `body-small` on-surface-variant line
+below the command label. A supporting command grows from 32 to 48 at pointer
+density and from 48 to 56 at touch density while retaining the same leading
+slot, shortcut, state and accessibility semantics.
+
+`ui_overlays_v2` holds the pointer and touch geometry on Windows and Linux;
+`menu-supporting.png` is the Segoe UI visual check.
+
+General-menu submenus and the inset focus ring remain open.

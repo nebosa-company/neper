@@ -1,10 +1,11 @@
 // The v2 menus and tooltips (D975, widget plan P5-11, docs/ux/components/Menu,
 // ContextMenu, Tooltip) under the light theme: a pointer menu 4 below its
 // button on `surface-container`, 4 above and below its 32 rows, a group head and
-// a separator between them, a checked and a disabled command; Down, Up, Home and
-// End move the focus (skipping the disabled one, wrapping), Enter runs, Escape
-// dismisses, a hovered row takes the `on-surface` layer; the touch menu's rows
-// 48 tall under an 8 rim; a context menu at the pointer flipped to its start and
+// a separator between them, a checked and a disabled command, and a 48-tall
+// radio command with a supporting line; Down, Up, Home and End move the focus
+// (skipping the disabled one, wrapping), Enter runs, Escape dismisses, a hovered
+// row takes the `on-surface` layer; touch supporting rows are 56 tall under an
+// 8 rim; a context menu at the pointer flipped to its start and
 // above it at the window's corner, and one opened from the keyboard below its
 // target; a plain tooltip on `inverse-surface` centred 4 above its anchor, 24
 // tall, flipping below at the top of the window; a rich tooltip on
@@ -170,6 +171,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.commands[1usize].checked = true
     s.commands[2usize] = overlay.menu_command("Minimap", s.subs[1usize])
     s.commands[2usize].head = "View"
+    s.commands[2usize].supporting = "Always visible"
     s.commands[2usize].radio = true
     s.commands[2usize].checked = true
     s.commands[3usize] = overlay.menu_command("Quit", s.subs[1usize])
@@ -204,9 +206,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (mini_row, has_mini) = bounds(&harness, &runtime, 103u64)
     let (quit_row, has_quit) = bounds(&harness, &runtime, 104u64)
     let (delete_row, has_delete) = bounds(&harness, &runtime, 105u64)
-    if !has_wrap || !has_mini || !has_quit || !has_delete || !near(wrap_row.y, new_row.y + 32.0) || !near(mini_row.y, wrap_row.y + 44.0) || !near(delete_row.y, quit_row.y + 41.0) { os.exit(16i32) }
+    if !has_wrap || !has_mini || !has_quit || !has_delete || !near(wrap_row.y, new_row.y + 32.0) || !near(mini_row.y, wrap_row.y + 44.0) || !near(mini_row.height, 48.0) || !near(delete_row.y, quit_row.y + 41.0) { os.exit(16i32) }
     if !is_color(shot, at(menu.x + 100.0, quit_row.y + 36.0), style.color(&tokens, .OutlineVariant)) || !is_color(shot, at(menu.x + 100.0, quit_row.y + 34.0), style.color(&tokens, .SurfaceContainer)) { os.exit(17i32) }
-    if !near(menu.height, 4.0 + 32.0 * 5.0 + 12.0 + 9.0 + 4.0) { os.exit(18i32) }
+    if !near(menu.height, 4.0 + 32.0 * 4.0 + 48.0 + 12.0 + 9.0 + 4.0) { os.exit(18i32) }
     // The tree: a menu named File, checked checkbox and radio commands, its group
     // break a Separator, and Quit disabled.
     let (menu_node, has_menu_node) = find(tree, .Menu, "File")
@@ -264,7 +266,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(41i32) }
     let (touch_menu, has_touch_menu) = lifted(&harness, 100u64)
     let (touch_row, has_touch_row) = bounds(&harness, &runtime, 101u64)
-    if !has_touch_menu || !has_touch_row || !near(touch_row.height, 48.0) || !near(touch_row.y, touch_menu.y + 8.0) || touch_menu.width < 112.0 { os.exit(42i32) }
+    let (touch_support, has_touch_support) = bounds(&harness, &runtime, 103u64)
+    if !has_touch_menu || !has_touch_row || !has_touch_support || !near(touch_row.height, 48.0) || !near(touch_support.height, 56.0) || !near(touch_row.y, touch_menu.y + 8.0) || touch_menu.width < 112.0 { os.exit(42i32) }
     // The context menu at the pointer (600, 460): no room at the end or below, so
     // it stands to the pointer's start and above it; 8 above its first row.
     let (root_4, build_4_error) = build(&f, &theme, s, .Pointed)
