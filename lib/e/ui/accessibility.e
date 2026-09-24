@@ -18,7 +18,7 @@ use e.ui.widget
 use e.ui.window
 
 type Id = widget.ElementId
-type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader, Separator, AlertDialog, Listbox, Option, MenuItemCheckbox, Combobox }
+type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar, Switch, Tab, TabList, Menu, MenuItem, Dialog, Alert, Heading, Status, Tooltip, Tree, TreeItem, Grid, RowHeader, ColumnHeader, Separator, AlertDialog, Listbox, Option, MenuItemCheckbox, Combobox, Region }
 type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool, mixed: bool, busy: bool, invalid: bool, required: bool, read_only: bool, modal: bool, current: bool }
 type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll, Dismiss, Expand, Collapse, Select, ShowMenu, SetSelection, Copy }
 // Relationships to other nodes; an `Id` of generation 0 is none.
@@ -65,6 +65,7 @@ const ROLE_LISTBOX: u8 = 35u8
 const ROLE_OPTION: u8 = 36u8
 const ROLE_MENU_ITEM_CHECKBOX: u8 = 37u8
 const ROLE_COMBOBOX: u8 = 38u8
+const ROLE_REGION: u8 = 39u8
 
 // The widget kinds by tag, as `e.ui.widget` numbers them.
 const KIND_TEXT: u8 = 4u8
@@ -85,7 +86,7 @@ fn role_of(kind: u8) -> Role {
 // The role a semantics code names: the inverse of `role_code`.
 fn role_of_code(code: u8) -> Role {
     var i = 1u8
-    while i < 39u8 {
+    while i < 40u8 {
         let candidate = role_at(i)
         if role_code(candidate) == code { ret candidate }
         i += 1u8
@@ -132,6 +133,7 @@ fn role_at(i: u8) -> Role {
     if i == ROLE_OPTION { ret .Option }
     if i == ROLE_MENU_ITEM_CHECKBOX { ret .MenuItemCheckbox }
     if i == ROLE_COMBOBOX { ret .Combobox }
+    if i == ROLE_REGION { ret .Region }
     ret .Application
 }
 
@@ -368,6 +370,7 @@ fn role_code(role: Role) -> u8 {
     if role == .Option { ret ROLE_OPTION }
     if role == .MenuItemCheckbox { ret ROLE_MENU_ITEM_CHECKBOX }
     if role == .Combobox { ret ROLE_COMBOBOX }
+    if role == .Region { ret ROLE_REGION }
     ret 0u8
 }
 

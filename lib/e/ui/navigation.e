@@ -2016,7 +2016,7 @@ fn panel_tab(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
 // before Maximise, the title `on-surface` and no focus line. Busy, a 2px
 // `primary` bar sweeps under the header (centred and pulsing with reduced motion);
 // with an empty sentence the body is that sentence in `body-small`
-// `on-surface-variant`, 12 in and 8 down. A group in the tree named by the title,
+// `on-surface-variant`, 12 in and 8 down. A region in the tree named by the title,
 // busy while busy.
 // ponytail: moving a floating panel is the caller's (its header is no drag region yet).
 fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, close: *const widget.Submit, options: DockPanelOptions) -> (widget.Node, err) {
@@ -2183,7 +2183,7 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(key, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, panel, parts[0usize..count])
     var sem: widget.Semantics = zero
-    sem.role = 2u8
+    sem.role = accessibility.ROLE_REGION
     sem.label = title
     if options.busy { sem.states = accessibility.STATE_BUSY }
     ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
@@ -2196,7 +2196,7 @@ fn dock_panel_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title:
 // `on-surface-variant`, under the `on-surface` state layer, firing its toggle
 // and controlling its body (`key + 2 + 2 * index`); the open bodies share the
 // height left, 1px `outline-variant` lines between sections. A group in the tree
-// named `label`.
+// named `label`; each open body is a region labelled by its header.
 fn dock_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, titles: []const str, contents: []const widget.Node, open: []const bool, toggles: []const widget.Submit) -> (widget.Node, err) {
     let n = titles.len
     if contents.len != n || open.len != n || toggles.len != n { ret (zero, TooLarge) }
@@ -2256,7 +2256,7 @@ fn dock_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             if body_error != ok { ret (zero, TooLarge) }
             body[0usize] = contents[i]
             var sem: widget.Semantics = zero
-            sem.role = 2u8
+            sem.role = accessibility.ROLE_REGION
             sem.labelled_by = header_key
             var share = style.defaults()
             share.height = style.Length { Flex: 1.0 }

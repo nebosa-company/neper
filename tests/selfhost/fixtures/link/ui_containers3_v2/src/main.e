@@ -185,6 +185,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (later_floated, has_later_floated) = bounds(&harness, &runtime, 30u64)
     let (later_busy, has_later_busy) = bounds(&harness, &runtime, 94u64)
     if !has_later_floated || !has_later_busy || !(later_busy.x > busy.x) || !near(later_busy.width, busy.width) { os.exit(28i32) }
+    if testing.by_role(&harness, .Region).count != 4usize { os.exit(27i32) }
     if testing.by_label(&harness, "Dock panel").count != 1usize || testing.by_label(&harness, "Restore panel").count != 1usize || testing.by_text(&harness, "Nothing here").count != 1usize { os.exit(20i32) }
     // The stacked slot: 32 headers, the two open bodies sharing what is left.
     let (top, has_top) = bounds(&harness, &runtime, 51u64)

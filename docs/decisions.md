@@ -21358,3 +21358,14 @@ key so its measured movement is testable.
 `ui_containers3_v2` holds two distinct clock positions on Windows and Linux.
 
 Dock focus cycling and panel dragging remain open.
+
+## D991 — Dock panels are accessibility regions
+
+`Region` is appended to the accessibility role surface and code mapping.
+`dock_panel_of` reports a named region, and each open `dock_stack` body reports
+a region labelled by its disclosure header; the stack wrapper remains a group.
+
+`ui_containers3_v2` holds all four landmarks on Windows and Linux.
+
+Native host accessibility publishing, dock focus cycling and panel dragging
+remain open.
