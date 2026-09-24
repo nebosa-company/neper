@@ -19415,3 +19415,47 @@ or preset chips, and the stepper API holds neither. ColorPicker stays undelivere
 because its spectrum, hue and opacity strips, swatches and channel fields replace
 the RGB sliders. FontPicker stays undelivered because its style is a dense Picker
 and its size a Spin box, and both need caller state the function does not take.
+
+## D960 — The time field and the duration field draw their v2 specifications
+
+`overlay.time_field` and `overlay.duration_field` are the pointer hosts' forms of
+docs/ux/components/TimePicker and DurationPicker. Both are the outlined text field
+over text the caller holds (buffer, length and a typed `Change[str]`), 40 tall with
+a pointer and 56 on touch. The value is in `body-medium` at 40, through the new
+`FieldOptions.height`. At the field's end is a drawn `clock` mark (the new
+`GlyphKind.Clock`), 18 (24 on touch), in `on-surface-variant`, centred in a 32
+circle (40) 4 in from the end. The supporting text sits below in `body-small`, 4
+down and 16 in, in `on-surface-variant` or in `error` while the field is invalid.
+The caller keeps that text as the hint, the live reading or the error.
+
+The time field's clock is a button that fires `toggle` and turns `primary` while
+open. Open, the time list stands 4 below the field and matches its width, on
+`surface-container` with 8 corners and elevation 2, 8 above and below. It shows
+32-tall rows: the time in `body-medium` and the caller's offset ("30 min") at the
+end in `on-surface-variant`. The selected row is `secondary-container`. Six rows
+show in a viewport that scrolls to the selected one. Escape is `toggle` and Enter
+the selected pick. In the duration field the clock is only a mark. Its presets are
+filter chips 32 tall, 8 apart and 12 under the supporting text; the one matching
+the value is `secondary-container` with its check. The row is a group named
+Presets.
+
+`overlay.read_duration` reads 90m, 90 min, 2 hours, 1h30, 1.5h, 45 s, 1:30 (h:mm)
+and 1:30:00; a bare number is minutes. `write_duration` writes "1 h 30 min" and
+`write_clock` writes HH:MM zero-padded. The stepper `time_picker` and
+`duration_picker` are unchanged, and ui_pickers still holds them.
+
+tests/selfhost/fixtures/link/ui_pickers2_v2 checks these on pixels and bounds.
+The time field is a 200 x 40 frame in its 1px outline, its clock a 32 circle 4 in
+from the end, with the face and hands in `primary`. The list is 4 + 8 below and
+as wide, and its viewport is 192 tall. It is scrolled so the selected row is the
+second one showing, in `secondary-container` between rows on the container, and a
+press on a row fires that row's pick. The duration field's plain clock is in
+`on-surface-variant`. Its chips are 32 tall, 8 apart and 72 below the frame's top,
+the chosen one filled and the others outlined. The invalid field has the 2px
+`error` outline, and the fixture also checks the typed forms read and written.
+All 72 ui_* fixtures pass on Windows and Linux, and the Windows example builds.
+
+Still open: the touch forms (the dial and input mode, the unit-box modal) and the
+iOS wheels; the 12-hour clock and the locale's separator; typing to filter the
+time list and Up/Down through it; parsing typed times ("2:30 pm", "noon"); and the
+error icon in an invalid field.

@@ -929,6 +929,382 @@ fn duration_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
 }
 
+// v2 (D960, docs/ux/components/TimePicker, DurationPicker): the field both are on
+// pointer hosts -- the outlined text field over the caller's buffer, 40 tall with
+// a pointer and 56 on touch (`body-medium` at 40), a trailing `clock` 18 (24 on
+// touch) in `on-surface-variant` (`primary` while open) centred in a 32 circle (40
+// on touch) 4 in from the end -- over its supporting text `note` in `body-small`,
+// 4 below and 16 in, `on-surface-variant` or `error` while invalid. The frame is
+// keyed `key + 2`; the clock `key + 1` fires `toggle` when `opener`, and is a
+// plain mark otherwise.
+fn clocked_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], note: str, opener: bool, open: bool, toggle: *const widget.Submit, options: control.FieldOptions) -> (widget.Node, err) {
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var h = t.tokens.sizes.control_md
+    var side = t.tokens.sizes.control_sm
+    var size = t.tokens.sizes.icon_sm
+    if touch {
+        h = t.tokens.sizes.control_xl
+        side = t.tokens.sizes.control_md
+        size = t.tokens.sizes.icon_md
+    }
+    var kept = options
+    kept.height = h
+    kept.end_space = control.max_zero(side + 4.0 - 16.0)
+    let (edit_node, edit_error) = control.text_field(a, key, t, label, buffer, len, typed, zero, kept)
+    if edit_error != ok { ret (zero, edit_error) }
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var face_color = muted
+    if open { face_color = style.color(t.tokens, .Primary) }
+    let (face, face_error) = control.mark_glyph(a, face_color, .Clock, size)
+    if face_error != ok { ret (zero, face_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[3usize] = face
+    var end_mark = widget.aligned(key + 1u64, .Center, .Center, control.sized_style(side, side), layers[3usize..4usize])
+    if opener {
+        let state = control.control_state(t, key + 1u64, true, false)
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = control.with_alpha(muted, control.state_opacity(t, state))
+        look.foreground = muted
+        look.radius = side * 0.5
+        look.custom_padding = true
+        look.padding = (side - size) * 0.5
+        look.padding_start = look.padding
+        look.padding_y = look.padding
+        look.min_width = side
+        look.min_height = side
+        var states = 0u32
+        if open { states = accessibility.STATE_EXPANDED }
+        let (pressed, pressed_error) = control.pressable_states(a, key + 1u64, t, 3u8, "Times", look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 3u64, toggle, face)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        end_mark = pressed
+    }
+    layers[2usize] = end_mark
+    layers[0usize] = edit_node
+    layers[1usize] = widget.positioned(0u64, options.width - 4.0 - side, control.max_zero((h - side) * 0.5), style.defaults(), layers[2usize..3usize])
+    let framed = widget.stack(key + 2u64, style.defaults(), layers[0usize..2usize])
+    if note.len == 0usize { ret (framed, ok) }
+    var small = control.text_options()
+    small.role = .BodySmall
+    small.wrap = .None
+    var note_color = muted
+    if options.invalid { note_color = style.color(t.tokens, .Error) }
+    let (note_node, note_error) = control.colored_text(a, 0u64, note, t, small, note_color)
+    if note_error != ok { ret (zero, note_error) }
+    let (lines, lines_error) = mem.alloc[widget.Node](a, 3usize)
+    if lines_error != ok { ret (zero, TooLarge) }
+    lines[2usize] = note_node
+    var note_style = style.defaults()
+    note_style.padding.left = style.Length { Px: 16.0 }
+    note_style.padding.top = style.Length { Px: 4.0 }
+    note_style.min_height = style.Length { Px: 4.0 + style.text_style(t.tokens, .BodySmall).line_height }
+    lines[0usize] = framed
+    lines[1usize] = widget.box(0u64, note_style, lines[2usize..3usize])
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), lines[0usize..2usize]), ok)
+}
+
+// A time list's row (D960): 32 tall, 12 each side, the time in `body-medium`
+// `on-surface` and its offset at the end in `on-surface-variant` under the state
+// layer; the selected row `secondary-container`, its time `on-secondary-container`.
+fn time_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, clock_text: str, offset: str, chosen: bool, action: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, chosen)
+    var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    var words = style.color(t.tokens, .OnSurface)
+    if chosen {
+        fill = style.color(t.tokens, .SecondaryContainer)
+        words = style.color(t.tokens, .OnSecondaryContainer)
+    }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = style.layer(fill, words, control.state_opacity(t, state))
+    look.foreground = words
+    look.border_width = 0.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 12.0
+    look.padding_start = 12.0
+    look.padding_y = control.max_zero((t.tokens.sizes.control_sm - style.text_style(t.tokens, .BodyMedium).line_height) * 0.5)
+    look.min_height = t.tokens.sizes.control_sm
+    look.min_width = width
+    var caption = control.text_options()
+    caption.role = .BodyMedium
+    caption.wrap = .None
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+    if bits_error != ok { ret (zero, TooLarge) }
+    let (time_node, time_error) = control.colored_text(a, 0u64, clock_text, t, caption, words)
+    if time_error != ok { ret (zero, time_error) }
+    let (offset_node, offset_error) = control.colored_text(a, 0u64, offset, t, caption, style.color(t.tokens, .OnSurfaceVariant))
+    if offset_error != ok { ret (zero, offset_error) }
+    bits[0usize] = time_node
+    bits[1usize] = offset_node
+    var spread = style.defaults()
+    spread.min_width = style.Length { Px: control.max_zero(width - 24.0) }
+    let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 12.0 }, spread, bits[0usize..2usize])
+    let (made, made_error) = control.pressable(a, key, t, 3u8, clock_text, look, true, chosen, action, content)
+    ret (made, made_error)
+}
+
+// A time field (D960): the clocked field (editor `key`, clock `key + 1`, frame
+// `key + 2`) whose clock fires `toggle`; while `open`, the time list below it (the
+// overlay keyed `key + 3`, its viewport `key + 4`, rows `key + 5 + index`), each
+// row a time the caller wrote (`write_clock`) with its offset ("30 min", or empty),
+// firing its own pick. Escape is `toggle`, Enter the selected pick. The caller
+// keeps the text, parses it and reformats it on blur.
+// v2 (D960, docs/ux/components/TimePicker, field with time list): the list is a
+// menu at pointer density on `surface-container`, 8 corners, elevation 2, 8 above
+// and below the rows, 4 below the field and as wide; 6 rows show and it scrolls
+// to put the selected one first.
+// ponytail: no dial, input mode or wheels for touch, no 12-hour clock, no Up/Down through the list or typing to filter it, no error icon; the caller's text and picks carry the value.
+fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, times: []const str, offsets: []const str, selected: usize, picks: []const widget.Submit, note: str, options: control.FieldOptions) -> (widget.Node, err) {
+    if picks.len != times.len || offsets.len != times.len { ret (zero, TooLarge) }
+    let (boxed, boxed_error) = clocked_field(a, key, t, label, buffer, len, typed, note, true, open, toggle, options)
+    if boxed_error != ok { ret (zero, boxed_error) }
+    let listing = open && times.len > 0usize
+    var count = 1usize
+    if listing { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = boxed
+    var default_action: widget.Submit = zero
+    if listing {
+        let row_height = t.tokens.sizes.control_sm
+        let (items, items_error) = mem.alloc[widget.Node](a, times.len)
+        if items_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < times.len {
+            let (row, row_error) = time_row(a, key + 5u64 + u64(i), t, times[i], offsets[i], i == selected, &picks[i], options.width)
+            if row_error != ok { ret (zero, row_error) }
+            var entry: widget.Semantics = zero
+            entry.role = 11u8
+            entry.label = times[i]
+            if i == selected { entry.states = accessibility.STATE_SELECTED }
+            let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+            if wrapped_error != ok { ret (zero, TooLarge) }
+            wrapped[0usize] = row
+            items[i] = widget.semantics(0u64, entry, style.defaults(), wrapped[0usize..1usize])
+            i += 1usize
+        }
+        var shown = times.len
+        if shown > 6usize { shown = 6usize }
+        var first = 0usize
+        if selected < times.len { first = selected }
+        if first + shown > times.len { first = times.len - shown }
+        let (column, column_error) = mem.alloc[widget.Node](a, 2usize)
+        if column_error != ok { ret (zero, TooLarge) }
+        column[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..times.len])
+        let view_style = control.sized_style(options.width, f32(shown) * row_height)
+        column[0usize] = widget.scroll(key + 4u64, widget.Scroll { axis: .Vertical, offset: f32(first) * row_height, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Outline), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view_style, column[1usize..2usize])
+        var raised = control.surface_options(t)
+        raised.background = .SurfaceContainer
+        raised.elevation = 2u8
+        raised.radius = t.tokens.radii.sm
+        raised.padding = 0.0
+        var raised_style = control.surface_style(t, raised)
+        raised_style.padding.top = style.Length { Px: 8.0 }
+        raised_style.padding.bottom = style.Length { Px: 8.0 }
+        let (lifted, popup_error) = mem.alloc[widget.Node](a, 2usize)
+        if popup_error != ok { ret (zero, TooLarge) }
+        lifted[1usize] = widget.box(0u64, raised_style, column[0usize..1usize])
+        var list_sem: widget.Semantics = zero
+        list_sem.role = 10u8
+        list_sem.label = label
+        list_sem.row_count = u32(times.len)
+        lifted[0usize] = widget.semantics(0u64, list_sem, style.defaults(), lifted[1usize..2usize])
+        parts[1usize] = widget.overlay(key + 3u64, widget.Overlay { anchor: key + 2u64, placement: .Below, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
+        if selected < picks.len { default_action = picks[selected] }
+    }
+    var none_keys: []const widget.Shortcut = zero
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 2usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count])
+    var cancel: widget.Submit = zero
+    if listing { cancel = *toggle }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: none_keys, default_action: default_action, cancel_action: cancel, keys: zero }, style.defaults(), scoped[1usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    if listing {
+        sem.states = accessibility.STATE_EXPANDED
+        if selected < times.len { sem.active = key + 5u64 + u64(selected) }
+    }
+    ret (widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// A duration field (D960): the clocked field (editor `key`, clock mark `key + 1`,
+// frame `key + 2`) whose `note` the caller keeps as the hint, the live reading
+// ("Reads as 45 min", from `read_duration` and `write_duration`) or the error;
+// with `presets`, a row of filter chips (keyed `key + 3 + index`) under it, the
+// one at `chosen` selected, each firing its own pick.
+// v2 (D960, docs/ux/components/DurationPicker, typed field with presets): the
+// chips are 32 tall, 8 apart, 12 below the field's supporting text, the selected
+// one `secondary-container` with its check; the row is a group named "Presets".
+// ponytail: no unit boxes for touch or wheels for iOS, and the chips do not wrap; the caller's text carries the value.
+fn duration_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], note: str, presets: []const str, chosen: usize, picks: []const widget.Submit, options: control.FieldOptions) -> (widget.Node, err) {
+    if picks.len != presets.len { ret (zero, TooLarge) }
+    var no_toggle: widget.Submit = zero
+    let (boxed, boxed_error) = clocked_field(a, key, t, label, buffer, len, typed, note, false, false, &no_toggle, options)
+    if boxed_error != ok { ret (zero, boxed_error) }
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = boxed
+    if presets.len == 0usize { ret (widget.semantics(0u64, sem, style.defaults(), parts[0usize..1usize]), ok) }
+    let (chips, chips_error) = mem.alloc[widget.Node](a, presets.len)
+    if chips_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < presets.len {
+        let (made, made_error) = control.chip(a, key + 3u64 + u64(i), t, presets[i], .Filter, i == chosen, &picks[i], &picks[i])
+        if made_error != ok { ret (zero, made_error) }
+        chips[i] = made
+        i += 1usize
+    }
+    var row_style = style.defaults()
+    row_style.margin.top = style.Length { Px: 12.0 }
+    parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, row_style, chips[0usize..presets.len])
+    var group: widget.Semantics = zero
+    group.role = 2u8
+    group.label = "Presets"
+    parts[1usize] = widget.semantics(0u64, group, style.defaults(), parts[2usize..3usize])
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A time of day as zero-padded `HH:MM` into `out`; the length (0 when it does not fit).
+fn write_clock(out: []u8, value: time.Time) -> usize {
+    if out.len < 5usize { ret 0usize }
+    let at = write_two(out, 0usize, i64(value.hour))
+    out[at] = 58u8
+    ret write_two(out, at + 1usize, i64(value.minute))
+}
+
+// A duration written with its units, largest first and zero parts dropped
+// ("1 h 30 min", "45 s", "0 min"), whole seconds rounded; the length (0 when
+// `out` is shorter than 32).
+fn write_duration(out: []u8, d: time.Duration) -> usize {
+    if out.len < 32usize || d.nanos < 0i64 { ret 0usize }
+    let total = (d.nanos + 500000000i64) / 1000000000i64
+    let hours = total / 3600i64
+    let minutes = total / 60i64 % 60i64
+    let secs = total % 60i64
+    var at = 0usize
+    if hours != 0i64 {
+        at = at + control.write_i64(out[at..out.len], hours)
+        at = at + control.copy_text(out[at..out.len], " h")
+    }
+    if minutes != 0i64 || total == 0i64 {
+        if at != 0usize { at = at + control.copy_text(out[at..out.len], " ") }
+        at = at + control.write_i64(out[at..out.len], minutes)
+        at = at + control.copy_text(out[at..out.len], " min")
+    }
+    if secs != 0i64 {
+        if at != 0usize { at = at + control.copy_text(out[at..out.len], " ") }
+        at = at + control.write_i64(out[at..out.len], secs)
+        at = at + control.copy_text(out[at..out.len], " s")
+    }
+    ret at
+}
+
+fn is_digit(c: u8) -> bool {
+    ret c >= 48u8 && c <= 57u8
+}
+
+// A typed duration read (D960, docs/ux/components/DurationPicker): "90m", "90 min",
+// "2 hours", "1h30", "1.5h", "45 s", "1:30" (h:mm) and "1:30:00"; a number
+// without a unit is the unit below the one before it, minutes at first. False for
+// anything else.
+fn read_duration(text: str) -> (time.Duration, bool) {
+    let second = 1000000000i64
+    var i = 0usize
+    var colons = 0usize
+    while i < text.len {
+        if text[i] == 58u8 { colons += 1usize }
+        i += 1usize
+    }
+    if colons > 2usize { ret (zero, false) }
+    if colons != 0usize {
+        var acc = 0i64
+        var part = 0i64
+        var digits = 0usize
+        i = 0usize
+        while i <= text.len {
+            var c = 58u8
+            if i < text.len { c = text[i] }
+            if c == 58u8 {
+                if digits == 0usize || digits > 6usize { ret (zero, false) }
+                acc = acc * 60i64 + part
+                part = 0i64
+                digits = 0usize
+            } else {
+                if is_digit(c) {
+                    part = part * 10i64 + i64(c - 48u8)
+                    digits += 1usize
+                } else {
+                    if c != 32u8 { ret (zero, false) }
+                }
+            }
+            i += 1usize
+        }
+        if colons == 1usize { acc = acc * 60i64 }
+        ret (time.Duration { nanos: acc * second }, true)
+    }
+    var total = 0i64
+    var last = 0i64
+    var any = false
+    i = 0usize
+    while i < text.len {
+        if text[i] == 32u8 {
+            i += 1usize
+            continue
+        }
+        var whole = 0i64
+        var frac = 0i64
+        var den = 1i64
+        var seen = false
+        while i < text.len && is_digit(text[i]) {
+            whole = whole * 10i64 + i64(text[i] - 48u8)
+            if whole > 1000000i64 { ret (zero, false) }
+            seen = true
+            i += 1usize
+        }
+        if i < text.len && text[i] == 46u8 {
+            i += 1usize
+            while i < text.len && is_digit(text[i]) {
+                if den < 1000i64 {
+                    frac = frac * 10i64 + i64(text[i] - 48u8)
+                    den = den * 10i64
+                }
+                seen = true
+                i += 1usize
+            }
+        }
+        if !seen { ret (zero, false) }
+        while i < text.len && text[i] == 32u8 { i += 1usize }
+        var unit = 0i64
+        if i < text.len {
+            let u = text[i] | 32u8
+            if u == 104u8 { unit = 3600i64 }
+            if u == 109u8 { unit = 60i64 }
+            if u == 115u8 { unit = 1i64 }
+            if unit != 0i64 {
+                while i < text.len && (text[i] | 32u8) >= 97u8 && (text[i] | 32u8) <= 122u8 { i += 1usize }
+            }
+        }
+        if unit == 0i64 {
+            if last == 0i64 { unit = 60i64 }
+            if last == 3600i64 { unit = 60i64 }
+            if last == 60i64 { unit = 1i64 }
+            if unit == 0i64 { ret (zero, false) }
+        }
+        total = total + whole * unit * second + frac * unit * second / den
+        last = unit
+        any = true
+    }
+    ret (time.Duration { nanos: total }, any)
+}
+
 // A channel of a colour moved by its slider.
 type Channel = struct { channel: u8, value: paint.Color, change: widget.Change[paint.Color] }
 

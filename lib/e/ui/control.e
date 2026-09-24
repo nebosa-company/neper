@@ -646,13 +646,14 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // A drawn glyph (D955): the tick, the dash and the close cross the selection
 // controls mark themselves with, stroked 2px round in `color` across the area;
 // and (D956) the chevrons a menu's opener points with; (D959) the chevrons a
-// calendar turns its months with and the calendar a date field ends in.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar }
+// calendar turns its months with and the calendar a date field ends in; (D960)
+// the clock a time or duration field ends in.
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena }
 
 fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*Glyph](ctx)
-    let (pb, pb_error) = geometry.path_builder(g.arena, 16usize, 16usize)
+    let (pb, pb_error) = geometry.path_builder(g.arena, 16usize, 24usize)
     if pb_error != ok { ret TooLarge }
     var builder = pb
     let x = area.x
@@ -701,6 +702,24 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.35, y: y + h * 0.30 })
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.65, y: y + h * 0.12 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.65, y: y + h * 0.30 })
+    }
+    if g.kind == .Clock {
+        // A face of four quarter arcs, its hands at three o'clock.
+        let cx = x + w * 0.5
+        let cy = y + h * 0.5
+        let rx = w * 0.40
+        let ry = h * 0.40
+        let kx = rx * 0.5523
+        let ky = ry * 0.5523
+        try geometry.move_to(&builder, geometry.Point { x: cx, y: cy - ry })
+        try geometry.cubic_to(&builder, geometry.Point { x: cx + kx, y: cy - ry }, geometry.Point { x: cx + rx, y: cy - ky }, geometry.Point { x: cx + rx, y: cy })
+        try geometry.cubic_to(&builder, geometry.Point { x: cx + rx, y: cy + ky }, geometry.Point { x: cx + kx, y: cy + ry }, geometry.Point { x: cx, y: cy + ry })
+        try geometry.cubic_to(&builder, geometry.Point { x: cx - kx, y: cy + ry }, geometry.Point { x: cx - rx, y: cy + ky }, geometry.Point { x: cx - rx, y: cy })
+        try geometry.cubic_to(&builder, geometry.Point { x: cx - rx, y: cy - ky }, geometry.Point { x: cx - kx, y: cy - ry }, geometry.Point { x: cx, y: cy - ry })
+        try geometry.close_path(&builder)
+        try geometry.move_to(&builder, geometry.Point { x: cx, y: y + h * 0.26 })
+        try geometry.line_to(&builder, geometry.Point { x: cx, y: cy })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.68, y: cy })
     }
     if g.kind == .Cross {
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.28, y: y + h * 0.28 })
@@ -1324,11 +1343,12 @@ fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, va
 // whether it takes input, whether the caller's validation found it invalid, its
 // width, and for a text area the rows it shows.
 // v2 (D951): filled or outlined, and the fixed text before and after the value;
-// (D956) room kept clear at the end for a control standing inside it.
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32 }
+// (D956) room kept clear at the end for a control standing inside it; (D960) a
+// height other than the density's (0 keeps it), `body-medium` at 40 or less.
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32 }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0 }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0 }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -1349,7 +1369,8 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     let focused = state.focused && options.enabled
     let hovered = state.hovered && options.enabled
     let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
-    let h = t.tokens.metrics.control_height + 16.0
+    var h = t.tokens.metrics.control_height + 16.0
+    if options.height > 0.0 { h = options.height }
     let pad_x: f32 = if_else(dense, 12.0, 16.0)
     let ink = style.color(t.tokens, .OnSurface)
     let muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -1381,7 +1402,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         value_color = edge
     }
     var value_role: style.TextRole = .BodyLarge
-    if dense { value_role = .BodyMedium }
+    if dense || h <= t.tokens.sizes.control_md { value_role = .BodyMedium }
     let line = style.text_style(t.tokens, value_role).line_height
     let (text_look, style_error) = text_style(a, t, value_role)
     if style_error != ok { ret (zero, style_error) }
