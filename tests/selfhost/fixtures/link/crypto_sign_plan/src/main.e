@@ -1,9 +1,8 @@
 // `e.crypto.sign` / `e.crypto.kx` / `e.crypto.mac` / `e.crypto.hash` extensions:
-// ECDSA P-256 signing with RFC 6979 nonces (A.2.5 vectors), Poly1305 (RFC 8439
-// 2.5.2), BLAKE3 (the official vectors and tree-boundary lengths against the
-// `blake3` package), BIP-340 Schnorr (the BIP's test-vectors.csv), ffdhe2048 DH and
-// RSASSA-PSS / PKCS#1 v1.5 against Python `cryptography`. Every check has its own
-// exit code; the values come from scripts in the session scratchpad.
+// P-256/BIP-340 public verification plus fail-closed secret operations, Poly1305
+// (RFC 8439 2.5.2), BLAKE3 (the official vectors and tree-boundary lengths),
+// fail-closed ffdhe2048 secret operations, and RSASSA-PSS / PKCS#1 v1.5 against
+// Python `cryptography`. Every check has its own exit code.
 use e.os
 use e.io
 use e.mem
@@ -91,33 +90,36 @@ fn blake3_official(length: usize, key: str, context: str, expected: str, keyed: 
     ret 0u8
 }
 
-// Signs when a secret is given and compares; verifies and compares with `expect`.
+// Secret operations fail closed; verification still checks every public vector.
 fn schnorr_case(sk: str, pk: str, aux: str, msg: str, sig: str, expect: bool) -> u8 {
     var message: [128]u8 = zero
     let message_len = unhex(msg, message[0..])
     let public = hex32(pk)
     let signature = hex64(sig)
     if sk.len > 0usize {
-        let (derived, derive_error) = sign.schnorr_public_from_secret(hex32(sk))
-        if derive_error != ok || !same_hex(derived[0..], pk) { ret 1u8 }
-        let (made, sign_error) = sign.schnorr(hex32(sk), message[..message_len], hex32(aux))
-        if sign_error != ok || !same_hex(made[0..], sig) { ret 2u8 }
+        let (_, derive_error) = sign.schnorr_public_from_secret(hex32(sk))
+        if derive_error != sign.Unsupported { ret 1u8 }
+        let (_, sign_error) = sign.schnorr(hex32(sk), message[..message_len], hex32(aux))
+        if sign_error != sign.Unsupported { ret 2u8 }
     }
     if sign.schnorr_verify(public, message[..message_len], signature) != expect { ret 3u8 }
     ret 0u8
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    // 1-4: ECDSA P-256, RFC 6979 A.2.5.
+    // 1-4: P-256 secret operations fail closed; RFC 6979 A.2.5 verifies publicly.
     let p256_secret = sign.P256SecretKey { bytes: hex32("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721") }
-    let (p256_public, p256_public_error) = sign.p256_public_from_secret(p256_secret)
-    if p256_public_error != ok || !same_hex(p256_public.bytes[0..], "0460fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb67903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299") { os.exit(1i32) }
+    let (_, p256_public_error) = sign.p256_public_from_secret(p256_secret)
+    if p256_public_error != sign.Unsupported { os.exit(1i32) }
+    var p256_public: sign.P256PublicKey = zero
+    let _ = unhex("0460fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb67903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299", p256_public.bytes[0..])
     var der: [72]u8 = zero
-    let (der_len, sign_error) = sign.p256_sign(p256_secret, "sample", der[0..])
-    if sign_error != ok || !same_hex(der[..der_len], "3046022100efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716022100f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8") { os.exit(2i32) }
+    let (_, sign_error) = sign.p256_sign(p256_secret, "sample", der[0..])
+    if sign_error != sign.Unsupported { os.exit(2i32) }
+    let der_len = unhex("3046022100efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716022100f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8", der[0..])
     if !sign.p256_verify(p256_public, "sample", der[..der_len]) { os.exit(3i32) }
-    let (der_len2, sign_error2) = sign.p256_sign(p256_secret, "test", der[0..])
-    if sign_error2 != ok || !same_hex(der[..der_len2], "3045022100f1abb023518351cd71d881567b1ea663ed3efcf6c5132b354f28d3b0b7d383670220019f4113742a2b14bd25926b49c649155f267e60d3814b4c0cc84250e46f0083") { os.exit(4i32) }
+    let (_, sign_error2) = sign.p256_sign(p256_secret, "test", der[0..])
+    if sign_error2 != sign.Unsupported { os.exit(4i32) }
     try io.print("p256 ok\n")
     // 10-12: Poly1305.
     let poly_key = hex32("85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b")
@@ -189,24 +191,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if schnorr_case("0340034003400340034003400340034003400340034003400340034003400340", "778CAA53B4393AC467774D09497A87224BF9FAB6F6E68B23086497324D6FD117", "0000000000000000000000000000000000000000000000000000000000000000", "0102030405060708090A0B0C0D0E0F1011", "5130F39A4059B43BC7CAC09A19ECE52B5D8699D1A71E3C52DA9AFDB6B50AC370C4A482B77BF960F8681540E25B6771ECE1E5A37FD80E5A51897C5566A97EA5A5", true) != 0u8 { os.exit(57i32) }
     if schnorr_case("0340034003400340034003400340034003400340034003400340034003400340", "778CAA53B4393AC467774D09497A87224BF9FAB6F6E68B23086497324D6FD117", "0000000000000000000000000000000000000000000000000000000000000000", "99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999", "403B12B0D8555A344175EA7EC746566303321E5DBFA8BE6F091635163ECA79A8585ED3E3170807E7C03B720FC54C7B23897FCBA0E9D0B4A06894CFD249F22367", true) != 0u8 { os.exit(58i32) }
     try io.print("schnorr ok\n")
-    // 80-85: ffdhe2048.
+    // 80-85: variable-time ffdhe2048 secret operations fail closed.
     var dh_secret_a: [32]u8 = hex32("101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f")
     var dh_secret_b: [32]u8 = hex32("505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f")
     var public_a: [256]u8 = zero
     var public_b: [256]u8 = zero
     var secret_out: [256]u8 = zero
     let (pa_len, pa_error) = kx.dh_public(a, dh_secret_a[0..], public_a[0..])
-    if pa_error != ok || pa_len != 256usize || !same_hex(public_a[0..], "45a70603e614cedc34e8c84749ce83f065580d5dc6c4159b602b66575eb5b099d597f8c1e5cbe9f7417b4f887b01d896777678a8b3b88b3d826addc60c2844371e4127023ca5488a687cc19feab9e75564d950094de42282e0f45a3abd5f573b115de3be75eddaffb3672b42ce831e9cbadf11ac1b4b3ebcc98232246c7125ff577830f2f22a648a1782678f6b6b9ec6ccf6afc0f70312bd9cbc60d0849b84b4203c18e950bc222c8f779d6d1f6a4c4976f4396dd7d810d798166500475521064862d52deaac9cdabc2c99e94c8cf51e27e3d784bb6af1c0c8368b8c8396c0c89cc4952e69ab2cdc9b4d619dc67277bdb64a32f08b20053935051ba771a79ef9") { os.exit(80i32) }
+    if pa_error != kx.Unsupported || pa_len != 0usize { os.exit(80i32) }
     let (pb_len, pb_error) = kx.dh_public(a, dh_secret_b[0..], public_b[0..])
-    if pb_error != ok || pb_len != 256usize || !same_hex(public_b[0..], "182456d31daef8648d16397597f9f3b18cc6429d56940cb8f7f12532e732c77db03be5a65a2839aa94097960add229e71a466586c738432889445f628f94cc14ce8252fc28d42e5cf16e162793967ea367021fc8d4743152061a8f828ce75ee5cf196eb91bab5c639922b36f0c4da6389317e38f29c8e686fe460d2256a7087bcd676820785c9c65ca3b036d7e0848695d189949697d06faab8e380cb89649c9762ea8df5db1fd02e0238daf8ae7d946fbc37658ca8ae261728ce0370592c931235b415c6f16f26804a4e4ef15657c26071a4a54e41d1b0087a5eacdc8e08d7549c80c0cd8bc88bcc08782752279d7961326bcc620f1b04e996f485d138f46f3") { os.exit(81i32) }
+    if pb_error != kx.Unsupported || pb_len != 0usize { os.exit(81i32) }
     let (sa_len, sa_error) = kx.dh_shared(a, dh_secret_a[0..], public_b[0..], secret_out[0..])
-    if sa_error != ok || sa_len != 256usize || !same_hex(secret_out[0..], "09cd97fcfda28add68edcf9f0bfc6fef1b2a00da2efe9925e1d30302bc67ad26baa1820c8f19385f6938db9e9e950327b119c4cde511eba03ac8852933434082264c49573fb5815dee648205881fab36a5bc52b8e0896ab2e8cb95a4a82aa9e7e0323a57eb02eff2ec2dcfb0d5f19c1e0d0085423030533270c5c710c8831bb1fa4e2a2f3152e71e93f4438fd62db536bc7402c4790d9ff94814b0b1dae34f8e15a97895a092f247a707f622de303f711619d623fc87f3651c4d809c30b28785615f4243e327e068cc00cb8024ccd51311255e437ae716062a5f138d2a9b0bafe2842d110a11406e17b78f714aeefbadb86123c5b7ef145c890431d71e936997") { os.exit(82i32) }
+    if sa_error != kx.Unsupported || sa_len != 0usize { os.exit(82i32) }
     let (sb_len, sb_error) = kx.dh(a, dh_secret_b[0..], public_a[0..], secret_out[0..])
-    if sb_error != ok || sb_len != 256usize || !same_hex(secret_out[0..], "09cd97fcfda28add68edcf9f0bfc6fef1b2a00da2efe9925e1d30302bc67ad26baa1820c8f19385f6938db9e9e950327b119c4cde511eba03ac8852933434082264c49573fb5815dee648205881fab36a5bc52b8e0896ab2e8cb95a4a82aa9e7e0323a57eb02eff2ec2dcfb0d5f19c1e0d0085423030533270c5c710c8831bb1fa4e2a2f3152e71e93f4438fd62db536bc7402c4790d9ff94814b0b1dae34f8e15a97895a092f247a707f622de303f711619d623fc87f3651c4d809c30b28785615f4243e327e068cc00cb8024ccd51311255e437ae716062a5f138d2a9b0bafe2842d110a11406e17b78f714aeefbadb86123c5b7ef145c890431d71e936997") { os.exit(83i32) }
+    if sb_error != kx.Unsupported || sb_len != 0usize { os.exit(83i32) }
     var one: [1]u8 = [1]u8{ 1 }
     if kx.dh_valid_public(a, one[0..]) { os.exit(84i32) }
     let (_, bad_error) = kx.dh_shared(a, dh_secret_a[0..], one[0..], secret_out[0..])
-    if bad_error != kx.InvalidKey { os.exit(85i32) }
+    if bad_error != kx.Unsupported { os.exit(85i32) }
     try io.print("dh ok\n")
     // 90-95: RSA-PSS and PKCS#1 v1.5 over a 2048-bit key.
     var rsa_n: [256]u8 = zero

@@ -21702,3 +21702,14 @@ checks. The mapping deliberately remains IDNA 2008 rather than UTS #46.
 The generated tables are reproducible from the pinned `idna` 3.4 reference, and
 `net_idna` holds valid and invalid context, bidi, PVALID, combiner, and A-label
 cases on Windows and Linux.
+
+## D1016 — Secret-key crypto is constant-control-flow or unavailable
+
+AES substitution is algebraic instead of secret-indexed; GHASH, Poly1305 final
+selection, and ML-KEM implicit rejection use arithmetic masks. Existing P-256
+and BIP-340 signing, FFDHE secret exponentiation, and ML-DSA signing cannot meet
+that boundary with their generic variable-time arithmetic, so those secret
+operations fail closed as `Unsupported` while public verification remains.
+
+The focused cipher, AEAD, post-quantum, and signature fixtures hold the new
+constant-control-flow paths and fail-closed API behavior on Windows and Linux.

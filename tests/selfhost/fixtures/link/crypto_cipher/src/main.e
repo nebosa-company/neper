@@ -6,6 +6,7 @@ use e.io
 use e.os
 use e.mem
 use e.crypto.cipher as cipher
+use e.crypto.aead as aead
 
 fn same(a: []const u8, b: []const u8) -> bool {
     if a.len != b.len { ret false }
@@ -122,6 +123,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     padded[47] = 12u8
     let (_, bad_pad) = cipher.unpad_pkcs7(padded[..48])
     if bad_pad != cipher.Invalid { os.exit(15i32) }
+    // 16: the algebraic forward and inverse S-boxes compose over every byte.
+    i = 0usize
+    while i < 256usize {
+        if cipher.inverse_sbox(aead.sbox(u8(i))) != u8(i) { os.exit(16i32) }
+        i += 1usize
+    }
+    if aead.sbox(0u8) != 99u8 || aead.sbox(83u8) != 237u8 { os.exit(16i32) }
     try io.print("crypto cipher ok\n")
     ret ok
 }

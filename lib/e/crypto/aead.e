@@ -2,11 +2,12 @@
 // ChaCha20-Poly1305 (RFC 8439), sealed as ciphertext followed by the sixteen-byte tag.
 // `open` verifies the tag in constant time before it writes a byte of plaintext.
 //
-// AES is the straightforward byte-oriented cipher over its S-box, with the key schedule
-// computed per call; GHASH is the bit-by-bit multiply in GF(2^128) over two limbs;
+// AES is the straightforward byte-oriented cipher with an algebraic, constant-control-
+// flow S-box and the key schedule computed per call; GHASH is the bit-by-bit multiply
+// in GF(2^128) over two limbs;
 // Poly1305 is five 26-bit limbs with 64-bit products, the way the reference does it.
-// ponytail: none of it is constant-time against cache timing on the S-box, and none of
-// it is table-driven for speed; a bitsliced AES and a table GHASH are the upgrade.
+// It deliberately has no secret-indexed lookup tables. A bitsliced AES is the speed
+// upgrade if this algebraic form is ever measured as a bottleneck.
 
 use e.crypto.hash as hash
 use e.crypto.random as random
@@ -18,32 +19,47 @@ error Authentication
 
 // --- AES
 
-fn sbox(index: u8) -> u8 {
-    let table: [256]u8 = [256]u8{
-        99, 124, 119, 123, 242, 107, 111, 197, 48, 1, 103, 43, 254, 215, 171, 118,
-        202, 130, 201, 125, 250, 89, 71, 240, 173, 212, 162, 175, 156, 164, 114, 192,
-        183, 253, 147, 38, 54, 63, 247, 204, 52, 165, 229, 241, 113, 216, 49, 21,
-        4, 199, 35, 195, 24, 150, 5, 154, 7, 18, 128, 226, 235, 39, 178, 117,
-        9, 131, 44, 26, 27, 110, 90, 160, 82, 59, 214, 179, 41, 227, 47, 132,
-        83, 209, 0, 237, 32, 252, 177, 91, 106, 203, 190, 57, 74, 76, 88, 207,
-        208, 239, 170, 251, 67, 77, 51, 133, 69, 249, 2, 127, 80, 60, 159, 168,
-        81, 163, 64, 143, 146, 157, 56, 245, 188, 182, 218, 33, 16, 255, 243, 210,
-        205, 12, 19, 236, 95, 151, 68, 23, 196, 167, 126, 61, 100, 93, 25, 115,
-        96, 129, 79, 220, 34, 42, 144, 136, 70, 238, 184, 20, 222, 94, 11, 219,
-        224, 50, 58, 10, 73, 6, 36, 92, 194, 211, 172, 98, 145, 149, 228, 121,
-        231, 200, 55, 109, 141, 213, 78, 169, 108, 86, 244, 234, 101, 122, 174, 8,
-        186, 120, 37, 46, 28, 166, 180, 198, 232, 221, 116, 31, 75, 189, 139, 138,
-        112, 62, 181, 102, 72, 3, 246, 14, 97, 53, 87, 185, 134, 193, 29, 158,
-        225, 248, 152, 17, 105, 217, 142, 148, 155, 30, 135, 233, 206, 85, 40, 223,
-        140, 161, 137, 13, 191, 230, 66, 104, 65, 153, 45, 15, 176, 84, 187, 22 }
-    ret table[usize(index)]
+fn rotl8(x: u8, count: u8) -> u8 {
+    ret (x << count) | (x >> (8u8 - count))
 }
 
-// Multiplication by 2 in GF(2^8) with the AES polynomial.
+// Multiplication by 2 in GF(2^8) with the AES polynomial. The high-bit mask avoids
+// secret-dependent control flow.
 fn xtime(x: u8) -> u8 {
-    var doubled = x << 1u8
-    if (x & 128u8) != 0u8 { doubled = doubled ^ 27u8 }
-    ret doubled
+    ret (x << 1u8) ^ (27u8 * (x >> 7u8))
+}
+
+fn gf8_mul(a: u8, b: u8) -> u8 {
+    var product = 0u8
+    var x = a
+    var y = b
+    var i = 0usize
+    while i < 8usize {
+        let mask = 255u8 * (y & 1u8)
+        product = product ^ (x & mask)
+        x = xtime(x)
+        y = y >> 1u8
+        i += 1usize
+    }
+    ret product
+}
+
+// x^254 is the multiplicative inverse in GF(2^8), including 0 -> 0. The fixed
+// addition chain has the same operation count for every byte.
+fn gf8_inverse(x: u8) -> u8 {
+    let x2 = gf8_mul(x, x)
+    let x4 = gf8_mul(x2, x2)
+    let x8 = gf8_mul(x4, x4)
+    let x16 = gf8_mul(x8, x8)
+    let x32 = gf8_mul(x16, x16)
+    let x64 = gf8_mul(x32, x32)
+    let x128 = gf8_mul(x64, x64)
+    ret gf8_mul(gf8_mul(gf8_mul(x128, x64), gf8_mul(x32, x16)), gf8_mul(gf8_mul(x8, x4), x2))
+}
+
+fn sbox(index: u8) -> u8 {
+    let x = gf8_inverse(index)
+    ret x ^ rotl8(x, 1u8) ^ rotl8(x, 2u8) ^ rotl8(x, 3u8) ^ rotl8(x, 4u8) ^ 99u8
 }
 
 type AesKey = struct { round_keys: [240]u8, rounds: usize }
@@ -196,14 +212,12 @@ fn gf_multiply(x: Block128, y: Block128) -> Block128 {
         } else {
             x_bit = (x.low >> u32(127usize - bit)) & 1u64
         }
-        if x_bit != 0u64 {
-            z.high = z.high ^ v.high
-            z.low = z.low ^ v.low
-        }
+        let x_mask = 0u64 -% x_bit
+        z.high = z.high ^ (v.high & x_mask)
+        z.low = z.low ^ (v.low & x_mask)
         let carry = v.low & 1u64
         v.low = (v.low >> 1u32) | (v.high << 63u32)
-        v.high = v.high >> 1u32
-        if carry != 0u64 { v.high = v.high ^ 16212958658533785600u64 }
+        v.high = (v.high >> 1u32) ^ (16212958658533785600u64 & (0u64 -% carry))
         bit += 1usize
     }
     ret z
@@ -493,14 +507,13 @@ fn poly_tag(p: *Poly) -> [16]u8 {
     var g3 = h3 +% c
     c = g3 >> 26u32
     g3 = g3 & 67108863u32
-    var g4 = h4 +% c -% 67108864u32
-    if (g4 >> 31u32) == 0u32 {
-        h0 = g0
-        h1 = g1
-        h2 = g2
-        h3 = g3
-        h4 = g4
-    }
+    let g4 = h4 +% c -% 67108864u32
+    let use_g = 0u32 -% ((g4 >> 31u32) ^ 1u32)
+    h0 = (h0 & ~use_g) | (g0 & use_g)
+    h1 = (h1 & ~use_g) | (g1 & use_g)
+    h2 = (h2 & ~use_g) | (g2 & use_g)
+    h3 = (h3 & ~use_g) | (g3 & use_g)
+    h4 = (h4 & ~use_g) | (g4 & use_g)
     // Back to four 32-bit words, plus the pad.
     let w0 = h0 | (h1 << 26u32)
     let w1 = (h1 >> 6u32) | (h2 << 20u32)

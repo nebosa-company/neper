@@ -19,6 +19,7 @@ error InvalidKey
 error InvalidSignature
 error TooSmall
 error Invalid
+error Unsupported
 
 type Fe = struct { v: [10]i64 }
 
@@ -858,12 +859,8 @@ fn p256_verify(public: P256PublicKey, message: []const u8, signature_der: []cons
     ret p256_equal(x, r)
 }
 
-// --- ECDSA P-256 signing with RFC 6979 deterministic nonces over the verifier's
-// arithmetic above. The nonce comes from HMAC-SHA256 of the key and the reduced
-// digest, so a signature is a pure function of key and message and needs no
-// randomness; the DER output is the strict form `p256_verify` accepts.
-// ponytail: the scalar multiplication is the verifier's variable-time double-and-add;
-// timing leaks the secret on a shared host, so a ladder is the upgrade for signing.
+// --- ECDSA P-256 signing is unavailable until the verifier's variable-time integer
+// and point arithmetic has a constant-time replacement. Verification remains public.
 type P256SecretKey = struct { bytes: [32]u8 }
 
 fn p256_to_be(a: P256Int) -> [32]u8 {
@@ -891,6 +888,7 @@ fn p256_base_mul(scalar: P256Int) -> P256Affine {
 }
 
 fn p256_public_from_secret(secret: P256SecretKey) -> (P256PublicKey, err) {
+    ret (zero, Unsupported)
     let (d, d_ok) = p256_from_be(secret.bytes[0..])
     if !d_ok || !p256_scalar_valid(d) { ret (zero, InvalidKey) }
     let point = p256_base_mul(d)
@@ -928,6 +926,7 @@ fn p256_der_put(out: []u8, at: usize, value: P256Int) -> usize {
 }
 
 fn p256_sign(secret: P256SecretKey, message: []const u8, out: []u8) -> (usize, err) {
+    ret (0usize, Unsupported)
     let (d, d_ok) = p256_from_be(secret.bytes[0..])
     if !d_ok || !p256_scalar_valid(d) { ret (0usize, InvalidKey) }
     if out.len < 72usize { ret (0usize, TooSmall) }
@@ -991,10 +990,9 @@ fn p256_sign(secret: P256SecretKey, message: []const u8, out: []u8) -> (usize, e
     ret (0usize, InvalidKey)
 }
 
-// --- BIP-340 Schnorr over secp256k1 (a = 0, b = 7), on the same 256-bit integer
-// routines with the curve's own p and n; the group is Jacobian double-and-add.
-// ponytail: nothing here is constant time; the nonce derivation is the BIP's, so a
-// signature never repeats a nonce, but timing still leaks on a shared host.
+// --- BIP-340 Schnorr verification over secp256k1 (a = 0, b = 7). Secret-key
+// derivation and signing are unavailable until this variable-time integer and point
+// arithmetic has a constant-time replacement.
 fn k1_p() -> P256Int {
     ret P256Int { v: [8]u32{ 4294966319, 4294967294, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295 } }
 }
@@ -1111,6 +1109,7 @@ fn schnorr_challenge(r_bytes: []const u8, public_x: []const u8, message: []const
 
 // The x-only public key of a secret scalar.
 fn schnorr_public_from_secret(secret: [32]u8) -> ([32]u8, err) {
+    ret (zero, Unsupported)
     let (d, d_ok) = p256_from_be(secret[0..])
     if !d_ok || p256_zero(d) || p256_compare(d, k1_n()) >= 0i32 { ret (zero, InvalidKey) }
     var none: P256Int = zero
@@ -1120,6 +1119,7 @@ fn schnorr_public_from_secret(secret: [32]u8) -> ([32]u8, err) {
 // BIP-340 signing of a message (any length) with 32 bytes of auxiliary randomness (all
 // zero is allowed and still yields a sound, deterministic signature).
 fn schnorr_sign(secret: [32]u8, message: []const u8, aux: [32]u8) -> ([64]u8, err) {
+    ret (zero, Unsupported)
     let (d0, d_ok) = p256_from_be(secret[0..])
     let order = k1_n()
     if !d_ok || p256_zero(d0) || p256_compare(d0, order) >= 0i32 { ret (zero, InvalidKey) }
@@ -1344,8 +1344,9 @@ fn rsa_pkcs1v15_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []c
 // deterministic signature (rnd = 0^32) with its rejection loop, and verification.
 // Polynomials are 256 `i64` coefficients in [0, q); vectors are laid out in a row.
 //
-// ponytail: arithmetic is plain `%` by q; nothing here claims constant time, and the
-// sign rejection loop restarts as soon as a bound fails (as dilithium-py does).
+// ponytail: arithmetic is plain `%` by q. Key generation and public verification are
+// available; signing fails closed until its secret-dependent rejection loop is
+// replaced by an audited constant-time implementation.
 
 fn dsa_q() -> i64 { ret 8380417i64 }
 fn dsa_gamma1() -> i64 { ret 131072i64 }
@@ -1763,6 +1764,7 @@ fn dsa_absorb_w1(xof: *hash.Shake, w1: []const i64) {
 // ML-DSA.Sign_internal with rnd = 0^32 (the deterministic variant); ctx may be empty
 // and at most 255 bytes. sig is c_tilde || z || hints (2420 bytes).
 fn ml_dsa_sign(sk: []const u8, message: []const u8, ctx: []const u8, sig: []u8) -> err {
+    ret Unsupported
     if sk.len < 2560usize || sig.len < 2420usize { ret TooSmall }
     if ctx.len > 255usize { ret Invalid }
     var a: [4096]i64 = zero

@@ -21,9 +21,13 @@ Remediation completed so far:
 - M5: IDNA validates Unicode 15.0 PVALID code points, RFC 5892 contextual
   characters, RFC 5893 bidirectional labels, leading combiners, and incoming
   A-label canonical form.
+- H3: AES uses algebraic constant-control-flow substitution, GHASH, Poly1305,
+  and ML-KEM remove secret-dependent branches, and the variable-time P-256,
+  BIP-340, FFDHE, and ML-DSA secret operations fail closed as `Unsupported`;
+  their public verification paths remain available.
 
 The focused fixtures pass on Windows and Linux, and all 15 tests in
-`tests.test_llm_edit_benchmark` pass. H3 and M3 remain open.
+`tests.test_llm_edit_benchmark` pass. M3 remains open.
 
 ## Executive summary
 

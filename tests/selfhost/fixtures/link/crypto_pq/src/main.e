@@ -1,8 +1,8 @@
 // Post-quantum schemes against Python oracles: SHAKE128/256 against hashlib,
 // ML-KEM-768 (FIPS 203) against kyber-py for two seed sets -- ek, dk and c by their
 // SHA-256, the shared key byte for byte, and the implicit-rejection key of a tampered
-// ciphertext -- ML-DSA-44 (FIPS 204) against dilithium-py, and XMSS (RFC 8391) against
-// a byte-exact Python replica. Every check has its own exit code.
+// ciphertext -- ML-DSA-44 key generation plus fail-closed signing, and XMSS (RFC
+// 8391) against a byte-exact Python replica. Every check has its own exit code.
 use e.os
 use e.io
 use e.mem
@@ -39,26 +39,20 @@ fn kem_check(d: [32]u8, z: [32]u8, m: [32]u8, ek_hash: [32]u8, dk_hash: [32]u8, 
     if e2 != ok || !same(bad[0..], reject[0..]) { os.exit(base + 6i32) }
 }
 
-fn dsa_check(seed: [32]u8, message: []const u8, ctx: []const u8, pk_hash: [32]u8, sk_hash: [32]u8, sig_hash: [32]u8, base: i32) {
+fn dsa_check(seed: [32]u8, message: []const u8, ctx: []const u8, pk_hash: [32]u8, sk_hash: [32]u8, base: i32) {
     var pk: [1312]u8 = zero
     var sk: [2560]u8 = zero
     var sig: [2420]u8 = zero
-    let (good, e) = sign.ml_dsa(seed, message, ctx, pk[0..], sk[0..], sig[0..])
-    if e != ok { os.exit(base) }
+    let keygen_error = sign.ml_dsa_keygen(seed, pk[0..], sk[0..])
+    if keygen_error != ok { os.exit(base) }
     let h_pk = hash.sha256(pk[0..])
     if !same(h_pk[0..], pk_hash[0..]) { os.exit(base + 1i32) }
     let h_sk = hash.sha256(sk[0..])
     if !same(h_sk[0..], sk_hash[0..]) { os.exit(base + 2i32) }
-    let h_sig = hash.sha256(sig[0..])
-    if !same(h_sig[0..], sig_hash[0..]) { os.exit(base + 3i32) }
-    if !good { os.exit(base + 4i32) }
-    sig[40] = sig[40] ^ 1u8
+    if sign.ml_dsa_sign(sk[0..], message, ctx, sig[0..]) != sign.Unsupported { os.exit(base + 3i32) }
+    let (good, full_error) = sign.ml_dsa(seed, message, ctx, pk[0..], sk[0..], sig[0..])
+    if full_error != sign.Unsupported || good { os.exit(base + 4i32) }
     if sign.ml_dsa_verify(pk[0..], message, ctx, sig[0..]) { os.exit(base + 5i32) }
-    sig[40] = sig[40] ^ 1u8
-    if sign.ml_dsa_verify(pk[0..], "other", ctx, sig[0..]) { os.exit(base + 6i32) }
-    if sign.ml_dsa_verify(pk[0..], message, "x", sig[0..]) { os.exit(base + 7i32) }
-    sig[2419] = 81u8
-    if sign.ml_dsa_verify(pk[0..], message, ctx, sig[0..]) { os.exit(base + 8i32) }
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -107,7 +101,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let kem1_reject: [32]u8 = [32]u8{ 11, 248, 142, 192, 222, 166, 178, 220, 123, 59, 182, 228, 61, 108, 152, 239, 171, 144, 92, 131, 225, 22, 224, 242, 108, 168, 80, 234, 49, 99, 48, 246 }
     kem_check(d1, z1, m1, kem1_ek_hash, kem1_dk_hash, kem1_ct_hash, kem1_key, kem1_reject, 20i32)
 
-    // 30-48: ML-DSA-44 over two seeds, one with a context string.
+    // 30-48: ML-DSA-44 keygen over two seeds; variable-time signing fails closed.
     var seed1: [32]u8 = zero
     i = 0usize
     while i < 32usize {
@@ -117,13 +111,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // seed set 0
     let dsa0_pk_hash: [32]u8 = [32]u8{ 159, 16, 118, 68, 193, 8, 69, 38, 175, 59, 200, 9, 134, 128, 176, 84, 153, 162, 50, 90, 100, 78, 56, 143, 180, 249, 112, 224, 88, 209, 157, 70 }
     let dsa0_sk_hash: [32]u8 = [32]u8{ 4, 191, 107, 159, 87, 145, 102, 166, 39, 150, 29, 252, 92, 59, 249, 113, 125, 248, 104, 219, 136, 134, 56, 86, 53, 108, 70, 104, 200, 181, 107, 11 }
-    let dsa0_sig_hash: [32]u8 = [32]u8{ 28, 27, 139, 13, 128, 202, 193, 9, 99, 240, 174, 214, 37, 76, 136, 104, 8, 152, 198, 18, 32, 202, 189, 50, 254, 231, 49, 125, 172, 171, 109, 122 }
     // seed set 1
     let dsa1_pk_hash: [32]u8 = [32]u8{ 141, 91, 243, 122, 93, 185, 12, 118, 20, 241, 160, 124, 151, 118, 80, 187, 73, 19, 200, 105, 241, 128, 217, 106, 139, 118, 33, 219, 116, 30, 71, 66 }
     let dsa1_sk_hash: [32]u8 = [32]u8{ 82, 60, 4, 180, 198, 251, 42, 181, 80, 214, 254, 93, 27, 211, 84, 113, 88, 66, 67, 218, 235, 49, 80, 26, 22, 35, 84, 244, 170, 177, 50, 121 }
-    let dsa1_sig_hash: [32]u8 = [32]u8{ 223, 171, 166, 125, 42, 107, 64, 36, 88, 112, 89, 56, 31, 22, 215, 221, 96, 74, 151, 55, 71, 160, 230, 38, 231, 80, 30, 157, 101, 27, 105, 37 }
-    dsa_check(d0, "post-quantum message one", "", dsa0_pk_hash, dsa0_sk_hash, dsa0_sig_hash, 30i32)
-    dsa_check(seed1, "a second message under a context", "ctx", dsa1_pk_hash, dsa1_sk_hash, dsa1_sig_hash, 40i32)
+    dsa_check(d0, "post-quantum message one", "", dsa0_pk_hash, dsa0_sk_hash, 30i32)
+    dsa_check(seed1, "a second message under a context", "ctx", dsa1_pk_hash, dsa1_sk_hash, 40i32)
 
     // 50-60: XMSS-SHA2 at height 4 (the RFC parameter set at height 10 agrees with the
     // replica too but its 1024-leaf keygen takes 30 s here): the root, signatures at

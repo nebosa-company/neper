@@ -5,8 +5,10 @@
 // operation, and an all-zero secret_out secret -- a peer key of small order -- is
 // `InvalidKey`.
 //
-// ponytail: the ladder swaps by an arithmetic mask so the sequence of operations does
-// not depend on the scalar; nothing else here claims constant time.
+// The X25519 ladder swaps by an arithmetic mask so the sequence of operations does
+// not depend on the scalar. ML-KEM implicit rejection also compares and selects by
+// arithmetic masks. Secret FFDHE operations remain unavailable because the generic
+// bignum exponentiation is variable-time.
 
 use e.mem
 use e.algo.bignum as bignum
@@ -17,6 +19,7 @@ type X25519SecretKey = struct { bytes: [32]u8 }
 type X25519SharedKey = struct { bytes: [32]u8 }
 error InvalidKey
 error TooSmall
+error Unsupported
 
 type Fe = struct { v: [10]i64 }
 
@@ -356,13 +359,9 @@ fn x25519_exchange(secret: X25519SecretKey, peer: X25519PublicKey) -> (X25519Sha
 }
 
 // --- Finite-field Diffie-Hellman over RFC 7919 ffdhe2048 (generator 2) with
-// `e.algo.bignum`. Values are big-endian byte strings; a public value or shared
-// secret is always the group's 256 bytes, zero-padded on the left. A peer value is
-// accepted only in the open interval (1, p - 1) and in the prime-order subgroup,
-// which costs one more exponentiation than the exchange itself.
-// ponytail: the exponentiation is bignum's square-and-multiply over Montgomery
-// products, not constant time; only ffdhe2048 is offered, the other RFC 7919 groups are a hex
-// string each away.
+// `e.algo.bignum`. Public-value validation remains available. Secret exponentiation
+// fails closed because bignum's square-and-multiply is variable-time; restore these
+// entry points only with a constant-time modular-exponentiation backend.
 fn ffdhe2048_hex() -> str {
     ret "ffffffffffffffffadf85458a2bb4a9aafdc5620273d3cf1d8b9c583ce2d3695a9e13641146433fbcc939dce249b3ef97d2fe363630c75d8f681b202aec4617ad3df1ed5d5fd65612433f51f5f066ed0856365553ded1af3b557135e7f57c935984f0c70e0e68b77e2a689daf3efe8721df158a136ade73530acca4f483a797abc0ab182b324fb61d108a94bb2c8e3fbb96adab760d7f4681d4f42a3de394df4ae56ede76372bb190b07a7c8ee0a6d709e02fce1cdf7e2ecc03404cd28342f619172fe9ce98583ff8e4f1232eef28183c3fe3b1b4c6fad733bb5fcbc2ec22005c58ef1837d1683b2c6f34a26c1b2effa886b423861285c97ffffffffffffffff"
 }
@@ -384,18 +383,12 @@ fn dh_in_range(a: *mem.Arena, value: bignum.Int, p: bignum.Int) -> bool {
 }
 
 fn dh_power(a: *mem.Arena, base: bignum.Int, exponent: []const u8, out: []u8) -> err {
-    let (p, p_error) = dh_prime(a)
-    if p_error != ok { ret p_error }
-    let (x, x_error) = bignum.int_from_bytes_be(a, exponent)
-    if x_error != ok { ret x_error }
-    if !dh_in_range(a, x, p) { ret InvalidKey }
-    let (y, pow_error) = bignum.int_mod_pow(a, base, x, p)
-    if pow_error != ok { ret pow_error }
-    ret bignum.int_to_bytes_be(y, out[..dh_bytes()])
+    ret Unsupported
 }
 
 // 2^secret mod p as 256 bytes; the secret must lie in (1, p - 1).
 fn dh_public(a: *mem.Arena, secret: []const u8, out: []u8) -> (usize, err) {
+    ret (0usize, Unsupported)
     if out.len < dh_bytes() { ret (0usize, TooSmall) }
     let (two, two_error) = bignum.int_from_i64(a, 2i64)
     if two_error != ok { ret (0usize, two_error) }
@@ -425,6 +418,7 @@ fn dh_valid_public(a: *mem.Arena, public: []const u8) -> bool {
 
 // peer_public^secret mod p as 256 bytes; a peer value outside the subgroup is `InvalidKey`.
 fn dh_shared(a: *mem.Arena, secret: []const u8, peer_public: []const u8, out: []u8) -> (usize, err) {
+    ret (0usize, Unsupported)
     if out.len < dh_bytes() { ret (0usize, TooSmall) }
     if !dh_valid_public(a, peer_public) { ret (0usize, InvalidKey) }
     let (y, y_error) = bignum.int_from_bytes_be(a, peer_public)
@@ -446,8 +440,7 @@ fn dh(a: *mem.Arena, secret: []const u8, peer_public: []const u8, out: []u8) -> 
 // seeds d, z and m come from the caller; every result lands in caller storage.
 // Polynomials are 256 `i32` coefficients in [0, q); a vector is 768 of them in a row.
 //
-// ponytail: coefficient arithmetic is plain `%` by q, not Montgomery or Barrett, and
-// the ciphertext comparison in decaps is not constant time.
+// ponytail: coefficient arithmetic is plain `%` by q, not Montgomery or Barrett.
 
 fn kem_q() -> i32 { ret 3329i32 }
 
@@ -863,19 +856,17 @@ fn ml_kem_decaps(dk: []const u8, c: []const u8) -> ([32]u8, err) {
     hash.shake_squeeze(&reject, bar[0..])
     var again: [1088]u8 = zero
     kem_pke_encrypt(dk[1152..2336], m[0..], g[32..64], again[0..])
-    var same = true
+    var difference = 0u32
     i = 0usize
     while i < 1088usize {
-        if again[i] != c[i] { same = false }
+        difference = difference | u32(again[i] ^ c[i])
         i += 1usize
     }
+    let reject_bit = (difference | (0u32 -% difference)) >> 31u32
+    let reject_mask = u8(255u32 * reject_bit)
     i = 0usize
     while i < 32usize {
-        if same {
-            key[i] = g[i]
-        } else {
-            key[i] = bar[i]
-        }
+        key[i] = (g[i] & ~reject_mask) | (bar[i] & reject_mask)
         i += 1usize
     }
     ret (key, ok)
