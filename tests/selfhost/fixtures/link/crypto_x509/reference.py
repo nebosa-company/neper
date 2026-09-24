@@ -66,6 +66,19 @@ sub_mid = build(name("Sub CA"), zero_mid.subject, sub_key.public_key(), zero_key
                 start, end, ca=True, serial=11)
 deep_leaf = build(name("deep-leaf"), sub_mid.subject, leaf_key.public_key(), sub_key,
                   start, end, serial=12)
+constrained_key = key(8)
+constrained_mid = build(
+    name("Constrained CA"), root.subject, constrained_key.public_key(), root_key,
+    start, end, ca=True, serial=13,
+    extra_extensions=[(x509.NameConstraints(
+        permitted_subtrees=[x509.DNSName(".allowed.example")],
+        excluded_subtrees=[x509.DNSName("blocked.allowed.example")]), True)])
+allowed_leaf = build(name("allowed"), constrained_mid.subject, leaf_key.public_key(), constrained_key,
+                     start, end, dns=["www.allowed.example"], serial=14)
+outside_leaf = build(name("outside"), constrained_mid.subject, leaf_key.public_key(), constrained_key,
+                     start, end, dns=["www.outside.example"], serial=15)
+blocked_leaf = build(name("blocked"), constrained_mid.subject, leaf_key.public_key(), constrained_key,
+                     start, end, dns=["blocked.allowed.example"], serial=16)
 p256_root_key = ec.derive_private_key(1, ec.SECP256R1())
 p256_leaf_key = ec.derive_private_key(2, ec.SECP256R1())
 p256_root = build(name("P256 Root"), name("P256 Root"), p256_root_key.public_key(), p256_root_key,
@@ -86,6 +99,8 @@ der = {n: c.public_bytes(serialization.Encoding.DER) for n, c in
         ("stranger", stranger), ("unknown_critical", unknown_critical),
         ("bad_usage_mid", bad_usage_mid), ("bad_usage_leaf", bad_usage_leaf),
         ("zero_mid", zero_mid), ("sub_mid", sub_mid), ("deep_leaf", deep_leaf),
+        ("constrained_mid", constrained_mid), ("allowed_leaf", allowed_leaf),
+        ("outside_leaf", outside_leaf), ("blocked_leaf", blocked_leaf),
         ("p256_root", p256_root), ("p256_leaf", p256_leaf),
         ("p384_suffix", p384_suffix)]}
 pem_text = b"".join(c.public_bytes(serialization.Encoding.PEM) for c in [root, mid])
@@ -230,6 +245,22 @@ BODY = '''    let (root, e1) = x509.parse(a, root_der)
     deep_intermediates[1] = zero_mid
     let (deep_chain, e34) = x509.verify(a, deep_leaf, options(roots[0..], deep_intermediates[0..], "", .Any, 5u16))
     if e34 != x509.UnknownAuthority { os.exit(42) }
+    // DNS name constraints apply to every descendant SAN.
+    let (constrained_mid, e35) = x509.parse(a, constrained_mid_der)
+    let (allowed_leaf, e36) = x509.parse(a, allowed_leaf_der)
+    let (outside_leaf, e37) = x509.parse(a, outside_leaf_der)
+    let (blocked_leaf, e38) = x509.parse(a, blocked_leaf_der)
+    if e35 != ok || e36 != ok || e37 != ok || e38 != ok { os.exit(43) }
+    if constrained_mid.permitted_dns.len != 1usize || !str.eq(constrained_mid.permitted_dns[0], ".allowed.example") { os.exit(44) }
+    if constrained_mid.excluded_dns.len != 1usize || !str.eq(constrained_mid.excluded_dns[0], "blocked.allowed.example") { os.exit(45) }
+    var constrained_intermediates: [1]x509.Certificate = zero
+    constrained_intermediates[0] = constrained_mid
+    let (allowed_chain, e39) = x509.verify(a, allowed_leaf, options(roots[0..], constrained_intermediates[0..], "www.allowed.example", .Any, 4u16))
+    if e39 != ok || allowed_chain.certificates.len != 3usize { os.exit(46) }
+    let (outside_chain, e40) = x509.verify(a, outside_leaf, options(roots[0..], constrained_intermediates[0..], "www.outside.example", .Any, 4u16))
+    if e40 != x509.NameMismatch { os.exit(47) }
+    let (blocked_chain, e41) = x509.verify(a, blocked_leaf, options(roots[0..], constrained_intermediates[0..], "blocked.allowed.example", .Any, 4u16))
+    if e41 != x509.NameMismatch { os.exit(48) }
     ret ok
 }
 ''' % (start_ns, end_ns)

@@ -17,7 +17,7 @@ use e.fmt.asn1 as asn1
 use e.fmt.pem as pem
 
 type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey, P256: sign.P256PublicKey, Unsupported: []const u8 }
-type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool, has_path_len: bool, path_len: u16, has_key_usage: bool, key_cert_sign: bool, unhandled_critical: bool }
+type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, permitted_dns: []const str, excluded_dns: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool, has_path_len: bool, path_len: u16, has_key_usage: bool, key_cert_sign: bool, unhandled_critical: bool }
 type Pool = struct { certificates: []const Certificate }
 type VerifyOptions = struct { roots: Pool, intermediates: Pool, dns_name: str, now: time.Instant, usage: KeyUsage, max_depth: u16 }
 type KeyUsage = enum u8 { ServerAuth, ClientAuth, CodeSigning, EmailProtection, Any }
@@ -346,6 +346,7 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
                 let basic: [3]u8 = [3]u8{ 85, 29, 19 }
                 let key_usage: [3]u8 = [3]u8{ 85, 29, 15 }
                 let extended_usage: [3]u8 = [3]u8{ 85, 29, 37 }
+                let name_constraints: [3]u8 = [3]u8{ 85, 29, 30 }
                 var handled = false
                 if oid_equal(extension_oid.content, san[0..]) {
                     handled = true
@@ -394,6 +395,13 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
                     certificate.key_cert_sign = bits.content.len > 1usize && (bits.content[1] & 4u8) != 0u8
                 }
                 if oid_equal(extension_oid.content, extended_usage[0..]) { handled = true }
+                if oid_equal(extension_oid.content, name_constraints[0..]) {
+                    handled = true
+                    let (permitted, excluded, constraints_error) = parse_name_constraints(a, payload.content)
+                    if constraints_error != ok { ret (zero, constraints_error) }
+                    certificate.permitted_dns = permitted
+                    certificate.excluded_dns = excluded
+                }
                 if critical && !handled { certificate.unhandled_critical = true }
             }
         }
@@ -432,6 +440,80 @@ fn parse_dns_names(a: *mem.Arena, content: []const u8) -> ([]const str, err) {
         }
     }
     ret (names[0..], ok)
+}
+
+// DNS-only nameConstraints. Other GeneralName forms and subtree minimum/maximum
+// are rejected so a critical constraint is never silently weakened.
+fn parse_dns_subtrees(a: *mem.Arena, content: []const u8) -> ([]const str, err) {
+    var probe = asn1.reader(content, DEPTH)
+    var count = 0usize
+    while true {
+        let (subtree, present, subtree_error) = asn1.reader_next_err(&probe)
+        if subtree_error != ok { ret (zero, InvalidCertificate) }
+        if !present { break }
+        if subtree.tag.class != .Universal || subtree.tag.number != 16u32 || !subtree.tag.constructed { ret (zero, InvalidCertificate) }
+        let (parts0, parts_error) = inside(subtree)
+        if parts_error != ok { ret (zero, parts_error) }
+        var parts = parts0
+        let (base, base_error) = next(&parts)
+        if base_error != ok || base.tag.class != .Context || base.tag.number != 2u32 || base.tag.constructed || base.content.len == 0usize { ret (zero, InvalidCertificate) }
+        let (_, has_tail, tail_error) = asn1.reader_next_err(&parts)
+        if tail_error != ok || has_tail { ret (zero, InvalidCertificate) }
+        count += 1usize
+    }
+    if count == 0usize { ret (zero, InvalidCertificate) }
+    let (names, names_error) = mem.alloc[str](a, count)
+    if names_error != ok { ret (zero, names_error) }
+    var walk = asn1.reader(content, DEPTH)
+    var i = 0usize
+    while i < count {
+        let (subtree, present, subtree_error) = asn1.reader_next_err(&walk)
+        if subtree_error != ok || !present { ret (zero, InvalidCertificate) }
+        let (parts0, parts_error) = inside(subtree)
+        if parts_error != ok { ret (zero, parts_error) }
+        var parts = parts0
+        let (base, base_error) = next(&parts)
+        if base_error != ok { ret (zero, base_error) }
+        names[i] = base.content
+        i += 1usize
+    }
+    ret (names[0..], ok)
+}
+
+fn parse_name_constraints(a: *mem.Arena, content: []const u8) -> ([]const str, []const str, err) {
+    var top = asn1.reader(content, DEPTH)
+    let (sequence, sequence_error) = expect(&top, 16u32, true)
+    if sequence_error != ok { ret (zero, zero, sequence_error) }
+    let (_, has_top_tail, top_tail_error) = asn1.reader_next_err(&top)
+    if top_tail_error != ok || has_top_tail { ret (zero, zero, InvalidCertificate) }
+    let (fields0, fields_error) = inside(sequence)
+    if fields_error != ok { ret (zero, zero, fields_error) }
+    var fields = fields0
+    var permitted: []const str = zero
+    var excluded: []const str = zero
+    var seen_permitted = false
+    var seen_excluded = false
+    while true {
+        let (field, present, field_error) = asn1.reader_next_err(&fields)
+        if field_error != ok { ret (zero, zero, InvalidCertificate) }
+        if !present { break }
+        if field.tag.class != .Context || !field.tag.constructed { ret (zero, zero, InvalidCertificate) }
+        if field.tag.number == 0u32 && !seen_permitted && !seen_excluded {
+            let (names, names_error) = parse_dns_subtrees(a, field.content)
+            if names_error != ok { ret (zero, zero, names_error) }
+            permitted = names
+            seen_permitted = true
+        } else if field.tag.number == 1u32 && !seen_excluded {
+            let (names, names_error) = parse_dns_subtrees(a, field.content)
+            if names_error != ok { ret (zero, zero, names_error) }
+            excluded = names
+            seen_excluded = true
+        } else {
+            ret (zero, zero, InvalidCertificate)
+        }
+    }
+    if !seen_permitted && !seen_excluded { ret (zero, zero, InvalidCertificate) }
+    ret (permitted, excluded, ok)
 }
 
 fn parse_pem(a: *mem.Arena, source: str) -> ([]const Certificate, err) {
@@ -508,6 +590,49 @@ fn dns_match(pattern: str, name: str) -> bool {
         ret str.compare_ascii_fold(pattern[2usize..], name[dot + 1usize..]) == 0
     }
     ret str.compare_ascii_fold(pattern, name) == 0
+}
+
+fn dns_within_constraint(name: str, constraint: str) -> bool {
+    var suffix = constraint
+    var require_subdomain = false
+    if suffix.len > 0usize && suffix[0] == 46u8 {
+        suffix = suffix[1usize..]
+        require_subdomain = true
+    }
+    if suffix.len == 0usize || name.len < suffix.len { ret false }
+    let start = name.len - suffix.len
+    if str.compare_ascii_fold(name[start..], suffix) != 0 { ret false }
+    if start == 0usize { ret !require_subdomain }
+    ret name[start - 1usize] == 46u8
+}
+
+fn constraints_allow(issuer: Certificate, descendants: []const Certificate) -> bool {
+    if issuer.permitted_dns.len == 0usize && issuer.excluded_dns.len == 0usize { ret true }
+    var certificate_index = 0usize
+    while certificate_index < descendants.len {
+        let certificate = descendants[certificate_index]
+        var name_index = 0usize
+        while name_index < certificate.dns_names.len {
+            let name = certificate.dns_names[name_index]
+            var excluded_index = 0usize
+            while excluded_index < issuer.excluded_dns.len {
+                if dns_within_constraint(name, issuer.excluded_dns[excluded_index]) { ret false }
+                excluded_index += 1usize
+            }
+            if issuer.permitted_dns.len > 0usize {
+                var permitted = false
+                var permitted_index = 0usize
+                while permitted_index < issuer.permitted_dns.len {
+                    if dns_within_constraint(name, issuer.permitted_dns[permitted_index]) { permitted = true }
+                    permitted_index += 1usize
+                }
+                if !permitted { ret false }
+            }
+            name_index += 1usize
+        }
+        certificate_index += 1usize
+    }
+    ret true
 }
 
 fn usage_oid(usage: KeyUsage) -> [8]u8 {
@@ -616,6 +741,7 @@ fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, e
         if has_root {
             if !in_window(root, options.now) { ret (zero, Expired) }
             if verify_signature(current, root) != ok { ret (zero, UnknownAuthority) }
+            if !constraints_allow(root, links[..count]) { ret (zero, NameMismatch) }
             if !same_der(root.der, current.der) {
                 if count > limit { ret (zero, TooDeep) }
                 links[count] = root
@@ -629,6 +755,7 @@ fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, e
         if !intermediate.is_ca { ret (zero, UnknownAuthority) }
         if intermediate.has_key_usage && !intermediate.key_cert_sign { ret (zero, UnknownAuthority) }
         if intermediate.has_path_len && count - 1usize > usize(intermediate.path_len) { ret (zero, UnknownAuthority) }
+        if !constraints_allow(intermediate, links[..count]) { ret (zero, NameMismatch) }
         if !in_window(intermediate, options.now) { ret (zero, Expired) }
         if verify_signature(current, intermediate) != ok { ret (zero, UnknownAuthority) }
         if count >= limit { ret (zero, TooDeep) }

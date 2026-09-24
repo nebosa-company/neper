@@ -21668,3 +21668,14 @@ which supplies the toolbar sweep without caller-owned timers.
 the delay boundary, frame request and pointer sweep on Windows and Linux; its
 adjacent menu lifecycle now rebuilds after dismissal, and it checks alert-dialog
 semantics against the `AlertDialog` role introduced by D985.
+
+## D1013 — X.509 DNS name constraints are enforced
+
+The X.509 parser accepts critical DNS-only `nameConstraints` and records their
+permitted and excluded subtrees. Verification applies each issuing CA's
+constraints to every descendant subject alternative name, including constraints
+on a trusted root. Unsupported GeneralName forms and subtree distance fields are
+rejected instead of weakening a critical extension.
+
+`crypto_x509` carries signed permitted, outside, and excluded descendant chains
+and passes on Windows and Linux.
