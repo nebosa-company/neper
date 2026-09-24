@@ -16,7 +16,7 @@
 
 ## Code anchors
 
-- `.text`: `src/check.e`×124‡, `src/tool.e`×51‡, `src/main.e`×44‡, `src/lower.e`×39‡, `lib/e/ui/control.e`×33‡, `lib/e/text/io.e`×28, `lib/e/ui/style.e`×25, `scripts/algos/batch44.json`×25
+- `.text`: `src/check.e`×124‡, `src/tool.e`×51‡, `src/main.e`×44‡, `src/lower.e`×39‡, `lib/e/ui/control.e`×33‡, `lib/e/text/io.e`×28, `lib/e/ui/overlay.e`×25†, `lib/e/ui/style.e`×25
 - `.idata`: `src/link_pe.e`×2
 - `project.yaml`: `src/main.e`×5‡, `src/assets.e`×4, `lib/e/asset.e`×1
 - `ICON`: `lib/e/os/shell.windows.e`×10‡
@@ -24,7 +24,7 @@
 - `BITMAP`: `lib/e/os.windows.e`×1‡
 - `RCDATA`: `lib/e/fmt/html.e`×3†
 - `LANGUAGE`: `benchmarks/llm_edit/hard_context.py`×5
-- `.ico`: `lib/e/ui/control.e`×18‡, `lib/e/ui/overlay.e`×4†, `lib/e/fmt/brotli.e`×2‡, `lib/e/ui/navigation.e`×2†, `lib/e/os/shell.windows.e`×1‡, `lib/e/ui/style.e`×1
+- `.ico`: `lib/e/ui/control.e`×22‡, `lib/e/ui/overlay.e`×4†, `lib/e/fmt/brotli.e`×2‡, `lib/e/ui/navigation.e`×2†, `lib/e/os/shell.windows.e`×1‡, `lib/e/ui/style.e`×1
 - `.cur`: `src/parse.e`×201†, `src/tool.e`×43‡, `lib/e/ui/undo.e`×32, `src/lower.e`×30‡, `src/nir.e`×25†, `lib/e/gfx/scene.e`×18‡, `src/main.e`×10‡, `lib/e/fmt/lzw.e`×6
 - nearest existing implementation: `src/link_pe.e`, `src/object_coff.e`, `src/main.e`‡ († over 40 KB, ‡ over 120 KB — read by region)
 

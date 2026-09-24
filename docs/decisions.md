@@ -19459,3 +19459,72 @@ Still open: the touch forms (the dial and input mode, the unit-box modal) and th
 iOS wheels; the 12-hour clock and the locale's separator; typing to filter the
 time list and Up/Down through it; parsing typed times ("2:30 pm", "noon"); and the
 error icon in an invalid field.
+
+## D961 — The colour field and the font panel draw their v2 specifications
+
+`overlay.color_field` is docs/ux/components/ColorPicker's swatches-and-spectrum
+form. Its trigger is the read-only field head, 40 tall with a pointer and 56 on
+touch, showing the colour's hex after a 20 swatch. The head is the new
+`control.led_head`, which is `field_head` with a leading node. Open, a popover
+stands 4 below it on `surface-container-high`, with 12 corners, elevation 3 and 16
+padding, `width` wide (296 in the spec), 16 between its blocks. The blocks are:
+the saturation and brightness area, 150 tall (200 on touch) with 8 corners; the
+hue strip and the opacity strip, 12 tall (16) as pills; the channel row; and the
+swatches. One Custom node paints each of the area, the strips and the swatches
+(`tint_paint`) with scene linear gradients inside a rounded clip. The area is the
+hue at full saturation, then white fading out across and black fading in down.
+The opacity strip and any swatch that is not opaque stand over the 5px
+checkerboard in `outline-variant` and `surface-container-lowest`. The area's
+thumb is a 20 disc of the colour in a 2 `surface-container-lowest` ring and a 1
+`outline` ring; the strips' thumbs are the same rings, hollow. A press or a drag
+maps the pointer to saturation and brightness, to hue, or to opacity, the way
+the dial's knob does, and fires `Change[paint.Color]` with the whole colour. The
+channel row is a 32-tall hex field (48 on touch) over caller-held text, with a
+72 opacity readout 8 after it. `read_hex` reads 3, 6 or 8 digits with or without
+"#", and `write_hex` writes "#RRGGBB", adding "AA" when the colour is not opaque.
+The swatches are 32 (40 on touch), 8 apart, under "Theme" in `label-medium`
+`on-surface-variant`. Each has a 1px `on-surface` 16% hairline inside it and the
+`on-surface` state layer on hover. The chosen one has a 2px `on-surface` ring 2
+outside it, and a transparent swatch is named No colour.
+
+`control.font_panel` is docs/ux/components/FontPicker's inline panel. It is
+`surface-container-low` with 12 corners and 16 padding, in two columns 16 apart.
+The left column is 260 wide. At its top is the 40 outlined search field over
+caller-held text, with an 18 `search` mark 12 in (the new `GlyphKind.Search`)
+and the query 12 after it (the new `FieldOptions.start_space`); the caller
+filters the families. Below it is the family list on `surface` with 8 corners,
+using the list box's 40 rows, the chosen row in `secondary-container` with its
+check. The list is `listed` unframed, whose single-choice form now stands on its
+caller's surface. A `family` past the end reads as the first. The right column
+holds the style as the dense 40 Picker (`picker .Popup` under a density -1 copy
+of the theme) and the size as a dense Spin box 104 wide (the new
+`spin_box_sized`), 1 to 288 pt. "Family", "Style" and "Size" are drawn in
+`label-medium` `on-surface-variant` 4 above their parts. Last is the preview on
+`surface`, in a 1px `outline-variant` edge with 8 corners, 12 and 16 padding and
+at least 88 tall: the sample in `body-large` over the caption "Preview, 13 pt" in
+`label-small`. `overlay.color_picker` and `control.font_picker` keep their D820
+and D824 forms, and ui_pickers and ui_desktop still hold them unchanged.
+
+tests/selfhost/fixtures/link/ui_pickers3_v2 checks these on pixels and bounds.
+For the colour field it holds: the 40 trigger; the 296 panel 4 below on the high
+container; the 264 x 150 area 16 in, whose pixels match the HSV model; the thumb's
+colour disc and lowest ring at the colour; the 12 strips 16 apart, with cyan
+halfway along the hue strip and the colour fading in over both checker tones; the
+184 x 32 hex field and the 72 readout 8 after it; and the 32 swatches 8 apart, with
+the chosen ring, the hairline and the checkered No colour. It also checks that
+presses on the area, the hue strip and a swatch each fire the change with the
+expected colour. For the font panel it holds the low container, the search
+field's frame and query inset, the 260 list 16 + 4 under the search with its 40
+rows on `surface` and the chosen one in `secondary-container`, the 40 style picker,
+the 104 spin box with its arrows, the 212 preview in its edge, and that a press
+picks a family. It also checks that the hex and HSV forms round-trip. All 73 ui_*
+fixtures pass on Windows and Linux, and the Windows example builds.
+
+Still open for the colour picker: the RGB and HSL format select, typed opacity,
+recent colours, keyboard on the area and strips, and keeping the hue at a grey
+(it is derived from the colour, so a grey reads as red). Also open are the touch
+sheet with its mode switch and 28 thumbs, colour names and the host panel. For
+the font panel: subheaders and grouping, recent families, feature chips, rows in
+each family's own face, and the trigger with its popover and sheet. The style
+picker stands at its least 112 wide rather than 160, and the missing-font
+warning is not drawn.

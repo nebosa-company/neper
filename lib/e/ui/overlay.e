@@ -9,6 +9,7 @@ use e.mem
 use e.time
 use e.gfx.geometry
 use e.gfx.paint
+use e.gfx.scene
 use e.ui.accessibility
 use e.ui.control
 use e.ui.layout as ui_layout
@@ -1365,4 +1366,480 @@ fn color_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     sem.role = 2u8
     sem.label = label
     ret (widget.semantics(key, sem, style.defaults(), row[0usize..1usize]), ok)
+}
+
+// ------------------------------------------------ colour picker v2 (D961, P5-06)
+
+// A colour's hue in degrees (0..360), saturation and brightness (0..1).
+fn hsv_of(c: paint.Color) -> (f32, f32, f32) {
+    var high = c.red
+    if c.green > high { high = c.green }
+    if c.blue > high { high = c.blue }
+    var low = c.red
+    if c.green < low { low = c.green }
+    if c.blue < low { low = c.blue }
+    let span = high - low
+    var hue: f32 = 0.0
+    if span > 0.0 {
+        if high == c.red {
+            hue = 60.0 * (c.green - c.blue) / span
+            if hue < 0.0 { hue += 360.0 }
+        } else if high == c.green {
+            hue = 60.0 * ((c.blue - c.red) / span + 2.0)
+        } else {
+            hue = 60.0 * ((c.red - c.green) / span + 4.0)
+        }
+    }
+    var saturation: f32 = 0.0
+    if high > 0.0 { saturation = span / high }
+    ret (hue, saturation, high)
+}
+
+// The colour at a hue, saturation, brightness and alpha.
+fn hsv_color(hue: f32, saturation: f32, bright: f32, alpha: f32) -> paint.Color {
+    var h = hue / 60.0
+    if h < 0.0 { h = 0.0 }
+    while h >= 6.0 { h = h - 6.0 }
+    let sector = i64(h)
+    let f = h - f32(sector)
+    let p = bright * (1.0 - saturation)
+    let q = bright * (1.0 - saturation * f)
+    let u = bright * (1.0 - saturation * (1.0 - f))
+    if sector == 0i64 { ret paint.rgba(bright, u, p, alpha) }
+    if sector == 1i64 { ret paint.rgba(q, bright, p, alpha) }
+    if sector == 2i64 { ret paint.rgba(p, bright, u, alpha) }
+    if sector == 3i64 { ret paint.rgba(p, q, bright, alpha) }
+    if sector == 4i64 { ret paint.rgba(u, p, bright, alpha) }
+    ret paint.rgba(bright, p, q, alpha)
+}
+
+fn hex_digit(v: u32) -> u8 {
+    if v < 10u32 { ret u8(48u32 + v) }
+    ret u8(55u32 + v)
+}
+
+fn channel_byte(v: f32) -> u32 {
+    var c = v
+    if c < 0.0 { c = 0.0 }
+    if c > 1.0 { c = 1.0 }
+    ret u32(c * 255.0 + 0.5)
+}
+
+// The colour as "#RRGGBB" (upper case) into `out`, "#RRGGBBAA" when it is not
+// opaque; the length written.
+fn write_hex(out: []u8, c: paint.Color) -> usize {
+    if out.len < 9usize { ret 0usize }
+    var bytes: [4]u32 = zero
+    bytes[0usize] = channel_byte(c.red)
+    bytes[1usize] = channel_byte(c.green)
+    bytes[2usize] = channel_byte(c.blue)
+    bytes[3usize] = channel_byte(c.alpha)
+    var count = 3usize
+    if bytes[3usize] != 255u32 { count = 4usize }
+    out[0usize] = 35u8
+    var i = 0usize
+    while i < count {
+        out[1usize + 2usize * i] = hex_digit(bytes[i] / 16u32)
+        out[2usize + 2usize * i] = hex_digit(bytes[i] % 16u32)
+        i += 1usize
+    }
+    ret 1usize + 2usize * count
+}
+
+fn hex_value(c: u8) -> u32 {
+    if c >= 48u8 && c <= 57u8 { ret u32(c) - 48u32 }
+    if c >= 65u8 && c <= 70u8 { ret u32(c) - 55u32 }
+    if c >= 97u8 && c <= 102u8 { ret u32(c) - 87u32 }
+    ret 16u32
+}
+
+// Typed hex: 3, 6 or 8 digits, with or without "#"; false for anything else.
+fn read_hex(text: str) -> (paint.Color, bool) {
+    var start = 0usize
+    if text.len > 0usize && text[0usize] == 35u8 { start = 1usize }
+    let n = text.len - start
+    if n != 3usize && n != 6usize && n != 8usize { ret (zero, false) }
+    var digits: [8]u32 = zero
+    var i = 0usize
+    while i < n {
+        let d = hex_value(text[start + i])
+        if d > 15u32 { ret (zero, false) }
+        digits[i] = d
+        i += 1usize
+    }
+    if n == 3usize { ret (paint.rgba(f32(digits[0usize] * 17u32) / 255.0, f32(digits[1usize] * 17u32) / 255.0, f32(digits[2usize] * 17u32) / 255.0, 1.0), true) }
+    var alpha: f32 = 1.0
+    if n == 8usize { alpha = f32(digits[6usize] * 16u32 + digits[7usize]) / 255.0 }
+    ret (paint.rgba(f32(digits[0usize] * 16u32 + digits[1usize]) / 255.0, f32(digits[2usize] * 16u32 + digits[3usize]) / 255.0, f32(digits[4usize] * 16u32 + digits[5usize]) / 255.0, alpha), true)
+}
+
+// A spectrum, a strip or a swatch: what it paints (`kind` 0 the saturation and
+// brightness area, 1 the hue strip, 2 the opacity strip, 3 a swatch), the colour
+// as hue, saturation, brightness and alpha, the checkerboard's and the thumb's
+// colours, and, for a pointer, where it is and whom to tell.
+type Tint = struct { runtime: *widget.Runtime, key: widget.Key, kind: u8, hue: f32, saturation: f32, bright: f32, alpha: f32, color: paint.Color, light: paint.Color, dark: paint.Color, outer: paint.Color, inner: paint.Color, ink: paint.Color, hairline: paint.Color, chosen: bool, layer: f32, change: widget.Change[paint.Color], arena: *mem.Arena }
+
+fn fill_rect(b: *scene.Builder, r: geometry.Rect, brush: paint.Brush) -> err {
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: r, brush: brush } })
+}
+
+// The 5px checkerboard in `light` and `dark` over `area`.
+fn checker(b: *scene.Builder, area: geometry.Rect, light: paint.Color, dark: paint.Color) -> err {
+    try fill_rect(b, area, paint.Brush { Solid: light })
+    var row = 0usize
+    var y = area.y
+    while y < area.y + area.height {
+        var col = row % 2usize
+        var x = area.x + 5.0 * f32(col)
+        while x < area.x + area.width {
+            try fill_rect(b, geometry.Rect { x: x, y: y, width: 5.0, height: 5.0 }, paint.Brush { Solid: dark })
+            x += 10.0
+        }
+        y += 5.0
+        row += 1usize
+    }
+    ret ok
+}
+
+fn two_stops(a: *mem.Arena, from: paint.Color, to: paint.Color) -> ([]const paint.Stop, err) {
+    var none: []const paint.Stop = zero
+    let (stops, stops_error) = mem.alloc[paint.Stop](a, 2usize)
+    if stops_error != ok { ret (none, TooLarge) }
+    stops[0usize] = paint.Stop { offset: 0.0, color: from }
+    stops[1usize] = paint.Stop { offset: 1.0, color: to }
+    ret (stops[0usize..2usize], ok)
+}
+
+fn disc(k: *const Tint, b: *scene.Builder, cx: f32, cy: f32, radius: f32, color: paint.Color) -> err {
+    let (path, path_error) = control.arc_path(k.arena, cx, cy, radius, 1.0)
+    if path_error != ok { ret path_error }
+    ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: color } } })
+}
+
+fn ring(k: *const Tint, b: *scene.Builder, cx: f32, cy: f32, radius: f32, width: f32, color: paint.Color) -> err {
+    let (path, path_error) = control.arc_path(k.arena, cx, cy, radius, 1.0)
+    if path_error != ok { ret path_error }
+    ret scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: path, brush: paint.Brush { Solid: color }, stroke: paint.Stroke { width: width, cap: .Butt, join: .Round, miter_limit: 4.0 } } })
+}
+
+// v2 (D961, docs/ux/components/ColorPicker): the area is the hue at full
+// saturation, white fading out left to right and black fading in top to bottom,
+// in `radius-sm` corners, its thumb a 20 disc of the colour in a 2
+// `surface-container-lowest` ring and a 1 `outline` ring; the hue strip is the
+// hue circle and the opacity strip the colour from transparent to opaque over the
+// 5px `outline-variant` and `surface-container-lowest` checkerboard, both pills,
+// their thumbs the same rings hollow; a swatch is a disc of its colour (over the
+// checkerboard when it is not opaque) with a 1px `on-surface` 16% hairline inside.
+fn tint_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let k = mem.cast[*Tint](ctx)
+    var save: scene.Command = .Save
+    var restore: scene.Command = .Restore
+    var corner = area.height * 0.5
+    if k.kind == 0u8 { corner = 8.0 }
+    if k.kind == 3u8 && area.width * 0.5 < corner { corner = area.width * 0.5 }
+    if k.kind == 3u8 && k.layer > 0.0 { try disc(k, b, area.x + area.width * 0.5, area.y + area.height * 0.5, area.width * 0.5 + 4.0, control.with_alpha(k.ink, k.layer)) }
+    try scene.push(b, save)
+    try scene.push(b, scene.Command { Clip: scene.Clip { Rounded: widget.rounded(area, corner) } })
+    let left = geometry.Point { x: area.x, y: area.y }
+    let across = geometry.Point { x: area.x + area.width, y: area.y }
+    if k.kind == 0u8 {
+        try fill_rect(b, area, paint.Brush { Solid: hsv_color(k.hue, 1.0, 1.0, 1.0) })
+        let (whites, whites_error) = two_stops(k.arena, paint.rgba(1.0, 1.0, 1.0, 1.0), paint.rgba(1.0, 1.0, 1.0, 0.0))
+        if whites_error != ok { ret whites_error }
+        try fill_rect(b, area, paint.Brush { Linear: paint.LinearGradient { start: left, end: across, stops: whites } })
+        let (blacks, blacks_error) = two_stops(k.arena, paint.rgba(0.0, 0.0, 0.0, 0.0), paint.rgba(0.0, 0.0, 0.0, 1.0))
+        if blacks_error != ok { ret blacks_error }
+        try fill_rect(b, area, paint.Brush { Linear: paint.LinearGradient { start: left, end: geometry.Point { x: area.x, y: area.y + area.height }, stops: blacks } })
+    }
+    if k.kind == 1u8 {
+        let (stops, stops_error) = mem.alloc[paint.Stop](k.arena, 7usize)
+        if stops_error != ok { ret TooLarge }
+        var i = 0usize
+        while i < 7usize {
+            stops[i] = paint.Stop { offset: f32(i) / 6.0, color: hsv_color(60.0 * f32(i % 6usize), 1.0, 1.0, 1.0) }
+            i += 1usize
+        }
+        try fill_rect(b, area, paint.Brush { Linear: paint.LinearGradient { start: left, end: across, stops: stops[0usize..7usize] } })
+    }
+    if k.kind == 2u8 {
+        try checker(b, area, k.light, k.dark)
+        let (fade, fade_error) = two_stops(k.arena, control.with_alpha(k.color, 0.0), control.with_alpha(k.color, 1.0))
+        if fade_error != ok { ret fade_error }
+        try fill_rect(b, area, paint.Brush { Linear: paint.LinearGradient { start: left, end: across, stops: fade } })
+    }
+    if k.kind == 3u8 {
+        if k.color.alpha < 1.0 { try checker(b, area, k.light, k.dark) }
+        try fill_rect(b, area, paint.Brush { Solid: k.color })
+    }
+    try scene.push(b, restore)
+    let cy = area.y + area.height * 0.5
+    if k.kind == 3u8 {
+        let mid = area.x + area.width * 0.5
+        if k.chosen { try ring(k, b, mid, cy, area.width * 0.5 + 3.0, 2.0, k.ink) }
+        ret ring(k, b, mid, cy, area.width * 0.5 - 0.5, 1.0, k.hairline)
+    }
+    if k.kind == 0u8 {
+        let tx = area.x + k.saturation * area.width
+        let ty = area.y + (1.0 - k.bright) * area.height
+        try disc(k, b, tx, ty, 10.0, k.outer)
+        try disc(k, b, tx, ty, 9.0, k.inner)
+        ret disc(k, b, tx, ty, 7.0, control.with_alpha(k.color, 1.0))
+    }
+    var share = k.hue / 360.0
+    if k.kind == 2u8 { share = k.alpha }
+    let tx = area.x + share * area.width
+    try ring(k, b, tx, cy, 9.5, 1.0, k.outer)
+    ret ring(k, b, tx, cy, 8.0, 2.0, k.inner)
+}
+
+// A press or a drag on the area sets saturation (across) and brightness (up); on
+// a strip, the hue or the opacity (across); each reaches `change` as the colour.
+fn tint_at(k: *const Tint, p: geometry.Point) -> err {
+    let (area, has_area) = control.keyed_bounds(k.runtime, k.key)
+    if !has_area || area.width <= 0.0 || area.height <= 0.0 { ret ok }
+    var sx = (p.x - area.x) / area.width
+    var sy = (p.y - area.y) / area.height
+    if sx < 0.0 { sx = 0.0 }
+    if sx > 1.0 { sx = 1.0 }
+    if sy < 0.0 { sy = 0.0 }
+    if sy > 1.0 { sy = 1.0 }
+    var next = hsv_color(k.hue, sx, 1.0 - sy, k.alpha)
+    if k.kind == 1u8 { next = hsv_color(sx * 360.0, k.saturation, k.bright, k.alpha) }
+    if k.kind == 2u8 { next = control.with_alpha(k.color, sx) }
+    ret widget.fire_change[paint.Color](k.change, next)
+}
+
+fn tint_gesture(ctx: *void, g: widget.Gesture) -> err {
+    let k = mem.cast[*Tint](ctx)
+    switch g {
+    case .Tap as p:
+        ret tint_at(k, p)
+    case .DragMove as d:
+        ret tint_at(k, d.position)
+    default:
+        ret ok
+    }
+}
+
+// A swatch's press: its colour to `change`.
+type Swatch = struct { color: paint.Color, change: widget.Change[paint.Color] }
+
+fn swatch_fire(ctx: *void) -> err {
+    let s = mem.cast[*Swatch](ctx)
+    ret widget.fire_change[paint.Color](s.change, s.color)
+}
+
+fn same_color(x: paint.Color, y: paint.Color) -> bool {
+    ret channel_byte(x.red) == channel_byte(y.red) && channel_byte(x.green) == channel_byte(y.green) && channel_byte(x.blue) == channel_byte(y.blue) && channel_byte(x.alpha) == channel_byte(y.alpha)
+}
+
+// A painted tint `w` x `h`: a Custom node over `tints[at]`, a slider region keyed
+// `key` in the tree named `label` with `value` when it takes the pointer.
+fn tinted(a: *mem.Arena, key: widget.Key, tint: *Tint, w: f32, h: f32, label: str, value: str) -> (widget.Node, err) {
+    var none: []const widget.Node = zero
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](tint), measure: control.mark_measure, paint: tint_paint, state: widget.bytes_of[Tint](tint) } }, style: control.sized_style(w, h), children: none }
+    let (hit, hit_error) = mem.alloc[widget.Node](a, 1usize)
+    if hit_error != ok { ret (zero, TooLarge) }
+    hit[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](tint), invoke: tint_gesture }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: true }, control.sized_style(w, h), body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 15u8
+    sem.label = label
+    sem.value = value
+    sem.actions = accessibility.ACTION_SET_VALUE
+    ret (widget.semantics(0u64, sem, style.defaults(), hit[0usize..1usize]), ok)
+}
+
+fn percent_text(a: *mem.Arena, share: f32, suffix: str) -> str {
+    let (out, out_error) = mem.alloc[u8](a, 32usize)
+    if out_error != ok { ret "" }
+    var n = control.write_i64(out, i64(share + 0.5))
+    n += control.copy_text(out[n..32usize], suffix)
+    ret out[0usize..n]
+}
+
+// A colour field (D961): the trigger (keyed `key`) showing the colour as a 20
+// swatch and its hex, firing `toggle`; open, the panel (the overlay `key + 1`,
+// the panel box `key + 7`) holds the saturation and brightness area (`key + 2`),
+// the hue strip (`key + 3`), with `with_alpha` the opacity strip (`key + 4`), the
+// hex field (`key + 5`) over the caller's `hex` text reaching `typed` (the caller
+// parses it with `read_hex`), the opacity readout (`key + 6`) and the caller's
+// `swatches` under "Theme" (keyed `key + 8 + index`), a transparent one standing
+// for No colour; every move reaches `change` with the whole colour.
+// v2 (D961, docs/ux/components/ColorPicker, swatches and spectrum): the trigger
+// is the read-only field's box 40 tall (56 on touch) with the 20 swatch leading;
+// the panel is a popover 4 below it on `surface-container-high`, `radius-md` 12,
+// elevation 3, `width` wide (296 in the spec) with 16 padding and 16 between
+// blocks; the area 150 tall (200 on touch) and full width, the strips 12 tall (16
+// on touch); the channel fields 32 tall (48 on touch), 8 apart; the section label
+// in `label-medium` `on-surface-variant`; the swatches 32 (40 on touch) in 40
+// cells, so 8 apart, the chosen one in a 2px `on-surface` ring 2 outside it.
+// ponytail: the hue comes from the colour, so it resets to red at a grey; hex only (no RGB/HSL select), the readout is not typed, no recent colours, no keyboard on the area or strips, no sheet or mode switch for touch, no host panel, 20 thumbs on touch.
+fn color_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: paint.Color, with_alpha: bool, change: widget.Change[paint.Color], open: bool, toggle: *const widget.Submit, swatches: []const paint.Color, hex: []u8, hex_len: usize, typed: widget.Change[str], width: f32) -> (widget.Node, err) {
+    if swatches.len > 64usize { ret (zero, TooLarge) }
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    let (hue, saturation, bright) = hsv_of(value)
+    let light = style.color(t.tokens, .SurfaceContainerLowest)
+    let dark = style.color(t.tokens, .OutlineVariant)
+    let ink = style.color(t.tokens, .OnSurface)
+    let (tints, tints_error) = mem.alloc[Tint](a, 4usize + swatches.len)
+    if tints_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < 4usize + swatches.len {
+        tints[i] = Tint { runtime: t.runtime, key: key + 2u64 + u64(i), kind: u8(i), hue: hue, saturation: saturation, bright: bright, alpha: value.alpha, color: value, light: light, dark: dark, outer: style.color(t.tokens, .Outline), inner: light, ink: ink, hairline: control.with_alpha(ink, 0.16), chosen: false, layer: 0.0, change: change, arena: a }
+        if i >= 3usize {
+            tints[i].kind = 3u8
+            tints[i].key = 0u64
+        }
+        i += 1usize
+    }
+    // The trigger: the value's swatch and hex.
+    let (shown, shown_error) = mem.alloc[u8](a, 9usize)
+    if shown_error != ok { ret (zero, TooLarge) }
+    let shown_len = write_hex(shown, value)
+    let swatch_size: f32 = 20.0
+    var none: []const widget.Node = zero
+    let (leads, leads_error) = mem.alloc[widget.Node](a, 1usize)
+    if leads_error != ok { ret (zero, TooLarge) }
+    leads[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&tints[3usize]), measure: control.mark_measure, paint: tint_paint, state: widget.bytes_of[Tint](&tints[3usize]) } }, style: control.sized_style(swatch_size, swatch_size), children: none }
+    let field_h: f32 = control.if_else(touch, t.tokens.sizes.control_xl, t.tokens.sizes.control_md)
+    let (head, head_error) = control.led_head(a, key, t, label, shown[0usize..shown_len], true, open, toggle, field_h, .ChevronDown, .ChevronUp, true, leads[0usize..1usize])
+    if head_error != ok { ret (zero, head_error) }
+    var count = 1usize
+    if open { count = 2usize }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, count)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = head
+    if open {
+        let inner = control.max_zero(width - 32.0)
+        let (blocks, blocks_error) = mem.alloc[widget.Node](a, 8usize)
+        if blocks_error != ok { ret (zero, TooLarge) }
+        var used = 0usize
+        let area_h: f32 = control.if_else(touch, 200.0, 150.0)
+        let strip_h: f32 = control.if_else(touch, 16.0, 12.0)
+        let (spectrum, spectrum_error) = tinted(a, key + 2u64, &tints[0usize], inner, area_h, "Saturation and brightness", percent_text(a, saturation * 100.0, "%"))
+        if spectrum_error != ok { ret (zero, spectrum_error) }
+        blocks[used] = spectrum
+        used += 1usize
+        let (hues, hues_error) = tinted(a, key + 3u64, &tints[1usize], inner, strip_h, "Hue", percent_text(a, hue, " degrees"))
+        if hues_error != ok { ret (zero, hues_error) }
+        blocks[used] = hues
+        used += 1usize
+        if with_alpha {
+            let (fades, fades_error) = tinted(a, key + 4u64, &tints[2usize], inner, strip_h, "Opacity", percent_text(a, value.alpha * 100.0, "%"))
+            if fades_error != ok { ret (zero, fades_error) }
+            blocks[used] = fades
+            used += 1usize
+        }
+        // The channel row: the hex field and, with alpha, the opacity readout.
+        let channel_h: f32 = control.if_else(touch, t.tokens.sizes.control_lg, t.tokens.sizes.control_sm)
+        var readout_w: f32 = 0.0
+        if with_alpha { readout_w = 72.0 }
+        var field = control.field_options()
+        field.width = inner - readout_w - control.if_else(with_alpha, 8.0, 0.0)
+        field.height = channel_h
+        // Unlabelled, so no notch cuts the 32 field; the group carries the name.
+        let (hexed, hexed_error) = control.text_field(a, key + 5u64, t, "", hex, hex_len, typed, zero, field)
+        if hexed_error != ok { ret (zero, hexed_error) }
+        let (channel_row, channel_error) = mem.alloc[widget.Node](a, 4usize)
+        if channel_error != ok { ret (zero, TooLarge) }
+        channel_row[3usize] = hexed
+        var hex_sem: widget.Semantics = zero
+        hex_sem.role = 2u8
+        hex_sem.label = "Hex"
+        channel_row[0usize] = widget.semantics(0u64, hex_sem, style.defaults(), channel_row[3usize..4usize])
+        var channel_count = 1usize
+        if with_alpha {
+            var words = control.text_options()
+            words.role = .BodyMedium
+            words.wrap = .None
+            let (amount, amount_error) = control.colored_text(a, 0u64, percent_text(a, value.alpha * 100.0, "%"), t, words, ink)
+            if amount_error != ok { ret (zero, amount_error) }
+            channel_row[2usize] = amount
+            var readout = control.sized_style(readout_w, channel_h)
+            readout.radius = t.tokens.radii.xs
+            readout.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .Outline) }
+            channel_row[1usize] = widget.aligned(key + 6u64, .Center, .Center, readout, channel_row[2usize..3usize])
+            channel_count = 2usize
+        }
+        blocks[used] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), channel_row[0usize..channel_count])
+        used += 1usize
+        if swatches.len > 0usize {
+            let (swatch_picks, swatch_picks_error) = mem.alloc[Swatch](a, swatches.len)
+            if swatch_picks_error != ok { ret (zero, TooLarge) }
+            let (submits, submits_error) = mem.alloc[widget.Submit](a, swatches.len)
+            if submits_error != ok { ret (zero, TooLarge) }
+            let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * swatches.len)
+            if cells_error != ok { ret (zero, TooLarge) }
+            let dot: f32 = control.if_else(touch, 40.0, 32.0)
+            var j = 0usize
+            while j < swatches.len {
+                let tint = &tints[4usize + j]
+                let swatch_key = key + 8u64 + u64(j)
+                let chosen = same_color(swatches[j], value)
+                tint.color = swatches[j]
+                tint.chosen = chosen
+                tint.layer = control.state_opacity(t, control.control_state(t, swatch_key, true, chosen))
+                swatch_picks[j] = Swatch { color: swatches[j], change: change }
+                submits[j] = widget.Submit { ctx: mem.cast[*void](&swatch_picks[j]), invoke: swatch_fire }
+                cells[swatches.len + j] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](tint), measure: control.mark_measure, paint: tint_paint, state: widget.bytes_of[Tint](tint) } }, style: control.sized_style(dot, dot), children: none }
+                var cell_style = control.sized_style(dot, dot)
+                cell_style.radius = dot * 0.5
+                let (pressed_cell, pressed_error) = mem.alloc[widget.Node](a, 1usize)
+                if pressed_error != ok { ret (zero, TooLarge) }
+                pressed_cell[0usize] = widget.region(swatch_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&submits[j]), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, cell_style, cells[swatches.len + j..swatches.len + j + 1usize])
+                var entry: widget.Semantics = zero
+                entry.role = 5u8
+                let (named, named_error) = mem.alloc[u8](a, 9usize)
+                if named_error != ok { ret (zero, TooLarge) }
+                entry.label = named[0usize..write_hex(named, swatches[j])]
+                if swatches[j].alpha <= 0.0 { entry.label = "No colour" }
+                entry.actions = accessibility.ACTION_PRESS
+                if chosen { entry.states = accessibility.STATE_CHECKED }
+                cells[j] = widget.semantics(0u64, entry, style.defaults(), pressed_cell[0usize..1usize])
+                j += 1usize
+            }
+            var section = control.text_options()
+            section.role = .LabelMedium
+            section.wrap = .None
+            let (theme_label, theme_label_error) = control.colored_text(a, 0u64, "Theme", t, section, style.color(t.tokens, .OnSurfaceVariant))
+            if theme_label_error != ok { ret (zero, theme_label_error) }
+            let (group, group_error) = mem.alloc[widget.Node](a, 3usize)
+            if group_error != ok { ret (zero, TooLarge) }
+            var flow = style.defaults()
+            flow.width = style.Length { Px: inner }
+            group[0usize] = theme_label
+            group[2usize] = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: control.if_else(touch, 16.0, 8.0) }, flow, cells[0usize..swatches.len])
+            var radio: widget.Semantics = zero
+            radio.role = 2u8
+            radio.label = "Theme"
+            group[1usize] = widget.semantics(0u64, radio, style.defaults(), group[2usize..3usize])
+            blocks[used] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), group[0usize..2usize])
+            used += 1usize
+        }
+        var raised = control.surface_options(t)
+        raised.background = .SurfaceContainerHigh
+        raised.radius = t.tokens.radii.md
+        raised.elevation = 3u8
+        raised.padding = 16.0
+        var raised_style = control.surface_style(t, raised)
+        raised_style.width = style.Length { Px: width }
+        raised_style.overflow = .Visible
+        let (panel_body, panel_error) = mem.alloc[widget.Node](a, 1usize)
+        if panel_error != ok { ret (zero, TooLarge) }
+        panel_body[0usize] = widget.flex(key + 7u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, raised_style, blocks[0usize..used])
+        let (made, made_error) = dismissable(a, key + 1u64, key, .Below, label, panel_body[0usize], toggle, 4.0)
+        if made_error != ok { ret (zero, made_error) }
+        parts[1usize] = made
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    sem.value = shown[0usize..shown_len]
+    if open { sem.states = accessibility.STATE_EXPANDED }
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
 }

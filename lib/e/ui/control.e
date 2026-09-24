@@ -648,7 +648,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // and (D956) the chevrons a menu's opener points with; (D959) the chevrons a
 // calendar turns its months with and the calendar a date field ends in; (D960)
 // the clock a time or duration field ends in.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena }
 
 fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
@@ -720,6 +720,23 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.move_to(&builder, geometry.Point { x: cx, y: y + h * 0.26 })
         try geometry.line_to(&builder, geometry.Point { x: cx, y: cy })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.68, y: cy })
+    }
+    if g.kind == .Search {
+        // A lens of four quarter arcs and its handle to the lower right (D961).
+        let cx = x + w * 0.42
+        let cy = y + h * 0.42
+        let rx = w * 0.25
+        let ry = h * 0.25
+        let kx = rx * 0.5523
+        let ky = ry * 0.5523
+        try geometry.move_to(&builder, geometry.Point { x: cx, y: cy - ry })
+        try geometry.cubic_to(&builder, geometry.Point { x: cx + kx, y: cy - ry }, geometry.Point { x: cx + rx, y: cy - ky }, geometry.Point { x: cx + rx, y: cy })
+        try geometry.cubic_to(&builder, geometry.Point { x: cx + rx, y: cy + ky }, geometry.Point { x: cx + kx, y: cy + ry }, geometry.Point { x: cx, y: cy + ry })
+        try geometry.cubic_to(&builder, geometry.Point { x: cx - kx, y: cy + ry }, geometry.Point { x: cx - rx, y: cy + ky }, geometry.Point { x: cx - rx, y: cy })
+        try geometry.cubic_to(&builder, geometry.Point { x: cx - rx, y: cy - ky }, geometry.Point { x: cx - kx, y: cy - ry }, geometry.Point { x: cx, y: cy - ry })
+        try geometry.close_path(&builder)
+        try geometry.move_to(&builder, geometry.Point { x: cx + rx * 0.72, y: cy + ry * 0.72 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.84, y: y + h * 0.84 })
     }
     if g.kind == .Cross {
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.28, y: y + h * 0.28 })
@@ -1345,10 +1362,10 @@ fn progress_ring(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, va
 // v2 (D951): filled or outlined, and the fixed text before and after the value;
 // (D956) room kept clear at the end for a control standing inside it; (D960) a
 // height other than the density's (0 keeps it), `body-medium` at 40 or less.
-type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32 }
+type FieldOptions = struct { placeholder: str, enabled: bool, read_only: bool, invalid: bool, width: f32, rows: u32, filled: bool, prefix: str, suffix: str, end_space: f32, height: f32, start_space: f32 }
 
 fn field_options() -> FieldOptions {
-    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0 }
+    ret FieldOptions { placeholder: "", enabled: true, read_only: false, invalid: false, width: 160.0, rows: 1u32, filled: false, prefix: "", suffix: "", end_space: 0.0, height: 0.0, start_space: 0.0 }
 }
 
 // The field every text field is, v2 (D951, docs/ux/components/TextField): outlined
@@ -1485,7 +1502,7 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
     }
     frame_style.min_height = style.Length { Px: height }
     let side = style.Length { Px: pad_x }
-    frame_style.padding = style.EdgeLengths { left: side, top: style.Length { Px: pad_top }, right: style.Length { Px: pad_x + options.end_space }, bottom: style.Length { Px: pad_top } }
+    frame_style.padding = style.EdgeLengths { left: style.Length { Px: pad_x + options.start_space }, top: style.Length { Px: pad_top }, right: style.Length { Px: pad_x + options.end_space }, bottom: style.Length { Px: pad_top } }
     if options.filled {
         var fill = style.color(t.tokens, .SurfaceContainerHighest)
         if hovered { fill = style.layer(fill, ink, t.tokens.states.hover) }
@@ -1673,6 +1690,14 @@ fn text_area(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
 // open) 24 (18 at 40) in `on-surface-variant`, `primary` while open; a press fires
 // `toggle`, and the head says Expanded while open.
 fn field_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, h: f32, closed: GlyphKind, opened: GlyphKind, notch: bool) -> (widget.Node, err) {
+    var none: []const widget.Node = zero
+    let (made, made_error) = led_head(a, key, t, label, shown, chosen, open, toggle, h, closed, opened, notch, none)
+    ret (made, made_error)
+}
+
+// The same head with `lead` (at most one node) before the value, 12 in and 12
+// before it (D961: the colour picker's 20 swatch).
+fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, h: f32, closed: GlyphKind, opened: GlyphKind, notch: bool, lead: []const widget.Node) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
     let dense = h <= t.tokens.sizes.control_md
     let pad_x: f32 = if_else(dense, 12.0, 16.0)
@@ -1716,9 +1741,17 @@ fn field_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown
     if open { kind = opened }
     let (chevron, chevron_error) = mark_glyph(a, point, kind, mark)
     if chevron_error != ok { ret (zero, chevron_error) }
-    let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+    let (bits, bits_error) = mem.alloc[widget.Node](a, 4usize)
     if bits_error != ok { ret (zero, TooLarge) }
     bits[0usize] = value_node
+    if lead.len == 1usize {
+        // The lead is at most 20 tall, and the head keeps `h`.
+        look.padding_start = 12.0
+        look.padding_y = max_zero((h - max_of(mark, 20.0)) * 0.5)
+        bits[2usize] = lead[0usize]
+        bits[3usize] = value_node
+        bits[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, style.defaults(), bits[2usize..4usize])
+    }
     bits[1usize] = chevron
     // The chevron at the end of the least width.
     var spread = style.defaults()
@@ -1987,6 +2020,8 @@ fn listed(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         view_style.border = style.Border { width: 0.0, color: paint.rgba(0.0, 0.0, 0.0, 0.0) }
         view_style.radius = 0.0
         view_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: four, right: style.Length { Px: 0.0 }, bottom: four }
+        // An unframed single-choice list (D961, the font panel's) stands on its caller's surface.
+        if !multi { view_style.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
     }
     view_style.overflow = .Clip
     let (view, view_error) = widget.scroll_view(a, key, .Vertical, view_style, items[0usize..options.len])
@@ -3071,11 +3106,17 @@ fn stepper(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: i
 // from it, their 16 chevrons in `on-surface-variant` under their own state layers,
 // the v2 disabled colours at a bound; on touch they flank the field as D952's.
 fn spin_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str]) -> (widget.Node, err) {
+    let (made, made_error) = spin_box_sized(a, key, t, label, buffer, value, low, high, step, change, typed, 4.0 * t.tokens.spacing.lg)
+    ret (made, made_error)
+}
+
+// The same spin box `width` wide (D961: the font picker's 104).
+fn spin_box_sized(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []u8, value: i64, low: i64, high: i64, step: i64, change: widget.Change[i64], typed: widget.Change[str], width: f32) -> (widget.Node, err) {
     let (buttons, shortcuts, pair_error) = step_pair(a, t, key + 1u64, key + 2u64, value, low, high, step, change)
     if pair_error != ok { ret (zero, pair_error) }
     let len = write_i64(buffer, value)
     var options = field_options()
-    options.width = 4.0 * t.tokens.spacing.lg
+    options.width = width
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     if !touch { options.end_space = 24.0 - 8.0 }
     let (editor, editor_error) = text_field(a, key, t, label, buffer, len, typed, zero, options)
@@ -4408,6 +4449,174 @@ fn font_picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, fami
     sem.label = label
     sem.value = families[family]
     ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
+}
+
+// A font panel (D961) over the caller's catalogue: the families as a list (keyed
+// `key + 1`, its rows `key + 2 + index`, `rows` tall), the family's styles as a
+// picker (`key + 64`, open while `styles_open`, its menu `key + 65` and its rows
+// after) firing `toggle_styles`, the size as a spin box (`key + 80`, its arrows
+// `key + 81` and `key + 82`) over the caller's `size_buffer`, 1 to 288, and a
+// preview of `sample` (keyed `key + 84`), and a search field (`key + 85`) over the
+// caller's `search` text reaching `searched` -- the caller filters `families`;
+// the panel box is `key`. A `family` past
+// the end reads as the first. A group in the tree named `label` whose value is
+// the picked family.
+// v2 (D961, docs/ux/components/FontPicker, inline panel): `surface-container-low`,
+// `radius-md` 12, 16 padding, two columns 16 apart; the family list column 260 on
+// `surface` with `radius-sm` corners, its rows the list box's 40 rows, the chosen
+// one `secondary-container` with its trailing check; "Family", "Style" and "Size"
+// drawn in `label-medium` `on-surface-variant` 4 above their parts; style and size
+// at pointer density -1 (the dense 40 Picker, and the dense Spin box 104 wide);
+// the preview on `surface` in a 1px `outline-variant` edge with `radius-sm`
+// corners, 12 above and below and 16 at the sides, at least 88 tall, the sample in
+// `body-large` over the caption "Preview, <size> pt" in `label-small`
+// `on-surface-variant`.
+// The search is the outlined field 40 tall with an 18 `search` mark 12 in, 16
+// above the family label.
+// ponytail: no subheaders, recent families, feature chips, trigger or sheet; the picker is its least 112 wide, not 160; rows are in the theme's face -- a field per family's face waits on the caller's fonts.
+fn font_panel(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, families: []const str, family: usize, styles: []const str, style_index: usize, styles_open: bool, toggle_styles: *const widget.Submit, size: i64, size_buffer: []u8, sample: str, pick_family: widget.Change[usize], pick_style: widget.Change[usize], change_size: widget.Change[i64], typed_size: widget.Change[str], search: []u8, search_len: usize, searched: widget.Change[str], rows: u32, width: f32) -> (widget.Node, err) {
+    if families.len == 0usize || styles.len == 0usize { ret (zero, TooLarge) }
+    var picked = family
+    if picked >= families.len { picked = 0usize }
+    let (family_actions, family_error) = chosen_actions(a, families.len, pick_family)
+    if family_error != ok { ret (zero, family_error) }
+    let (style_actions, style_error) = chosen_actions(a, styles.len, pick_style)
+    if style_error != ok { ret (zero, style_error) }
+    // Style and size at density -1: a copy of the theme whose controls are 24 + 16.
+    let (dense_tokens, dense_error) = mem.alloc[style.ThemeTokens](a, 1usize)
+    if dense_error != ok { ret (zero, TooLarge) }
+    dense_tokens[0usize] = *t.tokens
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    if !touch { dense_tokens[0usize].metrics.control_height = t.tokens.sizes.control_xs }
+    let (themes, themes_error) = mem.alloc[Theme](a, 1usize)
+    if themes_error != ok { ret (zero, TooLarge) }
+    themes[0usize] = *t
+    themes[0usize].tokens = &dense_tokens[0usize]
+    let dense = &themes[0usize]
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var heading = text_options()
+    heading.role = .LabelMedium
+    heading.wrap = .None
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 12usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    // The family column: its label over the list on `surface`.
+    let (family_label, family_label_error) = colored_text(a, 0u64, "Family", t, heading, muted)
+    if family_label_error != ok { ret (zero, family_label_error) }
+    let (chosen_rows, chosen_error) = mem.alloc[bool](a, families.len)
+    if chosen_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < families.len {
+        chosen_rows[i] = i == picked
+        i += 1usize
+    }
+    let (list, list_error) = listed(a, key + 1u64, t, "Family", families, chosen_rows, family_actions, rows, 262.0, false, false)
+    if list_error != ok { ret (zero, list_error) }
+    parts[0usize] = list
+    var list_frame = style.defaults()
+    list_frame.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    list_frame.radius = t.tokens.radii.sm
+    list_frame.overflow = .Clip
+    // The search: the outlined field 40 tall and 260 wide, its 18 `search` mark 12
+    // in, in `on-surface-variant`, and the query 12 after it.
+    var query = field_options()
+    query.width = 260.0
+    query.height = t.tokens.sizes.control_md
+    query.placeholder = "Search fonts"
+    query.start_space = 12.0 + t.tokens.sizes.icon_sm + 12.0 - 16.0
+    if t.tokens.metrics.control_height < t.tokens.sizes.control_sm { query.start_space = 12.0 + t.tokens.sizes.icon_sm }
+    let (query_field, query_error) = text_field(a, key + 85u64, t, "", search, search_len, searched, zero, query)
+    if query_error != ok { ret (zero, query_error) }
+    let (lens, lens_error) = mark_glyph(a, muted, .Search, t.tokens.sizes.icon_sm)
+    if lens_error != ok { ret (zero, lens_error) }
+    let (searching, searching_error) = mem.alloc[widget.Node](a, 3usize)
+    if searching_error != ok { ret (zero, TooLarge) }
+    searching[0usize] = query_field
+    searching[2usize] = lens
+    searching[1usize] = widget.positioned(0u64, 12.0, max_zero((query.height - t.tokens.sizes.icon_sm) * 0.5), style.defaults(), searching[2usize..3usize])
+    var search_sem: widget.Semantics = zero
+    search_sem.role = 2u8
+    search_sem.label = "Search fonts"
+    let (searched_parts, searched_error) = mem.alloc[widget.Node](a, 1usize)
+    if searched_error != ok { ret (zero, TooLarge) }
+    searched_parts[0usize] = widget.stack(0u64, style.defaults(), searching[0usize..2usize])
+    let (column_parts, column_parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if column_parts_error != ok { ret (zero, TooLarge) }
+    column_parts[2usize] = family_label
+    column_parts[3usize] = widget.box(0u64, list_frame, parts[0usize..1usize])
+    column_parts[0usize] = widget.semantics(0u64, search_sem, style.defaults(), searched_parts[0usize..1usize])
+    // The label 16 under the search, 4 above the list.
+    column_parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), column_parts[2usize..4usize])
+    parts[3usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, style.defaults(), column_parts[0usize..2usize])
+    // The style and size, each under its label.
+    let (style_label, style_label_error) = colored_text(a, 0u64, "Style", t, heading, muted)
+    if style_label_error != ok { ret (zero, style_label_error) }
+    let (faces, faces_error) = picker(a, key + 64u64, dense, "Style", styles, style_index, styles_open, toggle_styles, style_actions, .Popup)
+    if faces_error != ok { ret (zero, faces_error) }
+    let (size_label, size_label_error) = colored_text(a, 0u64, "Size", t, heading, muted)
+    if size_label_error != ok { ret (zero, size_label_error) }
+    let (sized, sized_error) = spin_box_sized(a, key + 80u64, dense, "Size", size_buffer, size, 1i64, 288i64, 1i64, change_size, typed_size, 104.0)
+    if sized_error != ok { ret (zero, sized_error) }
+    let (labelled_parts, labelled_error) = mem.alloc[widget.Node](a, 4usize)
+    if labelled_error != ok { ret (zero, TooLarge) }
+    labelled_parts[0usize] = style_label
+    labelled_parts[1usize] = faces
+    labelled_parts[2usize] = size_label
+    labelled_parts[3usize] = sized
+    parts[4usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), labelled_parts[0usize..2usize])
+    parts[5usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), labelled_parts[2usize..4usize])
+    // The preview: the sample over its caption.
+    var sample_words = text_options()
+    sample_words.role = .BodyLarge
+    sample_words.wrap = .None
+    sample_words.ellipsis = "..."
+    sample_words.max_lines = 1u32
+    let (sample_node, sample_error) = colored_text(a, 0u64, sample, t, sample_words, style.color(t.tokens, .OnSurface))
+    if sample_error != ok { ret (zero, sample_error) }
+    let (caption_text, caption_error) = mem.alloc[u8](a, 40usize)
+    if caption_error != ok { ret (zero, TooLarge) }
+    var caption_len = copy_text(caption_text, "Preview, ")
+    caption_len += write_i64(caption_text[caption_len..40usize], size)
+    caption_len += copy_text(caption_text[caption_len..40usize], " pt")
+    var small = text_options()
+    small.role = .LabelSmall
+    small.wrap = .None
+    let (caption_node, caption_node_error) = colored_text(a, 0u64, caption_text[0usize..caption_len], t, small, muted)
+    if caption_node_error != ok { ret (zero, caption_node_error) }
+    parts[6usize] = sample_node
+    parts[7usize] = caption_node
+    let right_width = max_zero(width - 32.0 - 260.0 - 16.0)
+    var preview_style = style.defaults()
+    preview_style.width = style.Length { Px: right_width }
+    preview_style.min_height = style.Length { Px: 88.0 }
+    preview_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    preview_style.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+    preview_style.radius = t.tokens.radii.sm
+    let side = style.Length { Px: 16.0 }
+    let edge = style.Length { Px: 12.0 }
+    preview_style.padding = style.EdgeLengths { left: side, top: edge, right: side, bottom: edge }
+    parts[8usize] = widget.flex(key + 84u64, ui_layout.Flex { axis: .Vertical, main: .SpaceBetween, cross: .Start, gap: 4.0 }, preview_style, parts[6usize..8usize])
+    parts[9usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, style.defaults(), parts[4usize..6usize])
+    let (right, right_error) = mem.alloc[widget.Node](a, 2usize)
+    if right_error != ok { ret (zero, TooLarge) }
+    right[0usize] = parts[9usize]
+    right[1usize] = parts[8usize]
+    parts[10usize] = parts[3usize]
+    parts[11usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 16.0 }, style.defaults(), right[0usize..2usize])
+    var panel_options = surface_options(t)
+    panel_options.background = .SurfaceContainerLow
+    panel_options.radius = t.tokens.radii.md
+    panel_options.padding = 16.0
+    var panel_style = surface_style(t, panel_options)
+    panel_style.width = style.Length { Px: width }
+    panel_style.overflow = .Visible
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(key, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 16.0 }, panel_style, parts[10usize..12usize])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = label
+    sem.value = families[picked]
+    ret (widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize]), ok)
 }
 
 // A notification list: D832's notices, newest first as the caller orders them,
