@@ -3089,6 +3089,28 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
         s.menu_mode = true
         ret (true, ok)
     }
+    if s.has_focus && plain {
+        let (item_owner, has_item) = menu_item_owner(s, usize(s.focus))
+        if has_item && code == 39u32 && (s.elements[item_owner].sem.actions & 1024u32) != 0u32 {
+            let item = &s.elements[usize(s.focus)]
+            let fired = fire_gesture(item.gesture, Gesture { Tap: geometry.Point { x: item.bounds.x + item.bounds.width * 0.5, y: item.bounds.y + item.bounds.height * 0.5 } })
+            ret (true, fired)
+        }
+        if has_item && code == 37u32 {
+            var modal_count = 0usize
+            var top = 0usize
+            var m = 0usize
+            while m < s.overlay_count {
+                let over = usize(s.overlays[m])
+                if s.elements[over].modal && descends_from(s, usize(s.focus), over) {
+                    modal_count += 1usize
+                    top = over
+                }
+                m += 1usize
+            }
+            if modal_count > 1usize { ret (true, fire_submit(s.elements[top].dismiss)) }
+        }
+    }
     if !s.has_focus || !plain || !descends_from(s, usize(s.focus), bar) { ret (false, ok) }
     var current = count
     var opened = count
@@ -3248,13 +3270,18 @@ fn menu_key(s: *State, code: u32, k: input.KeyEvent) -> bool {
 fn menu_tap(s: *State, index: usize, point: geometry.Point) -> err {
     let fired = fire_gesture(s.elements[index].gesture, Gesture { Tap: point })
     if fired != ok { ret fired }
-    let (_, item) = menu_item_owner(s, index)
+    let (owner_at, item) = menu_item_owner(s, index)
     if !item { ret ok }
+    if (s.elements[owner_at].sem.actions & 1024u32) != 0u32 { ret ok }
     s.menu_typeahead_len = 0usize
-    let (modal, has_modal) = topmost_modal(s)
-    if has_modal && descends_from(s, index, modal) {
-        let dismissed = fire_submit(s.elements[modal].dismiss)
-        if dismissed != ok { ret dismissed }
+    var i = s.overlay_count
+    while i > 0usize {
+        i -= 1usize
+        let modal = usize(s.overlays[i])
+        if s.elements[modal].modal && descends_from(s, index, modal) {
+            let dismissed = fire_submit(s.elements[modal].dismiss)
+            if dismissed != ok { ret dismissed }
+        }
     }
     leave_menu_mode(s)
     ret ok

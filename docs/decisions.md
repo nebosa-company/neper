@@ -21514,3 +21514,19 @@ semantic label remains the original whole title.
 `menu-bar-access-underline.png` is the Segoe UI visual check.
 
 Submenus remain open.
+
+## D1003 — MenuBar supports one level of cascading submenus
+
+A MenuBar command can own a first-level submenu. Its row exposes Show menu,
+Expanded and Controls semantics, draws a trailing chevron, and anchors the child
+menu to its right with a 4-pixel overlap and 8-pixel upward alignment. Right
+opens the focused submenu, Left closes only that level, and choosing a leaf
+dismisses the complete modal chain before restoring pre-menu focus.
+
+The title key stride grows to 256 so fourteen commands and their submenu keys
+remain disjoint. `ui_navigation2_v2` holds opening, focus entry, leaf activation,
+full-chain dismissal, focus return and Left closure on Windows and Linux;
+`menu-bar-submenu.png` is the Segoe UI visual check.
+
+Deeper cascades, delayed hover with a safe triangle, radio and icon items, and
+the collapsed form remain open.

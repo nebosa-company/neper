@@ -8,7 +8,8 @@
 // secondary fixed bar sharing its width with a 2px line across the active tab;
 // a 32 tall menu bar on `surface` whose open 24 tall title is
 // `secondary-container`, its menu 2 below on `surface-container`, 32 tall
-// commands, a separator, a checked command and Escape closing.
+// commands, a separator, a checked command, and one right-side submenu opened
+// and closed by the shared menu keyboard path.
 
 use e.gpu
 use e.io
@@ -34,7 +35,7 @@ type Counter = struct { count: usize }
 
 // The counters: 0-4 crumbs, 5 overflow toggle, 6-8 tabs, 9 menu toggles, 10
 // commands.
-type Store = struct { counters: [12]Counter, subs: [12]widget.Submit, crumbs: [5]widget.Submit, tabs: [3]widget.Submit, toggles: [2]widget.Submit, file: [5]navigation.BarCommand, edit: [1]navigation.BarCommand, menus: [2]navigation.BarMenu }
+type Store = struct { counters: [12]Counter, subs: [12]widget.Submit, crumbs: [5]widget.Submit, tabs: [3]widget.Submit, toggles: [2]widget.Submit, file: [5]navigation.BarCommand, submenu: [2]navigation.BarCommand, edit: [1]navigation.BarCommand, menus: [2]navigation.BarMenu }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -151,6 +152,15 @@ fn current_count(tree: accessibility.Tree) -> usize {
     ret n
 }
 
+fn has_action(node: accessibility.Node, wanted: accessibility.Action) -> bool {
+    var i = 0usize
+    while i < node.actions.len {
+        if node.actions[i] == wanted { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -207,6 +217,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.file[4usize].label = "Delete"
     s.file[4usize].destructive = true
     s.file[4usize].enabled = false
+    s.submenu[0usize] = command
+    s.submenu[0usize].label = "Recent"
+    s.submenu[1usize] = command
+    s.submenu[1usize].label = "Workspace"
+    s.file[2usize].submenu = s.submenu[..]
+    s.file[2usize].submenu_toggle = s.subs[11usize]
     s.edit[0usize] = command
     s.edit[0usize].label = "Undo"
     s.menus[0usize] = navigation.BarMenu { label: "File", commands: s.file[0usize..5usize] }
@@ -272,7 +288,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_on_file || !same_element(on_file, testing.by_key(&harness, 2401u64).element) { os.exit(38i32) }
     if testing.press_key(&harness, 39u32, zero) != ok { os.exit(39i32) }
     let (on_edit, has_on_edit) = testing.focused(&harness)
-    if !has_on_edit || !same_element(on_edit, testing.by_key(&harness, 2417u64).element) { os.exit(40i32) }
+    if !has_on_edit || !same_element(on_edit, testing.by_key(&harness, 2657u64).element) { os.exit(40i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || s.counters[9usize].count != 1usize { os.exit(41i32) }
     s.counters[9usize].count = 0usize
     if testing.press_key(&harness, 27u32, zero) != ok { os.exit(42i32) }
@@ -320,12 +336,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_typed || !same_element(typed, testing.by_key(&harness, 2404u64).element) || testing.pump(&harness, root_3, time.Instant { nanos: 2200000000i64 }) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok || testing.press_key(&harness, 79u32, zero) != ok || testing.press_key(&harness, 84u32, zero) != ok { os.exit(53i32) }
     let (prefixed, has_prefixed) = testing.focused(&harness)
     if !has_prefixed || !same_element(prefixed, testing.by_key(&harness, 2405u64).element) { os.exit(62i32) }
-    // Right follows an open menu to its neighbour and fires that title.
-    if testing.press_key(&harness, 39u32, zero) != ok || s.counters[9usize].count != 1usize { os.exit(44i32) }
-    let (followed, has_followed) = testing.focused(&harness)
-    if !has_followed || !same_element(followed, testing.by_key(&harness, 2417u64).element) { os.exit(44i32) }
     s.counters[9usize].count = 0usize
-    let (edit_title, has_edit_title) = bounds(&harness, &runtime, 2417u64)
+    s.counters[10usize].count = 0usize
+    s.counters[11usize].count = 0usize
+    // Right opens the focused submenu; Left closes that level. Right on a leaf
+    // still follows the top-level menu to its neighbour.
+    if testing.press_key(&harness, 39u32, zero) != ok || s.counters[11usize].count != 1usize { os.exit(44i32) }
+    s.file[2usize].submenu_open = true
+    let (root_sub, root_sub_error) = build(&f, &theme, s, false, 0usize)
+    if root_sub_error != ok || testing.pump(&harness, root_sub, time.Instant { nanos: 2210000000i64 }) != ok { os.exit(66i32) }
+    let (tree_sub, tree_sub_error) = testing.semantics(&harness)
+    let (other_node, has_other_node) = find(tree_sub, .MenuItem, "Other")
+    if tree_sub_error != ok || !has_other_node || !other_node.state.expanded || !has_action(other_node, .ShowMenu) || !same_element(other_node.relations.controls, testing.by_key(&harness, 2449u64).element) { os.exit(66i32) }
+    let (on_recent, has_on_recent) = testing.focused(&harness)
+    if !has_on_recent || !same_element(on_recent, testing.by_key(&harness, 2450u64).element) { os.exit(67i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok { os.exit(67i32) }
+    if s.counters[10usize].count != 1usize || s.counters[11usize].count != 2usize || s.counters[9usize].count != 1usize { os.exit(67i32) }
+    let (sub_returned, has_sub_returned) = testing.focused(&harness)
+    if !has_sub_returned || !same_element(sub_returned, original) { os.exit(67i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 2450u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || s.counters[11usize].count != 3usize { os.exit(67i32) }
+    s.counters[9usize].count = 0usize
+    s.counters[10usize].count = 0usize
+    s.file[2usize].submenu_open = false
+    let (root_leaf, root_leaf_error) = build(&f, &theme, s, false, 0usize)
+    if root_leaf_error != ok || testing.pump(&harness, root_leaf, time.Instant { nanos: 2220000000i64 }) != ok || widget.focus(&runtime, testing.by_key(&harness, 2406u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok || s.counters[9usize].count != 1usize { os.exit(68i32) }
+    let (followed, has_followed) = testing.focused(&harness)
+    if !has_followed || !same_element(followed, testing.by_key(&harness, 2657u64).element) { os.exit(44i32) }
+    s.counters[9usize].count = 0usize
+    let (edit_title, has_edit_title) = bounds(&harness, &runtime, 2657u64)
     if !has_edit_title || testing.hover(&harness, edit_title.x + edit_title.width * 0.5, edit_title.y + edit_title.height * 0.5) != ok || s.counters[9usize].count != 1usize { os.exit(51i32) }
     s.counters[9usize].count = 0usize
     // Its menu 2 below on `surface-container`, at least 200 wide; five commands
@@ -339,6 +377,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (auto_node, has_auto_node) = find(tree_3, .MenuItem, "Autosave")
     let (delete_node, has_delete_node) = find(tree_3, .MenuItem, "Delete")
     if testing.by_role(&harness, .MenuItem).count != 5usize || !has_auto_node || !auto_node.state.checked || !has_delete_node || !delete_node.state.disabled { os.exit(30i32) }
+    if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(69i32) }
+    s.counters[9usize].count = 0usize
     if !tap_key(&harness, &runtime, 2403u64) || s.counters[10usize].count != 1usize || s.counters[9usize].count != 1usize { os.exit(31i32) }
     let (returned, has_returned) = testing.focused(&harness)
     if !has_returned || !same_element(returned, original) { os.exit(55i32) }

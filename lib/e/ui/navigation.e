@@ -904,7 +904,7 @@ type MenuBarItem = struct { label: str, items: []const overlay.MenuItem }
 // be chosen, its shortcut's words ("Ctrl+S"; empty for none), whether it is
 // checked (a check in the leading slot), whether a separator stands before it,
 // and whether it destroys (in `error`).
-type BarCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checked: bool, separated: bool, destructive: bool }
+type BarCommand = struct { label: str, action: widget.Submit, enabled: bool, shortcut: str, checked: bool, separated: bool, destructive: bool, submenu: []const BarCommand, submenu_open: bool, submenu_toggle: widget.Submit }
 
 // A menu of the v2 menu bar (D972): its title and its commands.
 type BarMenu = struct { label: str, commands: []const BarCommand }
@@ -934,10 +934,10 @@ fn menu_title_label(a: *mem.Arena, t: *const control.Theme, label: str, caption:
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), parts[2usize..4usize]), ok)
 }
 
-// A menu bar: the menus' titles in a row, sixteen keys apart from `key + 1` (a
-// title, its menu and up to fourteen commands each), the one at `open` open (an
-// index past the end for none), each firing its toggle; a group in the tree named
-// `label`. The v2 bar of D972 below over plain commands.
+// A menu bar: the menus' titles in a row, 256 keys apart from `key + 1` (a
+// title, its menu, up to fourteen commands and their first-level submenus), the
+// one at `open` open (an index past the end for none), each firing its toggle; a
+// group in the tree named `label`. The v2 bar of D972 below over plain commands.
 fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const MenuBarItem, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     let (bars, bars_error) = mem.alloc[BarMenu](a, menus.len)
     if bars_error != ok { ret (zero, TooLarge) }
@@ -963,11 +963,11 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 }
 
 // v2 (D972, docs/ux/components/MenuBar): full-bleed and square, 32 tall on
-// `surface`, 4 in at the ends. A title (keyed `key + 1 + 16 * index`) is 24 tall,
+// `surface`, 4 in at the ends. A title (keyed `key + 1 + 256 * index`) is 24 tall,
 // 8 at its sides, `radius-xs`, its `body-medium` label in `on-surface` under the
 // `state-hover` layer, the titles touching; the open one is `secondary-container`
-// with `on-secondary-container` and Expanded, its menu (keyed `key + 2 + 16 *
-// index`, its commands `key + 3 + 16 * index + j`, at most 14) hanging 2 below
+// with `on-secondary-container` and Expanded, its menu (keyed `key + 2 + 256 *
+// index`, its commands `key + 3 + 256 * index + j`, at most 14) hanging 2 below
 // it: `surface-container`, `radius-sm`, elevation 2, 8 at top and bottom, 200 to
 // 320 wide. A command is 32 tall, 12 at its sides, 8 between its parts: the 18
 // leading slot (a check; reserved in every command once any is checked), the
@@ -976,7 +976,10 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // separator is a 1px `outline-variant` line with 8 above and below. A disabled
 // command is `on-surface` at 38% under no layer. A MenuBar in the tree named
 // by `label`.
-// ponytail: no submenus, radio or icon items or collapsed form.
+// A command can open one submenu to its right, overlapping by 4 and aligned 8
+// above the row; Right opens it, Left closes it, and a leaf closes both menus.
+// ponytail: one submenu level only; no delayed hover/safe triangle, radio or
+// icon items or collapsed form.
 // Command dismissal and focus return are shared by the widget runtime.
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
@@ -986,7 +989,7 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     var i = 0usize
     while i < menus.len {
         if menus[i].commands.len > 14usize { ret (zero, TooLarge) }
-        let title_key = key + 1u64 + 16u64 * u64(i)
+        let title_key = key + 1u64 + 256u64 * u64(i)
         let opened = i == open
         let state = control.control_state(t, title_key, true, false)
         var tint = ink
@@ -1039,19 +1042,27 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // A menu bar's menu (D972): a modal overlay 2 below `anchor` while `open`, the
 // commands keyed `key + 1 + index`; a press outside it or Escape fires `dismiss`.
 fn bar_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = bar_menu_at(a, key, t, anchor, label, commands, open, dismiss, .Below, geometry.Point { x: 0.0, y: 2.0 }, true)
+    ret (made, made_error)
+}
+
+fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, commands: []const BarCommand, open: bool, dismiss: *const widget.Submit, placement: widget.Placement, offset: geometry.Point, allow_submenus: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    if commands.len > 14usize { ret (zero, TooLarge) }
     var slotted = false
     var k = 0usize
     while k < commands.len {
         if commands[k].checked { slotted = true }
         k += 1usize
     }
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * commands.len)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 3usize * commands.len)
     if rows_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     var i = 0usize
     while i < commands.len {
         let c = &commands[i]
+        let has_submenu = c.submenu.len != 0usize
+        if has_submenu && !allow_submenus { ret (zero, TooLarge) }
         if c.separated && i > 0usize {
             let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
             if lines_error != ok { ret (zero, TooLarge) }
@@ -1084,7 +1095,7 @@ fn bar_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
         look.padding_y = 0.0
         look.min_height = 32.0
         look.min_width = 24.0
-        let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
         if parts_error != ok { ret (zero, TooLarge) }
         var p = 0usize
         if slotted {
@@ -1115,15 +1126,37 @@ fn bar_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
             parts[p] = widget.padded(0u64, 24.0, 0.0, 0.0, 0.0, style.defaults(), held[0usize..1usize])
             p += 1usize
         }
+        if has_submenu {
+            let (arrow, arrow_error) = control.icon_square(a, muted, .ChevronRight, 18.0)
+            if arrow_error != ok { ret (zero, arrow_error) }
+            parts[p] = arrow
+            p += 1usize
+        }
         var line_style = style.defaults()
         line_style.width = style.Length { Percent: 100.0 }
         let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, line_style, parts[0usize..p])
         var sem_states = 0u32
         if c.checked { sem_states = accessibility.STATE_CHECKED }
-        let (made, made_error) = control.pressable_states(a, item_key, t, 22u8, c.label, look, c.enabled, false, sem_states, 0u32, 0u64, &c.action, content)
+        var sem_actions = 0u32
+        var controls = 0u64
+        var chosen = &c.action
+        let submenu_key = key + 15u64 + 16u64 * u64(i)
+        if has_submenu {
+            sem_actions = accessibility.ACTION_SHOW_MENU
+            controls = submenu_key
+            chosen = &c.submenu_toggle
+            if c.submenu_open { sem_states = sem_states | accessibility.STATE_EXPANDED }
+        }
+        let (made, made_error) = control.pressable_states(a, item_key, t, 22u8, c.label, look, c.enabled, false, sem_states, sem_actions, controls, chosen, content)
         if made_error != ok { ret (zero, made_error) }
         rows[n] = made
         n += 1usize
+        if has_submenu {
+            let (nested, nested_error) = bar_menu_at(a, submenu_key, t, item_key, c.label, c.submenu, c.submenu_open, &c.submenu_toggle, .Right, geometry.Point { x: -4.0, y: -8.0 }, false)
+            if nested_error != ok { ret (zero, nested_error) }
+            rows[n] = nested
+            n += 1usize
+        }
         i += 1usize
     }
     var sheet = control.surface_options(t)
@@ -1150,7 +1183,7 @@ fn bar_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
     let (lifted, lifted_error) = mem.alloc[widget.Node](a, 1usize)
     if lifted_error != ok { ret (zero, TooLarge) }
     lifted[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .Below, offset: geometry.Point { x: 0.0, y: 2.0 }, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), lifted[0usize..1usize]), ok)
 }
 
 // A context menu: D827's menu (keyed `key`, items `key + 1 + index`) below
