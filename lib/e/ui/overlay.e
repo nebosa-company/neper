@@ -231,9 +231,8 @@ fn menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 // pointer's start or above it where it would overflow; or, opened from the
 // keyboard (`pointed` false), below `owner` at its start edge. 8 above and below
 // its commands at either density; the commands keyed `key + 1 + index` and
-// submenu overlays following `menu_of`'s key scheme.
-// ponytail: no touch lift, scrim or long press; the target's selected look and
-// Show menu action stay the caller's.
+// submenu overlays following `menu_of`'s key scheme. Touch uses
+// `context_target` and `context_menu_touch_of` below.
 fn context_menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owner: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit, at: geometry.Point, pointed: bool) -> (widget.Node, err) {
     var anchor = owner
     var placement: widget.Placement = .Below
@@ -244,6 +243,106 @@ fn context_menu_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owne
         offset = geometry.Point { x: at.x + 2.0, y: at.y + 2.0 }
     }
     let (made, made_error) = menu_at(a, key, t, anchor, label, commands, open, dismiss, placement, offset, 8.0, true)
+    ret (made, made_error)
+}
+
+fn context_show(ctx: *void, action: u32) -> err {
+    if action != accessibility.ACTION_SHOW_MENU { ret ok }
+    let show = mem.cast[*const widget.Submit](ctx)
+    ret widget.fire_submit(*show)
+}
+
+fn context_hold(ctx: *void, gesture: widget.Gesture) -> err {
+    ret ok
+}
+
+// A target that owns a context menu. It exposes Show menu and Controls, reports
+// its open state, and on touch asks the shared runtime for the 500 ms long press.
+// `content` supplies the target itself and `show` outlives the element.
+fn context_target(a: *mem.Arena, key: widget.Key, t: *const control.Theme, role: accessibility.Role, label: str, menu_key: widget.Key, open: bool, show: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    if touch && mem.address_of(t.runtime) != 0usize {
+        let press_error = widget.long_press(t.runtime, key, show)
+        if press_error != ok { ret (zero, press_error) }
+    }
+    var plate = style.defaults()
+    if open {
+        plate.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) }
+        if touch {
+            plate.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
+            plate.radius = t.tokens.radii.md
+            plate.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 3.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[3usize]) }
+        }
+    }
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: zero, invoke: context_hold }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, plate, body[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = accessibility.role_code(role)
+    sem.label = label
+    sem.actions = accessibility.ACTION_SHOW_MENU
+    sem.controls = menu_key
+    sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](show), invoke: context_show }
+    if open { sem.states = accessibility.STATE_SELECTED | accessibility.STATE_EXPANDED }
+    ret (widget.semantics(0u64, sem, style.defaults(), inner[0usize..1usize]), ok)
+}
+
+fn context_scrim_piece(t: *const control.Theme, width: f32, height: f32) -> widget.Node {
+    var dim = style.defaults()
+    dim.width = style.Length { Px: width }
+    dim.height = style.Length { Px: height }
+    dim.background = paint.Brush { Solid: control.with_alpha(style.color(t.tokens, .Scrim), t.tokens.states.scrim) }
+    ret widget.box(0u64, dim, zero)
+}
+
+// Four scrim rectangles leave the target and its 4px shadow exposed, so the
+// in-layout target itself is the lifted preview without duplicating keyed nodes.
+fn context_scrim_around(a: *mem.Arena, t: *const control.Theme, owner: widget.Key, top: widget.Node) -> (widget.Node, err) {
+    if mem.address_of(t.runtime) == 0usize {
+        let (made, made_error) = with_scrim(a, t, top)
+        ret (made, made_error)
+    }
+    let (owner_bounds, has_target) = widget.bounds_for_key(t.runtime, owner)
+    let surface = widget.surface_size(t.runtime)
+    if !has_target || surface.width <= 0.0 || surface.height <= 0.0 {
+        let (made, made_error) = with_scrim(a, t, top)
+        ret (made, made_error)
+    }
+    var left = owner_bounds.x - 4.0
+    var top_at = owner_bounds.y - 4.0
+    var right = owner_bounds.x + owner_bounds.width + 4.0
+    var bottom = owner_bounds.y + owner_bounds.height + 4.0
+    if left < 0.0 { left = 0.0 }
+    if top_at < 0.0 { top_at = 0.0 }
+    if right > surface.width { right = surface.width }
+    if bottom > surface.height { bottom = surface.height }
+    let (pieces, pieces_error) = mem.alloc[widget.Node](a, 4usize)
+    if pieces_error != ok { ret (zero, TooLarge) }
+    pieces[0usize] = context_scrim_piece(t, surface.width, top_at)
+    pieces[1usize] = context_scrim_piece(t, left, bottom - top_at)
+    pieces[2usize] = context_scrim_piece(t, surface.width - right, bottom - top_at)
+    pieces[3usize] = context_scrim_piece(t, surface.width, surface.height - bottom)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = widget.overlay(0u64, widget.Overlay { anchor: 0u64, placement: .At, offset: zero, modal: false, dismiss: zero }, style.defaults(), pieces[0usize..1usize])
+    layers[1usize] = widget.overlay(0u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: 0.0, y: top_at }, modal: false, dismiss: zero }, style.defaults(), pieces[1usize..2usize])
+    layers[2usize] = widget.overlay(0u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: right, y: top_at }, modal: false, dismiss: zero }, style.defaults(), pieces[2usize..3usize])
+    layers[3usize] = widget.overlay(0u64, widget.Overlay { anchor: 0u64, placement: .At, offset: geometry.Point { x: 0.0, y: bottom }, modal: false, dismiss: zero }, style.defaults(), pieces[3usize..4usize])
+    layers[4usize] = top
+    ret (widget.box(0u64, style.defaults(), layers[0usize..5usize]), ok)
+}
+
+// Touch context menu: 8 below its lifted target, under the target-preserving
+// scrim. The target's `show` action normally toggles `open` on long press.
+// ponytail: no press-drag-release selection or host haptic tick yet.
+fn context_menu_touch_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owner: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (floating, menu_error) = menu_at(a, key, t, owner, label, commands, true, dismiss, .Below, geometry.Point { x: 0.0, y: 8.0 }, 8.0, true)
+    if menu_error != ok { ret (zero, menu_error) }
+    let (made, made_error) = context_scrim_around(a, t, owner, floating)
     ret (made, made_error)
 }
 

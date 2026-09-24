@@ -362,6 +362,10 @@ type State = struct {
     tooltip_seen_at: i64,
     tooltip_last_at: i64,
     has_tooltip_last: bool,
+    long_press_key: Key,
+    has_long_press: bool,
+    long_press_at: i64,
+    long_press_fired: bool,
     // The focus ring (D940): shown only when the focus came by the keyboard or the
     // program, never by a pointer press; its colour, width and gap outside the
     // element, set from the theme; the clip the element being placed lies within.
@@ -4039,6 +4043,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     if !s.has_root { ret ok }
     switch event {
     case .PointerDown as p:
+        s.has_long_press = false
+        s.long_press_fired = false
         // The topmost overlay under the pointer is the tree the press is in; a modal
         // one the press misses is dismissed and keeps the press from what is under.
         var from = usize(s.root)
@@ -4099,6 +4105,14 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             s.elements[viewport].scroll_velocity = 0.0
         }
     case .PointerUp as p:
+        if s.long_press_fired {
+            s.long_press_fired = false
+            s.has_long_press = false
+            s.arena_state.pressed = false
+            s.arena_state.dragging = false
+            ret ok
+        }
+        s.has_long_press = false
         // A drag with a payload dropped: the deepest region under the pointer that
         // takes drops hears it (after the source's own drag end).
         var dropped_on = 0usize
@@ -4145,6 +4159,10 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .PointerMove as p:
+        if s.has_long_press && !s.long_press_fired && distance_sq(p.position, s.arena_state.down) > gesture_slop() * gesture_slop() {
+            s.has_long_press = false
+            s.long_press_fired = false
+        }
         if s.arena_state.pressed {
             let candidate = usize(s.arena_state.candidate)
             let e = &s.elements[candidate]
@@ -4259,6 +4277,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .Scroll as p:
+        s.has_long_press = false
+        s.long_press_fired = false
         let (zoomed, has_zoomed) = hit_zoom(s, usize(s.root), p.position)
         if has_zoomed {
             // A notch scales by a tenth either way.
@@ -4341,6 +4361,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .Focus as w:
         ret ok
     case .Blur as w:
+        s.has_long_press = false
+        s.long_press_fired = false
         ret ok
     case .Lifecycle as l:
         ret ok
@@ -4630,6 +4652,37 @@ fn tooltip_wanted(widget_runtime: *Runtime, key: Key) -> bool {
     ret true
 }
 
+// Fire `action` once when a primary press has stayed inside `key` for 500 ms.
+// The caller asks during each build; the runtime requests those builds and then
+// consumes the release so the target's ordinary tap does not also run.
+fn long_press(widget_runtime: *Runtime, key: Key, action: *const Submit) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (found, count) = find_by_key(s, key)
+    if count == 0usize || !s.arena_state.pressed || s.arena_state.dragging || !geometry.contains(s.elements[usize(found.slot)].bounds, s.arena_state.down) {
+        if s.has_long_press && s.long_press_key == key {
+            s.has_long_press = false
+            s.long_press_fired = false
+        }
+        ret ok
+    }
+    let now = s.animation_time.nanos
+    if !s.has_long_press || s.long_press_key != key {
+        s.long_press_key = key
+        s.has_long_press = true
+        s.long_press_at = now
+        s.long_press_fired = false
+    }
+    if s.long_press_fired { ret ok }
+    if now < s.long_press_at || now - s.long_press_at < 500000000i64 {
+        s.animation_due = true
+        ret ok
+    }
+    s.long_press_fired = true
+    s.animation_due = true
+    ret fire_submit(*action)
+}
+
 // Whether focus is on the keyed element or one of its descendants.
 fn focus_within(widget_runtime: *const Runtime, key: Key) -> bool {
     let s = mem.cast[*State](widget_runtime.state)
@@ -4769,6 +4822,21 @@ fn bounds_of(widget_runtime: *const Runtime, element: ElementId) -> (geometry.Re
     let (index, found) = element_of(s, element)
     if !found { ret (zero, false) }
     ret (s.elements[index].bounds, true)
+}
+
+// Last reconciled bounds for a key, and the current logical surface size.
+fn bounds_for_key(widget_runtime: *const Runtime, key: Key) -> (geometry.Rect, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret (zero, false) }
+    let (found, count) = find_by_key(s, key)
+    if count != 1usize { ret (zero, false) }
+    ret (s.elements[usize(found.slot)].bounds, true)
+}
+
+fn surface_size(widget_runtime: *const Runtime) -> geometry.Size {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || s.closed { ret zero }
+    ret s.window_size
 }
 
 // ------------------------------------------------ the algorithms of the tree (D904)

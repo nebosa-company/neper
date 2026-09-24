@@ -1203,7 +1203,8 @@ fn bar_menu_at(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
 // A context menu: D827's menu (keyed `key`, items `key + 1 + index`) below
 // `anchor` while `open`; the caller opens it from the secondary press or the
 // keyboard's menu key it handles itself, and `dismiss` closes it. v2 (D975):
-// `overlay.context_menu_of` as opened from the keyboard, below `anchor`.
+// `overlay.context_menu_of` as opened from the keyboard, below `anchor`; touch
+// density uses the lifted-target scrim form.
 fn context_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, items: []const overlay.MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (commands, commands_error) = mem.alloc[overlay.MenuCommand](a, items.len)
@@ -1213,6 +1214,10 @@ fn context_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor:
         commands[i] = overlay.menu_command(items[i].label, items[i].action)
         commands[i].enabled = items[i].enabled
         i += 1usize
+    }
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm {
+        let (made, made_error) = overlay.context_menu_touch_of(a, key, t, anchor, label, commands[0usize..items.len], open, dismiss)
+        ret (made, made_error)
     }
     let (made, made_error) = overlay.context_menu_of(a, key, t, anchor, label, commands[0usize..items.len], open, dismiss, zero, false)
     ret (made, made_error)

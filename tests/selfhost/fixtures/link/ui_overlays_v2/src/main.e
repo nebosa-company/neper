@@ -26,6 +26,7 @@ use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
@@ -35,10 +36,10 @@ use e.ui.widget
 type Counter = struct { count: usize }
 
 // The counters: 0 New, 1 the other commands, 2 dismiss, 3 Learn more, 4 anchors,
-// 5 submenu toggle, 6 submenu leaf.
-type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, commands: [5]overlay.MenuCommand, touch_subs: [2]overlay.MenuCommand, pops: [2]overlay.MenuCommand, pop_subs: [2]overlay.MenuCommand, tips: [1]overlay.MenuItem }
+// 5 submenu toggle, 6 submenu leaf, 7 touch submenu toggle, 8 context toggle.
+type Store = struct { counters: [9]Counter, subs: [9]widget.Submit, commands: [5]overlay.MenuCommand, touch_subs: [2]overlay.MenuCommand, pops: [2]overlay.MenuCommand, pop_subs: [2]overlay.MenuCommand, tips: [1]overlay.MenuItem }
 
-type Which = enum u8 { Menu, Touch, Pointed, Keyboard }
+type Which = enum u8 { Menu, Touch, Pointed, Keyboard, ContextTouch }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -72,7 +73,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     if items_error != ok { ret (zero, items_error) }
     let (file, e1) = control.button(a, 1u64, t, "File", &s.subs[4usize], control.button_options())
     let (save, e2) = control.button(a, 2u64, t, "Save", &s.subs[4usize], control.button_options())
-    let (info, e3) = control.button(a, 3u64, t, "Info", &s.subs[4usize], control.button_options())
+    var info_options = control.button_options()
+    info_options.variant = .Plain
+    let (info_button, info_button_error) = control.button(a, 30u64, t, "Info", &s.subs[4usize], info_options)
+    let context_open = which == .Pointed || which == .Keyboard || (which == .ContextTouch && s.counters[8usize].count % 2usize == 1usize)
+    let (info, e3) = overlay.context_target(a, 3u64, t, .Group, "Actions for Info", 400u64, context_open, &s.subs[8usize], info_button)
     s.commands[0usize].submenu = s.touch_subs[0usize..0usize]
     s.commands[0usize].submenu_open = false
     if which == .Touch {
@@ -86,8 +91,18 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (rich, e7) = overlay.rich_tooltip(a, 300u64, t, 3u64, "Incremental builds", "Only changed modules are rebuilt.", s.tips[0usize..1usize], true)
     s.pops[0usize].submenu_open = s.counters[5usize].count % 2usize == 1usize
     let pointer = geometry.Point { x: 600.0, y: 460.0 }
-    let (context, e8) = overlay.context_menu_of(a, 400u64, t, 3u64, "Actions for Info", s.pops[0usize..2usize], which == .Pointed || which == .Keyboard, &s.subs[2usize], pointer, which == .Pointed)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret (zero, e1) }
+    var context: widget.Node = zero
+    var e8: err = ok
+    if which == .ContextTouch {
+        let (made, made_error) = overlay.context_menu_touch_of(a, 400u64, t, 3u64, "Actions for Info", s.pops[0usize..2usize], context_open, &s.subs[8usize])
+        context = made
+        e8 = made_error
+    } else {
+        let (made, made_error) = overlay.context_menu_of(a, 400u64, t, 3u64, "Actions for Info", s.pops[0usize..2usize], context_open, &s.subs[2usize], pointer, which == .Pointed)
+        context = made
+        e8 = made_error
+    }
+    if e1 != ok || e2 != ok || info_button_error != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret (zero, e1) }
     let (anchors, anchors_error) = mem.alloc[widget.Node](a, 3usize)
     if anchors_error != ok { ret (zero, anchors_error) }
     anchors[0usize] = file
@@ -183,7 +198,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     stores[0usize] = store
     let s = &stores[0usize]
     var i = 0usize
-    while i < 8usize {
+    while i < 9usize {
         s.subs[i] = widget.Submit { ctx: mem.cast[*void](&s.counters[i]), invoke: on_count }
         i += 1usize
     }
@@ -373,6 +388,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (below, has_below) = lifted(&harness, 400u64)
     if !has_below || !near(below.x, info.x) { os.exit(49i32) }
     if !near(below.y, info.y + info.height) && !near(below.y + below.height, info.y) { os.exit(50i32) }
+    // Touch: holding the target for 500 ms opens once, consumes its release,
+    // leaves the lifted target out of the 32% scrim, and places the menu 8 away.
+    let touch_start = time.Instant { nanos: 1500000000i64 }
+    if testing.begin(&harness, touch_start) != ok { os.exit(102i32) }
+    let (touch_context_closed, touch_context_closed_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if touch_context_closed_error != ok || testing.pump(&harness, touch_context_closed, touch_start) != ok { os.exit(103i32) }
+    let (touch_info, has_touch_info) = bounds(&harness, &runtime, 3u64)
+    if !has_touch_info { os.exit(104i32) }
+    let touch_point = geometry.Point { x: touch_info.x + touch_info.width * 0.5, y: touch_info.y + touch_info.height * 0.5 }
+    if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(touch_point.x, touch_point.y) }) != ok { os.exit(105i32) }
+    let held_at = time.Instant { nanos: 1510000000i64 }
+    if testing.begin(&harness, held_at) != ok { os.exit(106i32) }
+    let (touch_held, touch_held_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if touch_held_error != ok || testing.pump(&harness, touch_held, held_at) != ok || !widget.animation_frame_requested(&runtime) { os.exit(107i32) }
+    let almost = time.Instant { nanos: 2009999999i64 }
+    if testing.begin(&harness, almost) != ok { os.exit(108i32) }
+    let (touch_almost, touch_almost_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if touch_almost_error != ok || testing.pump(&harness, touch_almost, almost) != ok || s.counters[8usize].count != 0usize { os.exit(109i32) }
+    let due = time.Instant { nanos: 2010000000i64 }
+    if testing.begin(&harness, due) != ok { os.exit(110i32) }
+    let (touch_due, touch_due_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if touch_due_error != ok || testing.pump(&harness, touch_due, due) != ok || s.counters[8usize].count != 1usize || !widget.animation_frame_requested(&runtime) { os.exit(111i32) }
+    let open_at = time.Instant { nanos: 2010000001i64 }
+    if testing.begin(&harness, open_at) != ok { os.exit(112i32) }
+    let (touch_context, touch_context_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if touch_context_error != ok || testing.pump(&harness, touch_context, open_at) != ok { os.exit(113i32) }
+    let (touch_pop, has_touch_pop) = lifted(&harness, 400u64)
+    if !has_touch_pop || (!near(touch_pop.y, touch_info.y + touch_info.height + 8.0) && !near(touch_pop.y + touch_pop.height, touch_info.y - 8.0)) { os.exit(114i32) }
+    let (touch_tree, touch_tree_error) = testing.semantics(&harness)
+    if touch_tree_error != ok { os.exit(115i32) }
+    let (touch_target, has_touch_target) = find(touch_tree, .Group, "Actions for Info")
+    if !has_touch_target || !touch_target.state.selected || !touch_target.state.expanded || !has_action(touch_target, .ShowMenu) || !same_element(touch_target.relations.controls, testing.by_key(&harness, 400u64).element) { os.exit(116i32) }
+    let (touch_shot, touch_shot_error) = testing.snapshot(&harness, a)
+    if touch_shot_error != ok { os.exit(117i32) }
+    let dimmed = style.layer(style.color(&touch_tokens, .Background), style.color(&touch_tokens, .Scrim), touch_tokens.states.scrim)
+    if !is_color(touch_shot, at(5.0, 5.0), dimmed) || is_color(touch_shot, at(touch_info.x + 2.0, touch_info.y + 2.0), dimmed) { os.exit(118i32) }
+    if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(touch_point.x, touch_point.y) }) != ok || s.counters[4usize].count != 0usize { os.exit(119i32) }
+    if testing.tap(&harness, 5.0, 5.0) != ok || s.counters[8usize].count != 2usize { os.exit(120i32) }
+    let (touch_context_done, touch_context_done_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if touch_context_done_error != ok || testing.pump(&harness, touch_context_done, time.Instant { nanos: 2020000000i64 }) != ok || testing.by_key(&harness, 400u64).count != 0usize { os.exit(121i32) }
+    let (touch_done_tree, touch_done_tree_error) = testing.semantics(&harness)
+    if touch_done_tree_error != ok { os.exit(122i32) }
+    let (touch_done_target, has_touch_done_target) = find(touch_done_tree, .Group, "Actions for Info")
+    if !has_touch_done_target || accessibility.perform(&runtime, touch_done_target.id, .ShowMenu, "") != ok || s.counters[8usize].count != 3usize { os.exit(123i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(51i32) }
     try io.print("ui overlays v2 ok\n")
     ret ok

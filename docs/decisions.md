@@ -21713,3 +21713,23 @@ operations fail closed as `Unsupported` while public verification remains.
 
 The focused cipher, AEAD, post-quantum, and signature fixtures hold the new
 constant-control-flow paths and fail-closed API behavior on Windows and Linux.
+
+## D1017 — Touch context menus lift their target
+
+`overlay.context_target` gives a context owner Show menu and Controls semantics,
+reports Selected and Expanded while open, and uses the shared runtime clock to
+fire its action once after a stationary 500 ms touch hold. The runtime requests
+the intervening frames and consumes the release, so the owner's ordinary tap
+does not also run. Pointer targets use `secondary-container`; touch targets use
+`surface-container-lowest`, `radius-md` and elevation 3.
+
+`overlay.context_menu_touch_of` places the 48px-row menu 8px from that owner and
+builds the 32% scrim from four rectangles around its 4px shadow. The real keyed
+target therefore remains exposed as the lifted preview without duplicating its
+tree. `navigation.context_menu` selects this form at touch density.
+
+`ui_overlays_v2` holds the 500 ms boundary, frame requests, single action,
+release suppression, geometry, scrim cutout, semantics, assistive Show menu,
+outside dismissal and no click-through on Windows and Linux;
+`context-touch.png` is the Segoe UI visual check. Press-drag-release selection
+and a host haptic tick remain open.
