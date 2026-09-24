@@ -28,7 +28,7 @@ use e.ui.widget
 
 type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, typed: usize, dismisses: usize }
 
-type Which = enum u8 { Palette, Empty, Switcher }
+type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, Empty, Switcher }
 
 fn on_activate(ctx: *void, index: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -88,7 +88,10 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
     if which == .Empty { shown = names[0usize..0usize] }
     let activate = widget.Change[usize] { ctx: ctx, invoke: on_activate }
     let run = widget.Change[usize] { ctx: ctx, invoke: on_run }
-    let (palette, e1) = navigation.command_palette(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, shown, active, which != .Switcher, activate, run, dismiss, 560.0)
+    var mode: navigation.PaletteMode = .Commands
+    if which == .PaletteFiles { mode = .Files }
+    if which == .PaletteSymbols { mode = .Symbols }
+    let (palette, e1) = navigation.command_palette_mode(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, shown, active, which != .Switcher, activate, run, dismiss, 560.0)
     let (switcher, e2) = navigation.window_switcher(a, 200u64, t, "Windows", names[..], active, which == .Switcher, activate, run, dismiss, 480.0)
     if e1 != ok || e2 != ok { ret (zero, e1) }
     items[0usize] = palette
@@ -186,7 +189,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (combo, has_combo) = find(tree, .Combobox, "Commands")
     let (results, has_results) = find(tree, .Listbox, "Commands")
     let (test_node, has_test_node) = find(tree, .Option, "Test")
-    if !has_dialog || !dialog.state.modal || !has_combo || !combo.state.expanded || !has_results || !has_test_node || !test_node.state.selected || testing.by_text(&harness, "Type a command").count != 1usize { os.exit(20i32) }
+    if !has_dialog || !dialog.state.modal || !has_combo || !combo.state.expanded || !has_results || !has_test_node || !test_node.state.selected || testing.by_text(&harness, ">").count != 1usize || testing.by_text(&harness, "Type a command").count != 1usize { os.exit(20i32) }
     // Typing reaches the caller; Down activates Deploy; Enter runs Test.
     if testing.type_text(&harness, "de") != ok || logs[0usize].typed != 2usize { os.exit(21i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].active != 2usize { os.exit(22i32) }
@@ -195,6 +198,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_2, build_2_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Palette, 0usize)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(24i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].active != 2usize || logs[0usize].activations != 2usize { os.exit(25i32) }
+    // The same field names its file and symbol modes; only modes with a typed
+    // prefix reserve the primary-colour prefix slot.
+    let (root_files, build_files_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .PaletteFiles, 0usize)
+    if build_files_error != ok || testing.pump(&harness, root_files, time.Instant { nanos: 1120000000i64 }) != ok || testing.by_text(&harness, "Search files by name").count != 1usize || testing.by_text(&harness, ">").count != 0usize { os.exit(37i32) }
+    let (root_symbols, build_symbols_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .PaletteSymbols, 0usize)
+    if build_symbols_error != ok || testing.pump(&harness, root_symbols, time.Instant { nanos: 1140000000i64 }) != ok || testing.by_text(&harness, "@").count != 1usize || testing.by_text(&harness, "Go to symbol").count != 1usize { os.exit(38i32) }
     // With no match: the empty state, 24 above and below (142 in all).
     let (root_3, build_3_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Empty, 0usize)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(26i32) }

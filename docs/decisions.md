@@ -22156,3 +22156,13 @@ cycle action.
 `ui_overlays3_v2` holds the live 36px translation, short snap-back, lower-detent
 settle and Peek dismissal on Windows and Linux. The existing
 `bottom-sheet-half-detent.png` remains the Segoe UI handle check.
+
+## D1055 — Command palette modes share one field
+
+`PaletteMode` names Commands, Files, Symbols and Line. The source-compatible
+`command_palette` remains the Commands form, while `command_palette_mode` adds
+the selected mode's primary-colour prefix (`>`, `@`, `:` or none) and its
+specific placeholder without splitting the palette into separate components.
+
+`ui_overlays4_v2` holds command, file and symbol labels on Windows and Linux.
+`palette-symbol-mode.png` is the Segoe UI visual check.
