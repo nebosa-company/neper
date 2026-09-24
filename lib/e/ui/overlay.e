@@ -727,24 +727,30 @@ fn with_scrim(a: *mem.Arena, t: *const control.Theme, top: widget.Node) -> (widg
 // heading), 16 above the content, 8 above the actions at the end 8 apart -- the
 // default a filled button, a destructive one filled in `error`, the others text
 // buttons, all at the control height.
-// ponytail: no icon well, scroll dividers, full-screen form or host
-// button order; Escape and the scrim close only through a Cancel button.
+// ponytail: no icon well, scroll dividers, full-screen form or host button order.
 fn dialog(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool) -> (widget.Node, err) {
     let (made, made_error) = dialog_as(a, key, t, title, content, buttons, open, described, 23u8)
     ret (made, made_error)
 }
 
 fn dialog_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, busy: bool) -> (widget.Node, err) {
-    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy)
+    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy, zero)
+    ret (made, made_error)
+}
+
+// A basic dialog with an explicit fallback used by Escape and its scrim when
+// the button list has no Cancel action.
+fn dialog_dismissable(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, busy: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, 23u8, busy, *dismiss)
     ret (made, made_error)
 }
 
 fn dialog_as(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8) -> (widget.Node, err) {
-    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, semantic_role, false)
+    let (made, made_error) = dialog_as_state(a, key, t, title, content, buttons, open, described, semantic_role, false, zero)
     ret (made, made_error)
 }
 
-fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool) -> (widget.Node, err) {
+fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, buttons: []const DialogButton, open: bool, described: bool, semantic_role: u8, busy: bool, fallback: widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var submit: widget.Submit = zero
     var cancel: widget.Submit = zero
@@ -777,6 +783,7 @@ fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
         row[i] = pressed
         i += 1usize
     }
+    if !busy && !widget.submit_set(cancel.invoke) && widget.submit_set(fallback.invoke) { cancel = fallback }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var heading = control.text_options()
@@ -823,7 +830,9 @@ fn dialog_as_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: cancel }, style.defaults(), framed[0usize..1usize]))
+    var outside = cancel
+    if semantic_role == accessibility.ROLE_ALERT_DIALOG { outside = widget.Submit { ctx: zero, invoke: zero } }
+    let (made, made_error) = with_scrim(a, t, widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]))
     ret (made, made_error)
 }
 

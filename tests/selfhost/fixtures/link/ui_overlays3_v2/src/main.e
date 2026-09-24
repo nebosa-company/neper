@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, Side, Bottom, Actions }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, Side, Bottom, Actions }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -69,6 +69,10 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     var e2: err = ok
     if which == .DialogBusy {
         let (made_dialog, made_dialog_error) = overlay.dialog_state(a, 100u64, t, "Delete build?", inside, s.buttons[0usize..3usize], true, false, true)
+        alert = made_dialog
+        e2 = made_dialog_error
+    } else if which == .DialogDismiss {
+        let (made_dialog, made_dialog_error) = overlay.dialog_dismissable(a, 100u64, t, "Delete build?", inside, s.buttons[1usize..3usize], true, false, false, &s.subs[0usize])
         alert = made_dialog
         e2 = made_dialog_error
     } else {
@@ -187,9 +191,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (dialog, has_dialog) = find(tree, .AlertDialog, "Delete build?")
     let (heading, has_heading) = find(tree, .Heading, "Delete build?")
     if !has_dialog || !dialog.state.modal || dialog.relations.labelled_by.generation == 0u32 || !has_heading || heading.level != 2u8 { os.exit(17i32) }
-    // Escape cancels, a press on the scrim cancels, Delete deletes.
+    // Escape cancels; an alert consumes its scrim; Delete deletes.
     if testing.press_key(&harness, 27u32, zero) != ok || s.counters[0usize].count != 1usize { os.exit(18i32) }
-    if testing.tap(&harness, 5.0, 5.0) != ok || s.counters[0usize].count != 2usize { os.exit(19i32) }
+    if testing.tap(&harness, 5.0, 5.0) != ok || s.counters[0usize].count != 1usize { os.exit(19i32) }
     if !tap_key(&harness, &runtime, 104u64) || s.counters[1usize].count != 1usize { os.exit(20i32) }
     // Busy keeps the default action's width under its ring, suppresses repeat
     // Enter/presses and disables every other action; Escape and the scrim wait.
@@ -207,6 +211,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_busy_dialog || !busy_dialog.state.busy || !has_busy_cancel || !busy_cancel.state.disabled || !has_busy_delete || !busy_delete.state.disabled || !has_busy_keep || !busy_keep.state.busy || busy_keep.state.disabled { os.exit(45i32) }
     if !tap_key(&harness, &runtime, 103u64) || !tap_key(&harness, &runtime, 104u64) || !tap_key(&harness, &runtime, 105u64) || testing.press_key(&harness, 13u32, zero) != ok || testing.press_key(&harness, 27u32, zero) != ok || testing.tap(&harness, 5.0, 5.0) != ok { os.exit(46i32) }
     if s.counters[0usize].count != cancel_before || s.counters[1usize].count != delete_before || s.counters[2usize].count != keep_before { os.exit(47i32) }
+    // A basic dialog without a Cancel button can carry one explicit close action
+    // for both Escape and its scrim.
+    let dismiss_before = s.counters[0usize].count
+    let (root_dismiss, build_dismiss_error) = build(&f, &theme, s, .DialogDismiss)
+    if build_dismiss_error != ok || testing.pump(&harness, root_dismiss, time.Instant { nanos: 1075000000i64 }) != ok { os.exit(48i32) }
+    let (dismiss_tree, dismiss_tree_error) = testing.semantics(&harness)
+    if dismiss_tree_error != ok { os.exit(49i32) }
+    let (_, has_dismiss_dialog) = find(dismiss_tree, .Dialog, "Delete build?")
+    if !has_dismiss_dialog || testing.press_key(&harness, 27u32, zero) != ok || testing.tap(&harness, 5.0, 5.0) != ok || s.counters[0usize].count != dismiss_before + 2usize { os.exit(50i32) }
     // The side sheet: 300 wide along the right edge, the window's height,
     // `surface-container-low`, its open edge's corners rounded; a 48 header
     // with a 32 Close 8 from the end that dismisses.

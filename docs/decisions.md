@@ -21964,3 +21964,13 @@ temporarily removes the Cancel action used by Escape and the scrim.
 `ui_overlays3_v2` holds all action states and unchanged callback counters after
 button, Enter, Escape and scrim input on Windows and Linux. `dialog-busy.png` is
 the Segoe UI visual check.
+
+## D1037 — Dialog dismissal follows the dialog kind
+
+Alert-dialog scrim presses now use an inert outside action while Escape keeps
+the real Cancel action. `overlay.dialog_dismissable` supplies the complementary
+basic-dialog case: when no button is Cancel, one explicit fallback owns Escape
+and the scrim without inventing a button or guessing which action means close.
+
+`ui_overlays3_v2` holds alert Escape, inert alert scrims and both explicit basic
+dismissal paths on Windows and Linux.
