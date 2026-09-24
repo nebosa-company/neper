@@ -21793,3 +21793,14 @@ Escape, scroll, resize and blur cancel it.
 `ui_transient` holds both timing boundaries, release persistence and tap
 suppression on Windows and Linux. `ui_overlays_v2` and `ui_gesture` guard the
 existing context long press and general gesture dispatch on both hosts.
+
+## D1023 — Long-press haptics are an optional runtime host callback
+
+`widget.set_long_press_feedback` installs one non-critical host callback on a
+runtime. The shared long-press path fires it exactly once when the 500 ms
+boundary succeeds, before opening the touch context menu; feedback failure does
+not block the command. Hosts without haptic hardware install nothing.
+
+`ui_overlays_v2` holds one feedback pulse for each of two successful context
+holds, alongside the existing open and drag-release behavior, on Windows and
+Linux. Binding that callback to mobile haptic hardware remains host work.

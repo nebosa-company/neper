@@ -372,6 +372,8 @@ type State = struct {
     has_long_press: bool,
     long_press_at: i64,
     long_press_fired: bool,
+    long_press_feedback: Submit,
+    has_long_press_feedback: bool,
     rich_anchor_key: Key,
     rich_tooltip_key: Key,
     has_rich_tooltip: bool,
@@ -688,6 +690,15 @@ fn state_of(widget_runtime: *Runtime) -> (*State, err) {
     let s = mem.cast[*State](widget_runtime.state)
     if mem.address_of(s) == 0usize || s.closed { ret (s, InvalidTree) }
     ret (s, ok)
+}
+
+// An optional host feedback pulse at the successful long-press boundary.
+fn set_long_press_feedback(widget_runtime: *Runtime, feedback: Submit) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    s.long_press_feedback = feedback
+    s.has_long_press_feedback = submit_set(feedback.invoke)
+    ret ok
 }
 
 // Start one animation frame. The application and test harness call this before
@@ -4862,6 +4873,7 @@ fn long_press(widget_runtime: *Runtime, key: Key, action: *const Submit) -> err 
     }
     s.long_press_fired = true
     s.animation_due = true
+    if s.has_long_press_feedback { let _ = fire_submit(s.long_press_feedback) }
     ret fire_submit(*action)
 }
 

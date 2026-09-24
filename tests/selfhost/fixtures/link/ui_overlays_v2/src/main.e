@@ -36,8 +36,9 @@ use e.ui.widget
 type Counter = struct { count: usize }
 
 // The counters: 0 New, 1 the other commands, 2 dismiss, 3 Learn more, 4 anchors,
-// 5 submenu toggle, 6 submenu leaf, 7 touch submenu toggle, 8 context toggle.
-type Store = struct { counters: [9]Counter, subs: [9]widget.Submit, commands: [5]overlay.MenuCommand, touch_subs: [2]overlay.MenuCommand, pops: [2]overlay.MenuCommand, pop_subs: [2]overlay.MenuCommand, tips: [1]overlay.MenuItem }
+// 5 submenu toggle, 6 submenu leaf, 7 touch submenu toggle, 8 context toggle,
+// 9 host long-press feedback.
+type Store = struct { counters: [10]Counter, subs: [10]widget.Submit, commands: [5]overlay.MenuCommand, touch_subs: [2]overlay.MenuCommand, pops: [2]overlay.MenuCommand, pop_subs: [2]overlay.MenuCommand, tips: [1]overlay.MenuItem }
 
 type Which = enum u8 { Menu, Touch, Pointed, Keyboard, ContextTouch, Rich }
 
@@ -200,10 +201,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     stores[0usize] = store
     let s = &stores[0usize]
     var i = 0usize
-    while i < 9usize {
+    while i < 10usize {
         s.subs[i] = widget.Submit { ctx: mem.cast[*void](&s.counters[i]), invoke: on_count }
         i += 1usize
     }
+    if widget.set_long_press_feedback(&runtime, s.subs[9usize]) != ok { os.exit(165i32) }
     s.commands[0usize] = overlay.menu_command("New", s.subs[0usize])
     s.commands[0usize].shortcut = "Ctrl+N"
     s.commands[0usize].pictured = true
@@ -413,7 +415,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let due = time.Instant { nanos: 2010000000i64 }
     if testing.begin(&harness, due) != ok { os.exit(110i32) }
     let (touch_due, touch_due_error) = build(&f, &touch_theme, s, .ContextTouch)
-    if touch_due_error != ok || testing.pump(&harness, touch_due, due) != ok || s.counters[8usize].count != 1usize || !widget.animation_frame_requested(&runtime) { os.exit(111i32) }
+    if touch_due_error != ok || testing.pump(&harness, touch_due, due) != ok || s.counters[8usize].count != 1usize || s.counters[9usize].count != 1usize || !widget.animation_frame_requested(&runtime) { os.exit(111i32) }
     let open_at = time.Instant { nanos: 2010000001i64 }
     if testing.begin(&harness, open_at) != ok { os.exit(112i32) }
     let (touch_context, touch_context_error) = build(&f, &touch_theme, s, .ContextTouch)
@@ -447,7 +449,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let drag_due = time.Instant { nanos: 2530000000i64 }
     if testing.begin(&harness, drag_due) != ok { os.exit(128i32) }
     let (drag_due_root, drag_due_error) = build(&f, &touch_theme, s, .ContextTouch)
-    if drag_due_error != ok || testing.pump(&harness, drag_due_root, drag_due) != ok || s.counters[8usize].count != 5usize { os.exit(129i32) }
+    if drag_due_error != ok || testing.pump(&harness, drag_due_root, drag_due) != ok || s.counters[8usize].count != 5usize || s.counters[9usize].count != 2usize { os.exit(129i32) }
     let drag_open = time.Instant { nanos: 2530000001i64 }
     if testing.begin(&harness, drag_open) != ok { os.exit(130i32) }
     let (drag_open_root, drag_open_error) = build(&f, &touch_theme, s, .ContextTouch)
