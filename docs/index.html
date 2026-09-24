@@ -131,6 +131,7 @@
     .llm-feature::before { content: counter(llm, decimal-leading-zero); position: absolute; left: var(--space-6); padding: 2px var(--space-2); border-radius: var(--radius-full); background: var(--secondary-container); color: var(--on-secondary-container); font: 600 11px/16px var(--font-sans); }
     .llm-feature h3 { margin: 0 0 var(--space-2); font: 600 16px/24px var(--font-sans); letter-spacing: .15px; }
     .llm-feature p { margin: 0; color: var(--muted); font-size: 13px; }
+    .llm-feature .why { display: block; margin-top: var(--space-3); color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .2px; }
     .more-features { margin-top: var(--space-6); }
     .more-features .llm-grid { margin-top: var(--space-4); counter-reset: llm 16; }
     .more-toggle { display: flex; width: max-content; margin: auto; list-style: none; }
@@ -317,36 +318,36 @@ hello, neper</code></pre>
           <p>Every source snapshot, semantic edit, dependency, unsafe boundary, test, and native artifact is connected by verifiable hashes.</p>
         </div>
         <div class="llm-grid">
-          <article class="llm-feature"><h3>Verification receipts</h3><p>One content-addressed receipt binds the requested behavior, source snapshot, toolchain, tests, environment, unsafe boundaries, and native artifact.</p></article>
-          <article class="llm-feature"><h3>Self-verifying compiler</h3><p>The Neper compiler compiles itself again and reaches a byte-identical fixed point: the compiler verifies the compiler.</p></article>
-          <article class="llm-feature"><h3>Deterministic artifacts</h3><p>Offline builds, content identities, immutable snapshots, and authenticated caches make repeated results comparable.</p></article>
-          <article class="llm-feature"><h3>Transactional edits</h3><p>Rename and change plans verify snapshot hashes and unrelated-diff guards before anything is applied.</p></article>
-          <article class="llm-feature"><h3>Semantic conflict detection</h3><p>Parallel agent changes are merged against a shared snapshot, checked for textual and semantic conflicts, then reverified together.</p></article>
-          <article class="llm-feature"><h3>Causal diagnostics</h3><p>Stable codes, exact spans, expected and actual types, related causes, and bounded notes explain what failed and why.</p></article>
-          <article class="llm-feature"><h3>Machine-applicable repairs</h3><p>Typed fixes include confidence, preconditions, and affected spans so an agent can repair without guessing.</p></article>
-          <article class="llm-feature"><h3>Bounded semantic context</h3><p>The compiler returns the types, effects, ownership, callers, and dependencies needed for one edit—not an entire repository.</p></article>
-          <article class="llm-feature"><h3>Compiler-issued LLM cards</h3><p>The grammar, APIs, diagnostics, and capability surface are emitted as compact model context for the selected toolchain.</p></article>
-          <article class="llm-feature"><h3>Complete unsafe inventory</h3><p>One command enumerates every unsafe boundary and escape hatch with its source, reason, and provenance.</p></article>
-          <article class="llm-feature"><h3>Script-free packages</h3><p>Packages are hash-verified and stored immutably. Installation executes no package code and grants no surprise authority.</p></article>
-          <article class="llm-feature"><h3>Hermetic build identity</h3><p>Every tool, dependency, platform fact, input, and environment condition that can affect a result enters its identity.</p></article>
-          <article class="llm-feature"><h3>Explicit semantics</h3><p>Casts, allocation, ownership, error flow, transfers, and unsafe boundaries are written where they happen.</p></article>
-          <article class="llm-feature"><h3>Lossless syntax model</h3><p>Tokens retain exact spans and trivia; the recoverable tree preserves source identity instead of reconstructing it.</p></article>
-          <article class="llm-feature"><h3>Stable JSON protocols</h3><p>Tokens, syntax, symbols, references, tests, builds, and results use versioned machine-readable records.</p></article>
-          <article class="llm-feature"><h3>Built-in verification</h3><p>Tests, timeouts, structured events, reproducible manifests, and self-host fixed points define an objective stop state.</p></article>
+          <article class="llm-feature"><h3>Verification receipts</h3><p>One content-addressed receipt binds the requested behavior, source snapshot, toolchain, tests, environment, unsafe boundaries, and native artifact.</p><small class="why">Why: Trust becomes portable, inspectable evidence.</small></article>
+          <article class="llm-feature"><h3>Self-verifying compiler</h3><p>The Neper compiler compiles itself again and reaches a byte-identical fixed point: the compiler verifies the compiler.</p><small class="why">Why: The toolchain proves its own consistency.</small></article>
+          <article class="llm-feature"><h3>Deterministic artifacts</h3><p>Offline builds, content identities, immutable snapshots, and authenticated caches make repeated results comparable.</p><small class="why">Why: Same inputs always produce comparable results.</small></article>
+          <article class="llm-feature"><h3>Transactional edits</h3><p>Rename and change plans verify snapshot hashes and unrelated-diff guards before anything is applied.</p><small class="why">Why: Stale or partial changes cannot silently land.</small></article>
+          <article class="llm-feature"><h3>Semantic conflict detection</h3><p>Parallel agent changes are merged against a shared snapshot, checked for textual and semantic conflicts, then reverified together.</p><small class="why">Why: Parallel agents cannot merge incompatible meanings.</small></article>
+          <article class="llm-feature"><h3>Causal diagnostics</h3><p>Stable codes, exact spans, expected and actual types, related causes, and bounded notes explain what failed and why.</p><small class="why">Why: Models fix causes instead of chasing symptoms.</small></article>
+          <article class="llm-feature"><h3>Machine-applicable repairs</h3><p>Typed fixes include confidence, preconditions, and affected spans so an agent can repair without guessing.</p><small class="why">Why: Repairs are checked actions, not guesses.</small></article>
+          <article class="llm-feature"><h3>Bounded semantic context</h3><p>The compiler returns the types, effects, ownership, callers, and dependencies needed for one edit—not an entire repository.</p><small class="why">Why: Models get truth without repository overload.</small></article>
+          <article class="llm-feature"><h3>Compiler-issued LLM cards</h3><p>The grammar, APIs, diagnostics, and capability surface are emitted as compact model context for the selected toolchain.</p><small class="why">Why: Documentation cannot drift from the active compiler.</small></article>
+          <article class="llm-feature"><h3>Complete unsafe inventory</h3><p>One command enumerates every unsafe boundary and escape hatch with its source, reason, and provenance.</p><small class="why">Why: Every escape hatch stays visible and auditable.</small></article>
+          <article class="llm-feature"><h3>Script-free packages</h3><p>Packages are hash-verified and stored immutably. Installation executes no package code and grants no surprise authority.</p><small class="why">Why: Installing dependencies cannot execute hidden code.</small></article>
+          <article class="llm-feature"><h3>Hermetic build identity</h3><p>Every tool, dependency, platform fact, input, and environment condition that can affect a result enters its identity.</p><small class="why">Why: Ambient machine state cannot hide inside results.</small></article>
+          <article class="llm-feature"><h3>Explicit semantics</h3><p>Casts, allocation, ownership, error flow, transfers, and unsafe boundaries are written where they happen.</p><small class="why">Why: Critical behavior never depends on invisible inference.</small></article>
+          <article class="llm-feature"><h3>Lossless syntax model</h3><p>Tokens retain exact spans and trivia; the recoverable tree preserves source identity instead of reconstructing it.</p><small class="why">Why: Tools edit code without destroying human intent.</small></article>
+          <article class="llm-feature"><h3>Stable JSON protocols</h3><p>Tokens, syntax, symbols, references, tests, builds, and results use versioned machine-readable records.</p><small class="why">Why: Agents consume facts without parsing prose.</small></article>
+          <article class="llm-feature"><h3>Built-in verification</h3><p>Tests, timeouts, structured events, reproducible manifests, and self-host fixed points define an objective stop state.</p><small class="why">Why: Work stops only when evidence says done.</small></article>
         </div>
         <details class="more-features">
           <summary class="more-toggle nu-btn tonal"><span class="more-closed">See 10 more</span><span class="more-open">Show less</span></summary>
           <div class="llm-grid">
-            <article class="llm-feature"><h3>Declaration-level reuse</h3><p>Incremental builds recheck only affected declarations and explain every keep-or-rebuild decision.</p></article>
-            <article class="llm-feature"><h3>Generated-code source maps</h3><p>Diagnostics in generated files route back to the source span the model should actually change.</p></article>
-            <article class="llm-feature"><h3>Single-purpose keywords</h3><p>A short, closed vocabulary with no synonyms or contextual meanings keeps generation compact and deterministic.</p></article>
-            <article class="llm-feature"><h3>No overloaded names</h3><p>Each name resolves one way. Calls, operators, protocols, and imports never depend on a hidden candidate set.</p></article>
-            <article class="llm-feature"><h3>Search-stable declarations</h3><p>Every top-level declaration begins at column zero with a keyword, and a file path is its module name.</p></article>
-            <article class="llm-feature"><h3>Canonical formatting</h3><p>One formatter produces one layout, shrinking diffs and preventing agents from spending tokens debating style.</p></article>
-            <article class="llm-feature"><h3>Direct native toolchain</h3><p>Neper emits native executables through its own linker without LLVM, a VM, a garbage collector, or a hidden scheduler.</p></article>
-            <article class="llm-feature"><h3>Optimization explanations</h3><p>The toolchain explains why code was retained, eliminated, rebuilt, instantiated, or linked instead of hiding those decisions.</p></article>
-            <article class="llm-feature"><h3>Honest flaky-test outcomes</h3><p>Retries cannot turn nondeterminism into a pass. Attempts, seeds, and evidence remain visible as an explicit flaky result.</p></article>
-            <article class="llm-feature"><h3>Measured token economics</h3><p>Language changes are evaluated against tokenizer cost and verified repair success, making model efficiency an engineering constraint.</p></article>
+            <article class="llm-feature"><h3>Declaration-level reuse</h3><p>Incremental builds recheck only affected declarations and explain every keep-or-rebuild decision.</p><small class="why">Why: Feedback stays fast as projects grow.</small></article>
+            <article class="llm-feature"><h3>Generated-code source maps</h3><p>Diagnostics in generated files route back to the source span the model should actually change.</p><small class="why">Why: Models repair the real editable source.</small></article>
+            <article class="llm-feature"><h3>Single-purpose keywords</h3><p>A short, closed vocabulary with no synonyms or contextual meanings keeps generation compact and deterministic.</p><small class="why">Why: Fewer meanings reduce generation errors.</small></article>
+            <article class="llm-feature"><h3>No overloaded names</h3><p>Each name resolves one way. Calls, operators, protocols, and imports never depend on a hidden candidate set.</p><small class="why">Why: Resolution avoids hidden candidate sets.</small></article>
+            <article class="llm-feature"><h3>Search-stable declarations</h3><p>Every top-level declaration begins at column zero with a keyword, and a file path is its module name.</p><small class="why">Why: Relevant code is cheap to locate.</small></article>
+            <article class="llm-feature"><h3>Canonical formatting</h3><p>One formatter produces one layout, shrinking diffs and preventing agents from spending tokens debating style.</p><small class="why">Why: Formatting noise disappears from every diff.</small></article>
+            <article class="llm-feature"><h3>Direct native toolchain</h3><p>Neper emits native executables through its own linker without LLVM, a VM, a garbage collector, or a hidden scheduler.</p><small class="why">Why: Programs ship without heavyweight runtime baggage.</small></article>
+            <article class="llm-feature"><h3>Optimization explanations</h3><p>The toolchain explains why code was retained, eliminated, rebuilt, instantiated, or linked instead of hiding those decisions.</p><small class="why">Why: Performance decisions remain inspectable and debuggable.</small></article>
+            <article class="llm-feature"><h3>Honest flaky-test outcomes</h3><p>Retries cannot turn nondeterminism into a pass. Attempts, seeds, and evidence remain visible as an explicit flaky result.</p><small class="why">Why: Nondeterminism cannot masquerade as correctness.</small></article>
+            <article class="llm-feature"><h3>Measured token economics</h3><p>Language changes are evaluated against tokenizer cost and verified repair success, making model efficiency an engineering constraint.</p><small class="why">Why: Language evolution must justify model cost.</small></article>
           </div>
         </details>
       </section>
