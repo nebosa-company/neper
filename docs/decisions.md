@@ -22055,3 +22055,14 @@ therefore a host system-back bridge) plus the scrim to the dismissal callback.
 `ui_overlays3_v2` holds the 217px content height, absent Cancel semantics and
 Escape dismissal on Windows and Linux. `action-sheet-android.png` is the Segoe
 UI visual check.
+
+## D1046 — Android action rows can lead with icons
+
+`overlay.action_sheet_android_with_icons` adds one parallel glyph slice to the
+existing Android row builder. Each 48px row reserves a 24px icon followed by a
+16px gap; ordinary icons use `on-surface-variant`, while a destructive icon
+follows its error label.
+
+`ui_overlays3_v2` holds the unchanged sheet geometry, Button semantics and
+callback on Windows and Linux. `action-sheet-icons.png` is the Segoe UI visual
+check.

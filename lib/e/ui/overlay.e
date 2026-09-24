@@ -1806,6 +1806,11 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // `body-large` label in `ink` under the `on-surface` state layer; a button in the
 // tree.
 fn sheet_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, ink: paint.Color, action: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = sheet_row_with_icon(a, key, t, label, ink, .Info, false, false, action)
+    ret (made, made_error)
+}
+
+fn sheet_row_with_icon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, ink: paint.Color, icon: control.GlyphKind, has_icon: bool, destructive: bool, action: *const widget.Submit) -> (widget.Node, err) {
     let state = control.control_state(t, key, true, false)
     var look = style.resolve(t.tokens, .Plain, state)
     look.background = control.with_alpha(style.color(t.tokens, .OnSurface), control.state_opacity(t, state))
@@ -1823,7 +1828,19 @@ fn sheet_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     caption.wrap = .None
     let (said, said_error) = control.colored_text(a, 0u64, label, t, caption, ink)
     if said_error != ok { ret (zero, said_error) }
-    let (made, made_error) = control.pressable(a, key, t, 3u8, label, look, true, false, action, said)
+    var content = said
+    if has_icon {
+        var icon_ink = style.color(t.tokens, .OnSurfaceVariant)
+        if destructive { icon_ink = ink }
+        let (mark, mark_error) = control.icon_square(a, icon_ink, icon, 24.0)
+        if mark_error != ok { ret (zero, mark_error) }
+        let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if parts_error != ok { ret (zero, TooLarge) }
+        parts[0usize] = mark
+        parts[1usize] = said
+        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, style.defaults(), parts[0usize..2usize])
+    }
+    let (made, made_error) = control.pressable(a, key, t, 3u8, label, look, true, false, action, content)
     if made_error != ok { ret (zero, made_error) }
     var stretched = made
     stretched.style.width = style.Length { Percent: 100.0 }
@@ -1848,17 +1865,25 @@ fn action_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
 }
 
 fn action_sheet_localized(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, cancel_label: str, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    let (made, made_error) = action_sheet_form(a, key, t, title, buttons, cancel_label, true, open, dismiss)
+    var no_icons: []const control.GlyphKind = zero
+    let (made, made_error) = action_sheet_form(a, key, t, title, buttons, no_icons, cancel_label, true, open, dismiss)
     ret (made, made_error)
 }
 
 fn action_sheet_android(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    let (made, made_error) = action_sheet_form(a, key, t, title, buttons, "", false, open, dismiss)
+    var no_icons: []const control.GlyphKind = zero
+    let (made, made_error) = action_sheet_form(a, key, t, title, buttons, no_icons, "", false, open, dismiss)
     ret (made, made_error)
 }
 
-fn action_sheet_form(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, cancel_label: str, has_cancel: bool, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+fn action_sheet_android_with_icons(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, icons: []const control.GlyphKind, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let (made, made_error) = action_sheet_form(a, key, t, title, buttons, icons, "", false, open, dismiss)
+    ret (made, made_error)
+}
+
+fn action_sheet_form(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, buttons: []const DialogButton, icons: []const control.GlyphKind, cancel_label: str, has_cancel: bool, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    if icons.len != 0usize && icons.len != buttons.len { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * buttons.len + 5usize)
     if rows_error != ok { ret (zero, TooLarge) }
     let (grips, grips_error) = mem.alloc[widget.Node](a, 2usize)
@@ -1899,7 +1924,17 @@ fn action_sheet_form(a: *mem.Arena, key: widget.Key, t: *const control.Theme, ti
             if row_error != ok { ret (zero, row_error) }
             made = row
         } else {
-            let (row, row_error) = sheet_row(a, key + 3u64 + u64(i), t, buttons[i].label, ink, &buttons[i].action)
+            var row: widget.Node = zero
+            var row_error: err = ok
+            if icons.len == buttons.len {
+                let (icon_row, icon_row_error) = sheet_row_with_icon(a, key + 3u64 + u64(i), t, buttons[i].label, ink, icons[i], true, buttons[i].kind == .Destructive, &buttons[i].action)
+                row = icon_row
+                row_error = icon_row_error
+            } else {
+                let (plain_row, plain_row_error) = sheet_row(a, key + 3u64 + u64(i), t, buttons[i].label, ink, &buttons[i].action)
+                row = plain_row
+                row_error = plain_row_error
+            }
             if row_error != ok { ret (zero, row_error) }
             made = row
         }

@@ -30,9 +30,9 @@ use e.ui.widget
 type Counter = struct { count: usize }
 
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
-type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, sheet_actions: [2]overlay.DialogButton }
+type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, action_icons: [3]control.GlyphKind, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -114,7 +114,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (bottom, e4) = overlay.bottom_sheet(a, 300u64, t, "Share", inside, which == .Bottom, &s.subs[3usize], 200.0)
     var actions: widget.Node = zero
     var e5: err = ok
-    if which == .ActionsAndroid {
+    if which == .ActionsAndroidIcons {
+        let (made_actions, made_actions_error) = overlay.action_sheet_android_with_icons(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], s.action_icons[0usize..3usize], true, &s.subs[3usize])
+        actions = made_actions
+        e5 = made_actions_error
+    } else if which == .ActionsAndroid {
         let (made_actions, made_actions_error) = overlay.action_sheet_android(a, 400u64, t, "build-4128.zip", s.actions[0usize..3usize], true, &s.subs[3usize])
         actions = made_actions
         e5 = made_actions_error
@@ -208,6 +212,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.actions[0usize] = overlay.DialogButton { label: "Share", action: s.subs[4usize], kind: .Plain }
     s.actions[1usize] = overlay.DialogButton { label: "Download", action: s.subs[4usize], kind: .Plain }
     s.actions[2usize] = overlay.DialogButton { label: "Delete", action: s.subs[1usize], kind: .Destructive }
+    s.action_icons[0usize] = .ArrowUp
+    s.action_icons[1usize] = .ArrowDown
+    s.action_icons[2usize] = .Cross
     s.sheet_actions[0usize] = overlay.DialogButton { label: "Keep", action: s.subs[2usize], kind: .Default }
     s.sheet_actions[1usize] = overlay.DialogButton { label: "Cancel", action: s.subs[0usize], kind: .Cancel }
     let (frame_storage, storage_error) = mem.alloc[u8](a, 2097152usize)
@@ -403,6 +410,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if android_tree_error != ok { os.exit(85i32) }
     let (_, has_android_cancel) = find(android_tree, .Button, "Cancel")
     if !has_android_sheet || !near(android_sheet.height, 217.0) || has_android_cancel || testing.by_key(&harness, 406u64).count != 0usize || testing.press_key(&harness, 27u32, zero) != ok || s.counters[3usize].count != android_dismiss_before + 1usize { os.exit(86i32) }
+    // The icon form preserves the same rows and actions while reserving a
+    // leading 24px glyph and 16px gap for every command.
+    let icon_share_before = s.counters[4usize].count
+    let (root_android_icons, build_android_icons_error) = build(&f, &theme, s, .ActionsAndroidIcons)
+    if build_android_icons_error != ok || testing.pump(&harness, root_android_icons, time.Instant { nanos: 1400000000i64 }) != ok { os.exit(87i32) }
+    let (android_icons_sheet, has_android_icons_sheet) = lifted(&harness, 400u64)
+    let (android_icons_tree, android_icons_tree_error) = testing.semantics(&harness)
+    if android_icons_tree_error != ok { os.exit(88i32) }
+    let (_, has_icon_share) = find(android_icons_tree, .Button, "Share")
+    if !has_android_icons_sheet || !near(android_icons_sheet.height, 217.0) || !has_icon_share || !tap_key(&harness, &runtime, 403u64) || s.counters[4usize].count != icon_share_before + 1usize { os.exit(89i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(42i32) }
     try io.print("ui overlays3 v2 ok\n")
     ret ok
