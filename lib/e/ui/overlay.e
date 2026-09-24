@@ -1573,6 +1573,15 @@ fn sheet_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: s
     ret (made, made_error)
 }
 
+fn sheet_with_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, actions: []const DialogButton, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var clamped = width
+    if clamped < 256.0 { clamped = 256.0 }
+    if clamped > 400.0 { clamped = 400.0 }
+    let (made, made_error) = edged_with_actions(a, key, t, title, content, dismiss, *dismiss, .Right, clamped, 0.0, actions)
+    ret (made, made_error)
+}
+
 // A bottom sheet: the same along the bottom edge, the window's width and
 // `height` tall; v2 (D977), a drag handle rather than the close button.
 fn bottom_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, height: f32) -> (widget.Node, err) {
@@ -1586,6 +1595,12 @@ fn bottom_sheet_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, t
     var outside = *dismiss
     if dirty { outside = widget.Submit { ctx: zero, invoke: zero } }
     let (made, made_error) = edged(a, key, t, title, content, dismiss, outside, .Below, 0.0, height)
+    ret (made, made_error)
+}
+
+fn bottom_sheet_with_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, actions: []const DialogButton, open: bool, dismiss: *const widget.Submit, height: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (made, made_error) = edged_with_actions(a, key, t, title, content, dismiss, *dismiss, .Below, 0.0, height, actions)
     ret (made, made_error)
 }
 
@@ -1623,11 +1638,24 @@ fn sheet_handle(t: *const control.Theme, grips: []widget.Node) -> widget.Node {
 // 40 across with a 24 `close`, 32 and 18 with a pointer, named "Close") -- over
 // the content 16 in at the sides; a bottom sheet's drag handle above the header.
 fn edged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
-    let (made, made_error) = edged_with_back(a, key, t, title, content, dismiss, outside, placement, width, height, zero)
+    var no_actions: []const DialogButton = zero
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, no_actions)
     ret (made, made_error)
 }
 
 fn edged_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit) -> (widget.Node, err) {
+    var no_actions: []const DialogButton = zero
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, back, no_actions)
+    ret (made, made_error)
+}
+
+fn edged_with_actions(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, actions: []const DialogButton) -> (widget.Node, err) {
+    let (made, made_error) = edged_full(a, key, t, title, content, dismiss, outside, placement, width, height, zero, actions)
+    ret (made, made_error)
+}
+
+fn edged_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32, back: *const widget.Submit, actions: []const DialogButton) -> (widget.Node, err) {
+    if actions.len > 2usize { ret (zero, TooLarge) }
     let bottom = placement == .Below
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     var heading = control.text_options()
@@ -1668,7 +1696,7 @@ fn edged_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
     bar.height = style.Length { Px: control.if_else(!bottom && !touch, 48.0, 56.0) }
     bar.padding.left = style.Length { Px: control.if_else(has_back, 8.0, 16.0) }
     bar.padding.right = style.Length { Px: control.if_else(bottom, 16.0, 8.0) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var p = 0usize
     if bottom {
@@ -1678,7 +1706,39 @@ fn edged_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
     parts[p] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, bar, header[0usize..n])
     bits[5usize] = content
     parts[p + 1usize] = widget.padded(0u64, 16.0, 0.0, 16.0, 0.0, style.defaults(), bits[5usize..6usize])
-    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..p + 2usize])
+    var part_count = p + 2usize
+    if actions.len > 0usize {
+        let (footer, footer_error) = mem.alloc[widget.Node](a, 2usize)
+        if footer_error != ok { ret (zero, TooLarge) }
+        let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+        if rule_error != ok { ret (zero, rule_error) }
+        footer[0usize] = rule
+        let (buttons, buttons_error) = mem.alloc[widget.Node](a, actions.len)
+        if buttons_error != ok { ret (zero, TooLarge) }
+        var i = 0usize
+        while i < actions.len {
+            var options = control.button_options()
+            options.variant = .Plain
+            if actions[i].kind == .Default { options.variant = .Filled }
+            if actions[i].kind == .Cancel { options.variant = .Outlined }
+            if actions[i].kind == .Destructive { options.variant = .Danger }
+            let (button, button_error) = control.button(a, key + 4u64 + u64(i), t, actions[i].label, &actions[i].action, options)
+            if button_error != ok { ret (zero, button_error) }
+            buttons[i] = button
+            i += 1usize
+        }
+        var footer_style = style.defaults()
+        footer_style.width = style.Length { Percent: 100.0 }
+        footer_style.padding.top = style.Length { Px: 16.0 }
+        footer_style.padding.right = style.Length { Px: 16.0 }
+        footer_style.padding.bottom = style.Length { Px: 16.0 }
+        footer_style.padding.left = style.Length { Px: 16.0 }
+        footer[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, footer_style, buttons[0usize..actions.len])
+        parts[part_count] = widget.spacer(0u64, 1.0)
+        parts[part_count + 1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), footer[0usize..2usize])
+        part_count += 2usize
+    }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
     let (made, made_error) = sheet_frame(a, key, t, title, column, dismiss, outside, placement, width, height)
     ret (made, made_error)
 }
@@ -1691,7 +1751,7 @@ fn edged_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titl
 // labelled by the element keyed `key + 1`; Escape fires `dismiss` and a press
 // outside fires `outside` (normally the same action).
 // ponytail: modal only -- no standard (docked or peeking) sheets, detents,
-// drag-to-dismiss or actions footer.
+// drag-to-dismiss.
 fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
     let bottom = placement == .Below
     let (body, body_error) = mem.alloc[widget.Node](a, 3usize)

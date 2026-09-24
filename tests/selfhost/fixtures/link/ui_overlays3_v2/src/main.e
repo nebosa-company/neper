@@ -30,9 +30,9 @@ use e.ui.widget
 type Counter = struct { count: usize }
 
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
-type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton }
+type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, Bottom, Actions }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, Bottom, Actions }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -91,10 +91,14 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     var side_width: f32 = 300.0
     if which == .SideNarrow { side_width = 100.0 }
     if which == .SideWide { side_width = 500.0 }
-    let side_open = which == .Side || which == .SideNarrow || which == .SideWide || which == .SideBack || which == .SideDirty
+    let side_open = which == .Side || which == .SideNarrow || which == .SideWide || which == .SideBack || which == .SideDirty || which == .SideActions
     var side: widget.Node = zero
     var e3: err = ok
-    if which == .SideDirty {
+    if which == .SideActions {
+        let (made_side, made_side_error) = overlay.sheet_with_actions(a, 200u64, t, "Details", inside, s.sheet_actions[0usize..2usize], true, &s.subs[3usize], side_width)
+        side = made_side
+        e3 = made_side_error
+    } else if which == .SideDirty {
         let (made_side, made_side_error) = overlay.sheet_state(a, 200u64, t, "Details", inside, true, true, &s.subs[3usize], side_width)
         side = made_side
         e3 = made_side_error
@@ -190,6 +194,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.actions[0usize] = overlay.DialogButton { label: "Share", action: s.subs[4usize], kind: .Plain }
     s.actions[1usize] = overlay.DialogButton { label: "Download", action: s.subs[4usize], kind: .Plain }
     s.actions[2usize] = overlay.DialogButton { label: "Delete", action: s.subs[1usize], kind: .Destructive }
+    s.sheet_actions[0usize] = overlay.DialogButton { label: "Keep", action: s.subs[2usize], kind: .Default }
+    s.sheet_actions[1usize] = overlay.DialogButton { label: "Cancel", action: s.subs[0usize], kind: .Cancel }
     let (frame_storage, storage_error) = mem.alloc[u8](a, 2097152usize)
     if storage_error != ok { os.exit(8i32) }
     var f = mem.arena_from(frame_storage)
@@ -322,6 +328,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_dirty_error != ok || testing.pump(&harness, root_dirty, time.Instant { nanos: 1190000000i64 }) != ok { os.exit(71i32) }
     if testing.tap(&harness, 5.0, 5.0) != ok || s.counters[3usize].count != dirty_dismiss_before { os.exit(72i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || s.counters[3usize].count != dirty_dismiss_before + 1usize { os.exit(73i32) }
+    // Optional sheet actions stay after a full-width divider at the bottom,
+    // with the filled main action followed by outlined Cancel from the start.
+    let sheet_keep_before = s.counters[2usize].count
+    let sheet_cancel_before = s.counters[0usize].count
+    let (root_sheet_actions, build_sheet_actions_error) = build(&f, &theme, s, .SideActions)
+    if build_sheet_actions_error != ok || testing.pump(&harness, root_sheet_actions, time.Instant { nanos: 1195000000i64 }) != ok { os.exit(74i32) }
+    let (sheet_actions_shot, sheet_actions_shot_error) = testing.snapshot(&harness, a)
+    if sheet_actions_shot_error != ok { os.exit(75i32) }
+    let (sheet_keep, has_sheet_keep) = bounds(&harness, &runtime, 204u64)
+    let (sheet_cancel, has_sheet_cancel) = bounds(&harness, &runtime, 205u64)
+    if !has_sheet_keep || !has_sheet_cancel || !near(sheet_keep.x, 356.0) || !near(sheet_cancel.x, sheet_keep.x + sheet_keep.width + 8.0) || !near(sheet_keep.y + sheet_keep.height, 464.0) { os.exit(76i32) }
+    if !is_color(sheet_actions_shot, at(350.0, sheet_keep.y - 16.5), style.color(&tokens, .OutlineVariant)) { os.exit(77i32) }
+    if !is_color(sheet_actions_shot, at(sheet_keep.x + 4.0, sheet_keep.y + 4.0), style.color(&tokens, .Primary)) { os.exit(79i32) }
+    if !is_color(sheet_actions_shot, at(sheet_cancel.x, sheet_cancel.y + sheet_cancel.height * 0.5), style.color(&tokens, .Border)) { os.exit(80i32) }
+    if !tap_key(&harness, &runtime, 204u64) || !tap_key(&harness, &runtime, 205u64) || s.counters[2usize].count != sheet_keep_before + 1usize || s.counters[0usize].count != sheet_cancel_before + 1usize { os.exit(78i32) }
     // The bottom sheet: 200 tall along the bottom, its top corners rounded, the
     // handle 16 down in `on-surface-variant` at 40%; no Close.
     let (root_3, build_3_error) = build(&f, &theme, s, .Bottom)

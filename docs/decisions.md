@@ -22024,3 +22024,14 @@ but the trapping scope keeps the real dismissal callback for Close and Escape.
 
 `ui_overlays3_v2` holds the unchanged dismiss count after the scrim and the
 single Escape dismissal on Windows and Linux.
+
+## D1043 — Sheet actions stay fixed at the bottom
+
+`overlay.sheet_with_actions` and `bottom_sheet_with_actions` add the specified
+two-action footer to the shared sheet body: a full-width divider, then 16px
+padding around a start-aligned filled main action and outlined Cancel, 8px apart.
+A spacer keeps that footer at the sheet edge while content occupies the middle.
+
+`ui_overlays3_v2` holds the divider, footer geometry, button colours and both
+callbacks on Windows and Linux. `sheet-actions-footer.png` is the Segoe UI visual
+check.
