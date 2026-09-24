@@ -19352,3 +19352,66 @@ bar, rule and frame, the button's word both ways, the halo, and the pill's width
 place and colour after Tab reaches the slider. All 70 `ui_*` fixtures pass on
 Windows and Linux. The Selection group is complete; the value pill centres on the
 handle only while its value is no wider than 16.
+
+## D959 — The calendar, the date picker and the picker's sheet draw their v2 specifications
+
+`overlay.calendar` now draws docs/ux/components/Calendar: cells 32 with a pointer
+(a 224 grid) and 40 on touch with 4 between the weeks; a header 32 tall and 8 above
+the weekday row (48 on touch) holding the month's name and year in `title-small`
+`on-surface` (`label-large` `on-surface-variant` on touch) and, at its end, Previous
+and Next as round icon buttons the cell's size with drawn `chevron-left` /
+`chevron-right` marks (18, 24 on touch) in `on-surface-variant`; a weekday row (Mo Tu
+We, or M T W on touch) in `label-medium`; and each day a disc the cell's size, its
+digits centred in `body-medium` under the `on-surface` state layer. The selected day,
+and in range mode both ends, is a `primary` disc with `on-primary` digits; the days
+between lie on a `primary-container` band that reaches half a cell under each end's
+disc. Days from the months either side stay empty cells. The new
+`overlay.calendar_marked` also takes today and draws it as a 1px `primary` ring with
+`primary` digits, which the selection overrides. Before this change the header was
+`<`, `YYYY-MM`, `>` as text buttons, there was no weekday row, and the days were
+hit-target Plain buttons with their digits at the top-start, the selected one Filled
+and the range tinted in `selection`.
+
+`overlay.date_picker` and `date_range_picker` now show the outlined read-only field:
+40 tall with a pointer, 56 on touch, the label in the notch once a date is set, a
+drawn calendar mark at the end, and the 2px `primary` outline while open. The field
+itself reports Expanded (before, only the Group did). The calendar stands 4 below
+it on `surface-container-high` with 12 corners and elevation 2, padded 8 above and
+12 at the sides and below, seven cells plus 32 wide (256 with a pointer). Before,
+the field was an Outlined button and the calendar sat on the generic popup surface.
+The field is `control.field_head`, which was factored out of D956's select head
+with its height, marks and notch as parameters. The select calls it with the
+select's own values and draws exactly what it drew before. `overlay.dismissable` is
+the scope, dialog and overlay of `light_dismissed` placed over a surface the caller
+draws.
+
+`control.picker`'s `.Sheet` now uses the select's field as its anchor and opens a
+bottom sheet on `surface-container-low` with 28 top corners and elevation 1. The
+sheet spans the window's width up to 640 and is centred; a 32 x 4 handle in
+`on-surface-variant` at 40% sits 16 from its top, the title follows in `title-large`
+24 in from the sides, and then come radio rows 56 tall, each a radio in its 40
+circle before the option in `body-large`. Under the sheet a separate non-modal
+overlay spreads the `scrim` across the window at the scrim opacity. A press on the
+scrim misses the modal sheet, and the sheet's dismissal fires `toggle`. Before, the
+sheet was a bordered `surface` box in the middle of the window, holding Filled or
+Plain buttons, with no scrim.
+
+tests/selfhost/fixtures/link/ui_pickers_v2 checks these on pixels and bounds. For
+the calendar it holds the 32 buttons and discs, the first day 72 below the header's
+top, the primary disc, the today ring, and the band's half cells at both ends of a
+range. For the open date picker it holds the 40 field in its 2px outline and the
+grid 12 below the field and 12 in from its side on the high container. For the
+sheet it holds the bottom edge at the window's, the 600-wide 56-tall rows, the
+dimmed page, the handle, and the chosen and unchosen radios. ui_pickers and
+ui_entry keep their behaviour checks unchanged. All 71 ui_* fixtures pass on
+Windows and Linux, and the Windows example builds.
+
+Still open: the calendar's year view, week numbers, event dots, unavailable days,
+and the locale's first day and names; typing in the date field, the locale format,
+the Today and Clear footer, and the modal and full-screen forms; the sheet's 60%
+height cap and its drag. TimePicker and DurationPicker stay undelivered because
+their specified control is a typed field over caller-held text, with a time list
+or preset chips, and the stepper API holds neither. ColorPicker stays undelivered
+because its spectrum, hue and opacity strips, swatches and channel fields replace
+the RGB sliders. FontPicker stays undelivered because its style is a dense Picker
+and its size a Spin box, and both need caller state the function does not take.

@@ -2863,6 +2863,12 @@ ui_selection3_v2_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/ui-selection3-v2-selfhost"
 ui_selection3_v2_output=$("$test_build/ui-selection3-v2-selfhost")
 [ "$ui_selection3_v2_output" = 'ui selection3 v2 ok' ]
+# the v2 calendar, date picker and picker sheet (D959)
+ui_pickers_v2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_pickers_v2/src/main.e" "$repo" x64 linux "$test_build/ui-pickers-v2-selfhost")
+[ "$ui_pickers_v2_written" = 'executable written' ]
+chmod +x "$test_build/ui-pickers-v2-selfhost"
+ui_pickers_v2_output=$("$test_build/ui-pickers-v2-selfhost")
+[ "$ui_pickers_v2_output" = 'ui pickers v2 ok' ]
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 ui_selection_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_selection/src/main.e" "$repo" x64 linux "$test_build/ui-selection-selfhost")

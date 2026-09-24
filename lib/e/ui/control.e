@@ -645,13 +645,14 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 
 // A drawn glyph (D955): the tick, the dash and the close cross the selection
 // controls mark themselves with, stroked 2px round in `color` across the area;
-// and (D956) the chevrons a menu's opener points with.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp }
+// and (D956) the chevrons a menu's opener points with; (D959) the chevrons a
+// calendar turns its months with and the calendar a date field ends in.
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena }
 
 fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     let g = mem.cast[*Glyph](ctx)
-    let (pb, pb_error) = geometry.path_builder(g.arena, 8usize, 8usize)
+    let (pb, pb_error) = geometry.path_builder(g.arena, 16usize, 16usize)
     if pb_error != ok { ret TooLarge }
     var builder = pb
     let x = area.x
@@ -676,6 +677,30 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.29, y: y + h * 0.60 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.5, y: y + h * 0.39 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.71, y: y + h * 0.60 })
+    }
+    if g.kind == .ChevronLeft {
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.60, y: y + h * 0.29 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.39, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.60, y: y + h * 0.71 })
+    }
+    if g.kind == .ChevronRight {
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.40, y: y + h * 0.29 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.61, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.40, y: y + h * 0.71 })
+    }
+    if g.kind == .Calendar {
+        // A page with a rule under its head and two rings above it.
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.17, y: y + h * 0.25 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.83, y: y + h * 0.25 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.83, y: y + h * 0.85 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.17, y: y + h * 0.85 })
+        try geometry.close_path(&builder)
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.17, y: y + h * 0.42 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.83, y: y + h * 0.42 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.35, y: y + h * 0.12 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.35, y: y + h * 0.30 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.65, y: y + h * 0.12 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.65, y: y + h * 0.30 })
     }
     if g.kind == .Cross {
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.28, y: y + h * 0.28 })
@@ -1619,28 +1644,16 @@ fn text_area(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer
 
 // -------------------------------------------------------- basic choice (D824, P1-11)
 
-// A select: a field showing the chosen option's label (keyed `key`), which fires
-// `toggle` -- the caller opens or closes it; open, a modal overlay below it (keyed
-// `key + 1`) lists the options as menu items keyed `key + 2 + index`, each firing
-// its own action, and a press outside fires `toggle` again to close. The caller
-// keeps `selected` and `open`.
-// v2 (D956, docs/ux/components/Select): the outlined text field's box -- 48 tall
-// with a pointer, 56 on touch, 40 dense, 16 sides (12 dense), `radius-xs`, the 1px
-// `outline` (`on-surface` hovered, 2px `primary` open) -- read-only, the value in
-// `body-large` `on-surface` and the label in the notch above it, or the label
-// resting in `on-surface-variant` before a choice; a trailing 24 chevron (18
-// dense) in `on-surface-variant`, pointing up in `primary` while open. The menu is
-// `surface-container` with 8 corners and elevation 2, 8 above and below its rows,
-// 4 below the field, at least 112 wide; its rows are `menu_row`s.
-// ponytail: the menu is at least 112 wide, not the field's own width; an overlay learning its anchor's width can match them.
-fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
-    if picks.len != options.len { ret (zero, TooLarge) }
-    let chosen = selected < options.len
-    var shown = label
-    if chosen { shown = options[selected] }
+// A read-only field's box that opens something (D956's select head, D959): `h`
+// tall, 12 sides at 40 or less and 16 above, `radius-xs`, the 1px `outline`
+// (`on-surface` hovered, 2px `primary` open), the value in `body-large` (`body-medium`
+// at 40) or the label resting in `on-surface-variant` before a choice, the label in
+// the notch once chosen when `notch`; the trailing `closed` mark (`opened` while
+// open) 24 (18 at 40) in `on-surface-variant`, `primary` while open; a press fires
+// `toggle`, and the head says Expanded while open.
+fn field_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: str, chosen: bool, open: bool, toggle: *const widget.Submit, h: f32, closed: GlyphKind, opened: GlyphKind, notch: bool) -> (widget.Node, err) {
     let state = control_state(t, key, true, false)
-    let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
-    let h = t.tokens.metrics.control_height + 16.0
+    let dense = h <= t.tokens.sizes.control_md
     let pad_x: f32 = if_else(dense, 12.0, 16.0)
     let ink = style.color(t.tokens, .OnSurface)
     let muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -1678,8 +1691,8 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     if !chosen { value_color = muted }
     let (value_node, value_error) = colored_text(a, 0u64, shown, t, words, value_color)
     if value_error != ok { ret (zero, value_error) }
-    var kind: GlyphKind = .ChevronDown
-    if open { kind = .ChevronUp }
+    var kind = closed
+    if open { kind = opened }
     let (chevron, chevron_error) = mark_glyph(a, point, kind, mark)
     if chevron_error != ok { ret (zero, chevron_error) }
     let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
@@ -1694,12 +1707,37 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     if open { states = accessibility.STATE_EXPANDED }
     let (head_node, head_error) = pressable_states(a, key, t, 3u8, shown, look, true, false, states, accessibility.ACTION_SHOW_MENU, key + 1u64, toggle, content)
     if head_error != ok { ret (zero, head_error) }
-    var head = head_node
-    if chosen && label.len != 0usize && !dense {
+    var framed = head_node
+    if chosen && label.len != 0usize && notch {
         let (notched_node, notched_error) = notched(a, t, head_node, label, label_color, pad_x)
         if notched_error != ok { ret (zero, notched_error) }
-        head = notched_node
+        framed = notched_node
     }
+    ret (framed, ok)
+}
+
+// A select: a field showing the chosen option's label (keyed `key`), which fires
+// `toggle` -- the caller opens or closes it; open, a modal overlay below it (keyed
+// `key + 1`) lists the options as menu items keyed `key + 2 + index`, each firing
+// its own action, and a press outside fires `toggle` again to close. The caller
+// keeps `selected` and `open`.
+// v2 (D956, docs/ux/components/Select): the outlined text field's box -- 48 tall
+// with a pointer, 56 on touch, 40 dense, 16 sides (12 dense), `radius-xs`, the 1px
+// `outline` (`on-surface` hovered, 2px `primary` open) -- read-only, the value in
+// `body-large` `on-surface` and the label in the notch above it, or the label
+// resting in `on-surface-variant` before a choice; a trailing 24 chevron (18
+// dense) in `on-surface-variant`, pointing up in `primary` while open. The menu is
+// `surface-container` with 8 corners and elevation 2, 8 above and below its rows,
+// 4 below the field, at least 112 wide; its rows are `menu_row`s.
+// ponytail: the menu is at least 112 wide, not the field's own width; an overlay learning its anchor's width can match them.
+fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
+    if picks.len != options.len { ret (zero, TooLarge) }
+    let chosen = selected < options.len
+    var shown = label
+    if chosen { shown = options[selected] }
+    let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
+    let (head, head_error) = field_head(a, key, t, label, shown, chosen, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense)
+    if head_error != ok { ret (zero, head_error) }
     var count = 1usize
     if open { count = 2usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
@@ -3728,68 +3766,121 @@ fn token_field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, toke
 }
 
 // How a picker presents its choice: D824's popup select, or a sheet -- a modal
-// overlay in the middle of the window listing the options as full-width rows
-// under a title, for a touch host.
+// overlay listing the options under a title, for a touch host.
 type PickerForm = enum u8 { Popup, Sheet }
 
+// A picker: `.Popup` is the select (D956: the docked menu with the chosen row
+// checked); `.Sheet` keeps the select's field (keyed `key`, firing `toggle`) and,
+// open, raises a bottom sheet (keyed `key + 1`) of radio rows keyed `key + 2 + index`.
+// v2 (D959, docs/ux/components/Picker): the sheet is `surface-container-low` with
+// 28 top corners and elevation 1, the window's width up to 640 and centred, over a
+// `scrim` at the scrim opacity across the window; a 32 x 4 handle in
+// `on-surface-variant` at 40% stands 16 from its top, the title in `title-large`
+// 24 in from the sides, then rows 56 tall, 16 in, a radio in its 40 circle before
+// the option in `body-large`; a press on the scrim, or Escape, fires `toggle`.
+// ponytail: the sheet opens at its full height; the 60% cap, the drag to expand and the slide wait on motion and a scrolled body.
 fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, presentation: PickerForm) -> (widget.Node, err) {
     if presentation == .Popup {
         let (popup, popup_error) = select(a, key, t, label, options, selected, open, toggle, picks)
         ret (popup, popup_error)
     }
     if picks.len != options.len { ret (zero, TooLarge) }
+    let chosen = selected < options.len
     var shown = label
-    if selected < options.len { shown = options[selected] }
-    var outlined = button_options()
-    outlined.variant = .Outlined
-    let (head, head_error) = button(a, key, t, shown, toggle, outlined)
+    if chosen { shown = options[selected] }
+    let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
+    let (head, head_error) = field_head(a, key, t, label, shown, chosen, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense)
     if head_error != ok { ret (zero, head_error) }
     var count = 1usize
-    if open { count = 2usize }
+    if open { count = 3usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
     if parts_error != ok { ret (zero, TooLarge) }
     parts[0usize] = head
     if open {
-        let (rows, rows_error) = mem.alloc[widget.Node](a, options.len + 1usize)
+        let (rows, rows_error) = mem.alloc[widget.Node](a, options.len + 2usize)
         if rows_error != ok { ret (zero, TooLarge) }
+        var grip = sized_style(32.0, 4.0)
+        grip.radius = 2.0
+        grip.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.4) }
+        let (grips, grips_error) = mem.alloc[widget.Node](a, 1usize)
+        if grips_error != ok { ret (zero, TooLarge) }
+        grips[0usize] = widget.box(0u64, grip, zero)
+        rows[0usize] = widget.aligned(0u64, .Center, .Start, style.defaults(), grips[0usize..1usize])
         var heading = text_options()
-        heading.role = .Title
-        let (title_node, title_error) = text_node(a, 0u64, label, t, heading)
+        heading.role = .TitleLarge
+        heading.wrap = .None
+        let (title_node, title_error) = colored_text(a, 0u64, label, t, heading, style.color(t.tokens, .OnSurface))
         if title_error != ok { ret (zero, title_error) }
-        rows[0usize] = title_node
+        let (titles, titles_error) = mem.alloc[widget.Node](a, 1usize)
+        if titles_error != ok { ret (zero, TooLarge) }
+        titles[0usize] = title_node
+        var title_box = style.defaults()
+        let side = style.Length { Px: 24.0 }
+        title_box.padding = style.EdgeLengths { left: side, top: style.Length { Px: 16.0 }, right: side, bottom: style.Length { Px: 8.0 } }
+        rows[1usize] = widget.box(0u64, title_box, titles[0usize..1usize])
+        var full = style.defaults()
+        full.width = style.Length { Percent: 100.0 }
         var i = 0usize
         while i < options.len {
-            var plain = button_options()
-            plain.variant = .Plain
-            if i == selected { plain.variant = .Filled }
-            let (item, item_error) = button(a, key + 2u64 + u64(i), t, options[i], &picks[i], plain)
-            if item_error != ok { ret (zero, item_error) }
+            let row_key = key + 2u64 + u64(i)
+            let row_state = control_state(t, row_key, true, false)
+            let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+            if bits_error != ok { ret (zero, TooLarge) }
+            let (ring, ring_error) = choice_mark(a, t, row_state, i == selected, false, true, true)
+            if ring_error != ok { ret (zero, ring_error) }
+            bits[0usize] = ring
+            var words = text_options()
+            words.role = .BodyLarge
+            words.wrap = .None
+            let (word, word_error) = colored_text(a, 0u64, options[i], t, words, style.color(t.tokens, .OnSurface))
+            if word_error != ok { ret (zero, word_error) }
+            bits[1usize] = word
+            let (lines, lines_error) = mem.alloc[widget.Node](a, 1usize)
+            if lines_error != ok { ret (zero, TooLarge) }
+            var line_style = style.defaults()
+            line_style.min_height = style.Length { Px: 56.0 }
+            line_style.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 0.0 } }
+            lines[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, line_style, bits[0usize..2usize])
+            let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+            if inner_error != ok { ret (zero, TooLarge) }
+            inner[0usize] = widget.region(row_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&picks[i]), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: true }, full, lines[0usize..1usize])
             var entry: widget.Semantics = zero
-            entry.role = 11u8
+            entry.role = 5u8
             entry.label = options[i]
-            if i == selected { entry.states = accessibility.STATE_SELECTED }
-            let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
-            if wrapped_error != ok { ret (zero, TooLarge) }
-            wrapped[0usize] = item
-            var stretched = style.defaults()
-            stretched.width = style.Length { Percent: 100.0 }
-            rows[1usize + i] = widget.semantics(0u64, entry, stretched, wrapped[0usize..1usize])
+            entry.actions = accessibility.ACTION_PRESS
+            if i == selected { entry.states = accessibility.STATE_CHECKED }
+            rows[2usize + i] = widget.semantics(0u64, entry, full, inner[0usize..1usize])
             i += 1usize
         }
-        var sheet = surface_options(t)
-        sheet.bordered = true
-        sheet.elevation = 3u8
-        sheet.radius = t.tokens.radii.sm
-        sheet.padding = t.tokens.spacing.md
-        var sheet_style = surface_style(t, sheet)
-        sheet_style.min_width = style.Length { Px: 8.0 * t.tokens.spacing.lg }
+        var sheet_style = style.defaults()
+        sheet_style.width = style.Length { Percent: 100.0 }
+        sheet_style.max_width = style.Length { Px: 640.0 }
+        sheet_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+        sheet_style.corners = style.Corners { top_left: t.tokens.radii.xl, top_right: t.tokens.radii.xl, bottom_right: 0.0, bottom_left: 0.0 }
+        sheet_style.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[1usize]) }
+        sheet_style.overflow = .Clip
+        sheet_style.padding = style.EdgeLengths { left: style.Length { Px: 0.0 }, top: style.Length { Px: 16.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
         let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
         if column_error != ok { ret (zero, TooLarge) }
-        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: t.tokens.spacing.xs }, sheet_style, rows[0usize..options.len + 1usize])
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, sheet_style, rows[0usize..options.len + 2usize])
+        var group: widget.Semantics = zero
+        group.role = 2u8
+        group.label = label
+        let (grouped, grouped_error) = mem.alloc[widget.Node](a, 1usize)
+        if grouped_error != ok { ret (zero, TooLarge) }
+        var group_style = style.defaults()
+        group_style.width = style.Length { Percent: 100.0 }
+        group_style.max_width = style.Length { Px: 640.0 }
+        grouped[0usize] = widget.semantics(0u64, group, group_style, column[0usize..1usize])
+        var centre = style.defaults()
+        centre.width = style.Length { Percent: 100.0 }
+        let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+        if centred_error != ok { ret (zero, TooLarge) }
+        centred[0usize] = widget.aligned(0u64, .Center, .End, centre, grouped[0usize..1usize])
         var none: []const widget.Shortcut = zero
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
         if scoped_error != ok { ret (zero, TooLarge) }
-        scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *toggle, keys: zero }, style.defaults(), column[0usize..1usize])
+        scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: none, default_action: zero, cancel_action: *toggle, keys: zero }, style.defaults(), centred[0usize..1usize])
         var list_sem: widget.Semantics = zero
         list_sem.role = 23u8
         list_sem.label = label
@@ -3797,7 +3888,17 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         let (dialog, dialog_error) = mem.alloc[widget.Node](a, 1usize)
         if dialog_error != ok { ret (zero, TooLarge) }
         dialog[0usize] = widget.semantics(0u64, list_sem, style.defaults(), scoped[0usize..1usize])
-        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *toggle }, style.defaults(), dialog[0usize..1usize])
+        // The scrim is an overlay of its own under the sheet: a press on it misses
+        // the modal sheet, which dismisses it.
+        var dim = style.defaults()
+        dim.width = style.Length { Percent: 100.0 }
+        dim.height = style.Length { Percent: 100.0 }
+        dim.background = paint.Brush { Solid: with_alpha(style.color(t.tokens, .Scrim), t.tokens.states.scrim) }
+        let (dims, dims_error) = mem.alloc[widget.Node](a, 1usize)
+        if dims_error != ok { ret (zero, TooLarge) }
+        dims[0usize] = widget.box(0u64, dim, zero)
+        parts[1usize] = widget.overlay(0u64, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: false, dismiss: zero }, style.defaults(), dims[0usize..1usize])
+        parts[2usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: 0u64, placement: .Below, offset: zero, modal: true, dismiss: *toggle }, style.defaults(), dialog[0usize..1usize])
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }

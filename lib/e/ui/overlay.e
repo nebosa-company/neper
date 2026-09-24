@@ -259,6 +259,12 @@ fn popup(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget
 fn light_dismissed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, dismiss: *const widget.Submit) -> (widget.Node, err) {
     let (surface, surface_error) = popup_surface(a, t, content)
     if surface_error != ok { ret (zero, surface_error) }
+    let (made, made_error) = dismissable(a, key, anchor, placement, label, surface, dismiss, t.tokens.spacing.xs)
+    ret (made, made_error)
+}
+
+// The same over a surface the caller drew, `gap` from the anchor (D959).
+fn dismissable(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement: widget.Placement, label: str, surface: widget.Node, dismiss: *const widget.Submit, gap: f32) -> (widget.Node, err) {
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = surface
@@ -273,7 +279,7 @@ fn light_dismissed(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anch
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: geometry.Point { x: 0.0, y: t.tokens.spacing.xs }, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: geometry.Point { x: 0.0, y: gap }, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
 }
 
 // A flyout: a light-dismissed popup against its anchor, placed while `open`.
@@ -465,13 +471,34 @@ fn same_date(a: time.Date, b: time.Date) -> bool {
     ret a.year == b.year && a.month == b.month && a.day == b.day
 }
 
-// A calendar of the month `shown` (its day is ignored): a header of a Previous
-// button (keyed `key + 1`), the year and month, and a Next button (`key + 2`),
+// A calendar of the month `shown` (its day is ignored): a header of the month
+// and year, a Previous button (keyed `key + 1`) and a Next button (`key + 2`),
 // each reporting the first of the neighbouring month through `show`; then the
-// weeks, Monday first, a plain button a day keyed `key + 3 + day` reporting its
-// date through `pick`, the day of `selected` filled and the days from `from` to
-// `to` (when `ranged`) tinted. A grid in the tree named `label`, seven columns.
+// weekday row and the weeks, Monday first, a day button keyed `key + 3 + day`
+// reporting its date through `pick`, the day of `selected` marked and the days
+// from `from` to `to` (when `ranged`) banded. A grid in the tree named `label`,
+// seven columns.
 fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+    let (made, made_error) = calendar_marked(a, key, t, label, shown, selected, has_selected, ranged, from, to, shown, false, show, pick)
+    ret (made, made_error)
+}
+
+// The same with `today` marked when `has_today`.
+// v2 (D959, docs/ux/components/Calendar): cells 32 with a pointer (224 wide), 40
+// on touch (280) with 4 between the weeks; the header 32 tall and 8 above the
+// weekdays (48 on touch) holds the month's name and year in `title-small`
+// `on-surface` (`label-large` `on-surface-variant` on touch), then Previous and
+// Next as round icon buttons the cell's size with `chevron-left` / `chevron-right`
+// 18 (24 on touch) in `on-surface-variant`; the weekday row says Mo Tu We (M T W on
+// touch) in `label-medium` `on-surface-variant`. A day is a disc the cell's size,
+// its digits centred in `body-medium` `on-surface` under the `on-surface` state
+// layer; today is a 1px `primary` ring with `primary` digits; the selected day --
+// and in range mode both ends -- a `primary` disc with `on-primary` digits (winning
+// over today); between the ends a `primary-container` band, reaching half a cell
+// under each end's disc, with `on-primary-container` digits. Days of the
+// neighbouring months stay empty cells.
+// ponytail: Monday first and English names; the locale's first day and month names, the year view, week numbers, event dots and unavailable days are still to come.
+fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let year = i64(shown.year)
     let month = i64(shown.month)
     if month < 1i64 || month > 12i64 { ret (zero, TooLarge) }
@@ -489,38 +516,72 @@ fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
     turns[1usize] = DayPick { day: next, pick: show }
     actions[0usize] = widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: day_fire }
     actions[1usize] = widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: day_fire }
-    // The header.
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var cell = t.tokens.sizes.control_sm
+    var week_gap: f32 = 0.0
+    var icon = t.tokens.sizes.icon_sm
+    var head_height = t.tokens.sizes.control_sm
+    var head_below: f32 = 8.0
+    if touch {
+        cell = t.tokens.sizes.control_md
+        week_gap = 4.0
+        icon = t.tokens.sizes.icon_md
+        head_height = t.tokens.sizes.control_lg
+        head_below = 0.0
+    }
+    let ink = style.color(t.tokens, .OnSurface)
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    let primary = style.color(t.tokens, .Primary)
+    let clear = paint.rgba(0.0, 0.0, 0.0, 0.0)
+    // The header: the month and year, then Previous and Next at the end.
     let (head, head_error) = mem.alloc[widget.Node](a, 3usize)
     if head_error != ok { ret (zero, TooLarge) }
-    var plain = control.button_options()
-    plain.variant = .Plain
-    let (back, back_error) = control.button(a, key + 1u64, t, "<", &actions[0usize], plain)
-    if back_error != ok { ret (zero, back_error) }
-    head[0usize] = back
-    let (title_bytes, title_error) = mem.alloc[u8](a, 16usize)
+    let (title_bytes, title_error) = mem.alloc[u8](a, 24usize)
     if title_error != ok { ret (zero, TooLarge) }
-    let year_len = control.write_i64(title_bytes, year)
-    title_bytes[year_len] = 45u8
-    let title_len = write_two(title_bytes, year_len + 1usize, month)
+    var title_len = control.copy_text(title_bytes, month_name(month))
+    title_bytes[title_len] = 32u8
+    title_len += 1usize
+    title_len += control.write_i64(title_bytes[title_len..], year)
     var heading = control.text_options()
-    heading.role = .Label
+    heading.role = .TitleSmall
     heading.wrap = .None
-    heading.align = .Center
-    let (title_node, title_node_error) = control.text(a, 0u64, title_bytes[0usize..title_len], t, heading)
+    var heading_color = ink
+    if touch {
+        heading.role = .LabelLarge
+        heading_color = muted
+    }
+    let (title_node, title_node_error) = control.colored_text(a, 0u64, title_bytes[0usize..title_len], t, heading, heading_color)
     if title_node_error != ok { ret (zero, title_node_error) }
     var spread = title_node
     spread.style.width = style.Length { Flex: 1.0 }
-    head[1usize] = spread
-    let (forward, forward_error) = control.button(a, key + 2u64, t, ">", &actions[1usize], plain)
+    head[0usize] = spread
+    let (back, back_error) = month_turn(a, key + 1u64, t, .ChevronLeft, "Previous month", &actions[0usize], cell, icon)
+    if back_error != ok { ret (zero, back_error) }
+    head[1usize] = back
+    let (forward, forward_error) = month_turn(a, key + 2u64, t, .ChevronRight, "Next month", &actions[1usize], cell, icon)
     if forward_error != ok { ret (zero, forward_error) }
     head[2usize] = forward
-    // The days: blanks before the first, then a button a day, in rows of seven.
-    let cell = t.tokens.metrics.hit_target
+    // The weekdays.
+    let (names, names_error) = mem.alloc[widget.Node](a, 7usize)
+    if names_error != ok { ret (zero, TooLarge) }
+    var weekday = 0usize
+    while weekday < 7usize {
+        var caption = control.text_options()
+        caption.role = .LabelMedium
+        caption.wrap = .None
+        let (name_node, name_error) = control.colored_text(a, 0u64, weekday_name(weekday, touch), t, caption, muted)
+        if name_error != ok { ret (zero, name_error) }
+        let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
+        if named_error != ok { ret (zero, TooLarge) }
+        named[0usize] = name_node
+        names[weekday] = widget.aligned(0u64, .Center, .Center, control.sized_style(cell, cell), named[0usize..1usize])
+        weekday += 1usize
+    }
+    // The days: blanks before the first, then a disc a day, in rows of seven.
     let slots = usize(first_weekday) + usize(days)
     let weeks = (slots + 6usize) / 7usize
-    let (rows, rows_error) = mem.alloc[widget.Node](a, 1usize + weeks)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, weeks)
     if rows_error != ok { ret (zero, TooLarge) }
-    rows[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, control.sized_style(7.0 * cell, t.tokens.metrics.control_height), head[0usize..3usize])
     var week = 0usize
     while week < weeks {
         let (cells, cells_error) = mem.alloc[widget.Node](a, 7usize)
@@ -534,37 +595,89 @@ fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
                 let date = time.Date { year: shown.year, month: shown.month, day: u8(day) }
                 turns[1usize + day] = DayPick { day: date, pick: pick }
                 actions[1usize + day] = widget.Submit { ctx: mem.cast[*void](&turns[1usize + day]), invoke: day_fire }
-                let chosen = has_selected && same_date(date, selected)
-                var variant: style.ControlVariant = .Plain
-                if chosen { variant = .Filled }
+                var end = has_selected && same_date(date, selected)
+                if ranged { end = has_selected && (same_date(date, from) || same_date(date, to)) }
+                let spans = ranged && !same_date(from, to)
+                let inside = spans && within_range(date, from, to)
+                let marked = has_today && same_date(date, today) && !end
+                var fill = clear
+                var digit_color = ink
+                var layer_color = ink
+                if inside { digit_color = style.color(t.tokens, .OnPrimaryContainer) }
+                if marked { digit_color = primary }
+                if end {
+                    fill = primary
+                    digit_color = style.color(t.tokens, .OnPrimary)
+                    layer_color = digit_color
+                }
                 let day_key = key + 3u64 + u64(day)
-                var look = style.resolve(t.tokens, variant, control.control_state(t, day_key, true, chosen))
-                if !chosen && ranged && within_range(date, from, to) { look.background = style.color(t.tokens, .Selection) }
+                let state = control.control_state(t, day_key, true, end)
+                var look = style.resolve(t.tokens, .Plain, state)
+                look.background = style.layer(fill, layer_color, control.state_opacity(t, state))
+                look.foreground = digit_color
+                look.border = primary
+                look.border_width = 0.0
+                if marked { look.border_width = 1.0 }
+                look.radius = cell * 0.5
+                look.custom_padding = true
+                look.padding = 0.0
+                look.padding_start = 0.0
+                look.padding_y = 0.0
+                look.min_width = cell
+                look.min_height = cell
                 let (digits, digits_error) = mem.alloc[u8](a, 4usize)
                 if digits_error != ok { ret (zero, TooLarge) }
                 let digit_count = control.write_i64(digits, i64(day))
                 var caption = control.text_options()
-                caption.role = .Label
+                caption.role = .BodyMedium
                 caption.wrap = .None
-                let (label_node, label_error) = control.colored_text(a, 0u64, digits[0usize..digit_count], t, caption, look.foreground)
+                let (label_node, label_error) = control.colored_text(a, 0u64, digits[0usize..digit_count], t, caption, digit_color)
                 if label_error != ok { ret (zero, label_error) }
-                let (pressed, pressed_error) = control.pressable_states(a, day_key, t, 3u8, digits[0usize..digit_count], look, true, chosen, 0u32, 0u32, 0u64, &actions[1usize + day], label_node)
+                let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+                if centred_error != ok { ret (zero, TooLarge) }
+                centred[0usize] = label_node
+                let content = widget.aligned(0u64, .Center, .Center, control.sized_style(cell, cell), centred[0usize..1usize])
+                let (pressed, pressed_error) = control.pressable_states(a, day_key, t, 3u8, digits[0usize..digit_count], look, true, end, 0u32, 0u32, 0u64, &actions[1usize + day], content)
                 if pressed_error != ok { ret (zero, pressed_error) }
                 var sized = pressed
                 sized.style.width = style.Length { Px: cell }
                 sized.style.height = style.Length { Px: cell }
-                sized.style.min_width = style.Length { Px: cell }
                 made = sized
+                if inside {
+                    // The band: the whole cell between the ends, the inner half at an end.
+                    var band_x: f32 = 0.0
+                    var band_width = cell
+                    if same_date(date, from) {
+                        band_x = cell * 0.5
+                        band_width = cell * 0.5
+                    }
+                    if same_date(date, to) { band_width = cell * 0.5 }
+                    var band = control.sized_style(band_width, cell)
+                    band.background = paint.Brush { Solid: style.color(t.tokens, .PrimaryContainer) }
+                    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+                    if layers_error != ok { ret (zero, TooLarge) }
+                    var none: []const widget.Node = zero
+                    layers[0usize] = widget.positioned(0u64, band_x, 0.0, band, none)
+                    layers[1usize] = sized
+                    made = widget.stack(0u64, control.sized_style(cell, cell), layers[0usize..2usize])
+                }
             }
             cells[column] = made
             column += 1usize
         }
-        rows[1usize + week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..7usize])
+        rows[week] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..7usize])
         week += 1usize
     }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var head_style = control.sized_style(7.0 * cell, head_height)
+    head_style.margin.bottom = style.Length { Px: head_below }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head[0usize..3usize])
+    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), names[0usize..7usize])
+    parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: week_gap }, style.defaults(), rows[0usize..weeks])
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), rows[0usize..1usize + weeks])
+    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..3usize])
     var sem: widget.Semantics = zero
     sem.role = 30u8
     sem.label = label
@@ -573,24 +686,90 @@ fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
     ret (widget.semantics(key, sem, style.defaults(), column_node[0usize..1usize]), ok)
 }
 
-// A date picker: an outlined button (keyed `key`) showing `value` as
-// `YYYY-MM-DD` (or the label while there is none) firing `toggle`, with a
-// calendar (keyed `key + 2`, in a flyout keyed `key + 1`) of the month `shown`
-// below it while `open`; a pick reaches `pick`, a month turn `show`, and the
-// flyout's dismissal is `toggle` again.
+// A calendar's Previous or Next: a round icon button `size` across, its chevron
+// `icon` in `on-surface-variant` under that colour's state layer.
+fn month_turn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, kind: control.GlyphKind, label: str, action: *const widget.Submit, size: f32, icon: f32) -> (widget.Node, err) {
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    let state = control.control_state(t, key, true, false)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), muted, control.state_opacity(t, state))
+    look.foreground = muted
+    look.border_width = 0.0
+    look.radius = size * 0.5
+    look.custom_padding = true
+    look.padding = 0.0
+    look.padding_start = 0.0
+    look.padding_y = 0.0
+    look.min_width = size
+    look.min_height = size
+    let (chevron, chevron_error) = control.mark_glyph(a, muted, kind, icon)
+    if chevron_error != ok { ret (zero, chevron_error) }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = chevron
+    let content = widget.aligned(0u64, .Center, .Center, control.sized_style(size, size), inner[0usize..1usize])
+    let (made, made_error) = control.pressable(a, key, t, 3u8, label, look, true, false, action, content)
+    ret (made, made_error)
+}
+
+fn month_name(month: i64) -> str {
+    if month == 1i64 { ret "January" }
+    if month == 2i64 { ret "February" }
+    if month == 3i64 { ret "March" }
+    if month == 4i64 { ret "April" }
+    if month == 5i64 { ret "May" }
+    if month == 6i64 { ret "June" }
+    if month == 7i64 { ret "July" }
+    if month == 8i64 { ret "August" }
+    if month == 9i64 { ret "September" }
+    if month == 10i64 { ret "October" }
+    if month == 11i64 { ret "November" }
+    ret "December"
+}
+
+// Monday 0 to Sunday 6: short names with a pointer, narrow ones on touch.
+fn weekday_name(day: usize, narrow: bool) -> str {
+    if narrow {
+        if day == 0usize { ret "M" }
+        if day == 1usize || day == 3usize { ret "T" }
+        if day == 2usize { ret "W" }
+        if day == 4usize { ret "F" }
+        ret "S"
+    }
+    if day == 0usize { ret "Mo" }
+    if day == 1usize { ret "Tu" }
+    if day == 2usize { ret "We" }
+    if day == 3usize { ret "Th" }
+    if day == 4usize { ret "Fr" }
+    if day == 5usize { ret "Sa" }
+    ret "Su"
+}
+
+// A date picker: a field (keyed `key`) showing `value` as `YYYY-MM-DD` (or the
+// label while there is none) firing `toggle`, with a calendar (keyed `key + 2`,
+// in a flyout keyed `key + 1`) of the month `shown` below it while `open`; a pick
+// reaches `pick`, a month turn `show`, and the flyout's dismissal is `toggle` again.
 fn date_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (made, made_error) = dated(a, key, t, label, value, has_value, false, value, value, open, toggle, shown, show, pick)
     ret (made, made_error)
 }
 
-// A date range picker: the same over `from` and `to`, the button showing both,
-// the days between tinted; a pick reaches `pick` and the caller decides which
-// end it sets.
+// A date range picker: the same over `from` and `to`, the field showing both,
+// both ends marked and the days between banded; a pick reaches `pick` and the
+// caller decides which end it sets.
 fn date_range_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, from: time.Date, to: time.Date, has_range: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (made, made_error) = dated(a, key, t, label, from, has_range, true, from, to, open, toggle, shown, show, pick)
     ret (made, made_error)
 }
 
+// v2 (D959, docs/ux/components/DatePicker, docked): the field is the outlined
+// read-only field (control.field_head) 40 tall with a pointer and 56 on touch, the
+// label in its notch once a date is set, a trailing calendar mark 18 (24 on touch)
+// in `on-surface-variant`, `primary` in the 2px `primary` outline while open, the
+// field saying Expanded. The calendar stands 4 below it on `surface-container-high`
+// with 12 corners and elevation 2, 8 above it and 12 at the sides and below, as
+// wide as seven cells and 32 (256 with a pointer).
+// ponytail: the value is typed by nobody and written YYYY-MM-DD; typing, the locale's format, Today and Clear, the modal form for touch and inline errors wait on a date field that owns its text.
 fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, ranged: bool, from: time.Date, to: time.Date, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (text_bytes, text_error) = mem.alloc[u8](a, 32usize)
     if text_error != ok { ret (zero, TooLarge) }
@@ -605,9 +784,14 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
         }
         caption = text_bytes[0usize..n]
     }
-    var outlined = control.button_options()
-    outlined.variant = .Outlined
-    let (head, head_error) = control.button(a, key, t, caption, toggle, outlined)
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var field_height = t.tokens.sizes.control_md
+    var cell = t.tokens.sizes.control_sm
+    if touch {
+        field_height = t.tokens.sizes.control_xl
+        cell = t.tokens.sizes.control_md
+    }
+    let (head, head_error) = control.field_head(a, key, t, label, caption, has_value, open, toggle, field_height, .Calendar, .Calendar, true)
     if head_error != ok { ret (zero, head_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -616,7 +800,18 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     if open {
         let (month, month_error) = calendar(a, key + 2u64, t, label, shown, value, has_value, ranged, from, to, show, pick)
         if month_error != ok { ret (zero, month_error) }
-        let (lifted, lifted_error) = light_dismissed(a, key + 1u64, t, key, .Below, label, month, toggle)
+        let (inside, inside_error) = mem.alloc[widget.Node](a, 1usize)
+        if inside_error != ok { ret (zero, TooLarge) }
+        inside[0usize] = month
+        var raised = control.surface_options(t)
+        raised.background = .SurfaceContainerHigh
+        raised.radius = t.tokens.radii.md
+        raised.elevation = 2u8
+        raised.padding = 12.0
+        var raised_style = control.surface_style(t, raised)
+        raised_style.padding.top = style.Length { Px: 8.0 }
+        raised_style.width = style.Length { Px: 7.0 * cell + 32.0 }
+        let (lifted, lifted_error) = dismissable(a, key + 1u64, key, .Below, label, widget.box(0u64, raised_style, inside[0usize..1usize]), toggle, 4.0)
         if lifted_error != ok { ret (zero, lifted_error) }
         popup_node = lifted
     }

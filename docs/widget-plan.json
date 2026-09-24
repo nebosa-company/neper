@@ -1218,7 +1218,12 @@
             "PickerSpec",
             "TimePickerSpec"
           ],
-          "delivered": []
+          "delivered": [
+            "CalendarSpec",
+            "DatePickerSpec",
+            "PickerSpec"
+          ],
+          "evidence": "lib/e/ui/overlay.e and lib/e/ui/control.e (D959): overlay.calendar (and calendar_marked, which marks today) at 32 cells with a pointer and 40 on touch (4 between the weeks), a 32/48 header of the month name and year in title-small with round Previous and Next icon buttons the cell's size carrying drawn chevron-left/right in on-surface-variant, a Mo..Su (M..S on touch) weekday row in label-medium, day discs with centred body-medium digits under the on-surface state layer, today a 1px primary ring, the selected day and both range ends primary discs with on-primary digits, the primary-container band reaching half a cell under each end; overlay.date_picker / date_range_picker as the outlined read-only field (control.field_head, shared with the select) 40/56 tall with the label notched once set and a drawn calendar mark, Expanded on the field, the calendar 4 below on surface-container-high with 12 corners, elevation 2, 8/12 padding and 7 cells + 32 wide (256); control.picker .Sheet as that field over a bottom sheet on surface-container-low with 28 top corners, elevation 1, the window's width up to 640 centred, a 32 x 4 handle, a title-large title 24 in and 56-tall radio rows in body-large, over a scrim overlay at the scrim opacity whose press dismisses; tests/selfhost/fixtures/link/ui_pickers_v2 and ui_pickers, ui_entry on both hosts. Open: the calendar's year view, week numbers, event dots, unavailable days and locale first day; the date field's typing, locale format, Today/Clear footer and modal form; the sheet's 60% cap and drag; TimePicker and DurationPicker (the spec's control is a typed field over caller-held text with a time list or presets, which the stepper API cannot host), ColorPicker (spectrum, hue and opacity strips, swatches and channel fields replace the RGB sliders), FontPicker (a two-column panel whose style is a dense Picker and size a Spin box, both needing caller state the API does not carry)"
         },
         {
           "id": "P5-07",
