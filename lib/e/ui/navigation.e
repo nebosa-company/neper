@@ -950,8 +950,8 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // separator is a 1px `outline-variant` line with 8 above and below. A disabled
 // command is `on-surface` at 38% under no layer. A MenuBar in the tree named
 // by `label`.
-// ponytail: no submenus, radio or icon items, Alt entry, hover-switching across
-// open titles, access keys, typeahead or collapsed form.
+// ponytail: no submenus, radio or icon items, hover-switching across open
+// titles, access keys, typeahead or collapsed form; Alt does not underline them.
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
     let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize * menus.len)

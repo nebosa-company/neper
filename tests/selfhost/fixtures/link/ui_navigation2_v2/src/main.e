@@ -22,6 +22,7 @@ use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.navigation
 use e.ui.overlay
@@ -267,6 +268,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 27u32, zero) != ok { os.exit(42i32) }
     let (restored, has_restored) = testing.focused(&harness)
     if !has_restored || !same_element(restored, original) { os.exit(43i32) }
+    // Releasing Alt alone enters the same mode on Windows and X; using Alt
+    // with another key leaves focus alone.
+    if testing.press_key(&harness, 18u32, zero) != ok { os.exit(45i32) }
+    let (windows_alt, has_windows_alt) = testing.focused(&harness)
+    if !has_windows_alt || !same_element(windows_alt, testing.by_key(&harness, 2401u64).element) || testing.press_key(&harness, 27u32, zero) != ok { os.exit(46i32) }
+    if testing.press_key(&harness, 65513u32, zero) != ok { os.exit(47i32) }
+    let (x_alt, has_x_alt) = testing.focused(&harness)
+    if !has_x_alt || !same_element(x_alt, testing.by_key(&harness, 2401u64).element) || testing.press_key(&harness, 27u32, zero) != ok { os.exit(48i32) }
+    var alt: input.Modifiers = zero
+    alt.alt = true
+    if testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 70u32, logical: 70u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 70u32, logical: 70u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(49i32) }
+    let (after_chord, has_after_chord) = testing.focused(&harness)
+    if !has_after_chord || !same_element(after_chord, original) { os.exit(50i32) }
     let (root_3, build_3_error) = build(&f, &theme, s, false, 0usize)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1050000000i64 }) != ok { os.exit(26i32) }
     let (shot_3, shot_3_error) = testing.snapshot(&harness, a)

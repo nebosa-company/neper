@@ -21417,3 +21417,15 @@ Linux.
 
 Alt entry, hover-switching, access keys, typeahead, submenus and command focus
 return remain open.
+
+## D995 — Alt release enters MenuBar title mode
+
+The runtime recognises Windows Alt and X Alt_L/Alt_R. Pressing and releasing Alt
+alone enters the same first-title mode as F10; any intervening key marks the Alt
+press used, so ordinary Alt chords do not steal focus.
+
+`ui_navigation2_v2` holds both host key forms and the used-chord guard on Windows
+and Linux.
+
+Access-key underlines and activation, hover-switching, typeahead, submenus and
+command focus return remain open.

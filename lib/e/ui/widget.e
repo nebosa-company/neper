@@ -341,6 +341,8 @@ type State = struct {
     menu_saved_focus: u32,
     has_menu_saved_focus: bool,
     menu_mode: bool,
+    menu_alt_down: bool,
+    menu_alt_used: bool,
     // The focus ring (D940): shown only when the focus came by the keyboard or the
     // program, never by a pointer press; its colour, width and gap outside the
     // element, set from the theme; the clip the element being placed lies within.
@@ -2999,6 +3001,10 @@ fn collect_menu_titles(s: *State, index: usize, targets: []u32, owners: []u32, c
     ret n
 }
 
+fn menu_alt_key(code: u32) -> bool {
+    ret code == 18u32 || code == 65513u32 || code == 65514u32
+}
+
 // F10 enters the first MenuBar title. Left and Right walk titles, following an
 // open menu; Down opens the focused title; Escape leaves title mode.
 fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
@@ -3837,8 +3843,16 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         }
     case .KeyDown as k:
         // Enter or Space on a focused tap region is a tap at its centre.
+        let code = key_code(k.key.physical)
+        if menu_alt_key(code) {
+            if !k.repeat {
+                s.menu_alt_down = true
+                s.menu_alt_used = false
+            }
+            ret ok
+        }
+        if s.menu_alt_down { s.menu_alt_used = true }
         if s.has_focus {
-            let code = key_code(k.key.physical)
             let f = &s.elements[usize(s.focus)]
             if f.live && f.kind == REGION_TAG && f.enabled && (f.gestures & GESTURE_TAP) != 0u8 && (code == 13u32 || code == 32u32) {
                 ret fire_gesture(f.gesture, Gesture { Tap: geometry.Point { x: f.bounds.x + f.bounds.width * 0.5, y: f.bounds.y + f.bounds.height * 0.5 } })
@@ -3851,6 +3865,19 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .KeyUp as k:
+        let code = key_code(k.key.physical)
+        if menu_alt_key(code) {
+            let enter = s.menu_alt_down && !s.menu_alt_used
+            s.menu_alt_down = false
+            s.menu_alt_used = false
+            if enter {
+                var f10: input.KeyEvent = zero
+                f10.key.physical = 65479u32
+                let (_, menu_error) = menu_bar_key(s, 65479u32, f10)
+                ret menu_error
+            }
+            ret ok
+        }
         if s.has_focus && s.elements[usize(s.focus)].has_action {
             let action = s.elements[usize(s.focus)].action
             ret action.invoke(action.ctx, event)
