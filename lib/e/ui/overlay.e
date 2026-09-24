@@ -20,14 +20,12 @@ error TooLarge
 
 // Whether a tooltip for `anchor` is wanted now: the anchor hovered and not held,
 // or focused from the keyboard.
-// v2 (D975, docs/ux/components/Tooltip): a press hides a plain tooltip, so it no
-// longer flashes on every click; keyboard focus shows it at once.
-// ponytail: no 500 ms hover delay, 1500 ms sweep window or touch long press; the
-// runtime reports no hover start time yet.
+// v2 (D975, docs/ux/components/Tooltip): hover waits 500 ms, the next anchor in
+// a 1500 ms toolbar sweep shows at once, a press hides it, and keyboard focus
+// shows it at once. ponytail: no touch long press yet.
 fn tooltip_wanted(t: *const control.Theme, anchor: widget.Key) -> bool {
     if mem.address_of(t.runtime) == 0usize { ret false }
-    let now = widget.interaction(t.runtime, anchor)
-    ret (now.hovered && !now.pressed) || now.focus_visible
+    ret widget.tooltip_wanted(t.runtime, anchor)
 }
 
 // A tooltip: `text` beside `anchor`, keyed `key`, placed only while `shown` (an

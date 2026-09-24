@@ -356,6 +356,12 @@ type State = struct {
     menu_typeahead: [16]u32,
     menu_typeahead_len: usize,
     menu_typeahead_at: i64,
+    tooltip_anchor: Key,
+    has_tooltip_anchor: bool,
+    tooltip_hover_at: i64,
+    tooltip_seen_at: i64,
+    tooltip_last_at: i64,
+    has_tooltip_last: bool,
     // The focus ring (D940): shown only when the focus came by the keyboard or the
     // program, never by a pointer press; its colour, width and gap outside the
     // element, set from the theme; the clip the element being placed lies within.
@@ -4581,6 +4587,47 @@ fn interaction(widget_runtime: *const Runtime, key: Key) -> Interaction {
     if count == 0usize { ret zero }
     let index = usize(found.slot)
     ret Interaction { hovered: s.arena_state.has_hovered && usize(s.arena_state.hovered) == index, pressed: s.arena_state.pressed && usize(s.arena_state.candidate) == index, focused: s.has_focus && usize(s.focus) == index, focus_visible: s.has_focus && s.focus_visible && usize(s.focus) == index }
+}
+
+// Plain tooltips wait 500 ms for the first hovered anchor. Once one has shown,
+// another hovered within 1500 ms appears immediately (the toolbar sweep).
+// Keyboard focus remains immediate; pressing hides the tooltip.
+fn tooltip_wanted(widget_runtime: *Runtime, key: Key) -> bool {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret false }
+    let current = interaction(widget_runtime, key)
+    let now = s.animation_time.nanos
+    if current.focus_visible {
+        s.tooltip_anchor = key
+        s.has_tooltip_anchor = true
+        s.tooltip_hover_at = now - 500000000i64
+        s.tooltip_seen_at = now
+        ret true
+    }
+    if !current.hovered || current.pressed {
+        if s.has_tooltip_anchor && s.tooltip_anchor == key {
+            if now >= s.tooltip_hover_at && now - s.tooltip_hover_at >= 500000000i64 {
+                s.tooltip_last_at = now
+                s.has_tooltip_last = true
+            }
+            s.has_tooltip_anchor = false
+        }
+        ret false
+    }
+    if !s.has_tooltip_anchor || s.tooltip_anchor != key {
+        var sweep = s.has_tooltip_last && now >= s.tooltip_last_at && now - s.tooltip_last_at <= 1500000000i64
+        if s.has_tooltip_anchor && now >= s.tooltip_hover_at && now - s.tooltip_hover_at >= 500000000i64 && now >= s.tooltip_seen_at && now - s.tooltip_seen_at <= 1500000000i64 { sweep = true }
+        s.tooltip_anchor = key
+        s.has_tooltip_anchor = true
+        s.tooltip_hover_at = now
+        if sweep { s.tooltip_hover_at = now - 500000000i64 }
+    }
+    s.tooltip_seen_at = now
+    if now < s.tooltip_hover_at || now - s.tooltip_hover_at < 500000000i64 {
+        s.animation_due = true
+        ret false
+    }
+    ret true
 }
 
 // Whether focus is on the keyed element or one of its descendants.

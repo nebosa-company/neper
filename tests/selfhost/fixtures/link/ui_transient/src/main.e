@@ -1,5 +1,6 @@
 // `e.ui.overlay` (D827, widget plan P1-14) under the light theme: a tooltip is
-// wanted while its anchor is hovered and placed below it; a menu button opens a
+// wanted after 500 ms of hover, hidden by a press and placed below its anchor;
+// the next anchor inside the 1500 ms sweep is immediate; a menu button opens a
 // modal menu of commands under itself, its items are pressed with Enter, Escape and
 // a press outside dismiss it; an alert dialog is a modal dialog in the middle,
 // labelled by its title, whose Enter is the default button and Escape the cancel.
@@ -150,16 +151,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (frame_storage, storage_error) = mem.alloc[u8](a, 524288usize)
     if storage_error != ok { os.exit(12i32) }
     var frame = mem.arena_from(frame_storage)
-    let now = time.Instant { nanos: 1000000000i64 }
+    var now = time.Instant { nanos: 1000000000i64 }
     let (root, build_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
     if build_error != ok { os.exit(13i32) }
     if testing.pump(&harness, root, now) != ok { os.exit(14i32) }
     // Nothing transient yet: no tooltip, no menu items, no dialog.
     if testing.by_role(&harness, .Tooltip).count != 0usize || testing.by_role(&harness, .MenuItem).count != 0usize || testing.by_role(&harness, .Dialog).count != 0usize { os.exit(15i32) }
-    // Hovered, the save button wants its tooltip; the next frame places it below.
+    // Hover waits 500 ms; the runtime requests frames until it is due, then the
+    // next frame places it below. A second anchor inside the 1500 ms toolbar
+    // sweep wants its tooltip immediately.
     let (save_at, has_save) = centre_of(&harness, &runtime, 1u64)
     if !has_save || testing.hover(&harness, save_at.x, save_at.y) != ok { os.exit(16i32) }
-    if !overlay.tooltip_wanted(&theme, 1u64) { os.exit(17i32) }
+    if overlay.tooltip_wanted(&theme, 1u64) || !widget.animation_frame_requested(&runtime) { os.exit(17i32) }
+    widget.set_frame_time(&runtime, time.Instant { nanos: 1499999999i64 })
+    if overlay.tooltip_wanted(&theme, 1u64) { os.exit(42i32) }
+    now = time.Instant { nanos: 1500000000i64 }
+    widget.set_frame_time(&runtime, now)
+    if !overlay.tooltip_wanted(&theme, 1u64) { os.exit(43i32) }
     let (root_2, build_2_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
     if build_2_error != ok { os.exit(18i32) }
     if testing.pump(&harness, root_2, now) != ok { os.exit(19i32) }
@@ -168,9 +176,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (save_bounds, has_save_bounds) = widget.bounds_of(&runtime, save_button)
     let (tip_bounds, has_tip) = testing.overlay_of(&harness, testing.by_key(&harness, 2u64).element)
     if !has_save_bounds || !has_tip || tip_bounds.y < save_bounds.y + save_bounds.height { os.exit(21i32) }
+    if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(save_at.x, save_at.y) }) != ok || overlay.tooltip_wanted(&theme, 1u64) { os.exit(45i32) }
+    if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(319.0, 319.0) }) != ok { os.exit(46i32) }
+    let (file_at, has_file) = centre_of(&harness, &runtime, 10u64)
+    if !has_file || testing.hover(&harness, file_at.x, file_at.y) != ok || !overlay.tooltip_wanted(&theme, 10u64) { os.exit(44i32) }
     // The menu button offers a menu; a tap fires the toggle; open, the menu holds
     // three items (one disabled) under the button and takes the focus.
-    let (file_at, has_file) = centre_of(&harness, &runtime, 10u64)
     if !has_file || testing.tap(&harness, file_at.x, file_at.y) != ok || logs[0usize].toggles != 1usize { os.exit(22i32) }
     let (root_3, build_3_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], true, false)
     if build_3_error != ok { os.exit(23i32) }
@@ -186,13 +197,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (file_bounds, has_file_bounds) = widget.bounds_of(&runtime, file_bounds_found)
     let (menu_bounds, has_menu_bounds) = testing.overlay_of(&harness, testing.by_key(&harness, 11u64).element)
     if !has_file_bounds || !has_menu_bounds || menu_bounds.y < file_bounds.y + file_bounds.height { os.exit(29i32) }
-    // Enter presses the focused first item; Tab then Enter the second; Escape
-    // dismisses through the toggle.
-    if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].commands != 1usize || logs[0usize].last_command != 0usize { os.exit(30i32) }
-    if testing.tab(&harness, false) != ok || testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].commands != 2usize || logs[0usize].last_command != 1usize { os.exit(31i32) }
-    if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].toggles != 2usize { os.exit(32i32) }
-    // A press outside dismisses too, and does not reach the save button under it.
-    if testing.tap(&harness, save_at.x, save_at.y) != ok || logs[0usize].toggles != 3usize || logs[0usize].saves != 0usize { os.exit(33i32) }
+    // Enter runs the focused item and asks the caller to close the menu. After
+    // each state change the caller rebuilds, as a real declarative loop does.
+    if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].commands != 1usize || logs[0usize].last_command != 0usize || logs[0usize].toggles != 2usize { os.exit(30i32) }
+    let (root_closed, root_closed_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if root_closed_error != ok || testing.pump(&harness, root_closed, now) != ok { os.exit(31i32) }
+    if testing.tap(&harness, file_at.x, file_at.y) != ok || logs[0usize].toggles != 3usize { os.exit(32i32) }
+    let (root_second, root_second_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], true, false)
+    if root_second_error != ok || testing.pump(&harness, root_second, now) != ok || testing.press_key(&harness, 40u32, zero) != ok || testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].commands != 2usize || logs[0usize].last_command != 1usize || logs[0usize].toggles != 4usize { os.exit(33i32) }
+    let (root_closed_again, root_closed_again_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if root_closed_again_error != ok || testing.pump(&harness, root_closed_again, now) != ok || testing.tap(&harness, file_at.x, file_at.y) != ok || logs[0usize].toggles != 5usize { os.exit(47i32) }
+    let (root_escape, root_escape_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], true, false)
+    if root_escape_error != ok || testing.pump(&harness, root_escape, now) != ok || testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].toggles != 6usize { os.exit(48i32) }
+    let (root_closed_last, root_closed_last_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], false, false)
+    if root_closed_last_error != ok || testing.pump(&harness, root_closed_last, now) != ok || testing.tap(&harness, file_at.x, file_at.y) != ok || logs[0usize].toggles != 7usize { os.exit(49i32) }
+    let (root_outside, root_outside_error) = build(&frame, &theme, &actions[0usize], &actions[1usize], items[0usize..3usize], buttons[0usize..2usize], true, false)
+    if root_outside_error != ok || testing.pump(&harness, root_outside, now) != ok || testing.tap(&harness, save_at.x, save_at.y) != ok || logs[0usize].toggles != 8usize || logs[0usize].saves != 0usize { os.exit(50i32) }
     // The dialog: modal, labelled by its title, described by its message, a heading
     // inside (level 2 since v2, D977); Enter does nothing without a default button,
     // Escape cancels.
@@ -201,7 +221,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, root_4, now) != ok { os.exit(35i32) }
     let (tree_4, tree_4_error) = testing.semantics(&harness)
     if tree_4_error != ok { os.exit(36i32) }
-    let (dialog_node, has_dialog) = find(tree_4, .Dialog, "Delete file?")
+    let (dialog_node, has_dialog) = find(tree_4, .AlertDialog, "Delete file?")
     if !has_dialog || !dialog_node.state.modal { os.exit(37i32) }
     if dialog_node.relations.labelled_by.slot == 0u32 && dialog_node.relations.labelled_by.generation == 0u32 { os.exit(38i32) }
     if dialog_node.relations.described_by.slot == 0u32 && dialog_node.relations.described_by.generation == 0u32 { os.exit(39i32) }

@@ -21655,3 +21655,16 @@ compatibility feature, not a validation bypass.
 
 `crypto_x509` carries signed adversarial certificates for each rejection and
 passes on Windows and Linux alongside the existing valid Ed25519 and P-256 chains.
+
+## D1012 — Tooltip hover timing lives in the shared runtime
+
+`widget.tooltip_wanted` tracks one active tooltip anchor against the frame
+clock. A first hover waits 500 ms and requests animation frames while it waits;
+keyboard focus remains immediate and a press hides the tooltip. Once a tooltip
+has shown, moving to another anchor within 1500 ms starts that anchor at once,
+which supplies the toolbar sweep without caller-owned timers.
+
+`overlay.tooltip_wanted` delegates to that runtime path. `ui_transient` holds
+the delay boundary, frame request and pointer sweep on Windows and Linux; its
+adjacent menu lifecycle now rebuilds after dismissal, and it checks alert-dialog
+semantics against the `AlertDialog` role introduced by D985.
