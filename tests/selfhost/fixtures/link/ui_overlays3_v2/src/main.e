@@ -32,7 +32,7 @@ type Counter = struct { count: usize }
 // The counters: 0 cancel, 1 delete, 2 keep, 3 dismiss, 4 share, 5 back.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, buttons: [3]overlay.DialogButton, actions: [3]overlay.DialogButton, action_icons: [3]control.GlyphKind, sheet_actions: [2]overlay.DialogButton }
 
-type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, DialogDefaultFirst, DialogDefaultLast, DialogScrolled, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, SideStandard, Bottom, BottomStandard, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu, ActionsIos }
+type Which = enum u8 { Dialog, DialogBusy, DialogDismiss, DialogIcon, DialogCompact, DialogDefaultFirst, DialogDefaultLast, DialogScrolled, Side, SideNarrow, SideWide, SideBack, SideDirty, SideActions, SideStandard, Bottom, BottomPeek, BottomHalf, BottomFull, BottomStandard, Actions, ActionsLocalized, ActionsAndroid, ActionsAndroidIcons, ActionsMenu, ActionsIos }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -129,8 +129,15 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     }
     var bottom: widget.Node = zero
     var e4: err = ok
-    if which == .BottomStandard {
-        let (made_bottom, made_bottom_error) = overlay.standard_bottom_sheet(a, 300u64, t, "Share", inside, true, &s.subs[3usize], 120.0)
+    if which == .BottomPeek || which == .BottomHalf || which == .BottomFull {
+        var detent: overlay.SheetDetent = .Peek
+        if which == .BottomHalf { detent = .Half }
+        if which == .BottomFull { detent = .Full }
+        let (made_bottom, made_bottom_error) = overlay.bottom_sheet_detent(a, 300u64, t, "Share", inside, true, &s.subs[3usize], &s.subs[6usize], detent, 96.0)
+        bottom = made_bottom
+        e4 = made_bottom_error
+    } else if which == .BottomStandard {
+        let (made_bottom, made_bottom_error) = overlay.standard_bottom_sheet_detent(a, 300u64, t, "Share", inside, true, &s.subs[3usize], &s.subs[6usize], .Peek, 120.0)
         bottom = made_bottom
         e4 = made_bottom_error
     } else {
@@ -478,6 +485,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot_3, at(320.0, bottom.y + 100.0), low) || !is_color(shot_3, at(2.0, bottom.y + 2.0), dimmed) { os.exit(32i32) }
     if !is_color(shot_3, at(320.0, bottom.y + 17.5), style.layer(low, style.color(&tokens, .OnSurfaceVariant), 0.4)) || !is_color(shot_3, at(320.0, bottom.y + 22.0), low) { os.exit(33i32) }
     if testing.by_key(&harness, 302u64).count != 0usize { os.exit(34i32) }
+    // Detents resolve against the window and expose the 48px handle as a
+    // keyboard-operable button whose value names the current stop.
+    let (root_peek, build_peek_error) = build(&f, &theme, s, .BottomPeek)
+    if build_peek_error != ok || testing.pump(&harness, root_peek, time.Instant { nanos: 1210000000i64 }) != ok { os.exit(124i32) }
+    let (peek_sheet, has_peek_sheet) = lifted(&harness, 300u64)
+    if !has_peek_sheet || !near(peek_sheet.height, 96.0) || !near(peek_sheet.y, 384.0) { os.exit(125i32) }
+    let resize_before = s.counters[6usize].count
+    let (root_half, build_half_error) = build(&f, &theme, s, .BottomHalf)
+    if build_half_error != ok || testing.pump(&harness, root_half, time.Instant { nanos: 1220000000i64 }) != ok { os.exit(126i32) }
+    let (half_sheet, has_half_sheet) = lifted(&harness, 300u64)
+    let (resize_handle, has_resize_handle) = bounds(&harness, &runtime, 302u64)
+    let (half_tree, half_tree_error) = testing.semantics(&harness)
+    if half_tree_error != ok { os.exit(127i32) }
+    let (resize_semantics, has_resize_semantics) = find(half_tree, .Button, "Resize sheet")
+    if !has_half_sheet || !near(half_sheet.height, 240.0) || !has_resize_handle || !near(resize_handle.height, 48.0) || !has_resize_semantics || !same(resize_semantics.value, "half height") { os.exit(128i32) }
+    if !tap_key(&harness, &runtime, 302u64) || testing.press_key(&harness, 13u32, zero) != ok || s.counters[6usize].count != resize_before + 2usize { os.exit(129i32) }
+    let (root_full, build_full_error) = build(&f, &theme, s, .BottomFull)
+    if build_full_error != ok || testing.pump(&harness, root_full, time.Instant { nanos: 1230000000i64 }) != ok { os.exit(130i32) }
+    let (full_sheet, has_full_sheet) = lifted(&harness, 300u64)
+    if !has_full_sheet || !near(full_sheet.height, 408.0) || !near(full_sheet.y, 72.0) { os.exit(131i32) }
     // A standard bottom sheet participates in the page column at its peek
     // height, with a top divider and no modal scrim or focus trap.
     let (root_bottom_standard, build_bottom_standard_error) = build(&f, &theme, s, .BottomStandard)

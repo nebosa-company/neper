@@ -22131,3 +22131,15 @@ no scrim, modal overlay or trapped focus.
 `ui_overlays3_v2` holds the 120px peek, undimmed page, edge pixels and Region
 semantics on Windows and Linux. `standard-bottom-sheet.png` is the Segoe UI
 visual check.
+
+## D1053 — Bottom sheets resolve named detents
+
+`SheetDetent` resolves Peek (caller height, 64px minimum), Half (half the current
+surface) and Full (surface height minus 72px) for modal and standard bottom
+sheets. The detent form replaces the decorative grip with a 48px Button named
+"Resize sheet", exposes the current detent as its value and fires one caller
+cycle action for tap, Enter or Space.
+
+`ui_overlays3_v2` holds 96/240/408px detents, the half-height value, the standard
+peek and both pointer/keyboard activations on Windows and Linux.
+`bottom-sheet-half-detent.png` is the Segoe UI visual check.
