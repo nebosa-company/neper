@@ -10,6 +10,7 @@ use e.time
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
+use e.text.unicode
 use e.ui.accessibility
 use e.ui.animation
 use e.ui.control
@@ -908,6 +909,31 @@ type BarCommand = struct { label: str, action: widget.Submit, enabled: bool, sho
 // A menu of the v2 menu bar (D972): its title and its commands.
 type BarMenu = struct { label: str, commands: []const BarCommand }
 
+fn menu_title_label(a: *mem.Arena, t: *const control.Theme, label: str, caption: control.TextOptions, ink: paint.Color, underlined: bool) -> (widget.Node, err) {
+    if !underlined || label.len == 0usize {
+        let (plain, plain_error) = control.colored_text(a, 0u64, label, t, caption, ink)
+        ret (plain, plain_error)
+    }
+    let (_, first_bytes) = unicode.read_utf8(label, 0usize)
+    let (advance, fit, baseline, metrics_error) = control.run_metrics(a, t, caption.role, label[0usize..first_bytes])
+    if metrics_error != ok { ret (zero, metrics_error) }
+    let (text_look, style_error) = control.text_style(a, t, caption.role)
+    if style_error != ok { ret (zero, style_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (first, first_error) = control.colored_text(a, 0u64, label[0usize..first_bytes], t, caption, ink)
+    if first_error != ok { ret (zero, first_error) }
+    parts[0usize] = first
+    var rule = control.sized_style(fit, t.tokens.sizes.divider)
+    rule.background = paint.Brush { Solid: ink }
+    parts[1usize] = widget.positioned(0u64, 0.0, baseline + 2.0, rule, zero)
+    parts[2usize] = widget.stack(0u64, control.sized_style(advance, text_look.line_height), parts[0usize..2usize])
+    let (rest, rest_error) = control.colored_text(a, 0u64, label[first_bytes..label.len], t, caption, ink)
+    if rest_error != ok { ret (zero, rest_error) }
+    parts[3usize] = rest
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), parts[2usize..4usize]), ok)
+}
+
 // A menu bar: the menus' titles in a row, sixteen keys apart from `key + 1` (a
 // title, its menu and up to fourteen commands each), the one at `open` open (an
 // index past the end for none), each firing its toggle; a group in the tree named
@@ -950,8 +976,7 @@ fn menu_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // separator is a 1px `outline-variant` line with 8 above and below. A disabled
 // command is `on-surface` at 38% under no layer. A MenuBar in the tree named
 // by `label`.
-// ponytail: no submenus, radio or icon items or collapsed form; Alt does not
-// underline access keys.
+// ponytail: no submenus, radio or icon items or collapsed form.
 // Command dismissal and focus return are shared by the widget runtime.
 fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, menus: []const BarMenu, open: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
     if toggles.len != menus.len { ret (zero, TooLarge) }
@@ -983,7 +1008,7 @@ fn menu_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
         var caption = control.text_options()
         caption.role = .BodyMedium
         caption.wrap = .None
-        let (label_node, label_error) = control.colored_text(a, 0u64, menus[i].label, t, caption, tint)
+        let (label_node, label_error) = menu_title_label(a, t, menus[i].label, caption, tint, widget.menu_access_keys_visible(t.runtime))
         if label_error != ok { ret (zero, label_error) }
         var states = 0u32
         if opened { states = accessibility.STATE_EXPANDED }

@@ -677,6 +677,13 @@ fn frame_time(widget_runtime: *Runtime) -> time.Instant {
     ret s.animation_time
 }
 
+// Whether Alt is currently held for an in-window menu bar to reveal access keys.
+fn menu_access_keys_visible(widget_runtime: *Runtime) -> bool {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret false }
+    ret s.menu_alt_down
+}
+
 fn request_animation_frame(widget_runtime: *Runtime) {
     let (s, state_error) = state_of(widget_runtime)
     if state_error == ok { s.animation_due = true }

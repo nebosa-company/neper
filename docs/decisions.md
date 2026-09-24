@@ -21502,3 +21502,15 @@ cycling without a second algorithm.
 Other on Windows and Linux.
 
 Access-key underlines and submenus remain open.
+
+## D1002 — Held Alt underlines MenuBar title access keys
+
+The runtime exposes its held-Alt menu state to the declarative builder. Each
+MenuBar title splits its first UTF-8 scalar into a measured run and draws a 1px
+foreground rule two pixels below its baseline while that state is active; the
+semantic label remains the original whole title.
+
+`ui_navigation2_v2` holds the Alt-down and Alt-up state on Windows and Linux;
+`menu-bar-access-underline.png` is the Segoe UI visual check.
+
+Submenus remain open.

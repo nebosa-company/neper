@@ -258,6 +258,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (file, has_file) = bounds(&harness, &runtime, 2401u64)
     if !has_menus || !has_file || !near(menus.height, 32.0) || !near(file.height, 24.0) || !near(file.x, menus.x + 4.0) || !is_color(shot, at(menus.x + 300.0, menus.y + 16.0), style.color(&tokens, .Background)) { os.exit(25i32) }
     if testing.by_role(&harness, .MenuBar).count != 1usize { os.exit(36i32) }
+    var alt_held: input.Modifiers = zero
+    alt_held.alt = true
+    if testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: alt_held, repeat: false } }) != ok || !widget.menu_access_keys_visible(&runtime) { os.exit(63i32) }
+    let (root_alt, root_alt_error) = build(&f, &theme, s, false, 9usize)
+    if root_alt_error != ok || testing.pump(&harness, root_alt, time.Instant { nanos: 1010000000i64 }) != ok { os.exit(63i32) }
+    let (shot_alt, shot_alt_error) = testing.snapshot(&harness, a)
+    if shot_alt_error != ok { os.exit(64i32) }
+    if testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 90u32, logical: 90u32 }, modifiers: alt_held, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 90u32, logical: 90u32 }, modifiers: alt_held, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: zero, repeat: false } }) != ok || widget.menu_access_keys_visible(&runtime) { os.exit(65i32) }
     let original = testing.by_key(&harness, 2301u64).element
     if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok { os.exit(37i32) }
     let (on_file, has_on_file) = testing.focused(&harness)
