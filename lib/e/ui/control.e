@@ -914,60 +914,330 @@ fn panel(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widg
     ret (widget.box(key, surface_style(t, options), children), ok)
 }
 
-// A card: the surface raised one level, rounded, with a hairline border.
+// A card: the elevated card of D965 below, its children in a column.
 fn card(a: *mem.Arena, key: widget.Key, t: *const Theme, children: []const widget.Node) -> (widget.Node, err) {
-    var options = surface_options(t)
-    options.radius = t.tokens.radii.sm
-    options.elevation = 1u8
-    let (made, made_error) = surface(a, key, t, options, children)
-    if made_error != ok { ret (zero, made_error) }
-    var raised = made
-    raised.style.border = style.Border { width: t.tokens.borders.hairline, color: style.color(t.tokens, .Border) }
-    ret (raised, ok)
+    let (made, made_error) = card_of(a, key, t, card_options(), children)
+    ret (made, made_error)
 }
 
-// A group box: a label above a bordered surface, a labelled group in the tree.
-fn group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, children: []const widget.Node) -> (widget.Node, err) {
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+// A card's treatment (D965): lifted, filled or outlined.
+type CardVariant = enum u8 { Elevated, Filled, Outlined }
+
+// A card's options: its treatment, its width (0: its content's), the dense grid's
+// padding, whether it is enabled and selected, the title it is named by, and the
+// action a press on the whole card fires (none: a static card).
+type CardOptions = struct { variant: CardVariant, width: f32, dense: bool, enabled: bool, selected: bool, title: str, action: *const widget.Submit }
+
+fn card_options() -> CardOptions {
+    var out: CardOptions = zero
+    out.enabled = true
+    ret out
+}
+
+// v2 (D965, docs/ux/components/Card): `radius-md` 12 (`radius-sm` 8 under 120
+// wide), `space-4` 16 padding (12 dense), clipping its children in a column.
+// Elevated is `surface-container-low` at `elevation-1`, filled
+// `surface-container-highest` with no shadow, outlined `surface` in a 1px
+// `outline-variant` edge. A pressable card is one Button named by the title under
+// the `on-surface` state layer, hover lifting it a level (to `elevation-2`
+// elevated); a static one is a Group named by the title. Selected draws the 2px
+// `primary` outline inside the edge and a 24 `primary` check disc 8 in from the
+// top end (with a width to place it). Disabled is `on-surface` 12% with the
+// content at 38%, no shadow, not focusable.
+// ponytail: no media, header or actions slots (the caller composes the column),
+// no dragged look, no loading skeletons; add them when a card grid needs them.
+fn card_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: CardOptions, children: []const widget.Node) -> (widget.Node, err) {
+    let pressed = mem.address_of(options.action) != 0usize
+    let state = control_state(t, key, options.enabled && pressed, options.selected)
+    var ground = style.color(t.tokens, .SurfaceContainerLow)
+    var raised = 1usize
+    if options.variant == .Filled {
+        ground = style.color(t.tokens, .SurfaceContainerHighest)
+        raised = 0usize
+    }
+    if options.variant == .Outlined {
+        ground = style.color(t.tokens, .Background)
+        raised = 0usize
+    }
+    if pressed && options.enabled {
+        ground = style.layer(ground, style.color(t.tokens, .OnSurface), state_opacity(t, state))
+        if state.hovered { raised += 1usize }
+    }
+    var s = style.defaults()
+    if !options.enabled {
+        ground = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_container)
+        raised = 0usize
+    }
+    s.background = paint.Brush { Solid: ground }
+    s.radius = t.tokens.radii.md
+    if options.width > 0.0 {
+        s.width = style.Length { Px: options.width }
+        if options.width < 120.0 { s.radius = t.tokens.radii.sm }
+    }
+    var pad_px: f32 = 16.0
+    if options.dense { pad_px = 12.0 }
+    let pad = style.Length { Px: pad_px }
+    s.padding = style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    s.overflow = .Clip
+    if options.variant == .Outlined { s.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) } }
+    if options.selected { s.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Primary) } }
+    if raised > 0usize { s.shadow = style.Shadow { offset: geometry.Point { x: 0.0, y: f32(raised) * 2.0 }, color: paint.rgba(0.0, 0.0, 0.0, t.tokens.elevation[raised]) } }
+    var column_style = style.defaults()
+    if !options.enabled { column_style.opacity = t.tokens.states.disabled_content }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize)
     if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, children)
+    var count = 1usize
+    if options.selected && options.width > 0.0 {
+        // The check disc, placed from the start: the stack has no end anchor.
+        var disc = sized_style(24.0, 24.0)
+        disc.radius = 12.0
+        disc.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        disc.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 4.0 } }
+        let (tick, tick_error) = mark_glyph(a, style.color(t.tokens, .OnPrimary), .Check, 16.0)
+        if tick_error != ok { ret (zero, tick_error) }
+        parts[3usize] = tick
+        parts[2usize] = widget.box(0u64, disc, parts[3usize..4usize])
+        parts[1usize] = widget.positioned(0u64, options.width - 8.0 - 24.0 - pad_px, 8.0 - pad_px, style.defaults(), parts[2usize..3usize])
+        count = 2usize
+    }
+    let (holder, holder_error) = mem.alloc[widget.Node](a, 1usize)
+    if holder_error != ok { ret (zero, TooLarge) }
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = options.title
+    if options.selected { sem.states = accessibility.STATE_SELECTED }
+    if !options.enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
+    if pressed {
+        sem.role = 3u8
+        sem.actions = accessibility.ACTION_PRESS
+        holder[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](options.action), invoke: press_tap }, gestures: 1u8 | 4u8, enabled: options.enabled, focusable: options.enabled }, s, parts[0usize..count])
+        ret (widget.semantics(0u64, sem, style.defaults(), holder[0usize..1usize]), ok)
+    }
+    if count == 1usize {
+        holder[0usize] = widget.box(0u64, s, parts[0usize..1usize])
+    } else {
+        holder[0usize] = widget.stack(0u64, s, parts[0usize..count])
+    }
+    ret (widget.semantics(key, sem, style.defaults(), holder[0usize..1usize]), ok)
+}
+
+// A group box: the outlined group box of D965 below.
+fn group_box(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, children: []const widget.Node) -> (widget.Node, err) {
+    let (made, made_error) = group_box_of(a, key, t, label, group_options(), children)
+    ret (made, made_error)
+}
+
+// A group box's box (D965): outlined, filled, or none.
+type GroupVariant = enum u8 { Outlined, Filled, Plain }
+
+// A group box's options: its box, the description under the title, the
+// group-level message (set: the group is invalid), whether it is enabled, and its
+// width (0: its widest row's).
+type GroupOptions = struct { variant: GroupVariant, description: str, message: str, enabled: bool, width: f32 }
+
+fn group_options() -> GroupOptions {
+    var out: GroupOptions = zero
+    out.enabled = true
+    ret out
+}
+
+// v2 (D965, docs/ux/components/GroupBox): the title in `title-small`
+// `on-surface` 4 in from the box edge, the description in `body-small`
+// `on-surface-variant` 2 under it, the box 8 below: outlined `surface` in a 1px
+// `outline-variant` edge, filled `surface-container-low`, both `radius-md` 12
+// clipping their rows; each child a row at least 48 tall (56 on touch) padded 4 by
+// 16, 1px `outline-variant` dividers between them (plain: no box and no
+// dividers). Invalid, the edge is 2px `error` and the message stands 8 below in
+// `body-small` `error` after a 16 `alert` mark 4 from it. Disabled, the title and
+// rows are at 38% and the edge `on-surface` 12%, the description kept. A Group
+// named by the title.
+// ponytail: no collapsible form (chevron title row with Expanded) yet.
+fn group_box_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: GroupOptions, children: []const widget.Node) -> (widget.Node, err) {
+    let plain = options.variant == .Plain
+    var row_h: f32 = t.tokens.sizes.control_lg
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { row_h = t.tokens.sizes.control_xl }
+    var fade: f32 = 1.0
+    if !options.enabled { fade = t.tokens.states.disabled_content }
+    let n = children.len
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * n + 1usize)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    var i = 0usize
+    while i < n {
+        if i > 0usize && !plain {
+            var line = style.defaults()
+            line.height = style.Length { Px: t.tokens.sizes.divider }
+            if options.width > 0.0 { line.width = style.Length { Px: options.width } }
+            line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            rows[count] = widget.box(0u64, line, zero)
+            count += 1usize
+        }
+        var row_style = style.defaults()
+        row_style.min_height = style.Length { Px: row_h }
+        if options.width > 0.0 { row_style.width = style.Length { Px: options.width } }
+        row_style.opacity = fade
+        var side: f32 = 16.0
+        if plain { side = 4.0 }
+        row_style.padding = style.EdgeLengths { left: style.Length { Px: side }, top: style.Length { Px: 4.0 }, right: style.Length { Px: side }, bottom: style.Length { Px: 4.0 } }
+        rows[count] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, row_style, children[i..i + 1usize])
+        count += 1usize
+        i += 1usize
+    }
+    var box_style = style.defaults()
+    if !plain {
+        box_style.radius = t.tokens.radii.md
+        box_style.overflow = .Clip
+        if options.variant == .Filled {
+            box_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+        } else {
+            box_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+            box_style.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+        }
+        if !options.enabled { box_style.border = style.Border { width: t.tokens.sizes.divider, color: with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_container) } }
+        if options.message.len != 0usize { box_style.border = style.Border { width: t.tokens.sizes.outline_focused, color: style.color(t.tokens, .Error) } }
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    // The title and the description.
+    let (heads, heads_error) = mem.alloc[widget.Node](a, 2usize)
+    if heads_error != ok { ret (zero, TooLarge) }
     var caption = text_options()
-    caption.role = .Label
-    let (heading, heading_error) = text_node(a, 0u64, label, t, caption)
+    caption.role = .TitleSmall
+    caption.wrap = .None
+    let (heading, heading_error) = colored_text(a, 0u64, label, t, caption, with_alpha(style.color(t.tokens, .OnSurface), fade))
     if heading_error != ok { ret (zero, heading_error) }
-    parts[0usize] = heading
-    var options = surface_options(t)
-    options.bordered = true
-    options.radius = t.tokens.radii.xs
-    parts[1usize] = widget.box(0u64, surface_style(t, options), children)
+    heads[0usize] = heading
+    var head_count = 1usize
+    if options.description.len != 0usize {
+        var said = text_options()
+        said.role = .BodySmall
+        said.max_lines = 2u32
+        let (described, described_error) = colored_text(a, 0u64, options.description, t, said, style.color(t.tokens, .OnSurfaceVariant))
+        if described_error != ok { ret (zero, described_error) }
+        heads[1usize] = described
+        head_count = 2usize
+    }
+    var head_style = style.defaults()
+    head_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 2.0 }, head_style, heads[0usize..head_count])
+    parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, box_style, rows[0usize..count])
+    var part_count = 2usize
+    if options.message.len != 0usize {
+        let alarm = style.color(t.tokens, .Error)
+        let (said, said_error) = mem.alloc[widget.Node](a, 2usize)
+        if said_error != ok { ret (zero, TooLarge) }
+        let (mark, mark_error) = icon_square(a, alarm, .Alert, 16.0)
+        if mark_error != ok { ret (zero, mark_error) }
+        said[0usize] = mark
+        var words = text_options()
+        words.role = .BodySmall
+        let (message_node, message_error) = colored_text(a, 0u64, options.message, t, words, alarm)
+        if message_error != ok { ret (zero, message_error) }
+        said[1usize] = message_node
+        parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), said[0usize..2usize])
+        part_count = 3usize
+    }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..2usize])
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), parts[0usize..part_count])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label
+    sem.hint = options.description
+    if options.message.len != 0usize {
+        sem.hint = options.message
+        sem.states = accessibility.STATE_INVALID
+    }
+    if !options.enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
     ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
 }
 
-// A divider: a hairline in the border colour across the axis, `length` long (0 to
-// fill), a decoration the tree leaves out.
+// A divider across `axis`, `length` long (0 to fill): the full-width divider of
+// D965 below.
 fn divider(a: *mem.Arena, key: widget.Key, t: *const Theme, axis: ui_layout.Axis, length: f32) -> (widget.Node, err) {
-    var s = style.defaults()
-    s.background = paint.Brush { Solid: style.color(t.tokens, .Border) }
-    let thick = style.Length { Px: t.tokens.borders.hairline }
+    var options = divider_options()
+    options.axis = axis
+    options.length = length
+    let (made, made_error) = divider_of(a, key, t, options)
+    ret (made, made_error)
+}
+
+// A divider's geometry (D965): its axis and length (0 to fill), the start and
+// end insets (56 or 72 for an inset divider, 16 each for a middle inset), the
+// label splitting it (and whether the label leads after a 16 line), and whether it
+// must be seen (`outline` in high contrast).
+type DividerOptions = struct { axis: ui_layout.Axis, length: f32, start: f32, end: f32, label: str, label_start: bool, strong: bool }
+
+fn divider_options() -> DividerOptions {
+    var out: DividerOptions = zero
+    out.axis = .Horizontal
+    ret out
+}
+
+// v2 (D965, docs/ux/components/Divider): a 1px (`divider`) line in
+// `outline-variant` (`outline` when strong) across the axis, inset by the start
+// and end margins; labelled, the line, the label in `label-medium`
+// `on-surface-variant` 12 from each line, and the line again (a 16 lead line
+// for a start label). Decorative, it is left out of the tree; labelled, it is a
+// Group named by its label.
+// ponytail: no Separator role in accessibility.Role yet, so a menu or toolbar
+// divider is hidden too; add the role when a host bridge maps it.
+fn divider_of(a: *mem.Arena, key: widget.Key, t: *const Theme, options: DividerOptions) -> (widget.Node, err) {
+    var ink = style.color(t.tokens, .OutlineVariant)
+    if options.strong { ink = style.color(t.tokens, .Outline) }
+    let horizontal = options.axis == .Horizontal
+    let thick = style.Length { Px: t.tokens.sizes.divider }
     var span: style.Length = style.Length { Percent: 100.0 }
-    if length > 0.0 { span = style.Length { Px: length } }
-    if axis == .Horizontal {
-        s.height = thick
-        s.width = span
+    if options.length > 0.0 { span = style.Length { Px: options.length } }
+    var outer = style.defaults()
+    var line = style.defaults()
+    line.background = paint.Brush { Solid: ink }
+    let none = style.Length { Px: 0.0 }
+    let lead = style.Length { Px: options.start }
+    let tail = style.Length { Px: options.end }
+    if horizontal {
+        outer.width = span
+        line.height = thick
+        line.width = style.Length { Flex: 1.0 }
+        outer.padding = style.EdgeLengths { left: lead, top: none, right: tail, bottom: none }
     } else {
-        s.width = thick
-        s.height = span
+        outer.height = span
+        line.width = thick
+        line.height = style.Length { Flex: 1.0 }
+        outer.padding = style.EdgeLengths { left: none, top: lead, right: none, bottom: tail }
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.box(0u64, line, zero)
+    var count = 1usize
+    if options.label.len != 0usize {
+        var caption = text_options()
+        caption.role = .LabelMedium
+        caption.wrap = .None
+        let (said, said_error) = colored_text(a, 0u64, options.label, t, caption, style.color(t.tokens, .OnSurfaceVariant))
+        if said_error != ok { ret (zero, said_error) }
+        parts[1usize] = said
+        parts[2usize] = parts[0usize]
+        if options.label_start {
+            var short = line
+            short.width = style.Length { Px: 16.0 }
+            parts[0usize] = widget.box(0u64, short, zero)
+        }
+        count = 3usize
     }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    body[0usize] = widget.box(0u64, s, zero)
+    var gap: f32 = 0.0
+    if count > 1usize { gap = 12.0 }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: options.axis, main: .Start, cross: .Center, gap: gap }, outer, parts[0usize..count])
     var sem: widget.Semantics = zero
     sem.hidden = true
+    if options.label.len != 0usize {
+        sem.hidden = false
+        sem.role = 2u8
+        sem.label = options.label
+    }
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
 }
 
@@ -3034,40 +3304,108 @@ fn mark_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
     ret scene.push(b, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&builder), brush: paint.Brush { Solid: m.color } } })
 }
 
-// A disclosure: a plain header button of the mark and the label firing `toggle`,
-// the content below it only while `expanded` (the caller keeps that); the header
-// says expanded or not in the tree, offers the other, and controls the content,
-// a group keyed `key + 1`.
+// A disclosure: the header button firing `toggle` (the caller keeps `expanded`)
+// over the content only while expanded; the header says expanded or not in the
+// tree, offers the other, and controls the content, a group keyed `key + 1`.
 fn disclosure(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
-    let look = style.resolve(t.tokens, .Plain, control_state(t, key, true, false))
-    let (marks, marks_error) = mem.alloc[Mark](a, 1usize)
-    if marks_error != ok { ret (zero, TooLarge) }
-    marks[0usize] = Mark { color: look.foreground, expanded: expanded, arena: a }
-    let (head, head_error) = mem.alloc[widget.Node](a, 2usize)
+    let (made, made_error) = disclosure_of(a, key, t, label, expanded, toggle, disclosure_options(), content)
+    ret (made, made_error)
+}
+
+// A disclosure's or an expander's extras (D965): the meta after a disclosure's
+// label (a count or summary), the supporting line under an expander's title,
+// whether it is enabled, and an expander's width (0: its header's).
+type DisclosureOptions = struct { meta: str, supporting: str, enabled: bool, width: f32 }
+
+fn disclosure_options() -> DisclosureOptions {
+    var out: DisclosureOptions = zero
+    out.enabled = true
+    ret out
+}
+
+// Right opening a shut header and Left shutting an open one, around `header`.
+fn toggle_keys(a: *mem.Arena, expanded: bool, toggle: *const widget.Submit, header: widget.Node) -> (widget.Node, err) {
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 1usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var arrow = 39u32
+    if expanded { arrow = 37u32 }
+    shortcuts[0usize] = widget.Shortcut { key: arrow, modifiers: zero, action: *toggle }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = header
+    ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..1usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), inner[0usize..1usize]), ok)
+}
+
+// v2 (D965, docs/ux/components/Disclosure): the header is a `radius-sm` button
+// 40 tall (32 dense), 8 at the start and 12 at the end, under the `on-surface`
+// state layer: a `chevron-right` `icon-md` 24 in `on-surface-variant`
+// (`chevron-down` while open), 8 to the label in `title-small` `on-surface` and
+// the meta after it in `body-medium` `on-surface-variant`. The content stands
+// 4 below, indented 40, 8 above what follows. Right opens and Left closes a
+// focused header. Disabled, the header's content is `on-surface` 38%, no layer,
+// not focusable.
+// ponytail: the chevron swaps rather than turning and the content does not
+// animate; add the motion with the animation module's tweens.
+fn disclosure_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, options: DisclosureOptions, content: widget.Node) -> (widget.Node, err) {
+    let state = control_state(t, key, options.enabled, false)
+    var h: f32 = t.tokens.sizes.control_md
+    if t.tokens.metrics.control_height < t.tokens.sizes.control_sm { h = t.tokens.sizes.control_sm }
+    var fade: f32 = 1.0
+    if !options.enabled { fade = t.tokens.states.disabled_content }
+    let on = with_alpha(style.color(t.tokens, .OnSurface), fade)
+    var muted = style.color(t.tokens, .OnSurfaceVariant)
+    if !options.enabled { muted = on }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), state_opacity(t, state))
+    look.foreground = on
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = t.tokens.radii.sm
+    look.custom_padding = true
+    look.padding = 12.0
+    look.padding_start = 8.0
+    look.padding_y = max_zero((h - t.tokens.sizes.icon_md) * 0.5)
+    look.min_height = h
+    look.min_width = h
+    var kind: GlyphKind = .ChevronRight
+    if expanded { kind = .ChevronDown }
+    let (head, head_error) = mem.alloc[widget.Node](a, 3usize)
     if head_error != ok { ret (zero, TooLarge) }
-    let size = t.tokens.text[0usize].line_height
-    var none: []const widget.Node = zero
-    head[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&marks[0usize]), measure: mark_measure, paint: mark_paint, state: widget.bytes_of[Mark](&marks[0usize]) } }, style: sized_style(size, size), children: none }
+    let (chevron, chevron_error) = icon_square(a, muted, kind, t.tokens.sizes.icon_md)
+    if chevron_error != ok { ret (zero, chevron_error) }
+    head[0usize] = chevron
     var caption = text_options()
-    caption.role = .Label
+    caption.role = .TitleSmall
     caption.wrap = .None
-    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, look.foreground)
+    let (label_node, label_error) = colored_text(a, 0u64, label, t, caption, on)
     if label_error != ok { ret (zero, label_error) }
     head[1usize] = label_node
-    let header = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.xs }, style.defaults(), head[0usize..2usize])
+    var head_count = 2usize
+    if options.meta.len != 0usize {
+        var said = text_options()
+        said.role = .BodyMedium
+        said.wrap = .None
+        let (meta_node, meta_error) = colored_text(a, 0u64, options.meta, t, said, muted)
+        if meta_error != ok { ret (zero, meta_error) }
+        head[2usize] = meta_node
+        head_count = 3usize
+    }
+    let header = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: t.tokens.spacing.sm }, style.defaults(), head[0usize..head_count])
     var states = 0u32
     var actions = accessibility.ACTION_EXPAND
     if expanded {
         states = accessibility.STATE_EXPANDED
         actions = accessibility.ACTION_COLLAPSE
     }
-    let (button_node, button_error) = pressable_states(a, key, t, 3u8, label, look, true, false, states, actions, key + 1u64, toggle, header)
+    let (button_node, button_error) = pressable_states(a, key, t, 3u8, label, look, options.enabled, false, states, actions, key + 1u64, toggle, header)
     if button_error != ok { ret (zero, button_error) }
+    let (keyed, keyed_error) = toggle_keys(a, expanded, toggle, button_node)
+    if keyed_error != ok { ret (zero, keyed_error) }
     var count = 1usize
     if expanded { count = 2usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = button_node
+    parts[0usize] = keyed
     if expanded {
         let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
         if body_error != ok { ret (zero, TooLarge) }
@@ -3076,24 +3414,130 @@ fn disclosure(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expan
         sem.role = 2u8
         sem.labelled_by = key
         var padded = style.defaults()
-        padded.padding = style.EdgeLengths { left: style.Length { Px: size + t.tokens.spacing.xs }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 0.0 } }
+        padded.padding = style.EdgeLengths { left: style.Length { Px: 40.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 0.0 }, bottom: style.Length { Px: 8.0 } }
         parts[1usize] = widget.semantics(key + 1u64, sem, padded, body[0usize..1usize])
     }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), parts[0usize..count]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..count]), ok)
 }
 
-// An expander: a disclosure on a bordered, rounded, padded surface.
+// An expander: the outlined section of D965 below.
 fn expander(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, content: widget.Node) -> (widget.Node, err) {
-    let (opened, opened_error) = disclosure(a, key, t, label, expanded, toggle, content)
-    if opened_error != ok { ret (zero, opened_error) }
-    let (sheet, sheet_error) = mem.alloc[widget.Node](a, 1usize)
-    if sheet_error != ok { ret (zero, TooLarge) }
-    sheet[0usize] = opened
-    var options = surface_options(t)
-    options.bordered = true
-    options.radius = t.tokens.radii.xs
-    options.padding = t.tokens.spacing.sm
-    ret (widget.box(0u64, surface_style(t, options), sheet[0usize..1usize]), ok)
+    let (made, made_error) = expander_of(a, key, t, label, expanded, toggle, disclosure_options(), content)
+    ret (made, made_error)
+}
+
+// A section's header row (D965), an expander's or an accordion's: a square
+// button `width` wide (0: its content's), `h` tall (plus 16 with a supporting
+// line), 16 each side and 8 above and below, under the `on-surface` state layer:
+// the title in `title` role `on-surface`, the supporting line under it in
+// `line` role `on-surface-variant`, and a trailing `chevron-down` 24 in
+// `on-surface-variant` (`chevron-up` open) 16 after them; it controls `key + 1`.
+fn section_header(a: *mem.Arena, key: widget.Key, t: *const Theme, title: str, supporting: str, expanded: bool, enabled: bool, toggle: *const widget.Submit, width: f32, h: f32, title_role: style.TextRole, line_role: style.TextRole) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    var fade: f32 = 1.0
+    if !enabled { fade = t.tokens.states.disabled_content }
+    let on = with_alpha(style.color(t.tokens, .OnSurface), fade)
+    var muted = style.color(t.tokens, .OnSurfaceVariant)
+    if !enabled { muted = on }
+    var tall = h
+    if supporting.len != 0usize { tall = h + 16.0 }
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), state_opacity(t, state))
+    look.foreground = on
+    look.border_width = 0.0
+    look.opacity = 1.0
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding = 16.0
+    look.padding_y = 8.0
+    look.min_height = tall
+    look.min_width = max_of(width, 1.0)
+    let (words, words_error) = mem.alloc[widget.Node](a, 2usize)
+    if words_error != ok { ret (zero, TooLarge) }
+    var caption = text_options()
+    caption.role = title_role
+    caption.wrap = .None
+    let (title_node, title_error) = colored_text(a, 0u64, title, t, caption, on)
+    if title_error != ok { ret (zero, title_error) }
+    words[0usize] = title_node
+    var word_count = 1usize
+    if supporting.len != 0usize {
+        var said = text_options()
+        said.role = line_role
+        said.wrap = .None
+        let (line_node, line_error) = colored_text(a, 0u64, supporting, t, said, muted)
+        if line_error != ok { ret (zero, line_error) }
+        words[1usize] = line_node
+        word_count = 2usize
+    }
+    let (row, row_error) = mem.alloc[widget.Node](a, 2usize)
+    if row_error != ok { ret (zero, TooLarge) }
+    var words_style = style.defaults()
+    words_style.width = style.Length { Flex: 1.0 }
+    row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Start, gap: 0.0 }, words_style, words[0usize..word_count])
+    var kind: GlyphKind = .ChevronDown
+    if expanded { kind = .ChevronUp }
+    let (chevron, chevron_error) = icon_square(a, muted, kind, t.tokens.sizes.icon_md)
+    if chevron_error != ok { ret (zero, chevron_error) }
+    row[1usize] = chevron
+    var row_style = style.defaults()
+    if width > 0.0 { row_style.width = style.Length { Px: width - 32.0 } }
+    row_style.min_height = style.Length { Px: tall - 16.0 }
+    let header = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 16.0 }, row_style, row[0usize..2usize])
+    var states = 0u32
+    var actions = accessibility.ACTION_EXPAND
+    if expanded {
+        states = accessibility.STATE_EXPANDED
+        actions = accessibility.ACTION_COLLAPSE
+    }
+    let (button_node, button_error) = pressable_states(a, key, t, 3u8, title, look, enabled, false, states, actions, key + 1u64, toggle, header)
+    ret (button_node, button_error)
+}
+
+// A section's content (D965): 16 at the sides and below, a group keyed `key`
+// labelled by its header.
+fn section_body(a: *mem.Arena, key: widget.Key, header: widget.Key, content: widget.Node) -> (widget.Node, err) {
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = content
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.labelled_by = header
+    var padded = style.defaults()
+    let side = style.Length { Px: 16.0 }
+    padded.padding = style.EdgeLengths { left: side, top: style.Length { Px: 0.0 }, right: side, bottom: side }
+    ret (widget.semantics(key, sem, padded, body[0usize..1usize]), ok)
+}
+
+// v2 (D965, docs/ux/components/Disclosure, the expander): a `surface` container
+// in a 1px `outline-variant` edge with `radius-md` 12, clipping (so the focus
+// ring stands inside it), holding the section header 56 tall (72 with a
+// supporting line) with the title in `body-large` and the supporting line in
+// `body-medium`, and the content 16 in at the sides and below while open. Right
+// opens and Left closes a focused header.
+// ponytail: no leading icon (and its 56 content indent), no motion.
+fn expander_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, expanded: bool, toggle: *const widget.Submit, options: DisclosureOptions, content: widget.Node) -> (widget.Node, err) {
+    let (header, header_error) = section_header(a, key, t, label, options.supporting, expanded, options.enabled, toggle, options.width, t.tokens.sizes.control_xl, .BodyLarge, .BodyMedium)
+    if header_error != ok { ret (zero, header_error) }
+    let (keyed, keyed_error) = toggle_keys(a, expanded, toggle, header)
+    if keyed_error != ok { ret (zero, keyed_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = keyed
+    var count = 1usize
+    if expanded {
+        let (inner, inner_error) = section_body(a, key + 1u64, key, content)
+        if inner_error != ok { ret (zero, inner_error) }
+        parts[1usize] = inner
+        count = 2usize
+    }
+    var sheet = style.defaults()
+    sheet.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    sheet.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+    sheet.radius = t.tokens.radii.md
+    sheet.overflow = .Clip
+    if options.width > 0.0 { sheet.width = style.Length { Px: options.width } }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sheet, parts[0usize..count]), ok)
 }
 
 // A tab list: a row of plain tab buttons keyed `key + 1 + index`, the selected one
@@ -5104,24 +5548,129 @@ fn empty_state(a: *mem.Arena, key: widget.Key, t: *const Theme, icon_texture: sc
     ret (widget.semantics(key, sem, style.defaults(), column[0usize..1usize]), ok)
 }
 
-// An accordion: D826's disclosures in a column, keyed `key + 1 + 2 * index` (their
-// content groups `key + 2 + 2 * index`), the one at `expanded` open and the others
-// shut (an index past the end for none), each header firing its own toggle; a
-// group in the tree named `label`.
+// An accordion: the filled accordion of D965 below with the section at
+// `expanded` open alone (an index past the end for none).
 fn accordion(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, contents: []const widget.Node, expanded: usize, toggles: []const widget.Submit) -> (widget.Node, err) {
-    if contents.len != labels.len || toggles.len != labels.len { ret (zero, TooLarge) }
-    let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
-    if items_error != ok { ret (zero, TooLarge) }
+    let (open, open_error) = mem.alloc[bool](a, labels.len)
+    if open_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < labels.len {
-        let (opened, opened_error) = disclosure(a, key + 1u64 + 2u64 * u64(i), t, labels[i], i == expanded, &toggles[i], contents[i])
-        if opened_error != ok { ret (zero, opened_error) }
-        items[i] = opened
+        open[i] = i == expanded
         i += 1usize
     }
+    let (made, made_error) = accordion_of(a, key, t, label, labels, contents, open[0usize..labels.len], toggles, accordion_options())
+    ret (made, made_error)
+}
+
+// An accordion's options (D965): outlined rather than filled, the supporting
+// line under each title (empty, or one per section), which sections are enabled
+// (empty: all), and its width (0: its widest header's).
+type AccordionOptions = struct { outlined: bool, supporting: []const str, enabled: []const bool, width: f32 }
+
+fn accordion_options() -> AccordionOptions {
+    var out: AccordionOptions = zero
+    ret out
+}
+
+// Keyboard focus moved to the element keyed `key`.
+type FocusTo = struct { runtime: *widget.Runtime, key: widget.Key }
+
+fn focus_to_fire(ctx: *void) -> err {
+    let f = mem.cast[*FocusTo](ctx)
+    let (s, state_error) = widget.state_of(f.runtime)
+    if state_error != ok { ret ok }
+    let (id, count) = widget.find_by_key(s, f.key)
+    if count == 0usize { ret ok }
+    ret widget.focus(f.runtime, id)
+}
+
+// v2 (D965, docs/ux/components/Accordion): the sections in one container,
+// `surface-container-low` (filled) or `surface` in a 1px `outline-variant` edge
+// (outlined), `radius-md` 12, clipping (so a header's focus ring stands inside);
+// each header the full-width section header (keyed `key + 1 + 2 * index`) 48 tall
+// with a pointer and 56 on touch (16 more with a supporting line), the title in
+// `body-medium` (`body-large` on touch) and the supporting line in `body-small`
+// (`body-medium`), the open content below it (`key + 2 + 2 * index`) 16 in at the
+// sides and below, and 1px `outline-variant` dividers between sections. `open`
+// says which are open, so one index or a set; each header fires its own toggle.
+// Up and Down move focus between headers, Home and End to the first and last.
+// A Group named `label`.
+// ponytail: no motion, no leading icons and no error summary in a shut header.
+fn accordion_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labels: []const str, contents: []const widget.Node, open: []const bool, toggles: []const widget.Submit, options: AccordionOptions) -> (widget.Node, err) {
+    let n = labels.len
+    if contents.len != n || toggles.len != n || open.len != n { ret (zero, TooLarge) }
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var h = t.tokens.sizes.control_lg
+    var title_role: style.TextRole = .BodyMedium
+    var line_role: style.TextRole = .BodySmall
+    if touch {
+        h = t.tokens.sizes.control_xl
+        title_role = .BodyLarge
+        line_role = .BodyMedium
+    }
+    let (targets, targets_error) = mem.alloc[FocusTo](a, n + 2usize)
+    if targets_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        targets[i] = FocusTo { runtime: t.runtime, key: key + 1u64 + 2u64 * u64(i) }
+        i += 1usize
+    }
+    let (items, items_error) = mem.alloc[widget.Node](a, 3usize * n)
+    if items_error != ok { ret (zero, TooLarge) }
+    var count = 0usize
+    i = 0usize
+    while i < n {
+        let header_key = key + 1u64 + 2u64 * u64(i)
+        var supporting: str = ""
+        if options.supporting.len == n { supporting = options.supporting[i] }
+        var enabled = true
+        if options.enabled.len == n { enabled = options.enabled[i] }
+        if i > 0usize {
+            var line = style.defaults()
+            line.height = style.Length { Px: t.tokens.sizes.divider }
+            if options.width > 0.0 { line.width = style.Length { Px: options.width } }
+            line.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+            items[count] = widget.box(0u64, line, zero)
+            count += 1usize
+        }
+        let (header, header_error) = section_header(a, header_key, t, labels[i], supporting, open[i], enabled, &toggles[i], options.width, h, title_role, line_role)
+        if header_error != ok { ret (zero, header_error) }
+        // Up, Down, Home and End from this header.
+        let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
+        if shortcuts_error != ok { ret (zero, TooLarge) }
+        var previous = i
+        if i > 0usize { previous = i - 1usize }
+        var next = i
+        if i + 1usize < n { next = i + 1usize }
+        shortcuts[0usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[previous]), invoke: focus_to_fire } }
+        shortcuts[1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[next]), invoke: focus_to_fire } }
+        shortcuts[2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[0usize]), invoke: focus_to_fire } }
+        shortcuts[3usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[n - 1usize]), invoke: focus_to_fire } }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = header
+        items[count] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize])
+        count += 1usize
+        if open[i] {
+            let (inner, inner_error) = section_body(a, header_key + 1u64, header_key, contents[i])
+            if inner_error != ok { ret (zero, inner_error) }
+            items[count] = inner
+            count += 1usize
+        }
+        i += 1usize
+    }
+    var sheet = style.defaults()
+    sheet.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+    if options.outlined {
+        sheet.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        sheet.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
+    }
+    sheet.radius = t.tokens.radii.md
+    sheet.overflow = .Clip
+    if options.width > 0.0 { sheet.width = style.Length { Px: options.width } }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: t.tokens.spacing.xs }, style.defaults(), items[0usize..labels.len])
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, sheet, items[0usize..count])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label

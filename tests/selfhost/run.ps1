@@ -3192,6 +3192,12 @@ $uiContent3V2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $uiContent3V2Written -ne 'executable written') { throw 'ui_content3_v2 emission failed' }
 $uiContent3V2Output = & $uiContent3V2Path
 if ($LASTEXITCODE -ne 0 -or $uiContent3V2Output -ne 'ui content3 v2 ok') { throw "ui_content3_v2 answered wrongly: exit $LASTEXITCODE" }
+# v2 dividers, cards, group boxes, disclosure, expander and accordion (D965, P5-08)
+$uiContainersV2Path = Join-Path $testBuild 'ui-containers-v2-selfhost.exe'
+$uiContainersV2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_containers_v2\src\main.e') $repo 'x64' 'windows' $uiContainersV2Path
+if ($LASTEXITCODE -ne 0 -or $uiContainersV2Written -ne 'executable written') { throw 'ui_containers_v2 emission failed' }
+$uiContainersV2Output = & $uiContainersV2Path
+if ($LASTEXITCODE -ne 0 -or $uiContainersV2Output -ne 'ui containers v2 ok') { throw "ui_containers_v2 answered wrongly: exit $LASTEXITCODE" }
 # Discrete selection (D819, widget plan P1-07): checkbox, radio group, switch and
 # segmented control under a theme, tapped, with their states in the tree.
 $uiSelectionPath = Join-Path $testBuild 'ui-selection-selfhost.exe'

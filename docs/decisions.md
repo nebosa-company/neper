@@ -19708,3 +19708,56 @@ Still open:
 - The focus ring is the runtime's rectangle round the target, not round the
   span's box on each line.
 - The paragraph needs a width to wrap; it does not take its parent's.
+
+## D965 — Dividers, cards, group boxes, disclosures and accordions draw their v2 specifications
+
+Five of the P5-08 containers now draw docs/ux/components. Each old entry point
+keeps its signature and calls a new `_of` form that takes an options struct.
+
+- `control.divider_of` (`DividerOptions`): a 1px `outline-variant` line, or
+  `outline` when strong, where the old one used `border`. It takes start and end
+  insets, and an optional label in `label-medium` `on-surface-variant` 12 from
+  each line, with a 16 lead line for a start label. A decorative divider is
+  hidden. A labelled one is a Group named by its label.
+- `control.card_of` (`CardOptions`, `CardVariant`): elevated
+  `surface-container-low` at `elevation-1`, filled `surface-container-highest`,
+  or outlined `surface` in a 1px `outline-variant` edge. The corners are
+  `radius-md` (`radius-sm` under 120 wide) and the padding is 16 (12 dense). A
+  pressable card is one Button named by its title, under the `on-surface` state
+  layer, and hover raises it a level. Selected adds a 2px `primary` outline and a
+  24 `primary` check disc 8 in from the top end. Disabled is `on-surface` 12% with
+  the content at 38%. `card` is the elevated card. Before, it was both shadowed and
+  bordered, with 12 padding.
+- `control.group_box_of` (`GroupOptions`, `GroupVariant`): a `title-small` title
+  4 in, with an optional `body-small` description. The box sits 8 below and is
+  outlined, filled or plain, at `radius-md`. Each child is a row at least 48 tall
+  (56 on touch), padded 4 by 16, with 1px dividers between rows. An invalid box
+  has a 2px `error` edge and the message with a 16 alert mark 8 below. Disabled is
+  38%.
+- `control.disclosure_of` (`DisclosureOptions`): a 40 (32 dense) `radius-sm`
+  header under the `on-surface` state layer. It holds a `chevron-right` 24 in
+  `on-surface-variant` (`chevron-down` while open), the `title-small` label and a
+  `body-medium` meta. This replaces the filled triangle and the `primary` label.
+  The content sits 40 in and 4 below. Right opens and Left closes.
+- `control.expander_of`: the `surface` container in a 1px `outline-variant` edge,
+  `radius-md`, clipped so the focus ring falls inside. Its section header is 56
+  tall (72 with a supporting line), with a trailing `chevron-down` or
+  `chevron-up`, and the content 16 in.
+- `control.accordion_of` (`AccordionOptions`): the sections share one
+  `surface-container-low` (or outlined) clipped container, with 1px dividers
+  between sections. It uses the same section header, 48 tall with a pointer and
+  56 on touch. It takes a set of open flags, so several sections can be open.
+  Up, Down, Home and End move focus between headers through a new `FocusTo`
+  submit. `accordion` keeps its single index.
+
+ui_containers_v2 holds the geometry, the colours, a pressable card's tap, the
+disclosure's Left key and the accordion's Down and Home focus moves. ui_surface
+now expects the 16 card padding and `surface-container-low`, and its column
+grows to 260 to hold the 48 rows. All 77 ui_* fixtures pass on Windows and Linux.
+
+Still open:
+- Motion: the chevrons swap instead of turning.
+- Leading icons, and the error summary in a closed accordion header.
+- The collapsible group box.
+- Card media, header and actions slots, the dragged card and loading skeletons.
+- A Separator role, which accessibility.Role does not have.

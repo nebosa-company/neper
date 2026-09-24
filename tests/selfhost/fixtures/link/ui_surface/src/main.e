@@ -75,7 +75,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, texture: scene.TextureId) -> (w
     items[6usize] = a_placeholder
     var column = style.defaults()
     column.width = style.Length { Px: 100.0 }
-    column.height = style.Length { Px: 200.0 }
+    column.height = style.Length { Px: 260.0 }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 6.0 }, column, items[0usize..7usize]), ok)
 }
 
@@ -94,7 +94,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if runtime_error != ok { os.exit(5i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
-    let (h, harness_error) = testing.harness(a, &runtime, 100u32, 200u32, 1.0)
+    let (h, harness_error) = testing.harness(a, &runtime, 100u32, 260u32, 1.0)
     if harness_error != ok { os.exit(6i32) }
     var harness = h
     var pixels: [16]u8 = zero
@@ -114,11 +114,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root, build_error) = build(&frame, &theme, texture)
     if build_error != ok { os.exit(10i32) }
     if testing.pump(&harness, root, time.Instant { nanos: 1000000000i64 }) != ok { os.exit(11i32) }
-    // The card pads its 20 x 10 content by the medium spacing on each side.
+    // The card pads its 20 x 10 content by v2's 16 on each side (D965).
     let (card_bounds, has_card) = widget.bounds_of(&runtime, testing.by_key(&harness, 1u64).element)
-    if !has_card || !near(card_bounds.width, 20.0 + 2.0 * tokens.spacing.md) || !near(card_bounds.height, 10.0 + 2.0 * tokens.spacing.md) { os.exit(12i32) }
+    if !has_card || !near(card_bounds.width, 20.0 + 32.0) || !near(card_bounds.height, 10.0 + 32.0) { os.exit(12i32) }
     let (panel_bounds, has_panel) = widget.bounds_of(&runtime, testing.by_key(&harness, 2u64).element)
-    if !has_panel || !near(panel_bounds.width, card_bounds.width) { os.exit(13i32) }
+    if !has_panel || !near(panel_bounds.width, 20.0 + 2.0 * tokens.spacing.md) { os.exit(13i32) }
     // The group box is a labelled group; the divider is not in the tree; the badge
     // is a status with its value; the avatar is an image; the placeholder is busy.
     if testing.by_label(&harness, "Set").count == 0usize { os.exit(14i32) }
@@ -138,12 +138,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let badge = testing.by_role(&harness, .Status)
     if badge.count != 1usize || testing.by_label(&harness, "3").count == 0usize { os.exit(19i32) }
     if testing.by_label(&harness, "me").count != 1usize { os.exit(20i32) }
-    // The pixels: the card's inside is the surface colour and its shadow lies two
+    // The pixels: the card's inside is `surface-container-low` and its shadow lies two
     // pixels below it; the panel is the variant surface; the avatar's corner is the
     // page and its centre the image.
     let (shot, shot_error) = testing.snapshot(&harness, a)
     if shot_error != ok { os.exit(21i32) }
-    let surface_color = style.color(&tokens, .Surface)
+    let surface_color = style.color(&tokens, .SurfaceContainerLow)
     let variant_color = style.color(&tokens, .SurfaceVariant)
     let cx = usize(card_bounds.x + card_bounds.width * 0.5)
     let cy = usize(card_bounds.y + card_bounds.height * 0.5)
