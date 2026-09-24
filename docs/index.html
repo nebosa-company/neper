@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Neper is the first general-purpose programming language optimized end to end for LLM-generated software.">
+  <meta name="description" content="Neper is the MIT-licensed, self-hosted, multiplatform programming language optimized end to end for LLM-generated software.">
   <title>Neper — the LLM-optimized programming language</title>
   <link rel="icon" href="gtm/logo/neper-icon.svg" type="image/svg+xml">
   <style>
@@ -54,9 +54,8 @@
     .str { color: #f5c875; }
     .prompt { color: var(--green); }
 
-    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 72px; border: 1px solid var(--line); }
-    .metric { padding: 22px; }
-    .metric + .metric { border-left: 1px solid var(--line); }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 72px; border: 1px solid var(--line); background: var(--line); }
+    .metric { padding: 22px; background: var(--page); }
     .metric strong { display: block; color: var(--green); font-size: clamp(22px, 3vw, 32px); line-height: 1.2; }
     .metric span { color: var(--muted); font-size: 12px; }
 
@@ -73,6 +72,11 @@
     .library-item { padding: 22px; background: var(--panel); }
     .library-item code { color: var(--green); font: inherit; font-size: 14px; }
     .library-item p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+    .catalog-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 32px; border-block: 1px solid var(--line); }
+    .catalog-stat { padding: 24px 0; }
+    .catalog-stat + .catalog-stat { padding-left: 28px; border-left: 1px solid var(--line); }
+    .catalog-stat strong { display: block; color: var(--blue); font-size: clamp(28px, 4vw, 42px); line-height: 1.15; }
+    .catalog-stat span { color: var(--muted); font-size: 12px; }
 
     .gpu-layout { display: grid; grid-template-columns: .72fr 1.28fr; gap: 48px; align-items: center; }
     .gpu-copy p { color: var(--muted); }
@@ -100,9 +104,9 @@
       .nav-links a:not(:last-child) { display: none; }
       main { padding-top: 30px; }
       .hero { grid-template-columns: 1fr; gap: 48px; min-height: auto; }
-      .metrics, .benefits, .library-grid, .llm-grid, .gpu-layout { grid-template-columns: 1fr; }
+      .metrics, .benefits, .library-grid, .catalog-stats, .llm-grid, .gpu-layout { grid-template-columns: 1fr; }
       .metrics { margin-top: 48px; }
-      .metric + .metric { border-left: 0; border-top: 1px solid var(--line); }
+      .catalog-stat + .catalog-stat { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
       .benefit { min-height: auto; }
       .video-slot { aspect-ratio: 4 / 3; }
       .final, footer { align-items: flex-start; flex-direction: column; }
@@ -128,7 +132,7 @@
         <div>
           <div class="eyebrow">&gt; first of its kind_</div>
           <h1>The first general-purpose language <span>optimized end to end for LLMs.</span></h1>
-          <p class="lede">Generate, search, edit, verify, and ship in one deterministic stack. Neper combines a model-native language, an ultra-rich standard library, and direct CPU/GPU machine code that humans can still audit.</p>
+          <p class="lede">Generate, search, edit, verify, and ship in one deterministic stack. Neper is MIT open source, multiplatform, and 100% self-hosted in Neper—from compiler and linker to its ultra-rich standard library.</p>
           <div class="actions">
             <a class="button" href="https://github.com/nebosa-company/neper">View on GitHub →</a>
             <a class="button secondary" href="#llm">See every LLM feature</a>
@@ -154,6 +158,10 @@ hello, neper</code></pre>
         <div class="metric"><strong>&lt; 1 sec</strong><span>whole-project rebuild target</span></div>
         <div class="metric"><strong>CPU + GPU</strong><span>one language, one module</span></div>
         <div class="metric"><strong>0 VM</strong><span>tiny native executables</span></div>
+        <div class="metric"><strong>MIT</strong><span>open source, fork anything</span></div>
+        <div class="metric"><strong>100% Neper</strong><span>self-hosted compiler + toolchain</span></div>
+        <div class="metric"><strong>3 OS</strong><span>Windows · Linux · macOS</span></div>
+        <div class="metric"><strong>Self-verifying</strong><span>byte-identical compiler fixed point</span></div>
       </div>
 
       <section id="speed">
@@ -188,6 +196,11 @@ hello, neper</code></pre>
         <div class="eyebrow">02 // batteries included</div>
         <h2>An ultra-rich standard library.</h2>
         <p class="section-intro">One coherent library surface replaces dependency archaeology. Every module is fenced, fixture-driven, and available to the compiler, the agent, and the reviewer under the same version.</p>
+        <div class="catalog-stats" aria-label="Neper library and user interface catalog totals">
+          <div class="catalog-stat"><strong>7,963</strong><span>function signatures</span></div>
+          <div class="catalog-stat"><strong>1,232</strong><span>standard-library algorithms</span></div>
+          <div class="catalog-stat"><strong>112</strong><span>native UI controls</span></div>
+        </div>
         <div class="library-grid">
           <div class="library-item"><code>e.algo</code><p>sorting, search, graphs, geometry, hashing, random</p></div>
           <div class="library-item"><code>e.crypto</code><p>hashes, signatures, encryption, key derivation, X.509</p></div>
@@ -279,12 +292,15 @@ hello, neper</code></pre>
 
       <section class="final">
         <h2>One language.<br>Every machine.<br>Built for models.</h2>
-        <a class="button" href="https://github.com/nebosa-company/neper#readme">Read the README →</a>
+        <div class="actions">
+          <a class="button" href="https://github.com/nebosa-company/neper">Fork the MIT source →</a>
+          <a class="button secondary" href="https://github.com/nebosa-company/neper#readme">Read the README</a>
+        </div>
       </section>
     </main>
 
     <footer>
-      <span>neper / the first general-purpose language optimized end to end for LLMs.</span>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
       <a href="progress.html">readiness →</a>
     </footer>
   </div>
