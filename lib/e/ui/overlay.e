@@ -1035,9 +1035,7 @@ fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
 // `on-surface` and the `meta` (empty for none) in `label-small`
 // `on-surface-variant` at the end, under the `on-surface` state layer; a list item
 // in the tree firing `action`.
-// ponytail: the matched characters are not set in weight 600, and the footer row
-// is the caller's.
-fn popup_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, meta: str, action: *const widget.Submit) -> (widget.Node, err) {
+fn popup_row_with_label(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, meta: str, action: *const widget.Submit, label_node: widget.Node) -> (widget.Node, err) {
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
     let row_height = control.if_else(touch, 48.0, 40.0)
     var role: style.TextRole = .BodyMedium
@@ -1057,13 +1055,10 @@ fn popup_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     look.min_width = 24.0
     let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    var caption = control.text_options()
-    caption.role = role
-    caption.wrap = .None
-    let (said, said_error) = control.colored_text(a, 0u64, label, t, caption, ink)
-    if said_error != ok { ret (zero, said_error) }
-    parts[0usize] = said
+    parts[0usize] = label_node
     parts[1usize] = widget.spacer(0u64, 1.0)
+    var caption = control.text_options()
+    caption.wrap = .None
     var n = 2usize
     if meta.len > 0usize {
         caption.role = .LabelSmall
@@ -1076,6 +1071,51 @@ fn popup_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     line_style.width = style.Length { Percent: 100.0 }
     let content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, line_style, parts[0usize..n])
     let (made, made_error) = control.pressable(a, key, t, 11u8, label, look, true, false, action, content)
+    ret (made, made_error)
+}
+
+fn popup_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, meta: str, action: *const widget.Submit) -> (widget.Node, err) {
+    var caption = control.text_options()
+    caption.role = .BodyMedium
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm { caption.role = .BodyLarge }
+    caption.wrap = .None
+    let (said, said_error) = control.colored_text(a, 0u64, label, t, caption, style.color(t.tokens, .OnSurface))
+    if said_error != ok { ret (zero, said_error) }
+    let (made, made_error) = popup_row_with_label(a, key, t, label, meta, action, said)
+    ret (made, made_error)
+}
+
+// A suggestion row with one byte range of its label emphasized at weight 600.
+// Invalid or empty ranges safely fall back to the ordinary row.
+fn popup_row_match(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, match_start: usize, match_end: usize, meta: str, action: *const widget.Submit) -> (widget.Node, err) {
+    if match_start >= match_end || match_end > label.len {
+        let (plain, plain_error) = popup_row(a, key, t, label, meta, action)
+        ret (plain, plain_error)
+    }
+    let (runs, runs_error) = mem.alloc[widget.Node](a, 3usize)
+    if runs_error != ok { ret (zero, TooLarge) }
+    var normal = control.text_options()
+    normal.role = .BodyMedium
+    var strong = control.text_options()
+    strong.role = .TitleSmall
+    if t.tokens.metrics.control_height > t.tokens.sizes.control_sm {
+        normal.role = .BodyLarge
+        strong.role = .TitleMedium
+    }
+    normal.wrap = .None
+    strong.wrap = .None
+    let ink = style.color(t.tokens, .OnSurface)
+    let (before, before_error) = control.colored_text(a, 0u64, label[0usize..match_start], t, normal, ink)
+    let (matched, matched_error) = control.colored_text(a, 0u64, label[match_start..match_end], t, strong, ink)
+    let (after, after_error) = control.colored_text(a, 0u64, label[match_end..label.len], t, normal, ink)
+    if before_error != ok { ret (zero, before_error) }
+    if matched_error != ok { ret (zero, matched_error) }
+    if after_error != ok { ret (zero, after_error) }
+    runs[0usize] = before
+    runs[1usize] = matched
+    runs[2usize] = after
+    let label_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), runs[0usize..3usize])
+    let (made, made_error) = popup_row_with_label(a, key, t, label, meta, action, label_node)
     ret (made, made_error)
 }
 

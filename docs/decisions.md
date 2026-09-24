@@ -21884,3 +21884,14 @@ full-width 40px `body-medium` primary action row. `ui_overlays2_v2` holds the
 loading pixels and semantics plus footer size and activation on Windows and
 Linux. `popup-loading-phase.png` and `popup-footer.png` are the Segoe UI visual
 checks. Only matched-character emphasis remains open for popup content.
+
+## D1030 — Popup rows can emphasize the matched label range
+
+`overlay.popup_row_match` keeps the ordinary full-width row, metadata, action
+and full semantic label, but splits one valid caller-supplied byte range into
+the same-size weight-600 title role between regular text runs. Empty or invalid
+ranges safely fall back to `popup_row`.
+
+`ui_overlays2_v2` holds the split runs and unchanged row behavior on Windows
+and Linux. `popup-match.png` is the Segoe UI visual check. The popup portion of
+D976 now has no open visual or semantic item.

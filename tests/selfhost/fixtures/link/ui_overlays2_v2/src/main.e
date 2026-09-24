@@ -69,8 +69,8 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     let (build_button, e3) = control.button(a, 3u64, t, "Build", &s.subs[1usize], control.button_options())
     let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize)
     if rows_error != ok { ret (zero, rows_error) }
-    let (first, e4) = overlay.popup_row(a, 11u64, t, "main.e", "src", &s.subs[0usize])
-    let (second, e5) = overlay.popup_row(a, 12u64, t, "math.e", "", &s.subs[0usize])
+    let (first, e4) = overlay.popup_row_match(a, 11u64, t, "main.e", 0usize, 4usize, "src", &s.subs[0usize])
+    let (second, e5) = overlay.popup_row_match(a, 12u64, t, "math.e", 5usize, 99usize, "", &s.subs[0usize])
     rows[0usize] = first
     rows[1usize] = second
     var popup_content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), rows[0usize..2usize])
@@ -245,7 +245,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (group, has_group) = find(tree, .Group, "Suggestions")
     let (search_combo, has_search_combo) = find(tree, .Combobox, "Search files")
     let (closed_filter, has_closed_filter) = find(tree, .Button, "Filter")
-    if !has_group || testing.by_role(&harness, .ListItem).count != 2usize || !has_search_combo || !search_combo.state.expanded || !same_element(search_combo.relations.controls, testing.by_key(&harness, 10u64).element) || !same_element(search_combo.relations.active, testing.by_key(&harness, 11u64).element) || !has_closed_filter || closed_filter.state.selected || closed_filter.state.expanded || !has_action(closed_filter, .ShowMenu) { os.exit(15i32) }
+    let (plain_math, has_plain_math) = find(tree, .ListItem, "math.e")
+    if !has_group || testing.by_role(&harness, .ListItem).count != 2usize || testing.by_text(&harness, "main").count != 1usize || testing.by_text(&harness, ".e").count != 1usize || !has_plain_math || !has_search_combo || !search_combo.state.expanded || !same_element(search_combo.relations.controls, testing.by_key(&harness, 10u64).element) || !same_element(search_combo.relations.active, testing.by_key(&harness, 11u64).element) || !has_closed_filter || closed_filter.state.selected || closed_filter.state.expanded || !has_action(closed_filter, .ShowMenu) { os.exit(15i32) }
     if !tap_key(&harness, &runtime, 2u64) || s.counters[1usize].count != 1usize { os.exit(16i32) }
     if !tap_key(&harness, &runtime, 12u64) || s.counters[0usize].count != 1usize { os.exit(17i32) }
     // Empty results are a padded polite status row, never a blank popup.
