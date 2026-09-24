@@ -31,7 +31,7 @@ type Counter = struct { count: usize }
 // The counters: 0 rows, 1 anchors, 2 dismiss, 3 main action, 4 other action.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, actions: [2]overlay.MenuItem }
 
-type Which = enum u8 { Popup, PopupEmpty, PopupError, PopupFooter, PopupLoading, Flyout, FlyoutCompact, Popover, PopoverBusy, Below }
+type Which = enum u8 { Popup, PopupEmpty, PopupError, PopupFooter, PopupLoading, Flyout, FlyoutCompact, Popover, PopoverBusy, PopoverDirty, Below }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -124,8 +124,8 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
     }
     var popover: widget.Node = zero
     var e9: err = ok
-    if which == .PopoverBusy {
-        let (made_popover, made_popover_error) = overlay.popover_state(a, 30u64, t, owner, side, "Build 4128", inside, s.actions[0usize..2usize], true, true, &s.subs[2usize])
+    if which == .PopoverBusy || which == .PopoverDirty {
+        let (made_popover, made_popover_error) = overlay.popover_state(a, 30u64, t, owner, side, "Build 4128", inside, s.actions[0usize..2usize], true, which == .PopoverBusy, which == .PopoverDirty, &s.subs[2usize])
         popover = made_popover
         e9 = made_popover_error
     } else {
@@ -409,6 +409,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (busy_close, has_busy_close) = find(busy_tree, .Button, "Close")
     if !has_busy_main || !busy_main.state.busy || busy_main.state.disabled || !has_busy_other || !busy_other.state.disabled || !has_busy_close || busy_close.state.disabled { os.exit(71i32) }
     if !tap_key(&harness, &runtime, 33u64) || !tap_key(&harness, &runtime, 34u64) || s.counters[3usize].count != main_before || s.counters[4usize].count != other_before { os.exit(72i32) }
+    // Dirty short tasks consume an outside press without reaching the anchor,
+    // but Escape remains the ordinary dismissal path.
+    let dismiss_before = s.counters[2usize].count
+    let anchor_before = s.counters[1usize].count
+    let (root_dirty, build_dirty_error) = build(&f, &theme, s, .PopoverDirty)
+    if build_dirty_error != ok || testing.pump(&harness, root_dirty, time.Instant { nanos: 1600000000i64 }) != ok { os.exit(73i32) }
+    let (dirty_search, has_dirty_search) = bounds(&harness, &runtime, 1u64)
+    if !has_dirty_search || testing.tap(&harness, dirty_search.x + dirty_search.width * 0.5, dirty_search.y + dirty_search.height * 0.5) != ok || s.counters[2usize].count != dismiss_before || s.counters[1usize].count != anchor_before { os.exit(74i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || s.counters[2usize].count != dismiss_before + 1usize { os.exit(75i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok

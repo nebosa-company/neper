@@ -21931,3 +21931,14 @@ secondary actions are disabled while Close remains available.
 `ui_overlays2_v2` holds the Busy and Disabled states and unchanged counters on
 Windows and Linux. `popover-busy.png` is the Segoe UI visual check. D976 now has
 only the dirty-task guard and compact presentation open.
+
+## D1034 — Dirty popovers consume outside presses
+
+`dismissable_by_offset_outside` separates a modal overlay's outside-press action
+from its trapping scope's cancel action. `overlay.popover_state` uses an inert
+outside action while `dirty` is set, so the press is consumed without closing or
+reaching the anchor; its Close button and Escape keep the real dismissal action.
+
+`ui_overlays2_v2` holds the untouched dismiss and anchor counters after an
+outside press, then the dismissal after Escape, on Windows and Linux. D976 now
+has only the compact popover presentation open.

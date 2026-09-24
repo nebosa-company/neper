@@ -1154,6 +1154,11 @@ fn dismissable_by(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement:
 }
 
 fn dismissable_by_offset(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement: widget.Placement, label: str, surface: widget.Node, dismiss: *const widget.Submit, offset: geometry.Point, by: widget.Key) -> (widget.Node, err) {
+    let (made, made_error) = dismissable_by_offset_outside(a, key, anchor, placement, label, surface, dismiss, *dismiss, offset, by)
+    ret (made, made_error)
+}
+
+fn dismissable_by_offset_outside(a: *mem.Arena, key: widget.Key, anchor: widget.Key, placement: widget.Placement, label: str, surface: widget.Node, dismiss: *const widget.Submit, outside: widget.Submit, offset: geometry.Point, by: widget.Key) -> (widget.Node, err) {
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = surface
@@ -1169,7 +1174,7 @@ fn dismissable_by_offset(a: *mem.Arena, key: widget.Key, anchor: widget.Key, pla
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), scoped[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize]), ok)
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: offset, modal: true, dismiss: outside }, style.defaults(), framed[0usize..1usize]), ok)
 }
 
 // A standard flyout anchor: filled while closed, selected tonal while open, and
@@ -1234,15 +1239,16 @@ fn popover(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widg
 // container's colour stands on the near edge, centred on the anchor but at least
 // 16 in from a corner, its tip 4 from the anchor (the container 10); a modal
 // dialog in the tree.
-// ponytail: no dirty-task guard or compact sheet.
+// ponytail: no compact sheet.
 fn popover_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
-    let (made, made_error) = popover_state(a, key, t, anchor, placement, title, content, actions, open, false, dismiss)
+    let (made, made_error) = popover_state(a, key, t, anchor, placement, title, content, actions, open, false, false, dismiss)
     ret (made, made_error)
 }
 
 // The same with the main action's loading ring shown and repeat actions ignored;
-// secondary actions are disabled until the caller clears `busy`.
-fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, busy: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
+// secondary actions are disabled until the caller clears `busy`. A dirty short
+// task consumes outside presses while Close and Escape still dismiss it.
+fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, title: str, content: widget.Node, actions: []const MenuItem, open: bool, busy: bool, dirty: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     if actions.len > 2usize { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -1361,7 +1367,9 @@ fn popover_state(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor
         card[1usize] = tip_node
     }
     let joined = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), card[0usize..2usize])
-    let (made, made_error) = dismissable_by_offset(a, key, anchor, placement, title, joined, dismiss, offset, key + 1u64)
+    var outside = *dismiss
+    if dirty { outside = widget.Submit { ctx: zero, invoke: zero } }
+    let (made, made_error) = dismissable_by_offset_outside(a, key, anchor, placement, title, joined, dismiss, outside, offset, key + 1u64)
     ret (made, made_error)
 }
 
