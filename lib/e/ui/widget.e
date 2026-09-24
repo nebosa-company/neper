@@ -4106,10 +4106,34 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         }
     case .PointerUp as p:
         if s.long_press_fired {
+            var chosen = 0usize
+            var has_chosen = false
+            if s.arena_state.pressed {
+                let candidate = usize(s.arena_state.candidate)
+                let (_, is_item) = menu_item_owner(s, candidate)
+                if is_item {
+                    chosen = candidate
+                    has_chosen = true
+                }
+            }
+            if !has_chosen {
+                let (over, inside, has_over) = overlay_at(s, p.position)
+                if has_over && inside {
+                    let (candidate, has_candidate) = hit_region(s, over, p.position, GESTURE_TAP)
+                    if has_candidate {
+                        let (_, is_item) = menu_item_owner(s, candidate)
+                        if is_item {
+                            chosen = candidate
+                            has_chosen = true
+                        }
+                    }
+                }
+            }
             s.long_press_fired = false
             s.has_long_press = false
             s.arena_state.pressed = false
             s.arena_state.dragging = false
+            if has_chosen { ret menu_tap(s, chosen, p.position) }
             ret ok
         }
         s.has_long_press = false
@@ -4159,6 +4183,22 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             ret action.invoke(action.ctx, event)
         }
     case .PointerMove as p:
+        if s.long_press_fired {
+            s.arena_state.last = p.position
+            s.arena_state.pressed = false
+            let (over, inside, has_over) = overlay_at(s, p.position)
+            if has_over && inside {
+                let (candidate, has_candidate) = hit_region(s, over, p.position, GESTURE_TAP)
+                if has_candidate {
+                    let (_, is_item) = menu_item_owner(s, candidate)
+                    if is_item {
+                        s.arena_state.candidate = u32(candidate)
+                        s.arena_state.pressed = true
+                    }
+                }
+            }
+            ret ok
+        }
         if s.has_long_press && !s.long_press_fired && distance_sq(p.position, s.arena_state.down) > gesture_slop() * gesture_slop() {
             s.has_long_press = false
             s.long_press_fired = false

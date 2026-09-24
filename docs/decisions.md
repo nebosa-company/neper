@@ -21733,3 +21733,15 @@ release suppression, geometry, scrim cutout, semantics, assistive Show menu,
 outside dismissal and no click-through on Windows and Linux;
 `context-touch.png` is the Segoe UI visual check. Press-drag-release selection
 and a host haptic tick remain open.
+
+## D1018 — Touch context drag-release chooses the row
+
+After a context long press has fired, pointer movement now hit-tests the modal
+menu and arms only the menu-item region under the finger. That row publishes its
+normal pressed state. Releasing over it routes through the existing `menu_tap`
+path, so a leaf runs, the full menu chain dismisses and the original target never
+receives the release. Releasing elsewhere still only suppresses the target tap.
+
+`ui_overlays_v2` holds a second 500 ms press, movement onto Rename, its pressed
+interaction, leaf activation, context dismissal and target suppression on
+Windows and Linux. A host haptic tick is the remaining context-touch gap.

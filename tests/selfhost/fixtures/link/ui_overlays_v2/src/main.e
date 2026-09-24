@@ -432,6 +432,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if touch_done_tree_error != ok { os.exit(122i32) }
     let (touch_done_target, has_touch_done_target) = find(touch_done_tree, .Group, "Actions for Info")
     if !has_touch_done_target || accessibility.perform(&runtime, touch_done_target.id, .ShowMenu, "") != ok || s.counters[8usize].count != 3usize { os.exit(123i32) }
+    if accessibility.perform(&runtime, touch_done_target.id, .ShowMenu, "") != ok || s.counters[8usize].count != 4usize { os.exit(124i32) }
+    // A second hold followed by a drag onto Rename arms that row; release runs
+    // the leaf, closes the menu and still does not press the original target.
+    if testing.send(&harness, input.Event { PointerDown: testing.pointer_at(touch_point.x, touch_point.y) }) != ok { os.exit(125i32) }
+    let drag_held = time.Instant { nanos: 2030000000i64 }
+    if testing.begin(&harness, drag_held) != ok { os.exit(126i32) }
+    let (drag_wait, drag_wait_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if drag_wait_error != ok || testing.pump(&harness, drag_wait, drag_held) != ok { os.exit(127i32) }
+    let drag_due = time.Instant { nanos: 2530000000i64 }
+    if testing.begin(&harness, drag_due) != ok { os.exit(128i32) }
+    let (drag_due_root, drag_due_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if drag_due_error != ok || testing.pump(&harness, drag_due_root, drag_due) != ok || s.counters[8usize].count != 5usize { os.exit(129i32) }
+    let drag_open = time.Instant { nanos: 2530000001i64 }
+    if testing.begin(&harness, drag_open) != ok { os.exit(130i32) }
+    let (drag_open_root, drag_open_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if drag_open_error != ok || testing.pump(&harness, drag_open_root, drag_open) != ok { os.exit(131i32) }
+    let (rename_row, has_rename_row) = bounds(&harness, &runtime, 402u64)
+    if !has_rename_row { os.exit(132i32) }
+    let rename_at = geometry.Point { x: rename_row.x + rename_row.width * 0.5, y: rename_row.y + rename_row.height * 0.5 }
+    if testing.send(&harness, input.Event { PointerMove: testing.pointer_at(rename_at.x, rename_at.y) }) != ok || !widget.interaction(&runtime, 402u64).pressed { os.exit(133i32) }
+    let leaf_before = s.counters[1usize].count
+    if testing.send(&harness, input.Event { PointerUp: testing.pointer_at(rename_at.x, rename_at.y) }) != ok || s.counters[1usize].count != leaf_before + 1usize || s.counters[8usize].count != 6usize || s.counters[4usize].count != 0usize { os.exit(134i32) }
+    let (drag_done, drag_done_error) = build(&f, &touch_theme, s, .ContextTouch)
+    if drag_done_error != ok || testing.pump(&harness, drag_done, time.Instant { nanos: 2540000000i64 }) != ok || testing.by_key(&harness, 400u64).count != 0usize { os.exit(135i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(51i32) }
     try io.print("ui overlays v2 ok\n")
     ret ok

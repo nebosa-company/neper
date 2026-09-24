@@ -337,7 +337,7 @@ fn context_scrim_around(a: *mem.Arena, t: *const control.Theme, owner: widget.Ke
 
 // Touch context menu: 8 below its lifted target, under the target-preserving
 // scrim. The target's `show` action normally toggles `open` on long press.
-// ponytail: no press-drag-release selection or host haptic tick yet.
+// ponytail: no host haptic tick yet.
 fn context_menu_touch_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, owner: widget.Key, label: str, commands: []const MenuCommand, open: bool, dismiss: *const widget.Submit) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (floating, menu_error) = menu_at(a, key, t, owner, label, commands, true, dismiss, .Below, geometry.Point { x: 0.0, y: 8.0 }, 8.0, true)
