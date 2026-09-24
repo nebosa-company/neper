@@ -1310,6 +1310,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.zoom_change = z.change
     case .Overlay as ov:
         e.enabled = true
+        e.linked = ov.anchor
         e.modal = ov.modal
         e.dismiss = ov.dismiss
         if !e.overlay_opened {
@@ -4878,6 +4879,28 @@ fn find_by_text(s: *State, value: str) -> (ElementId, usize) {
 // bounds, action, enabling, focus and text, the text borrowed from the runtime
 // until the element changes. `false` for a slot that holds no live element.
 type Summary = struct { id: ElementId, kind: u8, parent: ElementId, has_parent: bool, bounds: geometry.Rect, has_action: bool, enabled: bool, focused: bool, text: str, first_child: ElementId, has_child: bool, next_sibling: ElementId, has_sibling: bool, semantics: Semantics, has_semantics: bool, value: str, selection_start: usize, selection_end: usize, read_only: bool, focusable: bool }
+
+// The visible tooltip that describes this semantic element through an anchored
+// overlay, if any. This keeps the relation with the tooltip instead of every caller.
+fn tooltip_description(widget_runtime: *const Runtime, slot: usize) -> (ElementId, bool) {
+    let s = mem.cast[*State](widget_runtime.state)
+    if mem.address_of(s) == 0usize || slot >= s.elements.len { ret (zero, false) }
+    var i = 0usize
+    while i < s.overlay_count {
+        let layer_slot = usize(s.overlays[i])
+        let layer = &s.elements[layer_slot]
+        if layer.live && layer.kind == OVERLAY_TAG && layer.linked != 0u64 {
+            let (anchor, count) = find_by_key(s, layer.linked)
+            let anchor_slot = usize(anchor.slot)
+            if count == 1usize && (anchor_slot == slot || descends_from(s, anchor_slot, slot)) {
+                let (description, found) = semantic_role_under(s, layer_slot, 27u8)
+                if found { ret (ElementId { slot: u32(description), generation: s.elements[description].generation }, true) }
+            }
+        }
+        i += 1usize
+    }
+    ret (zero, false)
+}
 
 fn element_count(widget_runtime: *const Runtime) -> usize {
     let s = mem.cast[*State](widget_runtime.state)

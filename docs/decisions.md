@@ -21769,3 +21769,15 @@ authorizes no artifact or prior executable-digest reuse, so a missing, invalid,
 rotated, or unavailable key causes a safe cold rebuild rather than a build
 failure. Both self-host suites rewrite an artifact and its recorded checksum and
 require the forged pair to rebuild to the clean image.
+
+## D1021 — Tooltip overlays supply their anchor description relation
+
+The runtime records every overlay's anchor and the accessibility tree resolves a
+visible Tooltip below that overlay as the anchor semantic node's `described_by`
+relation. `overlay.tooltip_of` and `overlay.rich_tooltip` therefore own the
+relationship; a caller cannot forget it, and an explicit existing description
+still wins.
+
+`ui_overlays_v2` holds both the plain Button-to-Tooltip and rich Group-to-Tooltip
+relations on Windows and Linux. `ui_semantics` guards the general relationship
+bridge on both hosts.

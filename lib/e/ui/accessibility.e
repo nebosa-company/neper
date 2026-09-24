@@ -280,6 +280,10 @@ fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err) {
                 node.position = Position { row: sm.row, column: sm.column, row_count: sm.row_count, column_count: sm.column_count }
                 node.level = sm.level
             }
+            if node.relations.described_by.slot == 0u32 && node.relations.described_by.generation == 0u32 {
+                let (description, described) = widget.tooltip_description(runtime, slot)
+                if described { node.relations.described_by = description }
+            }
             node.state = state_of_bits(bits)
             // A button's label is the text it holds.
             if summary.kind == KIND_BUTTON && summary.has_child {

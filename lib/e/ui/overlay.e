@@ -36,8 +36,8 @@ fn rich_tooltip_wanted(t: *const control.Theme, anchor: widget.Key, tooltip_key:
 }
 
 // A tooltip: `text` beside `anchor`, keyed `key`, placed only while `shown` (an
-// empty box otherwise); a tooltip in the tree that describes nothing by itself --
-// the anchor's `described_by` is the caller's. The plain tooltip of D975 below.
+// empty box otherwise); the overlay sets the anchor's `described_by`. The plain
+// tooltip of D975 below.
 fn tooltip(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, text: str, shown: bool) -> (widget.Node, err) {
     let (made, made_error) = tooltip_of(a, key, t, anchor, text, "", shown)
     ret (made, made_error)

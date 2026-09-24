@@ -291,7 +291,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_save || !has_tip || !near(tip.y + tip.height, save.y - 4.0) || !near(tip.height, 24.0) || !near(tip.x + tip.width * 0.5, save.x + save.width * 0.5) { os.exit(29i32) }
     if !is_color(shot, at(tip.x + tip.width * 0.5, tip.y + 12.0), style.color(&tokens, .InverseSurface)) { os.exit(30i32) }
     let (tip_node, has_tip_node) = find(tree, .Tooltip, "Save file")
-    if !has_tip_node { os.exit(31i32) }
+    let (save_node, has_save_node) = find(tree, .Button, "Save")
+    if !has_tip_node || !has_save_node || !same_element(save_node.relations.described_by, tip_node.id) { os.exit(31i32) }
     // At the top of the window it flips below File.
     let (high, has_high) = lifted(&harness, 210u64)
     if !has_high || !near(high.y, file.y + file.height + 4.0) { os.exit(32i32) }
@@ -303,8 +304,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(rich.y, info.y + info.height + 4.0) && !near(rich.y + rich.height, info.y - 4.0) { os.exit(34i32) }
     if !is_color(shot, at(rich.x + rich.width * 0.5, rich.y + 6.0), style.color(&tokens, .SurfaceContainer)) { os.exit(35i32) }
     let (rich_node, has_rich_node) = find(tree, .Tooltip, "Incremental builds")
+    let (info_node, has_info_node) = find(tree, .Group, "Actions for Info")
     let (learn, has_learn) = bounds(&harness, &runtime, 301u64)
-    if !has_rich_node || !has_learn { os.exit(36i32) }
+    if !has_rich_node || !has_info_node || !same_element(info_node.relations.described_by, rich_node.id) || !has_learn { os.exit(36i32) }
     // A hovered row takes the `on-surface` layer at `state-hover`.
     if testing.hover(&harness, wrap_row.x + 100.0, wrap_row.y + 16.0) != ok { os.exit(37i32) }
     let (root_2, build_2_error) = build(&f, &theme, s, .Menu)
