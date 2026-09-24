@@ -6,6 +6,7 @@
 // (§3.7 of the proposal).
 
 use e.mem
+use e.str as string
 use e.time
 use e.gfx.geometry
 use e.gfx.paint
@@ -3975,6 +3976,7 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 }
 
 type PaletteMode = enum u8 { Commands, Files, Symbols, Line }
+type PaletteCommand = struct { name: str, group: str }
 
 fn palette_mode_prefix(mode: PaletteMode) -> str {
     if mode == .Commands { ret ">" }
@@ -3988,6 +3990,43 @@ fn palette_mode_placeholder(mode: PaletteMode) -> str {
     if mode == .Symbols { ret "Go to symbol" }
     if mode == .Line { ret "Go to line" }
     ret "Type a command"
+}
+
+fn palette_grouped_rows(a: *mem.Arena, t: *const control.Theme, rows: []widget.Node, groups: []const str) -> ([]widget.Node, err) {
+    var none: []widget.Node = zero
+    let (grouped, grouped_error) = mem.alloc[widget.Node](a, rows.len * 2usize)
+    if grouped_error != ok { ret (none, TooLarge) }
+    var n = 0usize
+    var i = 0usize
+    while i < rows.len {
+        let changed = i == 0usize || string.compare(groups[i], groups[i - 1usize]) != 0i32
+        if groups[i].len > 0usize && changed {
+            var heading = control.text_options()
+            heading.role = .LabelMedium
+            heading.wrap = .None
+            let (said, said_error) = control.colored_text(a, 0u64, groups[i], t, heading, style.color(t.tokens, .OnSurfaceVariant))
+            if said_error != ok { ret (none, said_error) }
+            let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+            if body_error != ok { ret (none, TooLarge) }
+            body[0usize] = said
+            var inset = style.defaults()
+            inset.width = style.Length { Percent: 100.0 }
+            inset.padding = style.EdgeLengths { left: style.Length { Px: 12.0 }, top: style.Length { Px: 8.0 }, right: style.Length { Px: 12.0 }, bottom: style.Length { Px: 4.0 } }
+            let padded = widget.box(0u64, inset, body[0usize..1usize])
+            let (semantic_body, semantic_body_error) = mem.alloc[widget.Node](a, 1usize)
+            if semantic_body_error != ok { ret (none, TooLarge) }
+            semantic_body[0usize] = padded
+            var sem: widget.Semantics = zero
+            sem.role = 2u8
+            sem.label = groups[i]
+            grouped[n] = widget.semantics(0u64, sem, style.defaults(), semantic_body[0usize..1usize])
+            n += 1usize
+        }
+        grouped[n] = rows[i]
+        n += 1usize
+        i += 1usize
+    }
+    ret (grouped[0usize..n], ok)
 }
 
 // v2 (D978, docs/ux/components/CommandPalette): the palette's field, 56 tall and
@@ -4073,6 +4112,27 @@ fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 }
 
 fn command_palette_mode(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    var no_groups: []const str = zero
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, commands, no_groups, active, open, activate, run, dismiss, width)
+    ret (made, made_error)
+}
+
+fn command_palette_grouped(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const PaletteCommand, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (names, names_error) = mem.alloc[str](a, commands.len)
+    if names_error != ok { ret (zero, TooLarge) }
+    let (groups, groups_error) = mem.alloc[str](a, commands.len)
+    if groups_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < commands.len {
+        names[i] = commands[i].name
+        groups[i] = commands[i].group
+        i += 1usize
+    }
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, active, open, activate, run, dismiss, width)
+    ret (made, made_error)
+}
+
+fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (field, field_error) = palette_field(a, key + 2u64, t, buffer, len, typed, mode)
     if field_error != ok { ret (zero, field_error) }
@@ -4093,8 +4153,14 @@ fn command_palette_mode(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     var results = style.defaults()
     results.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
     if commands.len > 0usize {
-        let (rows, rows_error) = choice_rows(a, key + 3u64, t, commands, active, run)
+        let (plain_rows, rows_error) = choice_rows(a, key + 3u64, t, commands, active, run)
         if rows_error != ok { ret (zero, rows_error) }
+        var rows = plain_rows
+        if groups.len == commands.len {
+            let (grouped, grouped_error) = palette_grouped_rows(a, t, rows, groups)
+            if grouped_error != ok { ret (zero, grouped_error) }
+            rows = grouped
+        }
         parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, results, rows)
     } else {
         var said = control.text_options()
