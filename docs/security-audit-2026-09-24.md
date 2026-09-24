@@ -25,9 +25,12 @@ Remediation completed so far:
   and ML-KEM remove secret-dependent branches, and the variable-time P-256,
   BIP-340, FFDHE, and ML-DSA secret operations fail closed as `Unsupported`;
   their public verification paths remain available.
+- M3: build manifests carry HMAC-SHA-256 authentication under a random per-user
+  key kept outside project caches. Unauthenticated manifests and artifacts not
+  recorded by an authenticated manifest are rebuilt from source.
 
 The focused fixtures pass on Windows and Linux, and all 15 tests in
-`tests.test_llm_edit_benchmark` pass. M3 remains open.
+`tests.test_llm_edit_benchmark` pass. All findings in this audit are remediated.
 
 ## Executive summary
 
@@ -157,10 +160,16 @@ the decoder.
 **Evidence:**
 `docs/tasks/compiler/C042-hostile-inputs-artifact-integrity-and-aggregate-limits-v1-pr.md:47-54`.
 
-Artifacts are hashed and checked against a manifest, which catches corruption,
-but both the artifact and its unkeyed manifest are writable cache data. An actor
-that can replace both can make a malicious artifact satisfy the current check.
-The compiler's own C042 task records this exact remaining gap.
+Artifacts were hashed and checked against an unkeyed manifest, so an actor that
+could replace both could make a malicious artifact satisfy the old check.
+
+**Remediation:** manifests now carry an HMAC-SHA-256 tag made with a random
+per-user key stored outside the project cache. The compiler authenticates the
+manifest before reusing any artifact or prior executable digest and rebuilds
+unrecorded artifacts. A regression rewrites both an artifact checksum and its
+manifest entry and proves both modules rebuild to the clean image on Windows and
+Linux. If no key can be obtained, the build succeeds with an unsigned manifest
+that cannot authorize later cache reuse.
 
 **Recommendation:** authenticate the manifest with a key held outside the cache,
 or treat all cache contents as untrusted and rebuild from source whenever the
@@ -276,10 +285,10 @@ currently contains the adversarial cases described above.
 - Process execution uses argument arrays by default and has explicit time/output
   limits; H1 is the deliberate shell-string exception.
 - Compiler artifacts have checksums, atomic publication, corruption rebuilds,
-  nesting/resource caps, and extensive fuzz coverage. M3 is the remaining
-  cross-trust-boundary integrity gap, not an absence of corruption checks.
+  nesting/resource caps, extensive fuzz coverage, and an authenticated manifest
+  whose key is held outside project caches.
 
-## Priorities
+## Remediation order (completed)
 
 1. Sandbox or remove the Bonsai shell tool before running model-authored tasks on
    a workstation containing credentials.

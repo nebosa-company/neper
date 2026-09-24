@@ -6581,7 +6581,7 @@ fn manifest_artifact_path(a: *mem.Arena, project_root: str, named: str) -> (str,
 fn manifest_previous_digest(a: *mem.Arena, manifest_path: str, relative_path: str) -> str {
     if relative_path.len == 0usize { ret "" }
     let (document, load_error) = graph.load_file(a, manifest_path)
-    if load_error != ok { ret "" }
+    if load_error != ok || !artifact_hash.cache_auth_verify(a, document) { ret "" }
     let entry_at = manifest_key_at(document, "\"artifacts\":[{\"path\":\"")
     if entry_at >= document.len { ret "" }
     let entry = document[entry_at..document.len]
@@ -6632,12 +6632,24 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
         if fresh_error != ok { ret fresh_error }
         digest = fresh
     }
-    let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize)
+    let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize + 90usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
     out.bytes = storage
     try manifest_write(a, &out, arch, os_name, g, mode, unchecked, relative_path, digest, reasons)
-    try byte(&out, 10u8)
+    // Authenticate the exact manifest prefix before its final top-level `}`. A hostile
+    // cache may rewrite both artifacts and JSON, but not this tag without the user key.
+    if out.count == 0usize || out.bytes[out.count - 1usize] != 125u8 { ret Capacity }
+    out.count = out.count - 1usize
+    let (cache_tag, cache_tag_error) = artifact_hash.cache_auth_tag(a, out.bytes[..out.count])
+    if cache_tag_error == ok {
+        try text(&out, ",\"cache_hmac_sha256\":\"")
+        try text(&out, cache_tag)
+        try text(&out, "\"}\n")
+    } else {
+        // A read-only compiler installation still builds, but cannot authorize reuse.
+        try text(&out, "}\n")
+    }
     // The file is opened once the text is ready (D345): every exit before this has
     // nothing to close.
     // `.neper/<mode>/` is made when it is missing (D287): each level once, an `Exists`

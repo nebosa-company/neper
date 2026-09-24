@@ -250,6 +250,8 @@ void neper_os_args(void *result, NpArena *arena) {
 #define PSAPI_VERSION 2
 #include <psapi.h>
 
+BOOLEAN NTAPI SystemFunction036(PVOID buffer, ULONG length);
+
 #pragma function(memset)
 void *memset(void *destination, int value, size_t count) {
     volatile unsigned char *at = (volatile unsigned char *)destination;
@@ -412,6 +414,50 @@ void neper_os_current_dir(void *result, NpArena *arena) {
     HeapFree(GetProcessHeap(), 0, wide);
     if (!bytes) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
     *(NpStr *)out = (NpStr){bytes, length};
+}
+
+void neper_os_env(void *result, NpArena *arena, const unsigned char *name, size_t name_len) {
+    unsigned char *out = (unsigned char *)result, *bytes;
+    wchar_t *wide_name = np_wide((NpStr){name, name_len}), *wide_value;
+    DWORD need, error;
+    size_t length = 0;
+    *(NpStr *)out = (NpStr){0, 0}; *(uint32_t *)(out + 16) = NP_OK;
+    if (!wide_name) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    SetLastError(ERROR_SUCCESS);
+    need = GetEnvironmentVariableW(wide_name, 0, 0);
+    error = GetLastError();
+    if (!need && error == ERROR_ENVVAR_NOT_FOUND) {
+        HeapFree(GetProcessHeap(), 0, wide_name);
+        *(uint32_t *)(out + 16) = NP_NOT_FOUND;
+        return;
+    }
+    wide_value = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, ((size_t)need + 1) * sizeof(wchar_t));
+    if (!wide_value) { HeapFree(GetProcessHeap(), 0, wide_name); *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    if (need) GetEnvironmentVariableW(wide_name, wide_value, need + 1);
+    else wide_value[0] = 0;
+    HeapFree(GetProcessHeap(), 0, wide_name);
+    bytes = np_utf8_arena(arena, wide_value, &length);
+    HeapFree(GetProcessHeap(), 0, wide_value);
+    if (!bytes && length) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    *(NpStr *)out = (NpStr){bytes, length};
+}
+
+uint32_t neper_os_random(unsigned char *buffer, size_t length) {
+    if (length > 0xffffffffu) return NP_FAILED;
+    return SystemFunction036(buffer, (ULONG)length) ? NP_OK : NP_FAILED;
+}
+
+void neper_os_create_new(void *result, NpArena *arena, const unsigned char *path, size_t path_len) {
+    unsigned char *out = (unsigned char *)result;
+    wchar_t *wide = np_wide((NpStr){path, path_len});
+    HANDLE handle;
+    (void)arena;
+    *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (!wide) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
+    handle = CreateFileW(wide, GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, 0);
+    HeapFree(GetProcessHeap(), 0, wide);
+    if (handle == INVALID_HANDLE_VALUE) { *(uint32_t *)(out + 8) = np_error(GetLastError()); return; }
+    *(uintptr_t *)out = (uintptr_t)handle;
 }
 
 void neper_os_stdin(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_INPUT_HANDLE); }
@@ -634,6 +680,9 @@ void neper_os_clock(void *result, unsigned char clock_kind) {
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/random.h>
+#include <stdlib.h>
+#include <string.h>
 
 static uint32_t np_error(int value) {
     switch (value) {
@@ -744,6 +793,46 @@ void neper_os_current_dir(void *result, NpArena *arena) {
         if (errno != ERANGE) { *(uint32_t *)(out + 16) = np_error(errno); return; }
         capacity *= 2;
     }
+}
+
+void neper_os_env(void *result, NpArena *arena, const unsigned char *name, size_t name_len) {
+    unsigned char *out = (unsigned char *)result, *copy;
+    char *named = np_c_string_arena(arena, (NpStr){name, name_len});
+    char *value;
+    size_t length = 0;
+    *(NpStr *)out = (NpStr){0, 0}; *(uint32_t *)(out + 16) = NP_OK;
+    if (!named) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    value = getenv(named);
+    if (!value) { *(uint32_t *)(out + 16) = NP_NOT_FOUND; return; }
+    while (value[length]) ++length;
+    copy = (unsigned char *)np_arena_alloc(arena, length, 1);
+    if (!copy && length) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    np_copy(copy, value, length);
+    *(NpStr *)out = (NpStr){copy, length};
+}
+
+uint32_t neper_os_random(unsigned char *buffer, size_t length) {
+    size_t filled = 0;
+    while (filled < length) {
+        ssize_t got = getrandom(buffer + filled, length - filled, 0);
+        if (got < 0) { if (errno == EINTR) continue; return np_error(errno); }
+        if (got == 0) return NP_FAILED;
+        filled += (size_t)got;
+    }
+    return NP_OK;
+}
+
+void neper_os_create_new(void *result, NpArena *arena, const unsigned char *path, size_t path_len) {
+    unsigned char *out = (unsigned char *)result;
+    size_t saved = arena ? arena->off : 0;
+    char *name = np_c_string_arena(arena, (NpStr){path, path_len});
+    int fd;
+    *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (!name) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
+    fd = open(name, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    arena->off = saved;
+    if (fd < 0) { *(uint32_t *)(out + 8) = np_error(errno); return; }
+    *(uintptr_t *)out = (uintptr_t)fd;
 }
 
 void neper_os_stdin(void *result) { *(uintptr_t *)result = 0; }

@@ -4294,6 +4294,15 @@ foreach ($hotMode in @('--release', '--time')) {
     if ($LASTEXITCODE -ne 0 -or $cycleStable -ne 'executable written') { throw "the warm build over the whole cache failed ($hotMode)" }
     & python (Join-Path $repo 'scripts/check_incremental.py') $cycleManifest 'main=kept:stable' 'ring=kept:stable'
     if ($LASTEXITCODE -ne 0) { throw "the whole cache was not stable ($hotMode)" }
+    # Keyed cache authenticity (H24): rewriting both a valid artifact and its manifest
+    # checksum cannot forge the manifest tag, so no cache record is trusted.
+    & python (Join-Path $repo 'benchmarks/fuzz/corrupt.py') cycle $cycleRing e.os e.io
+    & python (Join-Path $repo 'benchmarks/fuzz/corrupt.py') manifest $cycleManifest $cycleRing ring
+    $cycleForged = & $compiler emit-executable (Join-Path $cycleScratch 'src\main.e') $repo 'x64' 'windows' $cycleExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $cycleForged -ne 'executable written') { throw "the warm build over a forged cache failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cycleExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $cycleClean).Hash) { throw "the warm build over a forged cache is not the clean build ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $cycleManifest 'main=rebuilt:invalid-artifact' 'ring=rebuilt:invalid-artifact'
+    if ($LASTEXITCODE -ne 0) { throw "a forged manifest authorized cache reuse ($hotMode)" }
     # The unsafe inventory rides in the artifact (D457): a warm build's manifest lists
     # the same sites as the cold build's, copied from the kept modules' artifacts.
     $inventoryScratch = Join-Path $testBuild 'inventory-scratch'

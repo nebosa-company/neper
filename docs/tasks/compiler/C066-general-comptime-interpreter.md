@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Front end and language |
 | score | 0.85 of 1 |
-| queue position | 15 of 46 (only position 1 is eligible for the next session; see README) |
+| queue position | 14 of 45 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -56,7 +56,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `.len`: `src/main.e`×542‡, `src/check.e`×333‡, `src/tool.e`×309‡, `lib/e/ui/control.e`×193‡, `lib/e/ui/navigation.e`×172‡, `src/em.e`×168‡, `lib/e/ui/collection.e`×159‡, `lib/e/fmt/json.e`×154†
+- `.len`: `src/main.e`×542‡, `src/check.e`×333‡, `src/tool.e`×309‡, `lib/e/ui/control.e`×194‡, `lib/e/ui/navigation.e`×182‡, `src/em.e`×168‡, `lib/e/ui/collection.e`×159‡, `lib/e/fmt/json.e`×154†
 - `fold_const`: `tests/conformance/tools/fold_const.expected.jsonl`×5
 - `meta.fields`: `src/check.e`×6‡, `lib/e/fmt/asn1.e`×4, `lib/e/fmt/bson.e`×4, `lib/e/fmt/csv.e`×4, `lib/e/fmt/msgpack.e`×4, `lib/e/fmt/ini.e`×3, `lib/e/fmt/json.e`×3†, `lib/e/text/template.e`×3
 - `meta.element_type`: `lib/e/simd.e`×34, `src/check.e`×5‡, `scripts/check_module_surfaces.py`×1, `src/parse.e`×1†

@@ -7,9 +7,21 @@
 #
 #   python benchmarks/fuzz/corrupt.py truncate|flip PATH
 #   python benchmarks/fuzz/corrupt.py cycle PATH FROM TO
+#   python benchmarks/fuzz/corrupt.py manifest MANIFEST ARTIFACT MODULE
 import sys
+import json
 
 mode, path = sys.argv[1], sys.argv[2]
+if mode == 'manifest':
+    artifact, module = sys.argv[3], sys.argv[4]
+    document = json.load(open(path, encoding='utf-8'))
+    checksum = int.from_bytes(open(artifact, 'rb').read()[28:32], 'little')
+    entry = next(item for item in document['incremental'] if item['module'] == module)
+    entry['artifact_crc32c'] = f'{checksum:08x}'
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(document, f, separators=(',', ':'))
+        f.write('\n')
+    raise SystemExit(0)
 data = bytearray(open(path, 'rb').read())
 if mode == 'truncate':
     data = data[:len(data) // 2]

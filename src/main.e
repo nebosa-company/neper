@@ -4153,10 +4153,11 @@ fn dirname(path: str) -> str {
     ret path[0usize..end]
 }
 
-// The previous manifest's `incremental` entries indexed by module name (D473):
+// The authenticated previous manifest's `incremental` entries indexed by module name
+// (D473, H24):
 // each entry's `artifact_crc32c`, when it has one, into a slot the name finds.
-// A manifest without them -- none, or older -- records nothing, and every
-// artifact stands on its checksum.
+// A manifest without them -- none, older, or unauthenticated -- records nothing,
+// so no artifact is reused.
 fn index_manifest_hashes(a: *mem.Arena, hot: *HotLoad, manifest: str, capacity: usize) -> err {
     let (entries, entries_error) = mem.alloc[lookup.Entry](a, capacity * 8usize + 256usize)
     if entries_error != ok { ret entries_error }
@@ -6387,14 +6388,14 @@ fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
 
 // The artifact's checksum, checked against the manifest's record when there is one
 // (D473, H24): the checksum, and whether it is the recorded one. A module the
-// previous manifest did not record is taken as it is -- the file's own check stands
-// alone. The manifest is the anchor: a file whole by its own checksum but not the
+// previous authenticated manifest did not record is rebuilt. The manifest is the
+// anchor: a file whole by its own checksum but not the
 // one the manifest saw written -- replaced, or rewritten with the checksum redone --
 // is not the cache's.
 fn artifact_content_verified(old: []const u8, recorded: usize, recorded_known: bool) -> (usize, bool) {
     let (checksum, checksum_error) = em.artifact_checksum(old)
     if checksum_error != ok { ret (0usize, false) }
-    if recorded_known && checksum != recorded { ret (checksum, false) }
+    if !recorded_known || checksum != recorded { ret (checksum, false) }
     ret (checksum, true)
 }
 
@@ -6602,14 +6603,14 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
     if hot.unchecked && !hot.release { mode_id = 3usize }
     let (list, list_error) = mem.alloc[usize](a, loaded.modules.len)
     if list_error != ok { ret list_error }
-    // The previous build's manifest (D473): the content hash it recorded per module,
-    // read and indexed once.
+    // The previous build's manifest (D473, H24): authenticate it with the per-user key
+    // before any module record can authorize cache reuse, then index it once.
     if !hot.manifest_read {
         hot.manifest_read = true
         let (manifest_path, manifest_path_error) = with_suffix(a, dirname(directory[0usize..directory.len - 1usize]), "build-manifest.json")
         if manifest_path_error != ok { ret manifest_path_error }
         let (manifest_text, manifest_error) = source.load(a, manifest_path)
-        if manifest_error == ok { try index_manifest_hashes(a, hot, manifest_text, loaded.modules.len) }
+        if manifest_error == ok && artifact_hash.cache_auth_verify(a, manifest_text) { try index_manifest_hashes(a, hot, manifest_text, loaded.modules.len) }
     }
     var module_at = 0usize
     while loaded.scanned < loaded.count {

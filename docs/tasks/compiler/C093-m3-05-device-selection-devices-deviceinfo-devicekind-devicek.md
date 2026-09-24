@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Back end |
 | score | 0.40 of 1 |
-| queue position | 23 of 46 (only position 1 is eligible for the next session; see README) |
+| queue position | 22 of 45 (only position 1 is eligible for the next session; see README) |
 | difficulty | very high — the queue rates this for a frontier model at maximum reasoning; a 27B model should take the smallest checklist line per session and expect several sessions per line |
 
 ## Definition of done
@@ -36,7 +36,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `devices`: `lib/e/gpu.e`×7†, `lib/e/fmt/brotli.e`×2‡, `lib/e/os/shell.linux.e`×1, `scripts/check_gpu_contracts.py`×1
 - `.Cpu`: `lib/e/gpu.e`×6†
 - `NoDevice`: `lib/e/gpu.e`×3†
-- `Unsupported`: `src/codegen_x64.e`×106‡, `src/check.e`×73‡, `src/lower.e`×55‡, `lib/e/os/shell.linux.e`×50, `lib/e/os.linux.e`×27‡, `lib/e/os.windows.e`×18‡, `lib/e/crypto/x509.e`×17, `lib/e/fmt/parquet.e`×15†
+- `Unsupported`: `src/codegen_x64.e`×106‡, `src/check.e`×73‡, `src/lower.e`×55‡, `lib/e/os/shell.linux.e`×50, `lib/e/os.linux.e`×27‡, `lib/e/os.windows.e`×18‡, `lib/e/crypto/x509.e`×17†, `lib/e/fmt/parquet.e`×15†
 - `open_id`: `lib/e/gpu.e`×1†
 - `AmbiguousDevice`: `lib/e/gpu.e`×1†
 

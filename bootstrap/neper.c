@@ -1116,6 +1116,9 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.exit", "neper_os_exit"); intrinsic_param(fn, token, "code", i32); intrinsic_returns(fn, 0, error, error);
     OS_FN("os.args", "neper_os_args"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_returns(fn, 2, strings, error);
     OS_FN("os.current_dir", "neper_os_current_dir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_returns(fn, 2, string, error);
+    OS_FN("os.env", "neper_os_env"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "name", string); intrinsic_returns(fn, 2, string, error);
+    OS_FN("os.random", "neper_os_random"); intrinsic_param(fn, token, "buffer", bytes); intrinsic_returns(fn, 1, error, error);
+    OS_FN("os.create_new", "neper_os_create_new"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 2, file, error);
     OS_FN("os.reserve", "neper_os_reserve"); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 2, byte_pointer, error);
     OS_FN("os.commit", "neper_os_commit"); intrinsic_param(fn, token, "p", byte_pointer); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.clock", "neper_os_clock"); intrinsic_param(fn, token, "c", clock); intrinsic_returns(fn, 2, i64, error);
@@ -7335,8 +7338,8 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_set_args:PROC\nEXTERN neper_os_open:PROC\nEXTERN neper_os_read:PROC\n"
         "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdin:PROC\nEXTERN neper_os_stdout:PROC\n"
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_replace:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\n"
-        "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\n"
-        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"
+        "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\nEXTERN neper_os_env:PROC\n"
+        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\nEXTERN neper_os_random:PROC\nEXTERN neper_os_create_new:PROC\n"
         "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\nEXTERN neper_os_seek:PROC\nEXTERN neper_os_copy_bytes:PROC\nEXTERN neper_os_sha256_blocks:PROC\nEXTERN neper_os_crc32c_bytes:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"
         "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"
@@ -7729,7 +7732,7 @@ static int assemble_and_link(Compiler *c, const char *asm_path, const char *obj_
         f = fopen(batch, "wb");
         if (!f) return 0;
         fprintf(f, "@echo off\r\ncall %s -arch=x64 -host_arch=x64 >nul\r\n", qd);
-        fprintf(f, "link /nologo /debug:full /include:np_nepersym /subsystem:console /entry:mainCRTStartup /out:%s %s %s kernel32.lib shell32.lib >nul || exit /b 1\r\n", qe, qo, qr);
+        fprintf(f, "link /nologo /debug:full /include:np_nepersym /subsystem:console /entry:mainCRTStartup /out:%s %s %s kernel32.lib shell32.lib advapi32.lib >nul || exit /b 1\r\n", qe, qo, qr);
         fclose(f);
         if (command_status(command) != 0) return 0;
         remove(batch);

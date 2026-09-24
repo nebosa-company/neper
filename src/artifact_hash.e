@@ -3,6 +3,7 @@ use e.algo.hash as algo_hash
 use e.mem
 use e.os
 use lex
+use source
 
 error InvalidByte
 error Capacity
@@ -282,6 +283,172 @@ fn sha256_hex_into(bytes: []const u8, hex: []u8) {
     }
 }
 
+fn hex_nibble(value: u8) -> (u8, bool) {
+    if value >= 48u8 && value <= 57u8 { ret (value - 48u8, true) }
+    if value >= 97u8 && value <= 102u8 { ret (value - 87u8, true) }
+    ret (0u8, false)
+}
+
+// HMAC-SHA-256 over the SHA implementation above. Cache keys are 32 bytes, so the
+// long-key case RFC 2104 hashes first is deliberately outside this private surface.
+fn hmac_sha256_hex(a: *mem.Arena, key: []const u8, message: []const u8) -> (str, err) {
+    if key.len > 64usize { ret ("", InvalidByte) }
+    let (inner, inner_error) = mem.alloc[u8](a, 64usize + message.len)
+    if inner_error != ok { ret ("", inner_error) }
+    var at = 0usize
+    while at < 64usize {
+        var value = 0u8
+        if at < key.len { value = key[at] }
+        inner[at] = value ^ 54u8
+        at += 1usize
+    }
+    at = 0usize
+    while at < message.len {
+        inner[64usize + at] = message[at]
+        at += 1usize
+    }
+    var inner_hex: [64]u8 = zero
+    sha256_hex_into(inner, inner_hex[..])
+    var outer: [96]u8 = zero
+    at = 0usize
+    while at < 64usize {
+        var value = 0u8
+        if at < key.len { value = key[at] }
+        outer[at] = value ^ 92u8
+        at += 1usize
+    }
+    at = 0usize
+    while at < 32usize {
+        let (high, high_ok) = hex_nibble(inner_hex[at * 2usize])
+        let (low, low_ok) = hex_nibble(inner_hex[at * 2usize + 1usize])
+        if !high_ok || !low_ok { ret ("", InvalidByte) }
+        outer[64usize + at] = (high << 4u8) | low
+        at += 1usize
+    }
+    let (tag, tag_error) = sha256_hex(a, outer[..])
+    ret (tag, tag_error)
+}
+
+fn cache_key_from_hex(a: *mem.Arena, encoded: str) -> ([]const u8, err) {
+    var empty: []const u8 = zero
+    if encoded.len != 64usize { ret (empty, InvalidByte) }
+    let (key, key_error) = mem.alloc[u8](a, 32usize)
+    if key_error != ok { ret (empty, key_error) }
+    var at = 0usize
+    while at < 32usize {
+        let (high, high_ok) = hex_nibble(encoded[at * 2usize])
+        let (low, low_ok) = hex_nibble(encoded[at * 2usize + 1usize])
+        if !high_ok || !low_ok { ret (empty, InvalidByte) }
+        key[at] = (high << 4u8) | low
+        at += 1usize
+    }
+    ret (key, ok)
+}
+
+fn cache_key_path(a: *mem.Arena) -> (str, err) {
+    let (named, named_error) = os.env(a, "NEPER_CACHE_KEY_FILE")
+    if named_error == ok && named.len != 0usize { ret (named, ok) }
+    var (home, home_error) = os.env(a, "USERPROFILE")
+    if home_error != ok || home.len == 0usize { (home, home_error) = os.env(a, "HOME") }
+    if home_error != ok || home.len == 0usize { ret ("", os.NotFound) }
+    let suffix = "/.neper-cache-key"
+    let (path, path_error) = mem.alloc[u8](a, home.len + suffix.len)
+    if path_error != ok { ret ("", path_error) }
+    var path_at = 0usize
+    while path_at < home.len {
+        path[path_at] = home[path_at]
+        path_at += 1usize
+    }
+    var suffix_at = 0usize
+    while suffix_at < suffix.len {
+        path[home.len + suffix_at] = suffix[suffix_at]
+        suffix_at += 1usize
+    }
+    ret (path, ok)
+}
+
+// The cache authentication key lives in an explicit environment override or the
+// user's profile, never in a project's disposable `.neper` tree. Exclusive creation
+// makes concurrent first builds converge on one 0600 key on Linux.
+fn cache_auth_key(a: *mem.Arena) -> ([]const u8, err) {
+    let (encoded, encoded_error) = os.env(a, "NEPER_CACHE_KEY")
+    if encoded_error == ok {
+        let (decoded, decoded_error) = cache_key_from_hex(a, encoded)
+        ret (decoded, decoded_error)
+    }
+    var empty: []const u8 = zero
+    let (path, path_error) = cache_key_path(a)
+    if path_error != ok { ret (empty, path_error) }
+    let (existing, existing_error) = source.load(a, path)
+    if existing_error == ok {
+        if existing.len != 32usize { ret (empty, InvalidByte) }
+        ret (existing, ok)
+    }
+    if existing_error != os.NotFound { ret (empty, existing_error) }
+    var generated: [32]u8 = zero
+    let random_error = os.random(generated[..])
+    if random_error != ok { ret (empty, random_error) }
+    let (file, create_error) = os.create_new(a, path)
+    if create_error == os.Exists {
+        let (raced, raced_error) = source.load(a, path)
+        if raced_error != ok || raced.len != 32usize { ret (empty, InvalidByte) }
+        ret (raced, ok)
+    }
+    if create_error != ok { ret (empty, create_error) }
+    var written = 0usize
+    var write_error = ok
+    while written < 32usize && write_error == ok {
+        let (count, one_error) = os.write(file, generated[written..])
+        write_error = one_error
+        if count == 0usize && one_error == ok { write_error = Capacity }
+        written += count
+    }
+    let close_error = os.close(file)
+    if write_error != ok { ret (empty, write_error) }
+    if close_error != ok { ret (empty, close_error) }
+    let (held, held_error) = mem.alloc[u8](a, 32usize)
+    if held_error != ok { ret (empty, held_error) }
+    var held_at = 0usize
+    while held_at < 32usize {
+        held[held_at] = generated[held_at]
+        held_at += 1usize
+    }
+    ret (held, ok)
+}
+
+fn cache_auth_tag(a: *mem.Arena, message: []const u8) -> (str, err) {
+    let (key, key_error) = cache_auth_key(a)
+    if key_error != ok { ret ("", key_error) }
+    let (tag, tag_error) = hmac_sha256_hex(a, key, message)
+    ret (tag, tag_error)
+}
+
+// A generated manifest ends with this field. Its tag authenticates every preceding
+// byte, including every artifact checksum; trailing or rearranged data is rejected.
+fn cache_auth_verify(a: *mem.Arena, manifest: str) -> bool {
+    let marker = ",\"cache_hmac_sha256\":\""
+    var end = manifest.len
+    if end != 0usize && manifest[end - 1usize] == 10u8 { end = end - 1usize }
+    if end < marker.len + 66usize { ret false }
+    let marker_at = end - marker.len - 66usize
+    var at = 0usize
+    while at < marker.len {
+        if manifest[marker_at + at] != marker[at] { ret false }
+        at += 1usize
+    }
+    let tag_at = marker_at + marker.len
+    if manifest[tag_at + 64usize] != 34u8 || manifest[tag_at + 65usize] != 125u8 { ret false }
+    let (expected, expected_error) = cache_auth_tag(a, manifest[..marker_at])
+    if expected_error != ok || expected.len != 64usize { ret false }
+    var different = 0u8
+    at = 0usize
+    while at < 64usize {
+        different = different | (expected[at] ^ manifest[tag_at + at])
+        at += 1usize
+    }
+    ret different == 0u8
+}
+
 fn self_test() -> err {
     var empty: [1]u8 = zero
     let (empty_hash, empty_error) = xxhash64(empty[0usize..0usize])
@@ -304,6 +471,22 @@ fn self_test() -> err {
     if fnv_error != ok || fnv != 1335831723usize { ret InvalidByte }
     let (qualified, qualified_error) = qualified_error_value("e.os", "NotFound")
     if qualified_error != ok || qualified == 0usize { ret InvalidByte }
+    var hmac_key: [20]u8 = zero
+    var key_at = 0usize
+    while key_at < 20usize {
+        hmac_key[key_at] = 11u8
+        key_at += 1usize
+    }
+    var hmac_arena_bytes: [4096]u8 = zero
+    var hmac_arena = mem.arena_from(hmac_arena_bytes[..])
+    let (hmac, hmac_error) = hmac_sha256_hex(&hmac_arena, hmac_key[..], "Hi There")
+    let hmac_want = "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+    if hmac_error != ok || hmac.len != hmac_want.len { ret InvalidByte }
+    var hmac_at = 0usize
+    while hmac_at < hmac.len {
+        if hmac[hmac_at] != hmac_want[hmac_at] { ret InvalidByte }
+        hmac_at += 1usize
+    }
     ret ok
 }
 

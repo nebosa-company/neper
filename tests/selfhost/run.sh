@@ -4240,6 +4240,12 @@ for hot_mode in --release --time; do
     python3 -c "import json,re,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if all(re.fullmatch('[0-9a-f]{8}', e.get('artifact_crc32c','')) for e in d['incremental']) else 1)" "$cycle_manifest"
     [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     python3 "$repo/scripts/check_incremental.py" "$cycle_manifest" 'main=kept:stable' 'ring=kept:stable'
+    # Keyed cache authenticity (H24): rewriting both artifact and manifest cannot forge the tag.
+    python3 "$repo/benchmarks/fuzz/corrupt.py" cycle "$cycle_ring" e.os e.io
+    python3 "$repo/benchmarks/fuzz/corrupt.py" manifest "$cycle_manifest" "$cycle_ring" ring
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    cmp -s "$test_build/cycle$hot_mode" "$test_build/cycle-clean$hot_mode"
+    python3 "$repo/scripts/check_incremental.py" "$cycle_manifest" 'main=rebuilt:invalid-artifact' 'ring=rebuilt:invalid-artifact'
     # The unsafe inventory rides in the artifact (D457): warm and cold manifests agree.
     inventory_scratch="$test_build/inventory-scratch"
     rm -rf "$inventory_scratch"

@@ -21758,3 +21758,14 @@ Rich-tooltip actions use the existing pressable path with a 40px minimum height
 at pointer density. `ui_overlays_v2` holds the delay and grace boundaries,
 anchor/tooltip hover, anchor/action focus, Escape and action height on Windows
 and Linux; `rich-tooltip-persistent.png` is the Segoe UI visual check.
+
+## D1020 — Build-cache manifests are authenticated outside the cache
+
+Every generated build manifest authenticates its exact preceding bytes with
+HMAC-SHA-256. The 32-byte key comes from `NEPER_CACHE_KEY`, an explicit
+`NEPER_CACHE_KEY_FILE`, or an exclusively created per-user profile file; it is
+never stored in the project cache. A manifest that cannot be authenticated
+authorizes no artifact or prior executable-digest reuse, so a missing, invalid,
+rotated, or unavailable key causes a safe cold rebuild rather than a build
+failure. Both self-host suites rewrite an artifact and its recorded checksum and
+require the forged pair to rebuild to the clean image.
