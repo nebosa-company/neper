@@ -21872,3 +21872,15 @@ and checks decoded A-label hyphens. Adversarial fixtures and the TLS fixture pas
 on both hosts. The audit report records these corrections to the earlier blanket
 completion claim; no claim of vulnerability-free source or full TLS conformance
 is made.
+
+## D1029 — Popup loading and footer states use the final surface
+
+`overlay.popup_loading` keeps the popup at its final width while a 4px
+indeterminate primary segment crosses a secondary-container track flush with the
+surface's top edge. Its muted message is a polite Busy Status.
+
+`overlay.popup_footer` adds the specified outline-variant divider and one
+full-width 40px `body-medium` primary action row. `ui_overlays2_v2` holds the
+loading pixels and semantics plus footer size and activation on Windows and
+Linux. `popup-loading-phase.png` and `popup-footer.png` are the Segoe UI visual
+checks. Only matched-character emphasis remains open for popup content.

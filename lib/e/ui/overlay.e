@@ -927,10 +927,86 @@ fn popup_error(a: *mem.Arena, key: widget.Key, t: *const control.Theme, message:
     ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
 }
 
+// A popup footer: a divider followed by one full-width 40px primary action row.
+fn popup_footer(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, action: *const widget.Submit) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (rule, rule_error) = control.divider(a, 0u64, t, .Horizontal, 0.0)
+    if rule_error != ok { ret (zero, rule_error) }
+    parts[0usize] = rule
+    let ink = style.color(t.tokens, .Primary)
+    let state = control.control_state(t, key, true, false)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.foreground = ink
+    look.radius = 0.0
+    look.custom_padding = true
+    look.padding_start = 16.0
+    look.padding = 16.0
+    look.padding_y = (40.0 - style.text_style(t.tokens, .BodyMedium).line_height) * 0.5
+    look.min_height = 40.0
+    var words = control.text_options()
+    words.role = .BodyMedium
+    words.wrap = .None
+    let (label_node, label_error) = control.colored_text(a, 0u64, label, t, words, ink)
+    if label_error != ok { ret (zero, label_error) }
+    let (pressed, pressed_error) = control.pressable_states_fill(a, key, t, 3u8, label, look, true, false, 0u32, 0u32, 0u64, action, true, label_node)
+    if pressed_error != ok { ret (zero, pressed_error) }
+    parts[1usize] = pressed
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..2usize]), ok)
+}
+
+type PopupLoad = struct { fill: paint.Color, phase: f32 }
+
+fn popup_load_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
+    let load = mem.cast[*PopupLoad](ctx)
+    let width = area.width * 0.3
+    let x = area.x - width + load.phase * (area.width + width)
+    ret scene.push(b, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, area.y, width, area.height), brush: paint.Brush { Solid: load.fill } } })
+}
+
+// A loading popup: an indeterminate 4px bar flush with the surface's top edge,
+// then one polite muted status line at the final popup width.
+fn popup_loading(a: *mem.Arena, key: widget.Key, t: *const control.Theme, message: str) -> (widget.Node, err) {
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    let (loads, loads_error) = mem.alloc[PopupLoad](a, 1usize)
+    if loads_error != ok { ret (zero, TooLarge) }
+    loads[0usize] = PopupLoad { fill: style.color(t.tokens, .Primary), phase: control.progress_turn(t, 0.0 - 1.0, time.seconds(2i64)) }
+    var bar = control.sized_style(0.0, 4.0)
+    bar.width = style.Length { Percent: 100.0 }
+    bar.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) }
+    bar.radius = 2.0
+    bar.overflow = .Clip
+    bar.margin.top = style.Length { Px: 0.0 - 4.0 }
+    var none: []const widget.Node = zero
+    parts[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&loads[0usize]), measure: control.mark_measure, paint: popup_load_paint, state: widget.bytes_of[PopupLoad](&loads[0usize]) } }, style: bar, children: none }
+    var words = control.text_options()
+    words.role = .BodyMedium
+    words.wrap = .Word
+    let (message_node, message_error) = control.colored_text(a, 0u64, message, t, words, style.color(t.tokens, .OnSurfaceVariant))
+    if message_error != ok { ret (zero, message_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = message_node
+    var row = style.defaults()
+    row.width = style.Length { Percent: 100.0 }
+    row.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 12.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 8.0 } }
+    parts[1usize] = widget.box(0u64, row, held[0usize..1usize])
+    let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
+    if body_error != ok { ret (zero, TooLarge) }
+    body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
+    var sem: widget.Semantics = zero
+    sem.role = 26u8
+    sem.label = message
+    sem.states = accessibility.STATE_BUSY
+    sem.live = 1u8
+    ret (widget.semantics(key, sem, style.defaults(), body[0usize..1usize]), ok)
+}
+
 // v2 (D976/D987, docs/ux/components/Popup): the popup surface matches its anchor
 // within 200..480 and sits 4 off it on the `placement` side (flipping when that
 // side overflows), a group in the tree named `label`.
-// ponytail: no loading bar; the anchor keeps the focus
+// ponytail: no match highlighting; the anchor keeps the focus
 // because the popup takes none.
 fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }

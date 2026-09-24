@@ -31,7 +31,7 @@ type Counter = struct { count: usize }
 // The counters: 0 rows, 1 anchors, 2 dismiss, 3 main action, 4 other action.
 type Store = struct { counters: [8]Counter, subs: [8]widget.Submit, actions: [2]overlay.MenuItem }
 
-type Which = enum u8 { Popup, PopupEmpty, PopupError, Flyout, Popover, Below }
+type Which = enum u8 { Popup, PopupEmpty, PopupError, PopupFooter, PopupLoading, Flyout, Popover, Below }
 
 fn on_count(ctx: *void) -> err {
     let c = mem.cast[*Counter](ctx)
@@ -85,10 +85,24 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store, which: Which) -> (wi
         popup_content = failed
         e11 = failed_error
     }
-    let popup_open = which == .Popup || which == .PopupEmpty || which == .PopupError
+    if which == .PopupFooter {
+        let (footer, footer_error) = overlay.popup_footer(a, 16u64, t, "Search file contents", &s.subs[6usize])
+        let (with_footer, with_footer_error) = mem.alloc[widget.Node](a, 2usize)
+        if with_footer_error != ok { ret (zero, with_footer_error) }
+        with_footer[0usize] = popup_content
+        with_footer[1usize] = footer
+        popup_content = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), with_footer[0usize..2usize])
+        e11 = footer_error
+    }
+    if which == .PopupLoading {
+        let (loading, loading_error) = overlay.popup_loading(a, 18u64, t, "Searching 1,204 files")
+        popup_content = loading
+        e11 = loading_error
+    }
+    let popup_open = which == .Popup || which == .PopupEmpty || which == .PopupError || which == .PopupFooter || which == .PopupLoading
     let (popup, e6) = overlay.popup_of(a, 10u64, t, 1u64, .Below, "Suggestions", popup_content, popup_open)
     var active_key = 0u64
-    if which == .Popup { active_key = 11u64 }
+    if which == .Popup || which == .PopupFooter { active_key = 11u64 }
     let (search, e10) = overlay.popup_combobox(a, "Search files", 10u64, active_key, popup_open, search_button)
     let (inside, e7) = control.text(a, 0u64, "Only my builds", t, control.text_options())
     let (flyout, e8) = overlay.flyout(a, 20u64, t, 2u64, .Below, "Filters", inside, flyout_open, &s.subs[2usize])
@@ -258,6 +272,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if error_status.live != .Assertive { os.exit(54i32) }
     if !has_retry { os.exit(55i32) }
     if !tap_key(&harness, &runtime, 15u64) || s.counters[5usize].count != 1usize { os.exit(52i32) }
+    // A footer follows the result rows behind a divider and is one full-width
+    // 40px primary action.
+    let (root_footer, footer_error) = build(&f, &theme, s, .PopupFooter)
+    if footer_error != ok || testing.pump(&harness, root_footer, time.Instant { nanos: 1085000000i64 }) != ok { os.exit(56i32) }
+    let (footer_bounds, has_footer_bounds) = bounds(&harness, &runtime, 16u64)
+    let (footer_tree, footer_tree_error) = testing.semantics(&harness)
+    if footer_tree_error != ok { os.exit(57i32) }
+    let (footer_button, has_footer_button) = find(footer_tree, .Button, "Search file contents")
+    if !has_footer_bounds || !near(footer_bounds.height, 40.0) || !has_footer_button { os.exit(58i32) }
+    if !tap_key(&harness, &runtime, 16u64) || s.counters[6usize].count != 1usize { os.exit(59i32) }
+    // Loading keeps the final popup open under a flush indeterminate bar and
+    // announces one polite busy status line.
+    let (root_loading, loading_error) = build(&f, &theme, s, .PopupLoading)
+    if loading_error != ok || testing.pump(&harness, root_loading, time.Instant { nanos: 1090000000i64 }) != ok { os.exit(60i32) }
+    let (loading_tree, loading_tree_error) = testing.semantics(&harness)
+    if loading_tree_error != ok { os.exit(61i32) }
+    let (loading_status, has_loading_status) = find(loading_tree, .Status, "Searching 1,204 files")
+    if !has_loading_status || !loading_status.state.busy || loading_status.live != .Polite { os.exit(62i32) }
+    let (loading_shot, loading_shot_error) = testing.snapshot(&harness, a)
+    let (loading_popup, has_loading_popup) = lifted(&harness, 10u64)
+    if loading_shot_error != ok || !has_loading_popup || !is_color(loading_shot, at(loading_popup.x + 100.0, loading_popup.y + 1.0), style.color(&tokens, .Primary)) || !is_color(loading_shot, at(loading_popup.x + 10.0, loading_popup.y + 1.0), style.color(&tokens, .SecondaryContainer)) { os.exit(63i32) }
     // The flyout with a pointer: 4 below Filter, 200 wide at least on
     // `surface-container`, 12 above and 8 below its content; a modal dialog named
     // Filters; its anchor stays selected tonal and reports Expanded/Controls;
