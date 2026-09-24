@@ -3974,23 +3974,40 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     ret (made, made_error)
 }
 
+type PaletteMode = enum u8 { Commands, Files, Symbols, Line }
+
+fn palette_mode_prefix(mode: PaletteMode) -> str {
+    if mode == .Commands { ret ">" }
+    if mode == .Symbols { ret "@" }
+    if mode == .Line { ret ":" }
+    ret ""
+}
+
+fn palette_mode_placeholder(mode: PaletteMode) -> str {
+    if mode == .Files { ret "Search files by name" }
+    if mode == .Symbols { ret "Go to symbol" }
+    if mode == .Line { ret "Go to line" }
+    ret "Type a command"
+}
+
 // v2 (D978, docs/ux/components/CommandPalette): the palette's field, 56 tall and
 // the panel's width, 16 at its sides and 12 between its parts: a 24 `search`
-// glyph in `on-surface-variant`, the query in `body-large` `on-surface` (keyed
+// glyph in `on-surface-variant`, the mode prefix in `primary`, the query in
+// `body-large` `on-surface` (keyed
 // `key`) over the placeholder in `on-surface-variant`, and an "Esc" hint in
 // `body-small` `on-surface-variant` at the end.
-fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer: []u8, len: usize, typed: widget.Change[str], placeholder: str) -> (widget.Node, err) {
+fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode) -> (widget.Node, err) {
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let (query_look, look_error) = control.text_style(a, t, .BodyLarge)
     if look_error != ok { ret (zero, look_error) }
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 6usize)
     if layers_error != ok { ret (zero, TooLarge) }
     var at = 0usize
     if len == 0usize {
         var hint = control.text_options()
         hint.role = .BodyLarge
         hint.wrap = .None
-        let (hint_node, hint_error) = control.colored_text(a, 0u64, placeholder, t, hint, muted)
+        let (hint_node, hint_error) = control.colored_text(a, 0u64, palette_mode_placeholder(mode), t, hint, muted)
         if hint_error != ok { ret (zero, hint_error) }
         layers[at] = hint_node
         at += 1usize
@@ -4003,20 +4020,33 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
     let (lens, lens_error) = control.icon_square(a, muted, .Search, 24.0)
     if lens_error != ok { ret (zero, lens_error) }
     layers[2usize] = lens
+    var field_end = 3usize
+    let prefix = palette_mode_prefix(mode)
+    if prefix.len > 0usize {
+        var prefix_options = control.text_options()
+        prefix_options.role = .BodyLarge
+        prefix_options.wrap = .None
+        let (prefix_node, prefix_error) = control.colored_text(a, 0u64, prefix, t, prefix_options, style.color(t.tokens, .Primary))
+        if prefix_error != ok { ret (zero, prefix_error) }
+        layers[field_end] = prefix_node
+        field_end += 1usize
+    }
     var grow = style.defaults()
     grow.width = style.Length { Flex: 1.0 }
-    layers[3usize] = widget.stack(0u64, grow, layers[0usize..at])
+    layers[field_end] = widget.stack(0u64, grow, layers[0usize..at])
+    field_end += 1usize
     var small = control.text_options()
     small.role = .BodySmall
     small.wrap = .None
     let (esc, esc_error) = control.colored_text(a, 0u64, "Esc", t, small, muted)
     if esc_error != ok { ret (zero, esc_error) }
-    layers[4usize] = esc
+    layers[field_end] = esc
+    field_end += 1usize
     var bar = style.defaults()
     bar.width = style.Length { Percent: 100.0 }
     bar.height = style.Length { Px: 56.0 }
     bar.padding = style.EdgeLengths { left: style.Length { Px: 16.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 16.0 }, bottom: style.Length { Px: 0.0 } }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, bar, layers[2usize..5usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 12.0 }, bar, layers[2usize..field_end]), ok)
 }
 
 // A command palette: a search field (keyed `key + 2`, over the caller's buffer,
@@ -4034,12 +4064,17 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
 // `body-medium` `on-surface-variant`, centred. The footer is 32 tall, 16 at the
 // sides, below a 1px `outline-variant` line: "Up and Down to move, Enter to run"
 // in `body-small` `on-surface-variant`.
-// ponytail: no mode prefixes, group headings, categories, match highlighting,
-// shortcuts' key caps, unavailable rows, busy bar, ranking or compact form; the
+// ponytail: no group headings, categories, match highlighting, shortcuts' key
+// caps, unavailable rows, busy bar, ranking or compact form; the
 // caller still filters and keeps `active` inside the list.
 fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = command_palette_mode(a, key, t, label, buffer, len, typed, .Commands, commands, active, open, activate, run, dismiss, width)
+    ret (made, made_error)
+}
+
+fn command_palette_mode(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (field, field_error) = palette_field(a, key + 2u64, t, buffer, len, typed, "Type a command")
+    let (field, field_error) = palette_field(a, key + 2u64, t, buffer, len, typed, mode)
     if field_error != ok { ret (zero, field_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, TooLarge) }
