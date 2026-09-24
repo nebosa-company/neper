@@ -22120,3 +22120,14 @@ it beside a flexible page so the page narrows naturally.
 `ui_overlays3_v2` holds the 300px dock, page width, edge pixels, Region semantics
 and Close callback on Windows and Linux. `standard-side-sheet.png` is the Segoe
 UI visual check.
+
+## D1052 — Standard bottom sheets peek in page layout
+
+`overlay.standard_bottom_sheet` reuses the bottom handle, header and content in
+a caller-sized Region (64px minimum) placed after the page's flexible body. Its
+square `surface-container-low` frame uses elevation 1 and one top divider, with
+no scrim, modal overlay or trapped focus.
+
+`ui_overlays3_v2` holds the 120px peek, undimmed page, edge pixels and Region
+semantics on Windows and Linux. `standard-bottom-sheet.png` is the Segoe UI
+visual check.

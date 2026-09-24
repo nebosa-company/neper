@@ -1664,6 +1664,14 @@ fn bottom_sheet_with_actions(a: *mem.Arena, key: widget.Key, t: *const control.T
     ret (made, made_error)
 }
 
+fn standard_bottom_sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, close: *const widget.Submit, height: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var clamped = height
+    if clamped < 64.0 { clamped = 64.0 }
+    let (made, made_error) = edged_standard(a, key, t, title, content, close, .Below, 0.0, clamped)
+    ret (made, made_error)
+}
+
 fn sheet_with_back(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, content: widget.Node, open: bool, dismiss: *const widget.Submit, back: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     var clamped = width
@@ -1872,12 +1880,14 @@ fn sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 }
 
 fn standard_sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, column: widget.Node, placement: widget.Placement, width: f32, height: f32) -> (widget.Node, err) {
+    let bottom = placement == .Below
     let (panel_body, panel_body_error) = mem.alloc[widget.Node](a, 1usize)
     if panel_body_error != ok { ret (zero, TooLarge) }
     panel_body[0usize] = column
     var surface = control.surface_options(t)
     surface.background = .SurfaceContainerLow
     surface.elevation = 0u8
+    if bottom { surface.elevation = 1u8 }
     surface.radius = 0.0
     surface.padding = 0.0
     var panel = control.surface_style(t, surface)
@@ -1885,7 +1895,9 @@ fn standard_sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     panel.height = style.Length { Percent: 100.0 }
     panel.overflow = .Clip
     let panel_node = widget.box(0u64, panel, panel_body[0usize..1usize])
-    let (edge, edge_error) = control.divider(a, 0u64, t, .Vertical, 0.0)
+    var edge_axis: ui_layout.Axis = .Vertical
+    if bottom { edge_axis = .Horizontal }
+    let (edge, edge_error) = control.divider(a, 0u64, t, edge_axis, 0.0)
     if edge_error != ok { ret (zero, edge_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
@@ -1898,8 +1910,14 @@ fn standard_sheet_frame(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     var frame = style.defaults()
     frame.width = style.Length { Px: width }
     frame.height = style.Length { Percent: 100.0 }
+    var axis: ui_layout.Axis = .Horizontal
+    if bottom {
+        axis = .Vertical
+        frame.width = style.Length { Percent: 100.0 }
+        frame.max_width = style.Length { Px: 640.0 }
+    }
     if height > 0.0 { frame.height = style.Length { Px: height } }
-    let sheet_node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, frame, parts[0usize..2usize])
+    let sheet_node = widget.flex(0u64, ui_layout.Flex { axis: axis, main: .Start, cross: .Stretch, gap: 0.0 }, frame, parts[0usize..2usize])
     let (semantic_body, semantic_body_error) = mem.alloc[widget.Node](a, 1usize)
     if semantic_body_error != ok { ret (zero, TooLarge) }
     semantic_body[0usize] = sheet_node
