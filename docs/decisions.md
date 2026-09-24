@@ -21309,3 +21309,17 @@ scheduling, standard motion and reduced-motion forms on Windows and Linux.
 
 Determinate value easing and its show/minimum timing remain open, as do the
 composed label/detail/completion rows and the angled loading band.
+
+## D987 — Overlay width can follow its measured anchor
+
+`BelowMatch` and `AboveMatch` constrain overlay measurement to the laid-out
+anchor width. Pixel `min_width` and `max_width` values on the overlay node can
+clamp that width without duplicating placement logic. Select, autocomplete and
+combo-box menus match their fields exactly; popup keeps its 200–480 width range.
+Flipping and viewport clamping remain in the shared overlay placement path.
+
+`ui_selection2_v2`, `ui_entry` and `ui_overlays2_v2` hold the matched widths on
+Windows and Linux.
+
+Popup active-descendant, loading, empty, error, match-highlighting and footer
+states remain open, along with flyout and popover follow-up work.

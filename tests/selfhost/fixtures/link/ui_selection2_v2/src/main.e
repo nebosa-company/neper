@@ -172,6 +172,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (red, has_red) = bounds(&harness, &runtime, 3u64)
     let (green, has_green) = bounds(&harness, &runtime, 4u64)
     if !has_head || !has_red || !has_green || !near(head.height, 48.0) || !near(red.height, 36.0) || !near(red.y - head.y - head.height, 12.0) { os.exit(20i32) }
+    let (select_popup, has_select_popup) = bounds(&harness, &runtime, 2u64)
+    if !has_select_popup || !near(select_popup.width, head.width) {
+        try io.print("select anchor width\n")
+        os.exit(26i32)
+    }
     if !is_color(shot, at(head.x + 0.5, head.y + 24.0), primary) || !is_color(shot, at(head.x + 1.5, head.y + 24.0), primary) { os.exit(21i32) }
     if !is_color(shot, at(red.x + 4.0, red.y + 4.0), secondary) || !is_color(shot, at(green.x + 4.0, green.y + 4.0), style.color(&tokens, .SurfaceContainer)) { os.exit(22i32) }
     try io.print("ui selection2 v2 ok\n")

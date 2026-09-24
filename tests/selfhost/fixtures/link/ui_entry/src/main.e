@@ -133,6 +133,11 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
+fn near(a: f32, b: f32) -> bool {
+    let d = a - b
+    ret d < 0.01 && d > -0.01
+}
+
 type Buffers = struct { code: [16]u8, fruit: [16]u8, combo: [16]u8, token: [16]u8 }
 type Actions = struct { picks: []widget.Submit, removes: []widget.Submit, fruit_picks: []widget.Submit, rows: []widget.Submit, dismiss: widget.Submit, toggle: widget.Submit, fruit_toggle: widget.Submit }
 
@@ -282,6 +287,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (fruit_group, has_fruit) = find(tree_2, .Combobox, "Fruit")
     let (fruit_list, has_fruit_list) = find(tree_2, .Listbox, "Fruit")
     if !has_fruit || !fruit_group.state.expanded || !has_fruit_list || testing.by_role(&harness, .Option).count < 2usize { os.exit(24i32) }
+    let fruit_field = testing.by_key(&harness, 10u64)
+    let fruit_popup = testing.by_key(&harness, 11u64)
+    let (fruit_field_bounds, has_fruit_field) = widget.bounds_of(&runtime, fruit_field.element)
+    let (fruit_popup_bounds, has_fruit_popup) = widget.bounds_of(&runtime, fruit_popup.element)
+    if fruit_field.count != 1usize || fruit_popup.count != 1usize || !has_fruit_field || !has_fruit_popup || !near(fruit_field_bounds.width, fruit_popup_bounds.width) { os.exit(53i32) }
     let (fruit_at, has_fruit_at) = centre_of(&harness, &runtime, 10u64)
     if !has_fruit_at || testing.tap(&harness, fruit_at.x, fruit_at.y) != ok { os.exit(25i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].activations != 1usize || logs[0usize].active != 1usize { os.exit(26i32) }
@@ -301,6 +311,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_3_error != ok { os.exit(32i32) }
     if testing.pump(&harness, root_3, now) != ok { os.exit(33i32) }
     if testing.by_key(&harness, 22u64).count != 1usize || testing.by_key(&harness, 24u64).count != 1usize { os.exit(34i32) }
+    let combo_field = testing.by_key(&harness, 20u64)
+    let combo_popup = testing.by_key(&harness, 22u64)
+    let (combo_field_bounds, has_combo_field) = widget.bounds_of(&runtime, combo_field.element)
+    let (combo_popup_bounds, has_combo_popup) = widget.bounds_of(&runtime, combo_popup.element)
+    if !has_combo_field || !has_combo_popup || !near(combo_field_bounds.width, combo_popup_bounds.width) { os.exit(54i32) }
     let (colour_at, has_colour) = centre_of(&harness, &runtime, 20u64)
     if !has_colour || testing.tap(&harness, colour_at.x, colour_at.y) != ok || testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].picks != 3usize || logs[0usize].last_pick != 1usize { os.exit(35i32) }
     // The token field (the combo's list closed again): two chips; the second's

@@ -183,7 +183,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tree_error != ok { os.exit(11i32) }
     let (search, has_search) = bounds(&harness, &runtime, 1u64)
     let (popup, has_popup) = lifted(&harness, 10u64)
-    if !has_search || !has_popup || !near(popup.x, search.x) || !near(popup.y, search.y + search.height + 4.0) || popup.width < 200.0 { os.exit(12i32) }
+    if !has_search || !has_popup { os.exit(12i32) }
+    if !near(popup.x, search.x) {
+        try io.print("popup anchor x\n")
+        os.exit(12i32)
+    }
+    if !near(popup.y, search.y + search.height + 4.0) {
+        try io.print("popup anchor y\n")
+        os.exit(12i32)
+    }
+    if !near(popup.width, 200.0) {
+        try io.print("popup anchor width\n")
+        os.exit(28i32)
+    }
     if !is_color(shot, at(popup.x + 100.0, popup.y + 2.0), style.color(&tokens, .SurfaceContainer)) || !is_color(shot, at(popup.x + 100.0, popup.y + popup.height - 2.0), style.color(&tokens, .SurfaceContainer)) { os.exit(13i32) }
     let (row, has_row) = bounds(&harness, &runtime, 11u64)
     if !has_row || !near(row.x, popup.x) || !near(row.y, popup.y + 4.0) || !near(row.height, 40.0) || !near(popup.height, 88.0) { os.exit(14i32) }

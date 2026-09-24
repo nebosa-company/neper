@@ -105,7 +105,9 @@ type Semantics = struct { role: u8, label: str, value: str, hint: str, states: u
 // pointer); a side that overflows the window flips to the opposite side, the
 // offset mirrored, when that side fits. (D978) TopCenter centres the content
 // across the anchor with its top on the anchor's top (a palette 64 down the window).
-type Placement = enum u8 { Below, Above, Right, Left, Center, BelowCenter, AboveCenter, BelowEnd, At, TopCenter }
+// BelowMatch and AboveMatch also constrain the content to the anchor's width,
+// clamped by pixel min/max widths on the overlay node's style.
+type Placement = enum u8 { Below, Above, Right, Left, Center, BelowCenter, AboveCenter, BelowEnd, At, TopCenter, BelowMatch, AboveMatch }
 type Overlay = struct { anchor: Key, placement: Placement, offset: geometry.Point, modal: bool, dismiss: Submit }
 // The layout adapters that need a kind (D816): an aspect box is as wide as it may
 // be and as tall as the ratio says; a fitted box scales its content down to fit,
@@ -2011,8 +2013,8 @@ fn overlay_rect(anchor: geometry.Rect, size: geometry.Size, ov: Overlay, window_
     var x = anchor.x
     var y = anchor.y
     let p = ov.placement
-    let below = p == .Below || p == .BelowCenter || p == .BelowEnd
-    let above = p == .Above || p == .AboveCenter
+    let below = p == .Below || p == .BelowCenter || p == .BelowEnd || p == .BelowMatch
+    let above = p == .Above || p == .AboveCenter || p == .AboveMatch
     if p == .BelowCenter || p == .AboveCenter || p == .TopCenter { x = anchor.x + (anchor.width - size.width) * 0.5 }
     if p == .BelowEnd { x = anchor.x + anchor.width - size.width }
     if below { y = anchor.y + anchor.height }
@@ -2062,7 +2064,17 @@ fn place_overlays(s: *State, a: *mem.Arena, b: *scene.Builder) -> err {
             let (found, count) = find_by_key(s, spec.anchor)
             if count != 0usize { anchor = s.elements[usize(found.slot)].bounds }
         }
-        let open = ui_layout.Constraints { min_width: 0.0, max_width: s.window_size.width, min_height: 0.0, max_height: s.window_size.height }
+        var open = ui_layout.Constraints { min_width: 0.0, max_width: s.window_size.width, min_height: 0.0, max_height: s.window_size.height }
+        if spec.placement == .BelowMatch || spec.placement == .AboveMatch {
+            var width = anchor.width
+            let (minimum, has_minimum) = style.px_of(node.style.min_width)
+            let (maximum, has_maximum) = style.px_of(node.style.max_width)
+            if has_minimum && width < minimum { width = minimum }
+            if has_maximum && width > maximum { width = maximum }
+            if width > s.window_size.width { width = s.window_size.width }
+            open.min_width = width
+            open.max_width = width
+        }
         let (size, size_error) = measure_stack(s, a, node, open)
         if size_error != ok { ret size_error }
         let rect = overlay_rect(anchor, size, spec, s.window_size)

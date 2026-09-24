@@ -3471,8 +3471,7 @@ fn led_head(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, shown: 
 // resting in `on-surface-variant` before a choice; a trailing 24 chevron (18
 // dense) in `on-surface-variant`, pointing up in `primary` while open. The menu is
 // `surface-container` with 8 corners and elevation 2, 8 above and below its rows,
-// 4 below the field, at least 112 wide; its rows are `menu_row`s.
-// ponytail: the menu is at least 112 wide, not the field's own width; an overlay learning its anchor's width can match them.
+// 4 below the field, matching its width; its rows are `menu_row`s.
 fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit) -> (widget.Node, err) {
     if picks.len != options.len { ret (zero, TooLarge) }
     let chosen = selected < options.len
@@ -3523,7 +3522,7 @@ fn select(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         let (popup, popup_error) = mem.alloc[widget.Node](a, 1usize)
         if popup_error != ok { ret (zero, TooLarge) }
         popup[0usize] = widget.semantics(0u64, menu_sem, style.defaults(), menu[0usize..1usize])
-        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: true, dismiss: *toggle }, style.defaults(), popup[0usize..1usize])
+        parts[1usize] = widget.overlay(key + 1u64, widget.Overlay { anchor: key, placement: .BelowMatch, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: true, dismiss: *toggle }, style.defaults(), popup[0usize..1usize])
     }
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
@@ -5757,7 +5756,7 @@ fn suggesting(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, field
         let (popup, popup_error) = mem.alloc[widget.Node](a, 1usize)
         if popup_error != ok { ret (zero, TooLarge) }
         popup[0usize] = widget.semantics(0u64, list_sem, style.defaults(), column[0usize..1usize])
-        parts[count - 1usize] = widget.overlay(list_key, widget.Overlay { anchor: key, placement: .Below, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
+        parts[count - 1usize] = widget.overlay(list_key, widget.Overlay { anchor: key, placement: .BelowMatch, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero }, style.defaults(), popup[0usize..1usize])
         if active < picks.len { default_action = picks[active] }
     }
     let (moves, moves_error) = mem.alloc[Move](a, 2usize)

@@ -580,7 +580,7 @@ fn popup_surface(a: *mem.Arena, t: *const control.Theme, content: widget.Node) -
 // The offset that stands an overlay `gap` off its anchor on the side `placement`
 // names (D976).
 fn gap_offset(placement: widget.Placement, gap: f32) -> geometry.Point {
-    if placement == .Above || placement == .AboveCenter { ret geometry.Point { x: 0.0, y: 0.0 - gap } }
+    if placement == .Above || placement == .AboveCenter || placement == .AboveMatch { ret geometry.Point { x: 0.0, y: 0.0 - gap } }
     if placement == .Right { ret geometry.Point { x: gap, y: 0.0 } }
     if placement == .Left { ret geometry.Point { x: 0.0 - gap, y: 0.0 } }
     if placement == .Center || placement == .At { ret geometry.Point { x: 0.0, y: 0.0 } }
@@ -596,9 +596,9 @@ fn popup(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget
     ret (made, made_error)
 }
 
-// v2 (D976, docs/ux/components/Popup): the popup surface 4 off its anchor on the
-// `placement` side (flipping when that side overflows), a group in the tree named
-// `label`.
+// v2 (D976/D987, docs/ux/components/Popup): the popup surface matches its anchor
+// within 200..480 and sits 4 off it on the `placement` side (flipping when that
+// side overflows), a group in the tree named `label`.
 // ponytail: no active descendant, loading bar, or empty and error rows; the
 // anchor keeps the focus because the popup takes none.
 fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, placement: widget.Placement, label: str, content: widget.Node, open: bool) -> (widget.Node, err) {
@@ -614,7 +614,13 @@ fn popup_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: wid
     let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
     if framed_error != ok { ret (zero, TooLarge) }
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize])
-    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placement, offset: gap_offset(placement, 4.0), modal: false, dismiss: zero }, style.defaults(), framed[0usize..1usize]), ok)
+    var placed = placement
+    if placement == .Below { placed = .BelowMatch }
+    if placement == .Above { placed = .AboveMatch }
+    var overlay_style = style.defaults()
+    overlay_style.min_width = style.Length { Px: 200.0 }
+    overlay_style.max_width = style.Length { Px: 480.0 }
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: placed, offset: gap_offset(placed, 4.0), modal: false, dismiss: zero }, overlay_style, framed[0usize..1usize]), ok)
 }
 
 // v2 (D976, docs/ux/components/Popup): a suggestion row, full width, 40 tall (48
