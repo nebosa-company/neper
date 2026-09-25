@@ -1492,6 +1492,17 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
 // A row's tap reporting its key; a caller may add one double-tap command.
 type RowPick = struct { key: widget.Key, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool }
 
+fn submit_semantic_action(ctx: *void, action: u32) -> err {
+    if action != accessibility.ACTION_PRESS { ret ok }
+    ret widget.fire_submit(*mem.cast[*const widget.Submit](ctx))
+}
+
+fn row_pick_action(ctx: *void, action: u32) -> err {
+    if action != accessibility.ACTION_PRESS { ret ok }
+    let r = mem.cast[*RowPick](ctx)
+    ret widget.fire_change[widget.Key](r.pick, r.key)
+}
+
 fn row_pick_gesture(ctx: *void, g: widget.Gesture) -> err {
     let r = mem.cast[*RowPick](ctx)
     if g.tag == .Tap { ret widget.fire_change[widget.Key](r.pick, r.key) }
@@ -1592,6 +1603,10 @@ fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column,
     sem.role = role
     sem.row = u32(index + 1usize)
     sem.row_count = u32(count)
+    if !owned {
+        sem.actions = accessibility.ACTION_PRESS
+        sem.on_action = widget.Change[u32] { ctx: ctx_of(&picks[0usize]), invoke: row_pick_action }
+    }
     if selected { sem.states = accessibility.STATE_SELECTED }
     ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
 }
@@ -3607,7 +3622,10 @@ fn row_sized(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
     sem.hint = item.supporting
     sem.row = u32(index + 1usize)
     sem.row_count = u32(count)
-    sem.actions = accessibility.ACTION_PRESS
+    if enabled {
+        sem.actions = accessibility.ACTION_PRESS
+        sem.on_action = widget.Change[u32] { ctx: ctx_of(&item.action), invoke: submit_semantic_action }
+    }
     if item.selected { sem.states = accessibility.STATE_SELECTED }
     if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
@@ -4122,7 +4140,10 @@ fn tile_node(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *con
     sem.hint = item.meta
     sem.row = u32(row_index + 1usize)
     sem.column = u32(column_index + 1usize)
-    sem.actions = accessibility.ACTION_PRESS
+    if enabled {
+        sem.actions = accessibility.ACTION_PRESS
+        sem.on_action = widget.Change[u32] { ctx: ctx_of(&item.action), invoke: submit_semantic_action }
+    }
     if item.selected { sem.states = accessibility.STATE_SELECTED }
     if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
