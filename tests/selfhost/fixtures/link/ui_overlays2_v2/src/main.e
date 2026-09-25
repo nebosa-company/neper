@@ -39,6 +39,43 @@ fn on_count(ctx: *void) -> err {
     ret ok
 }
 
+// (D1256) The last step a search field's Down or Up asked for.
+type Steps = struct { last: i32, count: usize }
+
+fn on_step(ctx: *void, value: i32) -> err {
+    let steps = mem.cast[*Steps](ctx)
+    steps.last = value
+    steps.count += 1usize
+    ret ok
+}
+
+// (D1256) A search field (keyed 800) under its keys, and its docked view (900)
+// on `groups` for `query`.
+fn build_search(a: *mem.Arena, t: *const control.Theme, s: *Store, steps: *Steps, buffer: []u8, query: str, groups: []const overlay.SearchGroup) -> (widget.Node, err) {
+    var i = 0usize
+    while i < query.len {
+        buffer[i] = query[i]
+        i += 1usize
+    }
+    var options = control.field_options()
+    options.width = 400.0
+    let (field, field_error) = control.search_field(a, 800u64, t, buffer, query.len, zero, s.subs[5usize], &s.subs[6usize], options)
+    if field_error != ok { ret (zero, field_error) }
+    let (keyed, keyed_error) = overlay.search_keys(a, t, field, query.len, s.subs[6usize], s.subs[7usize], widget.Change[i32] { ctx: mem.cast[*void](steps), invoke: on_step })
+    if keyed_error != ok { ret (zero, keyed_error) }
+    let (view, view_error) = overlay.search_view(a, 900u64, t, 800u64, "Search files", query, groups, "Search all files", &s.subs[1usize], true, &s.subs[2usize], 400.0)
+    if view_error != ok { ret (zero, view_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, parts_error) }
+    parts[0usize] = keyed
+    parts[1usize] = view
+    var page = style.defaults()
+    page.width = style.Length { Px: 640.0 }
+    page.height = style.Length { Px: 480.0 }
+    page.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, page, parts[0usize..2usize]), ok)
+}
+
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.01 && d > -0.01
@@ -438,6 +475,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, has_compact_main) = find(compact_popover_tree, .Button, "Rerun")
     let (_, has_compact_other) = find(compact_popover_tree, .Button, "Open log")
     if !has_compact_popover || !near(compact_popover.x, 0.0) || !near(compact_popover.y, 240.0) || !near(compact_popover.width, 640.0) || !near(compact_popover.height, 240.0) || !has_compact_popover_dialog || !compact_popover_dialog.state.modal || !has_compact_main || !has_compact_other { os.exit(80i32) }
+    // (D1256) The docked search view: grouped suggestions (three in two groups),
+    // the polite count, the fallback row; a row runs its action; Down and Up move
+    // the active row; Escape clears a query, then closes; a query matching
+    // nothing says so.
+    var recent: [1]overlay.SearchSuggestion = zero
+    recent[0usize] = overlay.SearchSuggestion { label: "build 4128", meta: "", action: s.subs[0usize] }
+    var named_files: [2]overlay.SearchSuggestion = zero
+    named_files[0usize] = overlay.SearchSuggestion { label: "Build.e", meta: "src", action: s.subs[0usize] }
+    named_files[1usize] = overlay.SearchSuggestion { label: "rebuild.sh", meta: "", action: s.subs[0usize] }
+    var groups: [2]overlay.SearchGroup = zero
+    groups[0usize] = overlay.SearchGroup { title: "Recent", suggestions: recent[..] }
+    groups[1usize] = overlay.SearchGroup { title: "Files", suggestions: named_files[..] }
+    var steps: Steps = zero
+    let (search_buffer, search_buffer_error) = mem.alloc[u8](a, 64usize)
+    if search_buffer_error != ok { os.exit(110i32) }
+    f = mem.arena_from(frame_storage)
+    let (searching, searching_error) = build_search(&f, &theme, s, &steps, search_buffer, "build", groups[..])
+    if searching_error != ok || testing.pump(&harness, searching, time.Instant { nanos: 9000000000i64 }) != ok { os.exit(111i32) }
+    let (search_tree, search_tree_error) = testing.semantics(&harness)
+    if search_tree_error != ok { os.exit(112i32) }
+    let (_, has_listbox) = find(search_tree, .Listbox, "Search files")
+    let (_, has_count) = find(search_tree, .Status, "3 suggestions")
+    if !has_listbox || !has_count || testing.by_text(&harness, "Recent").count == 0usize || testing.by_text(&harness, "Search all files").count == 0usize { os.exit(113i32) }
+    let rows_before = s.counters[0usize].count
+    if !tap_key(&harness, &runtime, 902u64) || s.counters[0usize].count != rows_before + 1usize { os.exit(114i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 800u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok || steps.last != 1i32 { os.exit(115i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || steps.last != -1i32 { os.exit(116i32) }
+    let clears_before = s.counters[6usize].count
+    let closes_before = s.counters[7usize].count
+    if testing.press_key(&harness, 27u32, zero) != ok || s.counters[6usize].count != clears_before + 1usize || s.counters[7usize].count != closes_before { os.exit(117i32) }
+    f = mem.arena_from(frame_storage)
+    let (nothing_found, nothing_found_error) = build_search(&f, &theme, s, &steps, search_buffer, "zzz", groups[0usize..0usize])
+    if nothing_found_error != ok || testing.pump(&harness, nothing_found, time.Instant { nanos: 9100000000i64 }) != ok { os.exit(118i32) }
+    if testing.by_text(&harness, "No results for “zzz”").count == 0usize { os.exit(119i32) }
+    f = mem.arena_from(frame_storage)
+    let (emptied, emptied_error) = build_search(&f, &theme, s, &steps, search_buffer, "", groups[..])
+    if emptied_error != ok || testing.pump(&harness, emptied, time.Instant { nanos: 9200000000i64 }) != ok { os.exit(120i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 800u64).element) != ok || testing.press_key(&harness, 27u32, zero) != ok || s.counters[7usize].count != closes_before + 1usize { os.exit(121i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok

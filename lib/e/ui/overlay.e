@@ -1086,6 +1086,193 @@ fn popup(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget
     ret (made, made_error)
 }
 
+// (D1256) A search suggestion (its label, optional meta and what running it
+// does) and a named group of them ("Recent", "Files").
+type SearchSuggestion = struct { label: str, meta: str, action: widget.Submit }
+type SearchGroup = struct { title: str, suggestions: []const SearchSuggestion }
+
+// (D1256) The first byte range of `label` matching `query` ignoring ASCII case.
+fn match_range(label: str, query: str) -> (usize, usize, bool) {
+    if query.len == 0usize || query.len > label.len { ret (0usize, 0usize, false) }
+    var at = 0usize
+    while at + query.len <= label.len {
+        var k = 0usize
+        while k < query.len {
+            var x = label[at + k]
+            var y = query[k]
+            if x >= 65u8 && x <= 90u8 { x += 32u8 }
+            if y >= 65u8 && y <= 90u8 { y += 32u8 }
+            if x != y { break }
+            k += 1usize
+        }
+        if k == query.len { ret (at, at + query.len, true) }
+        at += 1usize
+    }
+    ret (0usize, 0usize, false)
+}
+
+// (D1256, docs/ux/components/SearchBar, search view, docked) The view a search
+// bar (`anchor`) opens into, placed 4 below it while `open`: a
+// `surface-container-high` panel with `radius-xl` 28 and elevation 3, `width`
+// wide (held to 360..720), no taller than 2/3 of the window. Each group is a
+// `title-small` `on-surface-variant` subheader (16 in, 12 above, 4 below) over
+// its suggestions as popup rows, keyed `key + 1 + n` in order, the part matching
+// `query` at weight 600; with none, "No results for "query"". Last comes the
+// fallback row, `fallback_label` (the caller's "Search all files for "build""),
+// keyed `key + 4096`. A polite status says "6 suggestions" or "No results". A
+// click outside fires `dismiss`. A listbox named `label` (keyed `key`).
+// ponytail: docked only (the compact full-screen form and the grow/fade motion
+// are not drawn); no loading bar under the header -- pass `popup_loading`
+// content round the view's owner instead.
+fn search_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, query: str, groups: []const SearchGroup, fallback_label: str, fallback: *const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var total = 0usize
+    var g = 0usize
+    while g < groups.len {
+        total += groups[g].suggestions.len
+        g += 1usize
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, total + groups.len + 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    var row = 0usize
+    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    g = 0usize
+    while g < groups.len {
+        if groups[g].suggestions.len > 0usize && groups[g].title.len > 0usize {
+            var head = control.text_options()
+            head.role = .TitleSmall
+            head.wrap = .None
+            let (title, title_error) = control.colored_text(a, 0u64, groups[g].title, t, head, muted)
+            if title_error != ok { ret (zero, title_error) }
+            let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+            if held_error != ok { ret (zero, TooLarge) }
+            held[0usize] = title
+            parts[n] = widget.padded(0u64, 16.0, 12.0, 16.0, 4.0, style.defaults(), held[0usize..1usize])
+            n += 1usize
+        }
+        var k = 0usize
+        while k < groups[g].suggestions.len {
+            let it = &groups[g].suggestions[k]
+            let (from, to, found) = match_range(it.label, query)
+            var start = 0usize
+            var end = 0usize
+            if found {
+                start = from
+                end = to
+            }
+            let (made, made_error) = popup_row_match(a, key + 1u64 + u64(row), t, it.label, start, end, it.meta, &it.action)
+            if made_error != ok { ret (zero, made_error) }
+            parts[n] = made
+            n += 1usize
+            row += 1usize
+            k += 1usize
+        }
+        g += 1usize
+    }
+    // The count, or the empty line in its place.
+    let (count_bytes, count_error) = mem.alloc[u8](a, 40usize + query.len)
+    if count_error != ok { ret (zero, TooLarge) }
+    var said_len = 0usize
+    if total == 0usize {
+        said_len = control.copy_text(count_bytes, "No results for “")
+        said_len += control.copy_text(count_bytes[said_len..count_bytes.len], query)
+        said_len += control.copy_text(count_bytes[said_len..count_bytes.len], "”")
+        let (none_node, none_error) = popup_empty(a, key + 4097u64, t, count_bytes[0usize..said_len])
+        if none_error != ok { ret (zero, none_error) }
+        parts[n] = none_node
+        n += 1usize
+    } else {
+        said_len = control.write_i64(count_bytes, i64(total))
+        if total == 1usize {
+            said_len += control.copy_text(count_bytes[said_len..count_bytes.len], " suggestion")
+        } else {
+            said_len += control.copy_text(count_bytes[said_len..count_bytes.len], " suggestions")
+        }
+        var status: widget.Semantics = zero
+        status.role = 26u8
+        status.label = count_bytes[0usize..said_len]
+        status.live = 1u8
+        parts[n] = widget.semantics(key + 4097u64, status, style.defaults(), zero)
+        n += 1usize
+    }
+    if fallback_label.len > 0usize && mem.address_of(fallback) != 0usize {
+        let (last_row, last_error) = popup_footer(a, key + 4096u64, t, fallback_label, fallback)
+        if last_error != ok { ret (zero, last_error) }
+        parts[n] = last_row
+        n += 1usize
+    }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..n])
+    var raised = control.surface_options(t)
+    raised.background = .SurfaceContainerHigh
+    raised.elevation = 3u8
+    raised.radius = 28.0
+    raised.padding = 0.0
+    var plate = control.surface_style(t, raised)
+    var wide = width
+    if wide < 360.0 { wide = 360.0 }
+    if wide > 720.0 { wide = 720.0 }
+    plate.width = style.Length { Px: wide }
+    plate.padding.top = style.Length { Px: 8.0 }
+    plate.padding.bottom = style.Length { Px: 8.0 }
+    plate.overflow = .Clip
+    if mem.address_of(t.runtime) != 0usize {
+        let window = widget.surface_size(t.runtime)
+        if window.height > 0.0 { plate.max_height = style.Length { Px: window.height * 2.0 / 3.0 } }
+    }
+    let (framed, framed_error) = mem.alloc[widget.Node](a, 1usize)
+    if framed_error != ok { ret (zero, TooLarge) }
+    framed[0usize] = widget.box(0u64, plate, column[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 35u8
+    sem.label = label
+    let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
+    if named_error != ok { ret (zero, TooLarge) }
+    named[0usize] = widget.semantics(0u64, sem, style.defaults(), framed[0usize..1usize])
+    var dismissing: widget.Submit = zero
+    if mem.address_of(dismiss) != 0usize { dismissing = *dismiss }
+    ret (widget.overlay(key, widget.Overlay { anchor: anchor, placement: .BelowMatch, offset: gap_offset(.BelowMatch, 4.0), modal: false, dismiss: dismissing }, style.defaults(), named[0usize..1usize]), ok)
+}
+
+// (D1256) What a search field's keys do round `field`: Escape clears a query
+// (`query_len` > 0) and else closes the view; Down and Up move the active
+// suggestion through `move` (+1, -1) while the caret stays in the query.
+type SearchKey = struct { clear: widget.Submit, close: widget.Submit, has_query: bool, move: widget.Change[i32], step: i32 }
+
+fn search_escape_fire(ctx: *void) -> err {
+    let k = mem.cast[*SearchKey](ctx)
+    if k.has_query { ret widget.fire_submit(k.clear) }
+    ret widget.fire_submit(k.close)
+}
+
+fn search_move_fire(ctx: *void) -> err {
+    let k = mem.cast[*SearchKey](ctx)
+    ret widget.fire_change[i32](k.move, k.step)
+}
+
+fn search_keys(a: *mem.Arena, t: *const control.Theme, field: widget.Node, query_len: usize, clear: widget.Submit, close: widget.Submit, move: widget.Change[i32]) -> (widget.Node, err) {
+    let (keys, keys_error) = mem.alloc[SearchKey](a, 3usize)
+    if keys_error != ok { ret (zero, TooLarge) }
+    let (bound, bound_error) = mem.alloc[widget.Shortcut](a, 3usize)
+    if bound_error != ok { ret (zero, TooLarge) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    var k = 0usize
+    while k < 3usize {
+        keys[k] = SearchKey { clear: clear, close: close, has_query: query_len > 0usize, move: move, step: 0i32 }
+        k += 1usize
+    }
+    keys[1usize].step = 1i32
+    keys[2usize].step = -1i32
+    bound[0usize] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&keys[0usize]), invoke: search_escape_fire } }
+    bound[1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&keys[1usize]), invoke: search_move_fire } }
+    bound[2usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&keys[2usize]), invoke: search_move_fire } }
+    held[0usize] = field
+    ret (widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: bound[0usize..3usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize]), ok)
+}
+
 // A suggestion popup's owner: the caller's field remains the focusable child,
 // while this combobox reports the open popup and its virtual active row.
 fn popup_combobox(a: *mem.Arena, label: str, popup_key: widget.Key, active_key: widget.Key, open: bool, field: widget.Node) -> (widget.Node, err) {
