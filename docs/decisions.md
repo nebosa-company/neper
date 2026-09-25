@@ -23223,3 +23223,12 @@ Pagination remains textual and needs no directional icon treatment.
 
 `ui_navigation4_v2` holds both mirrored glyphs by rendered pixels on Windows
 and Linux. The Segoe review is `build/ux/pagination-rtl-chevrons-segoe.png`.
+
+## D1156 — Breadcrumb chevrons mirror in right-to-left themes
+
+Breadcrumbs now mirror both trail separators and the compact parent-link
+chevron from the theme direction. The trail keeps its caller-supplied logical
+order, and crumb actions and semantics are unchanged.
+
+`ui_navigation2_v2` holds both glyph directions by rendered pixels on Windows
+and Linux. The Segoe review is `build/ux/breadcrumbs-rtl-chevrons-segoe.png`.
