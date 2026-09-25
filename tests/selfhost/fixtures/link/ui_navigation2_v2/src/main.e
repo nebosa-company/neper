@@ -486,6 +486,52 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         fold_step += 1usize
     }
+    // (D1308) The root crumb leads with its icon; Ctrl+L and a press on the empty
+    // space ask to edit; editing, the path field stands alone, Enter goes and
+    // Escape cancels.
+    var path_names: [3]str = zero
+    path_names[0usize] = "Workspace"
+    path_names[1usize] = "lib"
+    path_names[2usize] = "ui"
+    let (path_bytes, path_bytes_error) = mem.alloc[u8](a, 32usize)
+    if path_bytes_error != ok { os.exit(96i32) }
+    let path_len = control.copy_text(path_bytes, "lib/ui")
+    var path_step = 0usize
+    while path_step < 2usize {
+        var pathed = navigation.breadcrumbs_options()
+        pathed.root_icon = true
+        pathed.root_glyph = .Picture
+        pathed.width = 500.0
+        pathed.edit = s.subs[6usize]
+        pathed.go = s.subs[7usize]
+        pathed.cancel = s.subs[8usize]
+        pathed.editing = path_step == 1usize
+        pathed.path = path_bytes
+        pathed.path_len = path_len
+        f = mem.arena_from(frame_storage)
+        let (path_trail, path_trail_error) = navigation.breadcrumbs_of(&f, 2300u64, &theme, "Path", path_names[..], s.crumbs[0usize..3usize], pathed)
+        let (path_page, path_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if path_trail_error != ok || path_page_error != ok { os.exit(97i32) }
+        path_page[0usize] = path_trail
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), path_page[0usize..1usize]), time.Instant { nanos: 7000000000i64 + i64(path_step) }) != ok { os.exit(98i32) }
+        if path_step == 0usize {
+            let (icon_crumb, has_icon_crumb) = bounds(&harness, &runtime, 2301u64)
+            if !has_icon_crumb || icon_crumb.width < 38.0 || testing.by_key(&harness, 2360u64).count != 0usize { os.exit(99i32) }
+            var held_control: input.Modifiers = zero
+            held_control.control = true
+            let edits_before = s.counters[6usize].count
+            if widget.focus(&runtime, testing.by_key(&harness, 2302u64).element) != ok || testing.press_key(&harness, 76u32, held_control) != ok || s.counters[6usize].count != edits_before + 1usize { os.exit(100i32) }
+            if !tap_key(&harness, &runtime, 2361u64) || s.counters[6usize].count != edits_before + 2usize { os.exit(101i32) }
+        }
+        if path_step == 1usize {
+            if testing.by_key(&harness, 2360u64).count != 1usize || testing.by_key(&harness, 2301u64).count != 0usize { os.exit(102i32) }
+            let goes_before = s.counters[7usize].count
+            let cancels_before = s.counters[8usize].count
+            if widget.focus(&runtime, testing.by_key(&harness, 2360u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.counters[7usize].count != goes_before + 1usize { os.exit(103i32) }
+            if testing.press_key(&harness, 27u32, zero) != ok || s.counters[8usize].count != cancels_before + 1usize { os.exit(104i32) }
+        }
+        path_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui navigation2 v2 ok\n")
     ret ok

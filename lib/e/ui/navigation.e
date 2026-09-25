@@ -2201,7 +2201,12 @@ fn breadcrumbs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // `toggle` opens while `open`; or `compact`, the parent link alone.
 // (D1250) `width`, when set and `hidden` is not, collapses as many levels as the
 // trail needs to fit it (`breadcrumbs_fit`).
-type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool, width: f32 }
+// (D1308) `root_icon` leads the root crumb with `root_glyph`. With `edit` set,
+// Ctrl+L on the trail or a press on its empty space fires it; `editing` puts the
+// path field in the trail's place over `path` (the caller's buffer, `path_len`
+// long, told through `typed`), Enter firing `go` and Escape `cancel`, and
+// `path_error` said under it.
+type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool, width: f32, root_icon: bool, root_glyph: control.GlyphKind, edit: widget.Submit, editing: bool, path: []u8, path_len: usize, typed: widget.Change[str], go: widget.Submit, cancel: widget.Submit, path_error: str }
 
 fn breadcrumbs_options() -> BreadcrumbsOptions {
     var out: BreadcrumbsOptions = zero
@@ -2283,6 +2288,12 @@ fn middle_cut(a: *mem.Arena, t: *const control.Theme, text: str, caption: contro
 }
 
 fn trail_crumb(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, action: *const widget.Submit, height: f32, widest: f32) -> (widget.Node, err) {
+    let (made, made_error) = trail_crumb_icon(a, key, t, label, action, height, widest, false, .MoreHoriz)
+    ret (made, made_error)
+}
+
+// (D1308) The same led, with `has_icon`, by an 18 `glyph` 4 before the label.
+fn trail_crumb_icon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, action: *const widget.Submit, height: f32, widest: f32, has_icon: bool, glyph: control.GlyphKind) -> (widget.Node, err) {
     let (look, ink) = crumb_look(t, key, height)
     var caption = control.text_options()
     caption.role = .BodyMedium
@@ -2291,10 +2302,22 @@ fn trail_crumb(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     caption.max_lines = 1u32
     // (D1290) A long name is cut in its middle, its whole name kept as the
     // crumb's name in the tree.
-    let shown = middle_cut(a, t, label, caption, control.max_zero(widest - 16.0))
+    var room = control.max_zero(widest - 16.0)
+    if has_icon { room = control.max_zero(room - 22.0) }
+    let shown = middle_cut(a, t, label, caption, room)
     let (said, said_error) = control.colored_text(a, 0u64, shown, t, caption, ink)
     if said_error != ok { ret (zero, said_error) }
-    let (made, made_error) = control.pressable_states(a, key, t, 9u8, label, look, true, false, 0u32, 0u32, 0u64, action, said)
+    var content = said
+    if has_icon {
+        let (lead, lead_error) = control.icon_square(a, ink, glyph, 18.0)
+        if lead_error != ok { ret (zero, lead_error) }
+        let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+        if bits_error != ok { ret (zero, TooLarge) }
+        bits[0usize] = lead
+        bits[1usize] = said
+        content = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), bits[0usize..2usize])
+    }
+    let (made, made_error) = control.pressable_states(a, key, t, 9u8, label, look, true, false, 0u32, 0u32, 0u64, action, content)
     if made_error != ok { ret (zero, made_error) }
     var capped = made
     capped.style.max_width = style.Length { Px: widest }
@@ -2381,10 +2404,48 @@ fn breadcrumbs_fit(a: *mem.Arena, t: *const control.Theme, names: []const str, w
 // fewest levels that let it fit.
 // (D1290) A long crumb is cut in its middle (`middle_cut`).
 // (D1291) A cut crumb's whole name is its tooltip.
-// ponytail: no root icon, drop targets, sibling menus or editable path.
+// (D1308) The root crumb's icon and the editable path (`BreadcrumbsOptions`):
+// the path field is keyed `key + 60`, the empty space after the trail `key + 61`.
+// ponytail: no drop targets or sibling menus; no Tab completion of folder names.
 fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit, given: BreadcrumbsOptions) -> (widget.Node, err) {
     if picks.len != names.len || names.len == 0usize { ret (zero, TooLarge) }
     var options = given
+    // The trail's own actions, in the arena since the tree outlives this call:
+    // edit, go and cancel.
+    let (path_actions, path_actions_error) = mem.alloc[widget.Submit](a, 3usize)
+    if path_actions_error != ok { ret (zero, TooLarge) }
+    path_actions[0usize] = options.edit
+    path_actions[1usize] = options.go
+    path_actions[2usize] = options.cancel
+    let editable = widget.submit_set(options.edit.invoke)
+    if options.editing {
+        // (D1308) The path as editable text in the trail's place.
+        var field = control.field_options()
+        field.width = options.width
+        field.invalid = options.path_error.len != 0usize
+        let (field_node, field_error) = control.text_field(a, key + 60u64, t, label, options.path, options.path_len, options.typed, path_actions[1usize], field)
+        if field_error != ok { ret (zero, field_error) }
+        let (edited, edited_error) = mem.alloc[widget.Node](a, 2usize)
+        if edited_error != ok { ret (zero, TooLarge) }
+        edited[0usize] = field_node
+        var edited_count = 1usize
+        if options.path_error.len != 0usize {
+            let (said, said_error) = control.field_message(a, key + 62u64, t, control.Message { validity: .Invalid, text: options.path_error }, key + 60u64)
+            if said_error != ok { ret (zero, said_error) }
+            edited[1usize] = said
+            edited_count = 2usize
+        }
+        let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+        if column_error != ok { ret (zero, TooLarge) }
+        column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), edited[0usize..edited_count])
+        let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+        if scoped_error != ok { ret (zero, TooLarge) }
+        scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: zero, default_action: zero, cancel_action: path_actions[2usize], keys: zero }, style.defaults(), column[0usize..1usize])
+        var editing_sem: widget.Semantics = zero
+        editing_sem.role = 2u8
+        editing_sem.label = label
+        ret (widget.semantics(key, editing_sem, style.defaults(), scoped[0usize..1usize]), ok)
+    }
     if options.width > 0.0 && options.hidden == 0usize && !options.compact { options.hidden = breadcrumbs_fit(a, t, names, options.width) }
     if options.hidden > 0usize && options.hidden + 3usize > names.len { ret (zero, TooLarge) }
     let (held, held_error) = mem.alloc[widget.Submit](a, 1usize)
@@ -2474,7 +2535,7 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
                 continue
             }
             if i < last {
-                let (made, made_error) = trail_crumb(a, key + 1u64 + u64(i), t, names[i], &picks[i], h, widest)
+                let (made, made_error) = trail_crumb_icon(a, key + 1u64 + u64(i), t, names[i], &picks[i], h, widest, i == 0usize && options.root_icon, options.root_glyph)
                 if made_error != ok { ret (zero, made_error) }
                 parts[n] = made
                 n += 1usize
@@ -2513,9 +2574,28 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     var list_sem: widget.Semantics = zero
     list_sem.role = 10u8
     list_sem.row_count = u32(names.len)
-    let (listed, listed_error) = mem.alloc[widget.Node](a, 1usize)
+    let (listed, listed_error) = mem.alloc[widget.Node](a, 3usize)
     if listed_error != ok { ret (zero, TooLarge) }
     listed[0usize] = widget.semantics(0u64, list_sem, style.defaults(), row[0usize..1usize])
+    if editable && !options.compact {
+        // (D1308) Ctrl+L edits the path; so does a press on the trail's empty space.
+        var space = style.defaults()
+        space.width = style.Length { Flex: 1.0 }
+        space.height = style.Length { Px: h }
+        listed[1usize] = listed[0usize]
+        listed[2usize] = widget.region(key + 61u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&path_actions[0usize]), invoke: control.press_tap }, gestures: 1u8, enabled: true, focusable: false }, space, zero)
+        var line = style.defaults()
+        if options.width > 0.0 { line.width = style.Length { Px: options.width } }
+        let (edit_keys, edit_keys_error) = mem.alloc[widget.Shortcut](a, 1usize)
+        if edit_keys_error != ok { ret (zero, TooLarge) }
+        var held_control: input.Modifiers = zero
+        held_control.control = true
+        edit_keys[0usize] = widget.Shortcut { key: 76u32, modifiers: held_control, action: path_actions[0usize] }
+        let (lined, lined_error) = mem.alloc[widget.Node](a, 1usize)
+        if lined_error != ok { ret (zero, TooLarge) }
+        lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, line, listed[1usize..3usize])
+        listed[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: edit_keys[0usize..1usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), lined[0usize..1usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = label

@@ -25263,3 +25263,19 @@ press toggling). In the year view it is expanded, the days are gone, and
 2026 is selected. A press on 2030 shows March 2030 and toggles back. This
 passes on Windows and Linux, and `ui_pickers` and `ui_pickers3_v2` still
 pass on both.
+
+## D1308 — Breadcrumbs gain a root icon and an editable path
+
+`BreadcrumbsOptions` gains the Breadcrumbs spec's root icon and editable
+path. With `root_icon`, the root crumb leads with an 18 `root_glyph` 4
+before its label (`trail_crumb_icon`). With `edit` set, Ctrl+L on the trail
+or a press on its empty space (`key + 61`, the rest of `width`) fires it.
+With `editing`, a text field (`key + 60`) over the caller's `path` stands
+in the trail's place: Enter fires `go`, Escape fires `cancel`, and a
+non-empty `path_error` marks the field invalid with the message under it.
+Drop targets, sibling menus and folder-name completion are still to come.
+
+`ui_navigation2_v2` holds the iconed root crumb (at least 38 wide), with
+Ctrl+L and the empty-space press each asking to edit. Editing, the field
+replaces the crumbs, Enter goes and Escape cancels. This passes on Windows
+and Linux, and `ui_content2_v2` still passes on both.
