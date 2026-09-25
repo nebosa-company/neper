@@ -147,6 +147,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.bar[1usize].glyph = .Alert
     s.bar[1usize].tone = .Error
     s.bar[1usize].action = s.press
+    s.bar[1usize].tooltip = "Open Problems"
     s.bar[2usize] = navigation.status_item("Indexing")
     s.bar[2usize].progress = 0.5
     s.bar[3usize] = navigation.status_item("Ln 4, Col 2")
@@ -204,6 +205,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     f = mem.arena_from(frame_storage)
     let (focused_root, focused_root_error) = build(&f, &theme, s)
     if focused_root_error != ok || testing.pump(&harness, focused_root, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(33i32) }
+    let (focused_tree, focused_tree_error) = testing.semantics(&harness)
+    let (_, has_problem_tip) = find(focused_tree, .Tooltip, "Open Problems")
+    if focused_tree_error != ok || !has_problem_tip { os.exit(35i32) }
     let (focused_shot, focused_shot_error) = testing.snapshot(&harness, a)
     let (problem, has_problem) = bounds(&harness, &runtime, 3002u64)
     if focused_shot_error != ok || !has_problem || !is_color(focused_shot, at(problem.x + 4.0, problem.y + 12.0), style.color(&tokens, .FocusRing)) || is_color(focused_shot, at(problem.x + 1.0, problem.y + 12.0), style.color(&tokens, .FocusRing)) { os.exit(34i32) }

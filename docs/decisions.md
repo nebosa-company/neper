@@ -23454,3 +23454,12 @@ their ring visible inside the bar's edge-to-edge 24-pixel row.
 `ui_status5_v2` holds the inset pixels and `ui_focus_ring` holds the unchanged
 default ring on Windows and Linux. The Segoe review is
 `build/ux/status-bar-focus-segoe.png`.
+
+## D1181 — Status actions own explicit tooltip text
+
+A pressable Status Item can now provide the words describing what it opens.
+The item reuses the shared Tooltip timing, focus trigger, placement and
+`described-by` relationship; passive and unlabelled actions add no overlay.
+
+`ui_status5_v2` holds a focused “Open Problems” tooltip on Windows and Linux.
+The Segoe review is `build/ux/status-bar-tooltip-segoe.png`.

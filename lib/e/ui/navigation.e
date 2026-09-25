@@ -376,8 +376,8 @@ fn toolbar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
 // A status bar item (D971): its text, an optional 16 glyph, its tone (Error and
 // Warning colour the glyph; anything else is `on-surface-variant`), whether it
 // sits in the end group, an optional press (unset: a plain item), and a progress
-// share for the meter item (below zero: none).
-type StatusItem = struct { text: str, glyph: control.GlyphKind, marked: bool, tone: control.StatusTone, end: bool, action: widget.Submit, progress: f32 }
+// share for the meter item (below zero: none), and optional action tooltip.
+type StatusItem = struct { text: str, glyph: control.GlyphKind, marked: bool, tone: control.StatusTone, end: bool, action: widget.Submit, progress: f32, tooltip: str }
 
 // A plain text item at the start.
 fn status_item(text: str) -> StatusItem {
@@ -413,7 +413,7 @@ fn status_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, sections:
 // under the `state-hover` layer. Only the first item, the message, is a polite
 // status named by its text. Pressable items share one roving Tab stop, with
 // Left/Right and Home/End moving in visual order.
-// ponytail: no narrowing rules or tooltips.
+// ponytail: no narrowing rules.
 type StatusMove = struct { runtime: *widget.Runtime, keys: []const widget.Key, backward: bool, edge: bool }
 
 fn status_move_fire(ctx: *void) -> err {
@@ -540,6 +540,16 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
                 let (untabbed, untabbed_error) = untab_pressable(a, made)
                 if untabbed_error != ok { ret (zero, untabbed_error) }
                 made = untabbed
+            }
+            if item.tooltip.len > 0usize {
+                let item_key = key + 1u64 + u64(i)
+                let (tip, tip_error) = overlay.tooltip(a, key + 1000000u64 + u64(i), t, item_key, item.tooltip, overlay.tooltip_wanted(t, item_key))
+                if tip_error != ok { ret (zero, tip_error) }
+                let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+                if layers_error != ok { ret (zero, TooLarge) }
+                layers[0usize] = made
+                layers[1usize] = tip
+                made = widget.stack(0u64, style.defaults(), layers[0usize..2usize])
             }
         } else {
             let (wraps, wraps_error) = mem.alloc[widget.Node](a, 1usize)
