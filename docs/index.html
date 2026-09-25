@@ -472,7 +472,7 @@ Hello, Neper</code></pre>
         <form method="dialog"><button class="catalog-dialog-close" aria-label="Close module catalog"><span aria-hidden="true">×</span></button></form>
       </header>
       <div class="catalog-dialog-body">
-        <p class="catalog-dialog-status" aria-live="polite">Loading the canonical module catalog…</p>
+        <p class="catalog-dialog-status" aria-live="polite" hidden></p>
         <div class="catalog-dialog-groups"></div>
       </div>
     </div>
@@ -484,7 +484,7 @@ Hello, Neper</code></pre>
         <form method="dialog"><button class="catalog-dialog-close" aria-label="Close algorithm catalog"><span aria-hidden="true">×</span></button></form>
       </header>
       <div class="catalog-dialog-body">
-        <p class="catalog-dialog-status" aria-live="polite">Loading the canonical algorithm catalog…</p>
+        <p class="catalog-dialog-status" aria-live="polite" hidden></p>
         <div class="catalog-dialog-groups"></div>
       </div>
     </div>
@@ -496,7 +496,7 @@ Hello, Neper</code></pre>
         <form method="dialog"><button class="catalog-dialog-close" aria-label="Close UI control catalog"><span aria-hidden="true">×</span></button></form>
       </header>
       <div class="catalog-dialog-body">
-        <p class="catalog-dialog-status" aria-live="polite">Loading the UI control catalog…</p>
+        <p class="catalog-dialog-status" aria-live="polite" hidden></p>
         <div class="catalog-dialog-groups"></div>
       </div>
     </div>
@@ -515,7 +515,7 @@ Hello, Neper</code></pre>
       ["Media and refresh", "Carousel PullToRefresh".split(" ")]
     ])
 
-    function renderCatalog(dialog, groups, expected, describe) {
+    function renderCatalog(dialog, groups, expected) {
       const output = dialog.querySelector(".catalog-dialog-groups")
       const fragment = document.createDocumentFragment()
       let count = 0
@@ -563,7 +563,7 @@ Hello, Neper</code></pre>
       }
       if (count !== expected) throw new Error(`expected ${expected} catalog entries, got ${count}`)
       output.replaceChildren(fragment)
-      dialog.querySelector(".catalog-dialog-status").textContent = describe(count, groups.size)
+      dialog.querySelector(".catalog-dialog-status").hidden = true
       dialog.dataset.loaded = "true"
     }
 
@@ -790,7 +790,7 @@ Hello, Neper</code></pre>
         if (!groups.has(namespace)) groups.set(namespace, [])
         groups.get(namespace).push({name, description: describeModule(name)})
       }
-      renderCatalog(dialog, groups, 344, (count, namespaces) => `${count} modules across ${namespaces} namespaces.`)
+      renderCatalog(dialog, groups, 344)
     }
 
     async function loadAlgorithms(dialog) {
@@ -806,12 +806,12 @@ Hello, Neper</code></pre>
         if (!groups.has(category)) groups.set(category, [])
         groups.get(category).push({name: entry[1], detail: entry[2]})
       }
-      renderCatalog(dialog, groups, 1232, (count, categories) => `${count.toLocaleString()} algorithms across ${categories} categories.`)
+      renderCatalog(dialog, groups, 1232)
     }
 
     function loadControls(dialog) {
       const groups = new Map([...controlGroups].map(([category, names]) => [category, names.map(name => ({name, preview: name, href: `ux/components/${name}/preview.html`}))]))
-      renderCatalog(dialog, groups, 112, (count, categories) => `${count} controls across ${categories} categories. Scroll the real renders or select a card for its full preview.`)
+      renderCatalog(dialog, groups, 112)
     }
 
     for (const trigger of document.querySelectorAll("[data-catalog]")) {
@@ -824,7 +824,9 @@ Hello, Neper</code></pre>
           else if (dialog.id === "algorithm-catalog") await loadAlgorithms(dialog)
           else loadControls(dialog)
         } catch {
-          dialog.querySelector(".catalog-dialog-status").textContent = "Could not load this catalog."
+          const status = dialog.querySelector(".catalog-dialog-status")
+          status.textContent = "Could not load this catalog."
+          status.hidden = false
         }
       })
     }
