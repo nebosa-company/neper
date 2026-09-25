@@ -23375,3 +23375,13 @@ cell under the pointer.
 
 `ui_inputs3_v2` holds the current-star focus layer on Windows and Linux. The
 Segoe review is `build/ux/rating-focus-segoe.png`.
+
+## D1172 — Rating pressed state wins per cell
+
+Rating's existing interaction scan now records the pressed cell as well as the
+hovered cell. That cell receives the theme's pressed state layer after focus
+and hover are resolved, matching the shared state precedence without changing
+selection timing.
+
+`ui_inputs3_v2` holds the pressed pixel on Windows and Linux. The Segoe review
+is `build/ux/rating-pressed-segoe.png`.
