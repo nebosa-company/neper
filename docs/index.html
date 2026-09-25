@@ -183,6 +183,7 @@
     .catalog-entry-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
     .catalog-entry { display: grid; gap: 2px; min-width: 0; padding: var(--space-3); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest); color: inherit; text-decoration: none; }
     .catalog-entry span { overflow-wrap: anywhere; font: 600 12px/18px var(--font-sans); }
+    .catalog-entry p { margin: var(--space-1) 0 0; color: var(--muted); font: 400 12px/18px var(--font-sans); }
     .catalog-entry code { overflow-wrap: anywhere; color: var(--primary); font: 400 11px/16px var(--font-mono); }
     #control-catalog .catalog-entry-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--space-4); }
     #control-catalog .catalog-entry { overflow: hidden; gap: 0; padding: 0; border-radius: var(--radius-md); }
@@ -543,6 +544,11 @@ Hello, Neper</code></pre>
           const name = document.createElement("span")
           name.textContent = item.name
           card.append(name)
+          if (item.description) {
+            const description = document.createElement("p")
+            description.textContent = item.description
+            card.append(description)
+          }
           if (item.detail) {
             const detail = document.createElement("code")
             detail.textContent = item.detail
@@ -561,15 +567,27 @@ Hello, Neper</code></pre>
     }
 
     async function loadModules(dialog) {
-      const response = await fetch("modules.json")
-      if (!response.ok) throw new Error("module catalog unavailable")
-      const plan = await response.json()
+      const [modulesResponse, apiResponse] = await Promise.all([fetch("modules.json"), fetch("module-apis.md")])
+      if (!modulesResponse.ok || !apiResponse.ok) throw new Error("module catalog unavailable")
+      const plan = await modulesResponse.json()
+      const descriptions = new Map()
+      for (const section of (await apiResponse.text()).split(/^### /m).slice(1)) {
+        const name = section.match(/^`([^`]+)`/)?.[1]
+        const firstFence = section.indexOf("```")
+        const secondFence = section.indexOf("```", firstFence + 3)
+        if (!name || secondFence < 0) continue
+        const paragraph = section.slice(secondFence + 3).trim().split(/\r?\n\s*\r?\n/, 1)[0]
+        const prose = paragraph.replace(/\s+/g, " ").replaceAll("`", "").trim()
+        const sentence = prose.match(/^.*?[.!?](?=\s|$)/)?.[0] || prose
+        descriptions.set(name, sentence.length > 200 ? `${sentence.slice(0, 197).replace(/\s+\S*$/, "")}…` : sentence)
+      }
       const modules = [...new Set(plan.tiers.flatMap(tier => tier.modules))].sort()
       const groups = new Map()
       for (const name of modules) {
         const namespace = name.split(".").slice(0, 2).join(".")
         if (!groups.has(namespace)) groups.set(namespace, [])
-        groups.get(namespace).push({name})
+        const topic = name.replace(/^e\.(?:[^.]+\.)?/, "").replaceAll(".", " ").replaceAll("_", " ")
+        groups.get(namespace).push({name, description: descriptions.get(name) || `Standard-library support for ${topic}.`})
       }
       renderCatalog(dialog, groups, 344, (count, namespaces) => `${count} modules across ${namespaces} namespaces.`)
     }
