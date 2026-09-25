@@ -561,7 +561,6 @@ Hello, Neper</code></pre>
         const collapsible = dialog.id === "algorithm-catalog"
         const group = document.createElement(collapsible ? "details" : "section")
         group.className = "catalog-dialog-group"
-        if (collapsible && count === 0) group.open = true
         const heading = document.createElement(collapsible ? "summary" : "h3")
         heading.textContent = dialog.id === "control-catalog" ? category : `${category} (${items.length})`
         const grid = document.createElement("div")
