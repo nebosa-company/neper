@@ -262,13 +262,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A tap on the Size header asks to sort by 1; dragging Kind's header onto
     // Name's reorders 2 to 0; dragging Name's handle 40 right resizes Name to
     // 140; a tap on a row picks its key.
-    let (size_at, has_size) = centre_of(&harness, &runtime, 3u64)
+    let (size_at, has_size) = centre_of(&harness, &runtime, 4u64)
     if !has_size || testing.tap(&harness, size_at.x, size_at.y) != ok || logs[0usize].sorts != 1usize || logs[0usize].sorted != 1usize { os.exit(18i32) }
-    let (kind_at, has_kind) = centre_of(&harness, &runtime, 4u64)
+    let (kind_at, has_kind) = centre_of(&harness, &runtime, 6u64)
     let (name_at, has_name) = centre_of(&harness, &runtime, 2u64)
     if !has_kind || !has_name || testing.drag(&harness, kind_at, name_at, 5usize) != ok { os.exit(19i32) }
     if logs[0usize].reorders != 1usize || logs[0usize].reorder.from != 2usize || logs[0usize].reorder.to != 0usize { os.exit(20i32) }
-    let (grip_at, has_grip) = centre_of(&harness, &runtime, 65u64)
+    let (grip_at, has_grip) = centre_of(&harness, &runtime, 3u64)
     if !has_grip || testing.drag(&harness, grip_at, geometry.Point { x: grip_at.x + 40.0, y: grip_at.y }, 4usize) != ok { os.exit(21i32) }
     if logs[0usize].resizes == 0usize || logs[0usize].resized.column != 0usize || logs[0usize].resized.width < 135.0 || logs[0usize].resized.width > 145.0 { os.exit(22i32) }
     let (row_at, has_row) = centre_of(&harness, &runtime, 1001u64)

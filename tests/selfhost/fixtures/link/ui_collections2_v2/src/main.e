@@ -215,15 +215,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // The header: 47 of `surface-container` over the 1px line; the sorted Name's
     // arrow in `on-surface` 16 in; the resize line 12 in from top and bottom.
     let (name, has_name) = bounds(&harness, &runtime, 2u64)
-    let (grip, has_grip) = bounds(&harness, &runtime, 65u64)
+    let (grip, has_grip) = bounds(&harness, &runtime, 3u64)
     if !has_name || !has_grip || !near(name.height, 47.0) || !near(name.width, 112.0) || !near(grip.x, name.x + 112.0) { os.exit(13i32) }
     if !is_color(shot, at(name.x + 80.0, name.y + 24.0), style.color(&tokens, .SurfaceContainer)) || !is_color(shot, at(name.x + 80.0, name.y + 47.5), rule) { os.exit(14i32) }
     if !any_color(shot, name.x + 16.0, name.y + 14.0, 18.0, 20.0, style.color(&tokens, .OnSurface)) || any_color(shot, name.x + 40.0, name.y + 4.0, 60.0, 40.0, style.color(&tokens, .OnSurface)) { os.exit(15i32) }
     if !is_color(shot, at(grip.x + 3.5, grip.y + 24.0), rule) || !is_color(shot, at(grip.x + 3.5, grip.y + 6.0), style.color(&tokens, .SurfaceContainer)) { os.exit(16i32) }
     let (files, has_files) = find(tree, .Table, "Files")
     let (name_header, has_name_header) = find(tree, .ColumnHeader, "Name")
-    if !has_files || files.position.row_count != 50u32 || files.position.column_count != 3u32 || !has_name_header || !name_header.state.selected { os.exit(17i32) }
+    let (name_grip, has_name_grip) = find(tree, .Separator, "Resize Name")
+    if !has_files || files.position.row_count != 50u32 || files.position.column_count != 3u32 || !has_name_header || !name_header.state.selected || !has_name_grip || !same(name_grip.value, "120 px") { os.exit(17i32) }
     if widget.semantic_action(&runtime, name_header.id, accessibility.ACTION_PRESS) != ok || logs[0usize].sorts != 1usize { os.exit(53i32) }
+    if widget.semantic_action(&runtime, name_grip.id, accessibility.ACTION_INCREMENT) != ok || logs[0usize].resizes != 1usize || !near(logs[0usize].width, 136.0) { os.exit(54i32) }
+    if widget.semantic_action(&runtime, name_grip.id, accessibility.ACTION_DECREMENT) != ok || logs[0usize].resizes != 2usize || !near(logs[0usize].width, 104.0) { os.exit(55i32) }
     // The rows: 40 each (39 over the divider) on `surface`, 48 under the
     // header's top; Beta (1001) `secondary-container`.
     let (first, has_first) = bounds(&harness, &runtime, 1000u64)
@@ -264,14 +267,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_4, root_4_error) = build(&f, &theme, ctx, columns[0usize..3usize])
     if root_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok || !focused_is(&harness, 1000u64) { os.exit(39i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(43i32) }
-    if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 3u64) { os.exit(46i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 4u64) { os.exit(46i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(47i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].sorts != 2usize { os.exit(44i32) }
     if testing.press_key(&harness, 32u32, zero) != ok || logs[0usize].sorts != 3usize { os.exit(45i32) }
     var alt: input.Modifiers = zero
     alt.alt = true
-    if testing.press_key(&harness, 39u32, alt) != ok || logs[0usize].resizes != 1usize || !near(logs[0usize].width, 136.0) { os.exit(49i32) }
-    if testing.press_key(&harness, 37u32, alt) != ok || logs[0usize].resizes != 2usize || !near(logs[0usize].width, 104.0) { os.exit(50i32) }
+    if testing.press_key(&harness, 39u32, alt) != ok || logs[0usize].resizes != 3usize || !near(logs[0usize].width, 136.0) { os.exit(49i32) }
+    if testing.press_key(&harness, 37u32, alt) != ok || logs[0usize].resizes != 4usize || !near(logs[0usize].width, 104.0) { os.exit(50i32) }
     var move_modifiers: input.Modifiers = zero
     move_modifiers.control = true
     move_modifiers.shift = true

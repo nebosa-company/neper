@@ -22657,3 +22657,13 @@ Enter or Space; unknown actions remain no-ops.
 
 `ui_collections2_v2` holds the semantic action on Windows and Linux. This is
 behavior-only on the reviewed HeaderRow surface.
+
+## D1099 — Header resize grips are adjustable separators
+
+Header cells and resize grips use adjacent interleaved keys instead of the
+fixed `key + 64 + index` grip range. Each grip is a named Separator whose value
+is the column width in pixels; Increment and Decrement reuse ColumnResize in
+16-pixel steps and the existing minimum.
+
+`ui_collections2_v2` and `ui_tabular` hold stable identity, value exposure and
+both semantic actions on Windows and Linux. The reviewed surface is unchanged.
