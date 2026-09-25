@@ -24384,3 +24384,18 @@ The bar's actions stay icon buttons rather than the spec's text buttons, and
 Shift+Up/Down stop at the built rows' edge. `ui_collections2_v2` holds both
 checkbox states, the checkbox toggle, the plain pick, Ctrl-click, Space,
 Ctrl+A, the bar, the mixed header and the toggling click on Windows and Linux.
+
+## D1247 — Lists and grids have loading and empty states
+
+With no items, `ListOptions.loading` puts 3 to 8 skeleton rows where the rows
+would be (`loading_rows`), in a busy group named "Loading" keyed `key + 1`
+that carries the shimmer sweep; the skeleton rows stay out of the tree, as the
+List spec asks. `GridOptions.loading` does the same with tiles: a `radius-md`
+square the tile's side over a caption bar 60% wide. `GridOptions.empty_title`
+and `empty_message` give a grid the list's compact empty state. Loading wins
+over empty.
+
+The skeleton rows are the 72 avatar rows whatever the real row's height, and
+they do not add "Still loading" after 10 seconds. `ui_collections_v2` holds the
+busy group and the 5 x 72 column, the loading grid and the empty grid on Windows
+and Linux.

@@ -591,6 +591,56 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_gamma_tile || widget.dispatch(&runtime, input.Event { KeyDown: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: control_only, repeat: false } }) != ok { os.exit(140i32) }
     if testing.tap(&harness, gamma_tile.x + gamma_tile.width * 0.5, gamma_tile.y + gamma_tile.height * 0.5) != ok || grid_chosen.kind != .Toggle || grid_chosen.index != 2usize { os.exit(141i32) }
     if widget.dispatch(&runtime, input.Event { KeyUp: input.KeyEvent { window: testing.no_window(), key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(142i32) }
+    // (D1247) With nothing to show: a loading list holds 5 skeleton rows (72 each)
+    // in a busy "Loading" group; a loading grid does the same with tiles; an empty
+    // grid shows its empty state.
+    var no_rows: [1]collection.RowItem = zero
+    var no_keys: [1]widget.Key = zero
+    var waiting = collection.list_options()
+    waiting.width = 300.0
+    waiting.loading = 5usize
+    var waiting_grid = collection.grid_options()
+    waiting_grid.width = 600.0
+    waiting_grid.loading = 4usize
+    var bare_grid = collection.grid_options()
+    bare_grid.width = 600.0
+    bare_grid.empty_title = "No photos"
+    bare_grid.empty_message = "Photos you add appear here"
+    var no_tiles: [1]collection.Tile = zero
+    var wait_step = 0usize
+    while wait_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        var shown_node: widget.Node = zero
+        if wait_step == 0usize {
+            let (made, made_error) = collection.list_of(&f, 960u64, &theme, "Waiting", no_rows[0usize..0usize], no_keys[0usize..0usize], waiting)
+            if made_error != ok { os.exit(143i32) }
+            shown_node = made
+        }
+        if wait_step == 1usize {
+            let (made, made_error) = collection.grid_view_of(&f, 970u64, &theme, "Waiting tiles", no_tiles[0usize..0usize], no_keys[0usize..0usize], waiting_grid)
+            if made_error != ok { os.exit(143i32) }
+            shown_node = made
+        }
+        if wait_step == 2usize {
+            let (made, made_error) = collection.grid_view_of(&f, 980u64, &theme, "Photos", no_tiles[0usize..0usize], no_keys[0usize..0usize], bare_grid)
+            if made_error != ok { os.exit(143i32) }
+            shown_node = made
+        }
+        let (wait_page, wait_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if wait_page_error != ok { os.exit(144i32) }
+        wait_page[0usize] = shown_node
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), wait_page[0usize..1usize]), time.Instant { nanos: 6000000000i64 + i64(wait_step) }) != ok { os.exit(145i32) }
+        let (wait_tree, wait_tree_error) = testing.semantics(&harness)
+        if wait_tree_error != ok { os.exit(146i32) }
+        let (busy, has_busy) = find(wait_tree, .Group, "Loading")
+        if wait_step < 2usize && (!has_busy || !busy.state.busy) { os.exit(147i32) }
+        if wait_step == 0usize {
+            let (bones, has_bones) = bounds(&harness, &runtime, 961u64)
+            if !has_bones || !near(bones.height, 360.0) { os.exit(148i32) }
+        }
+        if wait_step == 2usize && (has_busy || testing.by_text(&harness, "No photos").count == 0usize) { os.exit(149i32) }
+        wait_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok
