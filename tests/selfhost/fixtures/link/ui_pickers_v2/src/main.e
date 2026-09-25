@@ -342,6 +342,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if typed_step == 1usize && testing.by_text(&harness, "Enter a date as mm/dd/yyyy").count == 0usize { os.exit(97i32) }
         typed_step += 1usize
     }
+    // (D1258) The open picker's footer: Today picks today, Clear clears.
+    let footer_today = time.Date { year: 2026i32, month: 9u8, day: 25u8 }
+    var footer_marks: overlay.DateFooter = zero
+    footer_marks.today = footer_today
+    footer_marks.clear = &stores[0usize].press
+    f = mem.arena_from(frame_storage)
+    let (footed, footed_error) = overlay.date_picker_with(&f, 970u64, &theme, "Release date", footer_today, false, true, &stores[0usize].press, first_of_march, no_dates, picked_dates, footer_marks)
+    let (footed_page, footed_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if footed_error != ok || footed_page_error != ok { os.exit(98i32) }
+    footed_page[0usize] = footed
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), footed_page[0usize..1usize]), time.Instant { nanos: 3300000000i64 }) != ok { os.exit(99i32) }
+    var reset_day: time.Date = zero
+    stores[0usize].last_date = reset_day
+    let (today_box, has_today_box) = bounds(&harness, &runtime, 1034u64)
+    let (clear_box, has_clear_box) = bounds(&harness, &runtime, 1035u64)
+    if !has_today_box || !has_clear_box || !(clear_box.x > today_box.x + today_box.width) { os.exit(100i32) }
+    if testing.tap(&harness, today_box.x + today_box.width * 0.5, today_box.y + today_box.height * 0.5) != ok || stores[0usize].last_date.day != 25u8 || stores[0usize].last_date.month != 9u8 { os.exit(101i32) }
+    let toggles_before_clear = stores[0usize].toggles
+    if testing.tap(&harness, clear_box.x + clear_box.width * 0.5, clear_box.y + clear_box.height * 0.5) != ok || stores[0usize].toggles != toggles_before_clear + 1usize { os.exit(102i32) }
     // (D1230) Times in the locale's clock, and typed times in any common form.
     let (clock_bytes, clock_bytes_error) = mem.alloc[u8](a, 16usize)
     if clock_bytes_error != ok { os.exit(50i32) }

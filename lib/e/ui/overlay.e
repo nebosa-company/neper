@@ -3303,7 +3303,21 @@ fn weekday_name(day: usize, narrow: bool) -> str {
 // Alt+Down opens a closed picker; opening requests focus on the selected day in
 // the shown month, or day 1 otherwise.
 fn date_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
-    let (made, made_error) = dated(a, key, t, label, value, has_value, false, value, value, open, toggle, shown, show, pick)
+    var footer: DateFooter = zero
+    let (made, made_error) = dated(a, key, t, label, value, has_value, false, value, value, open, toggle, shown, show, pick, footer)
+    ret (made, made_error)
+}
+
+// (D1258) The docked calendar's footer: `today` (picked by Today) and what Clear
+// does; with `clear` unset there is no footer.
+type DateFooter = struct { today: time.Date, clear: *const widget.Submit }
+
+// (D1258, docs/ux/components/DatePicker, docked) `date_picker` with the docked
+// calendar's footer under the days: Today and Clear text buttons 32 tall, spread
+// to the ends (keyed `key + 64` and `key + 65`). Today picks `footer.today`
+// through `pick`, like a press on its day, and Clear fires `footer.clear`.
+fn date_picker_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date], footer: DateFooter) -> (widget.Node, err) {
+    let (made, made_error) = dated(a, key, t, label, value, has_value, false, value, value, open, toggle, shown, show, pick, footer)
     ret (made, made_error)
 }
 
@@ -3311,7 +3325,8 @@ fn date_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // both ends marked and the days between banded; a pick reaches `pick` and the
 // caller decides which end it sets.
 fn date_range_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, from: time.Date, to: time.Date, has_range: bool, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
-    let (made, made_error) = dated(a, key, t, label, from, has_range, true, from, to, open, toggle, shown, show, pick)
+    var footer: DateFooter = zero
+    let (made, made_error) = dated(a, key, t, label, from, has_range, true, from, to, open, toggle, shown, show, pick, footer)
     ret (made, made_error)
 }
 
@@ -3389,9 +3404,9 @@ fn date_open_fire(ctx: *void) -> err {
 // (`write_date_in`, ISO with no language); `parse_date` reads typed dates and
 // `date_format_hint` names the form.
 // (D1257) `date_entry` is the typed form (input mode) with its inline error.
-// ponytail: this docked field stays read-only; no Today and Clear footer or modal
-// touch form.
-fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, ranged: bool, from: time.Date, to: time.Date, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
+// (D1258) `date_picker_with` adds the Today and Clear footer.
+// ponytail: this docked field stays read-only; no modal touch form.
+fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, ranged: bool, from: time.Date, to: time.Date, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date], footer: DateFooter) -> (widget.Node, err) {
     let (text_bytes, text_error) = mem.alloc[u8](a, 32usize)
     if text_error != ok { ret (zero, TooLarge) }
     var caption: str = label
@@ -3433,9 +3448,33 @@ fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, va
     if open {
         let (month, month_error) = calendar(a, key + 2u64, t, label, shown, value, has_value, ranged, from, to, show, pick)
         if month_error != ok { ret (zero, month_error) }
-        let (inside, inside_error) = mem.alloc[widget.Node](a, 1usize)
+        let (inside, inside_error) = mem.alloc[widget.Node](a, 4usize)
         if inside_error != ok { ret (zero, TooLarge) }
         inside[0usize] = month
+        if mem.address_of(footer.clear) != 0usize {
+            let (todays, todays_error) = mem.alloc[DayPick](a, 1usize)
+            if todays_error != ok { ret (zero, TooLarge) }
+            let (today_press, today_press_error) = mem.alloc[widget.Submit](a, 1usize)
+            if today_press_error != ok { ret (zero, TooLarge) }
+            todays[0usize] = DayPick { day: footer.today, pick: pick, runtime: t.runtime, focus: 0u64 }
+            today_press[0usize] = widget.Submit { ctx: mem.cast[*void](&todays[0usize]), invoke: day_fire }
+            var plain = control.button_options()
+            plain.variant = .Plain
+            let (today_button, today_error) = control.button(a, key + 64u64, t, "Today", &today_press[0usize], plain)
+            if today_error != ok { ret (zero, today_error) }
+            let (clear_button, clear_error) = control.button(a, key + 65u64, t, "Clear", footer.clear, plain)
+            if clear_error != ok { ret (zero, clear_error) }
+            inside[2usize] = today_button
+            inside[3usize] = clear_button
+            var foot = style.defaults()
+            foot.width = style.Length { Px: 7.0 * cell }
+            foot.min_height = style.Length { Px: 32.0 }
+            let (footed, footed_error) = mem.alloc[widget.Node](a, 2usize)
+            if footed_error != ok { ret (zero, TooLarge) }
+            footed[0usize] = month
+            footed[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceBetween, cross: .Center, gap: 0.0 }, foot, inside[2usize..4usize])
+            inside[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, style.defaults(), footed[0usize..2usize])
+        }
         var raised = control.surface_options(t)
         raised.background = .SurfaceContainerHigh
         raised.radius = t.tokens.radii.md
