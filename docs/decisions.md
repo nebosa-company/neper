@@ -22612,3 +22612,12 @@ gesture region and callback state.
 
 `ui_collections2_v2` holds Enter and Space sorting on Windows and Linux. This
 is behavior-only on the reviewed HeaderRow surface.
+
+## D1094 — Header arrows stay within the column row
+
+Header cells bind Left and Right to their adjacent stable header keys, clamped
+at the first and last columns. The bindings share the collection focus mover
+already used by rows and grids.
+
+`ui_collections2_v2` holds both horizontal directions on Windows and Linux.
+This is behavior-only on the reviewed HeaderRow surface.

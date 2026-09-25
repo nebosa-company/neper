@@ -1288,8 +1288,10 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
     if drags_error != ok { ret (zero, TooLarge) }
     let (resizes, resizes_error) = mem.alloc[Resizing](a, columns.len)
     if resizes_error != ok { ret (zero, TooLarge) }
-    let (sort_keys, sort_keys_error) = mem.alloc[widget.Shortcut](a, columns.len)
-    if sort_keys_error != ok { ret (zero, TooLarge) }
+    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 3usize * columns.len)
+    if moves_error != ok { ret (zero, TooLarge) }
+    let (header_keys, header_keys_error) = mem.alloc[widget.Shortcut](a, 3usize * columns.len)
+    if header_keys_error != ok { ret (zero, TooLarge) }
     let grip: f32 = 8.0
     let inner = height - t.tokens.sizes.divider
     let inset = control.if_else(height <= 40.0, 8.0, 12.0)
@@ -1348,10 +1350,17 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         control.focus_look(t)
         tapped[0usize] = widget.region(header_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&drags[i]), invoke: header_gesture }, gestures: 1u8 | 2u8 | 4u8 | 8u8, enabled: true, focusable: true }, head_style, content[0usize..1usize])
         let sort_action = widget.Submit { ctx: ctx_of(&drags[i]), invoke: header_sort }
-        sort_keys[i] = widget.Shortcut { key: 32u32, modifiers: zero, action: sort_action }
+        var previous = i
+        if previous > 0usize { previous -= 1usize }
+        var next = i
+        if next + 1usize < columns.len { next += 1usize }
+        let shortcut = 3usize * i
+        bind_move(moves, header_keys, shortcut, t.runtime, key + 1u64 + u64(previous), 37u32)
+        bind_move(moves, header_keys, shortcut + 1usize, t.runtime, key + 1u64 + u64(next), 39u32)
+        header_keys[shortcut + 2usize] = widget.Shortcut { key: 32u32, modifiers: zero, action: sort_action }
         let (keyboard, keyboard_error) = mem.alloc[widget.Node](a, 1usize)
         if keyboard_error != ok { ret (zero, TooLarge) }
-        keyboard[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: sort_keys[i..i + 1usize], default_action: sort_action, cancel_action: zero, keys: zero }, style.defaults(), tapped[0usize..1usize])
+        keyboard[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: header_keys[shortcut..shortcut + 3usize], default_action: sort_action, cancel_action: zero, keys: zero }, style.defaults(), tapped[0usize..1usize])
         var sem: widget.Semantics = zero
         sem.role = 32u8
         sem.label = columns[i].title
