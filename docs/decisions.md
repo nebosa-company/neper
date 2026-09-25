@@ -23411,3 +23411,12 @@ that notice's existing dismiss callback. Pointer close and keyboard dismissal
 therefore share caller-owned mutation and Undo policy.
 
 `ui_desktop` holds Delete dismissal on Windows and Linux.
+
+## D1176 — Notification names carry severity
+
+Notification List item names now prefix the visible title with their severity;
+unread rows prefix that complete phrase, yielding names such as “Unread, error,
+Build 4128 failed”. The status well is no longer the only severity signal.
+
+`ui_status5_v2` holds unread/error ordering and an info row, while `ui_desktop`
+holds the legacy Notice wrapper, on Windows and Linux.

@@ -6754,6 +6754,13 @@ fn toast(a: *mem.Arena, key: widget.Key, t: *const Theme, notices: []const Notic
 // How serious a banner is: the well it takes and how the tree announces it.
 type Severity = enum u8 { Info, Success, Warning, Error }
 
+fn severity_name(severity: Severity) -> str {
+    if severity == .Success { ret "success" }
+    if severity == .Warning { ret "warning" }
+    if severity == .Error { ret "error" }
+    ret "info"
+}
+
 // A banner's layout (D971): the optional title, the standard form (message
 // block, actions in a row below) rather than the inline one-line form, and
 // full-bleed (square, under a bar).
@@ -7685,9 +7692,11 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
         lined[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 12.0 }, row_style, cells[0usize..cell_count])
         var entry: widget.Semantics = zero
         entry.role = 11u8
-        entry.label = item.title
+        let (described, described_error) = joined(a, severity_name(item.severity), item.title)
+        if described_error != ok { ret (zero, described_error) }
+        entry.label = described
         if item.unread {
-            let (named, named_error) = joined(a, "Unread", item.title)
+            let (named, named_error) = joined(a, "Unread", described)
             if named_error != ok { ret (zero, named_error) }
             entry.label = named
         }

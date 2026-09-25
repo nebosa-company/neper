@@ -2,8 +2,8 @@
 // docs/ux/components/NotificationList, StatusBar) under the light theme: a panel
 // on `surface-container-low` with a 56 header, Mark all read and a 1px
 // `outline-variant` line, day group headers, 72 tall rows with a severity well,
-// an unread `primary` dot and "Unread, " in the row's name, the unread count in
-// the region's name, the action and Dismiss pressing, the compact empty state;
+// an unread `primary` dot and unread/severity in the row's name, the unread
+// count in the region's name, the action and Dismiss pressing, the compact empty state;
 // a 24 tall status bar on `surface-container` with the message a polite status,
 // a 48x4 meter, an end group pressing at the end, and the mode variant on
 // `primary-container`.
@@ -168,8 +168,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Group headers where the day changes; the unread row named so, with its
     // well in `error-container` and the `primary` dot.
     if testing.by_text(&harness, "Today").count != 1usize || testing.by_text(&harness, "Yesterday").count != 1usize { os.exit(16i32) }
-    let (unread, has_unread) = find(tree, .ListItem, "Unread, Build 4128 failed")
-    let (read, has_read) = find(tree, .ListItem, "Ada requested your review")
+    let (unread, has_unread) = find(tree, .ListItem, "Unread, error, Build 4128 failed")
+    let (read, has_read) = find(tree, .ListItem, "info, Ada requested your review")
     if !has_unread || !has_read { os.exit(17i32) }
     if !is_color(shot, at(row.x + 22.0, row.y + 32.0), style.color(&tokens, .ErrorContainer)) { os.exit(18i32) }
     if !is_color(shot, at(row.x + row.width - 56.0, row.y + 16.0), style.color(&tokens, .Primary)) { os.exit(19i32) }
