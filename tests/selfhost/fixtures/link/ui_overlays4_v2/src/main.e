@@ -204,14 +204,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (results, has_results) = find(tree, .Listbox, "Commands")
     let (test_node, has_test_node) = find(tree, .Option, "Test")
     if !has_dialog || !dialog.state.modal || !has_combo || !combo.state.expanded || !has_results || !has_test_node || !test_node.state.selected || testing.by_text(&harness, ">").count != 1usize || testing.by_text(&harness, "Type a command").count != 1usize { os.exit(20i32) }
-    // Typing reaches the caller; Down activates Deploy; Enter runs Test.
-    if testing.type_text(&harness, "de") != ok || logs[0usize].typed != 2usize { os.exit(21i32) }
+    // Typing reaches the caller and resets selection to the first result; the
+    // already-built Down action then activates Deploy; Enter runs Test.
+    if testing.type_text(&harness, "de") != ok || logs[0usize].typed != 2usize || logs[0usize].active != 0usize || logs[0usize].activations != 2usize { os.exit(21i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].active != 2usize { os.exit(22i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].runs != 1usize || logs[0usize].ran != 1usize { os.exit(23i32) }
     // From the first row, Up wraps to the last.
     let (root_2, build_2_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Palette, 0usize)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(24i32) }
-    if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].active != 2usize || logs[0usize].activations != 2usize { os.exit(25i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].active != 2usize || logs[0usize].activations != 4usize { os.exit(25i32) }
     // The same field names its file and symbol modes; only modes with a typed
     // prefix reserve the primary-colour prefix slot.
     let (root_files, build_files_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .PaletteFiles, 0usize)

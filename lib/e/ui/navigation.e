@@ -4072,6 +4072,15 @@ fn palette_mode_placeholder(mode: PaletteMode) -> str {
     ret "Type a command"
 }
 
+type PaletteTyped = struct { typed: widget.Change[str], activate: widget.Change[usize] }
+
+fn palette_typed_fire(ctx: *void, value: str) -> err {
+    let typed_state = mem.cast[*PaletteTyped](ctx)
+    let reset_error = widget.fire_change[usize](typed_state.activate, 0usize)
+    if reset_error != ok { ret reset_error }
+    ret widget.fire_change[str](typed_state.typed, value)
+}
+
 fn palette_grouped_rows(a: *mem.Arena, t: *const control.Theme, rows: []widget.Node, groups: []const str) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
     let (grouped, grouped_error) = mem.alloc[widget.Node](a, rows.len * 2usize)
@@ -4183,8 +4192,8 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
 // `body-medium` `on-surface-variant`, centred. The footer is 32 tall, 16 at the
 // sides, below a 1px `outline-variant` line: "Up and Down to move, Enter to run"
 // in `body-small` `on-surface-variant`.
-// ponytail: no ranking or compact form; the
-// caller still filters and keeps `active` inside the list.
+// ponytail: no ranking or compact form; the caller still filters and stores
+// `active` while the palette requests its reset.
 fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (made, made_error) = command_palette_mode(a, key, t, label, buffer, len, typed, .Commands, commands, active, open, activate, run, dismiss, width)
     ret (made, made_error)
@@ -4234,7 +4243,11 @@ fn command_palette_grouped_busy(a: *mem.Arena, key: widget.Key, t: *const contro
 
 fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, categories: []const str, match_starts: []const usize, match_ends: []const usize, shortcuts: []const str, unavailable: []const str, active: usize, busy: bool, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (field, field_error) = palette_field(a, key + 2u64, t, buffer, len, typed, mode)
+    let (relays, relays_error) = mem.alloc[PaletteTyped](a, 1usize)
+    if relays_error != ok { ret (zero, TooLarge) }
+    relays[0usize] = PaletteTyped { typed: typed, activate: activate }
+    let relayed = widget.Change[str] { ctx: mem.cast[*void](&relays[0usize]), invoke: palette_typed_fire }
+    let (field, field_error) = palette_field(a, key + 2u64, t, buffer, len, relayed, mode)
     if field_error != ok { ret (zero, field_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
     if parts_error != ok { ret (zero, TooLarge) }
