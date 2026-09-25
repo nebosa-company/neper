@@ -223,7 +223,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (files, has_files) = find(tree, .Table, "Files")
     let (name_header, has_name_header) = find(tree, .ColumnHeader, "Name")
     let (name_grip, has_name_grip) = find(tree, .Separator, "Resize Name")
-    if !has_files || files.position.row_count != 50u32 || files.position.column_count != 3u32 || !has_name_header || !name_header.state.selected || !has_name_grip || !same(name_grip.value, "120 px") { os.exit(17i32) }
+    var descending_headers = 0usize
+    var header_at = 0usize
+    while header_at < tree.nodes.len {
+        if tree.nodes[header_at].role == .ColumnHeader && tree.nodes[header_at].sort == .Descending { descending_headers += 1usize }
+        header_at += 1usize
+    }
+    if !has_files || files.position.row_count != 50u32 || files.position.column_count != 3u32 || !has_name_header || !name_header.state.selected || name_header.sort != .Ascending || descending_headers != 1usize || !has_name_grip || !same(name_grip.value, "120 px") { os.exit(17i32) }
     if widget.semantic_action(&runtime, name_header.id, accessibility.ACTION_PRESS) != ok || logs[0usize].sorts != 1usize { os.exit(53i32) }
     if widget.semantic_action(&runtime, name_grip.id, accessibility.ACTION_INCREMENT) != ok || logs[0usize].resizes != 1usize || !near(logs[0usize].width, 136.0) { os.exit(54i32) }
     if widget.semantic_action(&runtime, name_grip.id, accessibility.ACTION_DECREMENT) != ok || logs[0usize].resizes != 2usize || !near(logs[0usize].width, 104.0) { os.exit(55i32) }
