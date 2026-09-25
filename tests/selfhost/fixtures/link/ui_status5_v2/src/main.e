@@ -200,6 +200,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 3002u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 3004u64) { os.exit(29i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !focused_is(&harness, 3002u64) || testing.press_key(&harness, 35u32, zero) != ok || !focused_is(&harness, 3004u64) { os.exit(30i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 3002u64) || testing.tab(&harness, false) != ok || focused_is(&harness, 3004u64) { os.exit(31i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 3002u64).element) != ok { os.exit(32i32) }
+    f = mem.arena_from(frame_storage)
+    let (focused_root, focused_root_error) = build(&f, &theme, s)
+    if focused_root_error != ok || testing.pump(&harness, focused_root, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(33i32) }
+    let (focused_shot, focused_shot_error) = testing.snapshot(&harness, a)
+    let (problem, has_problem) = bounds(&harness, &runtime, 3002u64)
+    if focused_shot_error != ok || !has_problem || !is_color(focused_shot, at(problem.x + 4.0, problem.y + 12.0), style.color(&tokens, .FocusRing)) || is_color(focused_shot, at(problem.x + 1.0, problem.y + 12.0), style.color(&tokens, .FocusRing)) { os.exit(34i32) }
     // The mode variant on `primary-container`.
     let (moded, has_moded) = bounds(&harness, &runtime, 3100u64)
     if !has_moded || !is_color(shot, at(moded.x + 300.0, moded.y + 12.0), style.color(&tokens, .PrimaryContainer)) { os.exit(26i32) }

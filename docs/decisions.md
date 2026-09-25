@@ -23444,3 +23444,13 @@ jump to its bounds. Passive items remain outside the focus sequence.
 
 `ui_status5_v2` holds two non-adjacent actions and all four moves on Windows and
 Linux.
+
+## D1180 — Edge-to-edge controls declare their focus inset
+
+Semantics can now request a positive runtime focus-ring inset without changing
+an element's accessible role. Status Bar action items request 3 pixels, leaving
+their ring visible inside the bar's edge-to-edge 24-pixel row.
+
+`ui_status5_v2` holds the inset pixels and `ui_focus_ring` holds the unchanged
+default ring on Windows and Linux. The Segoe review is
+`build/ux/status-bar-focus-segoe.png`.
