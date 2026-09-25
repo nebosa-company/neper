@@ -50,6 +50,16 @@ fn near(a: f32, b: f32) -> bool {
     ret d < 0.001 && d > -0.001
 }
 
+fn same(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn build(a: *mem.Arena, t: *const control.Theme, log: *const Log, ctx: *void) -> (widget.Node, err) {
     let (items, items_error) = mem.alloc[widget.Node](a, 2usize)
     if items_error != ok { ret (zero, items_error) }
@@ -134,6 +144,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, root_2, now) != ok { os.exit(28i32) }
     let (shown, _, _) = widget.slider_value_of(&runtime, volume)
     if !near(shown, 50.0) { os.exit(29i32) }
+    let (tree, tree_error) = testing.semantics(&harness)
+    if tree_error != ok { os.exit(53i32) }
+    var spoke = false
+    var node_at = 0usize
+    while node_at < tree.nodes.len {
+        let node = tree.nodes[node_at]
+        if node.role == .Slider && same(node.label, "Volume") && same(node.value, "50") { spoke = true }
+        node_at += 1usize
+    }
+    if !spoke { os.exit(54i32) }
     let (shot, shot_error) = testing.snapshot(&harness, a)
     if shot_error != ok { os.exit(30i32) }
     let primary = style.color(&tokens, .Primary)

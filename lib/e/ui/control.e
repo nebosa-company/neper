@@ -2671,6 +2671,15 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     var sem: widget.Semantics = zero
     sem.role = 15u8
     sem.label = label
+    // D1170: a single slider's semantic value follows its visible rounded value.
+    if !range {
+        let (said, said_error) = mem.alloc[u8](a, 21usize)
+        if said_error != ok { ret (zero, TooLarge) }
+        var rounded = first + 0.5
+        if first < 0.0 { rounded = first - 0.5 }
+        let said_len = write_i64(said, i64(rounded))
+        sem.value = said[0usize..said_len]
+    }
     sem.actions = accessibility.ACTION_INCREMENT | accessibility.ACTION_DECREMENT | accessibility.ACTION_SET_VALUE
     if !enabled { sem.states = accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), row[0usize..1usize]), ok)

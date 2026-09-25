@@ -23356,3 +23356,12 @@ six navigation bindings plus ten digit bindings—without adding a second key
 dispatch path; digits above the control's maximum remain unbound.
 
 `ui_actions` holds direct digit selection on Windows and Linux.
+
+## D1170 — Slider publishes its current value
+
+A single Slider now places its rounded visible value in the existing semantic
+Slider node, beside its name and Increment, Decrement and SetValue actions.
+RangeSlider stays unchanged until it can publish the specified pair of child
+sliders instead of misrepresenting two handles as one value.
+
+`ui_slider` holds the named value on Windows and Linux.
