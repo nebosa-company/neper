@@ -4977,6 +4977,12 @@ fn rate_tap(ctx: *void, g: widget.Gesture) -> err {
     ret widget.fire_change[u32](r.change, next)
 }
 
+// A bound digit sets its exact in-range Rating value (D1169).
+fn rate_exact(ctx: *void) -> err {
+    let r = mem.cast[*Rated](ctx)
+    ret widget.fire_change[u32](r.change, r.value)
+}
+
 // A rating: `max` stars in a row, the first `value` filled, each a tap region
 // keyed `key + 1 + index` setting the value to its number; the row a focus
 // target whose arrows step the value and whose Home/End reach its bounds; a
@@ -4986,7 +4992,9 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     let count = usize(max)
     let (stars, stars_error) = mem.alloc[Star](a, count)
     if stars_error != ok { ret (zero, TooLarge) }
-    let (rated, rated_error) = mem.alloc[Rated](a, count)
+    var digit_count = count + 1usize
+    if digit_count > 10usize { digit_count = 10usize }
+    let (rated, rated_error) = mem.alloc[Rated](a, count + digit_count)
     if rated_error != ok { ret (zero, TooLarge) }
     let (items, items_error) = mem.alloc[widget.Node](a, count)
     if items_error != ok { ret (zero, TooLarge) }
@@ -5038,7 +5046,8 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     steps[3usize] = Rate { value: value, max: max, move: .Last, change: change }
     let less = widget.Submit { ctx: mem.cast[*void](&steps[0usize]), invoke: rate_step }
     let more = widget.Submit { ctx: mem.cast[*void](&steps[1usize]), invoke: rate_step }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize)
+    let shortcut_count = 6usize + digit_count
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, shortcut_count)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     shortcuts[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: less }
     shortcuts[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: more }
@@ -5050,6 +5059,12 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     shortcuts[3usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: more }
     shortcuts[4usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[2usize]), invoke: rate_step } }
     shortcuts[5usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[3usize]), invoke: rate_step } }
+    var d = 0usize
+    while d < digit_count {
+        rated[count + d] = Rated { value: u32(d), current: value, change: change }
+        shortcuts[6usize + d] = widget.Shortcut { key: 48u32 + u32(d), modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&rated[count + d]), invoke: rate_exact } }
+        d += 1usize
+    }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }
     row[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), items[0usize..count])
@@ -5061,7 +5076,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     focus[0usize] = widget.region(key, widget.Region { gesture: none_gesture, gestures: 0u8, enabled: true, focusable: true }, style.defaults(), row[0usize..1usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focus[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..shortcut_count], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focus[0usize..1usize])
     // D1168: expose the scale, and give zero its specified spoken value.
     let (said, said_error) = mem.alloc[u8](a, 32usize)
     if said_error != ok { ret (zero, TooLarge) }
