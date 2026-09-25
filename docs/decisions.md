@@ -25435,3 +25435,17 @@ hiding on scroll is still to come.
 fill is narrower than the 64 pill; settled, no separate fill remains. This
 passes on Windows and Linux, and `ui_adaptive` and `ui_navigation` still
 pass on both.
+
+## D1318 — Collapsing app bars cross-fade their title
+
+A medium or large app bar collapsing with the page's scroll (D1267) now
+cross-fades its headline into the row's small title over the first 40 of
+travel, as the AppBar spec's scrolled state asks. The headline fades out as
+the row's small title (in the row's role, out of the tree so the heading is
+said once) fades in. Under reduced motion the cross-fade follows the
+collapse share, and the bar snaps as before. The contextual bar's motion is
+still to come.
+
+`ui_navigation_v2` scrolls a medium bar by 32: besides the headline, one
+more "Projects" text (the row's title) stands than at rest. This passes on
+Windows and Linux, and `ui_navigation` still passes on both.
