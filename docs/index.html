@@ -155,12 +155,6 @@
     .library-item { padding: var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); }
     .library-item code { color: var(--primary); font: 600 13px/20px var(--font-mono); }
     .library-item p { margin: var(--space-2) 0 0; color: var(--muted); font-size: 13px; }
-    .module-catalog-groups { display: grid; gap: var(--space-6); margin-top: var(--space-6); }
-    .module-group { padding-top: 0; }
-    .module-group h3 { margin: 0 0 var(--space-3); font: 600 16px/24px var(--font-sans); }
-    .module-catalog-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
-    .module-catalog-grid code { padding: var(--space-2) var(--space-3); overflow-wrap: anywhere; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest); color: var(--primary); font: 600 12px/18px var(--font-mono); }
-    .module-catalog-status { margin: var(--space-5) 0 0; color: var(--muted); }
     .catalog-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); margin-bottom: var(--space-8); padding: var(--space-8); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
     .catalog-stat strong { display: block; font: 400 clamp(32px, 4vw, 45px)/52px var(--font-display); }
     .catalog-stat span { font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
@@ -239,7 +233,7 @@
       main { padding-top: var(--space-10); }
       body { font-size: 16px; line-height: 24px; }
       .hero { grid-template-columns: 1fr; gap: var(--space-8); min-height: auto; }
-      .metrics, .benefits, .library-grid, .module-catalog-grid, .catalog-stats, .catalog-entry-grid, .llm-grid, .gpu-layout { grid-template-columns: 1fr; }
+      .metrics, .benefits, .library-grid, .catalog-stats, .catalog-entry-grid, .llm-grid, .gpu-layout { grid-template-columns: 1fr; }
       .metrics { margin-top: var(--space-12); }
       .catalog-stats { gap: var(--space-4); padding: var(--space-6); }
       .benefit { min-height: auto; }
@@ -345,7 +339,7 @@ Hello, Neper</code></pre>
         <h2>An ultra-rich standard library.</h2>
         <p class="section-intro">One coherent library surface replaces dependency archaeology. Every module is fenced, fixture-driven, and available to the compiler, the agent, and the reviewer under the same version.</p>
         <div class="catalog-stats" aria-label="Neper library and user interface catalog totals">
-          <div class="catalog-stat"><strong>7,963</strong><span>function signatures</span></div>
+          <div class="catalog-stat"><strong>344</strong><span>standard-library modules</span><button class="catalog-explore" type="button" data-catalog="module-catalog">Explore →</button></div>
           <div class="catalog-stat"><strong>1,232</strong><span>standard-library algorithms</span><button class="catalog-explore" type="button" data-catalog="algorithm-catalog">Explore →</button></div>
           <div class="catalog-stat"><strong>112</strong><span>native UI controls</span><button class="catalog-explore" type="button" data-catalog="control-catalog">Explore →</button></div>
         </div>
@@ -363,12 +357,7 @@ Hello, Neper</code></pre>
           <div class="library-item"><code>e.ml</code><p>linear algebra, classifiers, clustering, neural nets</p></div>
           <div class="library-item"><code>e.gpu</code><p>CPU, Vulkan, CUDA, tensors, images, presentation</p></div>
         </div>
-        <details class="more-features" id="module-catalog">
-          <summary class="more-toggle nu-btn tonal"><span class="more-closed">See all e.* modules</span><span class="more-open">Show less</span></summary>
-          <p class="module-catalog-status" aria-live="polite">Open the catalog to load every module from the canonical plan.</p>
-          <div class="module-catalog-groups"></div>
-          <p><a href="modules.json">Open the raw module catalog →</a></p>
-        </details>
+        <div class="more-features"><button class="more-toggle nu-btn tonal" type="button" data-catalog="module-catalog">Explore all e.* modules</button></div>
         <figure class="ui-showcase">
           <figcaption>
             <div>
@@ -474,6 +463,18 @@ Hello, Neper</code></pre>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
     </footer>
   </div>
+  <dialog class="catalog-dialog" id="module-catalog" aria-labelledby="module-catalog-title">
+    <div class="catalog-dialog-frame">
+      <header class="catalog-dialog-header">
+        <div><div class="eyebrow">e.* // standard library</div><h2 id="module-catalog-title">344 modules.</h2></div>
+        <form method="dialog"><button class="catalog-dialog-close" aria-label="Close module catalog"><span aria-hidden="true">×</span></button></form>
+      </header>
+      <div class="catalog-dialog-body">
+        <p class="catalog-dialog-status" aria-live="polite">Loading the canonical module catalog…</p>
+        <div class="catalog-dialog-groups"></div>
+      </div>
+    </div>
+  </dialog>
   <dialog class="catalog-dialog" id="algorithm-catalog" aria-labelledby="algorithm-catalog-title">
     <div class="catalog-dialog-frame">
       <header class="catalog-dialog-header">
@@ -499,48 +500,6 @@ Hello, Neper</code></pre>
     </div>
   </dialog>
   <script>
-    const moduleCatalog = document.querySelector("#module-catalog")
-    moduleCatalog.addEventListener("toggle", async () => {
-      if (!moduleCatalog.open || moduleCatalog.dataset.loaded) return
-      const status = moduleCatalog.querySelector(".module-catalog-status")
-      const output = moduleCatalog.querySelector(".module-catalog-groups")
-      status.textContent = "Loading module catalog…"
-      try {
-        const response = await fetch("modules.json")
-        if (!response.ok) throw new Error("catalog unavailable")
-        const plan = await response.json()
-        const modules = [...new Set(plan.tiers.flatMap(tier => tier.modules))].sort()
-        const groups = new Map()
-        for (const name of modules) {
-          const namespace = name.split(".").slice(0, 2).join(".")
-          if (!groups.has(namespace)) groups.set(namespace, [])
-          groups.get(namespace).push(name)
-        }
-        const fragment = document.createDocumentFragment()
-        for (const [namespace, names] of groups) {
-          const group = document.createElement("section")
-          group.className = "module-group"
-          const heading = document.createElement("h3")
-          heading.textContent = namespace
-          const grid = document.createElement("div")
-          grid.className = "module-catalog-grid"
-          for (const name of names) {
-            const code = document.createElement("code")
-            code.textContent = name
-            grid.append(code)
-          }
-          group.append(heading, grid)
-          fragment.append(group)
-        }
-        output.replaceChildren(fragment)
-        if (output.querySelectorAll("code").length !== modules.length) throw new Error("incomplete module catalog")
-        status.textContent = `${modules.length} modules across ${groups.size} namespaces.`
-        moduleCatalog.dataset.loaded = "true"
-      } catch {
-        status.textContent = "Could not load the module catalog. Use the raw catalog link below."
-      }
-    })
-
     const controlGroups = new Map([
       ["Content and display", "Avatar Badge Canvas Card Cover Divider EmptyState Gauge Icon Image Level Placeholder ProgressBar ProgressRing RichText SelectableText Skeleton Text".split(" ")],
       ["Layout and structure", "ActionRow Form FormField GroupBox HeaderRow ResizablePane Row SplitView".split(" ")],
@@ -601,6 +560,20 @@ Hello, Neper</code></pre>
       dialog.dataset.loaded = "true"
     }
 
+    async function loadModules(dialog) {
+      const response = await fetch("modules.json")
+      if (!response.ok) throw new Error("module catalog unavailable")
+      const plan = await response.json()
+      const modules = [...new Set(plan.tiers.flatMap(tier => tier.modules))].sort()
+      const groups = new Map()
+      for (const name of modules) {
+        const namespace = name.split(".").slice(0, 2).join(".")
+        if (!groups.has(namespace)) groups.set(namespace, [])
+        groups.get(namespace).push({name})
+      }
+      renderCatalog(dialog, groups, 344, (count, namespaces) => `${count} modules across ${namespaces} namespaces.`)
+    }
+
     async function loadAlgorithms(dialog) {
       const response = await fetch("algos.md")
       if (!response.ok) throw new Error("algorithm catalog unavailable")
@@ -628,7 +601,8 @@ Hello, Neper</code></pre>
         dialog.showModal()
         if (dialog.dataset.loaded) return
         try {
-          if (dialog.id === "algorithm-catalog") await loadAlgorithms(dialog)
+          if (dialog.id === "module-catalog") await loadModules(dialog)
+          else if (dialog.id === "algorithm-catalog") await loadAlgorithms(dialog)
           else loadControls(dialog)
         } catch {
           dialog.querySelector(".catalog-dialog-status").textContent = "Could not load this catalog."
