@@ -255,6 +255,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if narrow_step == 2usize && (has_crlf || has_utf) { os.exit(47i32) }
         narrow_step += 1usize
     }
+    // (D1243) The message squeezed into 30, hovered past the tooltip delay, shows "Ready"
+    // in full as its tooltip.
+    var tip_step = 0usize
+    while tip_step < 3usize {
+        f = mem.arena_from(frame_storage)
+        let (tip_bar, tip_bar_error) = navigation.status_bar_of(&f, 3200u64, &theme, narrow_items[..], false, 30.0)
+        if tip_bar_error != ok { os.exit(49i32) }
+        let (tip_page, tip_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if tip_page_error != ok { os.exit(49i32) }
+        tip_page[0usize] = tip_bar
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 200.0), tip_page[0usize..1usize]), time.Instant { nanos: 3000000000i64 + i64(tip_step) * 600000000i64 }) != ok { os.exit(50i32) }
+        if tip_step == 0usize {
+            let (squeezed, has_squeezed) = bounds(&harness, &runtime, 3201u64)
+            if !has_squeezed || testing.hover(&harness, squeezed.x + 4.0, squeezed.y + 12.0) != ok { os.exit(48i32) }
+        }
+        tip_step += 1usize
+    }
+    let (tip_tree, tip_tree_error) = testing.semantics(&harness)
+    let (_, has_ready_tip) = find(tip_tree, .Tooltip, "Ready")
+    if tip_tree_error != ok || !has_ready_tip { os.exit(51i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(27i32) }
     try io.print("ui status5 v2 ok\n")
     ret ok

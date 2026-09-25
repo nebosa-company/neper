@@ -24314,3 +24314,15 @@ does: "Settings, update ready" from `badge_names`, or "Settings, new" without
 one.
 
 `ui_tabs_rtl` holds both names on Windows and Linux.
+
+## D1243 — A squeezed status message shows its full text as a tooltip
+
+When the status bar is narrower than its items and the message ends in an
+ellipsis (D1238), the message becomes a hover-only region keyed `key + 1` (the
+message is never pressable, so the key is free) and anchors a plain tooltip
+with its full text. The tooltip keeps the runtime's usual delay and focus
+rules; the message takes no Tab stop, since the live status already speaks
+the whole text to assistive technology.
+
+`ui_status5_v2` squeezes "Ready" into a 30 wide bar, hovers it past the delay
+and finds its tooltip on Windows and Linux.
