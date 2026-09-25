@@ -727,7 +727,7 @@ fn pagination_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 }
 
 // v2 (D973, docs/ux/components/Pagination): Previous (keyed `key + 1`) and Next
-// (`key + 2`) are `chevron-left` and `chevron-right` icon buttons in
+// (`key + 2`) are start-facing and end-facing icon buttons in
 // `on-surface-variant`, `on-surface` at 38% and out of the Tab order at the ends;
 // between them, 4 apart, the pages (keyed `key + 3 + index`) as round buttons 32
 // across at pointer density (40 touch), 8 at the sides from three digits, their
@@ -765,6 +765,12 @@ fn paged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
     turns[1usize] = Turn { index: next, turn: turn }
     actions[0usize] = widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: turn_fire }
     actions[1usize] = widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: turn_fire }
+    var back_glyph: control.GlyphKind = .ChevronLeft
+    var next_glyph: control.GlyphKind = .ChevronRight
+    if t.tokens.direction == .RightToLeft {
+        back_glyph = .ChevronRight
+        next_glyph = .ChevronLeft
+    }
     if compact {
         var button_options = control.button_options()
         button_options.variant = .Plain
@@ -773,7 +779,7 @@ fn paged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
         if back_error != ok { ret (zero, back_error) }
         parts[0usize] = back_button
     } else {
-        let (back_button, back_error) = control.glyph_action(a, key + 1u64, t, .ChevronLeft, previous_label, &actions[0usize], side, glyph, muted, current > 0usize, 0u32, 0u32, 0u64)
+        let (back_button, back_error) = control.glyph_action(a, key + 1u64, t, back_glyph, previous_label, &actions[0usize], side, glyph, muted, current > 0usize, 0u32, 0u32, 0u64)
         if back_error != ok { ret (zero, back_error) }
         parts[0usize] = back_button
     }
@@ -873,7 +879,7 @@ fn paged(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
         if next_error != ok { ret (zero, next_error) }
         parts[n] = next_button
     } else {
-        let (next_button, next_error) = control.glyph_action(a, key + 2u64, t, .ChevronRight, next_label, &actions[1usize], side, glyph, muted, current + 1usize < count, 0u32, 0u32, 0u64)
+        let (next_button, next_error) = control.glyph_action(a, key + 2u64, t, next_glyph, next_label, &actions[1usize], side, glyph, muted, current + 1usize < count, 0u32, 0u32, 0u64)
         if next_error != ok { ret (zero, next_error) }
         parts[n] = next_button
     }

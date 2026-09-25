@@ -23214,3 +23214,12 @@ end and page-change callbacks are unchanged.
 `ui_navigation4_v2` holds the visible labels, disabled first action and next
 page callback on Windows and Linux. The Segoe review is
 `build/ux/pagination-compact-text-segoe.png`.
+
+## D1155 — Pagination chevrons follow reading direction
+
+Numbered Pagination mirrors its Previous and Next chevrons in right-to-left
+themes while leaving their logical page actions and labels unchanged. Compact
+Pagination remains textual and needs no directional icon treatment.
+
+`ui_navigation4_v2` holds both mirrored glyphs by rendered pixels on Windows
+and Linux. The Segoe review is `build/ux/pagination-rtl-chevrons-segoe.png`.
