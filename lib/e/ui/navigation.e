@@ -1925,7 +1925,9 @@ fn breadcrumbs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // A trail's form (D972): `hidden` middle levels collapsed into one overflow crumb
 // (keyed `key + 40`; its menu `key + 41`, the levels `key + 42 + index`) that
 // `toggle` opens while `open`; or `compact`, the parent link alone.
-type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool }
+// (D1250) `width`, when set and `hidden` is not, collapses as many levels as the
+// trail needs to fit it (`breadcrumbs_fit`).
+type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool, width: f32 }
 
 fn breadcrumbs_options() -> BreadcrumbsOptions {
     var out: BreadcrumbsOptions = zero
@@ -1970,6 +1972,60 @@ fn trail_crumb(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     ret (capped, ok)
 }
 
+// (D1250) How many levels a trail of `names` must collapse to fit `width`: the
+// fewest, keeping the root and the last two, from its measured crumbs -- each
+// label plus 16 of padding, capped at 200 (160 touch; the current place at 320),
+// a 16 chevron between, and the overflow crumb its height square.
+fn breadcrumbs_fit(a: *mem.Arena, t: *const control.Theme, names: []const str, width: f32) -> usize {
+    if names.len < 4usize { ret 0usize }
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var widest: f32 = 200.0
+    var more: f32 = 32.0
+    if touch {
+        widest = 160.0
+        more = 48.0
+    }
+    let last = names.len - 1usize
+    let (widths, widths_error) = mem.alloc[f32](a, names.len)
+    if widths_error != ok { ret 0usize }
+    var i = 0usize
+    while i < names.len {
+        var caption = control.text_options()
+        caption.role = .BodyMedium
+        if i == last { caption.role = .TitleSmall }
+        caption.wrap = .None
+        let (said, said_error) = control.colored_text(a, 0u64, names[i], t, caption, style.color(t.tokens, .OnSurface))
+        var w: f32 = 16.0
+        if said_error == ok { w += widget.text_width(a, said) }
+        if i < last && w > widest { w = widest }
+        if i == last && w > 320.0 { w = 320.0 }
+        widths[i] = w
+        i += 1usize
+    }
+    var hidden = 0usize
+    while hidden + 3usize <= names.len {
+        var total: f32 = 0.0
+        var shown = 0usize
+        i = 0usize
+        while i < names.len {
+            if hidden > 0usize && i >= 1usize && i <= hidden {
+                if i == 1usize {
+                    total += more
+                    shown += 1usize
+                }
+            } else {
+                total += widths[i]
+                shown += 1usize
+            }
+            i += 1usize
+        }
+        total += 16.0 * f32(shown - 1usize)
+        if total <= width { ret hidden }
+        hidden += 1usize
+    }
+    ret names.len - 3usize
+}
+
 // v2 (D972, docs/ux/components/Breadcrumbs): one row that never wraps. A crumb is
 // a link 32 tall at pointer density (48 touch), 8 at its sides, `radius-sm`, its
 // `body-medium` label in `on-surface-variant` (`on-surface` hovered) under the
@@ -1981,11 +2037,14 @@ fn trail_crumb(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // crumb, a button named "Show 3 hidden levels" with a menu of them in order.
 // Compact, the trail is the parent alone as a 48 tall link led by
 // a start-facing chevron. The trail is a group named `label` round a list.
-// ponytail: the caller says how many levels collapse (the width is not measured);
-// the ellipsis ends a name rather than cutting its middle; no root icon, drop
-// targets, sibling menus or editable path.
-fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit, options: BreadcrumbsOptions) -> (widget.Node, err) {
+// (D1250) With `options.width` the trail measures its crumbs and collapses the
+// fewest levels that let it fit.
+// ponytail: the ellipsis ends a name rather than cutting its middle; no root
+// icon, drop targets, sibling menus or editable path.
+fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit, given: BreadcrumbsOptions) -> (widget.Node, err) {
     if picks.len != names.len || names.len == 0usize { ret (zero, TooLarge) }
+    var options = given
+    if options.width > 0.0 && options.hidden == 0usize && !options.compact { options.hidden = breadcrumbs_fit(a, t, names, options.width) }
     if options.hidden > 0usize && options.hidden + 3usize > names.len { ret (zero, TooLarge) }
     let (held, held_error) = mem.alloc[widget.Submit](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }

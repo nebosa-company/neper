@@ -19,6 +19,7 @@ use e.text.shape
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
+use e.ui.navigation
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
@@ -251,6 +252,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if count(lit, band, style.color(&tokens, .Text)) != 0usize { os.exit(26i32) }
     let caret_x = inline_bounds.x + 3.0 * advance + 1.0
     if !is_color(lit, px(caret_x, inline_bounds.y + body.line_height * 0.5), style.color(&tokens, .Primary)) { os.exit(27i32) }
+    // (D1250) A builder measures text as layout will: eight a's are twice four.
+    // Five crumbs of ten a's fit whole at their full width, collapse one level a
+    // pixel narrower, and at a pixel wide collapse all two they may.
+    var measure_caption = control.text_options()
+    measure_caption.role = .BodyMedium
+    measure_caption.wrap = .None
+    let ink = style.color(&tokens, .OnSurface)
+    frame = mem.arena_from(frame_storage)
+    let (four_a, four_a_error) = control.colored_text(&frame, 0u64, "aaaa", &theme, measure_caption, ink)
+    let (eight_a, eight_a_error) = control.colored_text(&frame, 0u64, "aaaaaaaa", &theme, measure_caption, ink)
+    let (ten_a, ten_a_error) = control.colored_text(&frame, 0u64, "aaaaaaaaaa", &theme, measure_caption, ink)
+    var current_caption = measure_caption
+    current_caption.role = .TitleSmall
+    let (ten_current, ten_current_error) = control.colored_text(&frame, 0u64, "aaaaaaaaaa", &theme, current_caption, ink)
+    if four_a_error != ok || eight_a_error != ok || ten_a_error != ok || ten_current_error != ok { os.exit(33i32) }
+    let four_width = widget.text_width(&frame, four_a)
+    if !(four_width > 0.0) || !near(widget.text_width(&frame, eight_a), 2.0 * four_width) { os.exit(34i32) }
+    var trail: [5]str = zero
+    var t_at = 0usize
+    while t_at < 5usize {
+        trail[t_at] = "aaaaaaaaaa"
+        t_at += 1usize
+    }
+    let crumb = widget.text_width(&frame, ten_a) + 16.0
+    let full = 4.0 * crumb + widget.text_width(&frame, ten_current) + 16.0 + 64.0
+    if crumb > 200.0 || navigation.breadcrumbs_fit(&frame, &theme, trail[..], full) != 0usize || navigation.breadcrumbs_fit(&frame, &theme, trail[..], full - 1.0) != 1usize || navigation.breadcrumbs_fit(&frame, &theme, trail[..], 1.0) != 2usize { os.exit(35i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(28i32) }
     try io.print("ui content2 v2 ok\n")
     ret ok
