@@ -3051,8 +3051,8 @@ fn iso_week_of(count: i64) -> i64 {
 // `tertiary` dot centred 4 above its cell's bottom; an unavailable day's digits
 // are `on-surface` at 38% under no state layer, a press does nothing and the tree
 // calls it disabled, though arrow keys still reach it.
-// ponytail: arrows do not skip a wholly unavailable week; a day's name is its
-// digits, not the full date.
+// (D1276) A day's name is its full date ("Tuesday, 10 March 2026").
+// ponytail: arrows do not skip a wholly unavailable week; English names only.
 fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date], marks: CalendarMarks) -> (widget.Node, err) {
     let year = i64(shown.year)
     let month = i64(shown.month)
@@ -3241,7 +3241,17 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
                     day_action = &nothing[0usize]
                     day_states = accessibility.STATE_DISABLED
                 }
-                let (pressed, pressed_error) = control.pressable_states(a, day_key, t, 3u8, digits[0usize..digit_count], look, true, end, day_states, 0u32, 0u64, day_action, content)
+                // (D1276) A day is named by its full date, not its digits.
+                let (spoken, spoken_error) = mem.alloc[u8](a, 40usize)
+                if spoken_error != ok { ret (zero, TooLarge) }
+                var said = control.copy_text(spoken, weekday_full(usize(weekday_of(year, month, i64(day)))))
+                said += control.copy_text(spoken[said..40usize], ", ")
+                said += control.write_i64(spoken[said..40usize], i64(day))
+                said += control.copy_text(spoken[said..40usize], " ")
+                said += control.copy_text(spoken[said..40usize], month_name(month))
+                said += control.copy_text(spoken[said..40usize], " ")
+                said += control.write_i64(spoken[said..40usize], year)
+                let (pressed, pressed_error) = control.pressable_states(a, day_key, t, 3u8, spoken[0usize..said], look, true, end, day_states, 0u32, 0u64, day_action, content)
                 if pressed_error != ok { ret (zero, pressed_error) }
                 let (tabbed, tabbed_error) = calendar_tab_stop(a, pressed, day == tab_day)
                 if tabbed_error != ok { ret (zero, tabbed_error) }
@@ -3384,6 +3394,17 @@ fn month_name(month: i64) -> str {
 }
 
 // Monday 0 to Sunday 6: short names with a pointer, narrow ones on touch.
+// (D1276) A weekday's full English name, Monday first.
+fn weekday_full(day: usize) -> str {
+    if day == 0usize { ret "Monday" }
+    if day == 1usize { ret "Tuesday" }
+    if day == 2usize { ret "Wednesday" }
+    if day == 3usize { ret "Thursday" }
+    if day == 4usize { ret "Friday" }
+    if day == 5usize { ret "Saturday" }
+    ret "Sunday"
+}
+
 fn weekday_name(day: usize, narrow: bool) -> str {
     if narrow {
         if day == 0usize { ret "M" }

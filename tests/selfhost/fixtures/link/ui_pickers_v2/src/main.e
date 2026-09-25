@@ -290,7 +290,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, widget.box(0u64, marked_ground, marked_page[0usize..1usize]), time.Instant { nanos: 3100000000i64 }) != ok { os.exit(83i32) }
     let (marked_box, has_marked_box) = bounds(&harness, &runtime, 900u64)
     let (monday_two, has_monday_two) = bounds(&harness, &runtime, 905u64)
-    if !has_marked_box || !has_monday_two || !near(monday_two.x, marked_box.x + 32.0) || testing.by_text(&harness, "9").count != 3usize || testing.by_text(&harness, "14").count != 3usize { os.exit(84i32) }
+    if !has_marked_box || !has_monday_two || !near(monday_two.x, marked_box.x + 32.0) || testing.by_text(&harness, "9").count != 2usize || testing.by_text(&harness, "14").count != 2usize { os.exit(84i32) }
     let (tenth_marked, has_tenth_marked) = bounds(&harness, &runtime, 913u64)
     let (open_day, has_open_day) = bounds(&harness, &runtime, 914u64)
     let (marked_shot, marked_shot_error) = testing.snapshot(&harness, a)

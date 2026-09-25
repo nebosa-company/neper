@@ -175,7 +175,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (eighth_bounds, has_eighth) = widget.bounds_of(&runtime, testing.by_key(&harness, 12u64).element)
     if !has_first || !has_second || !has_eighth { os.exit(14i32) }
     if second_bounds.y <= first_bounds.y || second_bounds.x >= first_bounds.x || eighth_bounds.y != second_bounds.y || eighth_bounds.x <= second_bounds.x { os.exit(15i32) }
-    let (tenth, has_tenth) = find(tree, .Button, "10")
+    let (tenth, has_tenth) = find(tree, .Button, "Tuesday, 10 March 2026")
     if !has_tenth || !tenth.state.selected { os.exit(16i32) }
     let (day_25, has_25) = centre_of(&harness, &runtime, 29u64)
     if !has_25 || testing.tap(&harness, day_25.x, day_25.y) != ok || logs[0usize].picks != 1usize || logs[0usize].picked.day != 25u8 || logs[0usize].picked.month != 3u8 { os.exit(17i32) }
