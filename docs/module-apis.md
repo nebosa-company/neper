@@ -7696,6 +7696,24 @@ fn is_label_separator(scalar: u32) -> bool
 fn label_to_ascii(label: str, out: []u8, scratch: []u32) -> (usize, err)
 fn to_ascii(domain: str, out: []u8, scratch: []u32) -> (usize, err)
 fn to_unicode(domain: str, out: []u8) -> (usize, err)
+fn bidi_ok(points: []const u32) -> bool
+fn bidi_rule_ok(points: []const u32) -> bool
+fn contextj_ok(points: []const u32, pos: usize) -> bool
+fn contexto_ok(points: []const u32, pos: usize) -> bool
+fn decode_a_label(label: str, points: []u32) -> (usize, err)
+fn domain_bidi_ok(domain: str) -> bool
+fn has_rtl(points: []const u32) -> bool
+fn idna_greek_table() -> str
+fn idna_han_table() -> str
+fn idna_hebrew_table() -> str
+fn idna_hiragana_table() -> str
+fn idna_joining_table() -> str
+fn idna_katakana_table() -> str
+fn idna_pvalid_table() -> str
+fn in_ranges(table: str, scalar: u32) -> bool
+fn joining_type(scalar: u32) -> u8
+fn points_are_nfc(points: []const u32) -> bool
+fn u_label_valid(points: []const u32) -> bool
 ```
 
 RFC 3492 `punycode_encode`/`punycode_decode` and IDNA labels: `to_ascii` (NFC, simple
@@ -10678,6 +10696,7 @@ fn sort_pairs(e: *Encoder, start: usize) -> err
 fn encode(e: *Encoder, value: *const Value) -> err
 fn count_until_break(d: *const Decoder) -> (usize, err)
 fn decode(a: *mem.Arena, d: *Decoder, max_depth: u16) -> (Value, err)
+fn skip_depth(d: *Decoder, depth: u16) -> err
 ```
 
 A streaming `Encoder` over a caller buffer (`encode_uint/int/negative/bytes/text/
@@ -11099,6 +11118,7 @@ fn finish(dst: []u8, signed_len: usize, tag: []const u8) -> (usize, err)
 fn sign_hmac(header_json: str, payload_json: str, key: []const u8, alg: Alg, dst: []u8) -> (usize, err)
 fn sign_hs256(header_json: str, payload_json: str, key: []const u8, dst: []u8) -> (usize, err)
 fn sign_ed25519(header_json: str, payload_json: str, secret: sign.Ed25519SecretKey, dst: []u8) -> (usize, err)
+fn escape_hex(s: str, from: usize) -> (u32, err)
 ```
 
 JWS compact serialisation: `split`, `header`, `payload`, `member` (an allocation-free
