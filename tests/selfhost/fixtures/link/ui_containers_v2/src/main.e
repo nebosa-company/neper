@@ -104,6 +104,9 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     var chosen = lifted
     chosen.variant = .Outlined
     chosen.selected = true
+    chosen.title = "Selected project"
+    chosen.action = &s.actions[0usize]
+    chosen.select = &s.actions[7usize]
     let (five, e5) = control.card_of(a, 22u64, t, chosen, fillers[3usize..4usize])
     var dragged_options = lifted
     dragged_options.dragged = true
@@ -275,6 +278,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_lifted || !has_filled || !has_chosen || !has_dragged || !near(lifted.width, 120.0) || !near(lifted.height, 42.0) || !near(chosen.height, 52.0) { os.exit(14i32) }
     if !is_color(shot, at(lifted.x + 60.0, lifted.y + 21.0), style.color(&tokens, .SurfaceContainerLow)) || !is_color(shot, at(filled.x + 60.0, filled.y + 21.0), style.color(&tokens, .SurfaceContainerHighest)) { os.exit(15i32) }
     if !is_color(shot, at(chosen.x + 1.0, chosen.y + 26.0), primary) || !is_color(shot, at(chosen.x + 60.0, chosen.y + 26.0), page) || !is_color(shot, at(chosen.x + 120.0 - 8.0 - 21.0, chosen.y + 8.0 + 12.0), primary) { os.exit(16i32) }
+    if testing.tap(&harness, chosen.x + 20.0, chosen.y + 26.0) != ok || stores[0usize].hits[0usize] != 1u32 || stores[0usize].hits[7usize] != 0u32 || testing.press_key(&harness, 32u32, zero) != ok || stores[0usize].hits[7usize] != 1u32 { os.exit(54i32) }
     let dragged_ground = style.layer(style.color(&tokens, .SurfaceContainerLow), style.color(&tokens, .OnSurface), tokens.states.dragged)
     if !is_color(shot, at(dragged.x + 60.0, dragged.y + 21.0), dragged_ground) || is_color(shot, at(dragged.x + 60.0, dragged.y + dragged.height + 4.0), page) { os.exit(50i32) }
     let (loading, has_loading) = bounds(&harness, &runtime, 24u64)
@@ -286,7 +290,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !is_color(shot, at(slotted.x + 100.0, slotted.y + 24.0), style.color(&tokens, .PrimaryContainer)) || !is_color(shot, at(slot_action.x + 20.0, slot_action.y + 20.0), style.color(&tokens, .SecondaryContainer)) { os.exit(53i32) }
     // The pressable card is a Button named by its title, and fires on a tap.
     if testing.by_label(&harness, "Open").count != 1usize || testing.by_role(&harness, .Button).count == 0usize { os.exit(17i32) }
-    if testing.tap(&harness, filled.x + 60.0, filled.y + 21.0) != ok || stores[0usize].hits[0usize] != 1u32 { os.exit(18i32) }
+    if testing.tap(&harness, filled.x + 60.0, filled.y + 21.0) != ok || stores[0usize].hits[0usize] != 2u32 { os.exit(18i32) }
     // Group boxes: the box 8 under the title, two 48 rows and a 1px divider in a
     // 1px outline-variant edge on surface; the invalid one's edge 2px error.
     let (group, has_group) = bounds(&harness, &runtime, 30u64)
@@ -303,6 +307,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var invalid_alert = false
     var described_card = false
     var loading_card_busy = false
+    var selectable_card = false
     var sem_at = 0usize
     while sem_at < group_tree.nodes.len {
         let node = group_tree.nodes[sem_at]
@@ -313,10 +318,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             invalid_alert = node.state.invalid && node.live == .Assertive
         }
         if node.role == .Button && same(node.label, "Open") { described_card = same(node.hint, "Build details") }
+        if node.role == .Button && same(node.label, "Selected project") { selectable_card = node.state.selected && has_action(node, .Select) }
         if node.role == .Group && same(node.label, "Loading project") { loading_card_busy = node.state.busy }
         sem_at += 1usize
     }
-    if !advanced_sem || !invalid_alert || !described_card || !loading_card_busy || testing.by_label(&harness, "Loading project").count != 1usize || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
+    if widget.semantic_action(&runtime, testing.by_label(&harness, "Selected project").element, accessibility.ACTION_SELECT) != ok || stores[0usize].hits[7usize] != 2u32 { os.exit(55i32) }
+    if !advanced_sem || !invalid_alert || !described_card || !loading_card_busy || !selectable_card || testing.by_label(&harness, "Loading project").count != 1usize || testing.tap(&harness, advanced.x + 100.0, advanced.y + advanced.height * 0.5) != ok || stores[0usize].hits[6usize] != 1u32 { os.exit(45i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[6usize] != 2u32 { os.exit(46i32) }
     // The disclosure: a 40 header, the content 40 in and 4 below; open, the
     // header says expanded, and Left on it (focused by the tap) shuts it.

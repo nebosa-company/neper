@@ -23521,3 +23521,14 @@ standard 16-pixel padding (12 dense), while `card_of` remains unchanged.
 
 `ui_containers_v2` holds the slot geometry on Windows and Linux. The Segoe
 review is `build/ux/card-slots-segoe.png`.
+
+## D1188 — Card selection is separate from opening
+
+CardOptions now accepts a caller-owned selection action. Pointer and Enter keep
+the primary open action, while Space fires selection; accessibility exposes and
+routes Press and Select independently. A selected pressable Card also stacks its
+check over content instead of letting the extra child enlarge the layout.
+
+The widget runtime now lets an ancestor shortcut handle a key before its generic
+focused-region activation. `ui_containers_v2` holds pointer, Space, semantics and
+unchanged geometry on Windows and Linux.
