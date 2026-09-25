@@ -127,7 +127,7 @@ type Scrollbar = struct { viewport: Key, axis: ui_layout.Axis }
 // v2 (D958): the halo round a handle (clear for none), the handle's width (4, or 2
 // while pressed; 0 is 4), and the tick dots' colours on the active and inactive
 // track (clear for no ticks).
-type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32, step: f32, vertical: bool, track: paint.Color, fill: paint.Color, thumb: paint.Color, change: Change[f32], change_second: Change[f32], enabled: bool, halo: paint.Color, handle: f32, tick_on: paint.Color, tick_off: paint.Color }
+type Slider = struct { value: f32, second: f32, range: bool, low: f32, high: f32, step: f32, vertical: bool, rtl: bool, track: paint.Color, fill: paint.Color, thumb: paint.Color, change: Change[f32], change_second: Change[f32], enabled: bool, halo: paint.Color, handle: f32, tick_on: paint.Color, tick_off: paint.Color }
 // A zoom view (D844, widget plan P2-11): its children laid out at their natural
 // size and painted scaled by `state.scale` and moved by `state.offset` inside its
 // own bounds, clipped; the wheel zooms about the pointer within `min_scale` and
@@ -242,6 +242,7 @@ type Element = struct {
     slider_step: f32,
     slider_range: bool,
     slider_vertical: bool,
+    slider_rtl: bool,
     slider_change: Change[f32],
     slider_change_second: Change[f32],
     second_held: bool,
@@ -1335,6 +1336,7 @@ fn reconcile_node(s: *State, node: *const Node, parent: usize, has_parent: bool,
         e.slider_step = sl.step
         e.slider_range = sl.range
         e.slider_vertical = sl.vertical
+        e.slider_rtl = sl.rtl
         e.slider_change = sl.change
         e.slider_change_second = sl.change_second
     case .Zoom as z:
@@ -2570,18 +2572,33 @@ fn slider_press(s: *State, element: usize, p: geometry.Point) -> err {
     ret slider_set(s, element, value, second)
 }
 
-// The arrow keys, Home and End on a focused slider move its first thumb.
+// The arrows, Page Up/Down, Home and End on a focused slider move its first
+// thumb; horizontal arrows follow reading direction (D1161).
 fn slider_key(s: *State, element: usize, code: u32) -> (bool, err) {
     let e = &s.elements[element]
     if !e.enabled { ret (false, ok) }
     var step = e.slider_step
     if !(step > 0.0) { step = (e.slider_high - e.slider_low) / 100.0 }
-    if code == 37u32 || code == 40u32 {
+    var less = code == 37u32
+    var more = code == 39u32
+    if e.slider_rtl {
+        less = code == 39u32
+        more = code == 37u32
+    }
+    if less || code == 40u32 {
         let moved = slider_set(s, element, e.slider_value - step, false)
         ret (true, moved)
     }
-    if code == 39u32 || code == 38u32 {
+    if more || code == 38u32 {
         let moved = slider_set(s, element, e.slider_value + step, false)
+        ret (true, moved)
+    }
+    if code == 34u32 {
+        let moved = slider_set(s, element, e.slider_value - (e.slider_high - e.slider_low) * 0.1, false)
+        ret (true, moved)
+    }
+    if code == 33u32 {
+        let moved = slider_set(s, element, e.slider_value + (e.slider_high - e.slider_low) * 0.1, false)
         ret (true, moved)
     }
     if code == 36u32 {

@@ -2632,7 +2632,7 @@ fn ranged(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, first: f3
     if showing { count = 3usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.slider(key, widget.Slider { value: first, second: second, range: range, low: low, high: high, step: step, vertical: false, track: rest, fill: fill, thumb: fill, change: change, change_second: change_second, enabled: enabled, halo: halo, handle: handle, tick_on: tick_on, tick_off: tick_off }, track_style)
+    parts[0usize] = widget.slider(key, widget.Slider { value: first, second: second, range: range, low: low, high: high, step: step, vertical: false, rtl: t.tokens.direction == .RightToLeft, track: rest, fill: fill, thumb: fill, change: change, change_second: change_second, enabled: enabled, halo: halo, handle: handle, tick_on: tick_on, tick_off: tick_off }, track_style)
     if showing {
         let (pill, pill_error) = value_pill(a, t, first)
         if pill_error != ok { ret (zero, pill_error) }
