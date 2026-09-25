@@ -4976,14 +4976,32 @@ fn rate_step(ctx: *void) -> err {
 }
 
 // A tap on star `index` sets it, or clears an already-current value (D1167).
-type Rated = struct { value: u32, current: u32, change: widget.Change[u32] }
+// Tap identity plus the row geometry used by drag scrubbing (D1173).
+type Rated = struct { value: u32, current: u32, max: u32, key: widget.Key, cell: f32, rtl: bool, runtime: *widget.Runtime, change: widget.Change[u32] }
+
+fn rate_at(r: *Rated, x: f32) -> err {
+    let (area, has_area) = keyed_bounds(r.runtime, r.key)
+    if !has_area { ret ok }
+    var offset = x - area.x
+    if r.rtl { offset = area.width - offset }
+    var index = i64(offset / r.cell)
+    if index < 0i64 { index = 0i64 }
+    if index >= i64(r.max) { index = i64(r.max) - 1i64 }
+    ret widget.fire_change[u32](r.change, u32(index) + 1u32)
+}
 
 fn rate_tap(ctx: *void, g: widget.Gesture) -> err {
-    if g.tag != .Tap { ret ok }
     let r = mem.cast[*Rated](ctx)
-    var next = r.value
-    if r.current == next { next = 0u32 }
-    ret widget.fire_change[u32](r.change, next)
+    switch g {
+    case .Tap as at:
+        var next = r.value
+        if r.current == next { next = 0u32 }
+        ret widget.fire_change[u32](r.change, next)
+    case .DragMove as moved:
+        ret rate_at(r, moved.position.x)
+    default:
+        ret ok
+    }
 }
 
 // A bound digit sets its exact in-range Rating value (D1169).
@@ -5039,7 +5057,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
             filled = true
         }
         stars[i] = Star { color: ink, filled: filled, arena: a }
-        rated[i] = Rated { value: u32(i) + 1u32, current: value, change: change }
+        rated[i] = Rated { value: u32(i) + 1u32, current: value, max: max, key: key, cell: cell, rtl: t.tokens.direction == .RightToLeft, runtime: t.runtime, change: change }
         let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
         if body_error != ok { ret (zero, TooLarge) }
         body[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&stars[i]), measure: mark_measure, paint: star_paint, state: widget.bytes_of[Star](&stars[i]) } }, style: sized_style(size, size), children: none }
@@ -5052,7 +5070,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
         if i == pressed { cell_style.background = paint.Brush { Solid: style.layer(paint.rgba(0.0, 0.0, 0.0, 0.0), style.color(t.tokens, .OnSurface), t.tokens.states.pressed) } }
         var slot = i
         if t.tokens.direction == .RightToLeft { slot = count - 1usize - i }
-        items[slot] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 4u8, enabled: true, focusable: false }, cell_style, body[0usize..1usize])
+        items[slot] = widget.region(key + 1u64 + u64(i), widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&rated[i]), invoke: rate_tap }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: false }, cell_style, body[0usize..1usize])
         i += 1usize
     }
     let (steps, steps_error) = mem.alloc[Rate](a, 4usize)
@@ -5078,7 +5096,7 @@ fn rating(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, value: u3
     shortcuts[5usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[3usize]), invoke: rate_step } }
     var d = 0usize
     while d < digit_count {
-        rated[count + d] = Rated { value: u32(d), current: value, change: change }
+        rated[count + d] = Rated { value: u32(d), current: value, max: max, key: key, cell: cell, rtl: t.tokens.direction == .RightToLeft, runtime: t.runtime, change: change }
         shortcuts[6usize + d] = widget.Shortcut { key: 48u32 + u32(d), modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&rated[count + d]), invoke: rate_exact } }
         d += 1usize
     }
