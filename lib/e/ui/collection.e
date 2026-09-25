@@ -1521,19 +1521,47 @@ type GridSource = struct { ctx: *void, count: fn(*void) -> usize, cell: fn(*void
 
 // The grid's state, which the caller keeps: the active cell, the range's anchor
 // (the active cell when there is no range), edit mode, whether the whole grid is
-// disabled, the number of changes saving, and the draft's length in the caller's
-// buffer.
-type GridState = struct { row: usize, column: usize, anchor_row: usize, anchor_column: usize, editing: bool, disabled: bool, saving: usize, len: usize }
+// disabled, the number of changes saving, an open column menu, and the draft's
+// length in the caller's buffer.
+type GridState = struct { row: usize, column: usize, anchor_row: usize, anchor_column: usize, editing: bool, disabled: bool, saving: usize, menu_open: bool, menu_column: usize, len: usize }
 
 // What a key, tap or editor asks: Move and Extend select, Edit/Type/Commit/Cancel
 // drive text, Toggle changes a checkbox and Open presents a select or date. The
 // caller owns every value; `next` is its next interaction state.
-type GridEventKind = enum u8 { Move, Extend, Edit, Replace, Type, Commit, Cancel, Toggle, Open, Paste, Clear, Undo, FillDown }
+type GridEventKind = enum u8 { Move, Extend, Edit, Replace, Type, Commit, Cancel, Toggle, Open, Menu, Paste, Clear, Undo, FillDown }
 type GridEvent = struct { kind: GridEventKind, row: usize, column: usize, next: GridState, text: str }
 
 // An event fired, then the focus to the element keyed `to.key` (a tapped cell
 // takes the grid's focus with it).
 type GridFire = struct { event: GridEvent, change: widget.Change[GridEvent], to: control.FocusTo }
+
+// A leaf menu item is followed by the menu's dismiss callback in the same
+// frame. Remember that sequence so the close event cannot overwrite selection.
+type GridMenuActions = struct { selected: bool, select: GridFire, dismiss: GridFire }
+
+fn grid_menu_select(ctx: *void) -> err {
+    let m = back_of[GridMenuActions](ctx)
+    m.selected = true
+    ret grid_fire(ctx_of(&m.select))
+}
+
+fn grid_menu_dismiss(ctx: *void) -> err {
+    let m = back_of[GridMenuActions](ctx)
+    if m.selected { ret ok }
+    ret grid_fire(ctx_of(&m.dismiss))
+}
+
+type GridColumnMenu = struct { state: GridState, change: widget.Change[GridEvent] }
+
+fn grid_column_menu(ctx: *void, column: usize) -> err {
+    let m = back_of[GridColumnMenu](ctx)
+    if m.state.disabled { ret ok }
+    var next = m.state
+    next.editing = false
+    next.menu_open = true
+    next.menu_column = column
+    ret widget.fire_change[GridEvent](m.change, GridEvent { kind: .Menu, row: m.state.row, column: m.state.column, next: next, text: "" })
+}
 
 type GridPress = struct { move: GridFire, extend: GridFire, edit: GridFire, editable: bool }
 
@@ -2006,9 +2034,8 @@ fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
 // status bar, 12 in, says the error count in `error` after an 18 `error` icon
 // and, for a range, "N cells selected" in `body-medium` `on-surface-variant`.
 // Every change reaches `change` as a `GridEvent` carrying the next state.
-// ponytail: no column-menu selection, clipboard
-// parsing and mutation, cross-fade, or touch sheet; the caller keeps the active
-// row in view (the ring is held inside the viewport).
+// ponytail: no clipboard parsing and mutation, cross-fade, or touch sheet; the
+// caller keeps the active row in view (the ring is held inside the viewport).
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
     var row_extent = extent
@@ -2018,8 +2045,11 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     if builds_error != ok { ret (zero, TooLarge) }
     builds[0usize] = GridBuild { source: source, t: t, state: state, change: change, holder: key + 1u64, key: key, columns: columns.len }
     let table_source = TableSource { ctx: ctx_of(&builds[0usize]), count: grid_count, key: grid_row_key, cell: grid_cell }
+    let (column_menus, column_menus_error) = mem.alloc[GridColumnMenu](a, 1usize)
+    if column_menus_error != ok { ret (zero, TooLarge) }
+    column_menus[0usize] = GridColumnMenu { state: state, change: change }
     var none: [1]widget.Key = zero
-    let (table_node, table_error) = tabulated(a, key + 16u64, t, label, columns, table_source, none[0usize..0usize], columns.len, false, zero, zero, zero, zero, row_extent, offset, scrolled, height - 40.0, 30u8, true)
+    let (table_node, table_error) = tabulated(a, key + 16u64, t, label, columns, table_source, none[0usize..0usize], columns.len, false, widget.Change[usize] { ctx: ctx_of(&column_menus[0usize]), invoke: grid_column_menu }, zero, zero, zero, row_extent, offset, scrolled, height - 40.0, 30u8, true)
     if table_error != ok { ret (zero, table_error) }
     var width: f32 = 40.0
     var x: f32 = 40.0
@@ -2053,7 +2083,7 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     let (ringed, ringed_error) = mem.alloc[widget.Node](a, 1usize)
     if ringed_error != ok { ret (zero, TooLarge) }
     ringed[0usize] = widget.box(0u64, ring, held[0usize..1usize])
-    let (layers, layers_error) = mem.alloc[widget.Node](a, 4usize)
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 5usize)
     if layers_error != ok { ret (zero, TooLarge) }
     layers[0usize] = table_node
     layers[1usize] = widget.positioned(0u64, x, y, style.defaults(), ringed[0usize..1usize])
@@ -2092,6 +2122,36 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     row_hit_stack[0usize] = widget.stack(0u64, row_hit_style, row_hits)
     layers[2usize] = widget.positioned(0u64, 0.0, 40.0, style.defaults(), row_hit_stack[0usize..1usize])
     var layer_count = 3usize
+    if state.menu_open && state.menu_column < columns.len && !state.disabled {
+        let (menu_actions, menu_actions_error) = mem.alloc[GridMenuActions](a, 1usize)
+        if menu_actions_error != ok { ret (zero, TooLarge) }
+        var closed = state
+        closed.menu_open = false
+        var selected = closed
+        if total > 0usize {
+            selected.row = total - 1usize
+            selected.column = state.menu_column
+            selected.anchor_row = 0usize
+            selected.anchor_column = state.menu_column
+            selected.editing = false
+        }
+        let focus = control.FocusTo { runtime: t.runtime, key: key + 1u64 }
+        menu_actions[0usize] = GridMenuActions {
+            selected: false,
+            select: GridFire { event: GridEvent { kind: .Extend, row: state.row, column: state.column, next: selected, text: "" }, change: change, to: focus },
+            dismiss: GridFire { event: GridEvent { kind: .Menu, row: state.row, column: state.column, next: closed, text: "" }, change: change, to: focus }
+        }
+        let select_action = widget.Submit { ctx: ctx_of(&menu_actions[0usize]), invoke: grid_menu_select }
+        let dismiss_action = widget.Submit { ctx: ctx_of(&menu_actions[0usize]), invoke: grid_menu_dismiss }
+        let (commands, commands_error) = mem.alloc[overlay.MenuCommand](a, 1usize)
+        if commands_error != ok { ret (zero, TooLarge) }
+        commands[0usize] = overlay.menu_command("Select column", select_action)
+        commands[0usize].enabled = total > 0usize
+        let (menu_node, menu_error) = overlay.menu_of(a, key + 8u64, t, key + 17u64 + u64(state.menu_column), "Column options", commands, true, &dismiss_action)
+        if menu_error != ok { ret (zero, menu_error) }
+        layers[layer_count] = menu_node
+        layer_count += 1usize
+    }
     if state.editing && !state.disabled {
         let (fires, fires_error) = mem.alloc[GridFire](a, 2usize)
         if fires_error != ok { ret (zero, TooLarge) }
@@ -2115,8 +2175,8 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         let (edits, edits_error) = mem.alloc[widget.Node](a, 1usize)
         if edits_error != ok { ret (zero, TooLarge) }
         edits[0usize] = widget.edit(key + 2u64, widget.Edit { buffer: draft, len: state.len, style: look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: widget.Change[str] { ctx: ctx_of(&fires[1usize]), invoke: grid_typed }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: style.color(t.tokens, .Primary), untabbed: false, ringed: false }, editor_style)
-        layers[3usize] = widget.overlay(0u64, widget.Overlay { anchor: key + 1u64, placement: .TopCenter, offset: zero, modal: true, dismiss: widget.Submit { ctx: ctx_of(&fires[0usize]), invoke: grid_fire } }, style.defaults(), edits[0usize..1usize])
-        layer_count = 4usize
+        layers[layer_count] = widget.overlay(0u64, widget.Overlay { anchor: key + 1u64, placement: .TopCenter, offset: zero, modal: true, dismiss: widget.Submit { ctx: ctx_of(&fires[0usize]), invoke: grid_fire } }, style.defaults(), edits[0usize..1usize])
+        layer_count += 1usize
     }
     var stack_style = control.sized_style(width, grid_height)
     stack_style.overflow = .Clip
