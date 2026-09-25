@@ -22417,3 +22417,15 @@ anchor to the tapped cell; an ordinary tap still emits `Move`. `ui_gesture` and
 `ui_collections6_v2` hold the shared state and range selection on Windows and
 Linux. This changes behavior on the reviewed DataGrid surface, so no
 duplicate screenshot is added.
+
+## D1076 — Row headers select through the existing range model
+
+DataGrid adds one transparent hit target over each visible row number, clipped
+to the scrolling body so a partial row cannot cover the sticky header. A click
+sets both row endpoints to that record and the column endpoints to the full
+width, emits the existing `Extend` event and returns focus to the grid.
+
+`ui_collections6_v2` holds selection, status count, focus and disabled behavior
+on Windows and Linux. The column action remains in the header menu as specified;
+this changes behavior on the reviewed DataGrid surface, so no duplicate
+screenshot is added.
