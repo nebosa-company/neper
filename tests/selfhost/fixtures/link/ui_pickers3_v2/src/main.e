@@ -356,6 +356,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let format_key = 900u64 + 4096u64
     let (rgb_segment, has_rgb_segment) = widget.bounds_of(&runtime, testing.by_key(&harness, format_key + 2u64).element)
     if !has_rgb_segment || testing.tap(&harness, rgb_segment.x + rgb_segment.width * 0.5, rgb_segment.y + rgb_segment.height * 0.5) != ok || chosen_format != .Rgb { os.exit(72i32) }
+    // (D1323) After a blue, a grey keeps the blue's hue: the hue strip still says
+    // 210 degrees.
+    var memo_step = 0usize
+    while memo_step < 3usize {
+        var memo_colour = paint.rgba(0.2, 0.5, 0.8, 1.0)
+        if memo_step == 2usize { memo_colour = paint.rgba(0.5, 0.5, 0.5, 1.0) }
+        f = mem.arena_from(frame_storage)
+        let (memo_field, memo_field_error) = overlay.color_field_with(&f, 1000u64, &theme, "Accent colour", memo_colour, false, recent_pick, true, &s.press, s.swatches[0usize..6usize], recent_colours[0usize..0usize], s.hex[0usize..16usize], 7usize, recent_typed, 296.0)
+        let (memo_page, memo_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if memo_field_error != ok || memo_page_error != ok { os.exit(73i32) }
+        memo_page[0usize] = memo_field
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), memo_page[0usize..1usize]), time.Instant { nanos: 6200000000i64 + i64(memo_step) }) != ok { os.exit(74i32) }
+        if memo_step == 2usize {
+            let (memo_tree, memo_tree_error) = testing.semantics(&harness)
+            if memo_tree_error != ok { os.exit(75i32) }
+            var hue_said = false
+            var mn = 0usize
+            while mn < memo_tree.nodes.len {
+                if same(memo_tree.nodes[mn].label, "Hue") && same(memo_tree.nodes[mn].value, "210 degrees") { hue_said = true }
+                mn += 1usize
+            }
+            if !hue_said { os.exit(76i32) }
+        }
+        memo_step += 1usize
+    }
     try io.print("ui pickers3 v2 ok\n")
     ret ok
 }
