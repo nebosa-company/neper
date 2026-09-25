@@ -179,6 +179,11 @@
     .catalog-entry { display: grid; gap: 2px; min-width: 0; padding: var(--space-3); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest); color: inherit; text-decoration: none; }
     .catalog-entry span { overflow-wrap: anywhere; font: 600 12px/18px var(--font-sans); }
     .catalog-entry code { overflow-wrap: anywhere; color: var(--primary); font: 400 11px/16px var(--font-mono); }
+    #control-catalog .catalog-entry-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--space-4); }
+    #control-catalog .catalog-entry { overflow: hidden; gap: 0; padding: 0; border-radius: var(--radius-md); }
+    #control-catalog .catalog-entry > span:last-child { padding: var(--space-3) var(--space-4); }
+    .catalog-entry-preview { height: 150px; overflow: hidden; border-bottom: 1px solid var(--outline-variant); background: #080a0f; }
+    .catalog-entry-preview iframe { width: 200%; height: 200%; border: 0; pointer-events: none; transform: scale(.5); transform-origin: 0 0; }
     .ui-showcase { overflow: hidden; margin: var(--space-10) 0 0; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface-container-low); box-shadow: var(--elevation-1); }
     .ui-showcase figcaption { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); padding: var(--space-6); }
     .ui-showcase h3 { margin: var(--space-1) 0 var(--space-2); font: 400 24px/32px var(--font-display); }
@@ -553,6 +558,17 @@ Hello, Neper</code></pre>
           const card = document.createElement(item.href ? "a" : "div")
           card.className = "catalog-entry"
           if (item.href) card.href = item.href
+          if (item.preview) {
+            const preview = document.createElement("span")
+            preview.className = "catalog-entry-preview"
+            const frame = document.createElement("iframe")
+            frame.src = `ux/control-preview.html?name=${encodeURIComponent(item.preview)}`
+            frame.loading = "lazy"
+            frame.tabIndex = -1
+            frame.setAttribute("aria-hidden", "true")
+            preview.append(frame)
+            card.append(preview)
+          }
           const name = document.createElement("span")
           name.textContent = item.name
           card.append(name)
@@ -590,8 +606,8 @@ Hello, Neper</code></pre>
     }
 
     function loadControls(dialog) {
-      const groups = new Map([...controlGroups].map(([category, names]) => [category, names.map(name => ({name, href: `ux/components/${name}/preview.html`}))]))
-      renderCatalog(dialog, groups, 112, (count, categories) => `${count} controls across ${categories} categories. Select one to open its live preview.`)
+      const groups = new Map([...controlGroups].map(([category, names]) => [category, names.map(name => ({name, preview: name, href: `ux/components/${name}/preview.html`}))]))
+      renderCatalog(dialog, groups, 112, (count, categories) => `${count} controls across ${categories} categories. Scroll the real renders or select a card for its full preview.`)
     }
 
     for (const trigger of document.querySelectorAll("[data-catalog]")) {
