@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="components/bundle.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --primary:#b3c5ff; --on-primary:#003062; --primary-container:#00468b; --on-primary-container:#dae2ff;
+      --secondary-container:#39475f; --on-secondary-container:#d6e3ff; --tertiary:#ffb692; --tertiary-container:#733413; --on-tertiary-container:#ffdbcb;
+      --success:#83d5a1; --success-container:#11522e; --on-success-container:#a0f3bd; --warning:#e7c36c;
+      --surface:#0c0e14; --surface-container-lowest:#080a0f; --surface-container-low:#121318; --surface-container:#1e1f24; --surface-container-high:#292a2f; --surface-container-highest:#33353a;
+      --on-surface:#e1e2e9; --on-surface-variant:#c3c6d5; --outline:#8d909e; --outline-variant:#434653; --focus-ring:#b3c5ff;
+      --font-sans:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; --font-display:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; --font-mono:"Cascadia Code",Consolas,monospace;
+      --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px;
+      --radius-xs:4px; --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-xl:28px; --radius-full:9999px;
+      --control-sm:32px; --control-md:40px; --control-xl:56px; --icon-sm:18px; --icon-md:24px; --icon-lg:36px;
+      --divider:1px; --outline-focused:2px; --focus-ring-width:3px; --focus-ring-offset:2px;
+      --state-hover:.08; --state-focus:.1; --state-pressed:.1; --state-dragged:.16; --duration-short-2:100ms; --ease-standard:cubic-bezier(.2,0,0,1);
+      --elevation-1:0 1px 2px #0008,0 1px 3px 1px #0005; --elevation-2:0 2px 6px #0008; --elevation-3:0 8px 24px #0008;
+    }
+    html, body { margin: 0; min-height: 100%; overflow: hidden; background: var(--surface-container-lowest); }
+    .nu-page { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <script>
+    const name = new URLSearchParams(location.search).get("name") || ""
+    if (!/^[A-Za-z]+$/.test(name)) throw new Error("invalid control")
+    fetch(`components/${name}/preview.html`).then(response => {
+      if (!response.ok) throw new Error("preview unavailable")
+      return response.text()
+    }).then(html => {
+      const source = new DOMParser().parseFromString(html, "text/html")
+      document.body.replaceChildren(...source.body.childNodes)
+    }).catch(() => { document.body.textContent = "Preview unavailable" })
+  </script>
+</body>
+</html>
