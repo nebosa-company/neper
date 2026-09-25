@@ -160,6 +160,22 @@
     .catalog-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); margin-bottom: var(--space-8); padding: var(--space-8); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
     .catalog-stat strong { display: block; font: 400 clamp(32px, 4vw, 45px)/52px var(--font-display); }
     .catalog-stat span { font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .catalog-explore { display: block; margin-top: var(--space-3); padding: 0; border: 0; border-bottom: 1px solid currentColor; background: transparent; color: inherit; font: 600 12px/20px var(--font-sans); cursor: pointer; }
+    .catalog-dialog { width: min(1080px, calc(100% - 32px)); max-height: 84vh; padding: 0; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface); color: var(--on-surface); box-shadow: var(--elevation-3); }
+    .catalog-dialog::backdrop { background: rgb(9 14 24 / 78%); backdrop-filter: blur(4px); }
+    .catalog-dialog-frame { display: flex; max-height: 84vh; flex-direction: column; }
+    .catalog-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-6); padding: var(--space-6); border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); }
+    .catalog-dialog-header h2 { margin: 0; font-size: clamp(24px, 4vw, 36px); line-height: 44px; }
+    .catalog-dialog-close { min-width: 40px; min-height: 40px; border: 1px solid var(--outline-variant); border-radius: var(--radius-full); background: var(--surface-container); color: inherit; font: 600 20px/1 var(--font-sans); cursor: pointer; }
+    .catalog-dialog-body { overflow: auto; padding: var(--space-6); }
+    .catalog-dialog-status { margin: 0 0 var(--space-6); color: var(--muted); }
+    .catalog-dialog-groups { display: grid; gap: var(--space-8); }
+    .catalog-dialog-group { padding-top: 0; }
+    .catalog-dialog-group h3 { margin: 0 0 var(--space-3); font: 600 16px/24px var(--font-sans); }
+    .catalog-entry-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+    .catalog-entry { display: grid; gap: 2px; min-width: 0; padding: var(--space-3); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface-container-lowest); color: inherit; text-decoration: none; }
+    .catalog-entry span { overflow-wrap: anywhere; font: 600 12px/18px var(--font-sans); }
+    .catalog-entry code { overflow-wrap: anywhere; color: var(--primary); font: 400 11px/16px var(--font-mono); }
     .ui-showcase { overflow: hidden; margin: var(--space-10) 0 0; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface-container-low); box-shadow: var(--elevation-1); }
     .ui-showcase figcaption { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); padding: var(--space-6); }
     .ui-showcase h3 { margin: var(--space-1) 0 var(--space-2); font: 400 24px/32px var(--font-display); }
@@ -204,7 +220,7 @@
       main { padding-top: var(--space-10); }
       body { font-size: 16px; line-height: 24px; }
       .hero { grid-template-columns: 1fr; gap: var(--space-8); min-height: auto; }
-      .metrics, .benefits, .library-grid, .module-catalog-grid, .catalog-stats, .llm-grid, .gpu-layout { grid-template-columns: 1fr; }
+      .metrics, .benefits, .library-grid, .module-catalog-grid, .catalog-stats, .catalog-entry-grid, .llm-grid, .gpu-layout { grid-template-columns: 1fr; }
       .metrics { margin-top: var(--space-12); }
       .catalog-stats { gap: var(--space-4); padding: var(--space-6); }
       .benefit { min-height: auto; }
@@ -311,8 +327,8 @@ hello, neper</code></pre>
         <p class="section-intro">One coherent library surface replaces dependency archaeology. Every module is fenced, fixture-driven, and available to the compiler, the agent, and the reviewer under the same version.</p>
         <div class="catalog-stats" aria-label="Neper library and user interface catalog totals">
           <div class="catalog-stat"><strong>7,963</strong><span>function signatures</span></div>
-          <div class="catalog-stat"><strong>1,232</strong><span>standard-library algorithms</span></div>
-          <div class="catalog-stat"><strong>112</strong><span>native UI controls</span></div>
+          <div class="catalog-stat"><strong>1,232</strong><span>standard-library algorithms</span><button class="catalog-explore" type="button" data-catalog="algorithm-catalog">Explore →</button></div>
+          <div class="catalog-stat"><strong>112</strong><span>native UI controls</span><button class="catalog-explore" type="button" data-catalog="control-catalog">Explore →</button></div>
         </div>
         <div class="library-grid">
           <div class="library-item"><code>e.algo</code><p>sorting, search, graphs, geometry, hashing, random</p></div>
@@ -439,6 +455,30 @@ hello, neper</code></pre>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
     </footer>
   </div>
+  <dialog class="catalog-dialog" id="algorithm-catalog" aria-labelledby="algorithm-catalog-title">
+    <div class="catalog-dialog-frame">
+      <header class="catalog-dialog-header">
+        <div><div class="eyebrow">e.* // standard library</div><h2 id="algorithm-catalog-title">1,232 algorithms.</h2></div>
+        <form method="dialog"><button class="catalog-dialog-close" aria-label="Close algorithm catalog">×</button></form>
+      </header>
+      <div class="catalog-dialog-body">
+        <p class="catalog-dialog-status" aria-live="polite">Loading the canonical algorithm catalog…</p>
+        <div class="catalog-dialog-groups"></div>
+      </div>
+    </div>
+  </dialog>
+  <dialog class="catalog-dialog" id="control-catalog" aria-labelledby="control-catalog-title">
+    <div class="catalog-dialog-frame">
+      <header class="catalog-dialog-header">
+        <div><div class="eyebrow">e.ui // native controls</div><h2 id="control-catalog-title">112 UI controls.</h2></div>
+        <form method="dialog"><button class="catalog-dialog-close" aria-label="Close UI control catalog">×</button></form>
+      </header>
+      <div class="catalog-dialog-body">
+        <p class="catalog-dialog-status" aria-live="polite">Loading the UI control catalog…</p>
+        <div class="catalog-dialog-groups"></div>
+      </div>
+    </div>
+  </dialog>
   <script>
     const moduleCatalog = document.querySelector("#module-catalog")
     moduleCatalog.addEventListener("toggle", async () => {
@@ -481,6 +521,89 @@ hello, neper</code></pre>
         status.textContent = "Could not load the module catalog. Use the raw catalog link below."
       }
     })
+
+    const controlGroups = new Map([
+      ["Content and display", "Avatar Badge Canvas Card Cover Divider EmptyState Gauge Icon Image Level Placeholder ProgressBar ProgressRing RichText SelectableText Skeleton Text".split(" ")],
+      ["Layout and structure", "ActionRow Form FormField GroupBox HeaderRow ResizablePane Row SplitView".split(" ")],
+      ["Actions", "Button Fab IconButton Link SpeedDial SplitButton SwipeActions ToggleButton Toolbar".split(" ")],
+      ["Input and selection", "Autocomplete Chip Choice ColorPicker ComboBox Dial FieldLabel FieldMessage FontPicker FormattedField MultiSelectList Picker Rating SearchBar SegmentedControl Select ShortcutRecorder Slider SpinBox Stepper Switch TextField TokenField ValidationSummary".split(" ")],
+      ["Navigation", "AppBar Breadcrumbs DestinationBar DocumentTabs MenuBar NavigationDrawer NavigationSplit NavigationStack PageIndicator PageView Pagination Tabs WindowSwitcher Wizard".split(" ")],
+      ["Collections and data", "DataGrid GridView KeyValueEditor List ListBox NotificationList Outline PropertyGrid ReorderableList Table TableRow Tree TreeTable VirtualGrid VirtualList".split(" ")],
+      ["Overlays and feedback", "Accordion ActionSheet Banner CommandPalette ContextMenu Dialog Disclosure Flyout Menu Popover Popup Sheet Snackbar Tooltip".split(" ")],
+      ["Date and time", "Calendar DatePicker DurationPicker TimePicker".split(" ")],
+      ["Workspace", "DockLayout DockPanel MultiDocumentWorkspace StatusBar".split(" ")],
+      ["Media and refresh", "Carousel PullToRefresh".split(" ")]
+    ])
+
+    function renderCatalog(dialog, groups, expected, describe) {
+      const output = dialog.querySelector(".catalog-dialog-groups")
+      const fragment = document.createDocumentFragment()
+      let count = 0
+      for (const [category, items] of groups) {
+        const group = document.createElement("section")
+        group.className = "catalog-dialog-group"
+        const heading = document.createElement("h3")
+        heading.textContent = `${category} (${items.length})`
+        const grid = document.createElement("div")
+        grid.className = "catalog-entry-grid"
+        for (const item of items) {
+          const card = document.createElement(item.href ? "a" : "div")
+          card.className = "catalog-entry"
+          if (item.href) card.href = item.href
+          const name = document.createElement("span")
+          name.textContent = item.name
+          card.append(name)
+          if (item.detail) {
+            const detail = document.createElement("code")
+            detail.textContent = item.detail
+            card.append(detail)
+          }
+          grid.append(card)
+          count++
+        }
+        group.append(heading, grid)
+        fragment.append(group)
+      }
+      if (count !== expected) throw new Error(`expected ${expected} catalog entries, got ${count}`)
+      output.replaceChildren(fragment)
+      dialog.querySelector(".catalog-dialog-status").textContent = describe(count, groups.size)
+      dialog.dataset.loaded = "true"
+    }
+
+    async function loadAlgorithms(dialog) {
+      const response = await fetch("algos.md")
+      if (!response.ok) throw new Error("algorithm catalog unavailable")
+      const groups = new Map()
+      let category = ""
+      for (const line of (await response.text()).split(/\r?\n/)) {
+        const heading = line.match(/^## \d+\.\s+(.+?)\s+\(\d+[–-]\d+\)$/)
+        if (heading) category = heading[1]
+        const entry = line.match(/^\d+\.\s+\*\*(.+?)\*\*.*?→ `((?:e|pacman)\.[^`]+)`/)
+        if (!entry || !category) continue
+        if (!groups.has(category)) groups.set(category, [])
+        groups.get(category).push({name: entry[1], detail: entry[2]})
+      }
+      renderCatalog(dialog, groups, 1232, (count, categories) => `${count.toLocaleString()} algorithms across ${categories} categories.`)
+    }
+
+    function loadControls(dialog) {
+      const groups = new Map([...controlGroups].map(([category, names]) => [category, names.map(name => ({name, href: `ux/components/${name}/preview.html`}))]))
+      renderCatalog(dialog, groups, 112, (count, categories) => `${count} controls across ${categories} categories. Select one to open its live preview.`)
+    }
+
+    for (const trigger of document.querySelectorAll("[data-catalog]")) {
+      trigger.addEventListener("click", async () => {
+        const dialog = document.getElementById(trigger.dataset.catalog)
+        dialog.showModal()
+        if (dialog.dataset.loaded) return
+        try {
+          if (dialog.id === "algorithm-catalog") await loadAlgorithms(dialog)
+          else loadControls(dialog)
+        } catch {
+          dialog.querySelector(".catalog-dialog-status").textContent = "Could not load this catalog."
+        }
+      })
+    }
   </script>
 </body>
 </html>
