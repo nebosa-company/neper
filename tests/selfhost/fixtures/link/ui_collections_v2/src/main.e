@@ -31,7 +31,7 @@ use e.ui.widget
 
 const W: usize = 700usize
 
-type Store = struct { presses: usize, offset: f32, press: widget.Submit, files: [3]collection.RowItem, settings: [2]collection.RowItem, tiles: [3]collection.Tile }
+type Store = struct { presses: usize, list_offset: f32, grid_offset: f32, press: widget.Submit, files: [3]collection.RowItem, settings: [2]collection.RowItem, tiles: [3]collection.Tile }
 
 fn on_press(ctx: *void) -> err {
     let s = mem.cast[*Store](ctx)
@@ -39,9 +39,15 @@ fn on_press(ctx: *void) -> err {
     ret ok
 }
 
-fn set_scroll(ctx: *void, value: f32) -> err {
+fn set_list_scroll(ctx: *void, value: f32) -> err {
     let s = mem.cast[*Store](ctx)
-    s.offset = value
+    s.list_offset = value
+    ret ok
+}
+
+fn set_grid_scroll(ctx: *void, value: f32) -> err {
+    let s = mem.cast[*Store](ctx)
+    s.grid_offset = value
     ret ok
 }
 
@@ -123,8 +129,8 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     long.dividers = true
     long.width = 300.0
     long.height = 144.0
-    long.offset = s.offset
-    long.change = widget.Change[f32] { ctx: mem.cast[*void](s), invoke: set_scroll }
+    long.offset = s.list_offset
+    long.change = widget.Change[f32] { ctx: mem.cast[*void](s), invoke: set_list_scroll }
     var none_ctx: *void = zero
     let (numbers, e4) = collection.virtual_list_of(a, 400u64, t, "Numbers", collection.RowSource { ctx: none_ctx, count: number_count, key: number_key, item: number_item }, long)
     var tile_keys: [3]widget.Key = zero
@@ -138,7 +144,8 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     var wall = collection.virtual_grid_options()
     wall.width = 300.0
     wall.height = 150.0
-    wall.change = long.change
+    wall.offset = s.grid_offset
+    wall.change = widget.Change[f32] { ctx: mem.cast[*void](s), invoke: set_grid_scroll }
     let (photos, e6) = collection.virtual_grid_of(a, 600u64, t, "Photos", collection.TileSource { ctx: none_ctx, count: photo_count, key: photo_key, tile: photo_tile }, wall)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (zero, e1) }
     let (left, left_error) = mem.alloc[widget.Node](a, 4usize)
@@ -311,19 +318,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // window asks for the minimum offset, then receives focus after the rebuild.
     if widget.focus(&runtime, testing.by_key(&harness, 4000u64).element) != ok { os.exit(45i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 4001u64) { os.exit(46i32) }
-    if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 4003u64) || !near(s.offset, 48.0) { os.exit(47i32) }
+    if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 4003u64) || !near(s.list_offset, 48.0) { os.exit(47i32) }
     f = mem.arena_from(frame_storage)
     let (root_2, build_2_error) = build(&f, &theme, s)
     if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(48i32) }
     if testing.by_key(&harness, 4006u64).count != 1usize || testing.by_key(&harness, 4007u64).count != 0usize { os.exit(56i32) }
     if testing.press_key(&harness, 33u32, zero) != ok || !focused_is(&harness, 4001u64) { os.exit(49i32) }
-    if testing.press_key(&harness, 35u32, zero) != ok || !near(s.offset, 4656.0) || focused_is(&harness, 4099u64) { os.exit(50i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !near(s.list_offset, 4656.0) || focused_is(&harness, 4099u64) { os.exit(50i32) }
     f = mem.arena_from(frame_storage)
     let (root_3, build_3_error) = build(&f, &theme, s)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok || !focused_is(&harness, 4099u64) { os.exit(51i32) }
     if testing.by_key(&harness, 4094u64).count != 1usize || testing.by_key(&harness, 4093u64).count != 0usize { os.exit(57i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 4098u64) { os.exit(52i32) }
-    if testing.press_key(&harness, 36u32, zero) != ok || !near(s.offset, 0.0) || focused_is(&harness, 4000u64) { os.exit(53i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !near(s.list_offset, 0.0) || focused_is(&harness, 4000u64) { os.exit(53i32) }
     f = mem.arena_from(frame_storage)
     let (root_4, build_4_error) = build(&f, &theme, s)
     if build_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok || !focused_is(&harness, 4000u64) { os.exit(54i32) }
@@ -353,7 +360,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (photos, has_photos) = find(tree, .Grid, "Photos")
     if !has_photos || photos.position.column_count != 2u32 || photos.position.row_count != 25u32 { os.exit(42i32) }
     if !is_color(shot, at(first_photo.x + 5.0, first_photo.y + 60.0), style.color(&tokens, .SurfaceContainerHighest)) || !is_color(shot, at(second_photo.x + 4.0, second_photo.y + 60.0), style.color(&tokens, .SecondaryContainer)) { os.exit(43i32) }
-    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(55i32) }
+    // Virtual-grid arrows preserve the column, Page keys move a viewport of
+    // rows, and an unbuilt end receives focus after the caller scrolls/rebuilds.
+    if widget.focus(&runtime, testing.by_key(&harness, 6000u64).element) != ok { os.exit(58i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 6001u64) { os.exit(59i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 6003u64) || !near(s.grid_offset, 130.0) { os.exit(60i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 6002u64) { os.exit(61i32) }
+    if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 6004u64) || !near(s.grid_offset, 270.0) { os.exit(62i32) }
+    if testing.press_key(&harness, 33u32, zero) != ok || !focused_is(&harness, 6002u64) || !near(s.grid_offset, 130.0) { os.exit(63i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !near(s.grid_offset, 3350.0) || focused_is(&harness, 6049u64) { os.exit(64i32) }
+    f = mem.arena_from(frame_storage)
+    let (root_5, build_5_error) = build(&f, &theme, s)
+    if build_5_error != ok || testing.pump(&harness, root_5, time.Instant { nanos: 1400000000i64 }) != ok || !focused_is(&harness, 6049u64) { os.exit(65i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 6047u64) || !near(s.grid_offset, 3220.0) { os.exit(66i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 6049u64) { os.exit(70i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 6047u64) || !near(s.grid_offset, 3220.0) { os.exit(71i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !near(s.grid_offset, 0.0) || focused_is(&harness, 6000u64) { os.exit(67i32) }
+    f = mem.arena_from(frame_storage)
+    let (root_6, build_6_error) = build(&f, &theme, s)
+    if build_6_error != ok || testing.pump(&harness, root_6, time.Instant { nanos: 1500000000i64 }) != ok || !focused_is(&harness, 6000u64) { os.exit(68i32) }
+    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok
 }

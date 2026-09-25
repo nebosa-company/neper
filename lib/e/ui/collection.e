@@ -3712,15 +3712,15 @@ fn virtual_list_options() -> VirtualListOptions {
     ret out
 }
 
-type VirtualListMove = struct { runtime: *widget.Runtime, key: widget.Key, offset: f32, previous: f32, change: widget.Change[f32] }
+type VirtualMove = struct { runtime: *widget.Runtime, key: widget.Key, offset: f32, previous: f32, change: widget.Change[f32] }
 
-fn virtual_list_offset(index: usize, total: usize, previous: f32, height: f32, extent: f32) -> f32 {
-    let top = f32(index) * extent
+fn virtual_offset(row_index: usize, rows: usize, previous: f32, height: f32, extent: f32) -> f32 {
+    let top = f32(row_index) * extent
     let bottom = top + extent
     var next_offset = previous
     if top < next_offset { next_offset = top }
     if bottom > next_offset + height { next_offset = bottom - height }
-    var high = f32(total) * extent - height
+    var high = f32(rows) * extent - height
     if high < 0.0 { high = 0.0 }
     if next_offset < 0.0 { next_offset = 0.0 }
     if next_offset > high { next_offset = high }
@@ -3728,8 +3728,8 @@ fn virtual_list_offset(index: usize, total: usize, previous: f32, height: f32, e
 }
 
 // Ask for the minimum revealing offset, then focus now or after that rebuild.
-fn virtual_list_move(ctx: *void) -> err {
-    let move = back_of[VirtualListMove](ctx)
+fn virtual_move(ctx: *void) -> err {
+    let move = back_of[VirtualMove](ctx)
     if move.offset != move.previous {
         let changed = widget.fire_change[f32](move.change, move.offset)
         if changed != ok { ret changed }
@@ -3737,9 +3737,9 @@ fn virtual_list_move(ctx: *void) -> err {
     ret widget.focus_key(move.runtime, move.key)
 }
 
-fn bind_virtual_list_move(moves: []VirtualListMove, shortcuts: []widget.Shortcut, at: usize, runtime: *widget.Runtime, source: RowSource, index: usize, total: usize, previous: f32, height: f32, extent: f32, code: u32, change: widget.Change[f32]) {
-    moves[at] = VirtualListMove { runtime: runtime, key: source.key(source.ctx, index), offset: virtual_list_offset(index, total, previous, height, extent), previous: previous, change: change }
-    shortcuts[at] = widget.Shortcut { key: code, modifiers: zero, action: widget.Submit { ctx: ctx_of(&moves[at]), invoke: virtual_list_move } }
+fn bind_virtual_move(moves: []VirtualMove, shortcuts: []widget.Shortcut, at: usize, runtime: *widget.Runtime, key: widget.Key, row_index: usize, rows: usize, previous: f32, height: f32, extent: f32, code: u32, change: widget.Change[f32]) {
+    moves[at] = VirtualMove { runtime: runtime, key: key, offset: virtual_offset(row_index, rows, previous, height, extent), previous: previous, change: change }
+    shortcuts[at] = widget.Shortcut { key: code, modifiers: zero, action: widget.Submit { ctx: ctx_of(&moves[at]), invoke: virtual_move } }
 }
 
 // Visible rows plus one viewport before and after, clipped to the source.
@@ -3789,7 +3789,7 @@ fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         rows[i] = made
         i += 1usize
     }
-    let (moves, moves_error) = mem.alloc[VirtualListMove](a, 6usize * count)
+    let (moves, moves_error) = mem.alloc[VirtualMove](a, 6usize * count)
     if moves_error != ok { ret (zero, TooLarge) }
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize * count)
     if shortcuts_error != ok { ret (zero, TooLarge) }
@@ -3809,12 +3809,12 @@ fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
         var page_down = index + page
         if page_down >= total { page_down = total - 1usize }
         let base = 6usize * i
-        bind_virtual_list_move(moves, shortcuts, base, t.runtime, source, previous, total, options.offset, options.height, extent, 38u32, options.change)
-        bind_virtual_list_move(moves, shortcuts, base + 1usize, t.runtime, source, next, total, options.offset, options.height, extent, 40u32, options.change)
-        bind_virtual_list_move(moves, shortcuts, base + 2usize, t.runtime, source, page_up, total, options.offset, options.height, extent, 33u32, options.change)
-        bind_virtual_list_move(moves, shortcuts, base + 3usize, t.runtime, source, page_down, total, options.offset, options.height, extent, 34u32, options.change)
-        bind_virtual_list_move(moves, shortcuts, base + 4usize, t.runtime, source, 0usize, total, options.offset, options.height, extent, 36u32, options.change)
-        bind_virtual_list_move(moves, shortcuts, base + 5usize, t.runtime, source, total - 1usize, total, options.offset, options.height, extent, 35u32, options.change)
+        bind_virtual_move(moves, shortcuts, base, t.runtime, source.key(source.ctx, previous), previous, total, options.offset, options.height, extent, 38u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 1usize, t.runtime, source.key(source.ctx, next), next, total, options.offset, options.height, extent, 40u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 2usize, t.runtime, source.key(source.ctx, page_up), page_up, total, options.offset, options.height, extent, 33u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 3usize, t.runtime, source.key(source.ctx, page_down), page_down, total, options.offset, options.height, extent, 34u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 4usize, t.runtime, source.key(source.ctx, 0usize), 0usize, total, options.offset, options.height, extent, 36u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 5usize, t.runtime, source.key(source.ctx, total - 1usize), total - 1usize, total, options.offset, options.height, extent, 35u32, options.change)
         held[i] = rows[i]
         rows[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..base + 6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
         i += 1usize
@@ -4054,11 +4054,12 @@ fn virtual_grid_options() -> VirtualGridOptions {
 // `radius-sm`) in `floor((width - 24 + 4) / (min + 4))` columns 4 apart, 12 in
 // at the sides, stretched to fill, in a clipped viewport (keyed `key`) on
 // `surface`; only the visible rows built, each tile keyed by the source; the
-// runtime's rounded thumb in `on-surface-variant` at 50%; arrows, Home and End
-// move the focus among the built tiles. A grid named `label` with its counts.
+// runtime's rounded thumb in `on-surface-variant` at 50%; arrows, Page Up,
+// Page Down, Home and End move by stable source key and request the minimum
+// revealing offset. A grid named `label` with its counts.
 // ponytail: rows are keyed by position, not by the tiles they hold; no 12 top
 // padding, sticky section headers, placeholders, paging, scrub label or size
-// levels; focus does not scroll to unbuilt rows.
+// levels.
 fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: TileSource, options: VirtualGridOptions) -> (widget.Node, err) {
     var least = options.min_width
     if !(least > 0.0) { least = control.if_else(density_of(t) == 2usize, 96.0, 112.0) }
@@ -4075,22 +4076,63 @@ fn virtual_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
     if built_first + built > total { built = total - built_first }
     let (tiles, tiles_error) = mem.alloc[Tile](a, built)
     if tiles_error != ok { ret (zero, TooLarge) }
-    let (keys, keys_error) = mem.alloc[widget.Key](a, built)
-    if keys_error != ok { ret (zero, TooLarge) }
     let (cells, cells_error) = mem.alloc[widget.Node](a, built)
     if cells_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < built {
         let index = built_first + i
         tiles[i] = source.tile(source.ctx, index)
-        keys[i] = source.key(source.ctx, index)
-        let (made, made_error) = tile_node(a, keys[i], t, &tiles[i], index / columns, index % columns, side, true, options.selecting)
+        let tile_key = source.key(source.ctx, index)
+        let (made, made_error) = tile_node(a, tile_key, t, &tiles[i], index / columns, index % columns, side, true, options.selecting)
         if made_error != ok { ret (zero, made_error) }
         cells[i] = made
         i += 1usize
     }
-    let rove_error = roving(a, t, cells, keys, columns)
-    if rove_error != ok { ret (zero, rove_error) }
+    let (moves, moves_error) = mem.alloc[VirtualMove](a, 8usize * built)
+    if moves_error != ok { ret (zero, TooLarge) }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 8usize * built)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    let (held, held_error) = mem.alloc[widget.Node](a, built)
+    if held_error != ok { ret (zero, TooLarge) }
+    var page_rows = usize(options.height / extent)
+    if page_rows == 0usize { page_rows = 1usize }
+    i = 0usize
+    while i < built {
+        let index = built_first + i
+        let current_row = index / columns
+        let column = index % columns
+        var left = index
+        if left > 0usize { left -= 1usize }
+        var right = index
+        if right + 1usize < total { right += 1usize }
+        var up = index
+        if up >= columns { up -= columns }
+        var down = index
+        if current_row + 1usize < row_total {
+            down += columns
+            if down >= total { down = total - 1usize }
+        }
+        var page_up_row = current_row
+        if page_up_row > page_rows { page_up_row -= page_rows } else { page_up_row = 0usize }
+        var page_down_row = current_row + page_rows
+        if page_down_row >= row_total { page_down_row = row_total - 1usize }
+        var page_up = page_up_row * columns + column
+        if page_up >= total { page_up = total - 1usize }
+        var page_down = page_down_row * columns + column
+        if page_down >= total { page_down = total - 1usize }
+        let base = 8usize * i
+        bind_virtual_move(moves, shortcuts, base, t.runtime, source.key(source.ctx, up), up / columns, row_total, options.offset, options.height, extent, 38u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 1usize, t.runtime, source.key(source.ctx, down), down / columns, row_total, options.offset, options.height, extent, 40u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 2usize, t.runtime, source.key(source.ctx, left), left / columns, row_total, options.offset, options.height, extent, 37u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 3usize, t.runtime, source.key(source.ctx, right), right / columns, row_total, options.offset, options.height, extent, 39u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 4usize, t.runtime, source.key(source.ctx, page_up), page_up / columns, row_total, options.offset, options.height, extent, 33u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 5usize, t.runtime, source.key(source.ctx, page_down), page_down / columns, row_total, options.offset, options.height, extent, 34u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 6usize, t.runtime, source.key(source.ctx, 0usize), 0usize, row_total, options.offset, options.height, extent, 36u32, options.change)
+        bind_virtual_move(moves, shortcuts, base + 7usize, t.runtime, source.key(source.ctx, total - 1usize), row_total - 1usize, row_total, options.offset, options.height, extent, 35u32, options.change)
+        held[i] = cells[i]
+        cells[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..base + 8usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
+        i += 1usize
+    }
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (zero, TooLarge) }
     var r = 0usize
