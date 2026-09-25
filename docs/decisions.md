@@ -22230,3 +22230,13 @@ semantics without a second loading renderer; the ordinary wrapper passes false.
 
 `ui_overlays4_v2` holds the extra pixel of geometry and Busy Progress on Windows
 and Linux. `palette-busy.png` is the Segoe UI visual check.
+
+## D1062 — Query changes reset through the existing selection channel
+
+The palette wraps its field change only long enough to request active index zero
+through the caller's existing `activate` callback, then relays the typed value.
+The caller remains the state owner, and every edit event gets the same reset
+without a second palette state store.
+
+`ui_overlays4_v2` types two characters and holds both reset requests plus the
+final query on Windows and Linux.
