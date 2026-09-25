@@ -25744,3 +25744,17 @@ dragged lift and the fuller tab menu are still to come.
 `ui_navigation5_v2` gives a three-document strip 200: its view is under 170
 wide, the button toggles, and open, the menu's notes row picks document 2.
 This passes on Windows and Linux, and `ui_workspace` still passes on both.
+
+## D1337 — Document tab menus carry the caller's further commands
+
+D1233's tab menu held the four close commands. `DocumentTabsOptions.more`
+now names further commands -- the DocumentTabs spec's Pin, Copy path, Reveal
+in folder and Split right, in the caller's words -- after a separator, and a
+press on one shuts the menu and reports a `TabCommand` (the tab and the
+command's index) through `more_pick`; the caller does the work, since pinning,
+paths and splits are its model's. The dragged lift and drop line are still to
+come.
+
+`ui_navigation5_v2` opens notes' menu with a secondary press and presses Copy
+path: tab 2, command 1 is reported, on Windows and Linux; `ui_workspace` still
+passes on both.

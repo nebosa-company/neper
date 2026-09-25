@@ -2827,8 +2827,9 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // (D1329) `document_tabs_with` adds file-type icons, the read-only mark and the
 // preview tab's name.
 // (D1336) With `width`, overflow scrolling and Show all open files.
+// (D1337) The menu's further commands from `DocumentTabsOptions.more`.
 // ponytail: a preview tab's title is upright (no italic face); no dragged lift or
-// drop line, Pin, Copy path, Reveal or Split in the menu.
+// drop line.
 // (D1233) A document strip's tab menu, kept across frames on the strip: whether
 // it is open and for which tab.
 type TabMenu = struct { open: bool, index: usize }
@@ -2875,7 +2876,7 @@ fn tab_close_many(ctx: *void) -> err {
 // (D1233, docs/ux/components/DocumentTabs) The menu of the tab `menu_for`: Close,
 // Close others, Close to the right and Close saved, each over the unpinned tabs
 // it names and disabled when it names none.
-fn tab_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, documents: []const Document, menu_for: usize, cell: *TabMenu, close: widget.Change[usize]) -> (widget.Node, err) {
+fn tab_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, documents: []const Document, menu_for: usize, cell: *TabMenu, close: widget.Change[usize], more: []const str, more_pick: widget.Change[TabCommand]) -> (widget.Node, err) {
     let n = documents.len
     let (lists, lists_error) = mem.alloc[usize](a, 4usize * n)
     if lists_error != ok { ret (zero, TooLarge) }
@@ -2903,8 +2904,10 @@ fn tab_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, documents: 
     }
     let (runs, runs_error) = mem.alloc[TabCloseMany](a, 5usize)
     if runs_error != ok { ret (zero, TooLarge) }
-    let (commands, commands_error) = mem.alloc[overlay.MenuCommand](a, 4usize)
+    let (commands, commands_error) = mem.alloc[overlay.MenuCommand](a, 4usize + more.len)
     if commands_error != ok { ret (zero, TooLarge) }
+    let (mores, mores_error) = mem.alloc[TabMore](a, more.len)
+    if mores_error != ok { ret (zero, TooLarge) }
     var names: [4]str = zero
     names[0usize] = "Close"
     names[1usize] = "Close others"
@@ -2918,12 +2921,20 @@ fn tab_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, documents: 
         commands[i].enabled = counts[i] > 0usize
         i += 1usize
     }
+    // (D1337) The caller's further commands after a separator.
+    var m = 0usize
+    while m < more.len {
+        mores[m] = TabMore { runtime: t.runtime, cell: cell, pick: more_pick, ask: TabCommand { index: menu_for, command: m } }
+        commands[4usize + m] = overlay.menu_command(more[m], widget.Submit { ctx: mem.cast[*void](&mores[m]), invoke: tab_more_fire })
+        if m == 0usize { commands[4usize].separated = true }
+        m += 1usize
+    }
     runs[4usize] = TabCloseMany { runtime: t.runtime, cell: cell, close: close, indices: none }
     let (closer, closer_error) = mem.alloc[widget.Submit](a, 1usize)
     if closer_error != ok { ret (zero, TooLarge) }
     closer[0usize] = widget.Submit { ctx: mem.cast[*void](&runs[4usize]), invoke: tab_close_many }
     let (at, pointed) = widget.context_point(t.runtime)
-    let (made, made_error) = overlay.context_menu_of(a, key, t, key - 129u64 + 2u64 * u64(menu_for), documents[menu_for].title, commands[0usize..4usize], true, &closer[0usize], at, pointed)
+    let (made, made_error) = overlay.context_menu_of(a, key, t, key - 129u64 + 2u64 * u64(menu_for), documents[menu_for].title, commands[0usize..4usize + more.len], true, &closer[0usize], at, pointed)
     ret (made, made_error)
 }
 
@@ -2942,7 +2953,21 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
 // focused tab in view, and ends in a 32 "Show all open files" button (keyed
 // `key + 128`) firing `toggle_all`; `all_open` stands its menu of every document
 // (keyed `key + 129`), a row picking that document.
-type DocumentTabsOptions = struct { icons: []const control.GlyphKind, read_only: []const bool, preview: usize, width: f32, all_open: bool, toggle_all: widget.Submit }
+// (D1337) `more` names the tab menu's further commands (Pin, Copy path, Reveal
+// in folder, Split right -- the caller's words), after a separator; one reports
+// the tab and the command's index through `more_pick`.
+type DocumentTabsOptions = struct { icons: []const control.GlyphKind, read_only: []const bool, preview: usize, width: f32, all_open: bool, toggle_all: widget.Submit, more: []const str, more_pick: widget.Change[TabCommand] }
+
+// (D1337) A tab menu's further command: which tab, which command.
+type TabCommand = struct { index: usize, command: usize }
+type TabMore = struct { runtime: *widget.Runtime, cell: *TabMenu, pick: widget.Change[TabCommand], ask: TabCommand }
+
+fn tab_more_fire(ctx: *void) -> err {
+    let m = mem.cast[*TabMore](ctx)
+    m.cell.open = false
+    widget.request_animation_frame(m.runtime)
+    ret widget.fire_change[TabCommand](m.pick, m.ask)
+}
 
 // (D1329) `document_tabs` with those extras.
 fn document_tabs_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], options: DocumentTabsOptions) -> (widget.Node, err) {
@@ -3279,7 +3304,7 @@ fn document_tabs_styled(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     }
     // (D1233) The open tab menu stands beside the strip.
     if has_menu_cell && menu_cell.open && menu_cell.index < documents.len {
-        let (menu, menu_error) = tab_menu(a, key + 130u64, t, documents, menu_cell.index, menu_cell, close)
+        let (menu, menu_error) = tab_menu(a, key + 130u64, t, documents, menu_cell.index, menu_cell, close, options.more, options.more_pick)
         if menu_error != ok { ret (zero, menu_error) }
         let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
         if both_error != ok { ret (zero, TooLarge) }
