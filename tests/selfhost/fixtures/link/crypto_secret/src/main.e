@@ -117,7 +117,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     // 7: split_random round-trips through shares 2, 4 and 5.
     var rng = rand.pcg64(9u64, 3u64)
-    if secret.split_random(plain[..], 5u8, 3u8, &rng, shares[..]) != ok { os.exit(7i32) }
+    if secret.split_random(plain[..], 5u8, 3u8, shares[..]) != ok { os.exit(7i32) }
     if same(shares[..16usize], plain[..]) { os.exit(7i32) }
     xs[0] = 2u8
     xs[1] = 4u8
@@ -137,7 +137,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if secret.split(plain[..], 2u8, 3u8, coefficients[..], shares[..]) != secret.Invalid { os.exit(8i32) }
     if secret.split(plain[..], 5u8, 3u8, coefficients[..31usize], shares[..]) != secret.Invalid { os.exit(8i32) }
     if secret.split(plain[..], 5u8, 3u8, coefficients[..], shares[..79usize]) != secret.TooSmall { os.exit(8i32) }
-    if secret.split_random(plain[..], 5u8, 3u8, &rng, shares[..79usize]) != secret.TooSmall { os.exit(8i32) }
+    if secret.split_random_seeded(plain[..], 5u8, 3u8, &rng, shares[..79usize]) != secret.TooSmall { os.exit(8i32) }
     xs[1] = 2u8
     if secret.combine(xs[..3usize], picked[..], 16usize, out[..]) != secret.Invalid { os.exit(8i32) }
     xs[1] = 0u8

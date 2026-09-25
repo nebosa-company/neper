@@ -55,6 +55,7 @@ fn read_be(s: *State, width: usize) -> (u64, err) {
 }
 
 fn read_bytes(a: *mem.Arena, s: *State, count: usize) -> ([]u8, err) {
+    if count > 16777216usize { ret (zero, TooLarge) }
     let (out, out_error) = mem.alloc[u8](a, count)
     if out_error != ok { ret (zero, out_error) }
     let read_error = read_exact(s, out)

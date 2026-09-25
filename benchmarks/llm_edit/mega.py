@@ -140,12 +140,14 @@ def run_case(agent_command: str, language: str, task: str) -> dict:
         prompt_file = workspace / "prompt.txt"
         prompt_file.write_text(prompt, encoding="utf-8")
         command = agent_command.format(
-            workspace=str(workspace), prompt=prompt, prompt_file=str(prompt_file))
+            workspace=str(workspace), prompt_file=str(prompt_file))
+        argv = shlex.split(command) if os.name != "nt" else [
+            part.strip('"') for part in shlex.split(command, posix=False)]
         started = time.perf_counter()
         proc = subprocess.run(
-            command if os.name == "nt" else shlex.split(command), cwd=workspace,
+            argv, cwd=workspace,
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            shell=os.name == "nt")
+            shell=False)
         seconds = time.perf_counter() - started
         passed, detail = evaluate(language, task, workspace, proc.stdout, before_lines)
         if proc.returncode:

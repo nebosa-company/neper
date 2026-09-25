@@ -62,6 +62,7 @@ fn octal(field: []const u8) -> (u64, bool) {
         var value = 0u64
         var at = 1usize
         while at < field.len {
+            if value > 72057594037927935u64 { ret (0u64, false) }
             value = (value << 8u32) | u64(field[at])
             at += 1usize
         }
@@ -142,6 +143,7 @@ fn apply_pax(s: *State, block: []const u8) -> err {
         var length = 0usize
         var digits = 0usize
         while at < block.len && block[at] >= 48u8 && block[at] <= 57u8 {
+            if length > (18446744073709551615usize - usize(block[at] - 48u8)) / 10usize { ret Invalid }
             length = length * 10usize + usize(block[at] - 48u8)
             digits += 1usize
             at += 1usize
@@ -173,6 +175,7 @@ fn apply_pax(s: *State, block: []const u8) -> err {
             if value.len == 0usize { ret Invalid }
             while v < value.len {
                 if value[v] < 48u8 || value[v] > 57u8 { ret Invalid }
+                if size > (18446744073709551615u64 - u64(value[v] - 48u8)) / 10u64 { ret Invalid }
                 size = size * 10u64 + u64(value[v] - 48u8)
                 v += 1usize
             }

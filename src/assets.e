@@ -292,6 +292,7 @@ fn parse_manifest(a: *mem.Arena, text: str, entries: []Entry) -> (usize, err) {
         if asset_same(k, "path") {
             let (path, path_error) = asset_scalar(a, value)
             if path_error != ok { ret (0usize, path_error) }
+            if !asset_path_safe(path) { ret (0usize, InvalidManifest) }
             e.path = path
             continue
         }
@@ -315,6 +316,26 @@ fn parse_manifest(a: *mem.Arena, text: str, entries: []Entry) -> (usize, err) {
         i += 1usize
     }
     ret (count, ok)
+}
+
+// A `path:` value must stay inside the project root: not empty, not absolute, no
+// drive or alternate-data-stream colon, and no `..` component (split on either
+// separator) that would escape the root when joined by asset_join.
+fn asset_path_safe(path: str) -> bool {
+    if path.len == 0usize { ret false }
+    if path[0usize] == 47u8 || path[0usize] == 92u8 { ret false }
+    var i = 0usize
+    while i < path.len {
+        if path[i] == 58u8 { ret false }
+        if path[i] == 46u8 && i + 1usize < path.len && path[i + 1usize] == 46u8 {
+            var component_start = i == 0usize || path[i - 1usize] == 47u8 || path[i - 1usize] == 92u8
+            var component_end = i + 2usize
+            var at_end = component_end == path.len || path[component_end] == 47u8 || path[component_end] == 92u8
+            if component_start && at_end { ret false }
+        }
+        i += 1usize
+    }
+    ret true
 }
 
 fn asset_join(a: *mem.Arena, root: str, leaf: str) -> (str, err) {

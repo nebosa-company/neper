@@ -555,11 +555,15 @@ fn check_auth() -> i32 {
     if b_error != ok || !str.eq(b, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM") { ret 19i32 }
     var r = rand.pcg64(3u64, 4u64)
     var verifier_dst: [50]u8 = zero
-    let (verifier, challenge, pkce_error) = auth.pkce(&r, verifier_dst[0..], challenge_dst[0..])
-    if pkce_error != ok || !str.eq(verifier, "e~EnUqEMNzHWnx1qEREUO.oiFWq97Hihxj-l-36HQQZnqJ1TU1") { ret 19i32 }
-    if !str.eq(challenge, "aYfZ1aGZp5WNSZgSFRTquhgfJr7EYYw-tBfhDv-nWPw") { ret 19i32 }
-    let (_, short_error) = auth.pkce_verifier(&r, verifier_dst[..42usize])
+    let (verifier, verifier_error) = auth.pkce_verifier_seeded(&r, verifier_dst[0..])
+    if verifier_error != ok || !str.eq(verifier, "e~EnUqEMNzHWnx1qEREUO.oiFWq97Hihxj-l-36HQQZnqJ1TU1") { ret 19i32 }
+    let (challenge, challenge_error) = auth.pkce_challenge(verifier, challenge_dst[0..])
+    if challenge_error != ok || !str.eq(challenge, "aYfZ1aGZp5WNSZgSFRTquhgfJr7EYYw-tBfhDv-nWPw") { ret 19i32 }
+    let (_, short_error) = auth.pkce_verifier(verifier_dst[..42usize])
     if short_error != auth.Invalid { ret 19i32 }
+    var secure_verifier_dst: [43]u8 = zero
+    let (secure_verifier, secure_challenge, pkce_error) = auth.pkce(secure_verifier_dst[0..], challenge_dst[0..])
+    if pkce_error != ok || secure_verifier.len < 43usize || secure_verifier.len > 128usize || secure_challenge.len != 43usize { ret 19i32 }
     let client = [132]u8{ 123, 34, 116, 121, 112, 101, 34, 58, 34, 119, 101, 98, 97, 117, 116, 104, 110, 46, 103, 101, 116, 34, 44, 34, 99, 104, 97, 108, 108, 101, 110, 103, 101, 34, 58, 34, 65, 65, 69, 67, 65, 119, 81, 70, 66, 103, 99, 73, 67, 81, 111, 76, 68, 65, 48, 79, 68, 120, 65, 82, 69, 104, 77, 85, 70, 82, 89, 88, 71, 66, 107, 97, 71, 120, 119, 100, 72, 104, 56, 34, 44, 34, 111, 114, 105, 103, 105, 110, 34, 58, 34, 104, 116, 116, 112, 115, 58, 47, 47, 101, 120, 97, 109, 112, 108, 101, 46, 99, 111, 109, 34, 44, 34, 99, 114, 111, 115, 115, 79, 114, 105, 103, 105, 110, 34, 58, 102, 97, 108, 115, 101, 125 }
     let bad_client = [129]u8{ 123, 34, 116, 121, 112, 101, 34, 58, 34, 119, 101, 98, 97, 117, 116, 104, 110, 46, 103, 101, 116, 34, 44, 34, 99, 104, 97, 108, 108, 101, 110, 103, 101, 34, 58, 34, 65, 65, 69, 67, 65, 119, 81, 70, 66, 103, 99, 73, 67, 81, 111, 76, 68, 65, 48, 79, 68, 120, 65, 82, 69, 104, 77, 85, 70, 82, 89, 88, 71, 66, 107, 97, 71, 120, 119, 100, 72, 104, 56, 34, 44, 34, 111, 114, 105, 103, 105, 110, 34, 58, 34, 104, 116, 116, 112, 115, 58, 47, 47, 101, 118, 105, 108, 46, 99, 111, 109, 34, 44, 34, 99, 114, 111, 115, 115, 79, 114, 105, 103, 105, 110, 34, 58, 102, 97, 108, 115, 101, 125 }
     let auth_data = [37]u8{ 163, 121, 166, 246, 238, 175, 185, 165, 94, 55, 140, 17, 128, 52, 226, 117, 30, 104, 47, 171, 159, 45, 48, 171, 19, 210, 18, 85, 134, 206, 25, 71, 5, 0, 0, 0, 42 }

@@ -3,10 +3,11 @@
 // byte is the constant term of its own random degree-(k-1) polynomial, and
 // share i (1 <= i <= n) holds every polynomial evaluated at x = i. `split` is
 // deterministic over caller-supplied coefficients so a fixture can replay it;
-// `split_random` draws them from `e.algo.rand`. `combine` interpolates at 0
+// `split_random` draws them from the system CSPRNG (`os.random`). `combine` interpolates at 0
 // from any k shares (Lagrange); fewer than k shares answer garbage, not an error.
 
 use e.algo.rand
+use e.os
 
 error Invalid
 error TooSmall
@@ -67,9 +68,37 @@ fn split(secret: []const u8, n: u8, k: u8, coefficients: []const u8, shares: []u
     ret ok
 }
 
-// `split` with the coefficients drawn from `rng` (the low byte of each draw),
+// `split` with the coefficients drawn from the system CSPRNG (`os.random`),
 // secret byte by secret byte, so every share sees the same polynomial.
-fn split_random(secret: []const u8, n: u8, k: u8, rng: *rand.Pcg64, shares: []u8) -> err {
+fn split_random(secret: []const u8, n: u8, k: u8, shares: []u8) -> err {
+    if k < 2u8 || k > n { ret Invalid }
+    let degree = usize(k) - 1usize
+    if shares.len < share_size(secret.len, n) { ret TooSmall }
+    var terms: [254]u8 = zero
+    var j = 0usize
+    while j < secret.len {
+        let random_error = os.random(terms[0usize..degree])
+        if random_error != ok { ret random_error }
+        var i = 0usize
+        while i < usize(n) {
+            let x = u8(i + 1usize)
+            var acc = 0u8
+            var d = degree
+            while d > 0usize {
+                acc = gf_mul(acc, x) ^ terms[d - 1usize]
+                d -= 1usize
+            }
+            shares[i * secret.len + j] = gf_mul(acc, x) ^ secret[j]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+// The deterministic test-only variant: coefficients drawn from `rng` (the low
+// byte of each draw), so a fixture can replay the exact shares.
+fn split_random_seeded(secret: []const u8, n: u8, k: u8, rng: *rand.Pcg64, shares: []u8) -> err {
     if k < 2u8 || k > n { ret Invalid }
     let degree = usize(k) - 1usize
     if shares.len < share_size(secret.len, n) { ret TooSmall }

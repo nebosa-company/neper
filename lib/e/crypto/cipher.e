@@ -221,15 +221,23 @@ fn pad_pkcs7(dst: []u8, src: []const u8) -> (usize, err) {
 }
 
 // The unpadded length of `data`, or `Invalid` when the padding is malformed.
+// The whole padding region is scanned and folded into a mask rather than
+// returning at the first bad byte, so the time taken does not reveal where the
+// padding first diverges (a padding oracle).
 fn unpad_pkcs7(data: []const u8) -> (usize, err) {
     if data.len == 0usize || data.len % 16usize != 0usize { ret (0usize, Invalid) }
     let pad = usize(data[data.len - 1usize])
-    if pad == 0usize || pad > 16usize { ret (0usize, Invalid) }
-    var i = data.len - pad
+    var valid = 1u8
+    if pad == 0usize || pad > 16usize { valid = 0u8 }
+    // Clamp the scan start so `data.len - pad` cannot underflow when pad > data.len.
+    var scan_pad = pad
+    if scan_pad > data.len { scan_pad = data.len }
+    var i = data.len - scan_pad
     while i < data.len {
-        if usize(data[i]) != pad { ret (0usize, Invalid) }
+        if usize(data[i]) != pad { valid = 0u8 }
         i += 1usize
     }
+    if valid == 0u8 { ret (0usize, Invalid) }
     ret (data.len - pad, ok)
 }
 

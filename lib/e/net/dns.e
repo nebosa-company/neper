@@ -672,6 +672,18 @@ fn chain_validate(ds_rdata: []const u8, dnskey_rrset: []const u8, rrsig_rdata: [
 // GET with `?dns=` base64url unpadded, or POST with the body.
 fn query_doh(dst: []u8, host: str, path: str, wire_query: []const u8, method_get: bool) -> (usize, err) {
     var at = 0usize
+    // The request line and the Host header are built from these: a CR, an LF or, in the
+    // path, a space would split the request, so such bytes are refused before any write.
+    var checked = 0usize
+    while checked < host.len {
+        if host[checked] == 13u8 || host[checked] == 10u8 { ret (0usize, TooSmall) }
+        checked += 1usize
+    }
+    checked = 0usize
+    while checked < path.len {
+        if path[checked] == 13u8 || path[checked] == 10u8 || path[checked] == 32u8 { ret (0usize, TooSmall) }
+        checked += 1usize
+    }
     if method_get {
         if put(dst, &at, "GET ") != ok || put(dst, &at, path) != ok || put(dst, &at, "?dns=") != ok { ret (0usize, TooSmall) }
         let (encoded, encode_error) = bytes.base64_encode(dst[at..], wire_query, .Url, false)
@@ -726,6 +738,7 @@ fn doh_response_body(http_response: []const u8) -> ([]const u8, err) {
                 content_length = 0usize
                 while i < line.len {
                     if line[i] < 48u8 || line[i] > 57u8 { ret (none, Malformed) }
+                    if content_length > (18446744073709551615usize - usize(line[i] - 48u8)) / 10usize { ret (none, Invalid) }
                     content_length = content_length * 10usize + usize(line[i] - 48u8)
                     i += 1usize
                 }

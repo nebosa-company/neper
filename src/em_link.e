@@ -902,11 +902,24 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         program.builder.function_count += 1usize
         let (folded_position, already_folded) = lookup.find(&folded, function.content_hash, 0usize, "")
         if already_folded {
-            program.function_offsets[global_function] = code_offset[folded_position]
-            verify[folded_position] = true
-            verify[position] = true
-            position += 1usize
-            continue
+            // The hash is what a fold claims, and the bytes are the proof (D459): both
+            // functions' content hashes -- their code and relocations -- are recomputed from
+            // their artifacts' bytes, and the offset is shared only where both hold. Two
+            // functions that arrive under one hash but are not the same code are copied apart.
+            let folded_function = table.funcs[folded_position]
+            let function_artifact = artifacts[table.owner[position]]
+            let folded_artifact = artifacts[table.owner[folded_position]]
+            let (this_hash, this_hash_error) = em.code_content_hash_bounded(function_artifact.bytes, function, function_artifact.string_starts, function_artifact.string_lengths, &workers[0usize].hash_scratch)
+            if this_hash_error != ok { ret this_hash_error }
+            let (folded_hash, folded_hash_error) = em.code_content_hash_bounded(folded_artifact.bytes, folded_function, folded_artifact.string_starts, folded_artifact.string_lengths, &workers[0usize].hash_scratch)
+            if folded_hash_error != ok { ret folded_hash_error }
+            if this_hash == folded_hash && this_hash == function.content_hash {
+                program.function_offsets[global_function] = code_offset[folded_position]
+                verify[folded_position] = true
+                verify[position] = true
+                position += 1usize
+                continue
+            }
         }
         program.function_offsets[global_function] = code_cursor
         try lookup.insert(&folded, function.content_hash, 0usize, "", position)

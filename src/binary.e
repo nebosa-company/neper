@@ -127,7 +127,7 @@ fn little_u64(buffer: *Buffer, value: usize) -> err {
 }
 
 fn patch_little_u32(buffer: *Buffer, offset: usize, value: usize) -> err {
-    if value > 4294967295usize || offset + 4usize > buffer.count { ret InvalidEncoding }
+    if value > 4294967295usize || offset > buffer.count || buffer.count - offset < 4usize { ret InvalidEncoding }
     var remaining = value
     var at = 0usize
     while at < 4usize {
@@ -139,7 +139,7 @@ fn patch_little_u32(buffer: *Buffer, offset: usize, value: usize) -> err {
 }
 
 fn patch_little_u64(buffer: *Buffer, offset: usize, value: usize) -> err {
-    if offset + 8usize > buffer.count { ret InvalidEncoding }
+    if offset > buffer.count || buffer.count - offset < 8usize { ret InvalidEncoding }
     var remaining = value
     var at = 0usize
     while at < 8usize {
@@ -151,7 +151,7 @@ fn patch_little_u64(buffer: *Buffer, offset: usize, value: usize) -> err {
 }
 
 fn read_u16(bytes: []const u8, offset: usize) -> (usize, err) {
-    if offset + 2usize > bytes.len { ret (0usize, InvalidEncoding) }
+    if offset > bytes.len || bytes.len - offset < 2usize { ret (0usize, InvalidEncoding) }
     ret (usize(bytes[offset]) + usize(bytes[offset + 1usize]) * 256usize, ok)
 }
 
@@ -160,17 +160,17 @@ fn read_u16(bytes: []const u8, offset: usize) -> (usize, err) {
 // The guard is the proof (D388): the four loads under `offset + 4 > len` carry no
 // check of their own, where they carried four.
 fn read_u32_at(bytes: []const u8, offset: usize) -> usize {
-    if offset + 4usize > bytes.len { ret 0usize }
+    if offset > bytes.len || bytes.len - offset < 4usize { ret 0usize }
     ret usize(bytes[offset]) | (usize(bytes[offset + 1usize]) << 8usize) | (usize(bytes[offset + 2usize]) << 16usize) | (usize(bytes[offset + 3usize]) << 24usize)
 }
 
 fn read_u32(bytes: []const u8, offset: usize) -> (usize, err) {
-    if offset + 4usize > bytes.len { ret (0usize, InvalidEncoding) }
+    if offset > bytes.len || bytes.len - offset < 4usize { ret (0usize, InvalidEncoding) }
     ret (usize(bytes[offset]) | (usize(bytes[offset + 1usize]) << 8usize) | (usize(bytes[offset + 2usize]) << 16usize) | (usize(bytes[offset + 3usize]) << 24usize), ok)
 }
 
 fn read_u64(bytes: []const u8, offset: usize) -> (usize, err) {
-    if offset + 8usize > bytes.len { ret (0usize, InvalidEncoding) }
+    if offset > bytes.len || bytes.len - offset < 8usize { ret (0usize, InvalidEncoding) }
     // Written out (D332): the loop with its multiplier was the artifact readers' most
     // called function.
     let low = usize(bytes[offset]) | (usize(bytes[offset + 1usize]) << 8usize) | (usize(bytes[offset + 2usize]) << 16usize) | (usize(bytes[offset + 3usize]) << 24usize)

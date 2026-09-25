@@ -619,6 +619,9 @@ fn decode(a: *mem.Arena, d: *Decoder, max_depth: u16) -> (Value, err) {
                 count = count / 2usize
             }
         }
+        // Each element needs at least one input byte, so a declared count larger
+        // than the remaining input would over-allocate before the loop trips.
+        if count > remaining(d) { ret (none, Truncated) }
         if major == MAJOR_ARRAY {
             let (items, items_error) = mem.alloc[Value](a, count)
             if items_error != ok { ret (none, items_error) }

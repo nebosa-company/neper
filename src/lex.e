@@ -219,7 +219,7 @@ fn column_from(source: str, line_start: usize, offset: usize) -> usize {
     var at = line_start
     if at == 0usize && offset >= 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 { at = 3usize }
     var column = 1usize
-    while at < offset {
+    while at < offset && at < source.len {
         if source[at] >= 128u8 {
             let width = utf8_width(source, at)
             if width == 0usize { at += invalid_utf8_width(source, at) } else { at += width }
@@ -273,7 +273,7 @@ fn column_utf16_at(source: str, lines: []const usize, offset: usize) -> usize {
     var at = line_start_of(source, lines, offset)
     // The byte-order mark is not a column: the scanner starts past it.
     if at == 0usize && offset >= 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 { at = 3usize }
-    while at < offset {
+    while at < offset && at < source.len {
         if source[at] >= 128u8 {
             let width = utf8_width(source, at)
             if width == 0usize {

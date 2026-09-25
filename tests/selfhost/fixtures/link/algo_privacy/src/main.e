@@ -24,7 +24,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var r = rand.pcg64(1u64, 2u64)
     var i = 0usize
     while i < 10usize {
-        let (x, e) = privacy.laplace(0.0f64, 1.0f64, 0.5f64, &r)
+        let (x, e) = privacy.laplace_seeded(0.0f64, 1.0f64, 0.5f64, &r)
         if e != ok || !near(x, want10[i], 0.000000000001f64) { os.exit(1i32) }
         i += 1usize
     }
@@ -38,7 +38,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var sum_abs = 0.0f64
     i = 0usize
     while i < 4000usize {
-        let (x, e) = privacy.laplace(0.0f64, 1.0f64, 0.5f64, &r)
+        let (x, e) = privacy.laplace_seeded(0.0f64, 1.0f64, 0.5f64, &r)
         if e != ok { os.exit(3i32) }
         var m = x
         if m < 0.0f64 { m = 0.0f64 - m }
@@ -54,7 +54,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var sum = 0.0f64
     i = 0usize
     while i < 4000usize {
-        let (x, e) = privacy.gaussian(0.0f64, 1.0f64, 0.5f64, 0.00001f64, &r)
+        let (x, e) = privacy.gaussian_seeded(0.0f64, 1.0f64, 0.5f64, 0.00001f64, &r)
         if e != ok { os.exit(4i32) }
         draws[i] = x
         sum += x
@@ -78,7 +78,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var k = 1u64
     while k <= 8u64 {
         var rk = rand.pcg64(k, 11u64)
-        let (pick, e) = privacy.exponential(scores[..], 1.0f64, 1.0f64, &rk)
+        let (pick, e) = privacy.exponential_seeded(scores[..], 1.0f64, 1.0f64, &rk)
         if e != ok || pick != picks[usize(k - 1u64)] { os.exit(5i32) }
         k += 1u64
     }
@@ -90,7 +90,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     r = rand.pcg64(9u64, 10u64)
     i = 0usize
     while i < 2000usize {
-        let (pick, e) = privacy.exponential(scores[..], 1.0f64, 1.0f64, &r)
+        let (pick, e) = privacy.exponential_seeded(scores[..], 1.0f64, 1.0f64, &r)
         if e != ok { os.exit(6i32) }
         counts[pick] += 1usize
         i += 1usize
@@ -112,7 +112,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         state = state *% 6364136223846793005u64 +% 1442695040888963407u64
         let bit = (state >> 33u32) % 10u64 < 3u64
         if bit { true_ones += 1usize }
-        if privacy.randomized_response(bit, 0.75f64, &r) { ones += 1usize }
+        if privacy.randomized_response_seeded(bit, 0.75f64, &r) { ones += 1usize }
         i += 1usize
     }
     let estimate = privacy.randomized_response_estimate(ones, 4000usize, 0.75f64)
@@ -127,27 +127,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if privacy.clip(5.0f64, 0.0f64, 1.0f64) != 1.0f64 || privacy.clip(-5.0f64, 0.0f64, 1.0f64) != 0.0f64 || privacy.clip(0.5f64, 0.0f64, 1.0f64) != 0.5f64 { os.exit(8i32) }
     var noisy: [5]f64 = zero
     r = rand.pcg64(1u64, 2u64)
-    if privacy.laplace_vector(scores[..], 1.0f64, 0.5f64, &r, noisy[..]) != ok { os.exit(9i32) }
+    if privacy.laplace_vector_seeded(scores[..], 1.0f64, 0.5f64, &r, noisy[..]) != ok { os.exit(9i32) }
     i = 0usize
     while i < 5usize {
         if !near(noisy[i], scores[i] + want10[i], 0.000000000001f64) { os.exit(9i32) }
         i += 1usize
     }
-    let (arg, arg_error) = privacy.report_noisy_max(scores[..], 1.0f64, 1000.0f64, &r)
+    let (arg, arg_error) = privacy.report_noisy_max_seeded(scores[..], 1.0f64, 1000.0f64, &r)
     if arg_error != ok || arg != 2usize { os.exit(9i32) }
 
     // 10: refusals.
-    let (_, bad_epsilon) = privacy.laplace(0.0f64, 1.0f64, 0.0f64, &r)
+    let (_, bad_epsilon) = privacy.laplace_seeded(0.0f64, 1.0f64, 0.0f64, &r)
     if bad_epsilon != privacy.Invalid { os.exit(10i32) }
     let (_, bad_delta) = privacy.gaussian_sigma(1.0f64, 0.5f64, 1.0f64)
     if bad_delta != privacy.Invalid { os.exit(10i32) }
-    let (_, bad_delta_low) = privacy.gaussian(0.0f64, 1.0f64, 0.5f64, 0.0f64, &r)
+    let (_, bad_delta_low) = privacy.gaussian_seeded(0.0f64, 1.0f64, 0.5f64, 0.0f64, &r)
     if bad_delta_low != privacy.Invalid { os.exit(10i32) }
-    let (_, bad_empty) = privacy.exponential(scores[..0usize], 1.0f64, 1.0f64, &r)
+    let (_, bad_empty) = privacy.exponential_seeded(scores[..0usize], 1.0f64, 1.0f64, &r)
     if bad_empty != privacy.Invalid { os.exit(10i32) }
-    let (_, bad_empty_max) = privacy.report_noisy_max(scores[..0usize], 1.0f64, 1.0f64, &r)
+    let (_, bad_empty_max) = privacy.report_noisy_max_seeded(scores[..0usize], 1.0f64, 1.0f64, &r)
     if bad_empty_max != privacy.Invalid { os.exit(10i32) }
-    if privacy.laplace_vector(scores[..], 1.0f64, 0.5f64, &r, noisy[..3usize]) != privacy.Invalid { os.exit(10i32) }
+    if privacy.laplace_vector_seeded(scores[..], 1.0f64, 0.5f64, &r, noisy[..3usize]) != privacy.Invalid { os.exit(10i32) }
     let (_, bad_compose) = privacy.compose_advanced(0.1f64, 100usize, 0.0f64)
     if bad_compose != privacy.Invalid { os.exit(10i32) }
 

@@ -678,7 +678,10 @@ fn bracket_argument_is_type(p: *Parser) -> bool {
 fn parse_bracket_argument_node(p: *Parser) -> err {
     if bracket_argument_is_type(p) {
         var has_type_node = false
-        try parse_type_node(p, &has_type_node)
+        try enter(p)
+        let inner_error = parse_type_node(p, &has_type_node)
+        if p.depth > 0usize { p.depth = p.depth - 1usize }
+        if inner_error != ok { ret inner_error }
         if !has_type_node { ret InvalidSyntax }
         ret ok
     }
@@ -869,7 +872,10 @@ fn parse_type_parameter_node(p: *Parser) -> err {
             }
         }
         var has_type_node = false
-        try parse_type_node(p, &has_type_node)
+        try enter(p)
+        let inner_error = parse_type_node(p, &has_type_node)
+        if p.depth > 0usize { p.depth = p.depth - 1usize }
+        if inner_error != ok { ret inner_error }
         if has_type_node {
             nested[0usize] = p.last_node
             nested_count = 1usize
@@ -889,7 +895,10 @@ fn parse_type_return_spec_node(p: *Parser) -> err {
         try skip_separators(p)
         while p.current.kind != .PunctRParen {
             var has_type_node = false
-            try parse_type_node(p, &has_type_node)
+            try enter(p)
+            let inner_error = parse_type_node(p, &has_type_node)
+            if p.depth > 0usize { p.depth = p.depth - 1usize }
+            if inner_error != ok { ret inner_error }
             type_count += 1usize
             try skip_separators(p)
             if p.current.kind == .PunctComma {
@@ -904,7 +913,10 @@ fn parse_type_return_spec_node(p: *Parser) -> err {
         try advance(p)
     } else {
         var has_type_node = false
-        try parse_type_node(p, &has_type_node)
+        try enter(p)
+        let inner_error = parse_type_node(p, &has_type_node)
+        if p.depth > 0usize { p.depth = p.depth - 1usize }
+        if inner_error != ok { ret inner_error }
         type_count = 1usize
     }
     try add_parent_since(p, .ReturnSpec, token_start, p.token_index, node_start)
@@ -958,7 +970,10 @@ fn parse_type_node(p: *Parser, has_node: *bool) -> err {
         if p.current.kind == .KwShared { try advance(p) }
         try skip_soft(p)
         var has_inner = false
-        try parse_type_node(p, &has_inner)
+        try enter(p)
+        let inner_error = parse_type_node(p, &has_inner)
+        if p.depth > 0usize { p.depth = p.depth - 1usize }
+        if inner_error != ok { ret inner_error }
         if has_inner {
             nested[0usize] = p.last_node
             nested_count = 1usize
@@ -979,7 +994,10 @@ fn parse_type_node(p: *Parser, has_node: *bool) -> err {
             if p.current.kind == .KwShared { try advance(p) }
             try skip_soft(p)
             var has_inner = false
-            try parse_type_node(p, &has_inner)
+            try enter(p)
+            let inner_error = parse_type_node(p, &has_inner)
+            if p.depth > 0usize { p.depth = p.depth - 1usize }
+            if inner_error != ok { ret inner_error }
             if has_inner {
                 nested[0usize] = p.last_node
                 nested_count = 1usize
@@ -999,7 +1017,10 @@ fn parse_type_node(p: *Parser, has_node: *bool) -> err {
         try require(p, .PunctRBracket)
         try skip_soft(p)
         var has_inner = false
-        try parse_type_node(p, &has_inner)
+        try enter(p)
+        let inner_error = parse_type_node(p, &has_inner)
+        if p.depth > 0usize { p.depth = p.depth - 1usize }
+        if inner_error != ok { ret inner_error }
         if has_inner {
             nested[nested_count] = p.last_node
             nested_count += 1usize
@@ -1199,7 +1220,10 @@ fn parse_place_node(p: *Parser) -> err {
     var nested: [1]usize = zero
     try advance(p)
     try skip_soft(p)
-    try parse_place_node(p)
+    try enter(p)
+    let inner_error = parse_place_node(p)
+    if p.depth > 0usize { p.depth = p.depth - 1usize }
+    if inner_error != ok { ret inner_error }
     nested[0usize] = p.last_node
     try add_parent_node(p, .UnaryExpr, token_start, usize(p.tree.nodes[p.last_node].token_end), nested[..])
     ret ok
@@ -1284,7 +1308,10 @@ fn parse_if_statement(p: *Parser) -> err {
     if p.current.kind == .KwElse {
         try advance(p)
         if p.current.kind == .KwIf {
-            try parse_if_statement(p)
+            try enter(p)
+            let inner_error = parse_if_statement(p)
+            if p.depth > 0usize { p.depth = p.depth - 1usize }
+            if inner_error != ok { ret inner_error }
         } else {
             try parse_block_node(p)
         }

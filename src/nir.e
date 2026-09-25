@@ -559,8 +559,12 @@ fn global_area_offset(builder: *Builder, index: usize) -> usize {
         var alignment = item.alignment
         if alignment == 0usize { alignment = 1usize }
         let remainder = offset % alignment
-        if remainder != 0usize { offset = offset + alignment - remainder }
+        if remainder != 0usize {
+            if offset > 18446744073709551615usize - (alignment - remainder) { ret 18446744073709551615usize }
+            offset = offset + alignment - remainder
+        }
         if at == index { ret offset }
+        if offset > 18446744073709551615usize - item.size { ret 18446744073709551615usize }
         offset = offset + item.size
         at += 1usize
     }

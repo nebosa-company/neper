@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlparse
 import random
 import re
 import secrets
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -325,10 +326,12 @@ def run_case(command_template: str, language: str, seed: int, read_limit: int,
                 prompt += "\n\n" + CARD_BY_LANGUAGE[language] + "\nUse `.\\corpus.ps1 index <symbol>` before source reads."
             prompt_file = workspace / "prompt.txt"
             prompt_file.write_text(prompt, encoding="utf-8")
-            command = command_template.format(workspace=str(workspace), prompt=prompt, prompt_file=str(prompt_file))
+            command = command_template.format(workspace=str(workspace), prompt_file=str(prompt_file))
+            argv = shlex.split(command) if os.name != "nt" else [
+                part.strip('"') for part in shlex.split(command, posix=False)]
             started = time.perf_counter()
-            proc = subprocess.run(command, cwd=workspace, capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace", shell=os.name == "nt")
+            proc = subprocess.run(argv, cwd=workspace, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", shell=False)
             seconds = time.perf_counter() - started
             applied, detail = apply_edits(corpus, workspace)
             passed, evaluation = evaluate(corpus) if applied else (False, detail)

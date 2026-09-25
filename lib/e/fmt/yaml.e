@@ -232,6 +232,7 @@ fn unescape_double(a: *mem.Arena, body: str) -> (str, err) {
                 k += 1usize
             }
             i += width
+            if scalar > 1114111u32 || (scalar >= 55296u32 && scalar <= 57343u32) { ret ("", Invalid) }
             used = push_utf8(out, used, scalar)
             continue
         } else {
