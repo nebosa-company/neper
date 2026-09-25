@@ -12,6 +12,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
@@ -2965,8 +2966,9 @@ fn time_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, clock_text:
 // `key + 2`) whose clock fires `toggle`; while `open`, the time list below it (the
 // overlay keyed `key + 3`, its viewport `key + 4`, rows `key + 5 + index`), each
 // row a time the caller wrote (`write_clock`) with its offset ("30 min", or empty),
-// firing its own pick. Escape is `toggle`, Enter the selected pick. The caller
-// keeps the text, parses it and reformats it on blur.
+// firing its own pick. Alt+Down opens a closed list; Escape is `toggle`, Enter
+// the selected pick. The caller keeps the text, parses it and reformats it on
+// blur.
 // v2 (D960, docs/ux/components/TimePicker, field with time list): the list is a
 // menu at pointer density on `surface-container`, 8 corners, elevation 2, 8 above
 // and below the rows, 4 below the field and as wide; 6 rows show and it scrolls
@@ -2986,6 +2988,14 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
     parts[0usize] = boxed
     var default_action: widget.Submit = zero
     var list_keys: []const widget.Shortcut = zero
+    if !open {
+        let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 1usize)
+        if keys_error != ok { ret (zero, TooLarge) }
+        var alt: input.Modifiers = zero
+        alt.alt = true
+        keys[0usize] = widget.Shortcut { key: 40u32, modifiers: alt, action: *toggle }
+        list_keys = keys[0usize..1usize]
+    }
     if listing {
         let row_height = t.tokens.sizes.control_sm
         let (items, items_error) = mem.alloc[widget.Node](a, times.len)
