@@ -20,15 +20,16 @@ use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.navigation
 use e.ui.style
 use e.ui.testing
 use e.ui.widget
 
-type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, closes: usize, closed: usize, typed: usize, dismisses: usize }
+type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, closes: usize, closed: usize, typed: usize, dismisses: usize, hold: navigation.SwitcherHold }
 
-type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, PaletteCompact, Empty, Switcher, SwitcherGrid, SwitcherFilter }
+type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, PaletteCompact, Empty, Switcher, SwitcherGrid, SwitcherFilter, SwitcherHold }
 
 fn on_activate(ctx: *void, index: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -127,13 +128,13 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
         palette = made_palette
         e1 = made_palette_error
     } else {
-        let (made_palette, made_palette_error) = navigation.command_palette_mode(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, shown, active, which != .Switcher && which != .SwitcherGrid && which != .SwitcherFilter, activate, run, dismiss, 560.0)
+        let (made_palette, made_palette_error) = navigation.command_palette_mode(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, shown, active, which != .Switcher && which != .SwitcherGrid && which != .SwitcherFilter && which != .SwitcherHold, activate, run, dismiss, 560.0)
         palette = made_palette
         e1 = made_palette_error
     }
     var switcher: widget.Node = zero
     var e2: err = ok
-    if which == .SwitcherGrid || which == .SwitcherFilter {
+    if which == .SwitcherGrid || which == .SwitcherFilter || which == .SwitcherHold {
         var windows: [4]navigation.SwitcherItem = zero
         windows[0usize] = navigation.SwitcherItem { name: "main.e", context: "neper/src", state: "", thumbnail: zero }
         windows[1usize] = navigation.SwitcherItem { name: "lower.e", context: "neper/src", state: "unsaved changes", thumbnail: zero }
@@ -143,6 +144,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
             buffer[0usize] = 108u8
             buffer[1usize] = 111u8
             let (made_switcher, made_switcher_error) = navigation.window_switcher_filterable(a, 200u64, t, "Switch window", buffer, 2usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, windows[..], active, true, activate, run, close, dismiss, 480.0)
+            switcher = made_switcher
+            e2 = made_switcher_error
+        } else if which == .SwitcherHold {
+            let log = mem.cast[*Log](ctx)
+            let (made_switcher, made_switcher_error) = navigation.window_switcher_grid_held(a, 200u64, t, "Switch window", windows[..], active, &log.hold, activate, run, close, dismiss)
             switcher = made_switcher
             e2 = made_switcher_error
         } else {
@@ -394,6 +400,46 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if logs[0usize].closes != 4usize { os.exit(80i32) }
     if logs[0usize].closed != 1usize { os.exit(81i32) }
     if testing.type_text(&harness, "w") != ok || logs[0usize].typed != 3usize || logs[0usize].active != 0usize { os.exit(75i32) }
+    // Hold-to-switch: the first Ctrl+Tab selects the previous MRU item but stays
+    // invisible for 200ms; repeated and shifted Tabs wrap, release commits, and
+    // a quick chord still commits without flashing. Escape and blur cancel.
+    let hold_activate = widget.Change[usize] { ctx: ctx, invoke: on_activate }
+    let hold_pick = widget.Change[usize] { ctx: ctx, invoke: on_run }
+    var ctrl: input.Modifiers = zero
+    ctrl.control = true
+    var ctrl_shift = ctrl
+    ctrl_shift.shift = true
+    let ctrl_tab = input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 9u32, logical: 9u32 }, modifiers: ctrl, repeat: false } }
+    let ctrl_shift_tab = input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 9u32, logical: 9u32 }, modifiers: ctrl_shift, repeat: false } }
+    let release_ctrl = input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 17u32, logical: 17u32 }, modifiers: zero, repeat: false } }
+    if testing.begin(&harness, time.Instant { nanos: 1700000000i64 }) != ok { os.exit(82i32) }
+    let (started, start_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, ctrl_tab, 4usize, 0usize, hold_activate, hold_pick, &subs[0usize])
+    if start_error != ok || !started || logs[0usize].active != 1usize || !logs[0usize].hold.holding { os.exit(83i32) }
+    var hold_frame = mem.arena_from(frame_storage)
+    let (root_hold, build_hold_error) = build(&hold_frame, &theme, ctx, &subs[0usize], buffer, .SwitcherHold, logs[0usize].active)
+    if build_hold_error != ok || testing.pump(&harness, root_hold, time.Instant { nanos: 1700000000i64 }) != ok || testing.by_key(&harness, 200u64).count != 0usize || !widget.animation_frame_requested(&runtime) { os.exit(84i32) }
+    if testing.begin(&harness, time.Instant { nanos: 1900000000i64 }) != ok { os.exit(85i32) }
+    var shown_frame = mem.arena_from(frame_storage)
+    let (root_shown, build_shown_error) = build(&shown_frame, &theme, ctx, &subs[0usize], buffer, .SwitcherHold, logs[0usize].active)
+    if build_shown_error != ok || testing.pump(&harness, root_shown, time.Instant { nanos: 1900000000i64 }) != ok { os.exit(86i32) }
+    let (_, has_held_panel) = lifted(&harness, 200u64)
+    if !has_held_panel { os.exit(87i32) }
+    let (stepped, step_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, ctrl_tab, 4usize, logs[0usize].active, hold_activate, hold_pick, &subs[0usize])
+    let (backed, back_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, ctrl_shift_tab, 4usize, logs[0usize].active, hold_activate, hold_pick, &subs[0usize])
+    if step_error != ok || back_error != ok || !stepped || !backed || logs[0usize].active != 1usize { os.exit(88i32) }
+    let (released, release_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, release_ctrl, 4usize, logs[0usize].active, hold_activate, hold_pick, &subs[0usize])
+    if release_error != ok || !released || logs[0usize].hold.holding || logs[0usize].runs != 4usize || logs[0usize].ran != 1usize { os.exit(89i32) }
+    if testing.begin(&harness, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(90i32) }
+    let (_, quick_start_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, ctrl_tab, 4usize, 0usize, hold_activate, hold_pick, &subs[0usize])
+    let (_, quick_release_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, release_ctrl, 4usize, logs[0usize].active, hold_activate, hold_pick, &subs[0usize])
+    if quick_start_error != ok || quick_release_error != ok || logs[0usize].runs != 5usize || logs[0usize].ran != 1usize { os.exit(91i32) }
+    let (_, cancel_start_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, ctrl_tab, 4usize, 0usize, hold_activate, hold_pick, &subs[0usize])
+    let escape = input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 27u32, logical: 27u32 }, modifiers: ctrl, repeat: false } }
+    let (cancelled, cancel_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, escape, 4usize, logs[0usize].active, hold_activate, hold_pick, &subs[0usize])
+    if cancel_start_error != ok || cancel_error != ok || !cancelled || logs[0usize].hold.holding || logs[0usize].dismisses != 4usize { os.exit(92i32) }
+    let (_, blur_start_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, ctrl_tab, 4usize, 0usize, hold_activate, hold_pick, &subs[0usize])
+    let (blurred, blur_error) = navigation.switcher_hold_event(&logs[0usize].hold, &runtime, input.Event { Blur: zero }, 4usize, logs[0usize].active, hold_activate, hold_pick, &subs[0usize])
+    if blur_start_error != ok || blur_error != ok || !blurred || logs[0usize].hold.holding || logs[0usize].dismisses != 5usize { os.exit(93i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(36i32) }
     try io.print("ui overlays4 v2 ok\n")
     ret ok

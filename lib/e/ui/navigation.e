@@ -4073,7 +4073,6 @@ fn compact_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // whatever chord its host lets it hear.
 // v2 (D978, docs/ux/components/WindowSwitcher, list form): the panel of
 // `centred_modal`, no scrim, the rows 4 above and below and 8 at the sides.
-// ponytail: no hold-to-switch.
 fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (made, made_error) = window_switcher_closable(a, key, t, label, names, active, open, activate, pick, zero, dismiss, width)
     ret (made, made_error)
@@ -4105,6 +4104,59 @@ fn window_switcher_closable(a: *mem.Arena, key: widget.Key, t: *const control.Th
 }
 
 type SwitcherItem = struct { name: str, context: str, state: str, thumbnail: scene.TextureId }
+
+// The caller-owned Ctrl+Tab hold lifecycle. Feed host events through
+// `switcher_hold_event`, then build `window_switcher_grid_held`: the first chord
+// selects the previous MRU item without drawing, another Tab steps (Shift goes
+// back), the panel appears after 200ms, modifier release picks, and Escape or
+// window blur cancels.
+type SwitcherHold = struct { started: time.Instant, holding: bool }
+
+fn switcher_hold_event(hold: *SwitcherHold, runtime: *widget.Runtime, event: input.Event, count: usize, current: usize, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit) -> (bool, err) {
+    switch event {
+    case .KeyDown as k:
+        let code = widget.key_code(k.key.physical)
+        if code == 27u32 && hold.holding {
+            hold.holding = false
+            ret (true, widget.fire_submit(*dismiss))
+        }
+        if code != 9u32 || !k.modifiers.control || count <= 1usize { ret (false, ok) }
+        var next = current
+        if !hold.holding {
+            hold.holding = true
+            hold.started = widget.frame_time(runtime)
+            next = 1usize
+            if k.modifiers.shift { next = count - 1usize }
+        } else if k.modifiers.shift {
+            if next == 0usize { next = count - 1usize } else { next -= 1usize }
+        } else {
+            next += 1usize
+            if next >= count { next = 0usize }
+        }
+        widget.request_animation_frame(runtime)
+        ret (true, widget.fire_change[usize](activate, next))
+    case .KeyUp as k:
+        if !hold.holding || k.modifiers.control { ret (false, ok) }
+        hold.holding = false
+        ret (true, widget.fire_change[usize](pick, current))
+    case .Blur as w:
+        if !hold.holding { ret (false, ok) }
+        hold.holding = false
+        ret (true, widget.fire_submit(*dismiss))
+    default:
+        ret (false, ok)
+    }
+}
+
+fn switcher_hold_open(hold: *const SwitcherHold, runtime: *widget.Runtime) -> bool {
+    if !hold.holding { ret false }
+    let elapsed = widget.frame_time(runtime).nanos - hold.started.nanos
+    if elapsed < 200000000i64 {
+        widget.request_animation_frame(runtime)
+        ret false
+    }
+    ret true
+}
 
 fn switcher_item_label(a: *mem.Arena, item: SwitcherItem) -> (str, err) {
     var label = item.name
@@ -4333,6 +4385,12 @@ fn window_switcher_grid_closable(a: *mem.Arena, key: widget.Key, t: *const contr
     framed[0usize] = widget.semantics(0u64, sem, style.defaults(), body[0usize..1usize])
     let lifted = widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *dismiss }, style.defaults(), framed[0usize..1usize])
     let (made, made_error) = overlay.with_scrim(a, t, lifted)
+    ret (made, made_error)
+}
+
+fn window_switcher_grid_held(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, items: []const SwitcherItem, active: usize, hold: *const SwitcherHold, activate: widget.Change[usize], pick: widget.Change[usize], close: widget.Change[usize], dismiss: *const widget.Submit) -> (widget.Node, err) {
+    let open = items.len > 1usize && switcher_hold_open(hold, t.runtime)
+    let (made, made_error) = window_switcher_grid_closable(a, key, t, label, items, active, open, activate, pick, close, dismiss)
     ret (made, made_error)
 }
 
