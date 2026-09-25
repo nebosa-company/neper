@@ -24996,3 +24996,18 @@ to come.
 
 `ui_collections4_v2` holds the arc's circle drawn differently a quarter turn
 later, on Windows and Linux.
+
+## D1290 — Breadcrumbs cut long names in the middle
+
+`navigation.middle_cut` fits a name into a width by keeping as many
+characters as fit from each end around "..." (the start taking the odd one),
+as the Breadcrumbs spec asks ("destination...test.e"). It never splits a
+UTF-8 character. It measures the two ends and the dots apart and sums them,
+because a string mixing glyphs a font lacks measured wrongly in the test font
+when taken whole. A crumb uses it for its label within its 200 (160 on touch)
+less its padding, keeping the whole name as its name in the tree. Without
+fonts nothing measures and nothing is cut. The tooltip with the whole name is
+still to come.
+
+`ui_content2_v2` holds forty a's cut to equal ends round "..." and a short
+name kept whole on Windows and Linux; the breadcrumb fixtures still pass.

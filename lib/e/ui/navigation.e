@@ -2230,6 +2230,52 @@ fn crumb_look(t: *const control.Theme, key: widget.Key, height: f32) -> (style.R
 
 // One crumb (D972): a link keyed `key` named `label`, its `body-medium` words (or
 // `glyph` when `drawn`) under the crumb look, at most `widest` across.
+// (D1290) `text` cut in the middle to fit `room` as `caption` measures it: as
+// many characters kept from each end as fit around "...", the start taking the
+// odd one; the text itself when it fits or nothing measures (no fonts).
+fn middle_cut(a: *mem.Arena, t: *const control.Theme, text: str, caption: control.TextOptions, room: f32) -> str {
+    let ink = style.color(t.tokens, .OnSurface)
+    let (whole, whole_error) = control.colored_text(a, 0u64, text, t, caption, ink)
+    if whole_error != ok { ret text }
+    let full = widget.text_width(a, whole)
+    if full <= room || full <= 0.0 { ret text }
+    let (out, out_error) = mem.alloc[u8](a, text.len + 3usize)
+    if out_error != ok { ret text }
+    // Character starts, so a cut never splits one.
+    let (starts, starts_error) = mem.alloc[usize](a, text.len + 1usize)
+    if starts_error != ok { ret text }
+    var chars = 0usize
+    var i = 0usize
+    while i < text.len {
+        if (u32(text[i]) & 192u32) != 128u32 {
+            starts[chars] = i
+            chars += 1usize
+        }
+        i += 1usize
+    }
+    starts[chars] = text.len
+    // The pieces are measured apart and summed: the ends and the dots.
+    let (dots, dots_error) = control.colored_text(a, 0u64, "...", t, caption, ink)
+    if dots_error != ok { ret text }
+    let dots_width = widget.text_width(a, dots)
+    var keep = chars
+    while keep > 0usize {
+        keep -= 1usize
+        let head = (keep + 1usize) / 2usize
+        let tail = keep - head
+        let (front, front_error) = control.colored_text(a, 0u64, text[0usize..starts[head]], t, caption, ink)
+        let (back, back_error) = control.colored_text(a, 0u64, text[starts[chars - tail]..text.len], t, caption, ink)
+        if front_error != ok || back_error != ok { ret text }
+        if widget.text_width(a, front) + dots_width + widget.text_width(a, back) <= room {
+            var n = control.copy_text(out, text[0usize..starts[head]])
+            n += control.copy_text(out[n..out.len], "...")
+            n += control.copy_text(out[n..out.len], text[starts[chars - tail]..text.len])
+            ret out[0usize..n]
+        }
+    }
+    ret "..."
+}
+
 fn trail_crumb(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, action: *const widget.Submit, height: f32, widest: f32) -> (widget.Node, err) {
     let (look, ink) = crumb_look(t, key, height)
     var caption = control.text_options()
@@ -2237,7 +2283,10 @@ fn trail_crumb(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
     caption.wrap = .None
     caption.ellipsis = "..."
     caption.max_lines = 1u32
-    let (said, said_error) = control.colored_text(a, 0u64, label, t, caption, ink)
+    // (D1290) A long name is cut in its middle, its whole name kept as the
+    // crumb's name in the tree.
+    let shown = middle_cut(a, t, label, caption, control.max_zero(widest - 16.0))
+    let (said, said_error) = control.colored_text(a, 0u64, shown, t, caption, ink)
     if said_error != ok { ret (zero, said_error) }
     let (made, made_error) = control.pressable_states(a, key, t, 9u8, label, look, true, false, 0u32, 0u32, 0u64, action, said)
     if made_error != ok { ret (zero, made_error) }
@@ -2313,8 +2362,9 @@ fn breadcrumbs_fit(a: *mem.Arena, t: *const control.Theme, names: []const str, w
 // a start-facing chevron. The trail is a group named `label` round a list.
 // (D1250) With `options.width` the trail measures its crumbs and collapses the
 // fewest levels that let it fit.
-// ponytail: the ellipsis ends a name rather than cutting its middle; no root
-// icon, drop targets, sibling menus or editable path.
+// (D1290) A long crumb is cut in its middle (`middle_cut`).
+// ponytail: no tooltip with the whole name, root icon, drop targets, sibling
+// menus or editable path.
 fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit, given: BreadcrumbsOptions) -> (widget.Node, err) {
     if picks.len != names.len || names.len == 0usize { ret (zero, TooLarge) }
     var options = given

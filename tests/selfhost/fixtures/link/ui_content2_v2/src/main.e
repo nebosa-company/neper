@@ -284,6 +284,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     bar_menus[1usize].label = "aaaa"
     let bar_need = 8.0 + 2.0 * (four_width + 16.0)
     if !navigation.menu_bar_fits(&frame, &theme, bar_menus[..], bar_need) || navigation.menu_bar_fits(&frame, &theme, bar_menus[..], bar_need - 1.0) { os.exit(36i32) }
+    // (D1290) A name too wide is cut in its middle: forty a's in room for about
+    // twenty keep equal ends round "..."; a name that fits is kept whole.
+    let long_name = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    let room = 20.0 * four_width / 4.0
+    let cut = navigation.middle_cut(&frame, &theme, long_name, measure_caption, room)
+    if cut.len >= long_name.len || cut.len < 6usize || cut[0usize] != 97u8 || cut[cut.len - 1usize] != 97u8 { os.exit(37i32) }
+    var dots = 0usize
+    var d = 0usize
+    while d < cut.len {
+        if cut[d] == 46u8 { dots += 1usize }
+        d += 1usize
+    }
+    if dots != 3usize || !mem.eq[u8](navigation.middle_cut(&frame, &theme, "aaaa", measure_caption, room), "aaaa") { os.exit(38i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(28i32) }
     try io.print("ui content2 v2 ok\n")
     ret ok
