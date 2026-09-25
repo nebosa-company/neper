@@ -532,6 +532,19 @@ fn navigation_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
     ret (made, made_error)
 }
 
+// A backable scope: Escape and Alt+Left share the caller-owned action.
+fn back_scope(a: *mem.Arena, key: widget.Key, content: widget.Node, back: widget.Submit) -> (widget.Node, err) {
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = content
+    let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 1usize)
+    if keys_error != ok { ret (zero, TooLarge) }
+    var alt: input.Modifiers = zero
+    alt.alt = true
+    keys[0usize] = widget.Shortcut { key: 37u32, modifiers: alt, action: back }
+    ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: keys[0usize..1usize], default_action: zero, cancel_action: back, keys: zero }, style.defaults(), held[0usize..1usize]), ok)
+}
+
 // v2 (D972, docs/ux/components/NavigationStack): the top page fills on `surface`
 // under the v2 app bar (48 with `title-medium` at pointer density, 64 with
 // `title-large` at touch), led while there is a page beneath by Back: an
@@ -579,18 +592,12 @@ fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
-    var cancel: widget.Submit = zero
-    var shortcuts: []const widget.Shortcut = zero
     if top > 0usize {
-        cancel = *pop
-        let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 1usize)
-        if keys_error != ok { ret (zero, TooLarge) }
-        var alt: input.Modifiers = zero
-        alt.alt = true
-        keys[0usize] = widget.Shortcut { key: 37u32, modifiers: alt, action: *pop }
-        shortcuts = keys[0usize..1usize]
+        let (backed, backed_error) = back_scope(a, key, column[0usize], *pop)
+        ret (backed, backed_error)
     }
-    ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: cancel, keys: zero }, style.defaults(), column[0usize..1usize]), ok)
+    var shortcuts: []const widget.Shortcut = zero
+    ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), column[0usize..1usize]), ok)
 }
 
 // The form the top-level destinations take at a width: a bar along the bottom on
@@ -1270,7 +1277,7 @@ fn navigation_split_options() -> NavigationSplitOptions {
 // nothing selected the detail shows the `empty` statement centred in
 // `body-medium` `on-surface-variant`. In a single pane the list, or the detail
 // under a v2 app bar (keyed `key + 4`) led by Back (`key + 5`) named "Back to
-// <the list>".
+// <the list>"; Escape and Alt+Left share its `pop` action.
 // ponytail: the touch divider is D966's sash, not the 24 gutter with its 4 x 48
 // handle; no supporting pane, snap points, push motion or focus moves.
 fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, primary: widget.Node, detail: widget.Node, showing_detail: bool, position: f32, change: widget.Change[f32], width: f32, height: f32, options: NavigationSplitOptions) -> (widget.Node, err) {
@@ -1395,7 +1402,12 @@ fn navigation_split_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
     if boxed_error != ok { ret (zero, TooLarge) }
     boxed[0usize] = widget.box(key, page, body[0usize..1usize])
-    ret (widget.semantics(0u64, sem, style.defaults(), boxed[0usize..1usize]), ok)
+    let made = widget.semantics(0u64, sem, style.defaults(), boxed[0usize..1usize])
+    if showing_detail && options.detail_title.len > 0usize {
+        let (backed, backed_error) = back_scope(a, key + 6u64, made, options.pop)
+        ret (backed, backed_error)
+    }
+    ret (made, ok)
 }
 
 // A navigation drawer: the destinations (their rows keyed `key + 2 + index`) in

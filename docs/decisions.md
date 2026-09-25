@@ -22907,3 +22907,12 @@ the tree.
 
 `ui_navigation3_v2` holds active-destination focus and exact opener restoration
 on Windows and Linux. The reviewed surface is unchanged.
+
+## D1124 — Compact split navigation shares the back scope
+
+The compact NavigationSplit detail form now uses the same small back scope as
+NavigationStack. Its app-bar Back button, Escape and Alt+Left all report the
+caller-owned pop action; side-by-side and legacy titleless forms are unchanged.
+
+`ui_navigation4_v2` holds all three paths on Windows and Linux. The reviewed
+surface is unchanged.

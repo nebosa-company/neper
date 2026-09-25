@@ -23,6 +23,7 @@ use e.text.shape
 use e.ui.accessibility
 use e.ui.collection
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.navigation
 use e.ui.style
@@ -194,6 +195,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (back, has_back) = find(tree, .Button, "Back to Builds")
     if !has_bar || !near(bar.height, 48.0) || !has_back || testing.by_text(&harness, "Build list").count != 1usize { os.exit(16i32) }
     if !tap_key(&harness, &runtime, 4205u64) || s.pops.count != 1usize { os.exit(17i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || s.pops.count != 2usize { os.exit(32i32) }
+    var alt: input.Modifiers = zero
+    alt.alt = true
+    if testing.press_key(&harness, 37u32, alt) != ok || s.pops.count != 3usize { os.exit(33i32) }
     // The indicator: a 32 tall track, seven dots 4, 6, 8, the 24 pill, 8, 6, 4,
     // 8 apart and 12 in; the pill `primary`, a dot `outline`.
     let (track, has_track) = bounds(&harness, &runtime, 4301u64)
