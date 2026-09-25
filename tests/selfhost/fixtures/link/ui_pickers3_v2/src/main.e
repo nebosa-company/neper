@@ -307,6 +307,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, closed_root, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(46i32) }
     if testing.tap(&harness, row1.x + 100.0, row1.y + 60.0) != ok { os.exit(38i32) }
     if s.families != 1u32 || s.family != 2usize { os.exit(39i32) }
+    // (D1274) Recent colours stand as a second section after Theme; a press on
+    // one picks it.
+    var recent_colours: [2]paint.Color = zero
+    recent_colours[0usize] = paint.rgba(0.1, 0.5, 0.9, 1.0)
+    recent_colours[1usize] = paint.rgba(0.9, 0.1, 0.4, 1.0)
+    let recent_pick = widget.Change[paint.Color] { ctx: mem.cast[*void](s), invoke: on_colour }
+    let recent_typed = widget.Change[str] { ctx: mem.cast[*void](s), invoke: on_text }
+    f = mem.arena_from(frame_storage)
+    let (recent_field, recent_error) = overlay.color_field_with(&f, 800u64, &theme, "Accent colour", copper(), true, recent_pick, true, &s.press, s.swatches[0usize..6usize], recent_colours[..], s.hex[0usize..16usize], 7usize, recent_typed, 296.0)
+    if recent_error != ok { os.exit(63i32) }
+    let (recent_page, recent_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if recent_page_error != ok { os.exit(63i32) }
+    recent_page[0usize] = recent_field
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 600.0), recent_page[0usize..1usize]), time.Instant { nanos: 6000000000i64 }) != ok { os.exit(60i32) }
+    if testing.by_text(&harness, "Theme").count == 0usize { os.exit(64i32) }
+    if testing.by_text(&harness, "Recent").count == 0usize { os.exit(65i32) }
+    if testing.by_key(&harness, 815u64).count != 1usize { os.exit(61i32) }
+    let (recent_box, has_recent_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 814u64).element)
+    let picks_before = s.colours
+    if !has_recent_box || testing.tap(&harness, recent_box.x + recent_box.width * 0.5, recent_box.y + recent_box.height * 0.5) != ok || s.colours != picks_before + 1u32 || s.colour.blue < 0.85 { os.exit(62i32) }
     try io.print("ui pickers3 v2 ok\n")
     ret ok
 }

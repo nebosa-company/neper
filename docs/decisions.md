@@ -24776,3 +24776,16 @@ remain.
 
 `ui_containers5_v2` holds 200 and 393 in a 601 workspace and Right on the sash
 asking for 208 on Windows and Linux.
+
+## D1274 — Colour pickers show recent colours
+
+`overlay.color_field_with` is `color_field` with the caller's `recent`
+colours (newest first, at most 8 shown) as a second swatch section, "Recent",
+after "Theme". The sections share the swatch code, each a radio group of
+swatches keyed on from the theme swatches (`key + 8 + swatches.len + index`),
+with the chosen one ringed and Checked. A press picks a swatch through
+`change`; the caller adds each committed colour to its recent list.
+`color_field` passes none and is unchanged.
+
+`ui_pickers3_v2` holds the Theme and Recent labels, the recent swatch keys and
+a press picking a recent colour on Windows and Linux.
