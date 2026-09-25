@@ -18,13 +18,16 @@ use e.ui.style
 use e.ui.widget
 use e.ui.window
 
-type Log = struct { taps: usize, drag_starts: usize, drag_moves: usize, drag_ends: usize, hovers: usize, hover_ends: usize, last_x: f32, submits: usize, cancels: usize, saves: usize, changes: usize, last_value: i32 }
+type Log = struct { taps: usize, double_taps: usize, drag_starts: usize, drag_moves: usize, drag_ends: usize, hovers: usize, hover_ends: usize, last_x: f32, submits: usize, cancels: usize, saves: usize, changes: usize, last_value: i32 }
 
 fn on_gesture(ctx: *void, g: widget.Gesture) -> err {
     let log = mem.cast[*Log](ctx)
     switch g {
     case .Tap as p:
         log.taps += 1usize
+        log.last_x = p.x
+    case .DoubleTap as p:
+        log.double_taps += 1usize
         log.last_x = p.x
     case .DragStart as p:
         log.drag_starts += 1usize
@@ -126,11 +129,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (focus_now, has_focus) = widget.focused(&runtime)
     let (first_id, first_count) = widget.find_by_key(mem.cast[*widget.State](runtime.state), 1u64)
     if !has_focus || first_count != 1usize || focus_now.slot != first_id.slot { os.exit(13i32) }
+    // The next tap in the same region is still a Tap and additionally completes
+    // one DoubleTap pair.
+    if widget.dispatch(&runtime, input.Event { PointerDown: pointer(10.0, 10.0) }) != ok || widget.dispatch(&runtime, input.Event { PointerUp: pointer(12.0, 11.0) }) != ok { os.exit(47i32) }
+    if log.taps != 2usize || log.double_taps != 1usize || log.last_x != 12.0 { os.exit(48i32) }
     // A press that wanders past the slop on a tap-only region is not a tap.
     if widget.dispatch(&runtime, input.Event { PointerDown: pointer(10.0, 10.0) }) != ok { os.exit(14i32) }
     if widget.dispatch(&runtime, input.Event { PointerMove: pointer(30.0, 12.0) }) != ok { os.exit(15i32) }
     if widget.dispatch(&runtime, input.Event { PointerUp: pointer(30.0, 12.0) }) != ok { os.exit(16i32) }
-    if log.taps != 1usize || log.drag_starts != 0usize { os.exit(17i32) }
+    if log.taps != 2usize || log.drag_starts != 0usize { os.exit(17i32) }
     // A drag on the second region: start once past the slop, moves after, an end.
     if widget.dispatch(&runtime, input.Event { PointerDown: pointer(5.0, 35.0) }) != ok { os.exit(18i32) }
     if widget.dispatch(&runtime, input.Event { PointerMove: pointer(8.0, 36.0) }) != ok { os.exit(19i32) }
@@ -162,8 +169,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.dispatch(&runtime, key(83u32, false, false)) != ok || log.saves != 1usize { os.exit(37i32) }
     // Enter and Space on the focused tap region tap it (D818); with the focus on
     // the scope itself, Enter is its default action.
-    if widget.dispatch(&runtime, key(13u32, false, false)) != ok || log.taps != 3usize || log.submits != 0usize { os.exit(38i32) }
-    if widget.dispatch(&runtime, key(32u32, false, false)) != ok || log.taps != 4usize { os.exit(44i32) }
+    if widget.dispatch(&runtime, key(13u32, false, false)) != ok || log.taps != 4usize || log.submits != 0usize { os.exit(38i32) }
+    if widget.dispatch(&runtime, key(32u32, false, false)) != ok || log.taps != 5usize { os.exit(44i32) }
     let (scope_id, scope_count) = widget.find_by_key(mem.cast[*widget.State](runtime.state), 5u64)
     if scope_count != 1usize || widget.focus(&runtime, scope_id) != ok { os.exit(45i32) }
     if widget.dispatch(&runtime, key(13u32, false, false)) != ok || log.submits != 1usize { os.exit(46i32) }

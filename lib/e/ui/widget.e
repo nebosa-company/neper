@@ -64,7 +64,7 @@ type Submit = struct { ctx: *void, invoke: fn(*void) -> err }
 // A gesture the arena settled on: a tap, a drag from its start through its moves to
 // its end, a hover entering and leaving. Positions are logical pixels.
 type Drag = struct { start: geometry.Point, position: geometry.Point, delta: geometry.Point }
-type Gesture = union enum u8 { Tap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd, Drop: Dropped }
+type Gesture = union enum u8 { Tap: geometry.Point, DoubleTap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd, Drop: Dropped }
 type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
 // The gestures a region takes part in, as bits: 1 tap, 2 drag, 4 hover.
 type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
@@ -406,6 +406,9 @@ type State = struct {
     closed: bool,
     arena_state: Arena,
     has_pointer: bool,
+    last_tap: ElementId,
+    has_last_tap: bool,
+    last_tap_at: time.Instant,
     // Editing: a scratch region for hit-test layouts, the composition (preedit) of
     // the focused editor, the fallback clipboard for a host without one, and the
     // undo history -- entries and their byte pool -- with the redo point.
@@ -3527,6 +3530,21 @@ fn menu_tap(s: *State, index: usize, point: geometry.Point) -> err {
     ret ok
 }
 
+// A pointer's second tap still runs the ordinary Tap path, then additionally
+// offers DoubleTap to the same region within the platform-neutral 500 ms window.
+fn pointer_tap(s: *State, index: usize, point: geometry.Point) -> err {
+    let fired = menu_tap(s, index, point)
+    if fired != ok { ret fired }
+    let elapsed = s.animation_time.nanos - s.last_tap_at.nanos
+    let current = ElementId { slot: u32(index), generation: s.elements[index].generation }
+    let doubled = s.has_last_tap && s.last_tap.slot == current.slot && s.last_tap.generation == current.generation && elapsed >= 0i64 && elapsed <= 500000000i64
+    s.last_tap = current
+    s.has_last_tap = !doubled
+    s.last_tap_at = s.animation_time
+    if doubled { ret fire_gesture(s.elements[index].gesture, Gesture { DoubleTap: point }) }
+    ret ok
+}
+
 // While a menu owns focus, Alt plus an item's initial runs that item.
 fn menu_item_access_key(s: *State, logical: u32) -> (bool, err) {
     if !s.has_focus { ret (false, ok) }
@@ -4235,7 +4253,7 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
                     s.arena_state.dragging = false
                     ret fire_gesture(e.gesture, Gesture { DragEnd: p.position })
                 }
-                if (e.gestures & GESTURE_TAP) != 0u8 && geometry.contains(e.bounds, p.position) { ret menu_tap(s, candidate, p.position) }
+                if (e.gestures & GESTURE_TAP) != 0u8 && geometry.contains(e.bounds, p.position) { ret pointer_tap(s, candidate, p.position) }
             }
             ret ok
         }
