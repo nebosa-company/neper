@@ -23232,3 +23232,15 @@ order, and crumb actions and semantics are unchanged.
 
 `ui_navigation2_v2` holds both glyph directions by rendered pixels on Windows
 and Linux. The Segoe review is `build/ux/breadcrumbs-rtl-chevrons-segoe.png`.
+
+## D1157 — PageView follows right-to-left page direction
+
+PageView now derives physical presentation and interaction from the theme
+direction: right-to-left pages reverse the strip, place Previous at the right
+and Next at the left with mirrored chevrons, reverse Left/Right, and advance on
+a rightward drag. Page Up/Down, Home/End and logical page indices do not change.
+The legacy PageView shares the same normalized drag and key path.
+
+`ui_collections4_v2` holds button placement and pixels, both horizontal keys,
+the live strip and release result on Windows and Linux. The Segoe review is
+`build/ux/page-view-rtl-segoe.png`.

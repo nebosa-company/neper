@@ -262,7 +262,7 @@ type Swipe = struct { turned: bool, moved: f32 }
 // A page view's drag: the cell the swipe keeps (none on the view's first frame),
 // where the pages stand, and whom to tell; (D982) settling, the drag only moves
 // the strip and the release turns past the threshold.
-type Paging = struct { cell: *Swipe, has_cell: bool, current: usize, count: usize, threshold: f32, turn: widget.Change[usize], settle: bool }
+type Paging = struct { cell: *Swipe, has_cell: bool, current: usize, count: usize, threshold: f32, turn: widget.Change[usize], settle: bool, rtl: bool }
 
 fn page_drag(ctx: *void, g: widget.Gesture) -> err {
     let p = mem.cast[*Paging](ctx)
@@ -281,7 +281,8 @@ fn page_drag(ctx: *void, g: widget.Gesture) -> err {
         }
         if p.cell.turned { ret ok }
         // The drag's delta is since the last move; the distance is from the start.
-        let moved = d.position.x - d.start.x
+        var moved = d.position.x - d.start.x
+        if p.rtl { moved = 0.0 - moved }
         if moved < 0.0 - p.threshold && p.current + 1usize < p.count {
             p.cell.turned = true
             ret widget.fire_change[usize](p.turn, p.current + 1usize)
@@ -294,9 +295,10 @@ fn page_drag(ctx: *void, g: widget.Gesture) -> err {
     case .DragEnd as at:
         if !p.has_cell { ret ok }
         p.cell.turned = false
-        let moved = p.cell.moved
+        var moved = p.cell.moved
         p.cell.moved = 0.0
         if !p.settle { ret ok }
+        if p.rtl { moved = 0.0 - moved }
         if moved < 0.0 - p.threshold && p.current + 1usize < p.count { ret widget.fire_change[usize](p.turn, p.current + 1usize) }
         if moved > p.threshold && p.current > 0usize { ret widget.fire_change[usize](p.turn, p.current - 1usize) }
         ret ok
@@ -308,14 +310,16 @@ fn page_drag(ctx: *void, g: widget.Gesture) -> err {
 // A page view: the page at `current` alone in a clipped box `width` by `height`
 // (keyed `key`), a horizontal drag past a quarter of the width turning to the
 // next or the previous page once per drag, Left and Right turning from the
-// focused view; every turn reaches `turn` with the index and the caller keeps
-// `current`. A group in the tree with the page's position.
+// focused view by the theme's reading direction; every turn reaches `turn` with
+// the index and the caller keeps `current`. A group in the tree with the page's
+// position.
 fn page_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []const widget.Node, current: usize, turn: widget.Change[usize], width: f32, height: f32) -> (widget.Node, err) {
     if pages.len == 0usize || current >= pages.len { ret (zero, TooLarge) }
     let (pagings, pagings_error) = mem.alloc[Paging](a, 1usize)
     if pagings_error != ok { ret (zero, TooLarge) }
     var none_cell: *Swipe = zero
-    pagings[0usize] = Paging { cell: none_cell, has_cell: false, current: current, count: pages.len, threshold: width * 0.25, turn: turn, settle: false }
+    let rtl = t.tokens.direction == .RightToLeft
+    pagings[0usize] = Paging { cell: none_cell, has_cell: false, current: current, count: pages.len, threshold: width * 0.25, turn: turn, settle: false, rtl: rtl }
     // The swipe's cell lives on the view's element from the frame before; on the
     // first frame there is none and a drag that frame turns nothing.
     let (s, state_error) = widget.state_of(t.runtime)
@@ -340,8 +344,14 @@ fn page_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: []c
     turns[1usize] = Turn { index: next, turn: turn }
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
-    shortcuts[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: turn_fire } }
-    shortcuts[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: turn_fire } }
+    var previous_key = 37u32
+    var next_key = 39u32
+    if rtl {
+        previous_key = 39u32
+        next_key = 37u32
+    }
+    shortcuts[0usize] = widget.Shortcut { key: previous_key, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&turns[0usize]), invoke: turn_fire } }
+    shortcuts[1usize] = widget.Shortcut { key: next_key, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&turns[1usize]), invoke: turn_fire } }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
     body[0usize] = pages[current]
@@ -4491,9 +4501,10 @@ fn page_view_options() -> PageViewOptions {
 // finger (a third as far past either end) and the release turns past half the
 // width. With a pointer, while the viewport or a button is hovered or focused,
 // tonal 40 icon buttons (`secondary-container` / `on-secondary-container`, 24
-// chevrons) stand 12 in from the sides, vertically centred: Previous (keyed
-// `key + 1`) and Next (`key + 2`), each gone at its end. Left, Right, Page Up
-// and Page Down step, Home and End go to the ends. The page indicator
+// chevrons) stand 12 in from the reading-direction sides, vertically centred:
+// Previous (keyed `key + 1`) and Next (`key + 2`), each gone at its end. Left
+// and Right mirror with the theme; Page Up and Page Down step, Home and End go
+// to the ends. The page indicator
 // (`page_indicator_of`, keyed `key + 3`) stands 12 below, or, full bleed, on its
 // media pill 16 above the bottom edge. A group named `label` saying "2 of 4",
 // said politely.
@@ -4504,13 +4515,16 @@ fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: 
     let w = options.width
     let h = options.height
     let (kept, has_cell) = swipe_cell(t, key)
+    let rtl = t.tokens.direction == .RightToLeft
     var moved: f32 = 0.0
     if has_cell { moved = kept.moved }
-    if moved > 0.0 && current == 0usize { moved = moved / 3.0 }
-    if moved < 0.0 && current + 1usize == pages.len { moved = moved / 3.0 }
+    var logical_moved = moved
+    if rtl { logical_moved = 0.0 - logical_moved }
+    if logical_moved > 0.0 && current == 0usize { moved = moved / 3.0 }
+    if logical_moved < 0.0 && current + 1usize == pages.len { moved = moved / 3.0 }
     let (pagings, pagings_error) = mem.alloc[Paging](a, 1usize)
     if pagings_error != ok { ret (zero, TooLarge) }
-    pagings[0usize] = Paging { cell: kept, has_cell: has_cell, current: current, count: pages.len, threshold: w * 0.5, turn: turn, settle: true }
+    pagings[0usize] = Paging { cell: kept, has_cell: has_cell, current: current, count: pages.len, threshold: w * 0.5, turn: turn, settle: true, rtl: rtl }
     // The strip: the current page and, while dragged, its neighbours.
     let (strip, strip_error) = mem.alloc[widget.Node](a, 3usize)
     if strip_error != ok { ret (zero, TooLarge) }
@@ -4523,7 +4537,9 @@ fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: 
             let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
             if held_error != ok { ret (zero, TooLarge) }
             held[0usize] = pages[page]
-            strip[n] = widget.positioned(0u64, (f32(page) - f32(current)) * w + moved, 0.0, control.sized_style(w, h), held[0usize..1usize])
+            var page_x = (f32(page) - f32(current)) * w
+            if rtl { page_x = 0.0 - page_x }
+            strip[n] = widget.positioned(0u64, page_x + moved, 0.0, control.sized_style(w, h), held[0usize..1usize])
             n += 1usize
         }
         page += 1usize
@@ -4562,22 +4578,32 @@ fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: 
     let shown = !touch && (engaged(t, key) || engaged(t, key + 1u64) || engaged(t, key + 2u64))
     let tonal = style.color(t.tokens, .SecondaryContainer)
     let tonal_ink = style.color(t.tokens, .OnSecondaryContainer)
+    var previous_glyph: control.GlyphKind = .ChevronLeft
+    var next_glyph: control.GlyphKind = .ChevronRight
+    var previous_x: f32 = 12.0
+    var next_x = w - 52.0
+    if rtl {
+        previous_glyph = .ChevronRight
+        next_glyph = .ChevronLeft
+        previous_x = w - 52.0
+        next_x = 12.0
+    }
     if shown && current > 0usize {
-        let (back, back_error) = glyph_in(a, key + 1u64, t, .ChevronLeft, "Previous page", &actions[0usize], 40.0, 24.0, tonal, tonal_ink, false, true)
+        let (back, back_error) = glyph_in(a, key + 1u64, t, previous_glyph, "Previous page", &actions[0usize], 40.0, 24.0, tonal, tonal_ink, false, true)
         if back_error != ok { ret (zero, back_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = back
-        layers[l] = widget.positioned(0u64, 12.0, (h - 40.0) * 0.5, style.defaults(), held[0usize..1usize])
+        layers[l] = widget.positioned(0u64, previous_x, (h - 40.0) * 0.5, style.defaults(), held[0usize..1usize])
         l += 1usize
     }
     if shown && current + 1usize < pages.len {
-        let (forward, forward_error) = glyph_in(a, key + 2u64, t, .ChevronRight, "Next page", &actions[1usize], 40.0, 24.0, tonal, tonal_ink, false, true)
+        let (forward, forward_error) = glyph_in(a, key + 2u64, t, next_glyph, "Next page", &actions[1usize], 40.0, 24.0, tonal, tonal_ink, false, true)
         if forward_error != ok { ret (zero, forward_error) }
         let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
         if held_error != ok { ret (zero, TooLarge) }
         held[0usize] = forward
-        layers[l] = widget.positioned(0u64, w - 52.0, (h - 40.0) * 0.5, style.defaults(), held[0usize..1usize])
+        layers[l] = widget.positioned(0u64, next_x, (h - 40.0) * 0.5, style.defaults(), held[0usize..1usize])
         l += 1usize
     }
     var total_h = h
@@ -4603,9 +4629,15 @@ fn page_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, pages: 
     stacked[0usize] = widget.stack(0u64, control.sized_style(w, total_h), layers[0usize..l])
     let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
-    shortcuts[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: actions[0usize] }
+    var previous_key = 37u32
+    var next_key = 39u32
+    if rtl {
+        previous_key = 39u32
+        next_key = 37u32
+    }
+    shortcuts[0usize] = widget.Shortcut { key: previous_key, modifiers: zero, action: actions[0usize] }
     shortcuts[1usize] = widget.Shortcut { key: 33u32, modifiers: zero, action: actions[0usize] }
-    shortcuts[2usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: actions[1usize] }
+    shortcuts[2usize] = widget.Shortcut { key: next_key, modifiers: zero, action: actions[1usize] }
     shortcuts[3usize] = widget.Shortcut { key: 34u32, modifiers: zero, action: actions[1usize] }
     shortcuts[4usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: actions[2usize] }
     shortcuts[5usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: actions[3usize] }
