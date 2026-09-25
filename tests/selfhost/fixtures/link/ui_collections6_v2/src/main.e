@@ -3,7 +3,9 @@
 // grid's focus, a tap moving it; an invalid cell's 2px `error` outline and the
 // status bar's "1 error"; a dirty cell's `primary` start bar; the arrows, Home,
 // End, Ctrl+Home, Ctrl+End, Page Up and Page Down moving the active cell; Tab
-// wrapping, Ctrl+A selecting all cells and F8 finding the next invalid cell;
+// wrapping, Ctrl+A selecting all cells, Shift+Space selecting a row,
+// Ctrl+Space selecting a column, F8 finding the next invalid cell, TSV Copy,
+// and caller-owned Paste, Clear, Undo and Fill Down commands;
 // Shift+Down extending a `primary-container` range and "2 cells selected";
 // Escape dropping it; F2 editing in a `surface-container-highest` editor in a
 // 2px `primary` outline over the cell, which takes the focus; typing, Enter or
@@ -135,6 +137,16 @@ fn focus_on(h: *testing.Harness, key: widget.Key) -> bool {
 
 fn at_cell(store: *const Store, row: usize, column: usize) -> bool {
     ret store.state.row == row && store.state.column == column && !store.state.editing
+}
+
+fn same_text(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -276,15 +288,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Tab commits an edit to the next cell; Shift+Enter commits upward.
     let (root_16, build_16_error) = build(&f, &theme, ctx, store)
     if build_16_error != ok || testing.pump(&harness, root_16, now) != ok { os.exit(70i32) }
-    if testing.press_key(&harness, 113u32, plain) != ok || !store.state.editing { os.exit(71i32) }
+    if !focus_on(&harness, 2u64) { os.exit(90i32) }
+    if testing.press_key(&harness, 13u32, plain) != ok { os.exit(71i32) }
+    if !store.state.editing { os.exit(89i32) }
     let (root_17, build_17_error) = build(&f, &theme, ctx, store)
     if build_17_error != ok || testing.pump(&harness, root_17, now) != ok { os.exit(72i32) }
     if testing.press_key(&harness, 9u32, plain) != ok || store.last.kind != .Commit || !at_cell(store, 1usize, 1usize) { os.exit(73i32) }
     let (root_18, build_18_error) = build(&f, &theme, ctx, store)
-    if build_18_error != ok || testing.pump(&harness, root_18, now) != ok || testing.press_key(&harness, 113u32, plain) != ok || !store.state.editing { os.exit(74i32) }
+    if build_18_error != ok || testing.pump(&harness, root_18, now) != ok || testing.press_key(&harness, 13u32, plain) != ok || !store.state.editing { os.exit(74i32) }
     let (root_19, build_19_error) = build(&f, &theme, ctx, store)
     if build_19_error != ok || testing.pump(&harness, root_19, now) != ok { os.exit(75i32) }
     if testing.press_key(&harness, 13u32, shift) != ok || store.last.kind != .Commit || !at_cell(store, 0usize, 1usize) { os.exit(76i32) }
+    // Selection commands expose row/column ranges; clipboard and mutation
+    // commands keep the values caller-owned.
+    let (root_20, build_20_error) = build(&f, &theme, ctx, store)
+    if build_20_error != ok || testing.pump(&harness, root_20, now) != ok { os.exit(77i32) }
+    if testing.press_key(&harness, 32u32, shift) != ok || store.last.kind != .Extend || store.state.row != 0usize || store.state.column != 1usize || store.state.anchor_row != 0usize || store.state.anchor_column != 0usize { os.exit(78i32) }
+    let (root_21, build_21_error) = build(&f, &theme, ctx, store)
+    if build_21_error != ok || testing.pump(&harness, root_21, now) != ok || testing.by_text(&harness, "2 cells selected").count != 1usize { os.exit(79i32) }
+    if testing.press_key(&harness, 32u32, ctrl) != ok || store.last.kind != .Extend || store.state.row != 4usize || store.state.column != 1usize || store.state.anchor_row != 0usize || store.state.anchor_column != 1usize { os.exit(80i32) }
+    let (root_22, build_22_error) = build(&f, &theme, ctx, store)
+    if build_22_error != ok || testing.pump(&harness, root_22, now) != ok || testing.by_text(&harness, "5 cells selected").count != 1usize { os.exit(81i32) }
+    if testing.press_key(&harness, 67u32, ctrl) != ok { os.exit(82i32) }
+    let (copied, copied_error) = widget.clipboard_get(&runtime, &f)
+    if copied_error != ok || !same_text(copied, "22\n22a\n22\n22\n22") { os.exit(83i32) }
+    if widget.clipboard_set(&runtime, "7\t8") != ok || testing.press_key(&harness, 86u32, ctrl) != ok || store.last.kind != .Paste || !same_text(store.last.text, "7\t8") { os.exit(84i32) }
+    if testing.press_key(&harness, 46u32, plain) != ok || store.last.kind != .Clear { os.exit(85i32) }
+    if testing.press_key(&harness, 90u32, ctrl) != ok || store.last.kind != .Undo { os.exit(86i32) }
+    if testing.press_key(&harness, 68u32, ctrl) != ok || store.last.kind != .FillDown { os.exit(87i32) }
+    if testing.press_key(&harness, 13u32, ctrl) != ok || store.last.kind != .FillDown { os.exit(88i32) }
     // The grid in the tree, named, 5 by 2.
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(52i32) }

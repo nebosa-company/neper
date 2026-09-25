@@ -22341,3 +22341,17 @@ Shift+Enter commits upward. `ui_collections6_v2`, `ui_navigation2_v2`, and
 `ui_inputs3_v2` hold the grid, F10 menu, and shortcut-recorder paths on Windows
 and Linux. This is behavior on the reviewed DataGrid surface, so no duplicate
 screenshot is added.
+
+## D1070 — DataGrid clipboard commands keep the source caller-owned
+
+The grid serializes its current rectangle as tab-separated columns and
+newline-separated rows for Ctrl/Meta+C, using the runtime clipboard and its
+hostless fallback. Ctrl/Meta+V carries clipboard text in a `Paste` event;
+Delete, Ctrl/Meta+Z, and Ctrl/Meta+D or Ctrl/Meta+Enter carry `Clear`, `Undo`,
+and `FillDown`. The caller applies those commands to its source, so the control
+does not duplicate application data or invent an incompatible undo stack.
+
+Shift+Space and Ctrl/Meta+Space select the active row and column through the
+existing rectangular range state. `ui_collections6_v2` holds selection, TSV
+Copy, Paste text, and all mutation commands on Windows and Linux. This changes
+behavior on the reviewed DataGrid surface, so no duplicate screenshot is added.
