@@ -4629,8 +4629,33 @@ fn tab_view(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str
 // reports the size moved by a step; both are clamped to `low..high`, and with no
 // `high` to the extent of the element `bound` names less `reserve` (no bound: no
 // upper limit).
-type Handle = struct { runtime: *widget.Runtime, pane: widget.Key, bound: widget.Key, vertical: bool, size: f32, thick: f32, low: f32, high: f32, reserve: f32, change: widget.Change[f32] }
+// (D1212) The sash keeps, across frames, the size it was first built at (what a
+// double-click restores) and the size a drag began at, whether a drag is under
+// way, and whether Escape cancelled it (its later moves are ignored).
+type Handle = struct { runtime: *widget.Runtime, pane: widget.Key, bound: widget.Key, vertical: bool, size: f32, thick: f32, low: f32, high: f32, reserve: f32, change: widget.Change[f32], cell: *SashCell, has_cell: bool }
 type Nudge = struct { handle: *Handle, amount: f32 }
+type SashCell = struct { initial: f32, start: f32, dragging: bool, cancelled: bool }
+
+fn sash_cell(runtime: *widget.Runtime, key: widget.Key, size: f32) -> (*SashCell, bool) {
+    var none: *SashCell = zero
+    if mem.address_of(runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: runtime, element: id, frame: 0u64 }
+    let (kept, _, kept_error) = widget.state[SashCell](&build, key, SashCell { initial: size, start: size, dragging: false, cancelled: false })
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
+// (D1212) Escape during a drag: back to the size the drag began at.
+fn handle_cancel(ctx: *void) -> err {
+    let h = mem.cast[*Handle](ctx)
+    if !h.has_cell || !h.cell.dragging { ret ok }
+    h.cell.cancelled = true
+    ret handle_report(h, h.cell.start)
+}
 
 fn keyed_bounds(runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
     let (s, state_error) = widget.state_of(runtime)
@@ -4662,7 +4687,24 @@ fn handle_report(h: *const Handle, wanted: f32) -> err {
 fn handle_drag(ctx: *void, g: widget.Gesture) -> err {
     let h = mem.cast[*Handle](ctx)
     switch g {
+    case .DragStart as p:
+        if h.has_cell {
+            h.cell.start = h.size
+            h.cell.dragging = true
+            h.cell.cancelled = false
+        }
+        ret ok
+    case .DragEnd as p:
+        if h.has_cell {
+            h.cell.dragging = false
+            h.cell.cancelled = false
+        }
+        ret ok
+    case .DoubleTap as p:
+        if h.has_cell { ret handle_report(h, h.cell.initial) }
+        ret ok
     case .DragMove as d:
+        if h.has_cell && h.cell.cancelled { ret ok }
         let (area, has_area) = keyed_bounds(h.runtime, h.pane)
         if !has_area { ret ok }
         if h.vertical { ret handle_report(h, d.position.y - area.y - h.thick * 0.5) }
@@ -4728,9 +4770,11 @@ fn sash_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
 // the line is 2px `primary` and the grip `primary`. As a dock layout's (`bar`),
 // hover and drag draw a 4px `primary` bar and no grip. Arrows move it 8, 48 with
 // Shift; Home and End go to the limits. A separator in the tree named `label`, its
-// value the size ("240 px"), controlling the pane.
-// ponytail: no double-click reset, Escape cancel, snap-to-close, size readout or
-// resize cursor.
+// value the size ("240 px"), controlling the pane. (D1212) A double-click restores
+// the size the pane was first built at, and Escape during a drag restores the
+// size the drag began at and ignores the rest of that drag.
+// ponytail: no snap-to-close, size readout or resize cursor; the default size is
+// the first built one, not a separate caller value.
 fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, axis: ui_layout.Axis, size: f32, low: f32, high: f32, bound: widget.Key, reserve: f32, change: widget.Change[f32], content: widget.Node, bar: bool) -> (widget.Node, err) {
     let vertical = axis == .Vertical
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -4738,7 +4782,8 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     if touch { hit = 24.0 }
     let (handles, handles_error) = mem.alloc[Handle](a, 1usize)
     if handles_error != ok { ret (zero, TooLarge) }
-    handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: hit, low: low, high: high, reserve: reserve, change: change }
+    let (kept, has_kept) = sash_cell(t.runtime, key + 2u64, size)
+    handles[0usize] = Handle { runtime: t.runtime, pane: key, bound: bound, vertical: vertical, size: size, thick: hit, low: low, high: high, reserve: reserve, change: change, cell: kept, has_cell: has_kept }
     let (nudges, nudges_error) = mem.alloc[Nudge](a, 6usize)
     if nudges_error != ok { ret (zero, TooLarge) }
     nudges[0usize] = Nudge { handle: &handles[0usize], amount: -8.0 }
@@ -4797,7 +4842,7 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
     let (drawn, drawn_error) = mem.alloc[widget.Node](a, 1usize)
     if drawn_error != ok { ret (zero, TooLarge) }
     drawn[0usize] = widget.Node { key: 0u64, kind: widget.Kind { Custom: widget.Custom { ctx: mem.cast[*void](&sashes[0usize]), measure: mark_measure, paint: sash_paint, state: widget.bytes_of[Sash](&sashes[0usize]) } }, style: paint_style, children: none }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 7usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     var less = 37u32
     var more = 39u32
@@ -4818,9 +4863,13 @@ fn pane_with_reserve(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
         shortcuts[5usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&nudges[5usize]), invoke: handle_nudge } }
         bound_keys = 6usize
     }
+    if has_kept && kept.dragging && !kept.cancelled {
+        shortcuts[bound_keys] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&handles[0usize]), invoke: handle_cancel } }
+        bound_keys += 1usize
+    }
     let (grip_node, grip_error) = mem.alloc[widget.Node](a, 1usize)
     if grip_error != ok { ret (zero, TooLarge) }
-    grip_node[0usize] = widget.region(key + 2u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&handles[0usize]), invoke: handle_drag }, gestures: 2u8 | 4u8, enabled: true, focusable: true }, grip, drawn[0usize..1usize])
+    grip_node[0usize] = widget.region(key + 2u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&handles[0usize]), invoke: handle_drag }, gestures: 1u8 | 2u8 | 4u8, enabled: true, focusable: true }, grip, drawn[0usize..1usize])
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound_keys], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), grip_node[0usize..1usize])

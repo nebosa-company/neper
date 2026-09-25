@@ -23833,3 +23833,19 @@ The page is the window's height, not the height of an enclosing scroll viewport.
 `ui_collections_v2` holds Page Down to the end, its stop at the end and Page Up
 back on Windows and Linux; `ui_collections4_v2` and `ui_collection` pass on both
 hosts.
+
+## D1212 — A pane's sash cancels a drag on Escape and resets on double-click
+
+The ResizablePane sash keeps a small retained cell under its own key. It records
+the size the pane was first built at, the size a drag began at, whether a drag
+is under way, and whether Escape cancelled it. While a drag is under way the
+sash's scope binds Escape: the pane goes back to the size the drag began at and
+the rest of that drag's moves are ignored until the release. The sash region
+now also takes taps, so the runtime's DoubleTap reaches it, and a double-click
+restores the first built size.
+
+The API has no separate default size, so the default is the first size the
+pane was built at. Snap-to-close, the size readout and the resize cursor stay
+open. `ui_containers2_v2` holds the cancel, the ignored later move and the
+double-click reset on Windows and Linux. A sweep of all 103 `ui_*` fixtures on
+both hosts shows only the 12 pre-existing failures recorded in D1195.

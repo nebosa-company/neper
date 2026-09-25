@@ -90,6 +90,18 @@ fn sized_row(a: *mem.Arena, w: f32, h: f32, child: widget.Node) -> (widget.Node,
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 0.0 }, control.sized_style(w, h), held[0usize..1usize]), ok)
 }
 
+fn press_at(h: *testing.Harness, x: f32, y: f32) -> bool {
+    ret testing.send(h, input.Event { PointerDown: testing.pointer_at(x, y) }) == ok
+}
+
+fn move_at(h: *testing.Harness, x: f32, y: f32) -> bool {
+    ret testing.send(h, input.Event { PointerMove: testing.pointer_at(x, y) }) == ok
+}
+
+fn release_at(h: *testing.Harness, x: f32, y: f32) -> bool {
+    ret testing.send(h, input.Event { PointerUp: testing.pointer_at(x, y) }) == ok
+}
+
 fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err) {
     let (items, items_error) = mem.alloc[widget.Node](a, 6usize)
     if items_error != ok { ret (zero, items_error) }
@@ -219,6 +231,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 39u32, shifted) != ok || !near(stores[0usize].size, 148.0) { os.exit(22i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || !near(stores[0usize].size, 200.0) { os.exit(23i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || !near(stores[0usize].size, 60.0) { os.exit(24i32) }
+    // (D1212) Escape during a drag restores the size the drag began at and the
+    // rest of that drag is ignored; a double-click restores the first size.
+    if !press_at(&harness, sash.x + 4.0, mid) || !move_at(&harness, sash.x + 20.0, mid) || !move_at(&harness, sash.x + 40.0, mid) || near(stores[0usize].size, 100.0) { os.exit(40i32) }
+    let (root_drag, root_drag_error) = build(&f, &theme, &stores[0usize])
+    if root_drag_error != ok || testing.pump(&harness, root_drag, now) != ok { os.exit(41i32) }
+    if testing.press_key(&harness, 27u32, zero) != ok || !near(stores[0usize].size, 100.0) { os.exit(42i32) }
+    let sizes_cancelled = stores[0usize].sizes
+    if !move_at(&harness, sash.x + 60.0, mid) || !release_at(&harness, sash.x + 60.0, mid) || stores[0usize].sizes != sizes_cancelled { os.exit(43i32) }
+    let (root_rest, root_rest_error) = build(&f, &theme, &stores[0usize])
+    if root_rest_error != ok || testing.pump(&harness, root_rest, now) != ok { os.exit(44i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !near(stores[0usize].size, 60.0) { os.exit(45i32) }
+    if testing.tap(&harness, sash.x + 4.0, mid) != ok || testing.tap(&harness, sash.x + 4.0, mid) != ok || !near(stores[0usize].size, 100.0) { os.exit(46i32) }
     // The focused dock panel: surface-container-low under a 2px primary line, a
     // 32 Close button named for the panel that fires.
     let (panel, has_panel) = bounds(&harness, &runtime, 50u64)
