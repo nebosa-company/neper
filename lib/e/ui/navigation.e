@@ -2003,8 +2003,10 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // neither hovered nor focused it holds an 8 dot in the title colour instead. A
 // pinned tab has no close. A tab is named with its state ("lower.e, unsaved
 // changes", "neper.json, pinned"), its position and Selected; Home and End pick
-// the ends and Delete closes the current tab, beside Left and Right. The current
-// or focused tab is the strip's one tab stop; close buttons remain pointer-only.
+// the ends and Delete closes the current tab, beside Left and Right. Ctrl+PageUp
+// and Ctrl+PageDown select the previous or next tab in strip order, wrapping.
+// The current or focused tab is the strip's one tab stop; close buttons remain
+// pointer-only.
 // ponytail: no file-type icons (a pinned tab keeps its title), preview tabs,
 // dragged lift or drop line, overflow scrolling, Show all open files, context
 // menu or read-only mark; the focus ring is the runtime's, not inset 3.
@@ -2035,7 +2037,7 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     if closes_error != ok { ret (zero, TooLarge) }
     let (actions, actions_error) = mem.alloc[widget.Submit](a, documents.len)
     if actions_error != ok { ret (zero, TooLarge) }
-    let (picks, picks_error) = mem.alloc[TabPick](a, 4usize)
+    let (picks, picks_error) = mem.alloc[TabPick](a, 6usize)
     if picks_error != ok { ret (zero, TooLarge) }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     var tab_stop = current
@@ -2164,7 +2166,7 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     }
     // Left and Right pick the neighbours of the current tab, Home and End the
     // ends; Delete closes it.
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 5usize)
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 7usize)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     var bound = 0usize
     if current > 0usize && current < documents.len {
@@ -2184,6 +2186,19 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     if current < documents.len && !documents[current].pinned {
         shortcuts[bound] = widget.Shortcut { key: 46u32, modifiers: zero, action: actions[current] }
         bound += 1usize
+    }
+    if documents.len > 1usize && current < documents.len {
+        var previous = documents.len - 1usize
+        if current > 0usize { previous = current - 1usize }
+        var next = 0usize
+        if current + 1usize < documents.len { next = current + 1usize }
+        picks[4usize] = TabPick { index: previous, pick: pick, runtime: t.runtime, focus: key + 1u64 + 2u64 * u64(previous) }
+        picks[5usize] = TabPick { index: next, pick: pick, runtime: t.runtime, focus: key + 1u64 + 2u64 * u64(next) }
+        var ctrl: input.Modifiers = zero
+        ctrl.control = true
+        shortcuts[bound] = widget.Shortcut { key: 33u32, modifiers: ctrl, action: widget.Submit { ctx: mem.cast[*void](&picks[4usize]), invoke: tab_pick_fire } }
+        shortcuts[bound + 1usize] = widget.Shortcut { key: 34u32, modifiers: ctrl, action: widget.Submit { ctx: mem.cast[*void](&picks[5usize]), invoke: tab_pick_fire } }
+        bound += 2usize
     }
     let (row, row_error) = mem.alloc[widget.Node](a, 1usize)
     if row_error != ok { ret (zero, TooLarge) }

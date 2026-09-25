@@ -23,6 +23,7 @@ use e.gfx.scene
 use e.text.shape
 use e.ui.accessibility
 use e.ui.control
+use e.ui.input
 use e.ui.layout as ui_layout
 use e.ui.navigation
 use e.ui.style
@@ -216,6 +217,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (moved, moved_error) = build(&f, &theme, s)
     if moved_error != ok || testing.pump(&harness, moved, time.Instant { nanos: 1100000000i64 }) != ok || !focusable(&harness, &runtime, 5001u64) || focusable(&harness, &runtime, 5003u64) { os.exit(34i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || s.picks.last != 2usize || !widget.focus_within(&runtime, 5005u64) { os.exit(35i32) }
+    var ctrl: input.Modifiers = zero
+    ctrl.control = true
+    if testing.press_key(&harness, 34u32, ctrl) != ok || s.picks.last != 2usize || !widget.focus_within(&runtime, 5005u64) { os.exit(36i32) }
+    if testing.press_key(&harness, 33u32, ctrl) != ok || s.picks.last != 0usize || !widget.focus_within(&runtime, 5001u64) { os.exit(37i32) }
     // The horizontal wizard: its title a level-1 heading; the steps named with
     // their state; the done marker `primary` and the connector after it 2px
     // `primary`.

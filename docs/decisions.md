@@ -23057,3 +23057,13 @@ the standard in-layout form remains persistent.
 
 `ui_navigation3_v2` holds keyboard, pointer, Escape and focus-return paths on
 Windows and Linux. The reviewed surface is unchanged.
+
+## D1140 — Document tabs switch in strip order with page keys
+
+DocumentTabs binds Ctrl+PageUp and Ctrl+PageDown to the previous and next
+document in strip order, wrapping at either edge. Both chords reuse the
+existing caller-owned pick callback and move focus to the stable target-tab
+key; one or zero documents leave them unbound.
+
+`ui_navigation5_v2` holds both directions on Windows and Linux. The reviewed
+surface is unchanged.
