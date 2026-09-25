@@ -361,6 +361,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var pixels: [6400]u32 = zero
     if gpu.read_image(q, shown, pixels[0..]) != ok { os.exit(116i32) }
     if pixels[8usize * 64usize + 8usize] != 4294967295u32 { os.exit(117i32) }
+    // (D1292) An editor holding a character no font maps (an emoji between two
+    // a's) still lays out, measures and paints; the caret after it stays at its
+    // byte offset.
+    let (emoji_buffer, emoji_buffer_error) = mem.alloc[u8](a, 16usize)
+    if emoji_buffer_error != ok { os.exit(119i32) }
+    emoji_buffer[0usize] = 97u8
+    emoji_buffer[1usize] = 240u8
+    emoji_buffer[2usize] = 159u8
+    emoji_buffer[3usize] = 152u8
+    emoji_buffer[4usize] = 128u8
+    emoji_buffer[5usize] = 97u8
+    let (emoji_children, emoji_children_error) = mem.alloc[widget.Node](a, 1usize)
+    if emoji_children_error != ok { os.exit(120i32) }
+    emoji_children[0usize] = widget.edit(9u64, widget.Edit { buffer: emoji_buffer, len: 6usize, style: text_style, color: white, selection: blue, change: zero, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: zero, untabbed: false, ringed: false }, sized(64.0, 20.0))
+    let emoji_root = widget.flex(3u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, column, emoji_children[0usize..1usize])
+    frame = mem.arena_from(frame_storage)
+    let (emoji_compiled, emoji_error) = widget.reconcile(&f.runtime, &frame, emoji_root, limits)
+    if emoji_error != ok { os.exit(121i32) }
+    if scene.render(&renderer, emoji_compiled, canvas, geometry.Size { width: 64.0, height: 100.0 }) != ok { os.exit(122i32) }
     if widget.close(&f.runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(118i32) }
     try io.print("ui edit ok\n")
     ret ok
