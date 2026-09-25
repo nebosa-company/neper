@@ -209,6 +209,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (back_at, has_back) = centre_of(&harness, &runtime, 42u64)
     if !has_back || testing.tap(&harness, back_at.x, back_at.y) != ok || logs[0usize].pops != 1usize { os.exit(33i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].pops != 2usize { os.exit(34i32) }
+    var alt: input.Modifiers = zero
+    alt.alt = true
+    if testing.press_key(&harness, 37u32, alt) != ok || logs[0usize].pops != 3usize { os.exit(38i32) }
     let (mail_2, has_mail_2) = find(tree_2, .Tab, "Mail")
     let (calendar_2, has_calendar_2) = find(tree_2, .Tab, "Calendar")
     if !has_mail_2 || !has_calendar_2 || calendar_2.bounds.y <= mail_2.bounds.y || calendar_2.bounds.x != mail_2.bounds.x { os.exit(35i32) }

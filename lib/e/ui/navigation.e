@@ -539,6 +539,7 @@ fn navigation_stack(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tit
 // With `jumps` (one a level) on a pointer host three or more levels deep,
 // breadcrumbs (keyed `key + 4`, the ancestors jumping to their levels) stand in
 // the bar in place of the title.
+// Alt+Left shares Back and Escape's pop action.
 // ponytail: no push or pop transitions, predictive back, focus moves or discard
 // guard; the page beneath is not kept in the tree.
 fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, titles: []const str, pages: []const widget.Node, pop: *const widget.Submit, jumps: []const widget.Submit, width: f32) -> (widget.Node, err) {
@@ -579,8 +580,16 @@ fn navigation_stack_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..2usize])
     var cancel: widget.Submit = zero
-    if top > 0usize { cancel = *pop }
     var shortcuts: []const widget.Shortcut = zero
+    if top > 0usize {
+        cancel = *pop
+        let (keys, keys_error) = mem.alloc[widget.Shortcut](a, 1usize)
+        if keys_error != ok { ret (zero, TooLarge) }
+        var alt: input.Modifiers = zero
+        alt.alt = true
+        keys[0usize] = widget.Shortcut { key: 37u32, modifiers: alt, action: *pop }
+        shortcuts = keys[0usize..1usize]
+    }
     ret (widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts, default_action: zero, cancel_action: cancel, keys: zero }, style.defaults(), column[0usize..1usize]), ok)
 }
 
