@@ -22519,3 +22519,16 @@ expansion state is retained by the control.
 `ui_collections3_v2` holds the Windows Shift+8 and X asterisk physical paths on
 Windows and Linux. This changes behavior on the reviewed Tree surface, so no
 duplicate screenshot is added.
+
+## D1085 — Virtual-list keys reveal unbuilt rows
+
+Each built virtual row binds Up, Down, Page Up, Page Down, Home and End to its
+absolute source index. The existing scroll callback receives only the smallest
+clamped offset that reveals the destination. A generalized runtime focus-by-key
+request focuses a present row immediately or carries an unbuilt stable key over
+the caller's next rebuild.
+
+`ui_collections_v2` holds one-row movement, viewport-minus-one-row paging, both
+ends, offset ownership and deferred focus on Windows and Linux. This changes
+behavior on the reviewed VirtualList surface, so no duplicate screenshot is
+added.

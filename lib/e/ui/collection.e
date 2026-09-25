@@ -3712,39 +3712,95 @@ fn virtual_list_options() -> VirtualListOptions {
     ret out
 }
 
+type VirtualListMove = struct { runtime: *widget.Runtime, key: widget.Key, offset: f32, previous: f32, change: widget.Change[f32] }
+
+fn virtual_list_offset(index: usize, total: usize, previous: f32, height: f32, extent: f32) -> f32 {
+    let top = f32(index) * extent
+    let bottom = top + extent
+    var next_offset = previous
+    if top < next_offset { next_offset = top }
+    if bottom > next_offset + height { next_offset = bottom - height }
+    var high = f32(total) * extent - height
+    if high < 0.0 { high = 0.0 }
+    if next_offset < 0.0 { next_offset = 0.0 }
+    if next_offset > high { next_offset = high }
+    ret next_offset
+}
+
+// Ask for the minimum revealing offset, then focus now or after that rebuild.
+fn virtual_list_move(ctx: *void) -> err {
+    let move = back_of[VirtualListMove](ctx)
+    if move.offset != move.previous {
+        let changed = widget.fire_change[f32](move.change, move.offset)
+        if changed != ok { ret changed }
+    }
+    ret widget.focus_key(move.runtime, move.key)
+}
+
+fn bind_virtual_list_move(moves: []VirtualListMove, shortcuts: []widget.Shortcut, at: usize, runtime: *widget.Runtime, source: RowSource, index: usize, total: usize, previous: f32, height: f32, extent: f32, code: u32, change: widget.Change[f32]) {
+    moves[at] = VirtualListMove { runtime: runtime, key: source.key(source.ctx, index), offset: virtual_list_offset(index, total, previous, height, extent), previous: previous, change: change }
+    shortcuts[at] = widget.Shortcut { key: code, modifiers: zero, action: widget.Submit { ctx: ctx_of(&moves[at]), invoke: virtual_list_move } }
+}
+
 // v2 (D979, docs/ux/components/VirtualList): the source's rows as `row_of`
 // rows of one height for `lines` in a clipped viewport (keyed `key`) on
 // `surface`, only those in view built (one above, two below) and keyed by the
 // source; a 1px `outline-variant` divider inset `inset` under every row but the
 // last; the runtime's rounded thumb in `on-surface-variant` at 50%; Up, Down,
-// Home and End moving the focus among the built rows. A list named `label` with
-// the full count, each row at its true position.
-// ponytail: overscan is not a screen each way, the focus does not scroll to
-// rows outside the window; no sticky headers, placeholders, end cap, paging or
-// end-anchored mode.
+// Page Up, Page Down, Home and End moving the focus by stable key and requesting
+// the minimum caller-owned offset that reveals it. A list named `label` with the
+// full count, each row at its true position.
+// ponytail: overscan is not a screen each way; no sticky headers, placeholders,
+// end cap, paging or end-anchored mode.
 fn virtual_list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: RowSource, options: VirtualListOptions) -> (widget.Node, err) {
     let extent = row_height(t, options.lines)
     let total = source.count(source.ctx)
     let (first, count) = widget.visible_range(options.offset, options.height, total, extent)
     let (items, items_error) = mem.alloc[RowItem](a, count)
     if items_error != ok { ret (zero, TooLarge) }
-    let (keys, keys_error) = mem.alloc[widget.Key](a, count)
-    if keys_error != ok { ret (zero, TooLarge) }
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < count {
         let index = first + i
         items[i] = source.item(source.ctx, index)
-        keys[i] = source.key(source.ctx, index)
+        let row_key = source.key(source.ctx, index)
         let lined = options.dividers && index + 1usize < total
-        let (made, made_error) = row_sized(a, keys[i], t, &items[i], index, total, options.width, extent - control.if_else(lined, t.tokens.sizes.divider, 0.0))
+        let (made, made_error) = row_sized(a, row_key, t, &items[i], index, total, options.width, extent - control.if_else(lined, t.tokens.sizes.divider, 0.0))
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
     }
-    let rove_error = roving(a, t, rows, keys, 1usize)
-    if rove_error != ok { ret (zero, rove_error) }
+    let (moves, moves_error) = mem.alloc[VirtualListMove](a, 6usize * count)
+    if moves_error != ok { ret (zero, TooLarge) }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize * count)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    let (held, held_error) = mem.alloc[widget.Node](a, count)
+    if held_error != ok { ret (zero, TooLarge) }
+    var page = usize(options.height / extent)
+    if page > 1usize { page -= 1usize } else { page = 1usize }
+    i = 0usize
+    while i < count {
+        let index = first + i
+        var previous = index
+        if previous > 0usize { previous -= 1usize }
+        var next = index
+        if next + 1usize < total { next += 1usize }
+        var page_up = index
+        if page_up > page { page_up -= page } else { page_up = 0usize }
+        var page_down = index + page
+        if page_down >= total { page_down = total - 1usize }
+        let base = 6usize * i
+        bind_virtual_list_move(moves, shortcuts, base, t.runtime, source, previous, total, options.offset, options.height, extent, 38u32, options.change)
+        bind_virtual_list_move(moves, shortcuts, base + 1usize, t.runtime, source, next, total, options.offset, options.height, extent, 40u32, options.change)
+        bind_virtual_list_move(moves, shortcuts, base + 2usize, t.runtime, source, page_up, total, options.offset, options.height, extent, 33u32, options.change)
+        bind_virtual_list_move(moves, shortcuts, base + 3usize, t.runtime, source, page_down, total, options.offset, options.height, extent, 34u32, options.change)
+        bind_virtual_list_move(moves, shortcuts, base + 4usize, t.runtime, source, 0usize, total, options.offset, options.height, extent, 36u32, options.change)
+        bind_virtual_list_move(moves, shortcuts, base + 5usize, t.runtime, source, total - 1usize, total, options.offset, options.height, extent, 35u32, options.change)
+        held[i] = rows[i]
+        rows[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..base + 6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
+        i += 1usize
+    }
     i = 0usize
     while i < count {
         if options.dividers && first + i + 1usize < total {

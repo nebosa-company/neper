@@ -31,7 +31,7 @@ use e.ui.widget
 
 const W: usize = 700usize
 
-type Store = struct { presses: usize, press: widget.Submit, files: [3]collection.RowItem, settings: [2]collection.RowItem, tiles: [3]collection.Tile }
+type Store = struct { presses: usize, offset: f32, press: widget.Submit, files: [3]collection.RowItem, settings: [2]collection.RowItem, tiles: [3]collection.Tile }
 
 fn on_press(ctx: *void) -> err {
     let s = mem.cast[*Store](ctx)
@@ -39,7 +39,9 @@ fn on_press(ctx: *void) -> err {
     ret ok
 }
 
-fn no_scroll(ctx: *void, value: f32) -> err {
+fn set_scroll(ctx: *void, value: f32) -> err {
+    let s = mem.cast[*Store](ctx)
+    s.offset = value
     ret ok
 }
 
@@ -121,7 +123,8 @@ fn build(a: *mem.Arena, t: *const control.Theme, s: *Store) -> (widget.Node, err
     long.dividers = true
     long.width = 300.0
     long.height = 144.0
-    long.change = widget.Change[f32] { ctx: mem.cast[*void](s), invoke: no_scroll }
+    long.offset = s.offset
+    long.change = widget.Change[f32] { ctx: mem.cast[*void](s), invoke: set_scroll }
     var none_ctx: *void = zero
     let (numbers, e4) = collection.virtual_list_of(a, 400u64, t, "Numbers", collection.RowSource { ctx: none_ctx, count: number_count, key: number_key, item: number_item }, long)
     var tile_keys: [3]widget.Key = zero
@@ -304,6 +307,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_first_row || !near(first_row.height, 47.0) || !is_color(shot, at(view.x + 150.0, view.y + 47.5), style.color(&tokens, .OutlineVariant)) { os.exit(31i32) }
     let half = style.mix(background, style.color(&tokens, .OnSurfaceVariant), 0.5)
     if !is_color(shot, at(view.x + 296.0, view.y + 16.0), half) || !is_color(shot, at(view.x + 299.5, view.y + 16.0), background) || is_color(shot, at(view.x + 296.0, view.y + 40.0), half) { os.exit(32i32) }
+    // Virtual-list keys move by stable source index. A target beyond the built
+    // window asks for the minimum offset, then receives focus after the rebuild.
+    if widget.focus(&runtime, testing.by_key(&harness, 4000u64).element) != ok { os.exit(45i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 4001u64) { os.exit(46i32) }
+    if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 4003u64) || !near(s.offset, 48.0) { os.exit(47i32) }
+    f = mem.arena_from(frame_storage)
+    let (root_2, build_2_error) = build(&f, &theme, s)
+    if build_2_error != ok || testing.pump(&harness, root_2, time.Instant { nanos: 1100000000i64 }) != ok { os.exit(48i32) }
+    if testing.press_key(&harness, 33u32, zero) != ok || !focused_is(&harness, 4001u64) { os.exit(49i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !near(s.offset, 4656.0) || focused_is(&harness, 4099u64) { os.exit(50i32) }
+    f = mem.arena_from(frame_storage)
+    let (root_3, build_3_error) = build(&f, &theme, s)
+    if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok || !focused_is(&harness, 4099u64) { os.exit(51i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 4098u64) { os.exit(52i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !near(s.offset, 0.0) || focused_is(&harness, 4000u64) { os.exit(53i32) }
+    f = mem.arena_from(frame_storage)
+    let (root_4, build_4_error) = build(&f, &theme, s)
+    if build_4_error != ok || testing.pump(&harness, root_4, time.Instant { nanos: 1300000000i64 }) != ok || !focused_is(&harness, 4000u64) { os.exit(54i32) }
     // The grid: two tiles of 146 across 300, 8 apart; the third on the next row.
     let (one, has_one) = bounds(&harness, &runtime, 501u64)
     let (two, has_two) = bounds(&harness, &runtime, 502u64)
@@ -330,7 +351,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (photos, has_photos) = find(tree, .Grid, "Photos")
     if !has_photos || photos.position.column_count != 2u32 || photos.position.row_count != 25u32 { os.exit(42i32) }
     if !is_color(shot, at(first_photo.x + 5.0, first_photo.y + 60.0), style.color(&tokens, .SurfaceContainerHighest)) || !is_color(shot, at(second_photo.x + 4.0, second_photo.y + 60.0), style.color(&tokens, .SecondaryContainer)) { os.exit(43i32) }
-    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(44i32) }
+    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(55i32) }
     try io.print("ui collections v2 ok\n")
     ret ok
 }

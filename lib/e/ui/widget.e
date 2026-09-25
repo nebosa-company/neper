@@ -351,8 +351,8 @@ type State = struct {
     menu_hover_at: i64,
     menu_safe_from: geometry.Point,
     has_menu_safe_from: bool,
-    menu_focus_key: Key,
-    has_menu_focus_key: bool,
+    requested_focus_key: Key,
+    has_requested_focus_key: bool,
     menu_typeahead: [16]u32,
     menu_typeahead_len: usize,
     menu_typeahead_at: i64,
@@ -912,6 +912,18 @@ fn focus(widget_runtime: *Runtime, element: ElementId) -> err {
     s.focus = u32(index)
     s.has_focus = true
     s.focus_visible = true
+    ret ok
+}
+
+// Focus the live element keyed `key`, or carry the request across the next
+// reconcile when a virtual collection has not built it yet.
+fn focus_key(widget_runtime: *Runtime, key: Key) -> err {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok { ret state_error }
+    let (element, count) = find_by_key(s, key)
+    if count > 0usize { ret focus(widget_runtime, element) }
+    s.requested_focus_key = key
+    s.has_requested_focus_key = true
     ret ok
 }
 
@@ -2795,14 +2807,14 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
         }
         o += 1usize
     }
-    if s.has_menu_focus_key {
-        let (wanted, count) = find_by_key(s, s.menu_focus_key)
+    if s.has_requested_focus_key {
+        let (wanted, count) = find_by_key(s, s.requested_focus_key)
         if count == 1usize {
             s.focus = wanted.slot
             s.has_focus = true
             s.focus_visible = true
         }
-        s.has_menu_focus_key = false
+        s.has_requested_focus_key = false
     }
     let (compiled, compile_error) = scene.compile(s.renderer, scene.finish(&builder))
     if compile_error != ok { ret (zero, TooLarge) }
@@ -3141,8 +3153,8 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
             let item = &s.elements[usize(s.focus)]
             let fired = fire_gesture(item.gesture, Gesture { Tap: geometry.Point { x: item.bounds.x + item.bounds.width * 0.5, y: item.bounds.y + item.bounds.height * 0.5 } })
             if fired == ok {
-                s.menu_focus_key = s.elements[item_owner].sem.controls + 1u64
-                s.has_menu_focus_key = true
+                s.requested_focus_key = s.elements[item_owner].sem.controls + 1u64
+                s.has_requested_focus_key = true
             }
             ret (true, fired)
         }
@@ -3152,8 +3164,8 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
                 let back = &s.elements[back_region]
                 let fired = fire_gesture(back.gesture, Gesture { Tap: geometry.Point { x: back.bounds.x + back.bounds.width * 0.5, y: back.bounds.y + back.bounds.height * 0.5 } })
                 if fired == ok {
-                    s.menu_focus_key = s.elements[back_owner].sem.controls
-                    s.has_menu_focus_key = true
+                    s.requested_focus_key = s.elements[back_owner].sem.controls
+                    s.has_requested_focus_key = true
                 }
                 ret (true, fired)
             }
@@ -3506,8 +3518,8 @@ fn menu_tap(s: *State, index: usize, point: geometry.Point) -> err {
     let (owner_at, item) = menu_item_owner(s, index)
     if !item { ret ok }
     if (s.elements[owner_at].sem.actions & 256u32) != 0u32 {
-        s.menu_focus_key = s.elements[owner_at].sem.controls
-        s.has_menu_focus_key = true
+        s.requested_focus_key = s.elements[owner_at].sem.controls
+        s.has_requested_focus_key = true
         ret ok
     }
     if (s.elements[owner_at].sem.actions & 1024u32) != 0u32 { ret ok }
