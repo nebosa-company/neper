@@ -1,7 +1,8 @@
 // `e.ui.control`'s desktop selection and history (D854, widget plan P3-05): a
 // font picker's family rows, style segments and size stepper each report their
 // choice and the preview stands; a notification list shows the caller's notices
-// with their actions and closes, and Mark all read (v2, D971) fires.
+// with their actions and closes, Mark all read fires, and Up, Down, Home and End
+// move focus between rows (v2, D971, D1174).
 
 use e.gpu
 use e.io
@@ -109,6 +110,12 @@ fn centre_of(h: *testing.Harness, runtime: *const widget.Runtime, key: widget.Ke
     ret (geometry.Point { x: area.x + area.width * 0.5, y: area.y + area.height * 0.5 }, true)
 }
 
+fn focused_is(h: *testing.Harness, key: widget.Key) -> bool {
+    let (focused, has_focus) = testing.focused(h)
+    let found = testing.by_key(h, key)
+    ret has_focus && found.count == 1usize && focused.slot == found.element.slot
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -172,7 +179,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_close || testing.tap(&harness, close_at.x, close_at.y) != ok || logs[0usize].dismisses != 1usize { os.exit(21i32) }
     let (clear_at, has_clear) = centre_of(&harness, &runtime, 101u64)
     if !has_clear || testing.tap(&harness, clear_at.x, clear_at.y) != ok || logs[0usize].clears != 1usize { os.exit(22i32) }
-    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(23i32) }
+    let first_row = testing.by_key(&harness, 102u64)
+    let (first_summary, has_first_summary) = widget.summary_at(&runtime, usize(first_row.element.slot))
+    if first_row.count != 1usize || !has_first_summary || !first_summary.focusable || widget.focus(&runtime, first_row.element) != ok { os.exit(23i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 105u64) { os.exit(24i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !focused_is(&harness, 102u64) { os.exit(25i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !focused_is(&harness, 105u64) { os.exit(26i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 102u64) { os.exit(27i32) }
+    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(28i32) }
     try io.print("ui desktop ok\n")
     ret ok
 }

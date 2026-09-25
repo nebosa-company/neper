@@ -7580,8 +7580,9 @@ fn joined(a: *mem.Arena, head: str, tail: str) -> (str, err) {
 // "You're all caught up". A polite group in the tree named `label` with the
 // unread count ("Notifications, 2 unread"); each row a list item named by its
 // title, "Unread, " first when unread.
+// Up, Down, Home and End move focus between rows, skipping day headings.
 // ponytail: the dismiss button always shows (not on hover alone); no settings
-// button, Up/Down keys, grouping of repeats, loading rows or insert motion.
+// button, grouping of repeats, loading rows or insert motion.
 fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, items: []const NotificationItem, mark_read: *const widget.Submit, width: f32, height: f32) -> (widget.Node, err) {
     if items.len > 64usize { ret (zero, TooLarge) }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
@@ -7589,6 +7590,15 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
     let inner = max_zero(width - 2.0)
     let (rows, rows_error) = mem.alloc[widget.Node](a, 2usize * items.len + 1usize)
     if rows_error != ok { ret (zero, TooLarge) }
+    let (targets, targets_error) = mem.alloc[FocusTo](a, items.len)
+    if targets_error != ok { ret (zero, TooLarge) }
+    let (row_shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize * items.len)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var target_index = 0usize
+    while target_index < items.len {
+        targets[target_index] = FocusTo { runtime: t.runtime, key: key + 2u64 + 3u64 * u64(target_index) }
+        target_index += 1usize
+    }
     var n = 0usize
     var unread = 0usize
     var i = 0usize
@@ -7683,7 +7693,26 @@ fn notification_list_of(a: *mem.Arena, key: widget.Key, t: *const Theme, label: 
         entry.hint = item.message
         entry.row = u32(i + 1usize)
         entry.row_count = u32(items.len)
-        rows[n] = widget.semantics(key + 2u64 + 3u64 * u64(i), entry, style.defaults(), lined[0usize..1usize])
+        let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
+        if named_error != ok { ret (zero, TooLarge) }
+        named[0usize] = widget.semantics(0u64, entry, style.defaults(), lined[0usize..1usize])
+        var previous = i
+        if i > 0usize { previous = i - 1usize }
+        var next = i
+        if i + 1usize < items.len { next = i + 1usize }
+        let base = 4usize * i
+        row_shortcuts[base] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[previous]), invoke: focus_to_fire } }
+        row_shortcuts[base + 1usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[next]), invoke: focus_to_fire } }
+        row_shortcuts[base + 2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[0usize]), invoke: focus_to_fire } }
+        row_shortcuts[base + 3usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&targets[items.len - 1usize]), invoke: focus_to_fire } }
+        let (focused, focused_error) = mem.alloc[widget.Node](a, 1usize)
+        if focused_error != ok { ret (zero, TooLarge) }
+        var none_gesture: widget.GestureAction = zero
+        var focus_style = style.defaults()
+        focus_style.radius = t.tokens.radii.sm
+        focus_look(t)
+        focused[0usize] = widget.region(targets[i].key, widget.Region { gesture: none_gesture, gestures: 0u8, enabled: true, focusable: true }, focus_style, named[0usize..1usize])
+        rows[n] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: row_shortcuts[base..base + 4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), focused[0usize..1usize])
         n += 1usize
         i += 1usize
     }
