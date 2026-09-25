@@ -24719,3 +24719,16 @@ still to come.
 
 `ui_navigation3_v2` holds the hidden 0, the rail's 80, and Right on the sash
 widening the drawer to 248 on Windows and Linux.
+
+## D1270 — Modal drawers open from an edge swipe
+
+`navigation.drawer_edge_swipe` stands a 20 wide drag strip along the content's
+start edge (the end in right-to-left). A drag from it that travels 56 inward
+fires `open`, which the caller answers by opening the modal drawer. The strip
+takes no tap, focus or place in the tree, so presses near the edge still reach
+the content. Callers leave it out where the host's gesture navigation claims
+the edge, as the spec's Android row says. The drawer's open and close motion
+is still to come.
+
+`ui_navigation3_v2` holds a 35 drag that does not open and a 115 drag that
+does on Windows and Linux.
