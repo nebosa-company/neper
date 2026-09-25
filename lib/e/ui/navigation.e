@@ -3828,7 +3828,7 @@ fn index_pick_fire(ctx: *void) -> err {
 // in its height, under the `on-surface` state layer; the active one
 // `secondary-container` with its label in `on-secondary-container`. A list item
 // in the tree with its position, Selected when active.
-fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names: []const str, active: usize, pick: widget.Change[usize]) -> ([]widget.Node, err) {
+fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names: []const str, categories: []const str, active: usize, pick: widget.Change[usize]) -> ([]widget.Node, err) {
     var none: []widget.Node = zero
     let (rows, rows_error) = mem.alloc[widget.Node](a, names.len)
     if rows_error != ok { ret (none, TooLarge) }
@@ -3863,15 +3863,35 @@ fn choice_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, names:
         var caption = control.text_options()
         caption.role = .BodyMedium
         caption.wrap = .None
-        let (said, said_error) = control.colored_text(a, 0u64, names[i], t, caption, ink)
-        if said_error != ok { ret (none, said_error) }
-        let (made, made_error) = control.pressable(a, row_key, t, 3u8, names[i], look, true, false, &actions[i], said)
+        let (name_node, name_error) = control.colored_text(a, 0u64, names[i], t, caption, ink)
+        if name_error != ok { ret (none, name_error) }
+        var said = name_node
+        var semantic_label = names[i]
+        if categories.len == names.len && categories[i].len > 0usize {
+            let (category_label, category_error) = string.concat(a, categories[i], ":")
+            if category_error != ok { ret (none, TooLarge) }
+            let (category_space, category_space_error) = string.concat(a, category_label, " ")
+            if category_space_error != ok { ret (none, TooLarge) }
+            let (full_label, full_label_error) = string.concat(a, category_space, names[i])
+            if full_label_error != ok { ret (none, TooLarge) }
+            semantic_label = full_label
+            var category_ink = style.color(t.tokens, .OnSurfaceVariant)
+            if i == active { category_ink = ink }
+            let (category_node, category_node_error) = control.colored_text(a, 0u64, category_label, t, caption, category_ink)
+            if category_node_error != ok { ret (none, category_node_error) }
+            let (caption_parts, caption_parts_error) = mem.alloc[widget.Node](a, 2usize)
+            if caption_parts_error != ok { ret (none, TooLarge) }
+            caption_parts[0usize] = category_node
+            caption_parts[1usize] = name_node
+            said = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), caption_parts[0usize..2usize])
+        }
+        let (made, made_error) = control.pressable(a, row_key, t, 3u8, semantic_label, look, true, false, &actions[i], said)
         if made_error != ok { ret (none, made_error) }
         var stretched = made
         stretched.style.width = style.Length { Percent: 100.0 }
         var entry: widget.Semantics = zero
         entry.role = accessibility.ROLE_OPTION
-        entry.label = names[i]
+        entry.label = semantic_label
         entry.row = u32(i + 1usize)
         entry.row_count = u32(names.len)
         if i == active { entry.states = accessibility.STATE_SELECTED }
@@ -3955,7 +3975,8 @@ fn centred_modal(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // type-to-filter, Close on hover or Delete, or detail line.
 fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, active: usize, open: bool, activate: widget.Change[usize], pick: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
-    let (rows, rows_error) = choice_rows(a, key + 2u64, t, names, active, pick)
+    var no_categories: []const str = zero
+    let (rows, rows_error) = choice_rows(a, key + 2u64, t, names, no_categories, active, pick)
     if rows_error != ok { ret (zero, rows_error) }
     var inset = style.defaults()
     inset.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 4.0 } }
@@ -3976,7 +3997,7 @@ fn window_switcher(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 }
 
 type PaletteMode = enum u8 { Commands, Files, Symbols, Line }
-type PaletteCommand = struct { name: str, group: str }
+type PaletteCommand = struct { name: str, group: str, category: str }
 
 fn palette_mode_prefix(mode: PaletteMode) -> str {
     if mode == .Commands { ret ">" }
@@ -4103,8 +4124,8 @@ fn palette_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, buffer
 // `body-medium` `on-surface-variant`, centred. The footer is 32 tall, 16 at the
 // sides, below a 1px `outline-variant` line: "Up and Down to move, Enter to run"
 // in `body-small` `on-surface-variant`.
-// ponytail: no group headings, categories, match highlighting, shortcuts' key
-// caps, unavailable rows, busy bar, ranking or compact form; the
+// ponytail: no match highlighting, shortcuts' key caps, unavailable rows, busy
+// bar, ranking or compact form; the
 // caller still filters and keeps `active` inside the list.
 fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     let (made, made_error) = command_palette_mode(a, key, t, label, buffer, len, typed, .Commands, commands, active, open, activate, run, dismiss, width)
@@ -4112,8 +4133,8 @@ fn command_palette(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 }
 
 fn command_palette_mode(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
-    var no_groups: []const str = zero
-    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, commands, no_groups, active, open, activate, run, dismiss, width)
+    var none: []const str = zero
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, commands, none, none, active, open, activate, run, dismiss, width)
     ret (made, made_error)
 }
 
@@ -4122,17 +4143,20 @@ fn command_palette_grouped(a: *mem.Arena, key: widget.Key, t: *const control.The
     if names_error != ok { ret (zero, TooLarge) }
     let (groups, groups_error) = mem.alloc[str](a, commands.len)
     if groups_error != ok { ret (zero, TooLarge) }
+    let (categories, categories_error) = mem.alloc[str](a, commands.len)
+    if categories_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < commands.len {
         names[i] = commands[i].name
         groups[i] = commands[i].group
+        categories[i] = commands[i].category
         i += 1usize
     }
-    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, active, open, activate, run, dismiss, width)
+    let (made, made_error) = command_palette_of(a, key, t, label, buffer, len, typed, mode, names, groups, categories, active, open, activate, run, dismiss, width)
     ret (made, made_error)
 }
 
-fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], mode: PaletteMode, commands: []const str, groups: []const str, categories: []const str, active: usize, open: bool, activate: widget.Change[usize], run: widget.Change[usize], dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
     if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
     let (field, field_error) = palette_field(a, key + 2u64, t, buffer, len, typed, mode)
     if field_error != ok { ret (zero, field_error) }
@@ -4153,7 +4177,7 @@ fn command_palette_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, l
     var results = style.defaults()
     results.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 4.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 8.0 } }
     if commands.len > 0usize {
-        let (plain_rows, rows_error) = choice_rows(a, key + 3u64, t, commands, active, run)
+        let (plain_rows, rows_error) = choice_rows(a, key + 3u64, t, commands, categories, active, run)
         if rows_error != ok { ret (zero, rows_error) }
         var rows = plain_rows
         if groups.len == commands.len {

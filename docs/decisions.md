@@ -22178,3 +22178,13 @@ to command order. Each heading is also a named Group.
 `ui_overlays4_v2` holds two visual and semantic groups without changing option
 geometry or identity on Windows and Linux. `palette-grouped.png` is the Segoe UI
 visual check.
+
+## D1057 — Palette categories remain part of each option
+
+`PaletteCommand.category` renders a `body-medium` `on-surface-variant` prefix
+and colon 4px before the command name, changing to the selected row's ink with
+the rest of its content. The option's accessible name joins the same category
+and command, so filtering and activation still use one row and one index.
+
+`ui_overlays4_v2` holds category text and the joined Option label on Windows and
+Linux. `palette-categories.png` is the Segoe UI visual check.
