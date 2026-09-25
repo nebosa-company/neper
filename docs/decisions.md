@@ -23502,3 +23502,13 @@ The 1.5-degree tilt and 102% scale remain open until nodes have a visual
 transform independent of layout. `ui_containers_v2` holds the dragged pixels
 and shadow on Windows and Linux. The Segoe review is
 `build/ux/card-dragged-segoe.png`.
+
+## D1186 — Card loading reuses the shared skeleton sweep
+
+A loading Card now replaces caller content with media, 60-percent title and
+90-percent supporting-line skeletons driven by one shared sweep. The Card is a
+named Busy Group and suppresses its primary action until content arrives; the
+caller owns the existing 300-millisecond delay and animation phase.
+
+`ui_containers_v2` holds the shapes, Busy state and missing Button on Windows
+and Linux. The Segoe review is `build/ux/card-loading-segoe.png`.
