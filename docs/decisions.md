@@ -22807,3 +22807,12 @@ focusables or ignores siblings after the first 64.
 
 `ui_algorithms` holds 300 direct focusable siblings in document order on Windows
 and Linux. The reviewed surface is unchanged.
+
+## D1114 — Accessibility publication uses reusable exact storage
+
+The window retains an AccessibleNode slice and grows it to the semantic tree's
+actual size. Publication flattens into that slice through a separately tested
+conversion instead of rejecting trees beyond a 256-record stack array.
+
+`ui_algorithms` holds a larger tree and `ui_accessibility` holds the general path
+on Windows and Linux. The reviewed surface is unchanged.

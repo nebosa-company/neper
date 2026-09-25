@@ -179,6 +179,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // The tree and the focus order: the button comes first and is focusable.
     let (tree, tree_error) = accessibility.tree(a, &runtime)
     if tree_error != ok || tree.nodes.len == 0usize { os.exit(25i32) }
+    let (flat_tree, flat_tree_error) = mem.alloc[os.AccessibleNode](a, tree.nodes.len)
+    if flat_tree_error != ok || accessibility.flatten_into(&tree, flat_tree) != ok || tree.nodes.len <= 256usize { os.exit(46i32) }
     let (order, order_error) = accessibility.focus_order(a, &runtime)
     if order_error != ok || order.len <= 256usize {
         try io.printf["focus order: len {} err {} nodes {}\n"](order.len, order_error != ok, tree.nodes.len)
