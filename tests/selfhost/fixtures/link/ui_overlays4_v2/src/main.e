@@ -26,7 +26,7 @@ use e.ui.style
 use e.ui.testing
 use e.ui.widget
 
-type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, typed: usize, dismisses: usize }
+type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, closes: usize, closed: usize, typed: usize, dismisses: usize }
 
 type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, PaletteCompact, Empty, Switcher, SwitcherGrid }
 
@@ -41,6 +41,13 @@ fn on_run(ctx: *void, index: usize) -> err {
     let log = mem.cast[*Log](ctx)
     log.runs += 1usize
     log.ran = index
+    ret ok
+}
+
+fn on_close(ctx: *void, index: usize) -> err {
+    let log = mem.cast[*Log](ctx)
+    log.closes += 1usize
+    log.closed = index
     ret ok
 }
 
@@ -88,6 +95,7 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
     if which == .Empty { shown = names[0usize..0usize] }
     let activate = widget.Change[usize] { ctx: ctx, invoke: on_activate }
     let run = widget.Change[usize] { ctx: ctx, invoke: on_run }
+    let close = widget.Change[usize] { ctx: ctx, invoke: on_close }
     var mode: navigation.PaletteMode = .Commands
     if which == .PaletteFiles { mode = .Files }
     if which == .PaletteSymbols { mode = .Symbols }
@@ -131,11 +139,11 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
         windows[1usize] = navigation.SwitcherItem { name: "lower.e", context: "neper/src", state: "unsaved changes", thumbnail: zero }
         windows[2usize] = navigation.SwitcherItem { name: "Build 4128 log", context: "CI", state: "", thumbnail: zero }
         windows[3usize] = navigation.SwitcherItem { name: "Settings", context: "Application", state: "", thumbnail: zero }
-        let (made_switcher, made_switcher_error) = navigation.window_switcher_grid(a, 200u64, t, "Switch window", windows[..], active, true, activate, run, dismiss)
+        let (made_switcher, made_switcher_error) = navigation.window_switcher_grid_closable(a, 200u64, t, "Switch window", windows[..], active, true, activate, run, close, dismiss)
         switcher = made_switcher
         e2 = made_switcher_error
     } else {
-        let (made_switcher, made_switcher_error) = navigation.window_switcher(a, 200u64, t, "Windows", names[..], active, which == .Switcher, activate, run, dismiss, 480.0)
+        let (made_switcher, made_switcher_error) = navigation.window_switcher_closable(a, 200u64, t, "Windows", names[..], active, which == .Switcher, activate, run, close, dismiss, 480.0)
         switcher = made_switcher
         e2 = made_switcher_error
     }
@@ -328,6 +336,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (windows, has_windows) = find(tree_4, .Listbox, "Windows")
     let (main_window, has_main_window) = find(tree_4, .Option, "Build")
     if !has_windows || !has_main_window || !main_window.state.selected { os.exit(32i32) }
+    if testing.press_key(&harness, 46u32, zero) != ok || logs[0usize].closes != 1usize || logs[0usize].closed != 0usize { os.exit(64i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].active != 1usize { os.exit(33i32) }
     if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].active != 2usize { os.exit(34i32) }
     if testing.press_key(&harness, 27u32, zero) != ok || logs[0usize].dismisses != 3usize { os.exit(35i32) }
@@ -346,6 +355,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (selected_window, has_selected_window) = find(grid_tree, .Option, "lower.e, neper/src, unsaved changes")
     if !has_grid_panel || !near(grid_panel.x, 20.0) || !near(grid_panel.width, 600.0) || !has_grid_first || !near(grid_first.width, 136.0) || !has_grid_dialog || !grid_dialog.state.modal || !has_grid_list || !has_selected_window || !selected_window.state.selected { os.exit(62i32) }
     if !is_color(grid_shot, at(5.0, 5.0), dimmed) || testing.by_text(&harness, "lower.e").count != 2usize || testing.by_text(&harness, "neper/src, unsaved changes").count != 1usize { os.exit(63i32) }
+    if testing.press_key(&harness, 46u32, zero) != ok || logs[0usize].closes != 2usize || logs[0usize].closed != 1usize { os.exit(65i32) }
+    if testing.hover(&harness, grid_first.x + 68.0, grid_first.y + 42.0) != ok { os.exit(66i32) }
+    var hover_frame = mem.arena_from(frame_storage)
+    let (root_hover, build_hover_error) = build(&hover_frame, &theme, ctx, &subs[0usize], buffer, .SwitcherGrid, 1usize)
+    if build_hover_error != ok || testing.pump(&harness, root_hover, time.Instant { nanos: 1500000000i64 }) != ok { os.exit(67i32) }
+    let (close_main, has_close_main) = bounds(&harness, &runtime, 1226u64)
+    if !has_close_main || !near(close_main.width, 24.0) || !near(close_main.height, 24.0) || !near(close_main.x, grid_first.x + 108.0) || testing.by_label(&harness, "Close main.e").count != 1usize { os.exit(68i32) }
+    if testing.tap(&harness, close_main.x + 12.0, close_main.y + 12.0) != ok || logs[0usize].closes != 3usize || logs[0usize].closed != 0usize { os.exit(69i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(36i32) }
     try io.print("ui overlays4 v2 ok\n")
     ret ok
