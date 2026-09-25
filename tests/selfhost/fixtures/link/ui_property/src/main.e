@@ -205,13 +205,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_person || !has_look || !person.state.expanded || !look.state.expanded { os.exit(18i32) }
     let (dark_at, has_dark) = centre_of(&harness, &runtime, 300u64)
     if !has_dark || testing.tap(&harness, dark_at.x, dark_at.y) != ok || logs[0usize].checks != 1usize { os.exit(19i32) }
-    // A tap on Person's header reports the group's key (its first property's
-    // index plus one); collapsed, its two rows are gone and the header says shut.
-    let (person_at, has_person_at) = centre_of(&harness, &runtime, 2u64)
-    if !has_person_at || testing.tap(&harness, person_at.x, person_at.y) != ok || logs[0usize].toggles != 1usize || logs[0usize].toggled != 1u64 { os.exit(20i32) }
+    // A tap on Person's header reports the stable group-name key; collapsed,
+    // its two rows are gone and the header says shut.
+    let person_key = collection.property_group_key("Person")
+    let (person_at, has_person_at) = centre_of(&harness, &runtime, collection.property_group_heading_key(1u64, "Person"))
+    if !has_person_at || testing.tap(&harness, person_at.x, person_at.y) != ok || logs[0usize].toggles != 1usize || logs[0usize].toggled != person_key { os.exit(20i32) }
     let (collapsed, collapsed_error) = mem.alloc[widget.Key](a, 1usize)
     if collapsed_error != ok { os.exit(21i32) }
-    collapsed[0usize] = 1u64
+    collapsed[0usize] = person_key
     let (root_2, build_2_error) = build(&frame, &theme, ctx, source, collapsed[0usize..1usize], pairs[0usize..2usize], &handlers[0usize])
     if build_2_error != ok || testing.pump(&harness, root_2, now) != ok { os.exit(22i32) }
     let (tree_2, tree_2_error) = testing.semantics(&harness)

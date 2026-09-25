@@ -6,6 +6,7 @@
 // keys; the scroll offset follows D807's rule and every move is reported.
 
 use e.mem
+use e.algo.hash as hash
 use e.gfx.geometry
 use e.gfx.paint
 use e.ui.accessibility
@@ -2949,9 +2950,15 @@ fn group_toggle_fire(ctx: *void) -> err {
     ret widget.fire_change[widget.Key](g.toggle, g.key)
 }
 
+// The stable public key for a property group.
+fn property_group_key(group: str) -> widget.Key { ret hash.fnv1a64(group) }
+
+// The stable widget key for a property group's heading in one grid.
+fn property_group_heading_key(key: widget.Key, group: str) -> widget.Key { ret key ^ property_group_key(group) }
+
 // A property grid: the properties in source order, a group heading (D826's
-// disclosure, keyed `key + 1 + index` of the group's first property, its group
-// key that index plus one) wherever the group changes, shut while its key is in
+// disclosure, keyed by the grid and group name, its group key the stable hash
+// of that name) wherever the group changes, shut while its key is in
 // `collapsed`, its header reporting the key through `toggle`; under it a row a
 // property, the name in the left column (`name_width` wide, a row header in the
 // tree) and the editor in the right, `width` wide in all. A table of two columns
@@ -2999,8 +3006,8 @@ fn contains_folded(hay: str, needle: []const u8) -> bool {
 // a name, of the kind in `title-medium` over the name in `body-medium`
 // `on-surface-variant`, 8 in; a 32 filter field "Filter properties" (keyed
 // `key + 300`) 8 in, the rows narrowed to names holding its text (case
-// folded) and a group with none left out. A group heading (keyed `key + 1 +
-// index` of its first property, the group key that index plus one) is a
+// folded) and a group with none left out. A group heading (keyed by the grid
+// and group name, with the stable hash of that name as its group key) is a
 // button 32 tall (40 on touch) 8 below the one before: an 18 `chevron-right`
 // (`chevron-down` open) in `on-surface-variant` in a 24 box, the `title-small`
 // name in `on-surface` and, while shut, "6 properties" in `label-small`
@@ -3014,8 +3021,8 @@ fn contains_folded(hay: str, needle: []const u8) -> bool {
 // (keyed `key + 400 + index`, named "Reset NAME") reporting the index through
 // `reset`; a message stands under the editor in `body-small` `error` after a
 // 16 `error` icon, and the row grows.
-// ponytail: groups are still keyed by position; the modified name is not 600
-// weight (no weighted role); read-only and Mixed values are the caller's
+// ponytail: the modified name is not 600 weight (no weighted role); read-only
+// and Mixed values are the caller's
 // editors; no draggable column divider, selected row or touch list form.
 fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, source: PropertySource, collapsed: []const widget.Key, toggle: widget.Change[widget.Key], name_width: f32, width: f32, options: PropertyGridOptions) -> (widget.Node, err) {
     let total = source.count(source.ctx)
@@ -3087,7 +3094,7 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         let head = source.property(source.ctx, i)
         var end = i
         while end < total && same_text(source.property(source.ctx, end).group, head.group) { end += 1usize }
-        let group_key = u64(i) + 1u64
+        let group_key = property_group_key(head.group)
         let open = head.group.len == 0usize || !is_selected(collapsed, group_key)
         var matched = 0usize
         var r = i
@@ -3195,7 +3202,7 @@ fn property_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, lab
         } else {
             toggles[block_count] = GroupToggle { key: group_key, toggle: toggle }
             actions[block_count] = widget.Submit { ctx: ctx_of(&toggles[block_count]), invoke: group_toggle_fire }
-            let heading_key = key + 1u64 + u64(i)
+            let heading_key = property_group_heading_key(key, head.group)
             let state = control.control_state(t, heading_key, true, false)
             var kind: control.GlyphKind = .ChevronRight
             if open { kind = .ChevronDown }

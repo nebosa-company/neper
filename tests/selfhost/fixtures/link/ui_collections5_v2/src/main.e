@@ -28,7 +28,7 @@ use e.ui.widget
 
 const W: usize = 420usize
 
-type Log = struct { toggles: usize, adds: usize, removes: usize, removed: usize, resets: usize, reset: usize }
+type Log = struct { toggles: usize, adds: usize, removes: usize, removed: usize, resets: usize, reset: usize, reordered: bool }
 
 fn on_toggle(ctx: *void, value: widget.Key) -> err {
     let log = mem.cast[*Log](ctx)
@@ -75,6 +75,13 @@ fn property_count(ctx: *void) -> usize {
 }
 
 fn property_at(ctx: *void, index: usize) -> collection.Property {
+    let log = mem.cast[*Log](ctx)
+    if log.reordered {
+        if index == 0usize { ret collection.Property { key: 103u64, name: "Dark", group: "Look" } }
+        if index == 1usize { ret collection.Property { key: 104u64, name: "Note", group: "Look" } }
+        if index == 2usize { ret collection.Property { key: 101u64, name: "Name", group: "Person" } }
+        ret collection.Property { key: 102u64, name: "Age", group: "Person" }
+    }
     if index == 0usize { ret collection.Property { key: 101u64, name: "Name", group: "Person" } }
     if index == 1usize { ret collection.Property { key: 102u64, name: "Age", group: "Person" } }
     if index == 2usize { ret collection.Property { key: 103u64, name: "Dark", group: "Look" } }
@@ -228,8 +235,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // in one column 128 in.
     if testing.by_text(&harness, "Button").count == 0usize || testing.by_text(&harness, "save").count == 0usize { os.exit(15i32) }
     let (filter_box, has_filter_box) = bounds(&harness, &runtime, 301u64)
-    let (person, has_person) = bounds(&harness, &runtime, 2u64)
-    let (look, has_look) = bounds(&harness, &runtime, 4u64)
+    let person_key = collection.property_group_key("Person")
+    let look_key = collection.property_group_key("Look")
+    let person_heading = collection.property_group_heading_key(1u64, "Person")
+    let look_heading = collection.property_group_heading_key(1u64, "Look")
+    let (person, has_person) = bounds(&harness, &runtime, person_heading)
+    let (look, has_look) = bounds(&harness, &runtime, look_heading)
     // The header's 8 above and below, the 32 field 4 above and below, 8 over the
     // first group.
     let (grid, has_grid) = bounds(&harness, &runtime, 1u64)
@@ -272,15 +283,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_more || testing.tap(&harness, more.x + more.width * 0.5, more.y + more.height * 0.5) != ok || logs[0usize].adds != 1usize { os.exit(27i32) }
     // Look shut: its rows gone, "2 properties" at the heading's end.
     var shut: [1]widget.Key = zero
-    shut[0usize] = 3u64
+    shut[0usize] = look_key
     let (root_2, build_2_error) = build(&f, &theme, ctx, shut[..], filter, 0usize, pairs[0usize..2usize], &adds[0usize])
     if build_2_error != ok || testing.pump(&harness, root_2, now) != ok { os.exit(28i32) }
     if testing.by_key(&harness, 103u64).count != 0usize || testing.by_text(&harness, "2 properties").count != 1usize { os.exit(29i32) }
     // The filter "ag": Age alone, under Person; Look, with nothing matching, gone.
     let (root_3, build_3_error) = build(&f, &theme, ctx, none[0usize..0usize], filter, 2usize, pairs[0usize..2usize], &adds[0usize])
     if build_3_error != ok || testing.pump(&harness, root_3, now) != ok { os.exit(30i32) }
-    if testing.by_key(&harness, 102u64).count != 1usize || testing.by_key(&harness, 101u64).count != 0usize || testing.by_key(&harness, 2u64).count != 1usize || testing.by_key(&harness, 4u64).count != 0usize { os.exit(31i32) }
-    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(32i32) }
+    if testing.by_key(&harness, 102u64).count != 1usize || testing.by_key(&harness, 101u64).count != 0usize || testing.by_key(&harness, person_heading).count != 1usize || testing.by_key(&harness, look_heading).count != 0usize { os.exit(31i32) }
+    // Reordering whole groups preserves both heading identities and collapse keys.
+    logs[0usize].reordered = true
+    let (root_4, build_4_error) = build(&f, &theme, ctx, shut[..], filter, 0usize, pairs[0usize..2usize], &adds[0usize])
+    if build_4_error != ok || testing.pump(&harness, root_4, now) != ok || testing.by_key(&harness, look_heading).count != 1usize || testing.by_key(&harness, person_heading).count != 1usize || testing.by_key(&harness, 103u64).count != 0usize || testing.by_key(&harness, 101u64).count != 1usize { os.exit(32i32) }
+    if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui collections5 v2 ok\n")
     ret ok
 }

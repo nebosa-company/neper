@@ -22878,3 +22878,13 @@ constructor defaults it on, preserving existing callers.
 
 `ui_collections4_v2` holds an ignored mid-scroll drag on Windows and Linux.
 The resting surface is unchanged.
+
+## D1121 — Property groups keep identity by name
+
+PropertyGrid derives its caller-visible collapse key from the group name with
+the shared FNV-1a helper, and mixes that key with the grid key for the heading.
+Filtering and reordering therefore preserve collapse and focus identity without
+adding another caller callback or field.
+
+`ui_collections5_v2` and `ui_property` hold toggle reporting, collapse and
+group reordering on Windows and Linux. The reviewed surface is unchanged.
