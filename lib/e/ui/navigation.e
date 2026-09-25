@@ -2019,7 +2019,7 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // pointer-only.
 // ponytail: no file-type icons (a pinned tab keeps its title), preview tabs,
 // dragged lift or drop line, overflow scrolling, Show all open files, context
-// menu or read-only mark; the focus ring is the runtime's, not inset 3.
+// menu or read-only mark.
 fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], marked: bool, active: bool) -> (widget.Node, err) {
     if documents.len > 64usize { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm

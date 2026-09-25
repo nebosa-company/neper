@@ -4238,8 +4238,7 @@ fn tabs_options() -> TabsOptions {
 // rounded top corners, or 2px across the whole tab when secondary. A scrollable
 // bar starts 8 in (16 touch).
 // ponytail: no icon tabs, badges, disabled tabs, overflow button or horizontal
-// scrolling; the focus ring is the runtime's, not inset 3; the indicator does not
-// slide between tabs.
+// scrolling; the indicator does not slide between tabs.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm

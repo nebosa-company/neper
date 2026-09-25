@@ -23132,3 +23132,14 @@ destructive action fires the original Cancel.
 `ui_navigation5_v2` holds request, modal semantics, Keep editing and Discard
 on Windows and Linux. The Segoe review is
 `build/ux/wizard-discard-segoe.png`.
+
+## D1147 — Tab focus rings stay inside edge-to-edge tabs
+
+The runtime recognises a focused region's semantic Tab owner and moves the
+focus ring's outer edge three pixels inside its bounds, sharing the existing
+menu-row treatment. This covers both Tabs and DocumentTabs without component
+specific focus painting.
+
+`ui_navigation5_v2` holds the inset pixel on Windows and Linux;
+`ui_navigation2_v2` guards ordinary Tabs on both hosts. The Segoe review is
+`build/ux/tab-focus-inset-segoe.png`.
