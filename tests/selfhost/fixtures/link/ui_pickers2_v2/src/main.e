@@ -315,6 +315,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), typing_page[0usize..1usize]), time.Instant { nanos: 6200000000i64 }) != ok { os.exit(62i32) }
     let (_, _, has_typed_hour) = widget.edit_selection(&runtime, testing.by_key(&harness, 1301u64).element)
     if !has_typed_hour || testing.by_key(&harness, 1305u64).count != 0usize || testing.by_key(&harness, 1306u64).count != 1usize { os.exit(63i32) }
+    // (D1296) In a field 70 wide the three presets wrap: the third chip stands
+    // on a row below the first.
+    var narrow_duration = control.field_options()
+    narrow_duration.width = 70.0
+    f = mem.arena_from(frame_storage)
+    let (wrapped, wrapped_error) = overlay.duration_field(&f, 1400u64, &theme, "Build timeout", s.taken[0usize..8usize], 3usize, zero, "", s.presets[0usize..3usize], 0usize, s.picks[0usize..3usize], narrow_duration)
+    let (wrapped_page, wrapped_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if wrapped_error != ok || wrapped_page_error != ok { os.exit(64i32) }
+    wrapped_page[0usize] = wrapped
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), wrapped_page[0usize..1usize]), time.Instant { nanos: 6300000000i64 }) != ok { os.exit(65i32) }
+    let (first_chip, has_first_chip) = bounds(&harness, &runtime, 1403u64)
+    let (third_chip, has_third_chip) = bounds(&harness, &runtime, 1405u64)
+    if !has_first_chip || !has_third_chip || !(third_chip.y > first_chip.y + 1.0) { os.exit(66i32) }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }

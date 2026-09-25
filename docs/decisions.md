@@ -25097,3 +25097,13 @@ Reading and range-checking the typed text is the caller's.
 
 `ui_pickers2_v2` holds, in input mode, the hour box as an editor, no dial and
 the mode toggle on Windows and Linux.
+
+## D1296 — Duration presets wrap
+
+A duration field's preset chips now wrap within the field's width, 8 apart
+both ways, instead of running off in one row. A field without a width keeps
+them on one line as before. The touch unit boxes and iOS wheels are still to
+come.
+
+`ui_pickers2_v2` holds the third of three presets on a row below the first in
+a 70-wide field on Windows and Linux.

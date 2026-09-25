@@ -4460,7 +4460,8 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
 // v2 (D960, docs/ux/components/DurationPicker, typed field with presets): the
 // chips are 32 tall, 8 apart, 12 below the field's supporting text, the selected
 // one `secondary-container` with its check; the row is a group named "Presets".
-// ponytail: no unit boxes for touch or wheels for iOS, and the chips do not wrap; the caller's text carries the value.
+// (D1296) The chips wrap to the field's width.
+// ponytail: no unit boxes for touch or wheels for iOS; the caller's text carries the value.
 fn duration_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], note: str, presets: []const str, chosen: usize, picks: []const widget.Submit, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != presets.len { ret (zero, TooLarge) }
     var no_toggle: widget.Submit = zero
@@ -4482,9 +4483,11 @@ fn duration_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
         chips[i] = made
         i += 1usize
     }
+    // (D1296) The chips wrap within the field's width, 8 apart both ways.
     var row_style = style.defaults()
     row_style.margin.top = style.Length { Px: 12.0 }
-    parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, row_style, chips[0usize..presets.len])
+    if options.width > 0.0 { row_style.width = style.Length { Px: options.width } }
+    parts[2usize] = widget.wrap(0u64, ui_layout.Wrap { axis: .Horizontal, main_gap: 8.0, cross_gap: 8.0 }, row_style, chips[0usize..presets.len])
     var group: widget.Semantics = zero
     group.role = 2u8
     group.label = "Presets"
