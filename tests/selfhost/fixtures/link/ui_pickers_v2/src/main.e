@@ -18,6 +18,7 @@ use e.gfx.image
 use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
+use e.ui.accessibility
 use e.ui.control
 use e.ui.input
 use e.ui.layout as ui_layout
@@ -117,6 +118,24 @@ fn over(under: paint.Color, top: paint.Color, share: f32) -> paint.Color {
 fn bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
     let (b, found) = widget.bounds_of(runtime, testing.by_key(h, key).element)
     ret (b, found)
+}
+
+// (D1307) The first node in the tree named `label`.
+fn labelled(h: *testing.Harness, label: str) -> (accessibility.Node, bool) {
+    let (tree, tree_error) = testing.semantics(h)
+    if tree_error != ok { ret (zero, false) }
+    var i = 0usize
+    while i < tree.nodes.len {
+        if testing.same_text(tree.nodes[i].label, label) { ret (tree.nodes[i], true) }
+        i += 1usize
+    }
+    ret (zero, false)
+}
+
+// (D1307) A tap at the middle of the element keyed `key`.
+fn tap_key(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bool {
+    let (b, found) = bounds(h, runtime, key)
+    ret found && testing.tap(h, b.x + b.width * 0.5, b.y + b.height * 0.5) == ok
 }
 
 fn focusable(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bool {
@@ -380,6 +399,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 1114u64).element) != ok || testing.press_key(&harness, 40u32, zero) != ok { os.exit(105i32) }
     let (skip_focus, has_skip_focus) = testing.focused(&harness)
     if !has_skip_focus || skip_focus.slot != testing.by_key(&harness, 1128u64).element.slot { os.exit(106i32) }
+    // (D1307) The month button toggles the year view; there, 2026 is chosen and
+    // a press on 2030 shows March 2030 and leaves the view.
+    var year_step = 0usize
+    while year_step < 2usize {
+        var year_marks: overlay.CalendarMarks = zero
+        year_marks.toggle_years = &stores[0usize].press
+        year_marks.year_view = year_step == 1usize
+        f = mem.arena_from(frame_storage)
+        let (yearly, yearly_error) = overlay.calendar_with(&f, 1200u64, &theme, "March", first_of_march, first_of_march, false, false, first_of_march, first_of_march, first_of_march, false, picked_dates, picked_dates, year_marks)
+        let (yearly_page, yearly_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if yearly_error != ok || yearly_page_error != ok { os.exit(115i32) }
+        yearly_page[0usize] = yearly
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 720.0), yearly_page[0usize..1usize]), time.Instant { nanos: 3500000000i64 + i64(year_step) }) != ok { os.exit(116i32) }
+        let (month_button, has_month_button) = labelled(&harness, "March 2026")
+        if !has_month_button { os.exit(118i32) }
+        let toggles_before = stores[0usize].toggles
+        if year_step == 0usize {
+            if month_button.state.expanded || testing.by_key(&harness, 1215u64).count != 1usize || !tap_key(&harness, &runtime, 1200u64 + 4095u64) || stores[0usize].toggles != toggles_before + 1usize { os.exit(119i32) }
+        }
+        if year_step == 1usize {
+            let (this_year, has_this_year) = labelled(&harness, "2026")
+            if !month_button.state.expanded || !has_this_year || !this_year.state.selected || testing.by_key(&harness, 1215u64).count != 0usize { os.exit(120i32) }
+            if !tap_key(&harness, &runtime, 1200u64 + 4096u64 + 11u64) || stores[0usize].last_date.year != 2030i32 || stores[0usize].last_date.month != 3u8 || stores[0usize].toggles != toggles_before + 1usize { os.exit(121i32) }
+        }
+        year_step += 1usize
+    }
     // (D1293) The touch picker: a dialog titled "Select date" saying "Tue, Sep 15",
     // a day press picking, OK confirming; in input mode its typed field stands in
     // the calendar's place.

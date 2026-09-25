@@ -3008,7 +3008,9 @@ fn calendar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str,
 // neighbouring months stay empty cells.
 // (D1229) The week starts on the theme language's first day (`week_start_of`):
 // Monday by default, Sunday for "en-US", Saturday for "ar-EG".
-// ponytail: English month and weekday names; no year view.
+// (D1307) `CalendarMarks.toggle_years` makes the title the month button and
+// `year_view` shows the years (`year_grid`).
+// ponytail: English month and weekday names.
 fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, shown: time.Date, selected: time.Date, has_selected: bool, ranged: bool, from: time.Date, to: time.Date, today: time.Date, has_today: bool, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     var marks: CalendarMarks = zero
     let (made, made_error) = calendar_with(a, key, t, label, shown, selected, has_selected, ranged, from, to, today, has_today, show, pick, marks)
@@ -3018,7 +3020,103 @@ fn calendar_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, labe
 // (D1244) What a calendar marks beyond the selection: a week-number column, a
 // dot under days with `events`, and unavailable days -- those in `unavailable`,
 // before `earliest` or after `latest`.
-type CalendarMarks = struct { week_numbers: bool, events: []const time.Date, unavailable: []const time.Date, earliest: time.Date, has_earliest: bool, latest: time.Date, has_latest: bool }
+// (D1307) With `toggle_years` set the month and year are a button (keyed
+// `key + 4095`) that fires it, and with `year_view` the days give way to years.
+type CalendarMarks = struct { week_numbers: bool, events: []const time.Date, unavailable: []const time.Date, earliest: time.Date, has_earliest: bool, latest: time.Date, has_latest: bool, year_view: bool, toggle_years: *const widget.Submit }
+
+// (D1307) A year pill's press: show `day`'s month, then leave the year view.
+type YearPick = struct { day: time.Date, show: widget.Change[time.Date], toggle: *const widget.Submit }
+
+fn year_pick_fire(ctx: *void) -> err {
+    let p = mem.cast[*YearPick](ctx)
+    try widget.fire_change[time.Date](p.show, p.day)
+    ret widget.fire_submit(*p.toggle)
+}
+
+// (D1307, docs/ux/components/Calendar, year view) Fifteen years in rows of three
+// round `shown`'s (inside `earliest` and `latest`), each a pill 72 by 36 (64 by 32
+// with a pointer), fully rounded, its year in `body-large` `on-surface-variant`
+// (`primary` / `on-primary` for the shown year), keyed `key + 4096 + index`,
+// showing that year's month and leaving the year view; `width` wide, `height`
+// tall.
+// ponytail: fifteen years round the shown one, not a scrolled century; arrows do
+// not move between years (each pill is its own Tab stop).
+fn year_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, shown: time.Date, marks: *const CalendarMarks, show: widget.Change[time.Date], width: f32, height: f32) -> (widget.Node, err) {
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var pill_w: f32 = 64.0
+    var pill_h: f32 = 32.0
+    if touch {
+        pill_w = 72.0
+        pill_h = 36.0
+    }
+    var first = shown.year - 7i32
+    if marks.has_earliest && first < marks.earliest.year { first = marks.earliest.year }
+    var last = first + 14i32
+    if marks.has_latest && last > marks.latest.year {
+        last = marks.latest.year
+        first = last - 14i32
+        if marks.has_earliest && first < marks.earliest.year { first = marks.earliest.year }
+    }
+    if last < first { last = first }
+    let count = usize(last - first + 1i32)
+    let (picks, picks_error) = mem.alloc[YearPick](a, count)
+    let (presses, presses_error) = mem.alloc[widget.Submit](a, count)
+    let (pills, pills_error) = mem.alloc[widget.Node](a, count)
+    let (rows, rows_error) = mem.alloc[widget.Node](a, (count + 2usize) / 3usize)
+    if picks_error != ok || presses_error != ok || pills_error != ok || rows_error != ok { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < count {
+        let year = first + i32(i)
+        let chosen = year == shown.year
+        let pill_key = key + 4096u64 + u64(i)
+        picks[i] = YearPick { day: time.Date { year: year, month: shown.month, day: 1u8 }, show: show, toggle: marks.toggle_years }
+        presses[i] = widget.Submit { ctx: mem.cast[*void](&picks[i]), invoke: year_pick_fire }
+        let state = control.control_state(t, pill_key, true, chosen)
+        var look = style.resolve(t.tokens, .Plain, state)
+        var ink = style.color(t.tokens, .OnSurfaceVariant)
+        var ground = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        if chosen {
+            ink = style.color(t.tokens, .OnPrimary)
+            ground = style.color(t.tokens, .Primary)
+        }
+        look.background = style.layer(ground, ink, control.state_opacity(t, state))
+        look.foreground = ink
+        look.border_width = 0.0
+        look.radius = pill_h * 0.5
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_start = 0.0
+        look.padding_y = 0.0
+        look.min_width = pill_w
+        look.min_height = pill_h
+        let (digits, digits_error) = mem.alloc[u8](a, 12usize)
+        if digits_error != ok { ret (zero, TooLarge) }
+        let digit_count = control.write_i64(digits, i64(year))
+        var caption = control.text_options()
+        caption.role = .BodyLarge
+        caption.wrap = .None
+        let (said, said_error) = control.colored_text(a, 0u64, digits[0usize..digit_count], t, caption, ink)
+        if said_error != ok { ret (zero, said_error) }
+        let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+        if held_error != ok { ret (zero, TooLarge) }
+        held[0usize] = said
+        let content = widget.aligned(0u64, .Center, .Center, control.sized_style(pill_w, pill_h), held[0usize..1usize])
+        let (pill, pill_error) = control.pressable(a, pill_key, t, 3u8, digits[0usize..digit_count], look, true, chosen, &presses[i], content)
+        if pill_error != ok { ret (zero, pill_error) }
+        pills[i] = pill
+        i += 1usize
+    }
+    var r = 0usize
+    while r * 3usize < count {
+        var end = r * 3usize + 3usize
+        if end > count { end = count }
+        rows[r] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .SpaceAround, cross: .Center, gap: 0.0 }, control.sized_style(width, pill_h + 16.0), pills[r * 3usize..end])
+        r += 1usize
+    }
+    var area = control.sized_style(width, height)
+    area.overflow = .Clip
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, area, rows[0usize..r]), ok)
+}
 
 fn date_listed(dates: []const time.Date, d: time.Date) -> bool {
     var i = 0usize
@@ -3139,6 +3237,42 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     var spread = title_node
     spread.style.width = style.Length { Flex: 1.0 }
     head[0usize] = spread
+    let years_toggle = mem.address_of(marks.toggle_years) != 0usize
+    if years_toggle {
+        // (D1307) The month button: the title and a `chevron-down` 18 (up while
+        // the years show), expanded with the year view.
+        let (bits, bits_error) = mem.alloc[widget.Node](a, 3usize)
+        if bits_error != ok { ret (zero, TooLarge) }
+        var turn: control.GlyphKind = .ChevronDown
+        if marks.year_view { turn = .ChevronUp }
+        let (turn_mark, turn_error) = control.mark_glyph(a, heading_color, turn, 18.0)
+        if turn_error != ok { ret (zero, turn_error) }
+        bits[0usize] = title_node
+        bits[1usize] = turn_mark
+        let month_state = control.control_state(t, key + 4095u64, true, false)
+        var month_look = style.resolve(t.tokens, .Plain, month_state)
+        month_look.background = style.layer(clear, heading_color, control.state_opacity(t, month_state))
+        month_look.foreground = heading_color
+        month_look.border_width = 0.0
+        month_look.radius = head_height * 0.5
+        month_look.custom_padding = true
+        month_look.padding = 8.0
+        month_look.padding_start = 8.0
+        month_look.padding_y = 0.0
+        month_look.min_height = head_height
+        var month_states = 0u32
+        var month_actions = accessibility.ACTION_EXPAND
+        if marks.year_view {
+            month_states = accessibility.STATE_EXPANDED
+            month_actions = accessibility.ACTION_COLLAPSE
+        }
+        let (month_button, month_button_error) = control.pressable_states(a, key + 4095u64, t, 3u8, title_bytes[0usize..title_len], month_look, true, false, month_states, month_actions, 0u64, marks.toggle_years, widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), bits[0usize..2usize]))
+        if month_button_error != ok { ret (zero, month_button_error) }
+        bits[2usize] = month_button
+        var grow = style.defaults()
+        grow.width = style.Length { Flex: 1.0 }
+        head[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, grow, bits[2usize..3usize])
+    }
     let (back, back_error) = month_turn(a, key + 1u64, t, .ChevronLeft, "Previous month", &actions[0usize], cell, icon)
     if back_error != ok { ret (zero, back_error) }
     head[1usize] = back
@@ -3359,9 +3493,17 @@ fn calendar_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
     parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, head_style, head[0usize..3usize])
     parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), names[0usize..7usize + lead])
     parts[2usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: week_gap }, style.defaults(), rows[0usize..weeks])
+    var part_count = 3usize
+    if years_toggle && marks.year_view {
+        // (D1307) The years stand where the weekdays and days would.
+        let (years, years_error) = year_grid(a, key, t, shown, &marks, show, grid_width, cell * 7.0 + week_gap * 6.0)
+        if years_error != ok { ret (zero, years_error) }
+        parts[1usize] = years
+        part_count = 2usize
+    }
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..3usize])
+    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), parts[0usize..part_count])
     var sem: widget.Semantics = zero
     sem.role = 30u8
     sem.label = label
