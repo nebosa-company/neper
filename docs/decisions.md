@@ -24665,3 +24665,17 @@ media already works.
 
 `ui_collections_v2` holds the 72 thumbnail row with its picture 16 in and the
 40 avatar frame on Windows and Linux.
+
+## D1266 — Rails have a menu button and FAB; sidebars a header
+
+`navigation.destination_bar_with` takes `DestinationExtras` and stands them
+above the destinations, outside the tab list, so they are not destinations.
+On the rail these are a 48 round `menu` icon button named "Open navigation"
+(keyed `key + 4096`, firing `menu`, which the caller uses to open the modal
+drawer) and the caller's FAB, 8 apart and 8 above the destinations, centred on
+`surface`. On the sidebar it is the header (the app or workspace name) in
+`title-medium`, 16 in, 16 above and 8 below, on `surface-container-low`. The
+bottom bar takes none. `destination_bar_of` is unchanged.
+
+`ui_navigation3_v2` holds the order (menu, FAB, destinations), the menu's
+press, its name and the sidebar header on Windows and Linux.
