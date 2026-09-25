@@ -2301,7 +2301,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     if head_error != ok { ret (zero, head_error) }
     let total = source.count(source.ctx)
     let body_height = height - head_height
-    let (first, count) = widget.visible_range(offset, body_height, total, row_extent)
+    let (first, count) = virtual_range(offset, body_height, total, row_extent)
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (zero, TooLarge) }
     var i = 0usize
