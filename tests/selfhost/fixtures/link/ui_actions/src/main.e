@@ -171,8 +171,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tree_error != ok { os.exit(14i32) }
     let (slider, has_slider) = find(tree, .Slider, "Quality")
     if !has_slider || !same(slider.value, "2") { os.exit(15i32) }
+    let (second_at, has_second) = centre_of(&harness, &runtime, 3u64)
+    if !has_second || testing.tap(&harness, second_at.x, second_at.y) != ok || logs[0usize].ratings != 1usize || logs[0usize].rating != 0u32 { os.exit(57i32) }
     let (fourth_at, has_fourth) = centre_of(&harness, &runtime, 5u64)
-    if !has_fourth || testing.tap(&harness, fourth_at.x, fourth_at.y) != ok || logs[0usize].ratings != 1usize || logs[0usize].rating != 4u32 { os.exit(16i32) }
+    if !has_fourth || testing.tap(&harness, fourth_at.x, fourth_at.y) != ok || logs[0usize].ratings != 2usize || logs[0usize].rating != 4u32 { os.exit(16i32) }
     if testing.tab(&harness, false) != ok { os.exit(17i32) }
     let (focused, has_focus) = testing.focused(&harness)
     let rating_row = testing.by_key(&harness, 1u64).element

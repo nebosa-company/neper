@@ -23331,3 +23331,11 @@ mapping remains unchanged.
 
 `ui_actions` holds cell order and both edge taps on Windows and Linux. The Segoe
 review is `build/ux/rating-rtl-segoe.png`.
+
+## D1167 — Re-clicking a Rating clears it
+
+Each Rating star's existing tap callback now also carries the caller's current
+value. Tapping that same star reports zero; every other star still reports its
+one-based logical value through the same change channel.
+
+`ui_actions` holds clear-by-reclick and ordinary selection on Windows and Linux.
