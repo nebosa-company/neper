@@ -23347,3 +23347,12 @@ Rating semantics now say `N of M stars` instead of a bare number, and say
 only the value text becomes self-contained for assistive technology.
 
 `ui_actions` holds both rated and unset values on Windows and Linux.
+
+## D1169 — Rating digits use ordinary shortcuts
+
+Focused Rating now binds every in-range digit from zero through nine directly
+to that value. The runtime shortcut array grows from eight to sixteen—the exact
+six navigation bindings plus ten digit bindings—without adding a second key
+dispatch path; digits above the control's maximum remain unbound.
+
+`ui_actions` holds direct digit selection on Windows and Linux.

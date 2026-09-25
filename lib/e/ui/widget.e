@@ -173,7 +173,8 @@ const HISTORY_BYTES: usize = 1024usize
 const MAX_COMPOSE: usize = 64usize
 const MAX_CLIP: usize = 256usize
 const EDIT_SCRATCH: usize = 65536usize
-const MAX_SHORTCUTS: usize = 8usize
+// Six navigation keys plus digits 0..9 for one focused Rating (D1169).
+const MAX_SHORTCUTS: usize = 16usize
 const GESTURE_TAP: u8 = 1u8
 const GESTURE_DRAG: u8 = 2u8
 const GESTURE_HOVER: u8 = 4u8
@@ -257,7 +258,7 @@ type Element = struct {
     gestures: u8,
     focusable: bool,
     traps_focus: bool,
-    shortcuts: [8]Shortcut,
+    shortcuts: [16]Shortcut,
     shortcut_count: usize,
     default_action: Submit,
     cancel_action: Submit,

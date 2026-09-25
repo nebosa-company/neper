@@ -196,6 +196,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].rating != 1u32 { os.exit(51i32) }
     if testing.press_key(&harness, 36u32, zero) != ok || logs[0usize].rating != 0u32 { os.exit(52i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || logs[0usize].rating != 5u32 { os.exit(53i32) }
+    if testing.press_key(&harness, 52u32, zero) != ok || logs[0usize].rating != 4u32 { os.exit(61i32) }
     let (root_unset, build_unset_error) = build(&frame, &theme, ctx, &handlers[0usize], dial_actions[0usize..2usize], menu_items[0usize..1usize], 0u32, false, false, false)
     if build_unset_error != ok || testing.pump(&harness, root_unset, time.Instant { nanos: 3000000000i64 }) != ok { os.exit(58i32) }
     let (tree_unset, tree_unset_error) = testing.semantics(&harness)
