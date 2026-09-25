@@ -24760,3 +24760,19 @@ wizard's guard already does. A clean page, or a stack one level deep, is
 
 `ui_navigation_v2` holds Back asking rather than popping and the question's
 Discard popping on Windows and Linux.
+
+## D1273 — Workspace groups have sizes and sashes
+
+`WorkspaceOptions.sizes` gives each editor group its size along the axis, the
+last group taking what is left. With `resizable`, every group but the last
+carries the ResizablePane sash on its end edge (`pane_with_reserve`, keyed
+`base + 195`) in place of the 1px line. Its drags, arrows, Home/End,
+double-click restore and Escape report a new `WorkspaceEvent` kind, `Resize`,
+with the group and its new `size`, holding it to at least 120 and leaving 120
+for each later group. The sash's 8 (24 on touch) is spent between groups
+instead of the line. A first run found the pane stands its hit strip beside the
+content, which squeezed the groups. The 2 x 2 grid and drag between groups
+remain.
+
+`ui_containers5_v2` holds 200 and 393 in a 601 workspace and Right on the sash
+asking for 208 on Windows and Linux.
