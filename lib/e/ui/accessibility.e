@@ -568,27 +568,31 @@ fn focus_order(a: *mem.Arena, runtime: *const widget.Runtime) -> ([]Id, err) {
     var nothing: []Id = zero
     let (root, has_root) = widget.root_of(runtime)
     if !has_root { ret (nothing, ok) }
-    var stack: [256]u32 = zero
+    let capacity = widget.element_count(runtime)
+    let (stack, stack_error) = mem.alloc[u32](a, capacity)
+    if stack_error != ok { ret (nothing, stack_error) }
+    let (children, children_error) = mem.alloc[u32](a, capacity)
+    if children_error != ok { ret (nothing, children_error) }
+    let (order, order_error) = mem.alloc[Id](a, capacity)
+    if order_error != ok { ret (nothing, order_error) }
     var depth = 0usize
     stack[0usize] = root.slot
     depth = 1usize
-    var order: [256]Id = zero
     var count = 0usize
     while depth > 0usize {
         depth -= 1usize
         let slot = stack[depth]
         let (summary, has_summary) = widget.summary_at(runtime, usize(slot))
         if !has_summary { continue }
-        if summary.focusable && count < 256usize {
+        if summary.focusable {
             order[count] = summary.id
             count += 1usize
         }
         // Children pushed last first so that the first child is visited next.
-        var children: [64]u32 = zero
         var child_count = 0usize
         var child = summary.first_child
         var has_child = summary.has_child
-        while has_child && child_count < 64usize {
+        while has_child {
             children[child_count] = child.slot
             child_count += 1usize
             let (child_summary, has_child_summary) = widget.summary_at(runtime, usize(child.slot))
@@ -596,18 +600,11 @@ fn focus_order(a: *mem.Arena, runtime: *const widget.Runtime) -> ([]Id, err) {
             has_child = child_summary.has_sibling
             child = child_summary.next_sibling
         }
-        while child_count > 0usize && depth < 256usize {
+        while child_count > 0usize {
             child_count -= 1usize
             stack[depth] = children[child_count]
             depth += 1usize
         }
     }
-    let (copy, allocation_error) = mem.alloc[Id](a, count)
-    if allocation_error != ok { ret (nothing, allocation_error) }
-    var at = 0usize
-    while at < count {
-        copy[at] = order[at]
-        at += 1usize
-    }
-    ret (copy[0usize..count], ok)
+    ret (order[0usize..count], ok)
 }

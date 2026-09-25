@@ -22798,3 +22798,12 @@ from the prior semantic element when a native bridge caches host objects.
 
 `ui_accessibility` holds node and relationship generations on Windows and Linux.
 The change is semantic only; reviewed surfaces are unchanged.
+
+## D1113 — Focus order has no fixed tree ceiling
+
+Accessibility focus-order traversal allocates its stack, sibling scratch and
+result from the runtime's exact element count. It no longer truncates after 256
+focusables or ignores siblings after the first 64.
+
+`ui_algorithms` holds 300 direct focusable siblings in document order on Windows
+and Linux. The reviewed surface is unchanged.

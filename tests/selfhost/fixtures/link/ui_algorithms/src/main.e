@@ -63,14 +63,22 @@ fn build(a: *mem.Arena, t: *const control.Theme, press: *const widget.Submit) ->
     if scroll_error != ok { ret (zero, scroll_error) }
     let (pressed, button_error) = control.button(a, 1u64, t, "Press", press, control.button_options())
     if button_error != ok { ret (zero, button_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    let (focusable, focusable_error) = mem.alloc[widget.Node](a, 300usize)
+    if focusable_error != ok { ret (zero, focusable_error) }
+    i = 0usize
+    while i < 300usize {
+        focusable[i] = widget.region(10000u64 + u64(i), widget.Region { gesture: zero, gestures: 0u8, enabled: true, focusable: true }, style.defaults(), zero)
+        i += 1usize
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, parts_error) }
     parts[0usize] = pressed
     parts[1usize] = scrolled
+    parts[2usize] = widget.stack(0u64, style.defaults(), focusable[0usize..300usize])
     var column = style.defaults()
     column.width = style.Length { Px: 240.0 }
     column.height = style.Length { Px: 200.0 }
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, column, parts[0usize..2usize]), ok)
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 8.0 }, column, parts[0usize..3usize]), ok)
 }
 
 fn app_build(model: *Log, ctx: *widget.BuildContext) -> (widget.Node, err) {
@@ -131,7 +139,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(12i32) }
-    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 200usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 16u16, max_commands: 512usize })
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 600usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 16u16, max_commands: 1024usize })
     if runtime_error != ok { os.exit(13i32) }
     var runtime = rt
     let theme = control.Theme { tokens: &tokens, fonts: fonts, language: "", runtime: &runtime }
@@ -140,7 +148,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var harness = h
     var log = Log { presses: 0usize, idles: 0usize }
     let press = widget.Submit { ctx: mem.cast[*void](&log), invoke: on_press }
-    let (frame_storage, storage_error) = mem.alloc[u8](a, 1048576usize)
+    let (frame_storage, storage_error) = mem.alloc[u8](a, 4194304usize)
     if storage_error != ok { os.exit(15i32) }
     var frame = mem.arena_from(frame_storage)
     let (root, build_error) = build(&frame, &theme, &press)
@@ -172,13 +180,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tree, tree_error) = accessibility.tree(a, &runtime)
     if tree_error != ok || tree.nodes.len == 0usize { os.exit(25i32) }
     let (order, order_error) = accessibility.focus_order(a, &runtime)
-    if order_error != ok || order.len == 0usize {
+    if order_error != ok || order.len <= 256usize {
         try io.printf["focus order: len {} err {} nodes {}\n"](order.len, order_error != ok, tree.nodes.len)
         os.exit(26i32)
     }
     // The button, or the pressable element inside it, comes first in the order.
     let (first_bounds, has_first) = widget.bounds_of(&runtime, order[0usize])
     if !has_first || first_bounds.x < button_bounds.x || first_bounds.y < button_bounds.y || first_bounds.y + first_bounds.height > button_bounds.y + button_bounds.height + 0.5 { os.exit(44i32) }
+    let last_focusable = testing.by_key(&harness, 10299u64)
+    if last_focusable.count != 1usize || order[order.len - 1usize].slot != last_focusable.element.slot || order[order.len - 1usize].generation != last_focusable.element.generation { os.exit(45i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(27i32) }
     // The app: a requested frame and idle work, where the host has windows.
     var model = Log { presses: 0usize, idles: 0usize }
