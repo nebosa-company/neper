@@ -6,19 +6,19 @@
   "blocks": [
     {
       "start": 0,
-      "end": 26.5,
+      "end": 23.5,
       "job_id": "b8a34056-b572-4e7d-a4ec-04b185a7f0ce",
       "vo_line": "Meet Neper, the first general-purpose language optimized for LLM-generated software, compiling a tiny program in thirty-two milliseconds to a three-thousand-six-hundred-forty-eight-byte native executable without Go’s garbage-collected runtime or TypeScript’s JavaScript, package, and build layers."
     },
     {
-      "start": 26.25,
-      "end": 52,
+      "start": 23.25,
+      "end": 49,
       "job_id": "452b9f6c-39f9-4c46-9d5e-9d6ad47d8452",
       "vo_line": "Neper replaces uncertainty with compact grammar, explicit semantics, canonical formatting, stable diagnostics, and checked repairs, while agents retrieve bounded context, apply transactional edits, detect semantic conflicts, verify results, and the compiler exceeds one million lines per second per core while removing unreachable code."
     },
     {
-      "start": 52,
-      "end": 77,
+      "start": 49,
+      "end": 74,
       "job_id": "08c599a9-d82b-4c4e-a596-6c6137ba5897",
       "vo_line": "One typed kernel runs on CPU, Vulkan, and CUDA, while Neper ships nearly eight thousand functions, over twelve hundred algorithms, and one hundred twelve native controls, connecting prompt to artifact through a content-addressed proof that is MIT open source and self-hosted."
     }

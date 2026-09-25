@@ -106,7 +106,7 @@ export default async ({ project }) => {
         <text x={28} y={88} width={328} height={42} fontFamily={FONT} fontSize={16} color="#dbe6ff">Direct native toolchain</text><text x={28} y={145} width={328} height={42} fontFamily={FONT} fontSize={16} color="#dbe6ff">Compact explicit semantics</text><text x={28} y={202} width={328} height={42} fontFamily={FONT} fontSize={16} color="#dbe6ff">Proof-carrying workflow</text><text x={28} y={276} width={328} height={24} fontFamily={MONO} fontSize={13} fontWeight={700} color={GREEN}>BUILT FOR AUTONOMOUS CODE</text>
       </frame>
     </frame>,
-    { at: 17.5, dur: 9, name: "Why switch" }
+    { at: 17.5, dur: 6, name: "Why switch" }
   )
 
   p.compose(
@@ -117,7 +117,7 @@ export default async ({ project }) => {
       {featurePanel(824, 384, "EDIT", ["Transactional edits — stale plans fail", "Semantic conflicts — meanings checked", "Machine repairs — fixes carry preconditions", "Generated source maps — edit real source"], GREEN)}
       <text x={74} y={594} width={1130} height={24} fontFamily={MONO} fontSize={13} fontWeight={700} color={BLUE}>14 / 26 LLM-NATIVE FEATURES</text>
     </frame>,
-    { at: 26.5, dur: 9, name: "LLM generation and editing" }
+    { at: 23.5, dur: 9, name: "LLM generation and editing" }
   )
 
   p.compose(
@@ -128,7 +128,7 @@ export default async ({ project }) => {
       {featurePanel(824, 384, "DIAGNOSE", ["Causal diagnostics — fix root causes", "Honest flaky tests — retries stay visible"], COPPER)}
       <text x={74} y={594} width={1130} height={24} fontFamily={MONO} fontSize={13} fontWeight={700} color={GREEN}>26 / 26 LLM-NATIVE FEATURES  ·  FROM PROMPT TO PROOF</text>
     </frame>,
-    { at: 35.5, dur: 9, name: "LLM build and verification" }
+    { at: 32.5, dur: 9, name: "LLM build and verification" }
   )
 
   p.compose(
@@ -138,7 +138,7 @@ export default async ({ project }) => {
       <frame x={72} y={438} width={1136} height={118} layout="none"><rect x={0} y={0} width={1136} height={118} radius={18} fill={PANEL} /><text x={28} y={23} width={1050} height={22} fontFamily={MONO} fontSize={13} fontWeight={700} color={MUTED}>WHOLE-PROJECT BUILD</text><rect x={28} y={66} width={1080} height={12} radius={6} fill="#334159" /><rect x={28} y={66} width={1026} height={12} radius={6} fill={BLUE} animate={[{property:"scaleX",from:0,to:1,at:.4,duration:1.6,easing:"house"}]} /></frame>
       <text x={74} y={584} width={1130} height={24} fontFamily={MONO} fontSize={14} color={COPPER}>DIRECT EMITTER  ·  OWN LINKER  ·  REACHABLE CODE ONLY  ·  NO LLVM</text>
     </frame>,
-    { at: 44.5, dur: 7.5, name: "Ultra performance" }
+    { at: 41.5, dur: 7.5, name: "Ultra performance" }
   )
 
   p.compose(
@@ -160,7 +160,7 @@ export default async ({ project }) => {
         <rect x={0} y={260} width={374} height={104} radius={18} fill={PANEL} /><text x={24} y={282} width={160} height={42} fontFamily={FONT} fontSize={28} fontWeight={600} color={GREEN}>CUDA</text><text x={24} y={328} width={326} height={22} fontFamily={FONT} fontSize={14} color={MUTED}>native NVIDIA path</text>
       </frame>
     </frame>,
-    { at: 52, dur: 6.5, name: "CPU and GPU" }
+    { at: 49, dur: 6.5, name: "CPU and GPU" }
   )
 
   p.compose(
@@ -173,7 +173,7 @@ export default async ({ project }) => {
       </frame>
       <frame x={448} y={218} width={760} height={366} layout="none"><rect x={0} y={0} width={760} height={366} radius={18} fill={PANEL_2} /><media file={forge} x={16} y={16} width={728} height={334} fit="contain" radius={12} /></frame>
     </frame>,
-    { at: 58.5, dur: 9.5, name: "Library and native UI" }
+    { at: 55.5, dur: 9.5, name: "Library and native UI" }
   )
 
   p.compose(
@@ -195,7 +195,7 @@ export default async ({ project }) => {
       <frame x={72} y={474} width={760} height={42} layout="none">{pill(0,164,"MIT open source")}{pill(180,210,"100% self-hosted")}{pill(406,238,"Windows · Linux · macOS")}</frame>
       <text x={74} y={552} width={1130} height={26} fontFamily={MONO} fontSize={14} fontWeight={700} color={GREEN}>26 LLM-NATIVE FEATURES  ·  DETERMINISTIC  ·  CONTENT-ADDRESSED</text>
     </frame>,
-    { at: 68, dur: 9, name: "From prompt to proof" }
+    { at: 65, dur: 9, name: "From prompt to proof" }
   )
 
   await p.frame(2, "renders/neper-capabilities-poster.png")
