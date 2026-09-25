@@ -411,9 +411,31 @@ fn status_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, sections:
 // a 48x4 fully rounded meter, `primary` on `secondary-container`, before its
 // words; a pressable item (keyed `key + 1 + index`) is a button named by its text
 // under the `state-hover` layer. Only the first item, the message, is a polite
-// status named by its text.
+// status named by its text. Pressable items share one roving Tab stop, with
+// Left/Right and Home/End moving in visual order.
 // ponytail: no narrowing rules or tooltips; the focus ring is the runtime's, not
 // inset 3.
+type StatusMove = struct { runtime: *widget.Runtime, keys: []const widget.Key, backward: bool, edge: bool }
+
+fn status_move_fire(ctx: *void) -> err {
+    let m = mem.cast[*StatusMove](ctx)
+    var current = 0usize
+    while current < m.keys.len {
+        if widget.focus_within(m.runtime, m.keys[current]) { break }
+        current += 1usize
+    }
+    if current == m.keys.len { ret ok }
+    var next = current
+    if m.edge {
+        if m.backward { next = 0usize } else { next = m.keys.len - 1usize }
+    } else if m.backward {
+        if next > 0usize { next -= 1usize }
+    } else if next + 1usize < m.keys.len {
+        next += 1usize
+    }
+    ret widget.focus_key(m.runtime, m.keys[next])
+}
+
 fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items: []const StatusItem, mode: bool, width: f32) -> (widget.Node, err) {
     var ground: style.ColorRole = .SurfaceContainer
     var ink = style.color(t.tokens, .OnSurfaceVariant)
@@ -425,6 +447,28 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
     if starts_error != ok { ret (zero, TooLarge) }
     let (ends, ends_error) = mem.alloc[widget.Node](a, items.len)
     if ends_error != ok { ret (zero, TooLarge) }
+    let (action_keys, action_keys_error) = mem.alloc[widget.Key](a, items.len)
+    if action_keys_error != ok { ret (zero, TooLarge) }
+    var action_count = 0usize
+    var pass = 0usize
+    while pass < 2usize {
+        var at = 0usize
+        while at < items.len {
+            if items[at].end == (pass == 1usize) && widget.submit_set(items[at].action.invoke) {
+                action_keys[action_count] = key + 1u64 + u64(at)
+                action_count += 1usize
+            }
+            at += 1usize
+        }
+        pass += 1usize
+    }
+    var tab_key = 0u64
+    if action_count > 0usize { tab_key = action_keys[0usize] }
+    var active = 0usize
+    while active < action_count {
+        if widget.focus_within(t.runtime, action_keys[active]) { tab_key = action_keys[active] }
+        active += 1usize
+    }
     var s = 0usize
     var e = 0usize
     var i = 0usize
@@ -484,6 +528,11 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
             let (pressed, pressed_error) = control.pressable(a, key + 1u64 + u64(i), t, 3u8, item.text, look, true, false, &item.action, content)
             if pressed_error != ok { ret (zero, pressed_error) }
             made = pressed
+            if key + 1u64 + u64(i) != tab_key {
+                let (untabbed, untabbed_error) = untab_pressable(a, made)
+                if untabbed_error != ok { ret (zero, untabbed_error) }
+                made = untabbed
+            }
         } else {
             let (wraps, wraps_error) = mem.alloc[widget.Node](a, 1usize)
             if wraps_error != ok { ret (zero, TooLarge) }
@@ -521,13 +570,31 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
     let ends_pad = style.Length { Px: 4.0 }
     let flat = style.Length { Px: 0.0 }
     bar.padding = style.EdgeLengths { left: ends_pad, top: flat, right: ends_pad, bottom: flat }
-    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 1usize)
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
     boxed[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar, groups[0usize..3usize])
+    var layer = 0usize
+    if action_count > 0usize {
+        let (moves, moves_error) = mem.alloc[StatusMove](a, 4usize)
+        if moves_error != ok { ret (zero, TooLarge) }
+        let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
+        if shortcuts_error != ok { ret (zero, TooLarge) }
+        var move = 0usize
+        while move < 4usize {
+            moves[move] = StatusMove { runtime: t.runtime, keys: action_keys[0usize..action_count], backward: move == 0usize || move == 2usize, edge: move >= 2usize }
+            move += 1usize
+        }
+        shortcuts[0usize] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: status_move_fire } }
+        shortcuts[1usize] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: status_move_fire } }
+        shortcuts[2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[2usize]), invoke: status_move_fire } }
+        shortcuts[3usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[3usize]), invoke: status_move_fire } }
+        boxed[1usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), boxed[0usize..1usize])
+        layer = 1usize
+    }
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = "Status bar"
-    ret (widget.semantics(key, sem, style.defaults(), boxed[0usize..1usize]), ok)
+    ret (widget.semantics(key, sem, style.defaults(), boxed[layer..layer + 1usize]), ok)
 }
 
 // A navigation stack: the top of `titles` and `pages` (the same length, the last

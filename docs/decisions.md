@@ -23435,3 +23435,12 @@ The Status Bar wraps its existing keyed layout in a Group named “Status bar”
 Its message remains the only polite Status, and item roles and keys are unchanged.
 
 `ui_status5_v2` holds the Group and nested message on Windows and Linux.
+
+## D1179 — Status Bar actions use one roving Tab stop
+
+Pressable Status Bar items keep one Tab stop at the first or currently focused
+action. Left and Right move through their visual start-to-end order; Home and End
+jump to its bounds. Passive items remain outside the focus sequence.
+
+`ui_status5_v2` holds two non-adjacent actions and all four moves on Windows and
+Linux.
