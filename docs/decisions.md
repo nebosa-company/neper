@@ -23018,3 +23018,12 @@ activate through the shared pressable.
 
 `ui_navigation3_v2` holds all three forms on Windows and Linux. The reviewed
 surface is unchanged.
+
+## D1136 — Pointer destinations expose numeric access keys
+
+DestinationBar binds Ctrl+1 through Ctrl+9 to the corresponding destination at
+pointer density. The chord reuses the same caller-owned action and stable-focus
+wrapper as pointer and default-key activation, and is absent at touch density.
+
+`ui_navigation3_v2` holds direct activation and focus on Windows and Linux. The
+reviewed surface is unchanged.

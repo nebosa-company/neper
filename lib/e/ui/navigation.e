@@ -678,10 +678,15 @@ fn destination_move_fire(ctx: *void) -> err {
     ret widget.focus_key(m.runtime, m.first + u64(next_index))
 }
 
-fn destination_tab_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, form: DestinationForm, count: usize, sem: widget.Semantics, body: widget.Node) -> (widget.Node, err) {
+fn destination_tab_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme, form: DestinationForm, picks: []const widget.Submit, sem: widget.Semantics, body: widget.Node) -> (widget.Node, err) {
     let (moves, moves_error) = mem.alloc[DestinationMove](a, 4usize)
     if moves_error != ok { ret (zero, TooLarge) }
-    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize)
+    var direct = 0usize
+    if t.tokens.metrics.control_height <= t.tokens.sizes.control_sm {
+        direct = picks.len
+        if direct > 9usize { direct = 9usize }
+    }
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 4usize + direct)
     if shortcuts_error != ok { ret (zero, TooLarge) }
     let horizontal = form == .Bottom
     var previous = 38u32
@@ -690,20 +695,27 @@ fn destination_tab_list(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         previous = 37u32
         next = 39u32
     }
-    moves[0usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: count, backward: true, edge: false }
-    moves[1usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: count, backward: false, edge: false }
-    moves[2usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: count, backward: true, edge: true }
-    moves[3usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: count, backward: false, edge: true }
+    moves[0usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: picks.len, backward: true, edge: false }
+    moves[1usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: picks.len, backward: false, edge: false }
+    moves[2usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: picks.len, backward: true, edge: true }
+    moves[3usize] = DestinationMove { runtime: t.runtime, first: key + 1u64, count: picks.len, backward: false, edge: true }
     shortcuts[0usize] = widget.Shortcut { key: previous, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: destination_move_fire } }
     shortcuts[1usize] = widget.Shortcut { key: next, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: destination_move_fire } }
     shortcuts[2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[2usize]), invoke: destination_move_fire } }
     shortcuts[3usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&moves[3usize]), invoke: destination_move_fire } }
+    var ctrl: input.Modifiers = zero
+    ctrl.control = true
+    var i = 0usize
+    while i < direct {
+        shortcuts[4usize + i] = widget.Shortcut { key: 49u32 + u32(i), modifiers: ctrl, action: picks[i] }
+        i += 1usize
+    }
     let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
     if held_error != ok { ret (zero, TooLarge) }
     held[0usize] = body
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..4usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize])
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..4usize + direct], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[0usize..1usize])
     ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
 }
 
@@ -851,7 +863,8 @@ fn destination_rows(a: *mem.Arena, first: widget.Key, t: *const control.Theme, i
 // by its label and badge, the active one Selected and Current, in a tab list
 // named "Main". The current or focused destination is the bar's one Tab stop;
 // Left/Right in the bottom bar or Up/Down in the rail and sidebar move focus,
-// Home and End jump, and the pressable's Enter and Space activate it.
+// Home and End jump, the pressable's Enter and Space activate it, and pointer
+// density binds Ctrl+1 through Ctrl+9 directly to the matching destination.
 // ponytail: no rail menu button or FAB slot, sidebar header, hiding on scroll or
 // pill growth; tabs rather than links in a navigation landmark (the spec allows
 // tabs where the content changes without a URL).
@@ -895,7 +908,7 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         side.padding = style.EdgeLengths { left: rim, top: rim, right: rim, bottom: rim }
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, side, rows)
         sem.row_count = u32(items.len)
-        let (made, made_error) = destination_tab_list(a, key, t, form, items.len, sem, body[0usize])
+        let (made, made_error) = destination_tab_list(a, key, t, form, pick_actions[0usize..items.len], sem, body[0usize])
         ret (made, made_error)
     }
     let bottom = form == .Bottom
@@ -1003,7 +1016,7 @@ fn destination_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, i
         body[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Center, gap: 12.0 }, sheet, cells[0usize..items.len])
         sem.row_count = u32(items.len)
     }
-    let (made, made_error) = destination_tab_list(a, key, t, form, items.len, sem, body[0usize])
+    let (made, made_error) = destination_tab_list(a, key, t, form, pick_actions[0usize..items.len], sem, body[0usize])
     ret (made, made_error)
 }
 
