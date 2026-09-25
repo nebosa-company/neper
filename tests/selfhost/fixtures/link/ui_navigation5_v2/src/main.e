@@ -234,6 +234,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 36u32, zero) != ok || s.picks.last != 0usize || !widget.focus_within(&runtime, 5001u64) { os.exit(20i32) }
     let (moved, moved_error) = build(&f, &theme, s)
     if moved_error != ok || testing.pump(&harness, moved, time.Instant { nanos: 1100000000i64 }) != ok || !focusable(&harness, &runtime, 5001u64) || focusable(&harness, &runtime, 5003u64) { os.exit(34i32) }
+    let (focused_shot, focused_shot_error) = testing.snapshot(&harness, a)
+    if focused_shot_error != ok || !is_color(focused_shot, at(main_tab.x + 4.0, main_tab.y + main_tab.height * 0.5), style.color(&tokens, .FocusRing)) { os.exit(55i32) }
     if testing.press_key(&harness, 35u32, zero) != ok || s.picks.last != 2usize || !widget.focus_within(&runtime, 5005u64) { os.exit(35i32) }
     var ctrl: input.Modifiers = zero
     ctrl.control = true

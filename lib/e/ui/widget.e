@@ -2363,16 +2363,17 @@ fn intersect(a: geometry.Rect, b: geometry.Rect) -> geometry.Rect {
 }
 
 // The ring: a stroke `ring_width` wide whose outer edge is `ring_offset + ring_width`
-// outside the bounds, on the element's shape grown by the same. Menu rows put its
-// outer edge 3px inside their edge-to-edge bounds; otherwise a clip that would cut
-// the outside ring moves it just inside the bounds.
+// outside the bounds, on the element's shape grown by the same. Menu rows and tabs
+// put its outer edge 3px inside their edge-to-edge bounds; otherwise a clip that
+// would cut the outside ring moves it just inside the bounds.
 fn place_ring(s: *State, a: *mem.Arena, b: *scene.Builder, element: usize, bounds: geometry.Rect, corner: style.Corners) -> err {
     let w = s.ring_width
     var grow = s.ring_offset + w * 0.5
     let reach = s.ring_offset + w
     let outer = geometry.Rect { x: bounds.x - reach, y: bounds.y - reach, width: bounds.width + 2.0 * reach, height: bounds.height + 2.0 * reach }
     let (_, menu_item) = menu_item_owner(s, element)
-    if menu_item {
+    let tab_item = semantic_owner(s, element, 19u8)
+    if menu_item || tab_item {
         grow = 0.0 - 3.0 - w * 0.5
     } else if s.has_clip {
         let c = s.clip_rect
@@ -3280,6 +3281,16 @@ fn menu_item_owner(s: *State, index: usize) -> (usize, bool) {
         let e = &s.elements[at]
         if e.has_semantics && (e.sem.role == 22u8 || e.sem.role == 37u8 || e.sem.role == 42u8) { ret (at, true) }
         if !e.has_parent { ret (0usize, false) }
+        at = usize(e.parent)
+    }
+}
+
+fn semantic_owner(s: *State, index: usize, role: u8) -> bool {
+    var at = index
+    while true {
+        let e = &s.elements[at]
+        if e.has_semantics && e.sem.role == role { ret true }
+        if !e.has_parent { ret false }
         at = usize(e.parent)
     }
 }
