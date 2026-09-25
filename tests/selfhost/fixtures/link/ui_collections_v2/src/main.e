@@ -764,6 +764,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         cap_step += 1usize
     }
+    // (D1324) Sections at rows 0 and 50: scrolled to row 10 the first header is
+    // pinned at the top; at rest there is no copy; as row 50 arrives it pushes the
+    // pin up by the overlap.
+    var header_rows: [2]usize = zero
+    header_rows[1usize] = 50usize
+    var pin_step = 0usize
+    while pin_step < 3usize {
+        var sectioned = collection.virtual_list_options()
+        sectioned.width = 300.0
+        sectioned.height = 144.0
+        sectioned.headers = header_rows[..]
+        if pin_step == 0usize { sectioned.offset = 480.0 }
+        if pin_step == 2usize { sectioned.offset = 2376.0 }
+        var pin_ctx: *void = zero
+        f = mem.arena_from(frame_storage)
+        let (pinning, pinning_error) = collection.virtual_list_of(&f, 7100u64, &theme, "Sections", collection.RowSource { ctx: pin_ctx, count: number_count, key: number_key, item: number_item }, sectioned)
+        let (pin_page, pin_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if pinning_error != ok || pin_page_error != ok { os.exit(195i32) }
+        pin_page[0usize] = pinning
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 300.0), pin_page[0usize..1usize]), time.Instant { nanos: 71000000000i64 + i64(pin_step) }) != ok { os.exit(196i32) }
+        let (pin_view, has_pin_view) = bounds(&harness, &runtime, 7100u64)
+        let pinned_key = 7100u64 ^ hash.fnv1a64("pinned")
+        if !has_pin_view { os.exit(197i32) }
+        if pin_step == 1usize && testing.by_key(&harness, pinned_key).count != 0usize { os.exit(198i32) }
+        if pin_step != 1usize {
+            let (pin_box, has_pin_box) = bounds(&harness, &runtime, pinned_key)
+            var expected_y = pin_view.y
+            if pin_step == 2usize { expected_y = pin_view.y - 24.0 }
+            if !has_pin_box || !near(pin_box.y, expected_y) { os.exit(199i32) }
+        }
+        pin_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok

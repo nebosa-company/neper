@@ -25530,3 +25530,21 @@ ColorPicker spec expects.
 
 `ui_pickers3_v2` shows a blue, then a grey: the hue strip still says "210
 degrees", on Windows and Linux.
+
+## D1324 — Virtual lists pin their section header
+
+`VirtualListOptions.headers` names the source's section-header rows
+(ascending indices). The header over the list's top row pins at the
+viewport's top (`pinned_header`), as the VirtualList spec's sticky
+section header asks. The pin is a copy of that row on `surface-container`,
+keyed `key ^ fnv1a64("pinned")` and out of the tree so the header is said
+once. As the next header arrives it pushes the pin up by their overlap.
+While the header rests on its own row, no copy stands. The headers are the
+caller's rows, so Up and Down pass over them like any other; the
+fast-scroll bubble is still to come.
+
+`ui_collections_v2` sections a hundred rows at 0 and 50. Scrolled to row 10
+the first header is pinned at the top; at rest there is no copy; and with
+row 50 arriving 24 into the pin, the pin stands 24 up. This passes on
+Windows and Linux, and `ui_collection` and `ui_algorithms` still pass on
+both.
