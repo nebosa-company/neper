@@ -660,6 +660,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.tap(&harness, thumbed.x + 296.0, jump_y) != ok { os.exit(154i32) }
     let jumped = s.list_offset - (130.0 - 16.0) * 4800.0 / 144.0
     if after_drag > (130.0 - 16.0) * 4800.0 / 144.0 || jumped > 0.5 || jumped < -0.5 { os.exit(155i32) }
+    // (D1264) Control rows: a checkbox row and a switch row are those controls in
+    // the tree, Checked when on; a press anywhere on the switch row runs it.
+    var control_rows: [2]collection.RowItem = zero
+    control_rows[0usize] = collection.row_item("Wi-Fi")
+    control_rows[0usize].control = .Switch
+    control_rows[0usize].on = true
+    control_rows[0usize].action = s.press
+    control_rows[1usize] = collection.row_item("Sync photos")
+    control_rows[1usize].control = .Checkbox
+    control_rows[1usize].action = s.press
+    var control_keys: [2]widget.Key = zero
+    control_keys[0usize] = 991u64
+    control_keys[1usize] = 992u64
+    var control_list = collection.list_options()
+    control_list.width = 300.0
+    f = mem.arena_from(frame_storage)
+    let (controls_node, controls_error) = collection.list_of(&f, 990u64, &theme, "Settings", control_rows[..], control_keys[..], control_list)
+    let (controls_page, controls_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if controls_error != ok || controls_page_error != ok { os.exit(156i32) }
+    controls_page[0usize] = controls_node
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(600.0, 400.0), controls_page[0usize..1usize]), time.Instant { nanos: 8000000000i64 }) != ok { os.exit(157i32) }
+    let (control_tree, control_tree_error) = testing.semantics(&harness)
+    if control_tree_error != ok { os.exit(158i32) }
+    let (wifi, has_wifi) = find(control_tree, .Switch, "Wi-Fi")
+    let (sync, has_sync) = find(control_tree, .Checkbox, "Sync photos")
+    if !has_wifi || !has_sync || !wifi.state.checked || sync.state.checked { os.exit(159i32) }
+    let control_presses = s.presses
+    if !tap_key(&harness, &runtime, 991u64) || s.presses != control_presses + 1usize { os.exit(160i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(69i32) }
     try io.print("ui collections v2 ok\n")
     ret ok

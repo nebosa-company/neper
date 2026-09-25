@@ -4143,7 +4143,11 @@ fn key_value_editor_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
 // and a trailing glyph, whether it is selected (and then marked with a trailing
 // check, for a single-select list), disabled, and its primary action. (D1236)
 // `commands` (empty for none) are the row's context menu.
-type RowItem = struct { headline: str, supporting: str, overline: str, meta: str, leading: control.GlyphKind, has_leading: bool, trailing: control.GlyphKind, has_trailing: bool, selected: bool, check: bool, disabled: bool, action: widget.Submit, commands: []const overlay.MenuCommand, has_checkbox: bool }
+type RowItem = struct { headline: str, supporting: str, overline: str, meta: str, leading: control.GlyphKind, has_leading: bool, trailing: control.GlyphKind, has_trailing: bool, selected: bool, check: bool, disabled: bool, action: widget.Submit, commands: []const overlay.MenuCommand, has_checkbox: bool, control: RowControl, on: bool }
+
+// (D1264) A control row's control: a leading checkbox or radio, or a trailing
+// switch, `on` when checked; the whole row toggles it.
+type RowControl = enum u8 { None, Checkbox, Radio, Switch }
 
 // (D1236) A row's context menu, kept across frames on the row: whether it is open.
 type RowMenu = struct { open: bool }
@@ -4233,8 +4237,10 @@ fn row_lines(item: *const RowItem) -> usize {
 // key, Shift+F10, or a touch hold).
 // (D1241) `has_checkbox` leads with a checkbox in its circle (checked when
 // selected) and the start padding drops to 4.
-// ponytail: no avatar, thumbnail, radio or switch leading slot, or selection
-// animation; the focus ring is the runtime's, inset where the list clips it.
+// (D1264) A control row (`control`) leads with its checkbox or radio mark or
+// ends with its switch, is that control in the tree, Checked when `on`, and a
+// press anywhere on it (or Space) runs its action, which toggles it.
+// ponytail: no avatar or thumbnail leading slot, or selection animation; the focus ring is the runtime's, inset where the list clips it.
 fn row_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *const RowItem, index: usize, count: usize, width: f32) -> (widget.Node, err) {
     let (made, made_error) = row_sized(a, key, t, item, index, count, width, row_height(t, row_lines(item)))
     ret (made, made_error)
@@ -4307,7 +4313,12 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
     let (parts, parts_error) = mem.alloc[widget.Node](a, 5usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var p = 0usize
-    if item.has_checkbox {
+    if item.control == .Checkbox || item.control == .Radio {
+        let (mark, mark_error) = control.choice_mark(a, t, state, item.on, false, item.control == .Radio, enabled)
+        if mark_error != ok { ret (zero, mark_error) }
+        parts[p] = mark
+        p += 1usize
+    } else if item.has_checkbox {
         let (mark, mark_error) = control.choice_mark(a, t, state, item.selected, false, false, enabled)
         if mark_error != ok { ret (zero, mark_error) }
         parts[p] = mark
@@ -4358,7 +4369,12 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
         parts[p] = meta_node
         p += 1usize
     }
-    if item.check && item.selected {
+    if item.control == .Switch {
+        let (flip, flip_error) = control.switch_mark(a, t, state, item.on, enabled)
+        if flip_error != ok { ret (zero, flip_error) }
+        parts[p] = flip
+        p += 1usize
+    } else if item.check && item.selected {
         let (tick, tick_error) = control.icon_square(a, ink, .Check, t.tokens.sizes.icon_md)
         if tick_error != ok { ret (zero, tick_error) }
         parts[p] = tick
@@ -4385,13 +4401,18 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
     row_style.height = style.Length { Px: height }
     row_style.background = paint.Brush { Solid: fill }
     let side = style.Length { Px: control.if_else(dense, 0.0, 8.0) }
-    row_style.padding = style.EdgeLengths { left: style.Length { Px: control.if_else(item.has_checkbox, 4.0, 16.0) }, top: side, right: style.Length { Px: control.if_else(dense, 12.0, 24.0) }, bottom: side }
+    let led = item.has_checkbox || item.control == .Checkbox || item.control == .Radio
+    row_style.padding = style.EdgeLengths { left: style.Length { Px: control.if_else(led, 4.0, 16.0) }, top: side, right: style.Length { Px: control.if_else(dense, 12.0, 24.0) }, bottom: side }
     let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
     if region_error != ok { ret (zero, TooLarge) }
     control.focus_look(t)
     region[0usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&item.action), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: enabled, focusable: enabled }, row_style, held[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 11u8
+    // (D1264) A control row is its control in the tree, Checked when on.
+    if item.control == .Checkbox { sem.role = 4u8 }
+    if item.control == .Radio { sem.role = 5u8 }
+    if item.control == .Switch { sem.role = 18u8 }
     sem.label = item.headline
     sem.hint = item.supporting
     sem.row = u32(index + 1usize)
@@ -4403,6 +4424,7 @@ fn row_acting(a: *mem.Arena, key: widget.Key, t: *const control.Theme, item: *co
     }
     if item.selected { sem.states = accessibility.STATE_SELECTED }
     if item.has_checkbox && item.selected { sem.states = sem.states | accessibility.STATE_CHECKED }
+    if item.control != .None && item.on { sem.states = sem.states | accessibility.STATE_CHECKED }
     if !enabled { sem.states = sem.states | accessibility.STATE_DISABLED }
     ret (widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize]), ok)
 }

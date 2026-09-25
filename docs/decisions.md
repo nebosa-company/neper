@@ -24636,3 +24636,18 @@ grow and fade motion are still to come.
 
 `ui_overlays2_v2` holds the window-filling view, the field in its header,
 Back and Escape, with the docked checks still passing, on Windows and Linux.
+
+## D1264 — Rows can be control rows
+
+`RowItem.control` (`Checkbox`, `Radio` or `Switch`) with `on` makes a Row
+spec control row. A checkbox or radio mark leads the row in its circle, the
+start padding dropping to 4 as for the selection checkbox; a switch stands at
+the end in place of the trailing slot. The row is that control in the tree,
+Checked when `on`, and a press anywhere on it (or Space) runs its action,
+which the caller uses to toggle it. The switch's track and thumb moved out of
+`control.switch_control` into `control.switch_mark`, so the row and the
+labelled switch draw the same part.
+
+`ui_collections_v2` holds a switch row and a checkbox row by role and state
+and a press on the switch row on Windows and Linux; the switch fixtures still
+pass.

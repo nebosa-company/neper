@@ -2792,16 +2792,10 @@ fn radio_group(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, labe
     ret (widget.semantics(key, sem, style.defaults(), stacked[0usize..1usize]), ok)
 }
 
-// A switch: a track with its thumb at the end when on, the label beside; a switch
-// in the tree, checked when on.
-// v2 (D955, docs/ux/components/Switch): a 52 x 32 fully rounded track, off the
-// highest container in a 2px `outline` edge with a 16 `outline` thumb 8 in, on
-// `primary` with a 24 `on-primary` thumb 4 in; hovered or pressed the thumb darkens
-// (`on-surface-variant` off, `primary-container` on), pressed it grows to 28, and
-// the 40 circle round it takes the state layer of `on-surface` (`primary` on). The
-// switch stands in 4 each way so the circle has room; the label 12 after the track.
-fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, on: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
-    let state = control_state(t, key, enabled, false)
+// (D1264) The switch's own part: its 52 x 32 track and thumb in the 40 circle
+// of its state layer, 60 x 40, for a control that stands it beside other
+// content (a control row).
+fn switch_mark(a: *mem.Arena, t: *const Theme, state: style.ControlState, on: bool, enabled: bool) -> (widget.Node, err) {
     let ink = style.color(t.tokens, .OnSurface)
     let highest = style.color(t.tokens, .SurfaceContainerHighest)
     var track_fill = highest
@@ -2848,9 +2842,25 @@ fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, o
     knob.radius = d * 0.5
     knob.background = paint.Brush { Solid: thumb }
     layers[2usize] = widget.positioned(0u64, 4.0 + cx - d * 0.5, 20.0 - d * 0.5, knob, zero)
+    ret (widget.stack(0u64, sized_style(60.0, 40.0), layers[0usize..3usize]), ok)
+}
+
+// A switch: a track with its thumb at the end when on, the label beside; a switch
+// in the tree, checked when on.
+// v2 (D955, docs/ux/components/Switch): a 52 x 32 fully rounded track, off the
+// highest container in a 2px `outline` edge with a 16 `outline` thumb 8 in, on
+// `primary` with a 24 `on-primary` thumb 4 in; hovered or pressed the thumb darkens
+// (`on-surface-variant` off, `primary-container` on), pressed it grows to 28, and
+// the 40 circle round it takes the state layer of `on-surface` (`primary` on). The
+// switch stands in 4 each way so the circle has room; the label 12 after the track.
+fn switch_control(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, on: bool, action: *const widget.Submit, enabled: bool) -> (widget.Node, err) {
+    let state = control_state(t, key, enabled, false)
+    let ink = style.color(t.tokens, .OnSurface)
+    let (mark, mark_error) = switch_mark(a, t, state, on, enabled)
+    if mark_error != ok { ret (zero, mark_error) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = widget.stack(0u64, sized_style(60.0, 40.0), layers[0usize..3usize])
+    parts[0usize] = mark
     var caption = text_options()
     caption.role = .BodyMedium
     caption.wrap = .None
