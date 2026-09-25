@@ -265,6 +265,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if locale_step == 1usize && !near(day_one.x, us_first_x + 32.0) { os.exit(48i32) }
         locale_step += 1usize
     }
+    // (D1230) Times in the locale's clock, and typed times in any common form.
+    let (clock_bytes, clock_bytes_error) = mem.alloc[u8](a, 16usize)
+    if clock_bytes_error != ok { os.exit(50i32) }
+    let half_past_two = time.Time { hour: 14u8, minute: 30u8, second: 0u8, nanos: 0u32 }
+    let after_midnight = time.Time { hour: 0u8, minute: 5u8, second: 0u8, nanos: 0u32 }
+    var clock_len = overlay.write_clock_in(clock_bytes, half_past_two, "en-US")
+    if !mem.eq[u8](clock_bytes[0usize..clock_len], "2:30 PM") { os.exit(51i32) }
+    clock_len = overlay.write_clock_in(clock_bytes, after_midnight, "en-US")
+    if !mem.eq[u8](clock_bytes[0usize..clock_len], "12:05 AM") { os.exit(52i32) }
+    clock_len = overlay.write_clock_in(clock_bytes, half_past_two, "de-DE")
+    if !mem.eq[u8](clock_bytes[0usize..clock_len], "14:30") { os.exit(53i32) }
+    clock_len = overlay.write_clock_in(clock_bytes, half_past_two, "")
+    if !mem.eq[u8](clock_bytes[0usize..clock_len], "14:30") { os.exit(54i32) }
+    var typed_forms: [7]str = zero
+    typed_forms[0usize] = "1430"
+    typed_forms[1usize] = "2:30 pm"
+    typed_forms[2usize] = "14.30"
+    typed_forms[3usize] = " 2:30PM "
+    typed_forms[4usize] = "2:30 p.m."
+    typed_forms[5usize] = "14:30"
+    typed_forms[6usize] = "0230pm"
+    var form = 0usize
+    while form < 7usize {
+        let (typed_time, typed_ok) = overlay.parse_clock(typed_forms[form])
+        if !typed_ok || typed_time.hour != 14u8 || typed_time.minute != 30u8 { os.exit(i32(60usize + form)) }
+        form += 1usize
+    }
+    let (noon, noon_ok) = overlay.parse_clock("Noon")
+    let (midnight, midnight_ok) = overlay.parse_clock("midnight")
+    let (early, early_ok) = overlay.parse_clock("12:15 am")
+    let (nine, nine_ok) = overlay.parse_clock("9")
+    if !noon_ok || noon.hour != 12u8 || !midnight_ok || midnight.hour != 0u8 || !early_ok || early.hour != 0u8 || early.minute != 15u8 || !nine_ok || nine.hour != 9u8 { os.exit(70i32) }
+    let (_, late_ok) = overlay.parse_clock("25:00")
+    let (_, minute_ok) = overlay.parse_clock("9:75")
+    let (_, pm_ok) = overlay.parse_clock("13 pm")
+    let (_, word_ok) = overlay.parse_clock("soon")
+    if late_ok || minute_ok || pm_ok || word_ok { os.exit(71i32) }
     try io.print("ui pickers v2 ok\n")
     ret ok
 }
