@@ -22487,3 +22487,13 @@ Right on a leaf stays put and no longer emits a false toggle command.
 `ui_collections3_v2` holds linear movement, child and parent movement, collapse,
 expand and the leaf no-op on Windows and Linux. This is a behavior-only change
 on the reviewed Tree surface, so no duplicate screenshot is added.
+
+## D1082 — Tree branch actions match their current state
+
+Each branch TreeItem now advertises Expand while closed and Collapse while open.
+Both semantic actions route to the same caller-owned stable-key toggle used by
+the twisty and arrow keys; leaves advertise neither action.
+
+`ui_collections3_v2` inspects the accessibility tree and invokes both actions on
+Windows and Linux. This changes behavior on the reviewed Tree surface, so no
+duplicate screenshot is added.
