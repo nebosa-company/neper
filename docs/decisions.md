@@ -25155,3 +25155,14 @@ selection without taking focus, as the List and DataTable specs ask for
 bulk selection.
 
 `ui_collections_v2` finds the count as a polite status on Windows and Linux.
+
+## D1301 — Levels take a neutral scale and gauges say no data with a dash
+
+`LevelOptions.neutral` lights a segmented or bar level in `primary` rather
+than the strength colours, as the Level spec's fill row asks for neutral
+scales. A gauge with no data now reads an en dash (not a hyphen) in
+`on-surface-variant`, per the Gauge spec.
+
+`ui_status_v2` holds a neutral four-step level lit in `primary` and a no-data
+gauge whose value is the en dash with "No data" as its hint, on Windows and
+Linux; `ui_feedback` and `metrics` still pass on both.

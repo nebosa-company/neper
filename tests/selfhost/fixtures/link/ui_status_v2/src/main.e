@@ -286,6 +286,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         level_step += 1usize
     }
+    // (D1301) A neutral segmented scale lights in `primary`; a gauge with no data
+    // reads an en dash.
+    if testing.begin(&harness, time.Instant { nanos: 21000000000i64 }) != ok { os.exit(47i32) }
+    f = mem.arena_from(frame_storage)
+    var neutral = control.level_options()
+    neutral.segments = 4u32
+    neutral.neutral = true
+    let (neutral_level, neutral_level_error) = control.level_of(&f, 970u64, &theme, "Steps", 2.0, 0.0, 4.0, 2.0, 2.0, 200.0, neutral)
+    var empty_gauge = control.gauge_options()
+    empty_gauge.no_data = true
+    let (dead_gauge, dead_gauge_error) = control.gauge_of(&f, 980u64, &theme, "GPU", 0.0, 0.0, 100.0, 96.0, empty_gauge)
+    let (neutral_page, neutral_page_error) = mem.alloc[widget.Node](&f, 2usize)
+    if neutral_level_error != ok || dead_gauge_error != ok || neutral_page_error != ok { os.exit(48i32) }
+    neutral_page[0usize] = neutral_level
+    neutral_page[1usize] = dead_gauge
+    var neutral_ground = control.sized_style(640.0, 660.0)
+    neutral_ground.background = paint.Brush { Solid: style.color(&tokens, .Background) }
+    if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 12.0 }, neutral_ground, neutral_page[0usize..2usize]), time.Instant { nanos: 21000000000i64 }) != ok { os.exit(49i32) }
+    let (neutral_cells, has_neutral_cells) = bounds(&harness, &runtime, 971u64)
+    let (neutral_shot, neutral_shot_error) = testing.snapshot(&harness, a)
+    if !has_neutral_cells || neutral_shot_error != ok || !is_color(neutral_shot, at(neutral_cells.x + 16.0, neutral_cells.y + 3.0), primary) { os.exit(50i32) }
+    let (neutral_tree, neutral_tree_error) = testing.semantics(&harness)
+    if neutral_tree_error != ok { os.exit(51i32) }
+    let (dead, has_dead) = find(neutral_tree, "GPU")
+    if !has_dead || !same(dead.value, "–") || !same(dead.hint, "No data") { os.exit(52i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(39i32) }
     try io.print("ui status v2 ok\n")
     ret ok
