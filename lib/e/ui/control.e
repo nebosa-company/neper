@@ -4918,6 +4918,68 @@ fn tab_strip_extents(runtime: *widget.Runtime, strip_key: widget.Key) -> (f32, f
     ret (content, shown, found)
 }
 
+// (D1281) A tab bar's indicator slide, kept on the bar across frames: the tab
+// selected last frame, the offset the slide began at and when, and where the
+// new tab stands in the bar (last frame's layout).
+type TabSlide = struct { last: usize, from: f32, since: i64, set: bool, at: f32, wide: f32 }
+
+// (D1281) How far the chosen tab's indicator stands from its tab this frame: on
+// a change of tab it starts at the old tab's place (last frame's bounds) and
+// eases to its own over `duration-medium-2`, asking for frames until it lands;
+// nothing under reduced motion or before the bar has been laid out.
+fn tab_slide(t: *const Theme, key: widget.Key, selected: usize, tab_key: widget.Key) -> (f32, *TabSlide) {
+    var none: *TabSlide = zero
+    let (dx, cell) = tab_slide_of(t, key, selected, tab_key)
+    if mem.address_of(cell) == 0usize { ret (0.0, none) }
+    ret (dx, cell)
+}
+
+fn tab_slide_of(t: *const Theme, key: widget.Key, selected: usize, tab_key: widget.Key) -> (f32, *TabSlide) {
+    var none: *TabSlide = zero
+    if mem.address_of(t.runtime) == 0usize || t.tokens.motion.reduced { ret (0.0, none) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (0.0, none) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (0.0, none) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    var fresh: TabSlide = zero
+    let (cell, _, cell_error) = widget.state[TabSlide](&build, key + 1048575u64, fresh)
+    if cell_error != ok { ret (0.0, none) }
+    let now = widget.frame_time(t.runtime).nanos
+    if !cell.set {
+        cell.set = true
+        cell.last = selected
+        ret (0.0, none)
+    }
+    if cell.last != selected {
+        let (old_id, old_count) = widget.find_by_key(s, key + 1u64 + u64(cell.last))
+        let (new_id, new_count) = widget.find_by_key(s, tab_key)
+        cell.from = 0.0
+        if old_count == 1usize && new_count == 1usize {
+            let (old_box, has_old) = widget.bounds_of(t.runtime, old_id)
+            let (new_box, has_new) = widget.bounds_of(t.runtime, new_id)
+            let (bar_box, has_bar) = widget.bounds_of(t.runtime, id)
+            if has_old && has_new && has_bar {
+                cell.from = old_box.x - new_box.x
+                cell.at = new_box.x - bar_box.x
+                cell.wide = new_box.width
+            }
+        }
+        cell.since = now
+        cell.last = selected
+    }
+    if cell.from == 0.0 { ret (0.0, none) }
+    let span = i64(t.tokens.durations.medium2) * 1000000i64
+    var progress: f32 = 1.0
+    if span > 0i64 && now >= cell.since { progress = f32(now - cell.since) / f32(span) }
+    if progress >= 1.0 {
+        cell.from = 0.0
+        ret (0.0, none)
+    }
+    widget.request_animation_frame(t.runtime)
+    ret (cell.from * (1.0 - animation.ease(.EaseInOut, progress)), cell)
+}
+
 fn tab_enabled(options: *const TabsOptions, i: usize) -> bool {
     ret i >= options.disabled.len || !options.disabled[i]
 }
@@ -4944,7 +5006,8 @@ fn tabs_options() -> TabsOptions {
 // (D1254) A scrollable bar given a `width` scrolls sideways and keeps the
 // focused selected tab in view.
 // (D1255) On a pointer host its chevrons page it.
-// ponytail: no edge fade; the indicator does not slide between tabs.
+// (D1281) The indicator slides between tabs (`tab_slide`).
+// ponytail: no edge fade; the indicator keeps its own width while it slides.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -4956,6 +5019,8 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     if sharing && labels.len > 0usize { least = max_of(90.0, options.width / f32(labels.len)) }
     let (items, items_error) = mem.alloc[widget.Node](a, labels.len)
     if items_error != ok { ret (zero, TooLarge) }
+    let (slide, slide_cell) = tab_slide(t, key, selected, key + 1u64 + u64(selected))
+    let sliding = slide != 0.0
     var i = 0usize
     while i < labels.len {
         let chosen = i == selected
@@ -4995,7 +5060,8 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
             named = with_badge
         }
         var mark = style.defaults()
-        if chosen { mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) } }
+        // (D1281) While the indicator slides the bar draws it; the tab does not.
+        if chosen && !sliding { mark.background = paint.Brush { Solid: style.color(t.tokens, .Primary) } }
         let sides = style.Length { Px: 16.0 }
         let flat = style.Length { Px: 0.0 }
         var content = label_node
@@ -5149,6 +5215,30 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
     scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..bound], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), row[0usize..1usize])
+    // (D1281) The sliding indicator over the bar: 3 tall and the tab's width less
+    // its 16 sides (2 tall and the whole tab when secondary), at the new tab's
+    // place moved by the slide.
+    if sliding {
+        var glide = style.defaults()
+        glide.background = paint.Brush { Solid: style.color(t.tokens, .Primary) }
+        var slide_x = slide_cell.at + slide
+        var slide_w = slide_cell.wide
+        var slide_h: f32 = 2.0
+        if !options.secondary {
+            slide_x += 16.0
+            slide_w = max_zero(slide_cell.wide - 32.0)
+            slide_h = 3.0
+            glide.corners = style.Corners { top_left: 3.0, top_right: 3.0, bottom_right: 0.0, bottom_left: 0.0 }
+        }
+        glide.width = style.Length { Px: slide_w }
+        glide.height = style.Length { Px: slide_h }
+        let (slid, slid_error) = mem.alloc[widget.Node](a, 3usize)
+        if slid_error != ok { ret (zero, TooLarge) }
+        slid[0usize] = scoped[0usize]
+        slid[2usize] = widget.box(0u64, glide, zero)
+        slid[1usize] = widget.positioned(0u64, slide_x, h - slide_h, style.defaults(), slid[2usize..3usize])
+        scoped[0usize] = widget.stack(0u64, style.defaults(), slid[0usize..2usize])
+    }
     var sem: widget.Semantics = zero
     sem.role = 20u8
     sem.column_count = u32(labels.len)

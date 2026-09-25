@@ -24869,3 +24869,19 @@ scales still step, since they light whole segments. Reduced motion jumps.
 
 `ui_status_v2` holds a level from 20 to 60 of 100 lit past 60 but not 110 of
 its 200 half way through, and past 110 once done, on Windows and Linux.
+
+## D1281 — The tab indicator slides between tabs
+
+A tab bar keeps a `TabSlide` across frames. When the selected tab changes,
+it records where the old tab stood relative to the new one, and where the new
+one stands in the bar (last frame's layout). For `duration-medium-2`, easing
+with the standard curve, the bar draws the indicator itself, positioned over
+the whole row: 3 tall, the tab's width less its 16 sides, or 2 tall across the
+whole tab when secondary. It moves from the old place to the new while the
+newly chosen tab leaves its own indicator undrawn. A first version moved the
+tab's own indicator, which the tab's region clipped at its edge. Reduced
+motion, and a bar not yet laid out, jump as before. The indicator keeps the
+new tab's width while it slides.
+
+`ui_tabs_rtl` holds the indicator under the middle tab half way from the
+first to the third, and gone from it once settled, on Windows and Linux.
