@@ -4006,6 +4006,24 @@ fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []
     if shortcuts_error != ok { ret TooLarge }
     let (held, held_error) = mem.alloc[widget.Node](a, n)
     if held_error != ok { ret TooLarge }
+    // (D1235) A grid's Page Up and Page Down stand in a scope of their own round
+    // each cell's eight: `page` rows up or down in the same column, stopping at
+    // the first and last rows.
+    let paged_grid = page > 0usize && across > 1usize
+    var page_moves: []control.FocusTo = zero
+    var page_keys: []widget.Shortcut = zero
+    var page_held: []widget.Node = zero
+    if paged_grid {
+        let (made_moves, made_moves_error) = mem.alloc[control.FocusTo](a, 2usize * n)
+        if made_moves_error != ok { ret TooLarge }
+        let (made_keys, made_keys_error) = mem.alloc[widget.Shortcut](a, 2usize * n)
+        if made_keys_error != ok { ret TooLarge }
+        let (made_held, made_held_error) = mem.alloc[widget.Node](a, n)
+        if made_held_error != ok { ret TooLarge }
+        page_moves = made_moves
+        page_keys = made_keys
+        page_held = made_held
+    }
     var i = 0usize
     while i < n {
         let base = 8usize * i
@@ -4057,6 +4075,17 @@ fn roving(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []
         }
         held[i] = nodes[i]
         nodes[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: shortcuts[base..k], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), held[i..i + 1usize])
+        if paged_grid {
+            let step = page * across
+            var up = i % across
+            if i >= step { up = i - step }
+            var down = i
+            while down + across < n && down + across <= i + step { down += across }
+            bind_move(page_moves, page_keys, 2usize * i, t.runtime, keys[up], 33u32)
+            bind_move(page_moves, page_keys, 2usize * i + 1usize, t.runtime, keys[down], 34u32)
+            page_held[i] = nodes[i]
+            nodes[i] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: page_keys[2usize * i..2usize * i + 2usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), page_held[i..i + 1usize])
+        }
         i += 1usize
     }
     ret ok
@@ -4451,7 +4480,8 @@ fn grid_options() -> GridOptions {
 // stretched to fill the width; arrows move the focus in two dimensions (Down
 // clamps into a short last row), Home and End to the row ends, and Ctrl+Home and
 // Ctrl+End to the set ends. A grid named `label` with its counts.
-// ponytail: no selection model, Page keys, rubber band, reflow
+// (D1235) Page Up and Page Down move a window's height of tile rows in the column.
+// ponytail: no selection model, rubber band, reflow
 // motion, loading or empty state; the caller keeps the page margins.
 fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, tiles: []const Tile, keys: []const widget.Key, options: GridOptions) -> (widget.Node, err) {
     if keys.len != tiles.len { ret (zero, TooLarge) }
@@ -4468,7 +4498,16 @@ fn grid_view_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         cells[i] = made
         i += 1usize
     }
-    let rove_error = roving(a, t, cells, keys, columns, 0usize)
+    // (D1235) A page is the window's height in tile rows, from the first tile's
+    // laid-out height and the 8 between rows; before the first layout, the grid.
+    var page_rows = 0usize
+    if tiles.len > 0usize && mem.address_of(t.runtime) != 0usize {
+        let (first_tile, has_first_tile) = keyed_bounds_of(t.runtime, keys[0usize])
+        let window = widget.surface_size(t.runtime)
+        if has_first_tile && first_tile.height > 0.0 && window.height > first_tile.height + 8.0 { page_rows = usize(window.height / (first_tile.height + 8.0)) }
+        if page_rows == 0usize { page_rows = (tiles.len + columns - 1usize) / columns }
+    }
+    let rove_error = roving(a, t, cells, keys, columns, page_rows)
     if rove_error != ok { ret (zero, rove_error) }
     var flow_style = style.defaults()
     flow_style.width = style.Length { Px: options.width }

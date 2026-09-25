@@ -381,6 +381,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 38u32, zero) != ok || !focused_is(&harness, 501u64) { os.exit(80i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || !focused_is(&harness, 502u64) { os.exit(81i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 501u64) { os.exit(82i32) }
+    // (D1235) Page Down reaches the same column a page of rows below, stopping at
+    // the last row; Page Up returns.
+    if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 503u64) { os.exit(94i32) }
+    if testing.press_key(&harness, 34u32, zero) != ok || !focused_is(&harness, 503u64) { os.exit(95i32) }
+    if testing.press_key(&harness, 33u32, zero) != ok || !focused_is(&harness, 501u64) { os.exit(96i32) }
     // The virtual grid: 1:1 photo tiles 136 across, 12 in and 4 apart.
     let (wall, has_wall) = bounds(&harness, &runtime, 600u64)
     let (first_photo, has_first_photo) = bounds(&harness, &runtime, 6000u64)
