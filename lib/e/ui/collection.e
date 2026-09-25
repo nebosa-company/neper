@@ -1535,11 +1535,26 @@ type GridEvent = struct { kind: GridEventKind, row: usize, column: usize, next: 
 // takes the grid's focus with it).
 type GridFire = struct { event: GridEvent, change: widget.Change[GridEvent], to: control.FocusTo }
 
+type GridPress = struct { move: GridFire, edit: GridFire, editable: bool }
+
 fn grid_fire(ctx: *void) -> err {
     let f = back_of[GridFire](ctx)
     let fired = widget.fire_change[GridEvent](f.change, f.event)
     if fired != ok || f.to.key == 0u64 || mem.address_of(f.to.runtime) == 0usize { ret fired }
     ret control.focus_to_fire(ctx_of(&f.to))
+}
+
+fn grid_press(ctx: *void, gesture: widget.Gesture) -> err {
+    let p = back_of[GridPress](ctx)
+    switch gesture {
+    case .Tap as at:
+        ret grid_fire(ctx_of(&p.move))
+    case .DoubleTap as at:
+        if p.editable { ret grid_fire(ctx_of(&p.edit)) }
+        ret ok
+    default:
+        ret ok
+    }
 }
 
 fn grid_typed(ctx: *void, value: str) -> err {
@@ -1850,18 +1865,22 @@ fn grid_cell(ctx: *void, a: *mem.Arena, index: usize, at: usize, out: *widget.No
     next.anchor_row = index
     next.anchor_column = at
     next.editing = false
-    let (fires, fires_error) = mem.alloc[GridFire](a, 1usize)
-    if fires_error != ok { ret TooLarge }
-    fires[0usize] = GridFire { event: GridEvent { kind: .Move, row: s.row, column: s.column, next: next, text: "" }, change: b.change, to: control.FocusTo { runtime: t.runtime, key: b.holder } }
-    let (taps, taps_error) = mem.alloc[widget.Submit](a, 1usize)
-    if taps_error != ok { ret TooLarge }
-    taps[0usize] = widget.Submit { ctx: ctx_of(&fires[0usize]), invoke: grid_fire }
+    let (presses, presses_error) = mem.alloc[GridPress](a, 1usize)
+    if presses_error != ok { ret TooLarge }
+    var editing = next
+    editing.editing = true
+    let focus = control.FocusTo { runtime: t.runtime, key: b.holder }
+    presses[0usize] = GridPress {
+        move: GridFire { event: GridEvent { kind: .Move, row: s.row, column: s.column, next: next, text: "" }, change: b.change, to: focus },
+        edit: GridFire { event: GridEvent { kind: .Edit, row: index, column: at, next: editing, text: "" }, change: b.change, to: focus },
+        editable: !value.read_only && !s.disabled
+    }
     let (tapped, tapped_error) = mem.alloc[widget.Node](a, 1usize)
     if tapped_error != ok { ret TooLarge }
     var fill = style.defaults()
     fill.width = style.Length { Percent: 100.0 }
     fill.height = style.Length { Percent: 100.0 }
-    tapped[0usize] = widget.region(cell_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&taps[0usize]), invoke: control.press_tap }, gestures: 1u8 | 4u8, enabled: !s.disabled, focusable: false }, fill, lined[0usize..1usize])
+    tapped[0usize] = widget.region(cell_key, widget.Region { gesture: widget.GestureAction { ctx: ctx_of(&presses[0usize]), invoke: grid_press }, gestures: 1u8 | 4u8, enabled: !s.disabled, focusable: false }, fill, lined[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.value = value.text
     if value.read_only {
@@ -1929,7 +1948,7 @@ fn saving_words(a: *mem.Arena, count: usize) -> (str, err) {
 // and, for a range, "N cells selected" in `body-medium` `on-surface-variant`.
 // Every change reaches `change` as a `GridEvent` carrying the next state.
 // ponytail: text cells only -- no checkbox, select or date cells; no
-// double-click, Shift+click, pointer row/column selection, clipboard
+// Shift+click, pointer row/column selection, clipboard
 // parsing and mutation, cross-fade, or touch sheet; the caller keeps the active
 // row in view (the ring is held inside the viewport).
 fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: GridSource, state: GridState, draft: []u8, change: widget.Change[GridEvent], extent: f32, offset: f32, scrolled: widget.Change[f32], height: f32) -> (widget.Node, err) {

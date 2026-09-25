@@ -225,18 +225,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     now = hover_done
     // Host of gamma is dirty: the 2 wide primary bar at its start.
     if !is_color(shot, at(grid.x + 41.0, grid.y + 104.0 + 15.0), style.color(&tokens, .Primary)) || is_color(shot, at(grid.x + 41.0, grid.y + 72.0 + 15.0), style.color(&tokens, .Primary)) { os.exit(15i32) }
+    var plain: input.Modifiers = zero
+    var shift: input.Modifiers = zero
+    shift.shift = true
+    var ctrl: input.Modifiers = zero
+    ctrl.control = true
     // A tap on Port of alpha moves the active cell there and takes the focus.
     if testing.tap(&harness, port_x + 50.0, grid.y + 55.0) != ok || !at_cell(store, 0usize, 1usize) { os.exit(16i32) }
     let (root_2, build_2_error) = build(&f, &theme, ctx, store)
     if build_2_error != ok || testing.pump(&harness, root_2, now) != ok { os.exit(17i32) }
     let (moved, has_moved) = bounds(&harness, &runtime, 2u64)
     if !has_moved || !near(moved.x, port_x) || !near(moved.width, 99.0) || !focus_on(&harness, 2u64) { os.exit(18i32) }
+    // A second tap within 500 ms keeps both ordinary tap notifications and adds
+    // edit mode for an editable cell.
+    let double_at = time.Instant { nanos: 2200000000i64 }
+    if testing.begin(&harness, double_at) != ok || testing.tap(&harness, port_x + 50.0, grid.y + 55.0) != ok || testing.tap(&harness, port_x + 50.0, grid.y + 55.0) != ok || store.last.kind != .Edit || !store.state.editing || store.state.row != 0usize || store.state.column != 1usize { os.exit(107i32) }
+    let (root_2a, build_2a_error) = build(&f, &theme, ctx, store)
+    if build_2a_error != ok || testing.pump(&harness, root_2a, double_at) != ok || !focus_on(&harness, 3u64) { os.exit(108i32) }
+    if testing.press_key(&harness, 27u32, plain) != ok || store.last.kind != .Cancel || store.state.editing { os.exit(109i32) }
+    let (root_2b, build_2b_error) = build(&f, &theme, ctx, store)
+    if build_2b_error != ok || testing.pump(&harness, root_2b, double_at) != ok || !focus_on(&harness, 2u64) { os.exit(110i32) }
+    now = double_at
     // Down, then Shift+Down: a range of two, filled, and counted.
-    var plain: input.Modifiers = zero
-    var shift: input.Modifiers = zero
-    shift.shift = true
-    var ctrl: input.Modifiers = zero
-    ctrl.control = true
     if testing.press_key(&harness, 40u32, plain) != ok || !at_cell(store, 1usize, 1usize) { os.exit(19i32) }
     let (root_3, build_3_error) = build(&f, &theme, ctx, store)
     if build_3_error != ok || testing.pump(&harness, root_3, now) != ok { os.exit(20i32) }

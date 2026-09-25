@@ -22391,3 +22391,16 @@ draft. Physical key codes never stand in for text.
 `ui_testing`, and `ui_accessibility` hold the shared primitive change on both
 hosts. This changes behavior on the reviewed DataGrid surface, so no duplicate
 screenshot is added.
+
+## D1074 — Double tap augments rather than replaces Tap
+
+The runtime records a region's stable element identity and treats a second
+pointer tap within 500 ms as one pair. It fires the ordinary `Tap` first, then
+`DoubleTap`, so existing controls keep their second-click behavior without
+each control maintaining a clock.
+
+DataGrid opts into `DoubleTap` only for editable cells: the ordinary tap moves
+the active cell and the additional gesture emits the existing caller-owned
+`Edit` state. `ui_gesture` and `ui_collections6_v2` hold the runtime and grid
+paths on Windows and Linux. This changes behavior on the reviewed DataGrid
+surface, so no duplicate screenshot is added.
