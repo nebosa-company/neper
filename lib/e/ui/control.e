@@ -4730,7 +4730,7 @@ fn tab_face(a: *mem.Arena, t: *const Theme, options: *const TabsOptions, i: usiz
 
 // (D1254) A scrolling tab strip's offset for this frame: where it last stood,
 // moved just enough to show the whole selected tab while that tab has the focus.
-fn tab_strip_offset(runtime: *widget.Runtime, strip_key: widget.Key, tab_key: widget.Key, has_tab: bool) -> f32 {
+fn tab_strip_offset(runtime: *widget.Runtime, strip_key: widget.Key, tab_key: widget.Key, has_tab: bool, margin: f32) -> f32 {
     let (s, state_error) = widget.state_of(runtime)
     if state_error != ok { ret 0.0 }
     let (strip_id, strip_count) = widget.find_by_key(s, strip_key)
@@ -4743,9 +4743,36 @@ fn tab_strip_offset(runtime: *widget.Runtime, strip_key: widget.Key, tab_key: wi
     let (view, has_view) = widget.bounds_of(runtime, strip_id)
     let (tab, has_tab_bounds) = widget.bounds_of(runtime, tab_id)
     if !has_view || !has_tab_bounds { ret offset }
-    if tab.x < view.x { ret max_zero(offset - (view.x - tab.x)) }
-    if tab.x + tab.width > view.x + view.width { ret offset + (tab.x + tab.width - view.x - view.width) }
+    // (D1255) Clear of the chevron over each end, where the strip can scroll.
+    var start_margin = margin
+    if offset <= 0.5 { start_margin = 0.0 }
+    if tab.x < view.x + start_margin { ret max_zero(offset - (view.x + start_margin - tab.x)) }
+    if tab.x + tab.width > view.x + view.width - margin { ret offset + (tab.x + tab.width - view.x - view.width + margin) }
     ret offset
+}
+
+// (D1255) A chevron's page: the strip moved by `step`.
+type TabPage = struct { runtime: *widget.Runtime, strip: widget.Key, step: f32 }
+
+fn tab_page_fire(ctx: *void) -> err {
+    let p = mem.cast[*TabPage](ctx)
+    let (s, state_error) = widget.state_of(p.runtime)
+    if state_error != ok { ret state_error }
+    let (strip_id, count) = widget.find_by_key(s, p.strip)
+    if count == 0usize { ret ok }
+    let (offset, has_offset) = widget.scroll_offset_of(p.runtime, strip_id)
+    if !has_offset { ret ok }
+    ret widget.scroll_to(p.runtime, strip_id, offset + p.step)
+}
+
+// The strip's content and shown widths from its last placement.
+fn tab_strip_extents(runtime: *widget.Runtime, strip_key: widget.Key) -> (f32, f32, bool) {
+    let (s, state_error) = widget.state_of(runtime)
+    if state_error != ok { ret (0.0, 0.0, false) }
+    let (strip_id, count) = widget.find_by_key(s, strip_key)
+    if count == 0usize { ret (0.0, 0.0, false) }
+    let (content, shown, found) = widget.scroll_extents(runtime, strip_id)
+    ret (content, shown, found)
 }
 
 fn tab_enabled(options: *const TabsOptions, i: usize) -> bool {
@@ -4773,8 +4800,8 @@ fn tabs_options() -> TabsOptions {
 // its name gaining its `badge_names` meaning or "new".
 // (D1254) A scrollable bar given a `width` scrolls sideways and keeps the
 // focused selected tab in view.
-// ponytail: no overflow button or edge fade; the indicator does not slide
-// between tabs.
+// (D1255) On a pointer host its chevrons page it.
+// ponytail: no edge fade; the indicator does not slide between tabs.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -4882,14 +4909,51 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
     // focus the strip brings it fully into view.
     if !sharing && options.width > 0.0 && mem.address_of(t.runtime) != 0usize {
         let strip_key = key + 1048576u64
-        let offset = tab_strip_offset(t.runtime, strip_key, key + 1u64 + u64(selected), selected < labels.len)
-        let (strips, strips_error) = mem.alloc[widget.Node](a, 1usize)
+        var margin: f32 = 0.0
+        if !touch { margin = t.tokens.sizes.control_md }
+        let offset = tab_strip_offset(t.runtime, strip_key, key + 1u64 + u64(selected), selected < labels.len, margin)
+        // (D1255) On a pointer host an overflowing strip has round chevron buttons
+        // the control's size over its ends -- "Scroll tabs back" (keyed
+        // `key + 1048577`) while it is scrolled, "Scroll tabs forward"
+        // (`key + 1048578`) while more lies past its end -- each paging it by
+        // its width; they take no Tab stop.
+        let (content, shown, has_extents) = tab_strip_extents(t.runtime, strip_key)
+        let paging = !touch && has_extents && content > shown + 0.5
+        let back_page = paging && offset > 0.5
+        let forward_page = paging && offset + shown < content - 0.5
+        let chevron_side = t.tokens.sizes.control_md
+        let (strips, strips_error) = mem.alloc[widget.Node](a, 6usize)
         if strips_error != ok { ret (zero, TooLarge) }
-        strips[0usize] = bar_parts[0usize]
+        let (pages, pages_error) = mem.alloc[TabPage](a, 2usize)
+        if pages_error != ok { ret (zero, TooLarge) }
+        let (page_presses, page_presses_error) = mem.alloc[widget.Submit](a, 2usize)
+        if page_presses_error != ok { ret (zero, TooLarge) }
+        strips[3usize] = bar_parts[0usize]
         var view = style.defaults()
         view.width = style.Length { Px: options.width }
         view.overflow = .Clip
-        bar_parts[0usize] = widget.scroll(strip_key, widget.Scroll { axis: .Horizontal, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view, strips[0usize..1usize])
+        strips[0usize] = widget.scroll(strip_key, widget.Scroll { axis: .Horizontal, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: false, thumb: paint.rgba(0.0, 0.0, 0.0, 0.0), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view, strips[3usize..4usize])
+        var at = 1usize
+        if back_page {
+            pages[0usize] = TabPage { runtime: t.runtime, strip: strip_key, step: 0.0 - shown }
+            page_presses[0usize] = widget.Submit { ctx: mem.cast[*void](&pages[0usize]), invoke: tab_page_fire }
+            let (back_button, back_error) = glyph_action(a, key + 1048577u64, t, .ChevronLeft, "Scroll tabs back", &page_presses[0usize], chevron_side, t.tokens.sizes.icon_sm, style.color(t.tokens, .OnSurfaceVariant), true, 0u32, 0u32, 0u64)
+            if back_error != ok { ret (zero, back_error) }
+            strips[4usize] = back_button
+            strips[at] = widget.positioned(0u64, 0.0, 0.0, style.defaults(), strips[4usize..5usize])
+            at += 1usize
+        }
+        if forward_page {
+            pages[1usize] = TabPage { runtime: t.runtime, strip: strip_key, step: shown }
+            page_presses[1usize] = widget.Submit { ctx: mem.cast[*void](&pages[1usize]), invoke: tab_page_fire }
+            let (forward_button, forward_error) = glyph_action(a, key + 1048578u64, t, .ChevronRight, "Scroll tabs forward", &page_presses[1usize], chevron_side, t.tokens.sizes.icon_sm, style.color(t.tokens, .OnSurfaceVariant), true, 0u32, 0u32, 0u64)
+            if forward_error != ok { ret (zero, forward_error) }
+            strips[5usize] = forward_button
+            strips[at] = widget.positioned(0u64, options.width - chevron_side, 0.0, style.defaults(), strips[5usize..6usize])
+            at += 1usize
+        }
+        bar_parts[0usize] = strips[0usize]
+        if at > 1usize { bar_parts[0usize] = widget.stack(0u64, style.defaults(), strips[0usize..at]) }
     }
     var line = style.defaults()
     line.height = style.Length { Px: t.tokens.sizes.divider }

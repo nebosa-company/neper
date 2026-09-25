@@ -110,6 +110,18 @@ fn tab_named(h: *const testing.Harness, label: str) -> bool {
     ret false
 }
 
+// (D1255) Whether the tree has a node of `role` named `label`.
+fn tab_named_role(h: *const testing.Harness, role: accessibility.Role, label: str) -> bool {
+    let (tree, tree_error) = testing.semantics(h)
+    if tree_error != ok { ret false }
+    var n = 0usize
+    while n < tree.nodes.len {
+        if tree.nodes[n].role == role && mem.eq[u8](tree.nodes[n].label, label) { ret true }
+        n += 1usize
+    }
+    ret false
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
@@ -190,7 +202,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (iconic_node, iconic_node_error) = build_badged(&frame, &theme, &stores[0usize], true)
     if iconic_node_error != ok || testing.pump(&harness, iconic_node, time.Instant { nanos: 4200000000i64 }) != ok || !tab_named(&harness, "Settings, update ready") || !tab_named(&harness, "Builds, 3 failed") { os.exit(35i32) }
     // (D1254) Eight scrollable tabs in 200 overflow; once the last (selected) tab
-    // has the focus the strip scrolls just far enough to show all of it.
+    // has the focus the strip scrolls to show all of it (clear of the chevrons).
     var many_labels: [8]str = zero
     var many_picks: [8]widget.Submit = zero
     var m = 0usize
@@ -202,7 +214,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var scroller = control.tabs_options()
     scroller.width = 200.0
     var scroll_step = 0usize
-    while scroll_step < 3usize {
+    while scroll_step < 4usize {
         frame = mem.arena_from(frame_bytes)
         let (many, many_error) = control.tabs_of(&frame, 300u64, &theme, many_labels[..], 7usize, many_picks[..], scroller)
         let (many_page, many_page_error) = mem.alloc[widget.Node](&frame, 1usize)
@@ -218,6 +230,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (strip_offset, has_strip_offset) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 1048876u64).element)
     if !has_strip_view || !has_last_tab || !has_first_tab || !has_strip_offset || !(strip_offset > 0.0) { os.exit(39i32) }
     if last_tab.x + last_tab.width > strip_view.x + strip_view.width + 0.5 || !(first_tab.x < strip_view.x) { os.exit(40i32) }
+    // (D1255) The scrolled strip now shows both chevrons; Scroll tabs back pages
+    // it back by its width.
+    frame = mem.arena_from(frame_bytes)
+    let (paged, paged_error) = control.tabs_of(&frame, 300u64, &theme, many_labels[..], 7usize, many_picks[..], scroller)
+    let (paged_page, paged_page_error) = mem.alloc[widget.Node](&frame, 1usize)
+    if paged_error != ok || paged_page_error != ok { os.exit(41i32) }
+    paged_page[0usize] = paged
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(320.0, 80.0), paged_page[0usize..1usize]), time.Instant { nanos: 5100000000i64 }) != ok { os.exit(42i32) }
+    let (back_chevron, has_back_chevron) = widget.bounds_of(&runtime, testing.by_key(&harness, 1048877u64).element)
+    let (paged_view, has_paged_view) = widget.bounds_of(&runtime, testing.by_key(&harness, 1048876u64).element)
+    let (before_page, _) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 1048876u64).element)
+    if !has_back_chevron || !has_paged_view || !tab_named_role(&harness, .Button, "Scroll tabs back") { os.exit(43i32) }
+    if testing.tap(&harness, back_chevron.x + back_chevron.width * 0.5, back_chevron.y + back_chevron.height * 0.5) != ok { os.exit(44i32) }
+    let (after_page, _) = widget.scroll_offset_of(&runtime, testing.by_key(&harness, 1048876u64).element)
+    let paged_by = before_page - after_page
+    if !(paged_by > 0.0) || (after_page > 0.5 && (paged_by - paged_view.width > 0.5 || paged_view.width - paged_by > 0.5)) { os.exit(45i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui tabs rtl ok\n")
     ret ok
