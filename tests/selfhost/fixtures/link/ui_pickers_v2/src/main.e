@@ -223,6 +223,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 40u32, alt) != ok || stores[0usize].toggles != 1usize { os.exit(36i32) }
     let (reopened, reopened_error) = build(&f, &theme, &stores[0usize], true, false)
     if reopened_error != ok || testing.pump(&harness, reopened, time.Instant { nanos: 4000000000i64 }) != ok || !widget.focus_within(&runtime, 215u64) { os.exit(37i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || !widget.focus_within(&runtime, 216u64) { os.exit(38i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || !widget.focus_within(&runtime, 223u64) { os.exit(39i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || !widget.focus_within(&runtime, 221u64) { os.exit(40i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || !widget.focus_within(&runtime, 227u64) { os.exit(41i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 206u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || stores[0usize].last_date.year != 2026i32 || stores[0usize].last_date.month != 2u8 || stores[0usize].last_date.day != 1u8 || stores[0usize].dates != 5usize || !widget.focus_within(&runtime, 233u64) { os.exit(42i32) }
     try io.print("ui pickers v2 ok\n")
     ret ok
 }

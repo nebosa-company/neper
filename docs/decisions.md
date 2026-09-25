@@ -22980,3 +22980,12 @@ the modal overlay's default focus.
 
 `ui_pickers_v2` holds the selected-day focus handoff on Windows and Linux. The
 reviewed surface is unchanged.
+
+## D1132 — Calendar day keys follow civil dates
+
+Each calendar day scopes Left/Right to one-day focus movement, Up/Down to one
+week, and Home/End to Monday/Sunday. A move across a month reports that month
+through the existing `show` callback before focusing the stable target-day key.
+
+`ui_pickers_v2` holds in-month movement, week boundaries and a previous-month
+crossing on Windows and Linux. The reviewed surface is unchanged.
