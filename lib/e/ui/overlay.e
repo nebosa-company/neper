@@ -3315,6 +3315,60 @@ fn date_range_picker(a: *mem.Arena, key: widget.Key, t: *const control.Theme, la
     ret (made, made_error)
 }
 
+// (D1257) A typed date's Enter: the text as last built, parsed in the theme's
+// language against `today`, reaching `picked` when it reads as a date.
+type DateCommit = struct { text: str, language: str, today: time.Date, picked: widget.Change[time.Date] }
+
+fn date_commit_fire(ctx: *void) -> err {
+    let c = mem.cast[*DateCommit](ctx)
+    let (day, read) = parse_date(c.text, c.language, c.today)
+    if !read { ret ok }
+    ret widget.fire_change[time.Date](c.picked, day)
+}
+
+// (D1257, docs/ux/components/DatePicker, input mode) A date typed into an
+// outlined field (keyed `key`, the caller's `buffer` and `len` through `change`)
+// `width` wide, with the locale's form ("mm/dd/yyyy") below it in `body-small`
+// `on-surface-variant`. Enter commits what `parse_date` reads -- the locale's
+// form, ISO, "25 sep", "today" -- through `picked`. Once the field loses the
+// focus holding text that is no date, it turns `error` and the line below says
+// "Enter a date as mm/dd/yyyy" in `error`, a live status tied to the field
+// (keyed `key + 1`).
+// ponytail: no reformatting on blur (the caller may rewrite `buffer` from the
+// picked date) and no minimum or maximum message.
+fn date_entry(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, change: widget.Change[str], picked: widget.Change[time.Date], today: time.Date, width: f32) -> (widget.Node, err) {
+    let text = buffer[0usize..len]
+    let (_, read) = parse_date(text, t.language, today)
+    var focused = false
+    if mem.address_of(t.runtime) != 0usize { focused = widget.focus_within(t.runtime, key) }
+    let wrong = len > 0usize && !read && !focused
+    let hint = date_format_hint(t.language)
+    let (commits, commits_error) = mem.alloc[DateCommit](a, 1usize)
+    if commits_error != ok { ret (zero, TooLarge) }
+    commits[0usize] = DateCommit { text: text, language: t.language, today: today, picked: picked }
+    var options = control.field_options()
+    options.width = width
+    options.invalid = wrong
+    options.placeholder = hint
+    let (field_node, field_error) = control.text_field(a, key, t, label, buffer, len, change, widget.Submit { ctx: mem.cast[*void](&commits[0usize]), invoke: date_commit_fire }, options)
+    if field_error != ok { ret (zero, field_error) }
+    var line = control.Message { validity: .Valid, text: hint }
+    if wrong {
+        let (said, said_error) = mem.alloc[u8](a, 32usize)
+        if said_error != ok { ret (zero, TooLarge) }
+        var at = control.copy_text(said, "Enter a date as ")
+        at += control.copy_text(said[at..said.len], hint)
+        line = control.Message { validity: .Invalid, text: said[0usize..at] }
+    }
+    let (message, message_error) = control.field_message(a, key + 1u64, t, line, key)
+    if message_error != ok { ret (zero, message_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = field_node
+    parts[1usize] = message
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), parts[0usize..2usize]), ok)
+}
+
 type DateOpen = struct { toggle: widget.Submit, runtime: *widget.Runtime, focus: widget.Key }
 
 fn date_open_fire(ctx: *void) -> err {
@@ -3334,7 +3388,9 @@ fn date_open_fire(ctx: *void) -> err {
 // (D1231) The value is written in the theme language's numeric form
 // (`write_date_in`, ISO with no language); `parse_date` reads typed dates and
 // `date_format_hint` names the form.
-// ponytail: the field is still read-only -- typing into it, Today and Clear, the modal form for touch and inline errors wait on a date field that owns its text.
+// (D1257) `date_entry` is the typed form (input mode) with its inline error.
+// ponytail: this docked field stays read-only; no Today and Clear footer or modal
+// touch form.
 fn dated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, value: time.Date, has_value: bool, ranged: bool, from: time.Date, to: time.Date, open: bool, toggle: *const widget.Submit, shown: time.Date, show: widget.Change[time.Date], pick: widget.Change[time.Date]) -> (widget.Node, err) {
     let (text_bytes, text_error) = mem.alloc[u8](a, 32usize)
     if text_error != ok { ret (zero, TooLarge) }

@@ -24534,3 +24534,19 @@ The search field's marker is another session's uncommitted edit, so it is
 left as they wrote it. `ui_overlays2_v2` holds the listbox, count, groups,
 fallback, a row's action, Down, Up, both Escapes and the no-results line on
 Windows and Linux.
+
+## D1257 — Dates can be typed
+
+`overlay.date_entry` is the DatePicker's input mode: an outlined text field over
+the caller's buffer, with the locale's form ("mm/dd/yyyy", from
+`date_format_hint`) in `body-small` below it. Enter commits whatever
+`parse_date` (D1231) reads -- the locale's form, ISO, "25 sep", "today" --
+through `picked`. The field turns `error` only once it has lost the focus
+holding text that is not a date. The line below it then says "Enter a date
+as mm/dd/yyyy" in `error`, a live status tied to the field, so typing is never
+interrupted by an error for a half-written date. The docked picker's field
+stays read-only, and the Today and Clear footer, reformatting on blur and the
+minimum and maximum messages are still to come.
+
+`ui_pickers_v2` holds the hint, the Enter commit of "9/25/2026" in en-US and
+the error for "13/45/2026" on Windows and Linux.
