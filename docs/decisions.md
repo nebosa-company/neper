@@ -24303,3 +24303,14 @@ checked as well as selected while it shows its checkbox.
 
 `ui_collections_v2` holds the bar, its count, Clear, a bulk action, the checked
 state and the bar's absence with nothing selected on Windows and Linux.
+
+## D1242 — Tabs have dot badges
+
+`TabsOptions.dots` marks tabs with the Badge spec's dot: a 6 `error` disc with
+its centre 3 in from the icon's top end corner on an icon tab, or 4 after the
+label on a text tab. A count wins over a dot, since one anchor has one badge.
+Status is never colour alone, so the dot joins the tab's name like a count
+does: "Settings, update ready" from `badge_names`, or "Settings, new" without
+one.
+
+`ui_tabs_rtl` holds both names on Windows and Linux.

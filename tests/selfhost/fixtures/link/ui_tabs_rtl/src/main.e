@@ -73,8 +73,13 @@ fn build_badged(a: *mem.Arena, t: *const control.Theme, s: *const Store, iconic:
     glyphs[2usize] = .Search
     var counts: [3]str = zero
     var meanings: [3]str = zero
+    var dots: [3]bool = zero
     var options = control.tabs_options()
+    // (D1242) Settings has a dot; with icons it means "update ready".
+    dots[2usize] = true
+    options.dots = dots[..]
     if iconic {
+        meanings[2usize] = "update ready"
         counts[1usize] = "3"
         meanings[1usize] = "3 failed"
         options.icons = glyphs[..]
@@ -180,6 +185,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if texty_error != ok || testing.pump(&harness, texty, time.Instant { nanos: 4100000000i64 }) != ok { os.exit(32i32) }
     let (text_tab, has_text_tab) = widget.bounds_of(&runtime, testing.by_key(&harness, 101u64).element)
     if !has_text_tab || text_tab.height > 40.5 || !tab_named(&harness, "Overview, 2") || testing.by_text(&harness, "2").count == 0usize { os.exit(33i32) }
+    // (D1242) A text tab's dot follows its label 4 after it and names it "new".
+    if !tab_named(&harness, "Settings, new") { os.exit(34i32) }
+    let (iconic_node, iconic_node_error) = build_badged(&frame, &theme, &stores[0usize], true)
+    if iconic_node_error != ok || testing.pump(&harness, iconic_node, time.Instant { nanos: 4200000000i64 }) != ok || !tab_named(&harness, "Settings, update ready") || !tab_named(&harness, "Builds, 3 failed") { os.exit(35i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(21i32) }
     try io.print("ui tabs rtl ok\n")
     ret ok

@@ -4606,20 +4606,30 @@ fn tabs(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, se
 // enabled). (D1226) `icons` puts a glyph above each label; `badges` holds a count
 // per tab ("" for none) and `badge_names` what each means in the tab's name
 // (the count itself when shorter).
-type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool, icons: []const GlyphKind, badges: []const str, badge_names: []const str }
+type TabsOptions = struct { secondary: bool, fixed: bool, width: f32, disabled: []const bool, icons: []const GlyphKind, badges: []const str, badge_names: []const str, dots: []const bool }
 
 fn tab_badge(options: *const TabsOptions, i: usize) -> str {
     if i >= options.badges.len { ret "" }
     ret options.badges[i]
 }
 
+// (D1242) Whether tab `i` shows a dot badge; a count wins over a dot.
+fn tab_dot(options: *const TabsOptions, i: usize) -> bool {
+    ret i < options.dots.len && options.dots[i] && tab_badge(options, i).len == 0usize
+}
+
 // (D1226) A tab's face: its label, under a 24 icon 2 above it when the bar has
 // icons, with the tab's count badge on the icon's top end corner -- or, with no
 // icon, 4 after the label.
+// (D1242) A dot badge stands where the count would: 3 in from the icon's top end
+// corner, or 4 after the label.
 fn tab_face(a: *mem.Arena, t: *const Theme, options: *const TabsOptions, i: usize, label_node: widget.Node, ink: paint.Color) -> (widget.Node, err) {
     let value = tab_badge(options, i)
+    let dotted = tab_dot(options, i)
+    var kind: BadgeKind = .Urgent
+    if dotted { kind = .Dot }
     let has_icon = i < options.icons.len
-    if !has_icon && value.len == 0usize { ret (label_node, ok) }
+    if !has_icon && value.len == 0usize && !dotted { ret (label_node, ok) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
     if parts_error != ok { ret (zero, TooLarge) }
     if has_icon {
@@ -4627,17 +4637,17 @@ fn tab_face(a: *mem.Arena, t: *const Theme, options: *const TabsOptions, i: usiz
         let (glyph, glyph_error) = icon_square(a, ink, options.icons[i], side)
         if glyph_error != ok { ret (zero, glyph_error) }
         parts[0usize] = glyph
-        if value.len != 0usize {
-            let (mark, mark_error) = badge_of(a, 0u64, t, value, .Urgent)
+        if value.len != 0usize || dotted {
+            let (mark, mark_error) = badge_of(a, 0u64, t, value, kind)
             if mark_error != ok { ret (zero, mark_error) }
-            let (anchored, anchored_error) = badge_anchor(a, 0u64, glyph, side, mark, false)
+            let (anchored, anchored_error) = badge_anchor(a, 0u64, glyph, side, mark, dotted)
             if anchored_error != ok { ret (zero, anchored_error) }
             parts[0usize] = anchored
         }
         parts[1usize] = label_node
         ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 2.0 }, style.defaults(), parts[0usize..2usize]), ok)
     }
-    let (mark, mark_error) = badge_of(a, 0u64, t, value, .Urgent)
+    let (mark, mark_error) = badge_of(a, 0u64, t, value, kind)
     if mark_error != ok { ret (zero, mark_error) }
     parts[0usize] = label_node
     parts[1usize] = mark
@@ -4665,7 +4675,9 @@ fn tabs_options() -> TabsOptions {
 // skip it. (D1226) With `icons` a tab is 16 taller (56 pointer, 64 touch) and
 // shows its icon 2 above the label; a count badge sits on the icon's top end
 // corner, or 4 after the label on a text-only tab, and joins the tab's name.
-// ponytail: no overflow button or horizontal scrolling; no dot badge; the
+// (D1242) With `dots` a tab without a count shows a 6 `error` dot there instead,
+// its name gaining its `badge_names` meaning or "new".
+// ponytail: no overflow button or horizontal scrolling; the
 // indicator does not slide between tabs.
 fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str, selected: usize, picks: []const widget.Submit, options: TabsOptions) -> (widget.Node, err) {
     if picks.len != labels.len { ret (zero, TooLarge) }
@@ -4708,8 +4720,9 @@ fn tabs_of(a: *mem.Arena, key: widget.Key, t: *const Theme, labels: []const str,
         let (label_node, face_error) = tab_face(a, t, &options, i, label_text, ink)
         if face_error != ok { ret (zero, face_error) }
         var named = labels[i]
-        if tab_badge(&options, i).len != 0usize {
+        if tab_badge(&options, i).len != 0usize || tab_dot(&options, i) {
             var meaning = tab_badge(&options, i)
+            if meaning.len == 0usize { meaning = "new" }
             if i < options.badge_names.len && options.badge_names[i].len != 0usize { meaning = options.badge_names[i] }
             let (with_badge, with_badge_error) = badge_name(a, labels[i], meaning)
             if with_badge_error != ok { ret (zero, with_badge_error) }
