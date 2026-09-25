@@ -23097,3 +23097,15 @@ absent at touch density.
 
 `ui_navigation5_v2` holds both chords on Windows and Linux. The reviewed
 surface is unchanged.
+
+## D1144 — Wizards expose reachable non-linear steps
+
+WizardOptions can make completed/current steps pressable and optionally make
+every step reachable for a non-linear flow. The stepper uses one roving Tab
+stop, orientation-matched arrows plus Home/End, and Enter/Space or pointer
+activation through the caller-owned indexed callback. Targets are 32 pixels at
+pointer density and 48 at touch density.
+
+`ui_navigation5_v2` holds focusability, target size, pointer/default-key picks
+and horizontal movement on Windows and Linux. The Segoe review is
+`build/ux/wizard-nonlinear-segoe.png`.
