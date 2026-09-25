@@ -165,11 +165,13 @@
     .catalog-stat span { font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
     .catalog-explore { display: block; margin-top: var(--space-3); padding: 0; border: 0; border-bottom: 1px solid currentColor; background: transparent; color: inherit; font: 600 12px/20px var(--font-sans); cursor: pointer; }
     .catalog-dialog { width: min(1080px, calc(100% - 32px)); max-height: 84vh; padding: 0; border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); background: var(--surface); color: var(--on-surface); box-shadow: var(--elevation-3); }
-    .catalog-dialog::backdrop { background: rgb(9 14 24 / 78%); backdrop-filter: blur(4px); }
+    .catalog-dialog::backdrop { background: rgb(4 7 12 / 88%); backdrop-filter: blur(6px); }
+    html:has(.catalog-dialog[open]) { overflow: hidden; }
     .catalog-dialog-frame { display: flex; max-height: 84vh; flex-direction: column; }
     .catalog-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); padding: var(--space-6); border-bottom: 1px solid var(--outline-variant); background: var(--surface-container-low); }
     .catalog-dialog-header h2 { margin: 0; font-size: clamp(24px, 4vw, 36px); line-height: 44px; }
     .catalog-dialog-close { display: grid; width: 40px; height: 40px; padding: 0; place-items: center; border: 1px solid var(--outline-variant); border-radius: var(--radius-full); background: var(--surface-container); color: inherit; font: 600 20px/1 var(--font-sans); cursor: pointer; }
+    body.nu-page .catalog-dialog-close { cursor: pointer; }
     .catalog-dialog-close span { transform: translateY(-2px); }
     .catalog-dialog-body { overflow: auto; padding: var(--space-6); }
     .catalog-dialog-status { margin: 0 0 var(--space-6); color: var(--muted); }
@@ -552,7 +554,7 @@ Hello, Neper</code></pre>
         const group = document.createElement("section")
         group.className = "catalog-dialog-group"
         const heading = document.createElement("h3")
-        heading.textContent = `${category} (${items.length})`
+        heading.textContent = dialog.id === "control-catalog" ? category : `${category} (${items.length})`
         const grid = document.createElement("div")
         grid.className = "catalog-entry-grid"
         for (const item of items) {
@@ -623,6 +625,10 @@ Hello, Neper</code></pre>
           dialog.querySelector(".catalog-dialog-status").textContent = "Could not load this catalog."
         }
       })
+    }
+
+    for (const dialog of document.querySelectorAll(".catalog-dialog")) {
+      dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close() })
     }
   </script>
 </body>

@@ -1236,6 +1236,7 @@
           "id": "P5-07",
           "name": "Content to the v2 specification",
           "module": "e.ui.control",
+          "latest_evidence": "D1164 mirrors icon_of's available directional chevrons and Back/Forward strokes from the theme direction while neutral icons and semantic names stay unchanged; ui_content_v2 holds both directions on Windows and Linux.",
           "components": [
             "AvatarSpec",
             "CanvasSpec",

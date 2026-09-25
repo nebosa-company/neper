@@ -564,14 +564,20 @@ fn icon_square(a: *mem.Arena, color: paint.Color, kind: GlyphKind, size: f32) ->
 // tinted by a colour role (`on-surface-variant` by default), at a token size;
 // disabled it is `on-surface` at 38%. Named, it is an Image; unnamed, it is left
 // out of the tree as a decoration.
-// ponytail: outline forms only; the filled "on" forms and RTL mirroring wait on
-// the full 49-icon set.
+// ponytail: outline forms only; filled "on" forms wait on the full 49-icon set.
 fn icon_of(a: *mem.Arena, key: widget.Key, t: *const Theme, kind: GlyphKind, options: IconOptions) -> (widget.Node, err) {
     var tint = style.color(t.tokens, options.color)
     if !options.enabled { tint = with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
     let (body, body_error) = mem.alloc[widget.Node](a, 1usize)
     if body_error != ok { ret (zero, TooLarge) }
-    let (square, square_error) = icon_square(a, tint, kind, icon_token_size(t, options.size))
+    var shown = kind
+    if t.tokens.direction == .RightToLeft {
+        if kind == .ChevronLeft { shown = .ChevronRight }
+        if kind == .ChevronRight { shown = .ChevronLeft }
+        if kind == .ArrowBack { shown = .ArrowForward }
+        if kind == .ArrowForward { shown = .ArrowBack }
+    }
+    let (square, square_error) = icon_square(a, tint, shown, icon_token_size(t, options.size))
     if square_error != ok { ret (zero, square_error) }
     body[0usize] = square
     var sem: widget.Semantics = zero
@@ -1901,7 +1907,7 @@ fn state_opacity(t: *const Theme, state: style.ControlState) -> f32 {
 // dock panel's and a workspace's header actions draw.
 // (D980) The arrow-up and arrow-down a sorted table column's header shows.
 // (D982) The refresh a pull to refresh's command shows.
-type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh }
+type GlyphKind = enum u8 { Check, Dash, Cross, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Clock, Search, Person, Picture, Alert, DragHandle, DockLeft, Maximize, MoreHoriz, ArrowBack, ArrowForward, Info, CheckCircle, Warning, MoreVert, Menu, ArrowUp, ArrowDown, Refresh }
 type Glyph = struct { color: paint.Color, kind: GlyphKind, arena: *mem.Arena, stroke: f32 }
 
 // An ellipse of four quarter arcs about a centre.
@@ -2069,6 +2075,13 @@ fn glyph_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err {
         try geometry.move_to(&builder, geometry.Point { x: x + w * 0.45, y: y + h * 0.25 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.2, y: y + h * 0.5 })
         try geometry.line_to(&builder, geometry.Point { x: x + w * 0.45, y: y + h * 0.75 })
+    }
+    if g.kind == .ArrowForward {
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.2, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.8, y: y + h * 0.5 })
+        try geometry.move_to(&builder, geometry.Point { x: x + w * 0.55, y: y + h * 0.25 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.8, y: y + h * 0.5 })
+        try geometry.line_to(&builder, geometry.Point { x: x + w * 0.55, y: y + h * 0.75 })
     }
     if g.kind == .Refresh {
         // (D982) Three quarters of a ring from the east round to the north, the
