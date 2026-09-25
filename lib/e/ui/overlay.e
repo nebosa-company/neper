@@ -1111,22 +1111,9 @@ fn match_range(label: str, query: str) -> (usize, usize, bool) {
     ret (0usize, 0usize, false)
 }
 
-// (D1256, docs/ux/components/SearchBar, search view, docked) The view a search
-// bar (`anchor`) opens into, placed 4 below it while `open`: a
-// `surface-container-high` panel with `radius-xl` 28 and elevation 3, `width`
-// wide (held to 360..720), no taller than 2/3 of the window. Each group is a
-// `title-small` `on-surface-variant` subheader (16 in, 12 above, 4 below) over
-// its suggestions as popup rows, keyed `key + 1 + n` in order, the part matching
-// `query` at weight 600; with none, "No results for "query"". Last comes the
-// fallback row, `fallback_label` (the caller's "Search all files for "build""),
-// keyed `key + 4096`. A polite status says "6 suggestions" or "No results". A
-// click outside fires `dismiss`. A listbox named `label` (keyed `key`).
-// (D1262) `search_shortcuts` opens it with Ctrl+K or `/`.
-// ponytail: docked only (the compact full-screen form and the grow/fade motion
-// are not drawn); no loading bar under the header -- pass `popup_loading`
-// content round the view's owner instead.
-fn search_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, query: str, groups: []const SearchGroup, fallback_label: str, fallback: *const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
-    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+// (D1263) A search view's rows: the groups, the count or no-results line and
+// the fallback row, keyed as `search_view` says.
+fn search_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, query: str, groups: []const SearchGroup, fallback_label: str, fallback: *const widget.Submit) -> (widget.Node, err) {
     var total = 0usize
     var g = 0usize
     while g < groups.len {
@@ -1203,9 +1190,89 @@ fn search_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: 
         parts[n] = last_row
         n += 1usize
     }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..n]), ok)
+}
+
+// (D1263, docs/ux/components/SearchBar, search view, full screen) The view on a
+// compact window (below 600 wide): a modal overlay (keyed `key`) filling the
+// window on `surface-container-high`, square and flat; a 72 header holding a
+// Back icon button (keyed `key + 8192`, firing `back`, named "Back") 4 in, and
+// the caller's `field` filling the rest, 16 at the end; a 1px `outline-variant`
+// divider; then the rows as the docked view has them. Escape and Back both
+// fire `back`. A listbox named `label`.
+fn search_view_full(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, field: widget.Node, query: str, groups: []const SearchGroup, fallback_label: str, fallback: *const widget.Submit, open: bool, back: *const widget.Submit) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    var window = geometry.Size { width: 360.0, height: 640.0 }
+    if mem.address_of(t.runtime) != 0usize {
+        let known = widget.surface_size(t.runtime)
+        if known.width > 0.0 && known.height > 0.0 { window = known }
+    }
+    let (rows_node, rows_error) = search_rows(a, key, t, query, groups, fallback_label, fallback)
+    if rows_error != ok { ret (zero, rows_error) }
+    let (head, head_error) = mem.alloc[widget.Node](a, 2usize)
+    if head_error != ok { ret (zero, TooLarge) }
+    let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
+    var side = t.tokens.sizes.control_md
+    if touch { side = t.tokens.sizes.target_touch }
+    let (back_button, back_error) = control.glyph_action(a, key + 8192u64, t, .ArrowBack, "Back", back, side, t.tokens.sizes.icon_md, style.color(t.tokens, .OnSurfaceVariant), true, 0u32, 0u32, 0u64)
+    if back_error != ok { ret (zero, back_error) }
+    head[0usize] = back_button
+    var grow = field
+    grow.style.width = style.Length { Flex: 1.0 }
+    head[1usize] = grow
+    var head_style = style.defaults()
+    head_style.width = style.Length { Px: window.width }
+    head_style.height = style.Length { Px: 72.0 }
+    let none = style.Length { Px: 0.0 }
+    head_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: none, right: style.Length { Px: 16.0 }, bottom: none }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, head_style, head[0usize..2usize])
+    var rule = style.defaults()
+    rule.width = style.Length { Px: window.width }
+    rule.height = style.Length { Px: t.tokens.sizes.divider }
+    rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+    parts[1usize] = widget.box(0u64, rule, zero)
+    parts[2usize] = rows_node
+    var page = control.sized_style(window.width, window.height)
+    page.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+    page.overflow = .Clip
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), parts[0usize..n])
+    column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, page, parts[0usize..3usize])
+    var sem: widget.Semantics = zero
+    sem.role = 35u8
+    sem.label = label
+    let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
+    if named_error != ok { ret (zero, TooLarge) }
+    named[0usize] = widget.semantics(0u64, sem, style.defaults(), column[0usize..1usize])
+    let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_error != ok { ret (zero, TooLarge) }
+    scoped[0usize] = widget.scope(0u64, widget.Scope { traps_focus: true, shortcuts: zero, default_action: zero, cancel_action: *back, keys: zero }, style.defaults(), named[0usize..1usize])
+    ret (widget.overlay(key, widget.Overlay { anchor: 0u64, placement: .Center, offset: zero, modal: true, dismiss: *back }, style.defaults(), scoped[0usize..1usize]), ok)
+}
+
+// (D1256, docs/ux/components/SearchBar, search view, docked) The view a search
+// bar (`anchor`) opens into, placed 4 below it while `open`: a
+// `surface-container-high` panel with `radius-xl` 28 and elevation 3, `width`
+// wide (held to 360..720), no taller than 2/3 of the window. Each group is a
+// `title-small` `on-surface-variant` subheader (16 in, 12 above, 4 below) over
+// its suggestions as popup rows, keyed `key + 1 + n` in order, the part matching
+// `query` at weight 600; with none, "No results for "query"". Last comes the
+// fallback row, `fallback_label` (the caller's "Search all files for "build""),
+// keyed `key + 4096`. A polite status says "6 suggestions" or "No results". A
+// click outside fires `dismiss`. A listbox named `label` (keyed `key`).
+// (D1262) `search_shortcuts` opens it with Ctrl+K or `/`.
+// (D1263) `search_view_full` is the compact form.
+// ponytail: no grow/fade motion; no loading bar under the header -- pass `popup_loading`
+// content round the view's owner instead.
+fn search_view(a: *mem.Arena, key: widget.Key, t: *const control.Theme, anchor: widget.Key, label: str, query: str, groups: []const SearchGroup, fallback_label: str, fallback: *const widget.Submit, open: bool, dismiss: *const widget.Submit, width: f32) -> (widget.Node, err) {
+    if !open { ret (widget.box(0u64, style.defaults(), zero), ok) }
+    let (rows_node, rows_error) = search_rows(a, key, t, query, groups, fallback_label, fallback)
+    if rows_error != ok { ret (zero, rows_error) }
+    let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_error != ok { ret (zero, TooLarge) }
+    column[0usize] = rows_node
     var raised = control.surface_options(t)
     raised.background = .SurfaceContainerHigh
     raised.elevation = 3u8

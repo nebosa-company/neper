@@ -77,6 +77,14 @@ fn build_search(a: *mem.Arena, t: *const control.Theme, s: *Store, steps: *Steps
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, page, parts[0usize..2usize]), ok)
 }
 
+// (D1263) One node as a child slice in the arena.
+fn full_view_array(a: *mem.Arena, node: widget.Node) -> []widget.Node {
+    let (held, held_error) = mem.alloc[widget.Node](a, 1usize)
+    if held_error != ok { os.exit(132i32) }
+    held[0usize] = node
+    ret held[0usize..1usize]
+}
+
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.01 && d > -0.01
@@ -527,6 +535,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if widget.focus(&runtime, testing.by_key(&harness, 902u64).element) != ok || testing.press_key(&harness, 75u32, ctrl_down) != ok || s.counters[4usize].count != opens_before + 1usize { os.exit(124i32) }
     if testing.press_key(&harness, 47u32, zero) != ok || s.counters[4usize].count != opens_before + 2usize { os.exit(125i32) }
     if widget.focus(&runtime, testing.by_key(&harness, 800u64).element) != ok || testing.press_key(&harness, 47u32, zero) != ok || s.counters[4usize].count != opens_before + 2usize { os.exit(126i32) }
+    // (D1263) The compact view fills the window: Back and the field in its
+    // header, the rows below; Back and Escape both fire back.
+    f = mem.arena_from(frame_storage)
+    var compact_options = control.field_options()
+    compact_options.width = 200.0
+    let (compact_field, compact_field_error) = control.search_field(&f, 850u64, &theme, search_buffer, 0usize, zero, s.subs[5usize], &s.subs[6usize], compact_options)
+    if compact_field_error != ok { os.exit(127i32) }
+    let (full_view, full_view_error) = overlay.search_view_full(&f, 950u64, &theme, "Search files", compact_field, "", groups[..], "Search all files", &s.subs[1usize], true, &s.subs[2usize])
+    if full_view_error != ok || testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 480.0), full_view_array(&f, full_view)), time.Instant { nanos: 9400000000i64 }) != ok { os.exit(128i32) }
+    let (full_box, has_full_box) = widget.bounds_of(&runtime, testing.by_key(&harness, 950u64).element)
+    let (full_back, has_full_back) = widget.bounds_of(&runtime, testing.by_key(&harness, 9142u64).element)
+    if !has_full_box || !has_full_back || !near(full_box.width, 640.0) || !near(full_box.height, 480.0) || testing.by_key(&harness, 850u64).count != 1usize { os.exit(129i32) }
+    let backs_before = s.counters[2usize].count
+    if testing.tap(&harness, full_back.x + full_back.width * 0.5, full_back.y + full_back.height * 0.5) != ok || s.counters[2usize].count != backs_before + 1usize { os.exit(130i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 850u64).element) != ok || testing.press_key(&harness, 27u32, zero) != ok || s.counters[2usize].count != backs_before + 2usize { os.exit(131i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(41i32) }
     try io.print("ui overlays2 v2 ok\n")
     ret ok
