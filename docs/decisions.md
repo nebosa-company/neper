@@ -23293,3 +23293,11 @@ increment; Home selects zero and End selects the maximum through the same
 caller-owned change channel.
 
 `ui_actions` holds every direction and both bounds on Windows and Linux.
+
+## D1163 — Tabs mirror horizontal navigation
+
+Tabs now derive their previous and next arrow bindings from the theme direction.
+Left advances and Right goes back in right-to-left themes, while Home and End
+still select the caller's logical first and last tabs.
+
+`ui_tabs_rtl` holds both directions and both bounds on Windows and Linux.
