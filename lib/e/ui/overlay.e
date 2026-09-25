@@ -3832,6 +3832,25 @@ fn time_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, clock_text:
     ret (made, made_error)
 }
 
+// (D1275) Whether `text` equals `word`, or starts it, ignoring ASCII case.
+fn same_text_folded(word: str, text: str) -> bool {
+    ret word.len == text.len && starts_folded(word, text)
+}
+
+fn starts_folded(word: str, text: str) -> bool {
+    if text.len > word.len { ret false }
+    var i = 0usize
+    while i < text.len {
+        var x = word[i]
+        var y = text[i]
+        if x >= 65u8 && x <= 90u8 { x += 32u8 }
+        if y >= 65u8 && y <= 90u8 { y += 32u8 }
+        if x != y { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // A time field (D960): the clocked field (editor `key`, clock `key + 1`, frame
 // `key + 2`) whose clock fires `toggle`; while `open`, the time list below it (the
 // overlay keyed `key + 3`, its viewport `key + 4`, rows `key + 5 + index`), each
@@ -3845,14 +3864,30 @@ fn time_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, clock_text:
 // to put the selected one first.
 // (D1230) Callers write rows and the value with `write_clock_in` for the
 // theme language's 12- or 24-hour clock and read typed text with `parse_clock`.
-// ponytail: no dial, input mode, AM/PM selector or wheels for touch, typing does
-// not filter the list, and there is no error icon; the caller's text and picks
+// (D1275) Typing filters the list to the times the text starts.
+// ponytail: no dial, input mode, AM/PM selector or wheels for touch, and there
+// is no error icon; the caller's text and picks
 // carry the value.
 fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, buffer: []u8, len: usize, typed: widget.Change[str], open: bool, toggle: *const widget.Submit, times: []const str, offsets: []const str, selected: usize, picks: []const widget.Submit, note: str, options: control.FieldOptions) -> (widget.Node, err) {
     if picks.len != times.len || offsets.len != times.len { ret (zero, TooLarge) }
     let (boxed, boxed_error) = clocked_field(a, key, t, label, buffer, len, typed, note, true, open, toggle, options)
     if boxed_error != ok { ret (zero, boxed_error) }
-    let listing = open && times.len > 0usize
+    // (D1275) Typing filters the list: while the field has the focus and its text
+    // is not the selected time, only the times it starts (ignoring case) stay;
+    // none left, no list.
+    let text = buffer[0usize..len]
+    var filtering = len > 0usize && mem.address_of(t.runtime) != 0usize && widget.focus_within(t.runtime, key)
+    if selected < times.len && same_text_folded(times[selected], text) { filtering = false }
+    let (kept, kept_error) = mem.alloc[bool](a, times.len)
+    if kept_error != ok { ret (zero, TooLarge) }
+    var kept_count = 0usize
+    var k = 0usize
+    while k < times.len {
+        kept[k] = !filtering || starts_folded(times[k], text)
+        if kept[k] { kept_count += 1usize }
+        k += 1usize
+    }
+    let listing = open && kept_count > 0usize
     var count = 1usize
     if listing { count = 2usize }
     let (parts, parts_error) = mem.alloc[widget.Node](a, count)
@@ -3873,7 +3908,12 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         let (items, items_error) = mem.alloc[widget.Node](a, times.len)
         if items_error != ok { ret (zero, TooLarge) }
         var i = 0usize
+        var built = 0usize
         while i < times.len {
+            if !kept[i] {
+                i += 1usize
+                continue
+            }
             let (row, row_error) = time_row(a, key + 5u64 + u64(i), t, times[i], offsets[i], i == selected, &picks[i], options.width)
             if row_error != ok { ret (zero, row_error) }
             var entry: widget.Semantics = zero
@@ -3883,17 +3923,18 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
             let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
             if wrapped_error != ok { ret (zero, TooLarge) }
             wrapped[0usize] = row
-            items[i] = widget.semantics(0u64, entry, style.defaults(), wrapped[0usize..1usize])
+            items[built] = widget.semantics(0u64, entry, style.defaults(), wrapped[0usize..1usize])
+            built += 1usize
             i += 1usize
         }
-        var shown = times.len
+        var shown = built
         if shown > 6usize { shown = 6usize }
         var first = 0usize
-        if selected < times.len { first = selected }
-        if first + shown > times.len { first = times.len - shown }
+        if selected < times.len && !filtering { first = selected }
+        if first + shown > built { first = built - shown }
         let (column, column_error) = mem.alloc[widget.Node](a, 2usize)
         if column_error != ok { ret (zero, TooLarge) }
-        column[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..times.len])
+        column[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), items[0usize..built])
         let view_style = control.sized_style(options.width, f32(shown) * row_height)
         column[0usize] = widget.scroll(key + 4u64, widget.Scroll { axis: .Vertical, offset: f32(first) * row_height, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: style.color(t.tokens, .Outline), change: zero, virtual_first: 0usize, virtual_count: 0usize, virtual_extent: 0.0 }, view_style, column[1usize..2usize])
         var raised = control.surface_options(t)
@@ -3910,7 +3951,7 @@ fn time_field(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: st
         var list_sem: widget.Semantics = zero
         list_sem.role = 10u8
         list_sem.label = label
-        list_sem.row_count = u32(times.len)
+        list_sem.row_count = u32(built)
         lifted[0usize] = widget.semantics(0u64, list_sem, style.defaults(), lifted[1usize..2usize])
         parts[1usize] = widget.overlay(key + 3u64, widget.Overlay { anchor: key + 2u64, placement: .Below, offset: geometry.Point { x: 0.0, y: 4.0 }, modal: false, dismiss: zero }, style.defaults(), lifted[0usize..1usize])
         if selected < picks.len {

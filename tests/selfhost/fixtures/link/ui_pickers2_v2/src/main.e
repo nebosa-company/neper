@@ -240,6 +240,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var alt: input.Modifiers = zero
     alt.alt = true
     if testing.press_key(&harness, 40u32, alt) != ok || s.toggles != 1u32 { os.exit(48i32) }
+    // (D1275) Unfocused the list is whole; typing "15" in the focused field
+    // keeps only 15:00 and 15:30.
+    let (typed_clock, typed_clock_error) = mem.alloc[u8](a, 8usize)
+    if typed_clock_error != ok { os.exit(49i32) }
+    typed_clock[0usize] = 49u8
+    typed_clock[1usize] = 53u8
+    var filter_options = control.field_options()
+    filter_options.width = 200.0
+    var filter_step = 0usize
+    while filter_step < 2usize {
+        f = mem.arena_from(frame_storage)
+        let (filtered, filtered_error) = overlay.time_field(&f, 900u64, &theme, "Starts", typed_clock, 2usize, zero, true, &s.press, s.times[0usize..8usize], s.offsets[0usize..8usize], 3usize, s.picks[0usize..8usize], "", filter_options)
+        let (filtered_page, filtered_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if filtered_error != ok || filtered_page_error != ok { os.exit(50i32) }
+        filtered_page[0usize] = filtered
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 400.0), filtered_page[0usize..1usize]), time.Instant { nanos: 6000000000i64 + i64(filter_step) }) != ok { os.exit(51i32) }
+        if filter_step == 0usize && (testing.by_key(&harness, 905u64).count != 1usize || widget.focus(&runtime, testing.by_key(&harness, 900u64).element) != ok) { os.exit(53i32) }
+        filter_step += 1usize
+    }
+    if testing.by_key(&harness, 909u64).count != 1usize || testing.by_key(&harness, 910u64).count != 1usize || testing.by_key(&harness, 905u64).count != 0usize || testing.by_key(&harness, 908u64).count != 0usize { os.exit(52i32) }
     try io.print("ui pickers2 v2 ok\n")
     ret ok
 }
