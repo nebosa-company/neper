@@ -7137,7 +7137,9 @@ type PickerForm = enum u8 { Popup, Sheet }
 // the option in `body-large`; a press on the scrim, or Escape, fires `toggle`.
 // (D1311) The sheet stands at most 60% of the window tall: past that its rows
 // scroll in a viewport (keyed `key + 1048576`) under the handle and title.
-// ponytail: no drag to expand and no slide.
+// (D1332) Opening, the sheet slides up from the window's foot over
+// `duration-medium-2` (the ease kept on the field); reduced motion shows it at once.
+// ponytail: no drag to expand, and closing is at once.
 fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: []const str, selected: usize, open: bool, toggle: *const widget.Submit, picks: []const widget.Submit, presentation: PickerForm) -> (widget.Node, err) {
     if presentation == .Popup {
         let (popup, popup_error) = select(a, key, t, label, options, selected, open, toggle, picks)
@@ -7147,6 +7149,10 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
     let chosen = selected < options.len
     var shown = label
     if chosen { shown = options[selected] }
+    // (D1332) How far the sheet has risen, kept on the field while it is shut too.
+    var rise_goal: f32 = 0.0
+    if open { rise_goal = 1.0 }
+    let risen = eased_on(t, key, key + 2097152u64, rise_goal, false, t.tokens.durations.medium2)
     let dense = t.tokens.metrics.control_height < t.tokens.sizes.control_sm
     let (head, head_error) = field_head(a, key, t, label, shown, chosen, open, toggle, t.tokens.metrics.control_height + 16.0, .ChevronDown, .ChevronUp, !dense)
     if head_error != ok { ret (zero, head_error) }
@@ -7257,6 +7263,15 @@ fn picker(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, options: 
         let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
         if centred_error != ok { ret (zero, TooLarge) }
         centred[0usize] = widget.aligned(0u64, .Center, .End, centre, grouped[0usize..1usize])
+        // (D1332) The slide: the sheet stands the share still to rise of the
+        // window's height below its place, paint only.
+        if risen < 1.0 && mem.address_of(t.runtime) != 0usize {
+            let drop = widget.surface_size(t.runtime).height * (1.0 - risen)
+            let (sliding, sliding_error) = mem.alloc[widget.Node](a, 1usize)
+            if sliding_error != ok { ret (zero, TooLarge) }
+            sliding[0usize] = centred[0usize]
+            centred[0usize] = widget.transformed(0u64, widget.VisualTransform { scale: 1.0, rotation: 0.0, offset: geometry.Point { x: 0.0, y: drop } }, centre, sliding[0usize..1usize])
+        }
         var none: []const widget.Shortcut = zero
         let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
         if scoped_error != ok { ret (zero, TooLarge) }
