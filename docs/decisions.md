@@ -22326,3 +22326,18 @@ model, current filtered index and callbacks remain caller-owned.
 `ui_overlays4_v2` holds the delay, animation request, stepping, release, quick
 path and cancellation on Windows and Linux; the already-reviewed grid is the
 visual surface, so this behavioral slice adds no duplicate screenshot.
+
+## D1069 — Keyed scopes own Tab before fallback traversal
+
+The runtime now normalizes X Page and F1–F24 keysyms to the same codes used by
+Windows, and gives an ancestor scope whose `keys` callback takes every key the
+first chance at plain Tab. With no such scope, Tab keeps the existing focus
+traversal. This fixes Linux F2 at the shared boundary and lets DataGrid reuse its
+single key handler instead of adding another dispatch path.
+
+DataGrid Tab and Shift+Tab wrap cell by cell, Ctrl+A selects the whole grid, F8
+visits the next invalid cell, edit-mode Tab commits to the next cell, and
+Shift+Enter commits upward. `ui_collections6_v2`, `ui_navigation2_v2`, and
+`ui_inputs3_v2` hold the grid, F10 menu, and shortcut-recorder paths on Windows
+and Linux. This is behavior on the reviewed DataGrid surface, so no duplicate
+screenshot is added.

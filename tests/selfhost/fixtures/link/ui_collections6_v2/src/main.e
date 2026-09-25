@@ -2,12 +2,13 @@
 // under the light theme: one active cell ringed in `focus-ring` holding the
 // grid's focus, a tap moving it; an invalid cell's 2px `error` outline and the
 // status bar's "1 error"; a dirty cell's `primary` start bar; the arrows, Home,
-// End, Ctrl+Home, Ctrl+End, Page Up and Page Down moving the active cell;
+// End, Ctrl+Home, Ctrl+End, Page Up and Page Down moving the active cell; Tab
+// wrapping, Ctrl+A selecting all cells and F8 finding the next invalid cell;
 // Shift+Down extending a `primary-container` range and "2 cells selected";
 // Escape dropping it; F2 editing in a `surface-container-highest` editor in a
-// 2px `primary` outline over the cell, which takes the focus; typing, Enter
-// committing and moving down with the focus back on the grid; Enter editing
-// and Escape cancelling.
+// 2px `primary` outline over the cell, which takes the focus; typing, Enter or
+// Tab committing and moving with the focus back on the grid; Enter editing and
+// Escape cancelling. X keysyms and Windows virtual keys share those paths.
 
 use e.gpu
 use e.io
@@ -163,7 +164,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     stores[0usize].draft = draft
     let store = &stores[0usize]
     let ctx = mem.cast[*void](store)
-    let (storage, storage_error) = mem.alloc[u8](a, 16777216usize)
+    let (storage, storage_error) = mem.alloc[u8](a, 33554432usize)
     if storage_error != ok { os.exit(9i32) }
     var f = mem.arena_from(storage)
     let now = time.Instant { nanos: 1000000000i64 }
@@ -225,8 +226,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 33u32, plain) != ok || !at_cell(store, 0usize, 0usize) || !focus_on(&harness, 2u64) { os.exit(37i32) }
     let (root_11, build_11_error) = build(&f, &theme, ctx, store)
     if build_11_error != ok || testing.pump(&harness, root_11, now) != ok { os.exit(38i32) }
-    // F2 edits alpha: the editor over the cell, its fill and outline, focused.
-    if testing.press_key(&harness, 113u32, plain) != ok || store.last.kind != .Edit || !store.state.editing || store.state.len != 5usize { os.exit(39i32) }
+    // Tab wraps by cell, F8 visits the invalid Port of beta, and Ctrl+A selects
+    // the whole grid. Linux keysyms normalize to the same public key codes.
+    if widget.key_code(65471u32) != 113u32 || widget.key_code(65477u32) != 119u32 || widget.key_code(65365u32) != 33u32 || widget.key_code(65366u32) != 34u32 { os.exit(55i32) }
+    if testing.press_key(&harness, 9u32, plain) != ok || !at_cell(store, 0usize, 1usize) { os.exit(56i32) }
+    let (root_11a, build_11a_error) = build(&f, &theme, ctx, store)
+    if build_11a_error != ok || testing.pump(&harness, root_11a, now) != ok { os.exit(57i32) }
+    if testing.press_key(&harness, 9u32, plain) != ok || !at_cell(store, 1usize, 0usize) { os.exit(58i32) }
+    let (root_11b, build_11b_error) = build(&f, &theme, ctx, store)
+    if build_11b_error != ok || testing.pump(&harness, root_11b, now) != ok { os.exit(59i32) }
+    if testing.press_key(&harness, 9u32, shift) != ok || !at_cell(store, 0usize, 1usize) { os.exit(60i32) }
+    let (root_11c, build_11c_error) = build(&f, &theme, ctx, store)
+    if build_11c_error != ok || testing.pump(&harness, root_11c, now) != ok { os.exit(61i32) }
+    if testing.press_key(&harness, 65477u32, plain) != ok || !at_cell(store, 1usize, 1usize) { os.exit(62i32) }
+    let (root_11d, build_11d_error) = build(&f, &theme, ctx, store)
+    if build_11d_error != ok || testing.pump(&harness, root_11d, now) != ok { os.exit(63i32) }
+    if testing.press_key(&harness, 65u32, ctrl) != ok || store.last.kind != .Extend || store.state.row != 4usize || store.state.column != 1usize || store.state.anchor_row != 0usize || store.state.anchor_column != 0usize { os.exit(64i32) }
+    let (root_11e, build_11e_error) = build(&f, &theme, ctx, store)
+    if build_11e_error != ok || testing.pump(&harness, root_11e, now) != ok || testing.by_text(&harness, "10 cells selected").count != 1usize { os.exit(65i32) }
+    if testing.press_key(&harness, 27u32, plain) != ok || store.state.anchor_row != 4usize || store.state.anchor_column != 1usize { os.exit(66i32) }
+    let (root_11f, build_11f_error) = build(&f, &theme, ctx, store)
+    if build_11f_error != ok || testing.pump(&harness, root_11f, now) != ok { os.exit(67i32) }
+    if testing.press_key(&harness, 36u32, ctrl) != ok || !at_cell(store, 0usize, 0usize) { os.exit(68i32) }
+    let (root_11g, build_11g_error) = build(&f, &theme, ctx, store)
+    if build_11g_error != ok || testing.pump(&harness, root_11g, now) != ok { os.exit(69i32) }
+    // Linux F2 edits alpha: the editor over the cell, its fill and outline, focused.
+    if testing.press_key(&harness, 65471u32, plain) != ok || store.last.kind != .Edit || !store.state.editing || store.state.len != 5usize { os.exit(39i32) }
     let (root_12, build_12_error) = build(&f, &theme, ctx, store)
     if build_12_error != ok || testing.pump(&harness, root_12, now) != ok { os.exit(40i32) }
     let (shot_12, shot_12_error) = testing.snapshot(&harness, a)
@@ -248,6 +273,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (root_15, build_15_error) = build(&f, &theme, ctx, store)
     if build_15_error != ok || testing.pump(&harness, root_15, now) != ok { os.exit(50i32) }
     if testing.press_key(&harness, 27u32, plain) != ok || store.last.kind != .Cancel || !at_cell(store, 1usize, 0usize) { os.exit(51i32) }
+    // Tab commits an edit to the next cell; Shift+Enter commits upward.
+    let (root_16, build_16_error) = build(&f, &theme, ctx, store)
+    if build_16_error != ok || testing.pump(&harness, root_16, now) != ok { os.exit(70i32) }
+    if testing.press_key(&harness, 113u32, plain) != ok || !store.state.editing { os.exit(71i32) }
+    let (root_17, build_17_error) = build(&f, &theme, ctx, store)
+    if build_17_error != ok || testing.pump(&harness, root_17, now) != ok { os.exit(72i32) }
+    if testing.press_key(&harness, 9u32, plain) != ok || store.last.kind != .Commit || !at_cell(store, 1usize, 1usize) { os.exit(73i32) }
+    let (root_18, build_18_error) = build(&f, &theme, ctx, store)
+    if build_18_error != ok || testing.pump(&harness, root_18, now) != ok || testing.press_key(&harness, 113u32, plain) != ok || !store.state.editing { os.exit(74i32) }
+    let (root_19, build_19_error) = build(&f, &theme, ctx, store)
+    if build_19_error != ok || testing.pump(&harness, root_19, now) != ok { os.exit(75i32) }
+    if testing.press_key(&harness, 13u32, shift) != ok || store.last.kind != .Commit || !at_cell(store, 0usize, 1usize) { os.exit(76i32) }
     // The grid in the tree, named, 5 by 2.
     let (tree, tree_error) = testing.semantics(&harness)
     if tree_error != ok { os.exit(52i32) }

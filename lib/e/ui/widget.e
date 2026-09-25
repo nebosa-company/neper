@@ -3128,7 +3128,7 @@ fn menu_bar_access_key(s: *State, logical: u32) -> (bool, err) {
 // F10 enters the first MenuBar title. Left and Right walk titles, following an
 // open menu; Down opens the focused title; Escape leaves title mode.
 fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
-    if code != 65479u32 && code != 37u32 && code != 39u32 && code != 40u32 && code != 27u32 { ret (false, ok) }
+    if code != 121u32 && code != 37u32 && code != 39u32 && code != 40u32 && code != 27u32 { ret (false, ok) }
     let plain = !k.modifiers.shift && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta
     if s.has_focus && plain {
         let (item_owner, has_item) = menu_item_owner(s, usize(s.focus))
@@ -3174,7 +3174,7 @@ fn menu_bar_key(s: *State, code: u32, k: input.KeyEvent) -> (bool, err) {
     var owners: [32]u32 = zero
     let count = collect_menu_titles(s, bar, targets[..], owners[..], 0usize)
     if count == 0usize { ret (false, ok) }
-    if code == 65479u32 && plain {
+    if code == 121u32 && plain {
         s.menu_typeahead_len = 0usize
         if !s.menu_mode {
             s.menu_saved_focus = s.focus
@@ -3656,11 +3656,14 @@ fn key_code(physical: u32) -> u32 {
     if physical == 65364u32 { ret 40u32 }
     if physical == 65360u32 { ret 36u32 }
     if physical == 65367u32 { ret 35u32 }
+    if physical == 65365u32 { ret 33u32 }
+    if physical == 65366u32 { ret 34u32 }
     if physical == 65288u32 { ret 8u32 }
     if physical == 65535u32 { ret 46u32 }
     if physical == 65293u32 || physical == 65421u32 { ret 13u32 }
     if physical == 65307u32 { ret 27u32 }
     if physical == 65289u32 { ret 9u32 }
+    if physical >= 65470u32 && physical <= 65493u32 { ret physical - 65358u32 }
     ret physical
 }
 
@@ -4023,10 +4026,6 @@ fn same_modifiers(a: input.Modifiers, b: input.Modifiers) -> bool {
 // most-recently-used switch.
 fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
     let code = key_code(k.key.physical)
-    if code == 9u32 && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta {
-        move_focus(s, k.modifiers.shift)
-        ret (true, ok)
-    }
     let (barred, bar_error) = menu_bar_key(s, code, k)
     if barred || bar_error != ok { ret (true, bar_error) }
     let (editor, has_editor) = focused_edit(s)
@@ -4077,6 +4076,10 @@ fn dispatch_key(s: *State, k: input.KeyEvent) -> (bool, err) {
         }
         if !e.has_parent { break }
         at = usize(e.parent)
+    }
+    if code == 9u32 && !k.modifiers.control && !k.modifiers.alt && !k.modifiers.meta {
+        move_focus(s, k.modifiers.shift)
+        ret (true, ok)
     }
     ret (false, ok)
 }
@@ -4439,8 +4442,8 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
             s.menu_alt_used = false
             if enter {
                 var f10: input.KeyEvent = zero
-                f10.key.physical = 65479u32
-                let (_, menu_error) = menu_bar_key(s, 65479u32, f10)
+                f10.key.physical = 121u32
+                let (_, menu_error) = menu_bar_key(s, 121u32, f10)
                 ret menu_error
             }
             ret ok
