@@ -25449,3 +25449,20 @@ still to come.
 `ui_navigation_v2` scrolls a medium bar by 32: besides the headline, one
 more "Projects" text (the row's title) stands than at rest. This passes on
 Windows and Linux, and `ui_navigation` still passes on both.
+
+## D1319 — Navigation stacks slide on push and pop
+
+A navigation stack now moves between pages, as the NavigationStack spec's
+transitions ask. The stack eases its depth over `duration-medium-2`
+(`eased_on_depth`). On a push the new page slides in from the end by the
+share still to run. On a pop the revealed page slides back from 30%
+towards the start. The slide is a paint-only transform, mirrored in RTL,
+so layout, hit testing and the tree stay put, and the stack clips it.
+Reduced motion shows the page at once. The leaving page is not drawn,
+because the caller no longer passes it, and predictive back is still to
+come.
+
+`ui_navigation_v2` pushes a page with a `primary` block: part way through,
+the block is not yet at its place, and settled it is. This passes on
+Windows and Linux, the stack's focus moves (D1271) still hold, and
+`ui_navigation` still passes on both.
