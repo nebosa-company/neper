@@ -25717,3 +25717,16 @@ the ResizablePane spec says. Text fields and links do not ask yet.
 `ui_panes` finds the arrow at rest, the resize-across cursor with the pointer
 over a sash, and the arrow again once it leaves, on Windows and Linux;
 `ui_app`, `ui_lifecycle` and `ui_drag_drop` still pass on both.
+
+## D1335 — Text fields show the text cursor, links the hand
+
+Following D1334's cursor requests: a link asks for the hand while hovered.
+Text fields need no request of their own: when a frame's build asked for
+nothing, `reconcile` looks under the last pointer position and, over an
+enabled editable text element, settles on the text cursor. The runtime
+tracks hover for regions only, so the field could not tell it was hovered
+itself.
+
+`ui_panes` finds the text cursor with the pointer over a text field and the
+hand over a link, on Windows and Linux; `ui_field`, `ui_edit`,
+`ui_inputs_v2` and `ui_app` still pass on both.

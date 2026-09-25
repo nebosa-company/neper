@@ -2897,8 +2897,14 @@ fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, cons
     let hover_error = menu_hover_tick(s)
     if hover_error != ok { ret (zero, hover_error) }
     // (D1334) The build that made `root` has asked for its cursor by now.
+    // (D1335) Asked nothing, the pointer over an editable text field is the text
+    // cursor.
     s.cursor_frame = s.cursor_wanted
     s.cursor_wanted = 0u8
+    if s.cursor_frame == 0u8 && s.has_root {
+        let (under, has_under) = hit_region(s, usize(s.root), s.arena_state.last, GESTURE_TAP)
+        if has_under && s.elements[under].kind == EDIT_TAG && s.elements[under].enabled && !s.elements[under].read_only { s.cursor_frame = 1u8 }
+    }
     s.frame += 1u64
     // The whole tree is unvisited, then the root matched against the previous root.
     var old_roots: [1]u32 = zero

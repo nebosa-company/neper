@@ -2245,6 +2245,8 @@ fn link(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, action: *co
     let (label_node, label_error) = text_node(a, 0u64, label, t, caption)
     if label_error != ok { ret (zero, label_error) }
     let active = state.hovered || state.pressed
+    // (D1335) Over a link, the hand.
+    if state.hovered && mem.address_of(t.runtime) != 0usize { widget.request_cursor(t.runtime, 2u8) }
     var count = 1usize
     if active { count = 2usize }
     let (lines, lines_error) = mem.alloc[widget.Node](a, count)

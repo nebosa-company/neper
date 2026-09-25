@@ -291,6 +291,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if cursor_step == 2usize && widget.cursor_of(&runtime) != 0u8 { os.exit(69i32) }
         cursor_step += 1usize
     }
+    // (D1335) Over a text field the frame asks for the text cursor, over a link
+    // the hand.
+    let (typed_bytes, typed_bytes_error) = mem.alloc[u8](a, 16usize)
+    if typed_bytes_error != ok { os.exit(70i32) }
+    var point_step = 0usize
+    while point_step < 3usize {
+        frame = mem.arena_from(frame_storage)
+        var wide_field = control.field_options()
+        wide_field.width = 200.0
+        let (typing, typing_error) = control.text_field(&frame, 990u64, &theme, "Name", typed_bytes, 0usize, zero, zero, wide_field)
+        let (linking, linking_error) = control.link(&frame, 995u64, &theme, "Learn more", &toggles[0usize])
+        let (pointed, pointed_error) = mem.alloc[widget.Node](&frame, 2usize)
+        if typing_error != ok || linking_error != ok || pointed_error != ok { os.exit(71i32) }
+        pointed[0usize] = typing
+        pointed[1usize] = linking
+        if testing.pump(&harness, widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 20.0 }, control.sized_style(400.0, 200.0), pointed[0usize..2usize]), now) != ok { os.exit(72i32) }
+        let (field_at, has_field_at) = centre_of(&harness, &runtime, 990u64)
+        let (link_at, has_link_at) = centre_of(&harness, &runtime, 995u64)
+        if !has_field_at || !has_link_at { os.exit(73i32) }
+        if point_step == 0usize && testing.hover(&harness, field_at.x, field_at.y) != ok { os.exit(74i32) }
+        if point_step == 1usize && (widget.cursor_of(&runtime) != 1u8 || testing.hover(&harness, link_at.x, link_at.y) != ok) { os.exit(75i32) }
+        if point_step == 2usize && widget.cursor_of(&runtime) != 2u8 { os.exit(76i32) }
+        point_step += 1usize
+    }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(49i32) }
     try io.print("ui panes ok\n")
     ret ok
