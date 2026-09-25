@@ -126,6 +126,18 @@ fn row_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *widget
     ret ok
 }
 
+// (D1328) A cell source whose cells are 30 wide boxes, keyed by row in the third column.
+fn numeric_cell_key(index: usize) -> widget.Key {
+    ret 9000u64 + u64(index)
+}
+
+fn numeric_row_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *widget.Node) -> err {
+    var key: widget.Key = 0u64
+    if column == 2usize { key = numeric_cell_key(index) }
+    *out = widget.box(key, control.sized_style(30.0, 10.0), zero)
+    ret ok
+}
+
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.01 && d > -0.01
@@ -492,6 +504,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if twisty_count < 3usize || expanded_twisties != 1usize { os.exit(96i32) }
     let (gamma_twisty, has_gamma_twisty) = bounds(&harness, &runtime, 1003u64 ^ hash.fnv1a64("row-disclose"))
     if !has_gamma_twisty || testing.tap(&harness, gamma_twisty.x + 12.0, gamma_twisty.y + 12.0) != ok || expand_log.count != 1usize || expand_log.ask.row != 1003u64 { os.exit(97i32) }
+    // (D1328) A numeric third column: its cells end at the column's end, 16 in.
+    var numbers_only: [3]bool = zero
+    numbers_only[2usize] = true
+    var numeric_options: collection.TableOptions = zero
+    numeric_options.numeric = numbers_only[..]
+    f = mem.arena_from(frame_storage)
+    let numeric_source = collection.TableSource { ctx: ctx, count: row_count, key: row_key, cell: numeric_row_cell }
+    let (numeric_table, numeric_table_error) = collection.table_with(&f, 9u64, &theme, "Files", columns[0usize..3usize], numeric_source, picked_keys[0usize..0usize], 0usize, false, zero, zero, zero, zero, 0.0, 0.0, zero, 300.0, numeric_options)
+    let (numeric_page, numeric_page_error) = mem.alloc[widget.Node](&f, 1usize)
+    if numeric_table_error != ok || numeric_page_error != ok { os.exit(98i32) }
+    numeric_page[0usize] = numeric_table
+    if testing.pump(&harness, widget.box(0u64, control.sized_style(400.0, 360.0), numeric_page[0usize..1usize]), time.Instant { nanos: 5300000000i64 }) != ok { os.exit(99i32) }
+    let (numeric_row, has_numeric_row) = bounds(&harness, &runtime, 1001u64)
+    let (numeric_cell, has_numeric_cell) = bounds(&harness, &runtime, numeric_cell_key(1usize))
+    if !has_numeric_row || !has_numeric_cell || !near(numeric_cell.x + numeric_cell.width, numeric_row.x + numeric_row.width - 16.0) { os.exit(100i32) }
     // (D1248) With no rows the header stays over the loading state (a busy
     // "Loading" group under an indeterminate progress bar) or the empty state.
     var state_step = 0usize

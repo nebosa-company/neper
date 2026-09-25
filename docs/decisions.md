@@ -25612,3 +25612,16 @@ no lifted look while dragging.
 `ui_collections5_v2` finds both handles, moves the first row down with
 Alt+Down, and drops the first row's handle a row and a half down onto index 1,
 on Windows and Linux; `ui_property` still passes on both.
+
+## D1328 — Tables end-align numeric columns
+
+`TableOptions.numeric` marks the columns, by index, that hold numbers. Their
+header titles stand at the end with the sort arrow before the title
+(`header_cells_numeric`, as the HeaderRow spec says), and their cells stand at
+the column's end. The marking lives in the options rather than on `Column`,
+which the example app builds as a literal. The filter mark, grouped tier and
+reorder lift are still to come.
+
+`ui_collections2_v2` marks the third column numeric: a row's cell there ends
+16 in from the row's end, on Windows and Linux; `ui_tabular` still passes on
+both.

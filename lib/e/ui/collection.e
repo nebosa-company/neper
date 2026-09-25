@@ -1661,9 +1661,15 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // `outline-variant` line inset 12 top and bottom (8 when `height` is 40), a
 // full-height 3px `primary` bar while hovered or dragged.
 // (D1246) A selectable table's select-all checkbox stands before these cells.
-// ponytail: no numeric (end-aligned) columns, filter mark, grouped tier or
-// reorder lift.
+// (D1328) A numeric column's title stands at the end, its sort arrow before it.
+// ponytail: no filter mark, grouped tier or reorder lift.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
+    var plain: []const bool = zero
+    let (made, made_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, height, pad, lead, below, plain)
+    ret (made, made_error)
+}
+
+fn header_cells_numeric(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key, numeric: []const bool) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
     let (drags, drags_error) = mem.alloc[HeaderDrag](a, columns.len)
@@ -1723,7 +1729,18 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         line_style.height = style.Length { Flex: 1.0 }
         let (content, content_error) = mem.alloc[widget.Node](a, 1usize)
         if content_error != ok { ret (zero, TooLarge) }
-        content[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, line_style, body[0usize..b])
+        var line_main: ui_layout.MainAlign = .Start
+        if numeric_column(numeric, i) {
+            // (D1328) At the end, the arrow before the title.
+            line_main = .End
+            line_style.width = style.Length { Flex: 1.0 }
+            if b == 2usize {
+                let arrow_first = body[1usize]
+                body[1usize] = body[0usize]
+                body[0usize] = arrow_first
+            }
+        }
+        content[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: line_main, cross: .Center, gap: 4.0 }, line_style, body[0usize..b])
         // A tap sorts; a drag begins a reorder; a drop on it ends one.
         var head_style = control.sized_style(control.max_zero(columns[i].width - grip), inner)
         head_style.background = paint.Brush { Solid: control.with_alpha(strong, control.state_opacity(t, state)) }
@@ -1999,7 +2016,14 @@ fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, co
 // hovered or focused row, reported through `act`.
 // (D1313) `expandable` leads each row's first cell with a disclosure reporting the
 // row's key through `expand`; a row in `expanded` is followed by its `detail`.
-type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail }
+// (D1328) `numeric` marks the columns (by index) that hold numbers: their headers
+// and cells stand at the end.
+type TableOptions = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, loading: bool, empty_title: str, empty_message: str, view_width: f32, row_actions: []const TableAction, act: widget.Change[TableActionAsk], expandable: bool, expanded: []const widget.Key, expand: widget.Change[widget.Key], detail: TableDetail, numeric: []const bool }
+
+// (D1328) Whether column `c` is numeric.
+fn numeric_column(numeric: []const bool, c: usize) -> bool {
+    ret c < numeric.len && numeric[c]
+}
 
 // (D1313) A table's detail rows: `build` makes row `index`'s detail.
 type TableDetail = struct { ctx: *void, build: fn(*void, *mem.Arena, usize, *widget.Node) -> err }
@@ -3054,7 +3078,7 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let total = source.count(source.ctx)
     var below: widget.Key = 0u64
     if total > 0usize { below = source.key(source.ctx, 0usize) }
-    let (header, head_error) = header_cells(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below)
+    let (header, head_error) = header_cells_numeric(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below, selection.numeric)
     if head_error != ok { ret (zero, head_error) }
     var head = header
     // (D1246) A selectable table's check column and select-all checkbox.
@@ -3112,6 +3136,15 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             let built_error = source.cell(source.ctx, a, index, c, &built)
             if built_error != ok { ret (zero, built_error) }
             cells[c] = built
+            // (D1328) A numeric column's cell stands at the end.
+            if numeric_column(selection.numeric, c) {
+                let (ended, ended_error) = mem.alloc[widget.Node](a, 1usize)
+                if ended_error != ok { ret (zero, TooLarge) }
+                ended[0usize] = built
+                var ended_style = style.defaults()
+                ended_style.width = style.Length { Percent: 100.0 }
+                cells[c] = widget.aligned(0u64, .End, .Center, ended_style, ended[0usize..1usize])
+            }
             c += 1usize
         }
         // (D1313, docs/ux/components/TableRow, expandable) The first cell leads with
