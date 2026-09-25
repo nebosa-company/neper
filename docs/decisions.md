@@ -24621,3 +24621,18 @@ characters, and 191 (OEM 2), where they are virtual keys.
 
 `ui_overlays2_v2` holds Ctrl+K and `/` from a row and `/` ignored in the
 field on Windows and Linux.
+
+## D1263 — The search view has its compact full-screen form
+
+`overlay.search_view_full` is the SearchBar spec's compact view: a modal
+overlay filling the window on `surface-container-high`, square and flat. Its
+72-tall header holds a Back icon button (keyed `key + 8192`) and the caller's
+search field filling the rest, over a 1px `outline-variant` divider, then the
+same rows as the docked view. The docked view's rows moved into
+`search_rows` so both forms share them. Back, Escape (the scope's cancel) and
+a press outside all fire `back`, and the scope traps the focus while the view
+is open. The caller picks the form by window width (below 600, compact). The
+grow and fade motion are still to come.
+
+`ui_overlays2_v2` holds the window-filling view, the field in its header,
+Back and Escape, with the docked checks still passing, on Windows and Linux.
