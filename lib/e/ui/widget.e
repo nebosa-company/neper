@@ -946,6 +946,19 @@ fn focus(widget_runtime: *Runtime, element: ElementId) -> err {
     ret ok
 }
 
+// (D1271) The key of the focused element, or of its nearest keyed ancestor.
+fn focused_key(widget_runtime: *Runtime) -> (Key, bool) {
+    let (s, state_error) = state_of(widget_runtime)
+    if state_error != ok || !s.has_focus { ret (0u64, false) }
+    var at = usize(s.focus)
+    while true {
+        if s.elements[at].live && s.elements[at].key != 0u64 { ret (s.elements[at].key, true) }
+        if !s.elements[at].has_parent { break }
+        at = usize(s.elements[at].parent)
+    }
+    ret (0u64, false)
+}
+
 // Focus the live element keyed `key`, or carry the request across the next
 // reconcile when a virtual collection has not built it yet.
 fn focus_key(widget_runtime: *Runtime, key: Key) -> err {

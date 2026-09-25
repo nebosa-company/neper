@@ -115,6 +115,12 @@ fn is_color(shot: image.Image, i: usize, c: paint.Color) -> bool {
     ret close_to(shot.pixels[i], c.red) && close_to(shot.pixels[i + 1usize], c.green) && close_to(shot.pixels[i + 2usize], c.blue)
 }
 
+// (D1271) No breadcrumb jumps.
+fn no_jumps() -> []const widget.Submit {
+    var none: []const widget.Submit = zero
+    ret none
+}
+
 fn bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
     let (b, found) = widget.bounds_of(runtime, testing.by_key(h, key).element)
     ret (b, found)
@@ -271,6 +277,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if hide_step == 1usize { hiding_expected = 0.0 }
         if !has_hiding_box || !near(hiding_box.height, hiding_expected) { os.exit(37i32) }
         hide_step += 1usize
+    }
+    // (D1271) Pushing from a focused row moves the focus to the new page's Back;
+    // popping returns it to the row.
+    var stack_titles: [2]str = zero
+    stack_titles[0usize] = "Projects"
+    stack_titles[1usize] = "neper"
+    var stack_step = 0usize
+    while stack_step < 4usize {
+        var depth = 1usize
+        if stack_step == 2usize { depth = 2usize }
+        f = mem.arena_from(frame_storage)
+        var plain = control.button_options()
+        plain.variant = .Plain
+        let (row_button, row_button_error) = control.button(&f, 2600u64, &theme, "Open neper", &s.subs[0usize], plain)
+        if row_button_error != ok { os.exit(38i32) }
+        var stack_pages: [2]widget.Node = zero
+        stack_pages[0usize] = row_button
+        stack_pages[1usize] = widget.box(0u64, control.sized_style(100.0, 100.0), zero)
+        let (stacked, stacked_error) = navigation.navigation_stack_of(&f, 2500u64, &theme, stack_titles[0usize..depth], stack_pages[0usize..depth], &s.subs[3usize], no_jumps(), 600.0)
+        if stacked_error != ok || testing.pump(&harness, stacked, time.Instant { nanos: 7200000000i64 + i64(stack_step) }) != ok { os.exit(39i32) }
+        let (focus_now, has_focus_now) = testing.focused(&harness)
+        if stack_step == 0usize && widget.focus(&runtime, testing.by_key(&harness, 2600u64).element) != ok { os.exit(40i32) }
+        if stack_step == 2usize && (!has_focus_now || focus_now.slot != testing.by_key(&harness, 2502u64).element.slot) { os.exit(41i32) }
+        if stack_step == 3usize && (!has_focus_now || focus_now.slot != testing.by_key(&harness, 2600u64).element.slot) { os.exit(42i32) }
+        stack_step += 1usize
     }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(31i32) }
     try io.print("ui navigation v2 ok\n")
