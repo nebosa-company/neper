@@ -22199,3 +22199,14 @@ unchanged.
 
 `ui_overlays4_v2` holds valid and empty ranges plus the unchanged accessible
 label on Windows and Linux. `palette-match.png` is the Segoe UI visual check.
+
+## D1059 — Palette shortcuts reuse compact key caps
+
+`PaletteCommand.shortcut` places a caller-spelled chord at the row end as
+20px key caps with 4px gaps. The existing key-cap parser now has one sized
+implementation: its original 24px wrapper remains unchanged, and the palette
+uses the 20px, 11px-text wrapper from the UX specification.
+
+The shortcut is joined to the Option's accessible name without changing its
+key or activation index. `ui_overlays4_v2` holds split chords and a single-key
+chord on Windows and Linux. `palette-key-caps.png` is the Segoe UI visual check.

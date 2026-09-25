@@ -5577,7 +5577,7 @@ fn shortcut_recorder(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str
 // A chord's key caps (D953): each `+`-separated part a cap 24 tall with 6px sides,
 // `radius-xs`, a 1px `outline-variant` edge on `surface-container-lowest`, its
 // name in `code` and `on-surface-variant`; 4 apart.
-fn key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, err) {
+fn key_caps_of(a: *mem.Arena, t: *const Theme, chord_text: str, height: f32, min_width: f32, side: f32, vertical: f32, role: style.TextRole) -> (widget.Node, err) {
     var parts_count = 1usize
     var i = 0usize
     while i < chord_text.len {
@@ -5587,7 +5587,7 @@ fn key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, er
     let (caps, caps_error) = mem.alloc[widget.Node](a, parts_count)
     if caps_error != ok { ret (zero, TooLarge) }
     var cap_text = text_options()
-    cap_text.role = .Code
+    cap_text.role = role
     cap_text.color = .OnSurfaceVariant
     cap_text.wrap = .None
     var from = 0usize
@@ -5602,14 +5602,14 @@ fn key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, er
             if inner_error != ok { ret (zero, TooLarge) }
             inner[0usize] = name
             var cap = style.defaults()
-            cap.min_height = style.Length { Px: 24.0 }
-            cap.min_width = style.Length { Px: 24.0 }
+            cap.min_height = style.Length { Px: height }
+            cap.min_width = style.Length { Px: min_width }
             cap.radius = t.tokens.radii.xs
             cap.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLowest) }
             cap.border = style.Border { width: t.tokens.sizes.divider, color: style.color(t.tokens, .OutlineVariant) }
-            let side = style.Length { Px: 6.0 }
-            let tb = style.Length { Px: 2.0 }
-            cap.padding = style.EdgeLengths { left: side, top: tb, right: side, bottom: tb }
+            let sides = style.Length { Px: side }
+            let tb = style.Length { Px: vertical }
+            cap.padding = style.EdgeLengths { left: sides, top: tb, right: sides, bottom: tb }
             if at < parts_count {
                 caps[at] = widget.box(0u64, cap, inner[0usize..1usize])
                 at += 1usize
@@ -5619,6 +5619,16 @@ fn key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, er
         i += 1usize
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 4.0 }, style.defaults(), caps[0usize..at]), ok)
+}
+
+fn key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, err) {
+    let (made, made_error) = key_caps_of(a, t, chord_text, 24.0, 24.0, 6.0, 2.0, .Code)
+    ret (made, made_error)
+}
+
+fn compact_key_caps(a: *mem.Arena, t: *const Theme, chord_text: str) -> (widget.Node, err) {
+    let (made, made_error) = key_caps_of(a, t, chord_text, 20.0, 20.0, 4.0, 0.0, .LabelSmall)
+    ret (made, made_error)
 }
 
 // ------------------------------------- advanced text and choice input (D831, P2-03)
