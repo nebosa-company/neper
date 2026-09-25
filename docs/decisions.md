@@ -22574,3 +22574,13 @@ nearest tile. One-column lists retain their existing set-wide Home and End.
 
 `ui_collections_v2` holds row-local, set-wide, short-row and ordinary arrow
 movement on Windows and Linux. This is behavior-only on the reviewed GridView.
+
+## D1090 — Table keys reveal unbuilt rows
+
+The virtual-list move builder is now a shared vertical-row helper used by Table
+as well. Table Up/Down, viewport-sized Page Up/Down, Home and End address the
+full source by stable key, request only the smallest clamped offset, and carry an
+unbuilt target across the caller's rebuild.
+
+`ui_collections2_v2` holds paging, both ends, caller-owned offsets and deferred
+focus on Windows and Linux. This is behavior-only on the reviewed Table surface.
