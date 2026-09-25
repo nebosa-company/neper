@@ -2278,7 +2278,18 @@ fn breadcrumbs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: s
 // path field in the trail's place over `path` (the caller's buffer, `path_len`
 // long, told through `typed`), Enter firing `go` and Escape `cancel`, and
 // `path_error` said under it.
-type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool, width: f32, root_icon: bool, root_glyph: control.GlyphKind, edit: widget.Submit, editing: bool, path: []u8, path_len: usize, typed: widget.Change[str], go: widget.Submit, cancel: widget.Submit, path_error: str }
+// (D1326) With `sibling_toggle` set, a hovered or focused ancestor crumb shows a
+// `chevron-down` (keyed `key + 100 + index`) reporting its index; `sibling_open`
+// (the index plus one, 0 for none) opens that crumb's menu of `siblings`.
+type BreadcrumbsOptions = struct { hidden: usize, open: bool, toggle: widget.Submit, compact: bool, width: f32, root_icon: bool, root_glyph: control.GlyphKind, edit: widget.Submit, editing: bool, path: []u8, path_len: usize, typed: widget.Change[str], go: widget.Submit, cancel: widget.Submit, path_error: str, sibling_toggle: widget.Change[usize], sibling_open: usize, siblings: []const overlay.MenuItem }
+
+// (D1326) A sibling chevron's press: which crumb.
+type SiblingAsk = struct { index: usize, toggle: widget.Change[usize] }
+
+fn sibling_ask_fire(ctx: *void) -> err {
+    let s = mem.cast[*SiblingAsk](ctx)
+    ret widget.fire_change[usize](s.toggle, s.index)
+}
 
 fn breadcrumbs_options() -> BreadcrumbsOptions {
     var out: BreadcrumbsOptions = zero
@@ -2478,7 +2489,8 @@ fn breadcrumbs_fit(a: *mem.Arena, t: *const control.Theme, names: []const str, w
 // (D1291) A cut crumb's whole name is its tooltip.
 // (D1308) The root crumb's icon and the editable path (`BreadcrumbsOptions`):
 // the path field is keyed `key + 60`, the empty space after the trail `key + 61`.
-// ponytail: no drop targets or sibling menus; no Tab completion of folder names.
+// (D1326) Sibling menus from `BreadcrumbsOptions.sibling_toggle`.
+// ponytail: no drop targets; no Tab completion of folder names.
 fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, names: []const str, picks: []const widget.Submit, given: BreadcrumbsOptions) -> (widget.Node, err) {
     if picks.len != names.len || names.len == 0usize { ret (zero, TooLarge) }
     var options = given
@@ -2533,7 +2545,10 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     let rtl = t.tokens.direction == .RightToLeft
     let last = names.len - 1usize
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize * names.len + 2usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 4usize * names.len + 3usize)
+    let (sibling_asks, sibling_asks_error) = mem.alloc[SiblingAsk](a, names.len)
+    let (sibling_presses, sibling_presses_error) = mem.alloc[widget.Submit](a, names.len)
+    if sibling_asks_error != ok || sibling_presses_error != ok { ret (zero, TooLarge) }
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
     if options.compact && names.len > 1usize {
@@ -2611,6 +2626,29 @@ fn breadcrumbs_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label
                 if made_error != ok { ret (zero, made_error) }
                 parts[n] = made
                 n += 1usize
+                // (D1326) The crumb's sibling chevron, while hovered or focused or open.
+                if widget.change_set[usize](options.sibling_toggle.invoke) {
+                    let chevron_key = key + 100u64 + u64(i)
+                    let crumb_state = control.control_state(t, key + 1u64 + u64(i), true, false)
+                    let chevron_state = control.control_state(t, chevron_key, true, false)
+                    let opened = options.sibling_open == i + 1usize
+                    if opened || crumb_state.hovered || crumb_state.focused || chevron_state.hovered || chevron_state.focused {
+                        sibling_asks[i] = SiblingAsk { index: i, toggle: options.sibling_toggle }
+                        sibling_presses[i] = widget.Submit { ctx: mem.cast[*void](&sibling_asks[i]), invoke: sibling_ask_fire }
+                        var states = 0u32
+                        if opened { states = accessibility.STATE_EXPANDED }
+                        let (chevron, chevron_error) = control.glyph_action(a, chevron_key, t, .ChevronDown, "Show siblings", &sibling_presses[i], 24.0, 16.0, muted, true, states, accessibility.ACTION_SHOW_MENU, key + 99u64)
+                        if chevron_error != ok { ret (zero, chevron_error) }
+                        parts[n] = chevron
+                        n += 1usize
+                        if opened {
+                            let (sibling_menu, sibling_menu_error) = overlay.menu(a, key + 99u64, t, chevron_key, "Siblings", options.siblings, true, &sibling_presses[i])
+                            if sibling_menu_error != ok { ret (zero, sibling_menu_error) }
+                            parts[n] = sibling_menu
+                            n += 1usize
+                        }
+                    }
+                }
             } else {
                 var here = control.text_options()
                 here.role = .TitleSmall

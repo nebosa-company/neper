@@ -25581,3 +25581,18 @@ rebuilt, so the check is live. The full suites were not rerun for this row (the
 snapshot goldens await a decision). Still to come: decoding the payload into the
 checker's records, so a kept import's declarations come from here and not a header
 tree.
+
+## D1326 — Breadcrumbs open sibling menus
+
+The Breadcrumbs spec's tool-app sibling menus: `BreadcrumbsOptions` gains
+`sibling_toggle`, `sibling_open` and `siblings`. With `sibling_toggle` set, an
+ancestor crumb that is hovered or focused (or whose menu is open) shows a 24
+`chevron-down` named "Show siblings" after it, keyed `key + 100 + index`,
+reporting the crumb's index; the crumb itself still navigates. With
+`sibling_open` (the index plus one) that chevron is expanded and its menu of the
+caller's `siblings` (keyed `key + 99`) stands anchored to it, dismissed through
+the same report. Drop targets are still to come.
+
+`ui_navigation2_v2` finds no chevron on a resting crumb; hovered, "lib" shows
+one whose press reports index 1; open, the menu lists docs and tests and a press
+on tests fires it, on Windows and Linux; `ui_content2_v2` still passes on both.

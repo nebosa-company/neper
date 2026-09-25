@@ -43,6 +43,13 @@ fn on_count(ctx: *void) -> err {
     ret ok
 }
 
+// (D1326) A sibling chevron's report, kept as the index plus one.
+fn on_sibling(ctx: *void, value: usize) -> err {
+    let seen = mem.cast[*usize](ctx)
+    *seen = value + 1usize
+    ret ok
+}
+
 fn near(a: f32, b: f32) -> bool {
     let d = a - b
     ret d < 0.01 && d > -0.01
@@ -531,6 +538,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if testing.press_key(&harness, 27u32, zero) != ok || s.counters[8usize].count != cancels_before + 1usize { os.exit(104i32) }
         }
         path_step += 1usize
+    }
+    // (D1326) Sibling menus: a resting crumb has no chevron; hovered, "lib" shows
+    // one that reports index 1; open, its menu lists the siblings and a pick fires.
+    var sibling_log: [1]usize = zero
+    var sibling_items: [2]overlay.MenuItem = zero
+    sibling_items[0usize] = overlay.MenuItem { label: "docs", action: s.subs[9usize], enabled: true }
+    sibling_items[1usize] = overlay.MenuItem { label: "tests", action: s.subs[10usize], enabled: true }
+    if testing.hover(&harness, 1.0, 399.0) != ok { os.exit(105i32) }
+    var sibling_step = 0usize
+    while sibling_step < 3usize {
+        var sibled = navigation.breadcrumbs_options()
+        sibled.sibling_toggle = widget.Change[usize] { ctx: mem.cast[*void](&sibling_log[0usize]), invoke: on_sibling }
+        sibled.siblings = sibling_items[..]
+        if sibling_step == 2usize { sibled.sibling_open = 2usize }
+        f = mem.arena_from(frame_storage)
+        let (sib_trail, sib_trail_error) = navigation.breadcrumbs_of(&f, 2400u64, &theme, "Path", path_names[..], s.crumbs[0usize..3usize], sibled)
+        let (sib_page, sib_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if sib_trail_error != ok || sib_page_error != ok { os.exit(106i32) }
+        sib_page[0usize] = sib_trail
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), sib_page[0usize..1usize]), time.Instant { nanos: 7100000000i64 + i64(sibling_step) }) != ok { os.exit(107i32) }
+        if sibling_step == 0usize {
+            let (lib_crumb, has_lib_crumb) = bounds(&harness, &runtime, 2402u64)
+            if !has_lib_crumb || testing.by_key(&harness, 2501u64).count != 0usize || testing.hover(&harness, lib_crumb.x + 5.0, lib_crumb.y + lib_crumb.height * 0.5) != ok { os.exit(108i32) }
+        }
+        if sibling_step == 1usize {
+            if !tap_key(&harness, &runtime, 2501u64) || sibling_log[0usize] != 2usize { os.exit(109i32) }
+        }
+        if sibling_step == 2usize {
+            let tests_before = s.counters[10usize].count
+            if testing.by_text(&harness, "docs").count == 0usize { os.exit(110i32) }
+            let (sib_tree, sib_tree_error) = testing.semantics(&harness)
+            let (tests_row, has_tests_row) = find(sib_tree, .MenuItem, "tests")
+            if sib_tree_error != ok || !has_tests_row || testing.tap(&harness, tests_row.bounds.x + 10.0, tests_row.bounds.y + tests_row.bounds.height * 0.5) != ok || s.counters[10usize].count != tests_before + 1usize { os.exit(111i32) }
+        }
+        sibling_step += 1usize
     }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(35i32) }
     try io.print("ui navigation2 v2 ok\n")
