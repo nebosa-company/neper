@@ -256,6 +256,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Full-bleed: square corners.
     let (bleed, has_bleed) = bounds(&harness, &runtime, 600u64)
     if !has_bleed || !is_color(shot, at(bleed.x + 0.5, bleed.y + 0.5), style.color(&tokens, .SurfaceContainerLow)) || !is_color(shot, at(info.x + 0.5, info.y + 0.5), ground) { os.exit(33i32) }
+    // (D1320) A banner built hidden grows in when shown: part way it stands
+    // lower than its own height, then whole; hidden again it shrinks out of the
+    // tree.
+    var grow_step = 0usize
+    var grown_height: f32 = 0.0
+    var mid_height: f32 = 0.0
+    while grow_step < 7usize {
+        var grow_at = 20000000000i64
+        var grow_hidden = true
+        if grow_step == 1usize { grow_at = 20016000000i64 }
+        if grow_step == 2usize {
+            grow_at = 20100000000i64
+            grow_hidden = false
+        }
+        if grow_step == 3usize {
+            grow_at = 20250000000i64
+            grow_hidden = false
+        }
+        if grow_step == 4usize {
+            grow_at = 20700000000i64
+            grow_hidden = false
+        }
+        if grow_step == 5usize { grow_at = 20800000000i64 }
+        if grow_step == 6usize { grow_at = 21500000000i64 }
+        var growing = control.banner_options()
+        growing.hidden = grow_hidden
+        if testing.begin(&harness, time.Instant { nanos: grow_at }) != ok { os.exit(35i32) }
+        f = mem.arena_from(frame_storage)
+        var no_grow_labels: []const str = zero
+        var no_grow_actions: []const widget.Submit = zero
+        let (grow_banner, grow_banner_error) = control.banner_of(&f, 900u64, &theme, .Info, "Sync paused.", no_grow_labels, no_grow_actions, zero, 480.0, growing)
+        let (grow_page, grow_page_error) = mem.alloc[widget.Node](&f, 1usize)
+        if grow_banner_error != ok || grow_page_error != ok { os.exit(36i32) }
+        grow_page[0usize] = grow_banner
+        if testing.pump(&harness, widget.box(0u64, control.sized_style(640.0, 400.0), grow_page[0usize..1usize]), time.Instant { nanos: grow_at }) != ok { os.exit(37i32) }
+        let (grow_box, has_grow_box) = bounds(&harness, &runtime, 900u64 + 8192u64)
+        if !has_grow_box { os.exit(38i32) }
+        if grow_step <= 1usize && grow_box.height > 0.5 { os.exit(39i32) }
+        if grow_step == 4usize { grown_height = grow_box.height }
+        if grow_step == 3usize && !(grow_box.height > 0.5) { os.exit(40i32) }
+        if grow_step == 3usize { mid_height = grow_box.height }
+        if grow_step == 6usize && testing.by_key(&harness, 900u64).count != 0usize { os.exit(41i32) }
+        grow_step += 1usize
+    }
+    if !(grown_height > 40.0) || !(mid_height < grown_height - 1.0) { os.exit(42i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(34i32) }
     try io.print("ui status3 v2 ok\n")
     ret ok
