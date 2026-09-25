@@ -23284,3 +23284,12 @@ the existing clamp and step-snap path, while Home and End remain absolute.
 
 `ui_slider` holds the RTL horizontal arrows, unchanged vertical arrow, and both
 Page keys on Windows and Linux.
+
+## D1162 — Rating completes directional navigation
+
+Rating now binds all four arrows plus Home and End in its existing focus scope.
+Left and Right swap in right-to-left themes, while Down/Up remain decrement and
+increment; Home selects zero and End selects the maximum through the same
+caller-owned change channel.
+
+`ui_actions` holds every direction and both bounds on Windows and Linux.

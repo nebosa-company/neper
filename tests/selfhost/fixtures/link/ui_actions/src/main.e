@@ -133,7 +133,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (r, renderer_error) = scene.renderer(a, device, q, 4u32, 4u32)
     if renderer_error != ok { os.exit(3i32) }
     var renderer = r
-    let tokens = style.reference(.Light)
+    var tokens = style.reference(.Light)
     let (fonts, fonts_error) = mem.alloc[shape.Font](a, 0usize)
     if fonts_error != ok { os.exit(4i32) }
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 128usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 12u16, max_commands: 256usize })
@@ -179,6 +179,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_focus || focused.slot != rating_row.slot { os.exit(18i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || logs[0usize].rating != 3u32 { os.exit(19i32) }
     if testing.press_key(&harness, 37u32, zero) != ok || logs[0usize].rating != 1u32 { os.exit(20i32) }
+    // RTL mirrors Left/Right only; Down/Up and Home/End remain logical.
+    tokens.direction = .RightToLeft
+    let (root_rtl, build_rtl_error) = build(&frame, &theme, ctx, &handlers[0usize], dial_actions[0usize..2usize], menu_items[0usize..1usize], 2u32, false, false, false)
+    if build_rtl_error != ok || testing.pump(&harness, root_rtl, time.Instant { nanos: 2000000000i64 }) != ok { os.exit(47i32) }
+    if testing.press_key(&harness, 37u32, zero) != ok || logs[0usize].rating != 3u32 { os.exit(48i32) }
+    if testing.press_key(&harness, 39u32, zero) != ok || logs[0usize].rating != 1u32 { os.exit(49i32) }
+    if testing.press_key(&harness, 38u32, zero) != ok || logs[0usize].rating != 3u32 { os.exit(50i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].rating != 1u32 { os.exit(51i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || logs[0usize].rating != 0u32 { os.exit(52i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || logs[0usize].rating != 5u32 { os.exit(53i32) }
+    tokens.direction = .LeftToRight
     // The split button: the primary fires; the second toggles; open, the menu the
     // caller anchors to it lies below it and the second says expanded.
     let (save_at, has_save) = centre_of(&harness, &runtime, 10u64)

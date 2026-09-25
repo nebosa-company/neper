@@ -1142,6 +1142,7 @@
           "id": "P5-04",
           "name": "Inputs to the v2 specification",
           "module": "e.ui.control",
+          "latest_evidence": "D1162 completes Rating keyboard navigation: Left/Right mirror in RTL, Down/Up remain decrement/increment, and Home/End select zero/maximum through the existing change channel. ui_actions holds every path on Windows and Linux.",
           "components": [
             "AutocompleteSpec",
             "DialSpec",
