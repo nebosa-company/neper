@@ -259,6 +259,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if testing.press_key(&harness, 37u32, zero) != ok || !focused_is(&harness, 2u64) { os.exit(47i32) }
     if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].sorts != 1usize { os.exit(44i32) }
     if testing.press_key(&harness, 32u32, zero) != ok || logs[0usize].sorts != 2usize { os.exit(45i32) }
+    if testing.press_key(&harness, 40u32, zero) != ok || !focused_is(&harness, 1000u64) { os.exit(48i32) }
     // The data grid: a 40 header, 32 rows, the row numbers on
     // `surface-container-low` and a grid line after each cell.
     let (sheet_head, has_sheet_head) = bounds(&harness, &runtime, 301u64)

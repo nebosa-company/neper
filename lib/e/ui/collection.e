@@ -1243,7 +1243,7 @@ fn resize_drag(ctx: *void, g: widget.Gesture) -> err {
 // reporting a `Reorder`; the sorted column marked with its direction; a resize
 // handle after each (keyed `key + 64 + index`) whose drag reports the width.
 fn header_row(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize]) -> (widget.Node, err) {
-    let (made, made_error) = header_cells(a, key, t, columns, sort_column, descending, sort, reorder, resize, header_height(t), cell_padding(t), 0.0)
+    let (made, made_error) = header_cells(a, key, t, columns, sort_column, descending, sort, reorder, resize, header_height(t), cell_padding(t), 0.0, 0u64)
     ret (made, made_error)
 }
 
@@ -1281,16 +1281,16 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // ponytail: no numeric (end-aligned) columns, filter mark, select-all
 // checkbox, grouped tier, keyboard resizing, reorder lift or aria-sort; the
 // handles keep their `key + 64 + index` keys.
-fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32) -> (widget.Node, err) {
+fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
     let (drags, drags_error) = mem.alloc[HeaderDrag](a, columns.len)
     if drags_error != ok { ret (zero, TooLarge) }
     let (resizes, resizes_error) = mem.alloc[Resizing](a, columns.len)
     if resizes_error != ok { ret (zero, TooLarge) }
-    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 3usize * columns.len)
+    let (moves, moves_error) = mem.alloc[control.FocusTo](a, 4usize * columns.len)
     if moves_error != ok { ret (zero, TooLarge) }
-    let (header_keys, header_keys_error) = mem.alloc[widget.Shortcut](a, 3usize * columns.len)
+    let (header_keys, header_keys_error) = mem.alloc[widget.Shortcut](a, 4usize * columns.len)
     if header_keys_error != ok { ret (zero, TooLarge) }
     let grip: f32 = 8.0
     let inner = height - t.tokens.sizes.divider
@@ -1354,13 +1354,19 @@ fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns
         if previous > 0usize { previous -= 1usize }
         var next = i
         if next + 1usize < columns.len { next += 1usize }
-        let shortcut = 3usize * i
+        let shortcut = 4usize * i
         bind_move(moves, header_keys, shortcut, t.runtime, key + 1u64 + u64(previous), 37u32)
         bind_move(moves, header_keys, shortcut + 1usize, t.runtime, key + 1u64 + u64(next), 39u32)
-        header_keys[shortcut + 2usize] = widget.Shortcut { key: 32u32, modifiers: zero, action: sort_action }
+        var bound = shortcut + 2usize
+        if below != 0u64 {
+            bind_move(moves, header_keys, bound, t.runtime, below, 40u32)
+            bound += 1usize
+        }
+        header_keys[bound] = widget.Shortcut { key: 32u32, modifiers: zero, action: sort_action }
+        bound += 1usize
         let (keyboard, keyboard_error) = mem.alloc[widget.Node](a, 1usize)
         if keyboard_error != ok { ret (zero, TooLarge) }
-        keyboard[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: header_keys[shortcut..shortcut + 3usize], default_action: sort_action, cancel_action: zero, keys: zero }, style.defaults(), tapped[0usize..1usize])
+        keyboard[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: header_keys[shortcut..bound], default_action: sort_action, cancel_action: zero, keys: zero }, style.defaults(), tapped[0usize..1usize])
         var sem: widget.Semantics = zero
         sem.role = 32u8
         sem.label = columns[i].title
@@ -2318,9 +2324,11 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         width += columns[c].width
         c += 1usize
     }
-    let (head, head_error) = header_cells(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead)
-    if head_error != ok { ret (zero, head_error) }
     let total = source.count(source.ctx)
+    var below: widget.Key = 0u64
+    if total > 0usize { below = source.key(source.ctx, 0usize) }
+    let (head, head_error) = header_cells(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below)
+    if head_error != ok { ret (zero, head_error) }
     let body_height = height - head_height
     let (first, count) = virtual_range(offset, body_height, total, row_extent)
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
