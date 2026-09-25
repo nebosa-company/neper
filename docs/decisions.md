@@ -24513,3 +24513,24 @@ for the builder. The edge fade is still to come.
 
 `ui_tabs_rtl` holds the reveal clear of the chevrons and a back page of the
 strip's width on Windows and Linux; the full UI sweep passes 103/103 on both.
+
+## D1256 — Search bars open a docked search view
+
+`overlay.search_view` is the SearchBar spec's docked view, placed 4 below the
+bar while open. It is a `surface-container-high` panel with `radius-xl` 28 and
+elevation 3, 360 to 720 wide and no taller than two thirds of the window. The
+caller's `SearchGroup`s appear as `title-small` subheaders over popup rows
+(keyed `key + 1 + n`), each with the part matching the query at weight 600
+(`match_range`, ignoring ASCII case). A polite status says "3 suggestions", or
+"No results for “query”" takes the rows' place. The caller's fallback
+row (`key + 4096`) comes last, and a click outside dismisses the view. The
+view is a listbox named by its label; the bar's `popup_combobox` carries the
+expanded and active-descendant state. `overlay.search_keys` wraps the field:
+Escape clears a query and then closes, and Down and Up move the active
+suggestion while the caret stays in the query. The compact full-screen form,
+the grow motion, and Ctrl+K or `/` opening are left for later.
+
+The search field's marker is another session's uncommitted edit, so it is
+left as they wrote it. `ui_overlays2_v2` holds the listbox, count, groups,
+fallback, a row's action, Down, Up, both Escapes and the no-results line on
+Windows and Linux.
