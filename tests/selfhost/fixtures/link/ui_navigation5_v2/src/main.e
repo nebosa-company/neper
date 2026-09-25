@@ -122,6 +122,13 @@ fn bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> (ge
     ret (b, found)
 }
 
+fn focusable(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bool {
+    let match = testing.by_key(h, key)
+    if match.count != 1usize { ret false }
+    let (summary, found) = widget.summary_at(runtime, usize(match.element.slot))
+    ret found && summary.focusable
+}
+
 fn tap_key(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> bool {
     let (b, found) = bounds(h, runtime, key)
     if !found { ret false }
@@ -200,11 +207,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (main_node, has_main_node) = find(tree, .Tab, "main.e, pinned")
     let (close_notes, has_close_notes) = find(tree, .Button, "Close notes")
     if !has_lower_node || !lower_node.state.selected || !has_main_node || !has_close_notes || testing.by_key(&harness, 5002u64).count != 0usize || testing.by_label(&harness, "Close lower.e").count != 1usize { os.exit(17i32) }
+    if focusable(&harness, &runtime, 5001u64) || !focusable(&harness, &runtime, 5003u64) || focusable(&harness, &runtime, 5004u64) || focusable(&harness, &runtime, 5005u64) || focusable(&harness, &runtime, 5006u64) { os.exit(33i32) }
     // Presses and keys: notes picks 2, its close reports 2; from the focused
     // strip Delete closes the current (1), Home picks 0 and End 2.
-    if testing.tap(&harness, notes.x + 6.0, notes.y + 18.0) != ok || s.picks.last != 2usize || !tap_key(&harness, &runtime, 5006u64) || s.closes.last != 2usize { os.exit(18i32) }
+    if testing.tap(&harness, notes.x + 6.0, notes.y + 18.0) != ok || s.picks.last != 2usize || !widget.focus_within(&runtime, 5005u64) || !tap_key(&harness, &runtime, 5006u64) || s.closes.last != 2usize { os.exit(18i32) }
     if testing.press_key(&harness, 46u32, zero) != ok || s.closes.count != 2usize || s.closes.last != 1usize { os.exit(19i32) }
-    if testing.press_key(&harness, 36u32, zero) != ok || s.picks.last != 0usize || testing.press_key(&harness, 35u32, zero) != ok || s.picks.last != 2usize { os.exit(20i32) }
+    if testing.press_key(&harness, 36u32, zero) != ok || s.picks.last != 0usize || !widget.focus_within(&runtime, 5001u64) { os.exit(20i32) }
+    let (moved, moved_error) = build(&f, &theme, s)
+    if moved_error != ok || testing.pump(&harness, moved, time.Instant { nanos: 1100000000i64 }) != ok || !focusable(&harness, &runtime, 5001u64) || focusable(&harness, &runtime, 5003u64) { os.exit(34i32) }
+    if testing.press_key(&harness, 35u32, zero) != ok || s.picks.last != 2usize || !widget.focus_within(&runtime, 5005u64) { os.exit(35i32) }
     // The horizontal wizard: its title a level-1 heading; the steps named with
     // their state; the done marker `primary` and the connector after it 2px
     // `primary`.

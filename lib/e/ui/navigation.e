@@ -1785,13 +1785,15 @@ type DocumentMove = struct { from: usize, to: usize }
 
 // A tab's gestures: a tap picks it, a drag begins a move carrying the index
 // (D844), a drop of another's tab on it ends one.
-type TabGesture = struct { runtime: *widget.Runtime, index: usize, pinned: bool, pick: widget.Change[usize], move: widget.Change[DocumentMove] }
+type TabGesture = struct { runtime: *widget.Runtime, focus: widget.Key, index: usize, pinned: bool, pick: widget.Change[usize], move: widget.Change[DocumentMove] }
 
 fn tab_gesture(ctx: *void, g: widget.Gesture) -> err {
     let h = mem.cast[*TabGesture](ctx)
     switch g {
     case .Tap as at:
-        ret widget.fire_change[usize](h.pick, h.index)
+        let picked = widget.fire_change[usize](h.pick, h.index)
+        if picked != ok { ret picked }
+        ret widget.focus_key(h.runtime, h.focus)
     case .DragStart as at:
         if h.pinned { ret ok }
         ret widget.begin_drag(h.runtime, u64(h.index) + 1u64)
@@ -1810,6 +1812,35 @@ type TabClose = struct { index: usize, close: widget.Change[usize] }
 fn tab_close_fire(ctx: *void) -> err {
     let c = mem.cast[*TabClose](ctx)
     ret widget.fire_change[usize](c.close, c.index)
+}
+
+type TabPick = struct { index: usize, pick: widget.Change[usize], runtime: *widget.Runtime, focus: widget.Key }
+
+fn tab_pick_fire(ctx: *void) -> err {
+    let p = mem.cast[*TabPick](ctx)
+    let picked = widget.fire_change[usize](p.pick, p.index)
+    if picked != ok { ret picked }
+    ret widget.focus_key(p.runtime, p.focus)
+}
+
+// A nested close button remains pointer-accessible but does not add a second
+// tab stop to the roving tab strip.
+fn untab_pressable(a: *mem.Arena, node: widget.Node) -> (widget.Node, err) {
+    if node.children.len != 1usize { ret (node, ok) }
+    let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if inner_error != ok { ret (zero, TooLarge) }
+    inner[0usize] = node.children[0usize]
+    switch inner[0usize].kind {
+    case .Region as region:
+        var untabbed = region
+        untabbed.focusable = false
+        inner[0usize].kind = widget.Kind { Region: untabbed }
+    default:
+        ret (node, ok)
+    }
+    var out = node
+    out.children = inner[0usize..1usize]
+    ret (out, ok)
 }
 
 // Document tabs: a tab a document keyed `key + 1 + 2 * index`, the current one
@@ -1839,7 +1870,8 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // neither hovered nor focused it holds an 8 dot in the title colour instead. A
 // pinned tab has no close. A tab is named with its state ("lower.e, unsaved
 // changes", "neper.json, pinned"), its position and Selected; Home and End pick
-// the ends and Delete closes the current tab, beside Left and Right.
+// the ends and Delete closes the current tab, beside Left and Right. The current
+// or focused tab is the strip's one tab stop; close buttons remain pointer-only.
 // ponytail: no file-type icons (a pinned tab keeps its title), preview tabs,
 // dragged lift or drop line, overflow scrolling, Show all open files, context
 // menu or read-only mark; the focus ring is the runtime's, not inset 3.
@@ -1870,16 +1902,26 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     if closes_error != ok { ret (zero, TooLarge) }
     let (actions, actions_error) = mem.alloc[widget.Submit](a, documents.len)
     if actions_error != ok { ret (zero, TooLarge) }
-    let (picks, picks_error) = mem.alloc[TabClose](a, 5usize)
+    let (picks, picks_error) = mem.alloc[TabPick](a, 4usize)
     if picks_error != ok { ret (zero, TooLarge) }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var tab_stop = current
+    if tab_stop >= documents.len { tab_stop = 0usize }
+    var focused = 0usize
+    while focused < documents.len {
+        if widget.focus_within(t.runtime, key + 1u64 + 2u64 * u64(focused)) {
+            tab_stop = focused
+            break
+        }
+        focused += 1usize
+    }
     var i = 0usize
     while i < documents.len {
         let d = documents[i]
         let chosen = i == current
         let tab_key = key + 1u64 + 2u64 * u64(i)
         let close_key = key + 2u64 + 2u64 * u64(i)
-        gestures[i] = TabGesture { runtime: t.runtime, index: i, pinned: d.pinned, pick: pick, move: move }
+        gestures[i] = TabGesture { runtime: t.runtime, focus: tab_key, index: i, pinned: d.pinned, pick: pick, move: move }
         closes[i] = TabClose { index: i, close: close }
         actions[i] = widget.Submit { ctx: mem.cast[*void](&closes[i]), invoke: tab_close_fire }
         let state = control.control_state(t, tab_key, true, chosen)
@@ -1933,7 +1975,9 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
             if close_name_error != ok { ret (zero, close_name_error) }
             let (closing, closing_error) = control.pressable(a, close_key, t, 3u8, close_name, slot_look, true, false, &actions[i], mark)
             if closing_error != ok { ret (zero, closing_error) }
-            parts[1usize] = closing
+            let (untabbed, untabbed_error) = untab_pressable(a, closing)
+            if untabbed_error != ok { ret (zero, untabbed_error) }
+            parts[1usize] = untabbed
             part_count = 2usize
         }
         var line_style = style.defaults()
@@ -1962,7 +2006,7 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         let (region, region_error) = mem.alloc[widget.Node](a, 1usize)
         if region_error != ok { ret (zero, TooLarge) }
         control.focus_look(t)
-        region[0usize] = widget.region(tab_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&gestures[i]), invoke: tab_gesture }, gestures: 1u8 | 2u8 | 4u8 | 8u8, enabled: true, focusable: true }, tab_style, body[0usize..1usize])
+        region[0usize] = widget.region(tab_key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&gestures[i]), invoke: tab_gesture }, gestures: 1u8 | 2u8 | 4u8 | 8u8, enabled: true, focusable: i == tab_stop }, tab_style, body[0usize..1usize])
         var named = d.title
         if d.dirty {
             let (dirty_name, dirty_error) = joined(a, d.title, ", unsaved changes")
@@ -1991,17 +2035,17 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     if shortcuts_error != ok { ret (zero, TooLarge) }
     var bound = 0usize
     if current > 0usize && current < documents.len {
-        picks[0usize] = TabClose { index: current - 1usize, close: pick }
-        shortcuts[bound] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[0usize]), invoke: tab_close_fire } }
-        picks[2usize] = TabClose { index: 0usize, close: pick }
-        shortcuts[bound + 1usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[2usize]), invoke: tab_close_fire } }
+        picks[0usize] = TabPick { index: current - 1usize, pick: pick, runtime: t.runtime, focus: key + 1u64 + 2u64 * u64(current - 1usize) }
+        shortcuts[bound] = widget.Shortcut { key: 37u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[0usize]), invoke: tab_pick_fire } }
+        picks[2usize] = TabPick { index: 0usize, pick: pick, runtime: t.runtime, focus: key + 1u64 }
+        shortcuts[bound + 1usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[2usize]), invoke: tab_pick_fire } }
         bound += 2usize
     }
     if current + 1usize < documents.len {
-        picks[1usize] = TabClose { index: current + 1usize, close: pick }
-        shortcuts[bound] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[1usize]), invoke: tab_close_fire } }
-        picks[3usize] = TabClose { index: documents.len - 1usize, close: pick }
-        shortcuts[bound + 1usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[3usize]), invoke: tab_close_fire } }
+        picks[1usize] = TabPick { index: current + 1usize, pick: pick, runtime: t.runtime, focus: key + 1u64 + 2u64 * u64(current + 1usize) }
+        shortcuts[bound] = widget.Shortcut { key: 39u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[1usize]), invoke: tab_pick_fire } }
+        picks[3usize] = TabPick { index: documents.len - 1usize, pick: pick, runtime: t.runtime, focus: key + 1u64 + 2u64 * u64(documents.len - 1usize) }
+        shortcuts[bound + 1usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&picks[3usize]), invoke: tab_pick_fire } }
         bound += 2usize
     }
     if current < documents.len && !documents[current].pinned {

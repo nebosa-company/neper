@@ -22998,3 +22998,12 @@ build, and a pointer pick focuses its day even when that region was untabbed.
 
 `ui_pickers_v2` holds initial, moved and clicked focusability on Windows and
 Linux. The reviewed surface is unchanged.
+
+## D1134 — Document tabs expose one roving tab stop
+
+DocumentTabs keeps only the current or focused tab in the Tab order. Pointer
+and keyboard picks move focus to the target stable tab key, while nested close
+buttons remain clickable and reachable through Delete without adding Tab stops.
+
+`ui_navigation5_v2` and `ui_containers2_v2` hold the behavior on Windows and
+Linux. The reviewed surface is unchanged.
