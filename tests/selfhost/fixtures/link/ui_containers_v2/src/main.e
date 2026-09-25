@@ -458,6 +458,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (rtl_open, rtl_open_error) = build(&f, &theme, &stores[0usize])
     if rtl_open_error != ok || testing.pump(&harness, rtl_open, time.Instant { nanos: 3500000000i64 }) != ok { os.exit(41i32) }
     if testing.press_key(&harness, 39u32, zero) != ok || stores[0usize].hits[1usize] != 5u32 { os.exit(42i32) }
+    // (D1221) An expander with a leading icon indents its open content 56 from
+    // the start edge: the left in left-to-right, the right in right-to-left.
+    var iconic = control.disclosure_options()
+    iconic.width = 240.0
+    iconic.has_icon = true
+    iconic.icon = .Picture
+    tokens.direction = .LeftToRight
+    f = mem.arena_from(frame_storage)
+    let (iconic_ltr, iconic_ltr_error) = control.expander_of(&f, 900u64, &theme, "Storage", true, &stores[0usize].actions[2usize], iconic, widget.box(950u64, control.sized_style(20.0, 10.0), zero))
+    if iconic_ltr_error != ok || testing.pump(&harness, iconic_ltr, time.Instant { nanos: 3000000000i64 }) != ok { os.exit(71i32) }
+    let (iconic_box, has_iconic_box) = bounds(&harness, &runtime, 900u64)
+    let (iconic_body, has_iconic_body) = bounds(&harness, &runtime, 950u64)
+    if !has_iconic_box || !has_iconic_body || !near(iconic_body.x - iconic_box.x, 56.0) { os.exit(72i32) }
+    tokens.direction = .RightToLeft
+    f = mem.arena_from(frame_storage)
+    let (iconic_rtl, iconic_rtl_error) = control.expander_of(&f, 900u64, &theme, "Storage", true, &stores[0usize].actions[2usize], iconic, widget.box(950u64, control.sized_style(20.0, 10.0), zero))
+    if iconic_rtl_error != ok || testing.pump(&harness, iconic_rtl, time.Instant { nanos: 3100000000i64 }) != ok { os.exit(73i32) }
+    let (rtl_iconic_box, has_rtl_iconic_box) = bounds(&harness, &runtime, 900u64)
+    let (rtl_iconic_body, has_rtl_iconic_body) = bounds(&harness, &runtime, 950u64)
+    if !has_rtl_iconic_box || !has_rtl_iconic_body || near(rtl_iconic_body.x - rtl_iconic_box.x, 56.0) { os.exit(74i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(33i32) }
     try io.print("ui containers v2 ok\n")
     ret ok
