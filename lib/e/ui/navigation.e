@@ -3686,6 +3686,15 @@ fn wizard_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str
     ret (made, made_error)
 }
 
+type WizardMove = struct { action: widget.Submit, runtime: *widget.Runtime, focus: widget.Key }
+
+fn wizard_move_fire(ctx: *void) -> err {
+    let m = mem.cast[*WizardMove](ctx)
+    let moved = widget.fire_submit(m.action)
+    if moved != ok { ret moved }
+    ret widget.focus_key(m.runtime, m.focus)
+}
+
 // One step of the stepper (D974): the 24 marker, then 8 on, the label over its
 // note; a list item named with its state.
 fn wizard_step(a: *mem.Arena, t: *const control.Theme, step: *const WizardStep, index: usize, count: usize, current: usize) -> (widget.Node, err) {
@@ -3806,18 +3815,28 @@ fn wizard_step(a: *mem.Arena, t: *const control.Theme, step: *const WizardStep, 
 // `key + 6`) led by Back (`arrow-back`) or on the first step Close, "Step 2 of 4:
 // Build" in `label-medium` `on-surface-variant` over a 4 tall `primary` bar
 // (keyed `key + 8`) on `secondary-container`, the content 16 in, and Next
-// full-width at the foot, 16 in. The stepper is a list of its steps, each named with its state ("Account,
-// completed", "Build, needs attention: fix 1 field") and the current one Current.
+// full-width at the foot, 16 in. The stepper is a list of its steps, each named
+// with its state ("Account, completed", "Build, needs attention: fix 1 field")
+// and the current one Current. The content exposes its step name as a level-2
+// heading keyed `key + 5`; successful Back and Next request it across rebuilds.
 // `legacy` keeps D853's contract: Back stays (disabled) on the first step and
 // Next and Finish follow `can_advance`.
-// ponytail: no pressable steps (non-linear wizards), step-change focus moves or
-// announcements, Finish's progress ring or discard confirmation.
+// ponytail: no pressable steps (non-linear wizards), Finish's progress ring or
+// discard confirmation.
 fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, steps: []const WizardStep, current: usize, content: widget.Node, can_advance: bool, legacy: bool, back: *const widget.Submit, next: *const widget.Submit, finish: *const widget.Submit, cancel: *const widget.Submit, options: WizardOptions, width: f32, height: f32) -> (widget.Node, err) {
     if steps.len == 0usize || current >= steps.len { ret (zero, TooLarge) }
     let last = current + 1usize == steps.len
     let compact = options.form == .Compact
     let vertical = options.form == .Vertical
     let advancing = !legacy || can_advance
+    let (moves, moves_error) = mem.alloc[WizardMove](a, 2usize)
+    if moves_error != ok { ret (zero, TooLarge) }
+    let (move_actions, move_actions_error) = mem.alloc[widget.Submit](a, 2usize)
+    if move_actions_error != ok { ret (zero, TooLarge) }
+    moves[0usize] = WizardMove { action: *back, runtime: t.runtime, focus: key + 5u64 }
+    moves[1usize] = WizardMove { action: *next, runtime: t.runtime, focus: key + 5u64 }
+    move_actions[0usize] = widget.Submit { ctx: mem.cast[*void](&moves[0usize]), invoke: wizard_move_fire }
+    move_actions[1usize] = widget.Submit { ctx: mem.cast[*void](&moves[1usize]), invoke: wizard_move_fire }
     let flat = style.Length { Px: 0.0 }
     var finish_label = options.finish_label
     if finish_label.len == 0usize { finish_label = "Finish" }
@@ -3889,12 +3908,13 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     if vertical { page_top = 16.0 }
     page.padding = style.EdgeLengths { left: style.Length { Px: sides }, top: style.Length { Px: page_top }, right: style.Length { Px: sides }, bottom: flat }
     var page_sem: widget.Semantics = zero
-    page_sem.role = 2u8
+    page_sem.role = 25u8
     page_sem.label = steps[current].label
+    page_sem.level = 2u8
     let page_node = widget.semantics(key + 5u64, page_sem, page, body[0usize..1usize])
     // The footer.
     var default_action: widget.Submit = zero
-    var forward = next
+    var forward: *const widget.Submit = &move_actions[1usize]
     var forward_key = key + 3u64
     var forward_label = "Next"
     if last {
@@ -3942,7 +3962,7 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
             var outlined = control.button_options()
             outlined.variant = .Outlined
             outlined.enabled = current > 0usize
-            let (back_button, back_error) = control.button(a, key + 2u64, t, "Back", back, outlined)
+            let (back_button, back_error) = control.button(a, key + 2u64, t, "Back", &move_actions[0usize], outlined)
             if back_error != ok { ret (zero, back_error) }
             foot[f] = back_button
             f += 1usize
@@ -3970,7 +3990,7 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
         bar_options.closing = true
         if current > 0usize {
             bar_options.back_label = "Back"
-            bar_options.back = *back
+            bar_options.back = move_actions[0usize]
             bar_options.closing = false
         }
         var nothing: []const Action = zero
