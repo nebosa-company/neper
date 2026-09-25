@@ -28,7 +28,7 @@ use e.ui.widget
 
 type Log = struct { activations: usize, active: usize, runs: usize, ran: usize, typed: usize, dismisses: usize }
 
-type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, Empty, Switcher }
+type Which = enum u8 { Palette, PaletteFiles, PaletteSymbols, PaletteGrouped, PaletteBusy, PaletteRanked, Empty, Switcher }
 
 fn on_activate(ctx: *void, index: usize) -> err {
     let log = mem.cast[*Log](ctx)
@@ -93,11 +93,22 @@ fn build(a: *mem.Arena, t: *const control.Theme, ctx: *void, dismiss: *const wid
     if which == .PaletteSymbols { mode = .Symbols }
     var palette: widget.Node = zero
     var e1: err = ok
-    if which == .PaletteGrouped || which == .PaletteBusy {
+    if which == .PaletteRanked {
+        buffer[0usize] = 114u8
+        buffer[1usize] = 101u8
+        var ranked: [4]navigation.PaletteCommand = zero
+        ranked[0usize] = navigation.PaletteCommand { name: "Run everything", group: "Commands", category: "Task", match_start: 0usize, match_end: 0usize, shortcut: "", unavailable: "", recency: 90u32 }
+        ranked[1usize] = navigation.PaletteCommand { name: "Create release", group: "Commands", category: "Task", match_start: 0usize, match_end: 0usize, shortcut: "", unavailable: "", recency: 99u32 }
+        ranked[2usize] = navigation.PaletteCommand { name: "Restore", group: "Commands", category: "Task", match_start: 0usize, match_end: 0usize, shortcut: "", unavailable: "", recency: 1u32 }
+        ranked[3usize] = navigation.PaletteCommand { name: "Release notes", group: "Commands", category: "Task", match_start: 0usize, match_end: 0usize, shortcut: "", unavailable: "", recency: 50u32 }
+        let (made_palette, made_palette_error) = navigation.command_palette_ranked(a, 100u64, t, "Commands", buffer, 2usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, ranked[..], active, false, true, activate, run, dismiss, 560.0)
+        palette = made_palette
+        e1 = made_palette_error
+    } else if which == .PaletteGrouped || which == .PaletteBusy {
         var grouped: [3]navigation.PaletteCommand = zero
-        grouped[0usize] = navigation.PaletteCommand { name: names[0usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 2usize, shortcut: "Ctrl+Shift+B", unavailable: "" }
-        grouped[1usize] = navigation.PaletteCommand { name: names[1usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 0usize, shortcut: "F6", unavailable: "" }
-        grouped[2usize] = navigation.PaletteCommand { name: names[2usize], group: "Commands", category: "Release", match_start: 0usize, match_end: 3usize, shortcut: "", unavailable: "No project open" }
+        grouped[0usize] = navigation.PaletteCommand { name: names[0usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 2usize, shortcut: "Ctrl+Shift+B", unavailable: "", recency: 0u32 }
+        grouped[1usize] = navigation.PaletteCommand { name: names[1usize], group: "Recent", category: "Project", match_start: 0usize, match_end: 0usize, shortcut: "F6", unavailable: "", recency: 0u32 }
+        grouped[2usize] = navigation.PaletteCommand { name: names[2usize], group: "Commands", category: "Release", match_start: 0usize, match_end: 3usize, shortcut: "", unavailable: "No project open", recency: 0u32 }
         let (made_palette, made_palette_error) = navigation.command_palette_grouped_busy(a, 100u64, t, "Commands", buffer, 0usize, widget.Change[str] { ctx: ctx, invoke: on_typed }, mode, grouped[..], active, which == .PaletteBusy, true, activate, run, dismiss, 560.0)
         palette = made_palette
         e1 = made_palette_error
@@ -247,6 +258,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if busy_tree_error != ok { os.exit(47i32) }
     let (busy_progress, has_busy_progress) = find(busy_tree, .Progress, "Loading commands")
     if !has_busy_panel || !has_busy_first || !near(busy_panel.height, 247.0) || !near(busy_first.y, busy_panel.y + 74.0) || !has_busy_progress || !busy_progress.state.busy { os.exit(48i32) }
+    // Owned matching ranks exact prefixes before word starts and subsequences,
+    // with recency inside a tier, while Enter maps back to the source command.
+    let (root_ranked, build_ranked_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .PaletteRanked, 0usize)
+    if build_ranked_error != ok || testing.pump(&harness, root_ranked, time.Instant { nanos: 1190000000i64 }) != ok { os.exit(49i32) }
+    let (ranked_tree, ranked_tree_error) = testing.semantics(&harness)
+    if ranked_tree_error != ok { os.exit(50i32) }
+    let (release_notes, has_release_notes) = find(ranked_tree, .Option, "Task: Release notes")
+    let (restore, has_restore) = find(ranked_tree, .Option, "Task: Restore")
+    let (create_release, has_create_release) = find(ranked_tree, .Option, "Task: Create release")
+    let (run_everything, has_run_everything) = find(ranked_tree, .Option, "Task: Run everything")
+    if !has_release_notes || release_notes.position.row != 1u32 || !has_restore || restore.position.row != 2u32 || !has_create_release || create_release.position.row != 3u32 || !has_run_everything || run_everything.position.row != 4u32 { os.exit(51i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].runs != 2usize || logs[0usize].ran != 3usize { os.exit(52i32) }
     // With no match: the empty state, 24 above and below (142 in all).
     let (root_3, build_3_error) = build(&f, &theme, ctx, &subs[0usize], buffer, .Empty, 0usize)
     if build_3_error != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1200000000i64 }) != ok { os.exit(26i32) }
