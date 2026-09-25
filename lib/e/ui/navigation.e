@@ -377,7 +377,9 @@ fn toolbar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
 // Warning colour the glyph; anything else is `on-surface-variant`), whether it
 // sits in the end group, an optional press (unset: a plain item), and a progress
 // share for the meter item (below zero: none), and optional action tooltip.
-type StatusItem = struct { text: str, glyph: control.GlyphKind, marked: bool, tone: control.StatusTone, end: bool, action: widget.Submit, progress: f32, tooltip: str }
+// (D1238) `drop_order` ranks an end item for narrowing: 0 never drops, and a
+// higher one drops before a lower one.
+type StatusItem = struct { text: str, glyph: control.GlyphKind, marked: bool, tone: control.StatusTone, end: bool, action: widget.Submit, progress: f32, tooltip: str, drop_order: u8 }
 
 // A plain text item at the start.
 fn status_item(text: str) -> StatusItem {
@@ -413,7 +415,9 @@ fn status_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, sections:
 // under the `state-hover` layer. Only the first item, the message, is a polite
 // status named by its text. Pressable items share one roving Tab stop, with
 // Left/Right and Home/End moving in visual order.
-// ponytail: no narrowing rules.
+// (D1238) Narrower than its items, it drops end items by `drop_order` and the
+// message ends in an ellipsis.
+// ponytail: the message's full text is not yet its tooltip.
 type StatusMove = struct { runtime: *widget.Runtime, keys: []const widget.Key, backward: bool, edge: bool }
 
 fn status_move_fire(ctx: *void) -> err {
@@ -448,12 +452,44 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
     if ends_error != ok { ret (zero, TooLarge) }
     let (action_keys, action_keys_error) = mem.alloc[widget.Key](a, items.len)
     if action_keys_error != ok { ret (zero, TooLarge) }
+    // (D1238) Narrowing: each item's width -- its 16 of padding, its words, a 16
+    // glyph or the 48 meter with the 4 between -- and, while the bar is wider than
+    // `width`, the end item with the highest `drop_order` leaves; the message then
+    // takes what is left and ends in an ellipsis.
+    let (widths, widths_error) = mem.alloc[f32](a, items.len)
+    if widths_error != ok { ret (zero, TooLarge) }
+    let (dropped, dropped_error) = mem.alloc[bool](a, items.len)
+    if dropped_error != ok { ret (zero, TooLarge) }
+    var total: f32 = 8.0
+    var measured = 0usize
+    while measured < items.len {
+        let (advance, _, _, metrics_error) = control.run_metrics(a, t, .BodySmall, items[measured].text)
+        if metrics_error != ok { ret (zero, metrics_error) }
+        var wide = 16.0 + advance
+        if items[measured].progress >= 0.0 { wide += 52.0 } else if items[measured].marked { wide += 20.0 }
+        widths[measured] = wide
+        dropped[measured] = false
+        total += wide
+        measured += 1usize
+    }
+    while total > width {
+        var worst = items.len
+        var candidate = 0usize
+        while candidate < items.len {
+            let c = &items[candidate]
+            if c.end && !dropped[candidate] && c.drop_order > 0u8 && (worst == items.len || c.drop_order > items[worst].drop_order) { worst = candidate }
+            candidate += 1usize
+        }
+        if worst == items.len { break }
+        dropped[worst] = true
+        total -= widths[worst]
+    }
     var action_count = 0usize
     var pass = 0usize
     while pass < 2usize {
         var at = 0usize
         while at < items.len {
-            if items[at].end == (pass == 1usize) && widget.submit_set(items[at].action.invoke) {
+            if !dropped[at] && items[at].end == (pass == 1usize) && widget.submit_set(items[at].action.invoke) {
                 action_keys[action_count] = key + 1u64 + u64(at)
                 action_count += 1usize
             }
@@ -472,8 +508,12 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
     var e = 0usize
     var i = 0usize
     while i < items.len {
+        if dropped[i] {
+            i += 1usize
+            continue
+        }
         let item = &items[i]
-        let (bits, bits_error) = mem.alloc[widget.Node](a, 2usize)
+        let (bits, bits_error) = mem.alloc[widget.Node](a, 3usize)
         if bits_error != ok { ret (zero, TooLarge) }
         var n = 0usize
         if item.progress >= 0.0 {
@@ -504,9 +544,22 @@ fn status_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, items:
         var small = control.text_options()
         small.role = .BodySmall
         small.wrap = .None
+        let squeezed = i == 0usize && !item.end && total > width
+        if squeezed {
+            small.max_lines = 1u32
+            small.ellipsis = "…"
+        }
         let (said, said_error) = control.colored_text(a, 0u64, item.text, t, small, ink)
         if said_error != ok { ret (zero, said_error) }
         bits[n] = said
+        if squeezed {
+            // The words stand in the spare third slot so the clip does not hold itself.
+            bits[2usize] = said
+            let room = control.max_zero(widths[0usize] - (total - width) - 16.0)
+            var clip = control.sized_style(room, 16.0)
+            clip.overflow = .Clip
+            bits[n] = widget.box(0u64, clip, bits[2usize..3usize])
+        }
         n += 1usize
         var line_style = style.defaults()
         line_style.height = style.Length { Px: 16.0 }
