@@ -23602,3 +23602,22 @@ ordinary Button, Card or Wizard activation and avoids a second keyboard router.
 keys, cancellation, the lifted geometry and the single final callback on Windows
 and Linux. Button, Card and Wizard activation regressions pass on both hosts.
 The Segoe review is `build/ux/ui-reorder-keyboard-segoe.png`.
+
+## D1194 — Reorder feedback rides the drag cell
+
+Reorderable List shows its pointer handle only while the row is hovered or
+focused (or lifted). A pointer drag draws the spec's primary 2px drop line at
+the landing gap with an 8px surface ring at its start; a keyboard-lifted row
+carries a secondary-container "Moving" tag. A pointer released outside the
+list rectangle, on either axis, cancels without reporting a move.
+
+Pickup, gap movement, drop, cancellation and direct Ctrl/Alt moves are
+announced through one polite status region. The pending notice, target and
+item live in the existing retained `Swipe` cell and are consumed by the next
+build, so no public API or new state store was added.
+
+`ui_collections4_v2` holds hover handles, the drop line, the tag, both outside
+cancels and every announcement on Windows and Linux; `ui_interaction` passes on
+both hosts. The Segoe reviews are `build/ux/ui-reorder-drop-line-segoe.png` and
+`build/ux/ui-reorder-moving-segoe.png`. Still open: auto-scroll, context-menu
+move commands and named accessibility move actions.
