@@ -2127,9 +2127,109 @@ fn document_tabs(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label:
 // adding Shift moves the current tab one place without wrapping.
 // The current or focused tab is the strip's one tab stop; close buttons remain
 // pointer-only.
+// (D1233) Each tab offers Show menu: Close, Close others, Close to the right and
+// Close saved over its unpinned tabs.
 // ponytail: no file-type icons (a pinned tab keeps its title), preview tabs,
-// dragged lift or drop line, overflow scrolling, Show all open files, context
-// menu or read-only mark.
+// dragged lift or drop line, overflow scrolling, Show all open files, Pin, Copy
+// path, Reveal or Split in the menu, or read-only mark.
+// (D1233) A document strip's tab menu, kept across frames on the strip: whether
+// it is open and for which tab.
+type TabMenu = struct { open: bool, index: usize }
+type TabMenuAsk = struct { runtime: *widget.Runtime, cell: *TabMenu, index: usize }
+
+fn tab_menu_cell(t: *const control.Theme, key: widget.Key) -> (*TabMenu, bool) {
+    var none: *TabMenu = zero
+    if mem.address_of(t.runtime) == 0usize { ret (none, false) }
+    let (s, state_error) = widget.state_of(t.runtime)
+    if state_error != ok { ret (none, false) }
+    let (id, found) = widget.find_by_key(s, key)
+    if found != 1usize { ret (none, false) }
+    var build = widget.BuildContext { runtime: t.runtime, element: id, frame: 0u64 }
+    let (kept, _, kept_error) = widget.state[TabMenu](&build, key, TabMenu { open: false, index: 0usize })
+    if kept_error != ok { ret (none, false) }
+    ret (kept, true)
+}
+
+fn tab_menu_ask(ctx: *void, action: u32) -> err {
+    let ask = mem.cast[*TabMenuAsk](ctx)
+    if action != accessibility.ACTION_SHOW_MENU { ret ok }
+    ask.cell.open = true
+    ask.cell.index = ask.index
+    widget.request_animation_frame(ask.runtime)
+    ret ok
+}
+
+// (D1233) A tab menu command: `close` for each index listed, highest first so
+// the caller's lower indices still name the same documents; then the menu shuts.
+type TabCloseMany = struct { runtime: *widget.Runtime, cell: *TabMenu, close: widget.Change[usize], indices: []const usize }
+
+fn tab_close_many(ctx: *void) -> err {
+    let c = mem.cast[*TabCloseMany](ctx)
+    c.cell.open = false
+    widget.request_animation_frame(c.runtime)
+    var at = c.indices.len
+    while at > 0usize {
+        at -= 1usize
+        try widget.fire_change[usize](c.close, c.indices[at])
+    }
+    ret ok
+}
+
+// (D1233, docs/ux/components/DocumentTabs) The menu of the tab `menu_for`: Close,
+// Close others, Close to the right and Close saved, each over the unpinned tabs
+// it names and disabled when it names none.
+fn tab_menu(a: *mem.Arena, key: widget.Key, t: *const control.Theme, documents: []const Document, menu_for: usize, cell: *TabMenu, close: widget.Change[usize]) -> (widget.Node, err) {
+    let n = documents.len
+    let (lists, lists_error) = mem.alloc[usize](a, 4usize * n)
+    if lists_error != ok { ret (zero, TooLarge) }
+    var counts: [4]usize = zero
+    var i = 0usize
+    while i < n {
+        if !documents[i].pinned {
+            if i == menu_for {
+                lists[counts[0usize]] = i
+                counts[0usize] += 1usize
+            } else {
+                lists[n + counts[1usize]] = i
+                counts[1usize] += 1usize
+            }
+            if i > menu_for {
+                lists[2usize * n + counts[2usize]] = i
+                counts[2usize] += 1usize
+            }
+            if !documents[i].dirty {
+                lists[3usize * n + counts[3usize]] = i
+                counts[3usize] += 1usize
+            }
+        }
+        i += 1usize
+    }
+    let (runs, runs_error) = mem.alloc[TabCloseMany](a, 5usize)
+    if runs_error != ok { ret (zero, TooLarge) }
+    let (commands, commands_error) = mem.alloc[overlay.MenuCommand](a, 4usize)
+    if commands_error != ok { ret (zero, TooLarge) }
+    var names: [4]str = zero
+    names[0usize] = "Close"
+    names[1usize] = "Close others"
+    names[2usize] = "Close to the right"
+    names[3usize] = "Close saved"
+    var none: []const usize = zero
+    i = 0usize
+    while i < 4usize {
+        runs[i] = TabCloseMany { runtime: t.runtime, cell: cell, close: close, indices: lists[i * n..i * n + counts[i]] }
+        commands[i] = overlay.menu_command(names[i], widget.Submit { ctx: mem.cast[*void](&runs[i]), invoke: tab_close_many })
+        commands[i].enabled = counts[i] > 0usize
+        i += 1usize
+    }
+    runs[4usize] = TabCloseMany { runtime: t.runtime, cell: cell, close: close, indices: none }
+    let (closer, closer_error) = mem.alloc[widget.Submit](a, 1usize)
+    if closer_error != ok { ret (zero, TooLarge) }
+    closer[0usize] = widget.Submit { ctx: mem.cast[*void](&runs[4usize]), invoke: tab_close_many }
+    let (at, pointed) = widget.context_point(t.runtime)
+    let (made, made_error) = overlay.context_menu_of(a, key, t, key - 129u64 + 2u64 * u64(menu_for), documents[menu_for].title, commands[0usize..4usize], true, &closer[0usize], at, pointed)
+    ret (made, made_error)
+}
+
 fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, documents: []const Document, current: usize, pick: widget.Change[usize], close: widget.Change[usize], move: widget.Change[DocumentMove], marked: bool, active: bool) -> (widget.Node, err) {
     if documents.len > 64usize { ret (zero, TooLarge) }
     let touch = t.tokens.metrics.control_height > t.tokens.sizes.control_sm
@@ -2161,6 +2261,9 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     if picks_error != ok { ret (zero, TooLarge) }
     let (moves, moves_error) = mem.alloc[TabMove](a, 2usize)
     if moves_error != ok { ret (zero, TooLarge) }
+    let (menu_cell, has_menu_cell) = tab_menu_cell(t, key)
+    let (asks, asks_error) = mem.alloc[TabMenuAsk](a, documents.len)
+    if asks_error != ok { ret (zero, TooLarge) }
     let muted = style.color(t.tokens, .OnSurfaceVariant)
     var tab_stop = current
     if tab_stop >= documents.len { tab_stop = 0usize }
@@ -2281,6 +2384,11 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
         sem.column = u32(i + 1usize)
         sem.column_count = u32(documents.len)
         sem.actions = accessibility.ACTION_PRESS
+        if has_menu_cell {
+            asks[i] = TabMenuAsk { runtime: t.runtime, cell: menu_cell, index: i }
+            sem.actions = accessibility.ACTION_PRESS | accessibility.ACTION_SHOW_MENU
+            sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](&asks[i]), invoke: tab_menu_ask }
+        }
         if chosen { sem.states = accessibility.STATE_SELECTED }
         if d.dirty { sem.hint = "unsaved" }
         tabs[i] = widget.semantics(0u64, sem, style.defaults(), region[0usize..1usize])
@@ -2358,7 +2466,18 @@ fn document_tabs_marked(a: *mem.Arena, key: widget.Key, t: *const control.Theme,
     sem.role = 20u8
     sem.label = label
     sem.column_count = u32(documents.len)
-    ret (widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize]), ok)
+    let strip_node = widget.semantics(key, sem, style.defaults(), scoped[0usize..1usize])
+    // (D1233) The open tab menu stands beside the strip.
+    if has_menu_cell && menu_cell.open && menu_cell.index < documents.len {
+        let (menu, menu_error) = tab_menu(a, key + 130u64, t, documents, menu_cell.index, menu_cell, close)
+        if menu_error != ok { ret (zero, menu_error) }
+        let (both, both_error) = mem.alloc[widget.Node](a, 2usize)
+        if both_error != ok { ret (zero, TooLarge) }
+        both[0usize] = strip_node
+        both[1usize] = menu
+        ret (widget.box(0u64, style.defaults(), both[0usize..2usize]), ok)
+    }
+    ret (strip_node, ok)
 }
 
 // A dock panel: the docked panel of D966 below, unfocused.

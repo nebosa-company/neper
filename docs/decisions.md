@@ -24164,3 +24164,20 @@ press or drag does.
 
 `ui_pickers3_v2` holds a saturation step, a shifted brightness step, a paged and
 an ended hue, and cleared and stepped opacity on Windows and Linux.
+
+## D1233 — Document tabs carry a context menu
+
+Every document tab now offers Show menu; asking for it (D1195's secondary
+press, the Menu key or Shift+F10) records the tab in a small cell retained on
+the strip. While that cell is open, the strip stands beside the DocumentTabs
+spec's menu of Close, Close others, Close to the right and Close saved, keyed
+`key + 130`. Each command closes the unpinned tabs it names through the strip's
+existing `close` callback, highest index first so the caller's lower indices
+keep naming the same documents, and is disabled when it names none. Pinned
+tabs are never closed by these commands.
+
+Pin, Copy path, Reveal in file explorer and Split right need caller or host
+hooks this API does not carry yet and stay open. At rest the tree is unchanged.
+`ui_navigation5_v2` opens the menu on a tab with a secondary press, checks the
+disabled Close to the right, closes the one unpinned other tab and sees the menu
+shut, on Windows and Linux. All 103 `ui_*` fixtures pass on both hosts.
