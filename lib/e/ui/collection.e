@@ -1659,8 +1659,9 @@ fn cell_padding(t: *const control.Theme) -> f32 {
 // `on-surface` state layer; after each an 8 wide resize handle drawing a 1px
 // `outline-variant` line inset 12 top and bottom (8 when `height` is 40), a
 // full-height 3px `primary` bar while hovered or dragged.
-// ponytail: no numeric (end-aligned) columns, filter mark, select-all
-// checkbox, grouped tier or reorder lift.
+// (D1246) A selectable table's select-all checkbox stands before these cells.
+// ponytail: no numeric (end-aligned) columns, filter mark, grouped tier or
+// reorder lift.
 fn header_cells(a: *mem.Arena, key: widget.Key, t: *const control.Theme, columns: []const Column, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], height: f32, pad: f32, lead: f32, below: widget.Key) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
     if cells_error != ok { ret (zero, TooLarge) }
@@ -1870,7 +1871,7 @@ fn row_pick_gesture(ctx: *void, g: widget.Gesture) -> err {
 // row a focusable tap region keyed by the row's key reporting it through `pick`,
 // selected in the selection colour; a row of cells in the tree at `index`.
 fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], role: u8) -> (widget.Node, err) {
-    let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, count, extent, selected, pick, zero, false, role, cell_padding(t), false, false)
+    let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, count, extent, selected, pick, zero, false, role, cell_padding(t), false, false, zero, false)
     ret (made, made_error)
 }
 
@@ -1882,16 +1883,22 @@ fn table_row(a: *mem.Arena, t: *const control.Theme, columns: []const Column, ce
 // `on-surface-variant` on `surface-container-low`, end-aligned 8 in, and has a
 // 1px `outline-variant` line after every cell. The focus ring is the runtime's,
 // inset where the viewport clips it.
-// ponytail: no selection checkbox column, disclosure and detail row, hover row
+// (D1246) `check`, when given, is the row's selection cell, first.
+// ponytail: no disclosure and detail row, hover row
 // actions, disabled, dragged or loading looks; the caller's cells keep their
 // own colours when the row is selected.
-fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool) -> (widget.Node, err) {
-    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 1usize)
+// (D1246) `has_check` puts `check` (a selection cell) first.
+fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column, cells: []const widget.Node, row_key: widget.Key, index: usize, count: usize, extent: f32, selected: bool, pick: widget.Change[widget.Key], double: widget.Change[widget.Key], has_double: bool, role: u8, pad: f32, grid: bool, owned: bool, check: widget.Node, has_check: bool) -> (widget.Node, err) {
+    let (boxed, boxed_error) = mem.alloc[widget.Node](a, 2usize * columns.len + 2usize)
     if boxed_error != ok { ret (zero, TooLarge) }
     let sides = style.Length { Px: pad }
     let flat = style.Length { Px: 0.0 }
     let rule = style.color(t.tokens, .OutlineVariant)
     var n = 0usize
+    if has_check {
+        boxed[n] = check
+        n += 1usize
+    }
     if grid {
         let (digits, digits_error) = mem.alloc[u8](a, 24usize)
         if digits_error != ok { ret (zero, TooLarge) }
@@ -1975,14 +1982,71 @@ fn table_row_of(a: *mem.Arena, t: *const control.Theme, columns: []const Column,
 // caller keeps the columns); a row tap reports the row's key through `pick` and
 // `selected` marks rows. A table in the tree named `label`.
 fn table(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32) -> (widget.Node, err) {
-    let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 12u8, false)
+    var selection: TableSelect = zero
+    let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 12u8, false, selection)
     ret (made, made_error)
+}
+
+// (D1246) A selectable table's selection: whom to tell of each gesture, and the
+// selection bar's actions.
+type TableSelect = struct { select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand }
+
+// (D1246, docs/ux/components/Table, TableRow, HeaderRow) `table` made selectable
+// by `selection`: a 52 first column (40 dense) holds each row's checkbox in its
+// circle, checked when selected, and the header's select-all checkbox, checked
+// when every row is selected and mixed when some are, named "Select all" and
+// the table's label. A checkbox click toggles its row. While any row is selected
+// the selection bar stands above the header (`selection_bar`, tabular) and a row
+// click toggles; otherwise Ctrl-click toggles, Shift-click extends and a plain
+// click is `pick`. A focused row takes Space, Shift+Up/Down, Ctrl+A and Escape as
+// a list's does (`selection_scopes`). The caller keeps `selected`.
+// ponytail: Shift+Up/Down stop at the built rows' edge; no touch hold.
+fn table_with(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, selection: TableSelect) -> (widget.Node, err) {
+    let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 12u8, false, selection)
+    ret (made, made_error)
+}
+
+// (D1246) A selectable table row's press: a toggle in selection mode, Ctrl
+// (Meta) toggling and Shift extending otherwise, else the table's `pick`.
+type TableClick = struct { runtime: *widget.Runtime, select: widget.Change[ListSelect], index: usize, pick: widget.Change[widget.Key], toggles: bool }
+
+fn table_click_fire(ctx: *void, row_key: widget.Key) -> err {
+    let c = back_of[TableClick](ctx)
+    let held = widget.modifiers(c.runtime)
+    if c.toggles || held.control || held.meta { ret widget.fire_change[ListSelect](c.select, ListSelect { kind: .Toggle, index: c.index }) }
+    if held.shift { ret widget.fire_change[ListSelect](c.select, ListSelect { kind: .Extend, index: c.index }) }
+    ret widget.fire_change[widget.Key](c.pick, row_key)
+}
+
+// (D1246) A selection checkbox in a column `side` wide and `tall`: the mark in
+// its circle, a tap region (keyed `key`) firing `press`; a checkbox in the tree
+// named `label`.
+fn selection_check(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, checked: bool, mixed: bool, press: *const widget.Submit, side: f32, tall: f32) -> (widget.Node, err) {
+    let state = control.control_state(t, key, true, false)
+    let (mark, mark_error) = control.choice_mark(a, t, state, checked, mixed, false, true)
+    if mark_error != ok { ret (zero, mark_error) }
+    let (held, held_error) = mem.alloc[widget.Node](a, 2usize)
+    if held_error != ok { ret (zero, TooLarge) }
+    held[0usize] = mark
+    held[1usize] = widget.region(key, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](press), invoke: control.press_tap }, gestures: 1u8, enabled: true, focusable: false }, control.sized_style(side, tall), held[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 4u8
+    sem.label = label
+    sem.actions = accessibility.ACTION_PRESS
+    sem.on_action = widget.Change[u32] { ctx: mem.cast[*void](press), invoke: submit_semantic_action }
+    if checked { sem.states = accessibility.STATE_CHECKED }
+    if mixed { sem.states = sem.states | accessibility.STATE_MIXED }
+    let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+    if centred_error != ok { ret (zero, TooLarge) }
+    centred[0usize] = widget.aligned(0u64, .Center, .Center, control.sized_style(side, tall), held[1usize..2usize])
+    ret (widget.semantics(0u64, sem, style.defaults(), centred[0usize..1usize]), ok)
 }
 
 // A data grid: the table as a grid in the tree, whose cells the source may build
 // as fields, so the caller edits in place; the same contract otherwise.
 fn data_grid(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32) -> (widget.Node, err) {
-    let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 30u8, false)
+    var selection: TableSelect = zero
+    let (made, made_error) = tabulated(a, key, t, label, columns, source, selected, sort_column, descending, sort, reorder, resize, pick, extent, offset, change, height, 30u8, false, selection)
     ret (made, made_error)
 }
 
@@ -2540,7 +2604,8 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
     if column_menus_error != ok { ret (zero, TooLarge) }
     column_menus[0usize] = GridColumnMenu { state: state, change: change }
     var none: [1]widget.Key = zero
-    let (table_node, table_error) = tabulated(a, key + 16u64, t, label, columns, table_source, none[0usize..0usize], columns.len, false, widget.Change[usize] { ctx: ctx_of(&column_menus[0usize]), invoke: grid_column_menu }, zero, zero, zero, row_extent, offset, scrolled, height - 40.0, 30u8, true)
+    var no_selection: TableSelect = zero
+    let (table_node, table_error) = tabulated(a, key + 16u64, t, label, columns, table_source, none[0usize..0usize], columns.len, false, widget.Change[usize] { ctx: ctx_of(&column_menus[0usize]), invoke: grid_column_menu }, zero, zero, zero, row_extent, offset, scrolled, height - 40.0, 30u8, true, no_selection)
     if table_error != ok { ret (zero, table_error) }
     var width: f32 = 40.0
     var x: f32 = 40.0
@@ -2754,10 +2819,11 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
 // source key and request the minimum revealing offset.
 // (D984) `owned` rows (`data_grid_of`'s) are neither focusable nor tapped and
 // hold their cells unpadded: the cells draw their own looks.
-// ponytail: no toolbar, selection bar, footer, pinned column, horizontal
+// (D1246) `selection` (from `table_with`) adds the check column and bar.
+// ponytail: no toolbar, footer, pinned column, horizontal
 // scroll, loading, empty or error state; `data_grid` keeps the caller's cells
 // as its editors -- `data_grid_of` is the one with the DataGrid's core.
-fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, role: u8, owned: bool) -> (widget.Node, err) {
+fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, columns: []const Column, source: TableSource, selected: []const widget.Key, sort_column: usize, descending: bool, sort: widget.Change[usize], reorder: widget.Change[Reorder], resize: widget.Change[ColumnResize], pick: widget.Change[widget.Key], extent: f32, offset: f32, change: widget.Change[f32], height: f32, role: u8, owned: bool, selection: TableSelect) -> (widget.Node, err) {
     if columns.len == 0usize || columns.len > 60usize { ret (zero, TooLarge) }
     let grid = role == 30u8
     var row_extent = extent
@@ -2774,16 +2840,53 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     let total = source.count(source.ctx)
     var below: widget.Key = 0u64
     if total > 0usize { below = source.key(source.ctx, 0usize) }
-    let (head, head_error) = header_cells(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below)
+    let (header, head_error) = header_cells(a, key, t, columns, sort_column, descending, sort, reorder, resize, head_height, pad, lead, below)
     if head_error != ok { ret (zero, head_error) }
+    var head = header
+    // (D1246) A selectable table's check column and select-all checkbox.
+    let selecting = !owned && widget.change_set[ListSelect](selection.select.invoke) && mem.address_of(t.runtime) != 0usize
+    let in_mode = selecting && selected.len > 0usize
+    let check_side = control.if_else(density_of(t) == 0usize, 40.0, 52.0)
+    if selecting {
+        width += check_side
+        let everything = total > 0usize && selected.len >= total
+        let (alls, alls_error) = mem.alloc[ListPick](a, 1usize)
+        if alls_error != ok { ret (zero, TooLarge) }
+        let (all_press, all_press_error) = mem.alloc[widget.Submit](a, 1usize)
+        if all_press_error != ok { ret (zero, TooLarge) }
+        var all_kind: ListSelectKind = .All
+        if everything { all_kind = .Clear }
+        alls[0usize] = ListPick { runtime: t.runtime, select: selection.select, kind: all_kind, index: 0usize, focus: 0u64, has_focus: false }
+        all_press[0usize] = widget.Submit { ctx: ctx_of(&alls[0usize]), invoke: list_pick_fire }
+        let (all_name, all_name_error) = mem.alloc[u8](a, label.len + 11usize)
+        if all_name_error != ok { ret (zero, TooLarge) }
+        var all_len = control.copy_text(all_name, "Select all ")
+        all_len += control.copy_text(all_name[all_len..all_name.len], label)
+        let (all_check, all_check_error) = selection_check(a, key ^ hash.fnv1a64("select-all"), t, all_name[0usize..all_len], everything, in_mode && !everything, &all_press[0usize], check_side, head_height - t.tokens.sizes.divider)
+        if all_check_error != ok { ret (zero, all_check_error) }
+        let (head_parts, head_parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if head_parts_error != ok { ret (zero, TooLarge) }
+        head_parts[0usize] = all_check
+        head_parts[1usize] = header
+        head = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), head_parts[0usize..2usize])
+    }
     let body_height = height - head_height
     let (first, count) = virtual_range(offset, body_height, total, row_extent)
     let (rows, rows_error) = mem.alloc[widget.Node](a, count)
     if rows_error != ok { ret (zero, TooLarge) }
+    let (row_keys, row_keys_error) = mem.alloc[widget.Key](a, count)
+    if row_keys_error != ok { ret (zero, TooLarge) }
+    let (toggles, toggles_error) = mem.alloc[ListPick](a, count)
+    if toggles_error != ok { ret (zero, TooLarge) }
+    let (toggle_presses, toggle_presses_error) = mem.alloc[widget.Submit](a, count)
+    if toggle_presses_error != ok { ret (zero, TooLarge) }
+    let (clicks, clicks_error) = mem.alloc[TableClick](a, count)
+    if clicks_error != ok { ret (zero, TooLarge) }
     var i = 0usize
     while i < count {
         let index = first + i
         let row_key = source.key(source.ctx, index)
+        row_keys[i] = row_key
         let (cells, cells_error) = mem.alloc[widget.Node](a, columns.len)
         if cells_error != ok { ret (zero, TooLarge) }
         c = 0usize
@@ -2795,7 +2898,20 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
             c += 1usize
         }
         let lined = index + 1usize < total
-        let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, total, row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0), is_selected(selected, row_key), pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned)
+        let row_tall = row_extent - control.if_else(lined, t.tokens.sizes.divider, 0.0)
+        let chosen = is_selected(selected, row_key)
+        var row_pick = pick
+        var check: widget.Node = zero
+        if selecting {
+            toggles[i] = ListPick { runtime: t.runtime, select: selection.select, kind: .Toggle, index: index, focus: 0u64, has_focus: false }
+            toggle_presses[i] = widget.Submit { ctx: ctx_of(&toggles[i]), invoke: list_pick_fire }
+            let (row_check, row_check_error) = selection_check(a, row_key ^ hash.fnv1a64("row-check"), t, "Select", chosen, false, &toggle_presses[i], check_side, row_tall)
+            if row_check_error != ok { ret (zero, row_check_error) }
+            check = row_check
+            clicks[i] = TableClick { runtime: t.runtime, select: selection.select, index: index, pick: pick, toggles: in_mode }
+            row_pick = widget.Change[widget.Key] { ctx: ctx_of(&clicks[i]), invoke: table_click_fire }
+        }
+        let (made, made_error) = table_row_of(a, t, columns, cells, row_key, index, total, row_tall, chosen, row_pick, zero, false, 13u8, control.if_else(owned, 0.0, pad), grid, owned, check, selecting)
         if made_error != ok { ret (zero, made_error) }
         rows[i] = made
         i += 1usize
@@ -2804,6 +2920,10 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
         let page = usize(body_height / row_extent)
         let rove_error = virtual_roving(a, t, rows, KeySource { ctx: source.ctx, key: source.key }, first, total, page, offset, body_height, row_extent, change, key + 1u64)
         if rove_error != ok { ret (zero, rove_error) }
+    }
+    if selecting {
+        let scoped_error = selection_scopes_from(a, t, rows[0usize..count], row_keys[0usize..count], selection.select, 1usize, first)
+        if scoped_error != ok { ret (zero, scoped_error) }
     }
     i = 0usize
     while i < count {
@@ -2824,15 +2944,23 @@ fn tabulated(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str
     view_style.height = style.Length { Px: body_height }
     view_style.overflow = .Clip
     view_style.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
-    parts[0usize] = head
-    parts[1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent }, view_style, rows[0usize..count])
+    var p = 0usize
+    if in_mode {
+        let (bar, bar_error) = selection_bar_of(a, key ^ hash.fnv1a64("selection-bar"), t, selected.len, selection.select, selection.bulk, width, true)
+        if bar_error != ok { ret (zero, bar_error) }
+        parts[p] = bar
+        p += 1usize
+    }
+    parts[p] = head
+    parts[p + 1usize] = widget.scroll(key, widget.Scroll { axis: .Vertical, offset: offset, overscroll: .Clamp, momentum: true, scrollbar: true, thumb: control.with_alpha(style.color(t.tokens, .OnSurfaceVariant), 0.5), change: change, virtual_first: first, virtual_count: total, virtual_extent: row_extent }, view_style, rows[0usize..count])
+    p += 2usize
     var column_style = style.defaults()
     column_style.width = style.Length { Px: width }
     let (column_node, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
-    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, parts[0usize..2usize])
+    column_node[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, column_style, parts[0usize..p])
     var sem: widget.Semantics = zero
     sem.role = role
     sem.label = label
@@ -3046,7 +3174,7 @@ fn tree_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, source: Tr
                 cells[c] = extra
                 c += 1usize
             }
-            let (tabled_row, tabled_error) = table_row_of(a, t, columns, cells, entry.key, entry.index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, cell_padding(t), false, false)
+            let (tabled_row, tabled_error) = table_row_of(a, t, columns, cells, entry.key, entry.index, entry.siblings, tall, chosen, pick, toggle, entry.branch, 2u8, cell_padding(t), false, false, zero, false)
             if tabled_error != ok { ret (none, tabled_error) }
             made = tabled_row
         } else {
@@ -4339,6 +4467,12 @@ fn list_click_fire(ctx: *void) -> err {
 // and Shift+Right to the item before or after in reading order); Ctrl+A selects
 // all and Escape clears.
 fn selection_scopes(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []const widget.Key, select: widget.Change[ListSelect], across: usize) -> err {
+    ret selection_scopes_from(a, t, nodes, keys, select, across, 0usize)
+}
+
+// (D1246) The same over built items that start at item `base` of the whole set:
+// the gestures report whole-set indices.
+fn selection_scopes_from(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node, keys: []const widget.Key, select: widget.Change[ListSelect], across: usize, base: usize) -> err {
     let count = nodes.len
     if count == 0usize { ret ok }
     let (picks, picks_error) = mem.alloc[ListPick](a, 7usize * count)
@@ -4362,13 +4496,13 @@ fn selection_scopes(a: *mem.Arena, t: *const control.Theme, nodes: []widget.Node
         if i > 0usize { before = i - 1usize }
         var after = i
         if i + 1usize < count { after = i + 1usize }
-        picks[b] = ListPick { runtime: t.runtime, select: select, kind: .Toggle, index: i, focus: 0u64, has_focus: false }
-        picks[b + 1usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: up, focus: keys[up], has_focus: true }
-        picks[b + 2usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: down, focus: keys[down], has_focus: true }
-        picks[b + 3usize] = ListPick { runtime: t.runtime, select: select, kind: .All, index: i, focus: 0u64, has_focus: false }
-        picks[b + 4usize] = ListPick { runtime: t.runtime, select: select, kind: .Clear, index: i, focus: 0u64, has_focus: false }
-        picks[b + 5usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: before, focus: keys[before], has_focus: true }
-        picks[b + 6usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: after, focus: keys[after], has_focus: true }
+        picks[b] = ListPick { runtime: t.runtime, select: select, kind: .Toggle, index: base + i, focus: 0u64, has_focus: false }
+        picks[b + 1usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: base + up, focus: keys[up], has_focus: true }
+        picks[b + 2usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: base + down, focus: keys[down], has_focus: true }
+        picks[b + 3usize] = ListPick { runtime: t.runtime, select: select, kind: .All, index: base + i, focus: 0u64, has_focus: false }
+        picks[b + 4usize] = ListPick { runtime: t.runtime, select: select, kind: .Clear, index: base + i, focus: 0u64, has_focus: false }
+        picks[b + 5usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: base + before, focus: keys[before], has_focus: true }
+        picks[b + 6usize] = ListPick { runtime: t.runtime, select: select, kind: .Extend, index: base + after, focus: keys[after], has_focus: true }
         keyed[b] = widget.Shortcut { key: 32u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&picks[b]), invoke: list_pick_fire } }
         keyed[b + 1usize] = widget.Shortcut { key: 38u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 1usize]), invoke: list_pick_fire } }
         keyed[b + 2usize] = widget.Shortcut { key: 40u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&picks[b + 2usize]), invoke: list_pick_fire } }
@@ -4567,9 +4701,21 @@ fn list_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, 
 // selected" in `title-medium` `on-surface`, and each of `bulk` as an icon button
 // named by its label (`key + 2 + i`). A group in the tree named by the count.
 fn selection_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, width: f32) -> (widget.Node, err) {
+    let (made, made_error) = selection_bar_of(a, key, t, count, select, bulk, width, false)
+    ret (made, made_error)
+}
+
+// (D1246) A table's selection bar (`tabular`) is `secondary-container` with its
+// count in `title-small` and everything in `on-secondary-container`.
+// ponytail: a table's bulk actions are icon buttons, not the spec's text buttons.
+fn selection_bar_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count: usize, select: widget.Change[ListSelect], bulk: []const overlay.MenuCommand, width: f32, tabular: bool) -> (widget.Node, err) {
     let touch = density_of(t) == 2usize
-    let ink = style.color(t.tokens, .OnSurface)
-    let muted = style.color(t.tokens, .OnSurfaceVariant)
+    var ink = style.color(t.tokens, .OnSurface)
+    var muted = style.color(t.tokens, .OnSurfaceVariant)
+    if tabular {
+        ink = style.color(t.tokens, .OnSecondaryContainer)
+        muted = ink
+    }
     var side = t.tokens.sizes.control_md
     if touch { side = t.tokens.sizes.target_touch }
     let glyph = t.tokens.sizes.icon_md
@@ -4590,6 +4736,7 @@ fn selection_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count:
     n += control.copy_text(said_bytes[n..40usize], " selected")
     var caption = control.text_options()
     caption.role = .TitleMedium
+    if tabular { caption.role = .TitleSmall }
     caption.wrap = .None
     let (said, said_error) = control.colored_text(a, 0u64, said_bytes[0usize..n], t, caption, ink)
     if said_error != ok { ret (zero, said_error) }
@@ -4611,6 +4758,7 @@ fn selection_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, count:
     var bar_style = control.sized_style(width, height)
     if width <= 0.0 { bar_style.width = style.Length { Percent: 100.0 } }
     bar_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+    if tabular { bar_style.background = paint.Brush { Solid: style.color(t.tokens, .SecondaryContainer) } }
     let none = style.Length { Px: 0.0 }
     bar_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: none, right: style.Length { Px: 8.0 }, bottom: none }
     let (row_node, row_node_error) = mem.alloc[widget.Node](a, 1usize)
