@@ -23938,3 +23938,18 @@ READMEs:
 - Hover and show delays, minimum display times, close-after-pick and drop-hold
   times are timers on the frame clock, not motion, and reduced motion never
   changes them.
+
+## D1219 — The scroll thumb widens under the pointer
+
+The runtime's painted scroll thumb is 8 wide instead of 4, rounded, and still
+2 from the trailing edge, while the pointer is over the viewport's trailing
+12 px strip (the bottom strip for a horizontal viewport). This is the VirtualList
+spec's hover width. The thumb is painted during reconcile, so the next frame after
+the pointer moves picks it up.
+
+The thumb is still painted rather than dragged, so there is no dragged width,
+and it has no 1.5 s fade or touch handle. `ui_collections_v2` holds the rest
+width and the hovered width on Windows and Linux; `ui_scroll` and
+`ui_collections2_v2` pass. A sweep of all 103 `ui_*` fixtures on both hosts
+shows only the 12 pre-existing failures recorded in D1195, with unchanged exit
+codes.

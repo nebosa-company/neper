@@ -2111,16 +2111,22 @@ fn place_scroll(s: *State, a: *mem.Arena, node: *const Node, element: usize, sc:
         // ponytail: the thumb is painted, not dragged; a press on it scrolls the content.
         // v2 (D979, docs/ux/components/VirtualList): 4 wide, fully rounded, 2 from
         // the trailing edge, viewport squared over the content long, 32 at least.
-        // ponytail: no widening to 8 on hover, fade after 1.5 s or touch handle.
+        // (D1219) 8 wide while the pointer is over the viewport's trailing 12.
+        // ponytail: no fade after 1.5 s or touch handle.
         let viewport = e.viewport_extent
         var length = viewport * viewport / content
         if length < 32.0 { length = min_f(32.0, viewport) }
         var at = offset / content * viewport
         if at > viewport - length { at = viewport - length }
         if at < 0.0 { at = 0.0 }
-        var thumb = geometry.Rect { x: inner.x + inner.width - 6.0, y: inner.y + at, width: 4.0, height: length }
-        if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 6.0, width: length, height: 4.0 } }
-        try fill_shape(a, b, thumb, 2.0, paint.Brush { Solid: sc.thumb })
+        var wide: f32 = 4.0
+        let p = s.arena_state.last
+        if s.has_pointer && geometry.contains(inner, p) {
+            if (vertical && p.x >= inner.x + inner.width - 12.0) || (!vertical && p.y >= inner.y + inner.height - 12.0) { wide = 8.0 }
+        }
+        var thumb = geometry.Rect { x: inner.x + inner.width - 2.0 - wide, y: inner.y + at, width: wide, height: length }
+        if !vertical { thumb = geometry.Rect { x: inner.x + at, y: inner.y + inner.height - 2.0 - wide, width: length, height: wide } }
+        try fill_shape(a, b, thumb, wide * 0.5, paint.Brush { Solid: sc.thumb })
     }
     try scene.push(b, restore)
     ret ok
