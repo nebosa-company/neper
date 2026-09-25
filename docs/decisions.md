@@ -23087,3 +23087,13 @@ failed actions and Finish do not move focus.
 
 `ui_navigation5_v2` holds heading semantics and the Next-to-rebuild focus
 handoff on Windows and Linux. The reviewed surface is unchanged.
+
+## D1143 — Pointer wizards expose Back and Next access keys
+
+At pointer density Wizard binds Alt+B to the available Back action and Alt+N
+to the available forward action, including the caller's last-step verb. The
+chords reuse the ordinary validation and step-heading focus path, and remain
+absent at touch density.
+
+`ui_navigation5_v2` holds both chords on Windows and Linux. The reviewed
+surface is unchanged.

@@ -3819,6 +3819,8 @@ fn wizard_step(a: *mem.Arena, t: *const control.Theme, step: *const WizardStep, 
 // with its state ("Account, completed", "Build, needs attention: fix 1 field")
 // and the current one Current. The content exposes its step name as a level-2
 // heading keyed `key + 5`; successful Back and Next request it across rebuilds.
+// At pointer density Alt+B and Alt+N invoke those same backward and forward
+// paths.
 // `legacy` keeps D853's contract: Back stays (disabled) on the first step and
 // Next and Finish follow `can_advance`.
 // ponytail: no pressable steps (non-linear wizards), Finish's progress ring or
@@ -4083,10 +4085,24 @@ fn wizard_drawn(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: 
     let (column, column_error) = mem.alloc[widget.Node](a, 1usize)
     if column_error != ok { ret (zero, TooLarge) }
     column[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, outer, parts[0usize..p])
-    var none: []const widget.Shortcut = zero
+    let (shortcuts, shortcuts_error) = mem.alloc[widget.Shortcut](a, 2usize)
+    if shortcuts_error != ok { ret (zero, TooLarge) }
+    var shortcut_count = 0usize
+    if t.tokens.metrics.control_height <= t.tokens.sizes.control_sm {
+        var alt: input.Modifiers = zero
+        alt.alt = true
+        if current > 0usize {
+            shortcuts[shortcut_count] = widget.Shortcut { key: 66u32, modifiers: alt, action: move_actions[0usize] }
+            shortcut_count += 1usize
+        }
+        if advancing {
+            shortcuts[shortcut_count] = widget.Shortcut { key: 78u32, modifiers: alt, action: *forward }
+            shortcut_count += 1usize
+        }
+    }
     let (scoped, scoped_error) = mem.alloc[widget.Node](a, 1usize)
     if scoped_error != ok { ret (zero, TooLarge) }
-    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: none, default_action: default_action, cancel_action: *cancel, keys: zero }, style.defaults(), column[0usize..1usize])
+    scoped[0usize] = widget.scope(key, widget.Scope { traps_focus: false, shortcuts: shortcuts[0usize..shortcut_count], default_action: default_action, cancel_action: *cancel, keys: zero }, style.defaults(), column[0usize..1usize])
     var sem: widget.Semantics = zero
     sem.role = 2u8
     sem.label = title

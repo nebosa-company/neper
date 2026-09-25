@@ -247,6 +247,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !tap_key(&harness, &runtime, 6003u64) || s.counters[1usize].count != 1usize { os.exit(25i32) }
     let (focused_step, focused_step_error) = build(&f, &theme, s)
     if focused_step_error != ok || testing.pump(&harness, focused_step, time.Instant { nanos: 1200000000i64 }) != ok || !widget.focus_within(&runtime, 6005u64) { os.exit(40i32) }
+    var alt: input.Modifiers = zero
+    alt.alt = true
+    if testing.press_key(&harness, 66u32, alt) != ok || s.counters[0usize].count != 1usize || testing.press_key(&harness, 78u32, alt) != ok || s.counters[1usize].count != 2usize { os.exit(41i32) }
     // The vertical wizard in a dialog: `surface-container-high`; its steps down
     // the start, 48 apart; Back hidden on the first step.
     let (column, has_column) = bounds(&harness, &runtime, 6100u64)
@@ -275,7 +278,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (create, has_create) = bounds(&harness, &runtime, 6204u64)
     let (create_node, has_create_node) = find(tree, .Button, "Create project")
     if !has_create || !has_create_node || !near(create.width, 328.0) || !tap_key(&harness, &runtime, 6204u64) || s.counters[2usize].count != 1usize { os.exit(30i32) }
-    if testing.press_key(&harness, 13u32, zero) != ok || s.counters[2usize].count != 2usize || !tap_key(&harness, &runtime, 6207u64) || s.counters[0usize].count != 1usize { os.exit(31i32) }
+    if testing.press_key(&harness, 13u32, zero) != ok || s.counters[2usize].count != 2usize || !tap_key(&harness, &runtime, 6207u64) || s.counters[0usize].count != 2usize { os.exit(31i32) }
     if testing.close(&harness) != ok || widget.close(&runtime) != ok || scene.close(&renderer) != ok || gpu.close(device) != ok { os.exit(32i32) }
     try io.print("ui navigation5 v2 ok\n")
     ret ok
