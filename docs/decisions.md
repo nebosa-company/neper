@@ -23964,7 +23964,7 @@ because swipe-to-dismiss is not written. Delete on a focused row still fires
 the row's dismiss, so a keyboard user loses nothing, and focusing the row shows
 the button before Tab reaches it.
 
- and  now hover a row before pressing its Dismiss,
+`ui_status5_v2` and `ui_desktop` now hover a row before pressing its Dismiss,
 and hold that no Dismiss is built at rest, on Windows and Linux. A sweep of all
 103 `ui_*` fixtures on both hosts shows only the 12 pre-existing failures
 recorded in D1195, with unchanged exit codes.
